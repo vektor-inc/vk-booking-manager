@@ -22,5 +22,8 @@ This is a plugin for online bookings for salons, lessons, etc.
 Yes. It is designed for multi-staff service providers.
 
 == Changelog ==
+
+For full changelog, see CHANGELOG.md.
+
 = 0.1.0 =
 - Initial release.
