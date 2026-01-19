@@ -19,7 +19,5 @@ This is a plugin for online bookings for salons, lessons, etc.
 
 == Changelog ==
 
-For full changelog, see CHANGELOG.md.
-
 = 0.1.0 =
 - Initial release.
