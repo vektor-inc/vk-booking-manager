@@ -1,0 +1,197 @@
+.vkbm-button {
+	text-box: trim-both text;
+	align-items: center;
+	appearance: none;
+	border: 1px solid transparent;
+	border-radius: var(--vkbm--radius--md, 6px);
+	cursor: pointer;
+	display: inline-flex;
+	font: inherit;
+	font-weight: 400;
+	gap: 0.35rem;
+	justify-content: center;
+	line-height: 1;
+	padding: 0.6rem 1.5rem;
+	text-decoration: none;
+	transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
+	user-select: none;
+	white-space: nowrap;
+	&:not(.vkbm-button__link) {
+		text-decoration: none !important;
+	}
+}
+
+.vkbm-button:focus {
+	outline: 2px solid rgba(37, 99, 235, 0.35);
+	outline-offset: 2px;
+}
+
+.vkbm-button[disabled],
+.vkbm-button:disabled,
+.vkbm-button.is-disabled,
+.vkbm-button[aria-disabled='true'] {
+	cursor: not-allowed;
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.vkbm-button__xs {
+	padding: 3px 0.8rem;
+	font-size: 0.75rem;
+	border-radius: var(--vkbm--radius--sm, 3px);
+}
+
+.vkbm-button__sm {
+	padding: 0.4rem 1rem;
+	font-size: 0.88rem;
+	border-radius: var(--vkbm--radius--sm, 3px);
+}
+
+.vkbm-button__lg {
+	padding: 0.8rem 1.75rem;
+	font-size: 1.05rem;
+}
+
+.vkbm-button__primary,
+a.vkbm-button__primary {
+	background: var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb);
+	color: #fff;
+}
+
+.vkbm-plan-summary__action.vkbm-button__primary {
+	background: var(
+		--vkbm--color--reservation-action,
+		var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb)
+	);
+}
+
+.vkbm-button__primary:hover {
+	/* background only (keep text color) */
+	background: color-mix(in srgb, var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb) 75%, #000);
+}
+
+.vkbm-plan-summary__action.vkbm-button__primary:hover {
+	background: color-mix(
+		in srgb,
+		var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb))
+		75%,
+		#000
+	);
+}
+
+.vkbm-menu-loop__button--reserve {
+	background: var(
+		--vkbm--color--reservation-action,
+		var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb)
+	);
+	color: #fff;
+}
+
+.vkbm-menu-loop__button--reserve:hover {
+	background: color-mix(
+		in srgb,
+		var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb))
+		75%,
+		#000
+	);
+}
+
+.vkbm-button__secondary,
+a.vkbm-button__secondary {
+	background: var(--vkbm--color--secondary, #222);
+	color: #fff;
+}
+
+.vkbm-button__secondary:hover {
+	background: color-mix(in srgb, var(--vkbm--color--secondary, #222) 75%, #000);
+}
+
+.vkbm-button__danger,
+a.vkbm-button__danger {
+	background: var(--wp--preset--color--danger, #dc3545);
+	color: #fff;
+}
+
+.vkbm-button__danger:hover {
+	background: color-mix(in srgb, var(--wp--preset--color--danger, #dc3545) 75%, #000);
+}
+
+.vkbm-button__link {
+	background: transparent;
+	border: none;
+	color: var(--vkbm--color--link, #1d8fcb);
+	font-weight: 400;
+	min-height: auto;
+	padding: 0;
+	text-decoration: underline;
+}
+
+.vkbm-button-outline {
+	background: transparent;
+	border-color: currentColor;
+}
+
+.vkbm-button-outline__primary {
+	color: var(--vkbm--color--primary, #2563eb);
+}
+
+.vkbm-button-outline__secondary {
+	color: var(--vkbm--color--secondary, #222);
+}
+
+.vkbm-button-outline__danger {
+	color: var(--wp--preset--color--danger, #dc3545);
+}
+
+.vkbm-button-outline:hover {
+	filter: none;
+	opacity: 1;
+}
+
+.vkbm-button-outline.vkbm-button-outline__primary:hover {
+	background: var(--vkbm--color--primary, #2563eb);
+	border-color: var(--vkbm--color--primary, #2563eb);
+	color: #fff;
+}
+
+.vkbm-button-outline.vkbm-button-outline__secondary:hover {
+	background: var(--vkbm--color--secondary, #222);
+	border-color: var(--vkbm--color--secondary, #222);
+	color: #fff;
+}
+
+.vkbm-button-outline.vkbm-button-outline__danger:hover {
+	background: var(--wp--preset--color--danger, #dc3545);
+	border-color: var(--wp--preset--color--danger, #dc3545);
+	color: #fff;
+}
+
+/* Prefer background-only hover for solid buttons (filter affects text too). */
+.vkbm-button:where(:not([class*="outline"])):hover {
+	filter: none;
+}
+
+.vkbm-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	justify-content: flex-start;
+}
+
+.vkbm-buttons a {
+	font-weight: normal;
+}
+
+.vkbm-buttons__center {
+	justify-content: center;
+}
+
+.vkbm-buttons__right {
+	justify-content: flex-end;
+}
+
+/* Optional: stretch items to the same height when needed (e.g. button groups in toolbars). */
+.vkbm-buttons__stretch {
+	align-items: stretch;
+}

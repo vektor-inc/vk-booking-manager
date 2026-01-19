@@ -1,0 +1,68 @@
+.vkbm-alert {
+	margin: 0 0 1.25rem;
+	padding: 0.85rem 1rem;
+	border: 1px solid transparent;
+	border-radius: var(--vkbm--radius--md);
+	background: #f8fafc;
+	color: #0f172a;
+	font-size: 0.95rem;
+	line-height: 1.4;
+	text-align: left; /* 親要素の影響をうけるため指定 */
+	a {
+		color: var(--vkbm--alert-link-color, currentColor);
+		font-weight: 600;
+		text-decoration: underline;
+	}
+	:is(h2,h3,h4,h5) {
+		margin: 0 0 .5em;
+	}
+	ul {
+		margin: 0;
+		padding-left: 0;
+		list-style: none;
+	}
+	li {
+		text-align: left;
+	}
+	li + li {
+		margin-top: 0.35rem;
+	}
+	*:first-child {
+		margin-top: 0;
+	}
+	*:last-child {
+		margin-bottom: 0;
+	}
+}
+
+.vkbm-alert__danger {
+	--vkbm--alert-link-color: var(--vkbm--color--danger-link, #842029);
+	background: var(--vkbm--color--danger-bg, #f8d7da);
+	border-color: var(--vkbm--color--danger-border, #f5c2c7);
+	color: var(--vkbm--color--danger-text, #842029);
+}
+
+.vkbm-alert__warning {
+	--vkbm--alert-link-color: var(--vkbm--color--warning-link, #664d03);
+	background: var(--vkbm--color--warning-bg, #fff3cd);
+	border-color: var(--vkbm--color--warning-border, #ffecb5);
+	color: var(--vkbm--color--warning-text, #664d03);
+}
+
+.vkbm-alert__info {
+	--vkbm--alert-link-color: var(--vkbm--color--info-link, #055160);
+	background: var(--vkbm--color--info-bg, #cff4fc);
+	border-color: var(--vkbm--color--info-border, #b6effb);
+	color: var(--vkbm--color--info-text, #055160);
+}
+
+.vkbm-alert__success {
+	--vkbm--alert-link-color: var(--vkbm--color--success-link, #0f5132);
+	background: var(--vkbm--color--success-bg, #d1e7dd);
+	border-color: var(--vkbm--color--success-border, #badbcc);
+	color: var(--vkbm--color--success-text, #0f5132);
+}
+
+.vkbm-alert--compact {
+	margin: 0;
+}

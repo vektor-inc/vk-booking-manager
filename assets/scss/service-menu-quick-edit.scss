@@ -1,0 +1,68 @@
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group {
+	margin: 12px 0;
+}
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label {
+	display: grid;
+	grid-template-columns: 10em 1fr;
+	align-items: center;
+	column-gap: 8px;
+	margin: 0 0 8px;
+}
+.inline-edit-row .vkbm-service-menu-quick-edit label {
+	line-height: 1.5;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .title,
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap {
+	float: none;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .title {
+	width: auto;
+	white-space: nowrap;
+	padding-right: 0;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap {
+	margin-left: 0;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap input:where(:not([type='checkbox'])) {
+	width: 10em;
+	max-width: 100%;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap textarea {
+	width: 100%;
+	max-width: 100%;
+	height: 8em;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	max-height: 10em;
+	overflow: auto;
+	border: 1px solid #c3c4c7;
+	background: #fff;
+	padding: 6px 8px;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes li {
+	margin: 0 0 4px;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes li:last-child {
+	margin-bottom: 0;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes label {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes input[type='checkbox'] {
+	margin: 0;
+}

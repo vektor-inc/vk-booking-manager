@@ -1,0 +1,44 @@
+.vkbm-menu-search {
+	display: grid;
+	gap: 1.25rem;
+}
+
+.vkbm-menu-search__fields {
+	display: grid;
+	gap: 1rem;
+}
+
+.vkbm-menu-search__field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.vkbm-menu-search__field label {
+	font-weight: 600;
+}
+
+.vkbm-menu-search__field input,
+.vkbm-menu-search__field select {
+	min-height: 40px;
+}
+
+.vkbm-menu-search__field-label {
+	font-weight: 600;
+}
+
+.vkbm-menu-search__field-preview {
+	align-items: center;
+	background: #fff;
+	border: 1px dashed var(--wp--preset--color--contrast-4, #bababa);
+	border-radius: 4px;
+	color: var(--wp--preset--color--contrast-3, #6b6b6b);
+	display: flex;
+	font-size: 0.9rem;
+	min-height: 38px;
+	padding: 0 0.75rem;
+}
+
+.vkbm-menu-search__actions {
+	gap: 0.75rem;
+}

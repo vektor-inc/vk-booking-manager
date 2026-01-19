@@ -1,0 +1,41 @@
+:root {
+	--vkbm--color--border: #e0e0e0;
+	--vkbm--color--accent: #1d8fcb;
+	/* --vkbm--color--primary は基本設定画面で未指定の場合にテーマ側で--wp--preset--color--primary があたるように指定 */
+	--vkbm--color--primary: var(--wp--preset--color--primary, #2563eb);
+	--vkbm--color--secondary: var(--wp--preset--color--secondary, #222);
+	--vkbm--color--reservation-action: var(--vkbm--color--primary, var(--wp--preset--color--primary, #000000));
+	--vkbm--color--bg-primary: #ffffff;
+	--vkbm--color--bg-secondary: #f9fafb;
+	--vkbm--color--link: var(--vkbm--color--accent, #1d8fcb);
+	--vkbm--color--text-secondary: #666666;
+
+	--vkbm--color--info-bg: #cff4fc;
+	--vkbm--color--info-border: #b6effb;
+	--vkbm--color--info-text: #055160;
+	--vkbm--color--info-link: #055160;
+
+	--vkbm--color--success-bg: #d1e7dd;
+	--vkbm--color--success-border: #badbcc;
+	--vkbm--color--success-text: #0f5132;
+	--vkbm--color--success-link: #0f5132;
+
+	--vkbm--color--warning-bg: #fff3cd;
+	--vkbm--color--warning-border: #ffecb5;
+	--vkbm--color--warning-text: #664d03;
+	--vkbm--color--warning-link: #664d03;
+
+	--vkbm--color--danger-bg: #f8d7da;
+	--vkbm--color--danger-border: #f5c2c7;
+	--vkbm--color--danger-text: #842029;
+	--vkbm--color--danger-link: #842029;
+
+	--vkbm--radius--md: 8px;
+	--vkbm--radius--sm: calc( var(--vkbm--radius--md, 8px) / 2 );
+	--vkbm--radius--xs: calc( var(--vkbm--radius--md, 8px) / 4 );
+	--vkbm--spacing--lg: 2rem;
+	--vkbm--spacing--md: 1.5rem;
+	--vkbm--spacing--sm: 1rem;
+	--vkbm--spacing--xs: 0.5rem;
+
+}

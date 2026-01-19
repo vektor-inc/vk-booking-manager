@@ -1,0 +1,234 @@
+.vkbm-auth-card {
+	max-width: 520px;
+	border:1px solid var(--vkbm--color--border);
+	border-radius: var(--vkbm--radius--md);
+	background-color: var(--vkbm--color--bg-primary);
+	padding: var(--vkbm--spacing--lg);
+	margin: var(--vkbm--spacing--md) auto 0;
+}
+
+.vkbm-auth-card__title {
+	text-align: center;
+	font-size:1.4rem;
+	margin-top:0;
+	margin-bottom: var(--vkbm--spacing--sm);
+}
+
+.vkbm-auth-card__description {
+	margin: 0 0 var(--vkbm--spacing--md);
+	font-size: 0.95rem;
+	color: #475569;
+	text-align: center;
+}
+
+.vkbm-auth-form__field {
+	margin-bottom: 1.25rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	max-width: 620px;
+}
+
+.vkbm-auth-form__password {
+	position: relative;
+}
+
+.vkbm-auth-form__password-field {
+	position: relative;
+	width: 100%;
+}
+
+.vkbm-auth-form__password-field .vkbm-auth-form__input {
+	padding-right: 2.5rem;
+	width: 100%;
+}
+
+.vkbm-auth-form__password-toggle {
+	position: absolute;
+	right: 2px;
+	bottom: 2px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	background: #fff;
+	border: none;
+	border-radius: 5px; /* フォームの角が切れたりしないように */
+	color: #475569;
+	cursor: pointer;
+}
+
+.vkbm-auth-form__password-toggle:hover,
+.vkbm-auth-form__password-toggle:focus {
+	border-color: #2563eb;
+	color: #2563eb;
+}
+
+.vkbm-auth-form__password-toggle-icon {
+	fill: currentColor;
+}
+
+.vkbm-auth-form__password-toggle-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.vkbm-auth-form__field-group {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 1rem;
+}
+
+.vkbm-auth-form__field-group--inline {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: nowrap;
+}
+
+.vkbm-auth-form__field-group--inline .vkbm-auth-form__input {
+	width: 5.5em;
+	min-width: 4.5em;
+}
+
+.vkbm-auth-form__unit {
+	color: #1e293b;
+	white-space: nowrap;
+}
+
+.vkbm-auth-form__field--inline .vkbm-auth-form__label {
+	margin-bottom: 0;
+}
+
+.vkbm-auth-form__label {
+	display: block;
+	color: #1e293b;
+	white-space: nowrap;
+	text-align: left;
+}
+
+.vkbm-auth-form__feedback {
+	font-size: 0.9rem;
+	color: #dc2626;
+	min-height: 1.2rem;
+	margin-top: 0.35rem;
+	display: none;
+}
+
+.vkbm-auth-form__required {
+	color: #dc2626;
+	margin-left: 0.25rem;
+	font-size: 1.1rem;
+}
+
+.vkbm-auth-form__note {
+	font-size: 0.85rem;
+	color: var(--vkbm--color--text-secondary);
+	text-align: left;
+	margin: 0.25rem 0 0;
+}
+
+.vkbm-auth-form__input[disabled],
+.vkbm-auth-form__input:disabled {
+	background: #f1f5f9;
+	color: #94a3b8;
+	cursor: not-allowed;
+}
+
+/* keep only customized block defined once later */
+
+.vkbm-auth-form__input:focus {
+	border-color: #2563eb;
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+	background: #fff;
+}
+
+.vkbm-auth-form__meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 1.25rem;
+	font-size: 0.9rem;
+	color: #475569;
+}
+
+.vkbm-auth-form__remember {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	cursor: pointer;
+}
+
+.vkbm-auth-form__link {
+	text-decoration: underline;
+	text-underline-offset: .25em;
+}
+
+.vkbm-auth-form__link:hover,
+.vkbm-auth-form__link:focus {
+	color: var(--vkbm--color--primary);
+	text-decoration: none;
+}
+
+.vkbm-auth-form__actions {
+	margin-bottom: 0.75rem;
+}
+
+.vkbm-auth-button {
+	width: 100%;
+}
+
+
+.vkbm-auth-form__footer {
+	margin: 1rem 0 0;
+	font-size: 0.9rem;
+	color: #475569;
+	text-align: center;
+}
+
+.vkbm-auth-form__footer--register-link {
+	display: none;
+}
+
+.vkbm-auth-form__footer--login-link {
+	display: none;
+}
+
+.vkbm-auth-card--notice .vkbm-auth-card__description {
+	color: #be123c;
+	font-weight: 600;
+}
+
+@media (max-width: 600px) {
+	.vkbm-auth-card {
+		padding: 1.5rem;
+	}
+
+	.vkbm-auth-form__meta {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.35rem;
+	}
+}
+
+.vkbm-auth-form__honeypot {
+	position: absolute;
+	left: -9999px;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	visibility: hidden;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}

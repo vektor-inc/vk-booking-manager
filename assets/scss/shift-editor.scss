@@ -1,0 +1,55 @@
+.vkbm-shift-days {
+	margin-top: 1em;
+}
+
+.vkbm-shift-day-row > th,
+.vkbm-shift-day-row > td {
+	border-bottom: 1px solid #dcdcde;
+}
+
+.vkbm-shift-day-label {
+	width: 180px;
+	vertical-align: top;
+	padding-top: 12px;
+}
+
+.vkbm-shift-day-label-text {
+	display: block;
+	font-weight: 600;
+	white-space: nowrap;
+	margin-bottom: 10px;
+}
+
+.vkbm-shift-day-status-wrap {
+	display: block;
+}
+
+.vkbm-shift-day-status {
+	width: 100%;
+}
+
+.vkbm-shift-time-cell {
+	vertical-align: top;
+}
+
+.vkbm-shift-day-message {
+	margin-bottom: 8px;
+	color: #646970;
+}
+
+.vkbm-shift-day-row.is-status-closed .vkbm-shift-day-message {
+	color: #d63638;
+}
+
+.vkbm-shift-day-row.is-status-closed .vkbm-shift-add-slot {
+	pointer-events: none;
+}
+
+.vkbm-shift-period select {
+	min-width: 90px;
+	margin-right: 6px;
+}
+
+.vkbm-shift-period-suffix {
+	margin-right: 12px;
+}

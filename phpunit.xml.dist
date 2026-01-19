@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+	bootstrap="tests/phpunit/bootstrap.php"
+	colors="true"
+	processIsolation="false"
+	syntaxCheck="false"
+>
+	<testsuites>
+		<testsuite name="Plugin Test Suite">
+			<directory prefix="test-" suffix=".php">tests/phpunit</directory>
+		</testsuite>
+	</testsuites>
+	<php>
+		<const name="WP_PHP_BINARY" value="php" />
+	</php>
+</phpunit>

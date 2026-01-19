@@ -1,0 +1,23 @@
+.column-primary .row-title,
+.column-title .row-title {
+	cursor: move;
+}
+
+.vkbm-term-order-row--dirty td {
+	background-color: #fff8e5;
+}
+
+.vkbm-term-order-status {
+	font-size: 12px;
+	color: #646970;
+	margin-left: 12px;
+}
+
+.vkbm-term-order-status.is-error {
+	color: #d63638;
+}
+
+.vkbm-term-order-status.is-success {
+	color: #008a20;
+}
+

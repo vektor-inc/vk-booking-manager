@@ -1,0 +1,41 @@
+{
+	"name": "vk-booking-manager",
+	"version": "0.1.0",
+	"description": "Booking and scheduling manager tailored for multi-staff service providers.",
+	"private": true,
+	"scripts": {
+		"build": "wp-scripts build && npm run build:css && npm run build:i18n",
+		"build:free": "node bin/switch-resource-config-dev.js free && npm run build",
+		"build:pro": "node bin/switch-resource-config-dev.js pro && npm run build",
+		"build:css": "node bin/build-css-bundles.js",
+		"start": "wp-scripts start",
+		"build:i18n": "wp i18n make-pot . languages/vk-booking-manager.pot --include=\"src,assets,build/blocks\" --exclude=\"dist,node_modules,vendor,build/**/*.map,build/**/*.asset.php\" && msgmerge --update languages/vk-booking-manager-ja.po languages/vk-booking-manager.pot && msgfmt -o languages/vk-booking-manager-ja.mo languages/vk-booking-manager-ja.po && wp i18n make-json languages/vk-booking-manager-ja.po",
+		"lint:css": "wp-scripts lint-style",
+		"lint:js": "wp-scripts lint-js",
+		"format": "wp-scripts format",
+		"phpunit": "wp-env run tests-cli --env-cwd='wp-content/plugins/vk-booking-manager' sh -c 'composer install && wp db query \"CREATE DATABASE IF NOT EXISTS wordpress_test\" >/dev/null 2>&1 || true && vendor/bin/phpunit -c phpunit.xml.dist'",
+		"dist": "npm run dist:all",
+		"dist:prepare": "rm -rf dist && npm run build",
+		"dist:stage:free": "mkdir -p dist/vk-booking-manager && rsync -a --delete --exclude='.git' --exclude='.github' --exclude='.vscode' --exclude='bin' --exclude='node_modules' --exclude='dist' --exclude='docs' --exclude='.wordpress-env' --exclude='.idea' --exclude='.DS_Store' --exclude='*.zip' --exclude='vendor' --exclude='tests' --exclude='test' ./ dist/vk-booking-manager && cd dist/vk-booking-manager && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader && cd ../.. && node bin/switch-resource-config.js free",
+		"dist:stage:pro": "mkdir -p dist/vk-booking-manager-pro && rsync -a --delete --exclude='.git' --exclude='.github' --exclude='.vscode' --exclude='bin' --exclude='node_modules' --exclude='dist' --exclude='docs' --exclude='.wordpress-env' --exclude='.idea' --exclude='.DS_Store' --exclude='*.zip' --exclude='vendor' --exclude='tests' --exclude='test' ./ dist/vk-booking-manager-pro && cd dist/vk-booking-manager-pro && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader && cd ../.. && node bin/switch-resource-config.js pro vk-booking-manager-pro",
+		"dist:all": "npm run dist:prepare && npm-run-all -s dist:stage:free dist:stage:pro",
+		"dist:free": "npm run dist:prepare && npm run dist:stage:free",
+		"dist:pro": "npm run dist:prepare && npm run dist:stage:pro",
+		"zip": "npm run zip:all",
+		"zip:free": "npm run dist:free && npm run zip:free:from-dist",
+		"zip:pro": "npm run dist:pro && npm run zip:pro:from-dist",
+		"zip:free:from-dist": "cd dist && rm -f vk-booking-manager.zip && zip -qr vk-booking-manager.zip vk-booking-manager",
+		"zip:pro:from-dist": "cd dist && rm -f vk-booking-manager-pro.zip && zip -qr vk-booking-manager-pro.zip vk-booking-manager-pro",
+		"zip:all": "npm run dist:all && npm-run-all -s zip:free:from-dist zip:pro:from-dist"
+	},
+	"devDependencies": {
+		"@babel/core": "^7.28.5",
+		"@babel/preset-env": "^7.28.5",
+		"@babel/preset-react": "^7.28.5",
+		"@wordpress/env": "^10.3.0",
+		"@wordpress/scripts": "^30.27.0",
+		"clean-css": "^5.3.3",
+		"npm-run-all": "^4.1.5",
+		"sass": "^1.97.1"
+	}
+}

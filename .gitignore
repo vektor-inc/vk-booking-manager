@@ -1,0 +1,9 @@
+/node_modules/
+/vendor/
+.DS_Store
+.phpunit.result.cache
+/build/
+/.vscode/
+/dist/
+.wp-env.override.json
+/languages/*-*.json

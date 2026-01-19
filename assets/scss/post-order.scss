@@ -1,0 +1,22 @@
+.column-primary .row-title,
+.column-title .row-title {
+	cursor: move;
+}
+
+.vkbm-post-order-row--dirty td {
+	background-color: #fff8e5;
+}
+
+.vkbm-post-order-status {
+	font-size: 12px;
+	color: #646970;
+	margin-left: 12px;
+}
+
+.vkbm-post-order-status.is-error {
+	color: #d63638;
+}
+
+.vkbm-post-order-status.is-success {
+	color: #008a20;
+}

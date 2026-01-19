@@ -1,0 +1,70 @@
+/**
+ * VK Booking Manager common styles.
+ *
+ * このファイルはプラグイン全体（フロント/管理画面）で読み込まれる前提の共通CSSです。
+ * アプリ全体に効かせたいスタイルはここに追加してください。
+ */
+
+
+ *[class*="vkbm-"] {
+	&,
+	& * {
+		box-sizing: border-box;
+	}
+ 	&:where(:is(h1,h2,h3,h4,h5,h6,p,li,dt,dd)),
+	& :is(dt,dd){
+		text-box: trim-both text;
+	}
+ }
+.vkbm-form__label--block{
+	display: block;
+	margin-bottom: 5px;
+}
+.vkbm-reservation-block {
+	input:where(:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit'])),
+	textarea,
+	select {
+		padding: 0.7em;
+		border: 1px solid var(--vkbm--color--border);
+		border-radius: var(--vkbm--radius--sm);
+	}
+}
+
+.vkbm-agreements {
+	display: flex;
+	flex-direction: column;
+	gap: var(--vkbm--spacing--md);
+	margin-top:var(--vkbm--spacing--md);
+	margin-bottom:var(--vkbm--spacing--md);
+}
+
+.vkbm-agreement__title {
+	font-size: 1rem;
+	font-weight: 600;
+	margin: 0 0 0.75rem;
+}
+
+.vkbm-agreement__body {
+	white-space: pre-wrap;
+	font-size: 0.9rem;
+	line-height: 1.6;
+	color: #333;
+	background: #fafafa;
+	border: 1px solid var(--vkbm--color--border, #e0e0e0);
+	border-radius: var(--vkbm--radius--md, 6px);
+	padding: 0.75rem;
+}
+
+.vkbm-agreement__body--scroll {
+	max-height: 240px;
+	overflow: auto;
+}
+
+.vkbm-agreement__check {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+	font-size: 0.9rem;
+}
+

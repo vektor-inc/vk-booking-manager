@@ -1,0 +1,25 @@
+{
+	"apiVersion": 3,
+	"name": "vk-booking-manager/menu-search-field-category",
+	"title": "Service tag field",
+	"parent": [
+		"vk-booking-manager/menu-search"
+	],
+	"category": "widgets",
+	"icon": "category",
+	"textdomain": "vk-booking-manager",
+	"usesContext": [
+		"vk-booking-manager/menuSearchTargetId"
+	],
+	"attributes": {
+		"label": {
+			"type": "string",
+			"default": "service tag"
+		}
+	},
+	"supports": {
+		"customClassName": false,
+		"html": false
+	},
+	"editorScript": "file:./index.js"
+}

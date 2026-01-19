@@ -1,0 +1,35 @@
+.vkbm-shift-bulk-create {
+  background: #fff;
+  border: 1px solid #dcdcde;
+  border-radius: 4px;
+  padding: 16px;
+  margin: 12px 0 16px;
+  max-width: 720px;
+}
+
+.vkbm-shift-bulk-create__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.vkbm-shift-bulk-create__description {
+  margin: 0 0 12px;
+  color: #646970;
+}
+
+.vkbm-shift-bulk-create__form {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.vkbm-shift-bulk-create__select {
+  min-width: 140px;
+}
+
+.vkbm-shift-bulk-create__button {
+  min-width: 140px;
+  justify-content: center;
+}
+

@@ -1,0 +1,1712 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: vk-booking-manager 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-01-19T08:24:15+00:00\n"
+"PO-Revision-Date: 2026-01-19 11:31+0900\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.8\n"
+
+#~ msgid "VK Booking Manager"
+#~ msgstr "VK Booking Manager"
+
+#~ msgid "Vektor,Inc."
+#~ msgstr "Vektor,Inc."
+
+#~ msgid "https://vektor-inc.co.jp/"
+#~ msgstr "https://vektor-inc.co.jp/"
+
+#~ msgid "Basic settings"
+#~ msgstr "基本設定"
+
+#~ msgid "BM settings"
+#~ msgstr "BM 設定"
+
+#~ msgid "Failed to save settings."
+#~ msgstr "設定の保存に失敗しました。"
+
+#~ msgid "Basic settings saved."
+#~ msgstr "基本設定を保存しました。"
+
+#~ msgid "Select logo image"
+#~ msgstr "ロゴ画像を選択"
+
+#~ msgid "Select"
+#~ msgstr "選択"
+
+#~ msgid "You do not have permission to access this page."
+#~ msgstr "このページにアクセスする権限がありません。"
+
+#~ msgid "Settings tab"
+#~ msgstr "設定タブ"
+
+#~ msgid "Store basic information"
+#~ msgstr "店舗基本情報"
+
+#~ msgid "System settings"
+#~ msgstr "システム設定"
+
+#~ msgid "User registration settings"
+#~ msgstr "ユーザー登録設定"
+
+#~ msgid "User consent items"
+#~ msgstr "ユーザー同意項目"
+
+#~ msgid "design settings"
+#~ msgstr "デザイン設定"
+
+#~ msgid "FAQ"
+#~ msgstr "よくある質問"
+
+#~ msgid "Business name"
+#~ msgstr "事業者名"
+
+#~ msgid "This is the name used in notification emails and screen displays."
+#~ msgstr "通知メールや画面表示で使用される名称です。"
+
+#~ msgid "Address"
+#~ msgstr "住所"
+
+#~ msgid "Please enter the prefecture, city, town, street address, building name, etc. all at once."
+#~ msgstr "都道府県・市区町村・番地・建物名などをまとめて入力してください。"
+
+#~ msgid "Main phone number"
+#~ msgstr "代表電話番号"
+
+#~ msgid "It will be displayed in the signature of the notification email and the contact information."
+#~ msgstr "通知メールの署名や問い合わせ先に表示されます。"
+
+#~ msgid "Business hours text"
+#~ msgstr "営業時間のテキスト"
+
+#~ msgid "This will be displayed in the signature of notification emails, etc."
+#~ msgstr "通知メールの署名などに表示されます。"
+
+#~ msgid "Payment method"
+#~ msgstr "決済方法"
+
+#~ msgid "Enter payment instructions and supported payment methods (cash, credit card, IC, etc.) when visiting the store."
+#~ msgstr "来店時支払いの案内や対応決済方法（現金・クレカ・IC など）を入力します。"
+
+#~ msgid "Regular holiday"
+#~ msgstr "定休日"
+
+#~ msgid "No regular holidays"
+#~ msgstr "定休日なし"
+
+#~ msgid "period"
+#~ msgstr "周期"
+
+#~ msgid "day of week"
+#~ msgstr "曜日"
+
+#~ msgid "operation"
+#~ msgstr "操作"
+
+#~ msgid "Add regular holidays"
+#~ msgstr "定休日を追加"
+
+#~ msgid "Register regular holidays by combining \"every week\", \"1st to 5th\", and days of the week."
+#~ msgstr "「毎週」「第1〜第5」と曜日を組み合わせて定休日を登録します。"
+
+#~ msgid "Basic business hours"
+#~ msgstr "基本営業時間"
+
+#~ msgid "Add time zone"
+#~ msgstr "時間帯を追加"
+
+#~ msgid "Register the business hours that are common to the entire facility."
+#~ msgstr "施設全体で共通となる営業時間帯を登録します。"
+
+#~ msgid "Business hours by day of the week"
+#~ msgstr "曜日別営業時間"
+
+#~ msgid "subject"
+#~ msgstr "対象"
+
+#~ msgid "Individual time period"
+#~ msgstr "個別時間帯"
+
+#~ msgid "Regular holidays (every week)"
+#~ msgstr "定休日（毎週）"
+
+#~ msgid "Specify individual business hours"
+#~ msgstr "個別の営業時間を指定"
+
+#~ msgid "Since it is registered as a weekly regular holiday, it will be treated as closed."
+#~ msgstr "毎週の定休日として登録されているため休業扱いになります。"
+
+#~ msgid "On holidays and days before holidays, shifts are generated based on basic business hours or individual settings."
+#~ msgstr "祝日・祝日前日は基本営業時間または個別設定を基にシフトを生成します。"
+
+#~ msgid "Website URL"
+#~ msgstr "ウェブサイト URL"
+
+#~ msgid "Use it as a link in notification emails and on the reservation completion screen."
+#~ msgstr "通知メールや予約完了画面でリンクとして利用します。"
+
+#~ msgid "Reservation page URL"
+#~ msgstr "予約ページ URL"
+
+#~ msgid "Place a \"reservation block\" on the fixed page you want to use as a reservation page, and then enter the public URL of that fixed page."
+#~ msgstr "予約ページとして使用する固定ページに「予約ブロック」を配置した上で、その固定ページの公開URLを入力してください。"
+
+#~ msgid "Reservation page display elements"
+#~ msgstr "予約ページの表示要素"
+
+#~ msgid "logo image"
+#~ msgstr "ロゴ画像"
+
+#~ msgid "Service menu list"
+#~ msgstr "サービスメニュー一覧"
+
+#~ msgid "Service menu display mode"
+#~ msgstr "サービスメニュー表示モード"
+
+#~ msgid "card"
+#~ msgstr "カード"
+
+#~ msgid "text"
+#~ msgstr "テキスト"
+
+#~ msgid "Post-service buffer"
+#~ msgstr "サービス後バッファ"
+
+#~ msgid "minutes"
+#~ msgstr "分"
+
+#~ msgid "If there is an input for each service menu, that will take priority."
+#~ msgstr "各サービスメニューで入力がある場合はそちらが優先されます。"
+
+#~ msgid "Reservation deadline"
+#~ msgstr "予約締切"
+
+#~ msgid "hours ago"
+#~ msgstr "時間前"
+
+#~ msgid "Reservation status"
+#~ msgstr "予約ステータス"
+
+#~ msgid "Instant confirmation"
+#~ msgstr "即時確定"
+
+#~ msgid "Make a tentative reservation"
+#~ msgstr "仮予約にする"
+
+#~ msgid "For tentative reservations, a reservation confirmation email will be sent to the user even when the reservation is changed to confirmed."
+#~ msgstr "仮予約の場合、確定に変更された時点でもユーザーに予約確定メールが送信されます。"
+
+#~ msgid "*Reservations made by users with administrator privileges and salon privileges will be confirmed immediately."
+#~ msgstr "※ 管理者権限及びサロン側の権限を持つユーザーによる予約の場合は即時確定になります。"
+
+#~ msgid "Reservation cancellation"
+#~ msgstr "予約キャンセル"
+
+#~ msgid "Cancellation of reservations via the web by users"
+#~ msgstr "ユーザーによるウェブからの予約キャンセル"
+
+#~ msgid "time specification"
+#~ msgstr "時間指定"
+
+#~ msgid "Cannot be canceled"
+#~ msgstr "キャンセル不可"
+
+#~ msgid "until the hour"
+#~ msgstr "時間前まで"
+
+#~ msgid "Duplicate reservations for the same staff"
+#~ msgstr "同一スタッフの予約重複"
+
+#~ msgid "Permitted only if specified from the management screen"
+#~ msgstr "管理画面からの指定の場合に限り許可"
+
+#~ msgid "Duplicate reservations for the same staff member in the same time slot will only be permitted if manually specified by the staff member from the management screen."
+#~ msgstr "同一スタッフの同じ時間帯での重複予約について、管理画面からスタッフによる手動指定の場合に限って許可します。"
+
+#~ msgid "Representative email address"
+#~ msgstr "代表メールアドレス"
+
+#~ msgid "This is used as the reply address when sending notification emails."
+#~ msgstr "通知メール送信時の返信先などに利用します。"
+
+#~ msgid "membership"
+#~ msgstr "メンバーシップ"
+
+#~ msgid "Allow anyone to register as a user"
+#~ msgstr "だれでもユーザー登録ができるようにする"
+
+#~ msgid "*This is the same as the standard WordPress “Membership” settings."
+#~ msgstr "※ WordPress 標準の「メンバーシップ」設定と共通です。"
+
+#~ msgid "Email authentication during user registration"
+#~ msgstr "ユーザー登録時のメール認証"
+
+#~ msgid "enable"
+#~ msgstr "有効化する"
+
+#~ msgid "Uncheck to skip email authentication and enable the user upon registration (mainly for local or test environments)."
+#~ msgstr "チェックを外すとメール認証をスキップし、登録と同時にユーザーを有効にします（主にローカルやテスト環境用）。"
+
+#~ msgid "Registration/Login Attempt Limit"
+#~ msgstr "登録・ログイン試行回数制限"
+
+#~ msgid "User registration"
+#~ msgstr "ユーザー登録"
+
+#~ msgid "times / 30 minutes"
+#~ msgstr "回 / 30分"
+
+#~ msgid "Log in"
+#~ msgstr "ログイン"
+
+#~ msgid "times / 10 minutes"
+#~ msgstr "回 / 10分"
+
+#~ msgid "Login by IP is limited to %d times/10 minutes, and user registration is limited to %d times/30 minutes."
+#~ msgstr "IP単位でログインは%d回/10分、ユーザー登録は%d回/30分までに制限します。"
+
+#~ msgid "Registration screen redirection"
+#~ msgstr "登録画面のリダイレクト"
+
+#~ msgid "Disable the WordPress new user registration screen and redirect to this system's user registration screen"
+#~ msgstr "WordPressの新規ユーザー登録画面を無効にし、このシステムのユーザー登録画面にリダイレクトします"
+
+#~ msgid "Even if WordPress's \"Membership (which allows anyone to register as a user)\" is enabled, wp-login.php?action=register will direct you to the registration screen of this system."
+#~ msgstr "WordPress の「メンバーシップ（だれでもユーザー登録できるようにする）」が有効な場合でも、wp-login.php?action=register を本システムの登録画面へ誘導します。"
+
+#~ msgid "Login screen redirection"
+#~ msgstr "ログイン画面のリダイレクト"
+
+#~ msgid "Disable the WordPress login screen and redirect to this system's login screen"
+#~ msgstr "WordPressのログイン画面を無効にして、このシステムのログイン画面にリダイレクトします"
+
+#~ msgid "If you access wp-login.php, you will be directed to the login screen of the reservation page."
+#~ msgstr "wp-login.php にアクセスした場合は予約ページのログイン画面へ誘導します。"
+
+#~ msgid "Store logo image"
+#~ msgstr "店舗ロゴ画像"
+
+#~ msgid "select image"
+#~ msgstr "画像を選択"
+
+#~ msgid "delete image"
+#~ msgstr "画像を削除"
+
+#~ msgid "Select a logo image from your Media Library (optional)."
+#~ msgstr "Media Library からロゴ画像を選択します（任意）。"
+
+#~ msgid "Cancellation policy"
+#~ msgstr "キャンセルポリシー"
+
+#~ msgid "Enter the cancellation policy to be displayed on the reservation page, notification email, etc."
+#~ msgstr "予約ページや通知メール等で表示するキャンセル規定を入力します。"
+
+#~ msgid "System Terms of Use"
+#~ msgstr "システム利用規約"
+
+#~ msgid "Enter the terms of use for the entire service, including membership registration, prohibitions, and disclaimers."
+#~ msgstr "会員登録・禁止事項・免責事項など、サービス全体の利用規約を入力します。"
+
+#~ msgid "Privacy policy"
+#~ msgstr "プライバシーポリシー"
+
+#~ msgid "please select"
+#~ msgstr "選択してください"
+
+#~ msgid "Specify the URL of the privacy policy page"
+#~ msgstr "プライバシーポリシーページのURLを指定"
+
+#~ msgid "Specify from this page"
+#~ msgstr "このページから指定"
+
+#~ msgid "Select how to display the privacy policy that requires consent during user registration."
+#~ msgstr "ユーザー登録時に同意を求めるプライバシーポリシーの表示方法を選択します。"
+
+#~ msgid "Privacy policy page URL"
+#~ msgstr "プライバシーポリシーページのURL"
+
+#~ msgid "Alert when shift is not registered"
+#~ msgstr "シフト未登録時のアラート"
+
+#~ msgid "Display an alert if a shift for the next month is not registered."
+#~ msgstr "ヶ月先のシフトが登録されていなかったらアラートを表示する"
+
+#~ msgid "Displayed if there is an unregistered month within the specified number of months including the current month."
+#~ msgstr "当月を含めた指定月数の範囲で、未登録の月がある場合に表示します。"
+
+#~ msgid "Resource name (singular)"
+#~ msgstr "リソース名称（単数）"
+
+#~ msgid "Replaces the \"staff\" notation on the screen (does not change the post type name vkbm_resource)."
+#~ msgstr "画面上の「スタッフ」表記を置き換えます（投稿タイプ名 vkbm_resource は変更しません）。"
+
+#~ msgid "resource label"
+#~ msgstr "リソースラベル"
+
+#~ msgid "Replaces the \"available staff\" notation in the menu card."
+#~ msgstr "メニューカード内の「担当可能スタッフ」表記を置き換えます。"
+
+#~ msgid "Resource name (multiple)"
+#~ msgstr "リソース名称（複数）"
+
+#~ msgid "Used for plural notation in lists, menu names, etc."
+#~ msgstr "一覧・メニュー名など、複数形の表記に利用します。"
+
+#~ msgid "primary color"
+#~ msgstr "プライマリカラー"
+
+#~ msgid "Use as the UI primary color (--vkbm--color--primary)."
+#~ msgstr "UI の主要カラー（--vkbm--color--primary）として使用します。"
+
+#~ msgid "If not specified, the theme's primary color will be used if the theme's primary color (--wp--preset--color--primary) exists."
+#~ msgstr "未指定の場合は、テーマのプライマリカラー（--wp--preset--color--primary）が存在する場合にテーマのプライマリカラーを使用します。"
+
+#~ msgid "Proceed to reservation button color"
+#~ msgstr "予約に進むボタンの色"
+
+#~ msgid "Use as the background color for the Proceed to Booking button."
+#~ msgstr "予約に進むボタンの背景色として使用します。"
+
+#~ msgid "If not specified, the primary color will be applied."
+#~ msgstr "未指定の場合はプライマリカラーが適用されます。"
+
+#~ msgid "Basic size of rounded corners"
+#~ msgstr "角丸の基本サイズ"
+
+#~ msgid "Applies to rounded corners (--vkbm--radius--md) in the main component."
+#~ msgstr "主なコンポーネントの角丸（--vkbm--radius--md）に適用します。"
+
+#~ msgid "Q: Even after registering as a new user, the user does not receive a confirmation email."
+#~ msgstr "Q : 新規ユーザー登録してもユーザーに確認メールが届きません"
+
+#~ msgid "A: To authenticate the email sender and prevent tampering, emails that do not have DKIM settings on the server may not even reach the spam folder."
+#~ msgstr "A : 送信者認証と改ざん防止のため、サーバーに DKIM 設定がないメールは迷惑メールフォルダに届かないことがあります。"
+
+#~ msgid "Especially if the user's email address is gmail, it will not arrive."
+#~ msgstr "特にユーザーのメールアドレスが gmail の場合は届きません。"
+
+#~ msgid "Please check the following with the site administrator."
+#~ msgstr "サイト管理者に以下の事を確認してください。"
+
+#~ msgid "Is the domain where this system is running and the domain of the site administrator's email address the same?"
+#~ msgstr "このシステムが動作しているドメインとサイト管理者のメールアドレスのドメインは同じですか？"
+
+#~ msgid "Is DKIM configured on the server side for the domain where this system is running?"
+#~ msgstr "このシステムが動いているドメインについて、サーバー側でDKIM設定がされているか？"
+
+#~ msgid "save changes"
+#~ msgstr "変更を保存"
+
+#~ msgid "weekly"
+#~ msgstr "毎週"
+
+#~ msgid "1st"
+#~ msgstr "第1"
+
+#~ msgid "2nd"
+#~ msgstr "第2"
+
+#~ msgid "3rd"
+#~ msgstr "第3"
+
+#~ msgid "4th"
+#~ msgstr "第4"
+
+#~ msgid "Fifth"
+#~ msgstr "第5"
+
+#~ msgid "Monday"
+#~ msgstr "月曜日"
+
+#~ msgid "Tuesday"
+#~ msgstr "火曜日"
+
+#~ msgid "Wednesday"
+#~ msgstr "水曜日"
+
+#~ msgid "Thursday"
+#~ msgstr "木曜日"
+
+#~ msgid "Friday"
+#~ msgstr "金曜日"
+
+#~ msgid "Saturday"
+#~ msgstr "土曜日"
+
+#~ msgid "Sunday"
+#~ msgstr "日曜日"
+
+#~ msgid "holiday"
+#~ msgstr "祝日"
+
+#~ msgid "The day before a public holiday"
+#~ msgstr "祝日前日"
+
+#~ msgid "Start time (hour) of basic business hours"
+#~ msgstr "基本営業時間の開始時刻（時）"
+
+#~ msgid "Start time of basic business hours (minutes)"
+#~ msgstr "基本営業時間の開始時刻（分）"
+
+#~ msgid "End time (hour) of basic business hours"
+#~ msgstr "基本営業時間の終了時刻（時）"
+
+#~ msgid "End time of basic business hours (minutes)"
+#~ msgstr "基本営業時間の終了時刻（分）"
+
+#~ msgid "delete"
+#~ msgstr "削除"
+
+#~ msgid "Start time (hour) of %s"
+#~ msgstr "%s の開始時刻（時）"
+
+#~ msgid "Start time of %s (minutes)"
+#~ msgstr "%s の開始時刻（分）"
+
+#~ msgid "End time (hour) of %s"
+#~ msgstr "%s の終了時刻（時）"
+
+#~ msgid "End time of %s (minutes)"
+#~ msgstr "%s の終了時刻（分）"
+
+#~ msgid "Remove time slot for %s"
+#~ msgstr "%s の時間帯を削除"
+
+#~ msgid "Staff collaboration"
+#~ msgstr "スタッフ連携"
+
+#~ msgid "Public settings"
+#~ msgstr "公開設定"
+
+#~ msgid "Internal memo (customer hidden)"
+#~ msgstr "内部メモ（顧客非表示）"
+
+#~ msgid "Catchphrase"
+#~ msgstr "キャッチコピー"
+
+#~ msgid "Basic price (tax included)"
+#~ msgstr "基本料金（税込）"
+
+#~ msgid "This menu invalidates the nomination fee"
+#~ msgstr "このメニューは指名料を無効にする"
+
+#~ msgid "Time required (minutes)"
+#~ msgstr "所要時間（分）"
+
+#~ msgid "Post-service buffer (min)"
+#~ msgstr "サービス後バッファ（分）"
+
+#~ msgid "If it is left blank, the information entered on the basic settings screen will be reflected."
+#~ msgstr "未記入の場合は基本設定画面での入力内容が反映されます。"
+
+#~ msgid "Reservation date"
+#~ msgstr "予約可能日"
+
+#~ msgid "Not specified"
+#~ msgstr "指定なし"
+
+#~ msgid "Saturdays and Sundays only"
+#~ msgstr "土日限定"
+
+#~ msgid "Weekdays only"
+#~ msgstr "平日限定"
+
+#~ msgid "Other conditions"
+#~ msgstr "その他条件"
+
+#~ msgid "If not filled in, the information entered on the basic settings screen will be reflected."
+#~ msgstr "未記入の場合は基本設定画面での入力内容が反映されます"
+
+#~ msgid "Use the details page"
+#~ msgstr "詳細ページを使用する"
+
+#~ msgid "Staff available"
+#~ msgstr "担当可能スタッフ"
+
+#~ msgid "No staff members are registered."
+#~ msgstr "スタッフが登録されていません。"
+
+#~ msgid "Disable online reservations"
+#~ msgstr "オンライン予約を無効にする"
+
+#~ msgid "Mark as archived"
+#~ msgstr "アーカイブ済みにする"
+
+#~ msgid "Some items have not been set"
+#~ msgstr "未設定の項目があります"
+
+#~ msgid "Please set the following items."
+#~ msgstr "以下の項目を設定してください。"
+
+#~ msgid "Please register %s."
+#~ msgstr "%s を登録してください。"
+
+#~ msgid "%s is not set. Please register \"No regular holidays\" or regular holidays."
+#~ msgstr "%s が未設定です。「定休日なし」または定休日を登録してください。"
+
+#~ msgid "Please select %s."
+#~ msgstr "%s を選択してください。"
+
+#~ msgid "No staff members have been registered yet. First, add staff."
+#~ msgstr "スタッフがまだ登録されていません。まずはスタッフを追加してください。"
+
+#~ msgid "add staff"
+#~ msgstr "スタッフを追加"
+
+#~ msgid "Staff list"
+#~ msgstr "スタッフ一覧"
+
+#~ msgid "Service not registered yet. First, add a service menu."
+#~ msgstr "サービスがまだ登録されていません。まずはサービスメニューを追加してください。"
+
+#~ msgid "Add service"
+#~ msgstr "サービスを追加"
+
+#~ msgid "Service list"
+#~ msgstr "サービス一覧"
+
+#~ msgid "Shift not registered"
+#~ msgstr "シフト未登録"
+
+#~ msgid "%d Monthly shift is not registered."
+#~ msgstr "%d月のシフトが登録されていません。"
+
+#~ msgid "Register shift"
+#~ msgstr "シフトを登録"
+
+#~ msgid "Shift/reservation table"
+#~ msgstr "シフト・予約表"
+
+#~ msgid "BM shift/reservation"
+#~ msgstr "BM シフト・予約"
+
+#~ msgid "Confirmed"
+#~ msgstr "確定"
+
+#~ msgid "Confirmation processing in progress..."
+#~ msgstr "確定処理中…"
+
+#~ msgid "Confirmation failed. Please try again later."
+#~ msgstr "確定に失敗しました。時間をおいて再度お試しください。"
+
+#~ msgid "Mon"
+#~ msgstr "月"
+
+#~ msgid "Tue"
+#~ msgstr "火"
+
+#~ msgid "Wed"
+#~ msgstr "水"
+
+#~ msgid "Thu"
+#~ msgstr "木"
+
+#~ msgid "Fri"
+#~ msgstr "金"
+
+#~ msgid "Sat"
+#~ msgstr "土"
+
+#~ msgid "Sun"
+#~ msgstr "日"
+
+#~ msgid "Reservation Page"
+#~ msgstr "予約ページ"
+
+#~ msgid "previous day"
+#~ msgstr "前の日"
+
+#~ msgid "the next day"
+#~ msgstr "次の日"
+
+#~ msgid "time"
+#~ msgstr "時間"
+
+#~ msgid "Shift not set."
+#~ msgstr "シフトが設定されていません。"
+
+#~ msgid "previous month"
+#~ msgstr "前の月"
+
+#~ msgid "next month"
+#~ msgstr "次の月"
+
+#~ msgid "Reservation"
+#~ msgstr "予約"
+
+#~ msgid "Person in charge undecided"
+#~ msgstr "担当未定"
+
+#~ msgid "Name not entered"
+#~ msgstr "お名前未入力"
+
+#~ msgid "Person in charge not set"
+#~ msgstr "担当未設定"
+
+#~ msgid "%1$s / %2$s"
+#~ msgstr "%1$s 様 / %2$s"
+
+#~ msgid "notice"
+#~ msgstr "お知らせ"
+
+#~ msgid "I have an unconfirmed \"tentative reservation\". Please check and confirm the contents."
+#~ msgstr "未確定の「仮予約」があります。内容を確認して確定させてください。"
+
+#~ msgid "There are currently no pending reservations."
+#~ msgstr "現在、未確定の仮予約はありません。"
+
+#~ msgid "detail"
+#~ msgstr "詳細"
+
+#~ msgid "certain"
+#~ msgstr "確"
+
+#~ msgid "tentative"
+#~ msgstr "仮"
+
+#~ msgid "Staff"
+#~ msgstr "スタッフ"
+
+#~ msgid "You don't have permission."
+#~ msgstr "このページにアクセスする権限がありません。"
+
+#~ msgid "No reservations found."
+#~ msgstr "予約が見つかりません。"
+
+#~ msgid "The target reservation could not be retrieved."
+#~ msgstr "対象の予約を取得できませんでした。"
+
+#~ msgid "Your reservation could not be updated."
+#~ msgstr "予約を更新できませんでした。"
+
+#~ msgid "Temporary work"
+#~ msgstr "臨時勤務"
+
+#~ msgid "Fixed holidays available"
+#~ msgstr "定休日対応"
+
+#~ msgid "Temporary closure"
+#~ msgstr "臨時休業"
+
+#~ msgid "Off"
+#~ msgstr "休み"
+
+#~ msgid "work"
+#~ msgstr "勤務"
+
+#~ msgid "Shift not set"
+#~ msgstr "シフト未設定"
+
+#~ msgid "Work schedule"
+#~ msgstr "勤務予定"
+
+#~ msgid "Pending"
+#~ msgstr "仮予約"
+
+#~ msgid "Cancelled"
+#~ msgstr "キャンセル"
+
+#~ msgid "No-show"
+#~ msgstr "無断キャンセル"
+
+#~ msgid "Closed"
+#~ msgstr "休業"
+
+#~ msgid "style guide"
+#~ msgstr "スタイルガイド"
+
+#~ msgid "Style guide (management screen)"
+#~ msgstr "スタイルガイド（管理画面）"
+
+#~ msgid "Style guide file not found."
+#~ msgstr "スタイルガイドファイルが見つかりません。"
+
+#~ msgid "Reservation system information"
+#~ msgstr "予約システム情報"
+
+#~ msgid "Furigana"
+#~ msgstr "ふりがな"
+
+#~ msgid "telephone number"
+#~ msgstr "電話番号"
+
+#~ msgid "date of birth"
+#~ msgstr "生年月日"
+
+#~ msgid "Date of birth (year)"
+#~ msgstr "生年月日（年）"
+
+#~ msgid "year"
+#~ msgstr "年"
+
+#~ msgid "date of birth (month)"
+#~ msgstr "生年月日（月）"
+
+#~ msgid "date of birth (day)"
+#~ msgstr "生年月日（日）"
+
+#~ msgid "Invalid verification link."
+#~ msgstr "無効な確認リンクです。"
+
+#~ msgid "The confirmation link has expired."
+#~ msgstr "確認リンクの有効期限が切れています。"
+
+#~ msgid "Email verification has been completed. Please log in."
+#~ msgstr "メール認証が完了しました。ログインしてください。"
+
+#~ msgid "Username or email address"
+#~ msgstr "ユーザー名またはメールアドレス"
+
+#~ msgid "password"
+#~ msgstr "パスワード"
+
+#~ msgid "Show password"
+#~ msgstr "パスワードを表示"
+
+#~ msgid "hide password"
+#~ msgstr "パスワードを非表示"
+
+#~ msgid "show password"
+#~ msgstr "パスワードを表示"
+
+#~ msgid "Stay logged in"
+#~ msgstr "ログイン状態を保持する"
+
+#~ msgid "Forgot your password?"
+#~ msgstr "パスワードをお忘れですか？"
+
+#~ msgid "Click here for new registration"
+#~ msgstr "新規登録はこちら"
+
+#~ msgid "Create an account"
+#~ msgstr "アカウントを作成"
+
+#~ msgid "register"
+#~ msgstr "登録する"
+
+#~ msgid "username"
+#~ msgstr "ユーザー名"
+
+#~ msgid "Only half-width alphanumeric characters・_・@・.・- can be used."
+#~ msgstr "半角英数字・_・@・.・- のみ使用できます。"
+
+#~ msgid "email address"
+#~ msgstr "メールアドレス"
+
+#~ msgid "Password (confirm)"
+#~ msgstr "パスワード（確認）"
+
+#~ msgid "I agree to the terms of use"
+#~ msgstr "利用規約に同意します"
+
+#~ msgid "I agree to the privacy policy"
+#~ msgstr "プライバシーポリシーに同意します"
+
+#~ msgid "I agree with %s"
+#~ msgstr "%sに同意します"
+
+#~ msgid "Email address (for confirmation)"
+#~ msgstr "メールアドレス（確認用）"
+
+#~ msgid "When you click the Register button, a confirmation email will be sent, so please check your email. If you have not received the email, please also check your spam folder."
+#~ msgstr "登録する ボタンをクリックすると確認メールが送信されますのでメールを確認してください。メールが届いていない場合は迷惑メールフォルダも確認してください。"
+
+#~ msgid "Please enter the username using only half-width alphanumeric characters, _, @, ., and -."
+#~ msgstr "ユーザー名は半角英数字・_・@・.・- のみで入力してください。"
+
+#~ msgid "Log in here"
+#~ msgstr "こちらからログイン"
+
+#~ msgid "Please log in to edit your profile."
+#~ msgstr "プロフィールを編集するにはログインしてください。"
+
+#~ msgid "Edit user information"
+#~ msgstr "ユーザー情報編集"
+
+#~ msgid "save"
+#~ msgstr "保存する"
+
+#~ msgid "New Password"
+#~ msgstr "新しいパスワード"
+
+#~ msgid "Leave empty if you do not want to change it."
+#~ msgstr "変更しない場合は空のままにしてください。"
+
+#~ msgid "New password (confirm)"
+#~ msgstr "新しいパスワード（確認）"
+
+#~ msgid "Login required."
+#~ msgstr "ログインが必要です。"
+
+#~ msgid "User information has been updated."
+#~ msgstr "ユーザー情報を更新しました。"
+
+#~ msgid "Security check failed. Please reload the page and try again."
+#~ msgstr "セキュリティチェックに失敗しました。ページを再読み込みしてもう一度お試しください。"
+
+#~ msgid "Too many attempts in a short period of time. Please try again later."
+#~ msgstr "短時間に試行回数が多すぎます。時間をおいて再度お試しください。"
+
+#~ msgid "Please enter your username (or email address)."
+#~ msgstr "ユーザー名（もしくはメールアドレス）を入力してください。"
+
+#~ msgid "Please enter your password."
+#~ msgstr "パスワードを入力してください。"
+
+#~ msgid "Email verification has not been completed. Please click the link in the registered email to confirm."
+#~ msgstr "メール認証が完了していません。登録したメール内のリンクをクリックして確認を済ませてください。"
+
+#~ msgid "Email verification has not been completed."
+#~ msgstr "メール認証が完了していません。"
+
+#~ msgid "An invalid request was detected."
+#~ msgstr "不正なリクエストを検出しました。"
+
+#~ msgid "We are currently not accepting user registration."
+#~ msgstr "現在ユーザー登録は受け付けていません。"
+
+#~ msgid "Please enter your user name in half-width alphanumeric characters (letters, numbers, underscores)."
+#~ msgstr "ユーザー名は半角英数字（英字・数字・アンダースコア）で入力してください。"
+
+#~ msgid "Please enter your username."
+#~ msgstr "ユーザー名を入力してください。"
+
+#~ msgid "You must agree to the terms of use."
+#~ msgstr "利用規約への同意が必要です。"
+
+#~ msgid "You must agree to the privacy policy."
+#~ msgstr "プライバシーポリシーへの同意が必要です。"
+
+#~ msgid "This username is already in use."
+#~ msgstr "このユーザー名は既に使用されています。"
+
+#~ msgid "Failed to send confirmation email. Please try again later."
+#~ msgstr "確認メールの送信に失敗しました。時間をおいてもう一度お試しください。"
+
+#~ msgid "A confirmation email has been sent. Click the link in the email to authenticate and log in."
+#~ msgstr "確認メールを送信しました。メール内のリンクをクリックして認証後にログインしてください。"
+
+#~ msgid "Thank you for registering. Please log in to continue booking."
+#~ msgstr "ご登録ありがとうございます。ログインして予約を続けてください。"
+
+#~ msgid "You are logged in as %s."
+#~ msgstr "%s としてログイン中です。"
+
+#~ msgid "Log out"
+#~ msgstr "ログアウト"
+
+#~ msgid "[%s] Confirm email address"
+#~ msgstr "[%s] メールアドレスの確認"
+
+#~ msgid "Last name"
+#~ msgstr "姓"
+
+#~ msgid "given name"
+#~ msgstr "名"
+
+#~ msgid "sex"
+#~ msgstr "性別"
+
+#~ msgid "male"
+#~ msgstr "男性"
+
+#~ msgid "woman"
+#~ msgstr "女性"
+
+#~ msgid "others"
+#~ msgstr "その他"
+
+#~ msgid "Please enter furigana."
+#~ msgstr "ふりがなを入力してください。"
+
+#~ msgid "Please enter your phone number."
+#~ msgstr "電話番号を入力してください。"
+
+#~ msgid "Please fill in the required fields."
+#~ msgstr "必須項目を入力してください。"
+
+#~ msgid "Please enter a valid email address."
+#~ msgstr "有効なメールアドレスを入力してください。"
+
+#~ msgid "This email address is already in use."
+#~ msgstr "このメールアドレスは既に使用されています。"
+
+#~ msgid "This email address is already registered."
+#~ msgstr "このメールアドレスは既に登録済みです。"
+
+#~ msgid "Please enter the same password twice."
+#~ msgstr "同じパスワードを2回入力してください。"
+
+#~ msgid "New passwords do not match."
+#~ msgstr "新しいパスワードが一致しません。"
+
+#~ msgid "Please enter a password of 8 characters or more."
+#~ msgstr "パスワードは8文字以上で入力してください。"
+
+#~ msgid "Entered username"
+#~ msgstr "入力されたユーザー名"
+
+#~ msgid "%s is a non-existent user."
+#~ msgstr "%s は存在しないユーザーです。"
+
+#~ msgid "The year specification is invalid."
+#~ msgstr "年の指定が不正です。"
+
+#~ msgid "The month specification is invalid."
+#~ msgstr "月の指定が不正です。"
+
+#~ msgid "Date format is incorrect."
+#~ msgstr "日付の形式が正しくありません。"
+
+#~ msgid "The specified menu was not found."
+#~ msgstr "指定されたメニューが見つかりません。"
+
+#~ msgid "Menu has not been published."
+#~ msgstr "メニューが公開されていません。"
+
+#~ msgid "Archived menus cannot be reserved."
+#~ msgstr "アーカイブ済みのメニューは予約できません。"
+
+#~ msgid "This menu is not available for online reservation."
+#~ msgstr "オンライン予約が無効なメニューです。"
+
+#~ msgid "The specified staff member cannot be in charge of this menu."
+#~ msgstr "指定されたスタッフはこのメニューを担当できません。"
+
+#~ msgid "No staff members have been set up to be in charge."
+#~ msgstr "担当可能なスタッフが設定されていません。"
+
+#~ msgid "No preference"
+#~ msgstr "指名なし"
+
+#~ msgid "Menu loop ID has not been set. Please check your ID."
+#~ msgstr "メニューループIDが未設定です。IDを確認してください。"
+
+#~ msgid "No service menus matching the criteria were found."
+#~ msgstr "条件に合致するサービスメニューが見つかりませんでした。"
+
+#~ msgid "%d minutes"
+#~ msgstr "%d分"
+
+#~ msgid "Time required"
+#~ msgstr "所要時間"
+
+#~ msgid "View details"
+#~ msgstr "詳細を見る"
+
+#~ msgid "Proceed to Reservation"
+#~ msgstr "予約に進む"
+
+#~ msgid "(tax included)"
+#~ msgstr " (税込)"
+
+#~ msgid "edit"
+#~ msgstr "編集"
+
+#~ msgid "The menu loop ID to be searched has not been set."
+#~ msgstr "検索対象のメニューループIDが設定されていません。"
+
+#~ msgid "The menu loop block to be displayed was not found."
+#~ msgstr "表示対象のメニューループブロックが見つかりません。"
+
+#~ msgid "Search with these conditions"
+#~ msgstr "この条件で検索"
+
+#~ msgid "service tag"
+#~ msgstr "サービスタグ"
+
+#~ msgid "keyword"
+#~ msgstr "キーワード"
+
+#~ msgid "all"
+#~ msgstr "すべて"
+
+#~ msgid "Reservation details"
+#~ msgstr "予約詳細"
+
+#~ msgid "Reserver"
+#~ msgstr "予約者"
+
+#~ msgid "List of reservations made by this person"
+#~ msgstr "この予約者の予約一覧"
+
+#~ msgid "start"
+#~ msgstr "開始"
+
+#~ msgid "end"
+#~ msgstr "終了"
+
+#~ msgid "Person in charge%s"
+#~ msgstr "担当%s"
+
+#~ msgid "Select %s"
+#~ msgstr "%sを選択"
+
+#~ msgid "Nomination category"
+#~ msgstr "指名区分"
+
+#~ msgid "Reservation of %s nomination by customer"
+#~ msgstr "顧客による%s指名の予約"
+
+#~ msgid "Checked when a customer makes a reservation by naming %s."
+#~ msgstr "顧客が%sを指名して予約した場合にチェックされます。"
+
+#~ msgid "Prices are based on the \"basic service fee\", \"nomination fee\", and \"total basic fee\" saved at the time of reservation. Please enter the \"total billing amount\" if necessary."
+#~ msgstr "料金は予約時の「基本サービス料」「指名料」「合計基本料」に基づいて保存されています。必要に応じて「合計請求金額」を入力してください。"
+
+#~ msgid "nomination fee"
+#~ msgstr "税込"
+
+#~ msgid "Menu"
+#~ msgstr "メニュー"
+
+#~ msgid "Change menu (exception)"
+#~ msgstr "メニューを変更する（例外）"
+
+#~ msgid "Select menu"
+#~ msgstr "メニューを選択"
+
+#~ msgid "In principle, the menu selected at the time of reservation will not be changed. Please check and select only if you need to make changes (the price saved at the time of booking will not be changed)."
+#~ msgstr "原則、予約時に選択されたメニューは変更しません。変更が必要な場合のみチェックして選択してください（予約時点で保存された料金は変更しません）。"
+
+#~ msgid "Service basic fee"
+#~ msgstr "サービス基本料金"
+
+#~ msgid "This is the basic service charge at the time of reservation. (Cannot be edited)"
+#~ msgstr "予約時点のサービス基本料金です。（編集不可）"
+
+#~ msgid "Total basic fee"
+#~ msgstr "基本料金合計"
+
+#~ msgid "This is the total of the basic service fee + nomination fee at the time of reservation. (Cannot be edited)"
+#~ msgstr "予約時点のサービス基本料金＋指名料の合計です。（編集不可）"
+
+#~ msgid "Total billing amount"
+#~ msgstr "請求金額合計"
+
+#~ msgid "If there are any service changes or additional charges, please enter the final amount charged, including the nomination fee. If not entered, the total basic fee will be applied."
+#~ msgstr "サービス変更や追加料金などがあった場合に、指名料を含めて最終的に請求した金額を入力してください。未入力の場合は基本料金合計が適用されます。"
+
+#~ msgid "Current applicable amount (reference): %s"
+#~ msgstr "現在の適用額（参考）: %s"
+
+#~ msgid "customer name"
+#~ msgstr "顧客名"
+
+#~ msgid "Treatment image"
+#~ msgstr "施術画像"
+
+#~ msgid "enlarge image"
+#~ msgstr "画像拡大表示"
+
+#~ msgid "Previous"
+#~ msgstr "前へ"
+
+#~ msgid "to the next"
+#~ msgstr "次へ"
+
+#~ msgid "close"
+#~ msgstr "閉じる"
+
+#~ msgid "addition"
+#~ msgstr "追加"
+
+#~ msgid "You can register multiple images."
+#~ msgstr "複数の画像を登録する事ができます。"
+
+#~ msgid "Images uploaded from here will be automatically converted and resized to jpg format."
+#~ msgstr "ここからアップロードされた画像は自動的にjpg形式に変換・リサイズされます。"
+
+#~ msgid "memo"
+#~ msgstr "メモ"
+
+#~ msgid "Management memo"
+#~ msgstr "運営側メモ"
+
+#~ msgid "Reservation title"
+#~ msgstr "予約タイトル"
+
+#~ msgid "Reservation date and time"
+#~ msgstr "予約日時"
+
+#~ msgid "in charge"
+#~ msgstr "担当"
+
+#~ msgid "Not set"
+#~ msgstr "未設定"
+
+#~ msgid "not clear"
+#~ msgstr "不明"
+
+#~ msgid "The selected %1$s (%2$s) cannot be specified because there is another reservation in the same time slot."
+#~ msgstr "選択した%1$s（%2$s）は同じ時間帯に他の予約があるため指定できません。"
+
+#~ msgid "The selected %1$s cannot be specified because there is another reservation in the same time slot."
+#~ msgstr "選択した%1$sは同じ時間帯に他の予約があるため指定できません。"
+
+#~ msgid "This %1$s (%2$s) has another reservation for the same time slot."
+#~ msgstr "この%1$s（%2$s）は同じ時間帯に他の予約が入っています。"
+
+#~ msgid "This %1$s has other reservations for the same time slot."
+#~ msgstr "この%1$sは同じ時間帯に他の予約が入っています。"
+
+#~ msgid "Draft token not found."
+#~ msgstr "ドラフトトークンが見つかりません。"
+
+#~ msgid "Draft not found."
+#~ msgstr "ドラフトが見つかりません。"
+
+#~ msgid "Draft contents are incomplete."
+#~ msgstr "ドラフト内容が不完全です。"
+
+#~ msgid "The selected date cannot be reserved. Please choose another date."
+#~ msgstr "選択した日付は予約できません。別の日付を選択してください。"
+
+#~ msgid "The selected staff member is no longer available."
+#~ msgstr "指定されたスタッフはこのメニューを担当できません。"
+
+#~ msgid "Could not assign person %s. Please try a different frame."
+#~ msgstr "担当%sを割り当てできませんでした。別の枠でお試しください。"
+
+#~ msgid "You must agree to the cancellation policy."
+#~ msgstr "キャンセルポリシーへの同意が必要です。"
+
+#~ msgid "A reservation for the same date and time already exists. Please change the date and time."
+#~ msgstr "同じ日時の予約が既に存在します。日時を変更してください。"
+
+#~ msgid "Reservation slot information is incorrect."
+#~ msgstr "予約枠情報が不正です。"
+
+#~ msgid "The selected slot is no longer available. Please choose another slot."
+#~ msgstr "選択した日付は予約できません。別の日付を選択してください。"
+
+#~ msgid "Menu ID is invalid."
+#~ msgstr "メニューIDが不正です。"
+
+#~ msgid "Token is invalid."
+#~ msgstr "トークンが不正です。"
+
+#~ msgid "You do not have permission to access this draft."
+#~ msgstr "このページにアクセスする権限がありません。"
+
+#~ msgid "The reservation ID is invalid."
+#~ msgstr "予約IDが不正です。"
+
+#~ msgid "You do not have permission to cancel this reservation."
+#~ msgstr "この予約をキャンセルする権限がありません。"
+
+#~ msgid "The reservation date and time is invalid."
+#~ msgstr "予約日時が不正です。"
+
+#~ msgid "This reservation cannot be canceled online."
+#~ msgstr "この予約はウェブからキャンセルできません。"
+
+#~ msgid "The cancellation deadline has passed."
+#~ msgstr "キャンセル可能期限を過ぎています。"
+
+#~ msgid "Site Owner"
+#~ msgstr "サイトオーナー"
+
+#~ msgid "Salon Owner"
+#~ msgstr "サロンオーナー"
+
+#~ msgid "Default Staff"
+#~ msgstr "基本スタッフ"
+
+#~ msgid "TBD"
+#~ msgstr "未定"
+
+#~ msgid "customer"
+#~ msgstr "お客様"
+
+#~ msgid "(none)"
+#~ msgstr "（なし）"
+
+#~ msgid "Your reservation has been confirmed."
+#~ msgstr "ご予約が確定しました。"
+
+#~ msgid "Your reservation has been cancelled."
+#~ msgstr "予約がキャンセルされました。"
+
+#~ msgid "We have tentatively accepted your reservation."
+#~ msgstr "ご予約を仮受付いたしました。"
+
+#~ msgid "This reservation is a provisional reservation. The administrator will confirm and confirm."
+#~ msgstr "この予約は仮予約です。管理者が確認の上確定されます。"
+
+#~ msgid "Not provided"
+#~ msgstr "未入力"
+
+#~ msgid "Manage this reservation"
+#~ msgstr "この予約を管理"
+
+#~ msgid "+ Nomination fee ¥%s"
+#~ msgstr " + 指名料 ¥%s"
+
+#~ msgid "Menu order"
+#~ msgstr "メニュー順"
+
+#~ msgid "Saving sort order..."
+#~ msgstr "並び順を保存中…"
+
+#~ msgid "Sort order saved"
+#~ msgstr "並び順を保存しました"
+
+#~ msgid "Saving failed. Please try again later."
+#~ msgstr "保存に失敗しました。時間をおいて再度お試しください。"
+
+#~ msgid "Unsupported post type."
+#~ msgstr "サポートされていない投稿タイプです。"
+
+#~ msgid "You do not have permission to perform this operation."
+#~ msgstr "この操作を行う権限がありません。"
+
+#~ msgid "No sorting targets found."
+#~ msgstr "並び替え対象が見つかりません。"
+
+#~ msgid "No sortable posts found."
+#~ msgstr "並び替え可能な投稿が見つかりません。"
+
+#~ msgid "Some posts were not found. Please reload the page."
+#~ msgstr "一部の投稿が見つかりませんでした。ページを再読み込みしてください。"
+
+#~ msgid "An error occurred while saving the sort order."
+#~ msgstr "並び順の保存中にエラーが発生しました。"
+
+#~ msgid "BM reservation"
+#~ msgstr "BM 予約"
+
+#~ msgid "New addition"
+#~ msgstr "新規追加"
+
+#~ msgid "Add reservation"
+#~ msgstr "予約を追加"
+
+#~ msgid "Edit reservation"
+#~ msgstr "予約を編集"
+
+#~ msgid "new reservation"
+#~ msgstr "新しい予約"
+
+#~ msgid "View reservation"
+#~ msgstr "予約を表示"
+
+#~ msgid "Search for reservations"
+#~ msgstr "予約を検索"
+
+#~ msgid "There are no reservations in the trash can."
+#~ msgstr "ゴミ箱に予約はありません。"
+
+#~ msgid "all reservations"
+#~ msgstr "すべての予約"
+
+#~ msgid "Reservation archive"
+#~ msgstr "予約アーカイブ"
+
+#~ msgid "Reserved attributes"
+#~ msgstr "予約属性"
+
+#~ msgid "Posted by"
+#~ msgstr "投稿者"
+
+#~ msgid "Add %s"
+#~ msgstr "%sを追加"
+
+#~ msgid "Edit %s"
+#~ msgstr "%sを編集"
+
+#~ msgid "new %s"
+#~ msgstr "新しい%s"
+
+#~ msgid "Show %s"
+#~ msgstr "%sを表示"
+
+#~ msgid "Search for %s"
+#~ msgstr "%sを検索"
+
+#~ msgid "%s not found."
+#~ msgstr "%sが見つかりません。"
+
+#~ msgid "There is no %s in the trash."
+#~ msgstr "ゴミ箱に%sはありません。"
+
+#~ msgid "All %s"
+#~ msgstr "すべての%s"
+
+#~ msgid "%s Archive"
+#~ msgstr "%sアーカイブ"
+
+#~ msgid "%s attribute"
+#~ msgstr "%s属性"
+
+#~ msgid "Insert into %s"
+#~ msgstr "%sに挿入"
+
+#~ msgid "Upload to this %s"
+#~ msgstr "この%sへのアップロード"
+
+#~ msgid "Service menu"
+#~ msgstr "サービスメニュー"
+
+#~ msgid "BM service"
+#~ msgstr "BM サービス"
+
+#~ msgid "Edit service menu"
+#~ msgstr "サービスメニューを編集"
+
+#~ msgid "new service menu"
+#~ msgstr "新しいサービスメニュー"
+
+#~ msgid "Display service menu"
+#~ msgstr "サービスメニューを表示"
+
+#~ msgid "Search service menu"
+#~ msgstr "サービスメニューを検索"
+
+#~ msgid "Service menu not found."
+#~ msgstr "サービスメニューが見つかりません。"
+
+#~ msgid "There is no service menu in the trash can."
+#~ msgstr "ゴミ箱にサービスメニューはありません。"
+
+#~ msgid "all services"
+#~ msgstr "すべてのサービス"
+
+#~ msgid "Service menu archive"
+#~ msgstr "サービスメニューアーカイブ"
+
+#~ msgid "Service menu attributes"
+#~ msgstr "サービスメニュー属性"
+
+#~ msgid "Insert into service menu"
+#~ msgstr "サービスメニューに挿入"
+
+#~ msgid "Upload to this service menu"
+#~ msgstr "このサービスメニューへのアップロード"
+
+#~ msgid "Fee"
+#~ msgstr "料金"
+
+#~ msgid "%s minutes"
+#~ msgstr "%s 分"
+
+#~ msgid "%s hours ago"
+#~ msgstr "%s 時間前"
+
+#~ msgid "Price (tax included)"
+#~ msgstr "料金（税込）"
+
+#~ msgid "Nomination fee setting"
+#~ msgstr "指名料設定"
+
+#~ msgid "Find your service tag"
+#~ msgstr "サービスタグを検索"
+
+#~ msgid "all service tags"
+#~ msgstr "すべてのサービスタグ"
+
+#~ msgid "parent service tag"
+#~ msgstr "親サービスタグ"
+
+#~ msgid "Parent service tag:"
+#~ msgstr "親サービスタグ:"
+
+#~ msgid "Edit service tag"
+#~ msgstr "サービスタグを編集"
+
+#~ msgid "Update service tag"
+#~ msgstr "サービスタグを更新"
+
+#~ msgid "Add service tag"
+#~ msgstr "サービスタグを追加"
+
+#~ msgid "New service tag name"
+#~ msgstr "新しいサービスタグ名"
+
+#~ msgid "Service menu group"
+#~ msgstr "サービスメニューグループ"
+
+#~ msgid "Search service menu group"
+#~ msgstr "サービスメニューグループを検索"
+
+#~ msgid "All service menu groups"
+#~ msgstr "すべてのサービスメニューグループ"
+
+#~ msgid "Parent service menu group"
+#~ msgstr "親サービスメニューグループ"
+
+#~ msgid "Parent service menu group:"
+#~ msgstr "親サービスメニューグループ:"
+
+#~ msgid "Edit service menu group"
+#~ msgstr "サービスメニューグループを編集"
+
+#~ msgid "Update service menu group"
+#~ msgstr "サービスメニューグループを更新"
+
+#~ msgid "Add service menu group"
+#~ msgstr "サービスメニューグループを追加"
+
+#~ msgid "New service menu group name"
+#~ msgstr "新しいサービスメニューグループ名"
+
+#~ msgid "service group"
+#~ msgstr "サービスグループ"
+
+#~ msgid "Display mode when displaying all items"
+#~ msgstr "全件表示時の表示モード"
+
+#~ msgid "Use common settings"
+#~ msgstr "共通設定を使用"
+
+#~ msgid "Applies only when the menu loop displays all groups."
+#~ msgstr "メニューループが全グループ表示のときのみ適用されます。"
+
+#~ msgid "shift"
+#~ msgstr "シフト"
+
+#~ msgid "BM shift"
+#~ msgstr "BM シフト"
+
+#~ msgid "add shift"
+#~ msgstr "シフトを追加"
+
+#~ msgid "Edit shift"
+#~ msgstr "シフトを編集"
+
+#~ msgid "new shift"
+#~ msgstr "新しいシフト"
+
+#~ msgid "show shift"
+#~ msgstr "シフトを表示"
+
+#~ msgid "search shift"
+#~ msgstr "シフトを検索"
+
+#~ msgid "Shift not found."
+#~ msgstr "シフトが見つかりません。"
+
+#~ msgid "There are no shifts in the trash."
+#~ msgstr "ゴミ箱にシフトはありません。"
+
+#~ msgid "all shifts"
+#~ msgstr "すべてのシフト"
+
+#~ msgid "shift archive"
+#~ msgstr "シフトアーカイブ"
+
+#~ msgid "shift attribute"
+#~ msgstr "シフト属性"
+
+#~ msgid "Please enter the start and end times for business hours for %s."
+#~ msgstr "%s の営業時間には開始・終了の時刻を入力してください。"
+
+#~ msgid "The time specification for %s is invalid."
+#~ msgstr "%s の時刻指定が不正です。"
+
+#~ msgid "Please specify the minutes for %s in 10 minute increments."
+#~ msgstr "%s の分は10分単位で指定してください。"
+
+#~ msgid "Business hours for %s must start time before end time."
+#~ msgstr "%s の営業時間は開始時刻が終了時刻よりも前でなければなりません。"
+
+#~ msgid "%1$s (frame %2$d)"
+#~ msgstr "%1$s（枠%2$d）"
+
+#~ msgid "There is a problem with the input content."
+#~ msgstr "入力内容に不備があります。"
+
+#~ msgid "work template"
+#~ msgstr "勤務テンプレート"
+
+#~ msgid "Use the same working hours as the store's business hours"
+#~ msgstr "店舗の営業時間と同じ営業時間を使用する"
+
+#~ msgid "If you uncheck it, you can set individual working hours for each day of the week."
+#~ msgstr "チェックを外すと曜日ごとに個別の勤務時間帯を設定できます。"
+
+#~ msgid "Work start time (hour)"
+#~ msgstr "勤務開始時刻（時）"
+
+#~ msgid "Work start time (minutes)"
+#~ msgstr "勤務開始時刻（分）"
+
+#~ msgid "Ending time (hours)"
+#~ msgstr "勤務終了時刻（時）"
+
+#~ msgid "End time of shift (minutes)"
+#~ msgstr "勤務終了時刻（分）"
+
+#~ msgid "Remove time slot"
+#~ msgstr "時間帯を削除"
+
+#~ msgid "Service menu post ID"
+#~ msgstr "サービスメニューの投稿ID"
+
+#~ msgid "Nominated resource ID (optional)"
+#~ msgstr "指名リソースID（任意）"
+
+#~ msgid "Target year (YYYY)"
+#~ msgstr "対象年（YYYY）"
+
+#~ msgid "Target month (1-12)"
+#~ msgstr "対象月（1-12）"
+
+#~ msgid "Time zone name (Site setting if not specified)"
+#~ msgstr "タイムゾーン名（未指定時はサイト設定）"
+
+#~ msgid "Target date (YYYY-MM-DD)"
+#~ msgstr "対象日（YYYY-MM-DD）"
+
+#~ msgid "Shift details"
+#~ msgstr "シフト詳細"
+
+#~ msgid "Staff (resources)"
+#~ msgstr "スタッフ（リソース）"
+
+#~ msgid "Select staff"
+#~ msgstr "スタッフを選択"
+
+#~ msgid "In the free version, the staff is fixed."
+#~ msgstr "Free版ではスタッフは固定です。"
+
+#~ msgid "date"
+#~ msgstr "日付"
+
+#~ msgid "By setting the year and month, you can edit the daily working hours."
+#~ msgstr "年と月を設定すると日別の勤務時間帯を編集できます。"
+
+#~ msgid "Start time (hour)"
+#~ msgstr "開始時刻（時）"
+
+#~ msgid "Start time (minutes)"
+#~ msgstr "開始時刻（分）"
+
+#~ msgid "End time (hour)"
+#~ msgstr "終了時刻（時）"
+
+#~ msgid "End time (minutes)"
+#~ msgstr "終了時刻（分）"
+
+#~ msgid "Please select staff (resources)."
+#~ msgstr "スタッフ（リソース）を選択してください。"
+
+#~ msgid "operational status"
+#~ msgstr "稼働ステータス"
+
+#~ msgid "You cannot set the time zone in this status."
+#~ msgstr "このステータスでは時間帯を設定できません。"
+
+#~ msgid "Please select a staff member."
+#~ msgstr "スタッフを選択してください。"
+
+#~ msgid "Add shifts in bulk"
+#~ msgstr "シフトの一括追加"
+
+#~ msgid "Register the shifts for the specified month as a draft for all staff members at once."
+#~ msgstr "指定した月のシフトをスタッフ全員分一括で下書き登録します。"
+
+#~ msgid "year and month"
+#~ msgstr "年月"
+
+#~ msgid "Bulk registration"
+#~ msgstr "一括登録"
+
+#~ msgid "%1$d year %2$02d month %3$s"
+#~ msgstr "%1$d年%2$02d月 %3$s"
+
+#~ msgid "Bulk registration of shifts failed. The year and month specification is invalid."
+#~ msgstr "シフトの一括登録に失敗しました。年月の指定が不正です。"
+
+#~ msgid "Shifts for %2$02d month of %1$d were registered in bulk (Created: %3$d / Skip: %4$d)."
+#~ msgstr "%1$d年%2$02d月のシフトを一括登録しました（作成: %3$d件 / スキップ: %4$d件）。"
+
+#~ msgid "%1$d year %2$d month"
+#~ msgstr "%1$d年%2$d月"
+
+#~ msgid "Normal"
+#~ msgstr "通常"
+
+#~ msgid "Special opening"
+#~ msgstr "臨時営業"
+
+#~ msgid "Nomination fee (tax included)."
+#~ msgstr "指名料（税込）"
+
+#~ msgid "%sBasic information"
+#~ msgstr "%s基本情報"
+
+#~ msgid "tax included"
+#~ msgstr "税込"
+
+#~ msgid "This is the fee that will be added if the customer nominates this %1$s. Example: %2$s"
+#~ msgstr "顧客がこの%1$sを指名した場合に加算する料金です。例: %2$s"
+
+#~ msgid "Unsupported taxonomy."
+#~ msgstr "サポートされていないタクソノミーです。"
+
+#~ msgid "No sortable items found."
+#~ msgstr "並び替え可能な項目が見つかりません。"
+
+#~ msgid "Some items were not found. Please reload the page."
+#~ msgstr "一部の項目が見つかりませんでした。ページを再読み込みしてください。"
+
+#~ msgctxt "block title"
+#~ msgid "menu loop"
+#~ msgstr "メニューループ"
+
+#, fuzzy
+#~ msgctxt "block description"
+#~ msgid "Narrow down and display service menu posts based on conditions."
+#~ msgstr "サービスメニュー投稿を条件で絞り込み表示します。"
+
+#~ msgctxt "block keyword"
+#~ msgid "menu"
+#~ msgstr "メニューループ"
+
+#~ msgctxt "block keyword"
+#~ msgid "booking"
+#~ msgstr "予約"
+
+#, fuzzy
+#~ msgctxt "block title"
+#~ msgid "Service tag field"
+#~ msgstr "サービスタグフィールド"
+
+#, fuzzy
+#~ msgctxt "block title"
+#~ msgid "Keyword search field"
+#~ msgstr "キーワード検索フィールド"
+
+#, fuzzy
+#~ msgctxt "block title"
+#~ msgid "Resource search field"
+#~ msgstr "リソース検索フィールド"
+
+#~ msgctxt "block title"
+#~ msgid "Service menu search"
+#~ msgstr "サービスメニュー検索"
+
+#, fuzzy
+#~ msgctxt "block description"
+#~ msgid "You can search by resource, service tag, etc. in conjunction with the menu loop."
+#~ msgstr "メニューループと連携してリソース・サービスタグなどで検索できます。"
+
+#~ msgctxt "block keyword"
+#~ msgid "search"
+#~ msgstr "検索"
+
+#~ msgctxt "block title"
+#~ msgid "reserved block"
+#~ msgstr "予約ブロック"
+
+#, fuzzy
+#~ msgctxt "block description"
+#~ msgid "This is a reservation UI that allows you to select menus and search for available slots."
+#~ msgstr "メニュー選択と空き枠検索を行う予約UIです。"

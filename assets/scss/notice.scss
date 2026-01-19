@@ -1,0 +1,101 @@
+/*
+ * VK Booking Manager admin notices.
+ * - Use vkbm-notice__{info|success|warning|danger} for variants.
+ * - Add .is-dismissible to show close button.
+ * - Add .is-dismissible-all to store dismissal globally (option) instead of per-user.
+ */
+
+.vkbm-notice {
+	position: relative;
+	margin: 1rem 0;
+	padding: 0.9rem 1rem;
+	border: 1px solid #c3c4c7;
+	border-left-width: 5px;
+	border-left-color: #c3c4c7;
+	border-radius: var(--vkbm--radius--md, 8px);
+	background: #fff;
+	color: #0f172a;
+}
+
+/* プラグインインストール画面などでCSSが干渉するので詳細度に注意 */
+.vkbm-notice :is(h2, h3, h4) {
+	margin: 0 0 0.5rem;
+	font-size: 1.05rem;
+	font-weight: 700;
+}
+
+.vkbm-notice p {
+	margin: 0.35rem 0;
+}
+
+.vkbm-notice ul {
+	margin: 0.5rem 0 0;
+	padding-left: 1.1rem;
+	list-style: disc;
+}
+
+.vkbm-notice li + li {
+	margin-top: 0.25rem;
+}
+
+.vkbm-notice a {
+	color: var(--vkbm--notice-link-color, currentColor);
+	font-weight: 600;
+	text-decoration: underline;
+}
+
+.vkbm-notice__danger {
+	--vkbm--notice-link-color: var(--vkbm--color--danger-link, #842029);
+	border-left-color: var(--wp--preset--color--danger, #dc3545);
+	color: var(--vkbm--color--danger-text, #842029);
+}
+
+.vkbm-notice__warning {
+	--vkbm--notice-link-color: var(--vkbm--color--warning-link, #664d03);
+	border-left-color: var(--wp--preset--color--warning, #ffc107);
+	color: var(--vkbm--color--warning-text, #664d03);
+}
+
+.vkbm-notice__info {
+	--vkbm--notice-link-color: var(--vkbm--color--info-link, #055160);
+	border-left-color: var(--wp--preset--color--primary, #2563eb);
+	color: var(--vkbm--color--info-text, #055160);
+}
+
+.vkbm-notice__success {
+	--vkbm--notice-link-color: var(--vkbm--color--success-link, #0f5132);
+	border-left-color: var(--wp--preset--color--success, #198754);
+	color: var(--vkbm--color--success-text, #0f5132);
+}
+
+.vkbm-notice.is-dismissible {
+	padding-right: 2.75rem;
+}
+
+.vkbm-notice__dismiss {
+	position: absolute;
+	top: 0.55rem;
+	right: 0.55rem;
+	width: 2rem;
+	height: 2rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid rgba(0, 0, 0, 0.15);
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.35);
+	color: currentColor;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.vkbm-notice__dismiss:hover,
+.vkbm-notice__dismiss:focus {
+	background: rgba(255, 255, 255, 0.55);
+}
+
+.vkbm-notice__dismiss:focus {
+	outline: 2px solid rgba(37, 99, 235, 0.35);
+	outline-offset: 2px;
+}
+

@@ -1,0 +1,45 @@
+/* Style guide page only (admin). */
+.vkbm-style-guide .vkbm-style-guide__content {
+	display: grid;
+	gap: 1.5rem;
+	max-width: 1100px;
+}
+
+.vkbm-style-guide .vkbm-style-guide__content section {
+	background: var(--vkbm--color--bg-primary, #fff);
+	border: 1px solid var(--vkbm--color--border, #e0e0e0);
+	border-radius: var(--vkbm--radius--md, 8px);
+	padding: 1.25rem;
+}
+
+.vkbm-style-guide .vkbm-style-guide__content .vkbm-sg-h2 {
+	margin: 0 0 0.75rem;
+	font-size: 1.15rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	padding-bottom: 0.75rem;
+	border-bottom: 1px solid var(--vkbm--color--border, #e0e0e0);
+}
+
+.vkbm-style-guide .vkbm-style-guide__content .vkbm-sg-h3 {
+	margin: 1rem 0 0.6rem;
+	font-size: 0.95rem;
+	font-weight: 700;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.vkbm-style-guide .vkbm-style-guide__content .vkbm-sg-h3::before {
+	content: '';
+	display: inline-block;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 999px;
+	background: var(--wp--preset--color--primary, #2563eb);
+}
+
+.vkbm-style-guide .vkbm-style-guide__content .vkbm-buttons {
+	margin-top: 0.25rem;
+}
+

@@ -1,0 +1,47 @@
+.vkbm-setting-table {
+  width: 100%;
+  background-color: #fff;
+  border-collapse: collapse;
+}
+
+.vkbm-setting-table th,
+.vkbm-setting-table td {
+  border: 1px solid #ccc;
+  padding: 8px 1rem;
+  width: auto;
+  border-left: none;
+  border-right: none;
+}
+
+.vkbm-setting-table th {
+  font-weight: normal;
+  vertical-align: top;
+  padding-top: 12px;
+}
+
+.vkbm-setting-table tbody th {
+  border-top: 0;
+  border-bottom: 0;
+}
+
+.vkbm-setting-table tbody th,
+.vkbm-setting-table tbody td {
+  border-top: none;
+  border-bottom: none;
+}
+
+.vkbm-setting-table tbody tr + tr th,
+.vkbm-setting-table tbody tr + tr td {
+  border-top: 1px solid #dcdcde;
+}
+
+.vkbm-setting-table .vkbm-shift-day-row.is-holiday th,
+.vkbm-setting-table .vkbm-shift-day-row.is-holiday td,
+.vkbm-setting-table .vkbm-shift-day-row.is-status-closed th,
+.vkbm-setting-table .vkbm-shift-day-row.is-status-closed td {
+  background-color: #f5f5f5;
+  border-left: 1px solid #f5f5f5;
+  border-right: 1px solid #f5f5f5;
+  border-top: 1px solid #f5f5f5;
+  border-bottom: 1px solid #f5f5f5;
+}

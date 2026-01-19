@@ -1,0 +1,106 @@
+{
+	"apiVersion": 3,
+	"name": "vk-booking-manager/menu-loop",
+	"title": "menu loop",
+	"description": "Narrow down and display service menu posts based on conditions.",
+	"category": "widgets",
+	"icon": "index-card",
+	"textdomain": "vk-booking-manager",
+	"keywords": [
+		"menu",
+		"query",
+		"booking"
+	],
+	"attributes": {
+		"loopId": {
+			"type": "string",
+			"default": ""
+		},
+		"itemsPerPage": {
+			"type": "number",
+			"default": -1
+		},
+		"order": {
+			"type": "string",
+			"default": "ASC"
+		},
+		"orderBy": {
+			"type": "string",
+			"default": "menu_order"
+		},
+		"displayMode": {
+			"type": "string",
+			"default": "card"
+		},
+		"groupFilterMode": {
+			"type": "string",
+			"default": "all"
+		},
+		"selectedGroupIds": {
+			"type": "array",
+			"default": [],
+			"items": {
+				"type": "number"
+			}
+		},
+		"hideGroupTitle": {
+			"type": "boolean",
+			"default": false
+		},
+		"showImage": {
+			"type": "boolean",
+			"default": true
+		},
+		"showExcerpt": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMeta": {
+			"type": "boolean",
+			"default": true
+		},
+		"showCategories": {
+			"type": "boolean",
+			"default": true
+		},
+		"showDetailButton": {
+			"type": "boolean",
+			"default": true
+		},
+		"showReserveButton": {
+			"type": "boolean",
+			"default": true
+		},
+		"buttonLabel": {
+			"type": "string",
+			"default": "View details"
+		},
+		"reserveButtonLabel": {
+			"type": "string",
+			"default": "Proceed to Reservation"
+		},
+		"reserveButtonUrl": {
+			"type": "string",
+			"default": ""
+		},
+		"emptyMessage": {
+			"type": "string",
+			"default": ""
+		}
+	},
+	"supports": {
+		"align": [
+			"wide",
+			"full"
+		],
+		"anchor": true,
+		"customClassName": true,
+		"spacing": {
+			"margin": true,
+			"padding": true
+		}
+	},
+	"style": "file:./style-index.css",
+	"editorStyle": "file:./index.css",
+	"editorScript": "file:./index.js"
+}
