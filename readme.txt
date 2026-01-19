@@ -17,10 +17,6 @@ This is a plugin for online bookings for salons, lessons, etc.
 1. Upload the plugin folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the WordPress Plugins screen.
 
-== Frequently Asked Questions ==
-= Does this plugin support multiple staff? =
-Yes. It is designed for multi-staff service providers.
-
 == Changelog ==
 
 For full changelog, see CHANGELOG.md.
