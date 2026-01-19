@@ -38,6 +38,22 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		parent::tearDown();
 	}
 
+	public function test_japanese_translations_are_loaded(): void {
+		if ( getenv( 'VK_BOOKING_MANAGER_SKIP_I18N_TESTS' ) ) {
+			$this->markTestSkipped( 'Skipping i18n tests for free distribution.' );
+		}
+
+		$mo_path = dirname( __DIR__, 3 ) . '/languages/vk-booking-manager-ja.mo';
+		$this->assertFileExists( $mo_path );
+
+		$mo = new \MO();
+		$this->assertTrue( $mo->import_from_file( $mo_path ) );
+
+		$translated = $mo->translate( 'Please enter the same password twice.' );
+
+		$this->assertSame( '同じパスワードを2回入力してください。', $translated );
+	}
+
 	public function test_registration_password_mismatch_sets_error(): void {
 		// Ensure registration is enabled for this test. / テスト用にユーザー登録を有効化。
 		$original_registration = get_option( 'users_can_register' );
@@ -72,7 +88,8 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$errors = $property->getValue( $shortcodes );
 
 		$this->assertInstanceOf( \WP_Error::class, $errors );
-		$this->assertContains( '同じパスワードを2回入力してください。', $errors->get_error_messages() );
+		$expected = __( 'Please enter the same password twice.', 'vk-booking-manager' );
+		$this->assertContains( $expected, $errors->get_error_messages() );
 
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
@@ -118,7 +135,8 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$errors = $property->getValue( $shortcodes );
 
 		$this->assertInstanceOf( \WP_Error::class, $errors );
-		$this->assertContains( '新しいパスワードが一致しません。', $errors->get_error_messages() );
+		$expected = __( 'New passwords do not match.', 'vk-booking-manager' );
+		$this->assertContains( $expected, $errors->get_error_messages() );
 
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
@@ -163,7 +181,8 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$errors = $property->getValue( $shortcodes );
 
 		$this->assertInstanceOf( \WP_Error::class, $errors );
-		$this->assertContains( 'パスワードは8文字以上で入力してください。', $errors->get_error_messages() );
+		$expected = __( 'Please enter a password of 8 characters or more.', 'vk-booking-manager' );
+		$this->assertContains( $expected, $errors->get_error_messages() );
 
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
@@ -212,7 +231,8 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$errors = $property->getValue( $shortcodes );
 
 		$this->assertInstanceOf( \WP_Error::class, $errors );
-		$this->assertContains( 'このメールアドレスは既に登録済みです。', $errors->get_error_messages() );
+		$expected = __( 'This email address is already registered.', 'vk-booking-manager' );
+		$this->assertContains( $expected, $errors->get_error_messages() );
 
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
