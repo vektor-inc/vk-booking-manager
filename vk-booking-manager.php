@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: VK Booking Manager
+ * Plugin Name: VK Booking Manager Pro
  * Plugin URI:  https://github.com/vektor-inc/vk-booking-manager/
  * Description: Booking and scheduling manager tailored for multi-staff service providers.
  * Version:     0.1.0

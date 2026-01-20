@@ -315,7 +315,10 @@ export const BookingConfirmApp = ({
 	useEffect(() => {
 		if (!draftToken) {
 			setLoadError(
-				__('The URL does not include a draft parameter. Please try again from the reservation page.', 'vk-booking-manager')
+				__(
+					'The URL does not include a temporary reservation data parameter. Please try again from the reservation page.',
+					'vk-booking-manager'
+				)
 			);
 			setLoading(false);
 			return;
@@ -342,7 +345,10 @@ export const BookingConfirmApp = ({
 			.catch((error) => {
 				setLoadError(
 					error?.message ||
-									__("Didn't get drafted. Please try again from the reservation page.", 'vk-booking-manager')
+									__(
+										"Couldn't load temporary reservation data. Please try again from the reservation page.",
+										'vk-booking-manager'
+									)
 				);
 			})
 			.finally(() => setLoading(false));
@@ -883,7 +889,7 @@ useEffect(() => {
 		return (
 			<div className="vkbm-confirm">
 				<div className="vkbm-alert vkbm-alert__info" role="status">
-					{__('Loading draft...', 'vk-booking-manager')}
+					{__('Loading temporary reservation data...', 'vk-booking-manager')}
 				</div>
 			</div>
 		);

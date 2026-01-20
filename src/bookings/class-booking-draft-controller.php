@@ -219,7 +219,7 @@ class Booking_Draft_Controller {
 
         $payload = get_transient( $this->build_transient_key( $token ) );
         if ( false === $payload ) {
-            return new WP_Error( 'draft_not_found', __( 'Draft not found.', 'vk-booking-manager' ), [ 'status' => 404 ] );
+            return new WP_Error( 'draft_not_found', __( 'Temporary reservation data not found.', 'vk-booking-manager' ), [ 'status' => 404 ] );
         }
 
         $payload = $this->backfill_draft_owner( $token, $payload );
@@ -227,7 +227,7 @@ class Booking_Draft_Controller {
         if ( ! $this->can_access_draft( $payload ) ) {
             return new WP_Error(
                 'forbidden_draft',
-                __( 'You do not have permission to access this draft.', 'vk-booking-manager' ),
+                __( 'You do not have permission to access this temporary reservation data.', 'vk-booking-manager' ),
                 [ 'status' => 403 ]
             );
         }
@@ -282,7 +282,7 @@ class Booking_Draft_Controller {
 
         $payload = get_transient( $this->build_transient_key( $token ) );
         if ( false === $payload ) {
-            return new WP_Error( 'draft_not_found', __( 'Draft not found.', 'vk-booking-manager' ), [ 'status' => 404 ] );
+            return new WP_Error( 'draft_not_found', __( 'Temporary reservation data not found.', 'vk-booking-manager' ), [ 'status' => 404 ] );
         }
 
         $payload = $this->backfill_draft_owner( $token, $payload );
@@ -290,7 +290,7 @@ class Booking_Draft_Controller {
         if ( ! $this->can_access_draft( $payload ) ) {
             return new WP_Error(
                 'forbidden_draft',
-                __( 'You do not have permission to access this draft.', 'vk-booking-manager' ),
+                __( 'You do not have permission to access this temporary reservation data.', 'vk-booking-manager' ),
                 [ 'status' => 403 ]
             );
         }
@@ -424,7 +424,7 @@ class Booking_Draft_Controller {
     /**
      * Ensure draft owner cookie exists for anonymous users.
      *
-     * 未ログインユーザー向けにドラフト所有者Cookieを設定します。
+     * 未ログインユーザー向けに予約一時データ所有者Cookieを設定します。
      *
      * @return string
      */
@@ -443,7 +443,7 @@ class Booking_Draft_Controller {
     /**
      * Read the current draft owner cookie value.
      *
-     * 現在のドラフト所有者Cookieの値を取得します。
+     * 現在の予約一時データ所有者Cookieの値を取得します。
      *
      * @return string
      */
@@ -460,7 +460,7 @@ class Booking_Draft_Controller {
     /**
      * Set the draft owner cookie.
      *
-     * ドラフト所有者Cookieを設定します。
+     * 予約一時データ所有者Cookieを設定します。
      *
      * @param string $value Cookie value.
      * @return void
@@ -485,10 +485,10 @@ class Booking_Draft_Controller {
     /**
      * Backfill draft ownership data for older drafts.
      *
-     * 既存ドラフトに所有者情報を補完します。
+     * 既存予約一時データに所有者情報を補完します。
      *
-     * @param string $token Draft token.
-     * @param mixed  $payload Draft payload.
+     * @param string $token Temporary reservation data token.
+     * @param mixed  $payload Temporary reservation data payload.
      * @return array<string, mixed>
      */
     private function backfill_draft_owner( string $token, $payload ): array {
@@ -516,9 +516,9 @@ class Booking_Draft_Controller {
     /**
      * Check whether the current requester can access the draft.
      *
-     * 現在のリクエストがドラフトにアクセス可能か検証します。
+     * 現在のリクエストが予約一時データにアクセス可能か検証します。
      *
-     * @param mixed $payload Draft payload.
+     * @param mixed $payload Temporary reservation data payload.
      * @return bool
      */
     private function can_access_draft( $payload ): bool {

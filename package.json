@@ -13,7 +13,7 @@
 		"lint:css": "wp-scripts lint-style",
 		"lint:js": "wp-scripts lint-js",
 		"format": "wp-scripts format",
-		"phpunit": "wp-env run tests-cli --env-cwd='wp-content/plugins/vk-booking-manager' sh -c 'composer install && wp db query \"CREATE DATABASE IF NOT EXISTS wordpress_test\" >/dev/null 2>&1 || true && vendor/bin/phpunit -c phpunit.xml.dist'",
+		"phpunit": "wp-env run tests-cli --env-cwd='wp-content/plugins/vk-booking-manager-pro' sh -c 'composer install && wp db query \"CREATE DATABASE IF NOT EXISTS wordpress_test\" >/dev/null 2>&1 || true && vendor/bin/phpunit -c phpunit.xml.dist'",
 		"dist": "npm run dist:all",
 		"dist:prepare": "rm -rf dist && npm run build",
 		"dist:stage:free": "mkdir -p dist/vk-booking-manager && rsync -a --delete --exclude='.git' --exclude='.github' --exclude='.vscode' --exclude='bin' --exclude='node_modules' --exclude='dist' --exclude='docs' --exclude='.wordpress-env' --exclude='.idea' --exclude='.DS_Store' --exclude='*.zip' --exclude='vendor' --exclude='readme.md' --exclude='AGENT.md' --exclude='languages/*.mo' --exclude='languages/*.po' --exclude='languages/*.po~' --exclude='languages/*-*.json' ./ dist/vk-booking-manager && cd dist/vk-booking-manager && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader && cd ../.. && node bin/switch-resource-config.js free",

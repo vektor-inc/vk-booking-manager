@@ -152,7 +152,7 @@ class Plugin {
 	 * @param Service_Menu_Post_Type     $service_menu_post_type Service menu post type handler.
 	 * @param Booking_Post_Type          $booking_post_type      Booking post type handler.
 	 * @param Booking_Admin              $booking_admin          Booking admin UI handler.
-	 * @param Booking_Draft_Controller   $booking_draft_controller Draft persistence handler.
+	 * @param Booking_Draft_Controller   $booking_draft_controller Temporary reservation data persistence handler.
 	 * @param My_Bookings_Controller     $my_bookings_controller Current user bookings REST controller.
 	 * @param Menu_Search_Block          $menu_search_block      Menu search block handler.
 	 * @param Menu_Loop_Block            $menu_loop_block        Menu loop block handler.

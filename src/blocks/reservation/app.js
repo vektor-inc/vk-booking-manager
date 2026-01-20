@@ -1221,7 +1221,7 @@ useEffect(() => {
 				const expiresIn = response?.expires_in || 1800;
 				if (!token) {
 					throw new Error(
-						__('Draft save failed.', 'vk-booking-manager')
+						__('Temporary reservation data save failed.', 'vk-booking-manager')
 					);
 				}
 
