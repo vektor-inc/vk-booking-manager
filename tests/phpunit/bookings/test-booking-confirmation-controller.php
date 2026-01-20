@@ -32,15 +32,25 @@ use function wp_set_current_user;
  */
 class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	private const TRANSIENT_PREFIX = 'vkbm_draft_';
+	private const OWNER_COOKIE     = 'vkbm_draft_owner';
 
 	/** @var array<int, string> */
 	private array $tokens = [];
+
+	/** @var array<string, mixed> */
+	private array $cookie_backup = [];
+
+	protected function setUp(): void {
+		parent::setUp();
+		$this->cookie_backup = $_COOKIE;
+	}
 
 	protected function tearDown(): void {
 		foreach ( $this->tokens as $token ) {
 			delete_transient( self::TRANSIENT_PREFIX . $token );
 		}
 		$this->tokens = [];
+		$_COOKIE      = $this->cookie_backup;
 		wp_set_current_user( 0 );
 		parent::tearDown();
 	}
@@ -161,6 +171,63 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		$booking = get_post( $booking_id );
 		$this->assertSame( $admin_id, (int) $booking->post_author );
 		$this->assertSame( '', (string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ) );
+	}
+
+	public function test_confirmation_allows_same_browser_temporary_data_without_owner_user(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$user_id  = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		$_COOKIE[ self::OWNER_COOKIE ] = 'owner123';
+		$token = $this->store_temporary_reservation_data(
+			$menu_id,
+			$staff_id,
+			'2024-02-04T10:00:00+09:00',
+			'2024-02-04T10:30:00+09:00'
+		);
+
+		$controller = $this->build_controller(
+			$staff_id,
+			'2024-02-04T10:00:00+09:00',
+			'2024-02-04T10:30:00+09:00'
+		);
+
+		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+		$request->set_param( 'token', $token );
+		$request->set_param( 'agree_terms', true );
+
+		$response = $controller->create_booking( $request );
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+	}
+
+	public function test_confirmation_rejects_temporary_data_without_owner_cookie(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$user_id  = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+
+		unset( $_COOKIE[ self::OWNER_COOKIE ] );
+		$token = $this->store_temporary_reservation_data(
+			$menu_id,
+			$staff_id,
+			'2024-02-05T10:00:00+09:00',
+			'2024-02-05T10:30:00+09:00'
+		);
+
+		$controller = $this->build_controller(
+			$staff_id,
+			'2024-02-05T10:00:00+09:00',
+			'2024-02-05T10:30:00+09:00'
+		);
+
+		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+		$request->set_param( 'token', $token );
+		$request->set_param( 'agree_terms', true );
+
+		$response = $controller->create_booking( $request );
+		$this->assertInstanceOf( WP_Error::class, $response );
+		$this->assertSame( 'forbidden_draft', $response->get_error_code() );
 	}
 
 	private function build_controller( int $staff_id, string $start_at, string $end_at ): Booking_Confirmation_Controller {

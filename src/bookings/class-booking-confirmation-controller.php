@@ -661,7 +661,16 @@ class Booking_Confirmation_Controller {
 			return $payload;
 		}
 
-		$payload['owner_user_id'] = (int) get_current_user_id();
+		if ( empty( $_COOKIE[ self::OWNER_COOKIE ] ) ) {
+			return $payload;
+		}
+
+		$cookie_value = sanitize_key( (string) wp_unslash( $_COOKIE[ self::OWNER_COOKIE ] ) );
+		if ( '' === $cookie_value ) {
+			return $payload;
+		}
+
+		$payload['owner_key'] = $cookie_value;
 		return $payload;
 	}
 
