@@ -4,12 +4,57 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Common;
 
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
 
 /**
  * Common helper utilities for VK Booking Manager.
  */
 class VKBM_Helper {
+	/**
+	 * Format a currency amount with a translatable symbol.
+	 *
+	 * 日本語: 通貨記号を翻訳可能な形式で付与します。
+	 *
+	 * @param int $amount Amount in base currency.
+	 * @return string
+	 */
+	public static function format_currency( int $amount ): string {
+		$formatted = number_format_i18n( max( 0, $amount ) );
+
+		$settings = ( new Settings_Repository() )->get_settings();
+		$currency_symbol = isset( $settings['currency_symbol'] ) ? trim( (string) $settings['currency_symbol'] ) : '';
+
+		if ( '' !== $currency_symbol ) {
+			return sprintf( '%s%s', $currency_symbol, $formatted );
+		}
+
+		return sprintf(
+			/* translators: %s: price amount */
+			__( '$%s', 'vk-booking-manager' ),
+			$formatted
+		);
+	}
+
+	/**
+	 * Get the tax-included label from provider settings.
+	 *
+	 * 日本語: 税込み表示のラベルを取得します。
+	 *
+	 * @return string
+	 */
+	public static function get_tax_included_label(): string {
+		$settings = ( new Settings_Repository() )->get_settings();
+		$label    = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		$has_label = '' !== trim( $label );
+
+		if ( ! $has_label ) {
+			return '';
+		}
+
+		return $label;
+	}
+
 	/**
 	 * Normalize phone number to digits only.
 	 *

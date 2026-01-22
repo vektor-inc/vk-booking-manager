@@ -77,6 +77,9 @@ class Settings_Sanitizer {
 			$data['provider_reservation_deadline_hours'] = $this->sanitize_non_negative_int(
 				$input['provider_reservation_deadline_hours'] ?? ( $data['provider_reservation_deadline_hours'] ?? 0 )
 				);
+			$slot_step_minutes = isset( $input['provider_slot_step_minutes'] ) ? (int) $input['provider_slot_step_minutes'] : ( $data['provider_slot_step_minutes'] ?? 15 );
+			$allowed_slot_steps = [ 10, 15, 20, 30, 60 ];
+			$data['provider_slot_step_minutes'] = in_array( $slot_step_minutes, $allowed_slot_steps, true ) ? $slot_step_minutes : 15;
 			$data['provider_service_menu_buffer_after_minutes'] = $this->sanitize_non_negative_int(
 				$input['provider_service_menu_buffer_after_minutes'] ?? ( $data['provider_service_menu_buffer_after_minutes'] ?? 0 )
 			);
@@ -95,6 +98,12 @@ class Settings_Sanitizer {
 		$data['reservation_menu_list_display_mode'] = in_array( $menu_list_display_mode, [ 'card', 'text' ], true ) ? $menu_list_display_mode : 'card';
 		$data['reservation_show_provider_logo'] = ! empty( $input['reservation_show_provider_logo'] );
 		$data['reservation_show_provider_name'] = ! empty( $input['reservation_show_provider_name'] );
+		$currency_symbol_raw       = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
+		$data['currency_symbol']   = sanitize_text_field( $currency_symbol_raw );
+		$tax_label_raw             = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
+		// English: Allow leading/trailing spaces, while stripping tags.
+		// 日本語: 先頭・末尾の空白は維持しつつ、タグは除去します。
+		$data['tax_label_text'] = wp_kses( $tax_label_raw, [] );
 		$data['provider_email']          = $this->sanitize_email( $data['provider_email'] );
 		if ( '' === $data['provider_email'] ) {
 			$data['provider_email'] = $this->sanitize_email( (string) get_option( 'admin_email' ) );
@@ -103,6 +112,9 @@ class Settings_Sanitizer {
 			$input['shift_alert_months'] ?? ( $data['shift_alert_months'] ?? 1 )
 		);
 		$data['shift_alert_months'] = min( 4, max( 1, $shift_alert_months ) );
+		$data['booking_reminder_hours'] = $this->sanitize_reminder_hours(
+			$input['booking_reminder_hours'] ?? ( $data['booking_reminder_hours'] ?? [] )
+		);
 		$data['design_primary_color'] = $this->sanitize_color( $input['design_primary_color'] ?? ( $data['design_primary_color'] ?? '' ) );
 		$data['design_reservation_button_color'] = $this->sanitize_color(
 			$input['design_reservation_button_color'] ?? ( $data['design_reservation_button_color'] ?? '' )
@@ -201,6 +213,38 @@ class Settings_Sanitizer {
 		}
 
 		return $email;
+	}
+
+	/**
+	 * Sanitize reminder hours array.
+	 *
+	 * @param mixed $raw Raw reminder hour values.
+	 * @return array<int, int>
+	 */
+	private function sanitize_reminder_hours( $raw ): array {
+		if ( ! is_array( $raw ) ) {
+			return [];
+		}
+
+		$sanitized = [];
+
+		foreach ( $raw as $value ) {
+			if ( '' === $value || null === $value ) {
+				continue;
+			}
+
+			$hours = $this->sanitize_non_negative_int( $value );
+			if ( $hours <= 0 ) {
+				continue;
+			}
+
+			$sanitized[] = $hours;
+		}
+
+		$sanitized = array_values( array_unique( $sanitized ) );
+		sort( $sanitized );
+
+		return $sanitized;
 	}
 
 	/**

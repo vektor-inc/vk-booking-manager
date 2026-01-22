@@ -1,0 +1,209 @@
+.vkbm-provider-settings {
+	&[data-active-tab="store"] {
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-faq {
+			display: none;
+		}
+		.vkbm-regular-holidays-table {
+			margin-top: 1em;
+			margin-bottom: 10px;
+			border-collapse: collapse;
+
+			.column-actions {
+				width: 100px;
+				text-align: center;
+			}
+
+			th {
+				font-weight: normal;
+				text-align: left;
+			}
+
+			th,
+			td {
+				padding: 6px 8px;
+				vertical-align: middle;
+			}
+
+			select {
+				width: auto;
+				min-width: 9em;
+			}
+		}
+
+		.vkbm-business-hours-table {
+			margin-top: 8px;
+
+			th,
+			td {
+				vertical-align: middle;
+			}
+
+			.column-use-basic {
+				width: 220px;
+			}
+		}
+
+		.vkbm-business-hours-row {
+			&.is-using-basic {
+				.vkbm-business-hours-slot-list,
+				.vkbm-business-hours-remove-slot {
+					opacity: 0.6;
+				}
+			}
+
+			&.is-regular-holiday {
+				background-color: #f8f8f8;
+
+				.vkbm-business-hours-note {
+					display: inline-block;
+					margin-left: 6px;
+					padding: 2px 6px;
+					font-size: 12px;
+					background: #ececec;
+					border-radius: 3px;
+				}
+			}
+		}
+		.vkbm-basic-business-hours {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.vkbm-business-hours-basic-add-slot {
+			align-self: flex-start;
+		}
+		.vkbm-business-hours-remove-slot,
+		.vkbm-business-hours-basic-remove-slot {
+			margin-left: auto;
+		}
+		.vkbm-provider-logo-preview {
+			margin-bottom: 12px;
+			min-height: 80px;
+			display: flex;
+			align-items: center;
+			justify-content: flex-start;
+
+			img.vkbm-provider-logo-image {
+				max-width: 220px;
+				height: auto;
+				border: 1px solid #dcdcde;
+				padding: 4px;
+				background: #fff;
+			}
+		}
+	}
+
+	&[data-active-tab="system"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-faq {
+			display: none;
+		}
+	}
+
+	&[data-active-tab="registration"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-faq {
+			display: none;
+		}
+	}
+
+	&[data-active-tab="design"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-faq {
+			display: none;
+		}
+	}
+
+	&[data-active-tab="faq"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-design {
+			display: none;
+		}
+		.vkbm-provider-settings__faq {
+			margin: 0 0 var(--vkbm--spacing--md);
+			padding-left:25px;
+
+			dt {
+				font-weight: 600;
+				margin: 0 0 1em;
+				&::before {
+					position: absolute;
+					margin-left: -25px;
+					content: "Q: ";
+				}
+			}
+
+			dd {
+				margin: 0 0 var(--vkbm--spacing--sm);
+				p {
+					margin-bottom:var(--vkbm--spacing--xs);
+				}
+				&::before {
+					position: absolute;
+					margin-left: -25px;
+					content: "A: ";
+				}
+			}
+		}
+	}
+
+	&[data-active-tab="consent"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-faq {
+			display: none;
+		}
+	}
+
+	.vkbm-provider-settings__inline-field {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 6px;
+		flex-wrap: wrap;
+
+		.small-text {
+			width: 70px;
+		}
+	}
+
+	.vkbm-provider-settings__checkbox-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.vkbm-reminder-hours__list {
+		margin-bottom:6px;
+	}
+
+	.vkbm-field-errors {
+		margin: 0;
+		padding-left: 1.2em;
+		color: #d63638;
+		font-size: 13px;
+		width: 100%;
+
+		li {
+			list-style: disc;
+		}
+	}
+}

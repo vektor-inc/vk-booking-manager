@@ -3,7 +3,6 @@
 	bootstrap="tests/phpunit/bootstrap.php"
 	colors="true"
 	processIsolation="false"
-	syntaxCheck="false"
 >
 	<testsuites>
 		<testsuite name="Plugin Test Suite">

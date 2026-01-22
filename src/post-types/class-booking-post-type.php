@@ -33,7 +33,7 @@ class Booking_Post_Type {
 		$labels = [
 			'name'                  => __( 'Reservation', 'vk-booking-manager' ),
 			'singular_name'         => __( 'Reservation', 'vk-booking-manager' ),
-			'menu_name'             => __( 'BM reservation', 'vk-booking-manager' ),
+			'menu_name'             => __( 'BM Reservation', 'vk-booking-manager' ),
 			'name_admin_bar'        => __( 'Reservation', 'vk-booking-manager' ),
 			'add_new'               => __( 'New addition', 'vk-booking-manager' ),
 			'add_new_item'          => __( 'Add reservation', 'vk-booking-manager' ),

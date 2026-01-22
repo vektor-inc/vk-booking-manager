@@ -219,6 +219,7 @@ export const ReservationApp = ({
 	const [providerSettings, setProviderSettings] = useState({
 		taxEnabled: false,
 		taxRate: 0,
+		taxLabelText: '',
 		reservationPageUrl: '',
 		showMenuList: true,
 		staffEnabled: true,
@@ -301,6 +302,14 @@ export const ReservationApp = ({
 				setProviderSettings({
 					taxEnabled: Boolean(settings?.tax_enabled),
 					taxRate: Number(settings?.tax_rate) || 0,
+					taxLabelText:
+						typeof settings?.tax_label_text === 'string'
+							? settings.tax_label_text
+							: '',
+					currencySymbol:
+						typeof settings?.currency_symbol === 'string'
+							? settings.currency_symbol
+							: '',
 					reservationPageUrl: settings?.reservation_page_url || '',
 					showMenuList: settings?.reservation_show_menu_list !== false,
 					staffEnabled: settings?.staff_enabled !== false,
@@ -805,25 +814,31 @@ useEffect(() => {
 		}
 
 		const taxSuffix = providerSettings.taxEnabled
-			? __('(tax included)', 'vk-booking-manager')
+			? (providerSettings.taxLabelText &&
+				providerSettings.taxLabelText.trim() !== ''
+				? providerSettings.taxLabelText
+				: '')
 			: '';
+		const withTaxLabel = (value) => ({
+			value,
+			taxLabel: value !== '—' ? taxSuffix : '',
+		});
 
+		const currencySymbol = providerSettings.currencySymbol || null;
 		const rows = [
 			{
 				key: 'base',
 				label: __('Service basic fee', 'vk-booking-manager'),
-				value:
-					basePrice !== null
-						? `${formatCurrencyJPY(basePrice)}${taxSuffix}`
-						: '—',
+				...withTaxLabel(
+					basePrice !== null ? formatCurrencyJPY(basePrice, currencySymbol) : '—'
+				),
 			},
 			{
 				key: 'total',
 				label: __('Total basic fee', 'vk-booking-manager'),
-				value:
-					totalPrice !== null
-						? `${formatCurrencyJPY(totalPrice)}${taxSuffix}`
-						: '—',
+				...withTaxLabel(
+					totalPrice !== null ? formatCurrencyJPY(totalPrice, currencySymbol) : '—'
+				),
 				highlight: true,
 			},
 		];
@@ -832,12 +847,13 @@ useEffect(() => {
 			rows.splice(1, 0, {
 				key: 'nomination',
 				label: __('nomination fee', 'vk-booking-manager'),
-				value:
+				...withTaxLabel(
 					staffNominationFee === null
 						? staffId
-							? `${formatCurrencyJPY(applyTax(0))}${taxSuffix}`
+							? formatCurrencyJPY(applyTax(0), currencySymbol)
 							: '—'
-						: `${formatCurrencyJPY(staffNominationFee)}${taxSuffix}`,
+						: formatCurrencyJPY(staffNominationFee, currencySymbol)
+				),
 			});
 		}
 
@@ -854,7 +870,7 @@ useEffect(() => {
 		() =>
 			buildApiPath('/wp/v2/vkbm_service_menu', {
 				per_page: 100,
-				_fields: 'id,title,meta',
+				_fields: 'id,title,meta,menu_order,vkbm_menu_group',
 				status: canViewPrivateMenus ? 'publish,private' : undefined,
 			}),
 		[canViewPrivateMenus]
@@ -1645,6 +1661,7 @@ useEffect(() => {
 											<BookingSummaryItems
 												booking={booking}
 												resourceLabel={providerSettings.resourceLabelSingular}
+												currencySymbol={providerSettings.currencySymbol || null}
 											/>
 										</div>
 									);

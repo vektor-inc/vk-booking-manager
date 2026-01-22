@@ -1,3 +1,5 @@
+import { __, sprintf } from '@wordpress/i18n';
+
 export const normalizePriceValue = (value) => {
 	if (value === null || value === undefined) {
 		return null;
@@ -24,7 +26,7 @@ export const normalizePriceValue = (value) => {
 	return null;
 };
 
-export const formatCurrencyJPY = (value) => {
+export const formatCurrencyJPY = (value, currencySymbol = null) => {
 	const normalized = normalizePriceValue(value);
 
 	if (normalized === null) {
@@ -32,7 +34,17 @@ export const formatCurrencyJPY = (value) => {
 	}
 
 	const formatter = new Intl.NumberFormat('ja-JP');
-	return `¥${formatter.format(normalized)}`;
+	const formattedAmount = formatter.format(normalized);
+
+	if (currencySymbol !== null && currencySymbol !== undefined && currencySymbol.trim() !== '') {
+		return `${currencySymbol}${formattedAmount}`;
+	}
+
+	return sprintf(
+		/* translators: %s: price amount */
+		__('$%s', 'vk-booking-manager'),
+		formattedAmount
+	);
 };
 
 export const extractMenuBasePrice = (menu) => {
@@ -56,4 +68,3 @@ export const extractMenuBasePrice = (menu) => {
 
 	return null;
 };
-

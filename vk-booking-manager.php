@@ -2,13 +2,27 @@
 /**
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://github.com/vektor-inc/vk-booking-manager/
- * Description: Booking and scheduling manager tailored for multi-staff service providers.
+ * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
  * Version:     0.1.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: vk-booking-manager
  * Domain Path: /languages
+ *
+ * @package VKBookingManager
+ * @copyright Copyright (C) 2026 Vektor,Inc.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -64,6 +78,7 @@ require_once __DIR__ . '/src/admin/class-style-guide-page.php';
 require_once __DIR__ . '/src/admin/class-setup-notices.php';
 require_once __DIR__ . '/src/admin/class-user-profile-fields.php';
 require_once __DIR__ . '/src/oembed/class-oembed-override.php';
+require_once __DIR__ . '/src/resources/resource-labels.php';
 
 use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\Admin\Owner_Admin_Menu_Filter;
@@ -318,41 +333,6 @@ function vkbm_get_reservation_page_logout_url(): string {
  *
  * @return string
  */
-function vkbm_get_resource_label_singular(): string {
-	static $cached = null;
-	if ( null !== $cached ) {
-		return $cached;
-	}
-
-	$repository = new Settings_Repository();
-	$settings   = $repository->get_settings();
-	$label      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
-	$label      = trim( $label );
-
-	$cached = '' !== $label ? $label : 'Staff';
-	return $cached;
-}
-
-/**
- * Get the configured plural label for resources (default: スタッフ).
- *
- * @return string
- */
-function vkbm_get_resource_label_plural(): string {
-	static $cached = null;
-	if ( null !== $cached ) {
-		return $cached;
-	}
-
-	$repository = new Settings_Repository();
-	$settings   = $repository->get_settings();
-	$label      = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
-	$label      = trim( $label );
-
-	$cached = '' !== $label ? $label : vkbm_get_resource_label_singular();
-	return $cached;
-}
-
 add_action(
 	'wp_logout',
 	static function (): void {

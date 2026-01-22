@@ -33,6 +33,7 @@ class Menu_Search_Block {
 	private ?array $staff_cache     = null;
 	private ?array $category_cache  = null;
 	private static array $loop_cache = [];
+	private static bool $blocks_registered = false;
 
 	/**
 	 * Register hooks.
@@ -45,6 +46,11 @@ class Menu_Search_Block {
 	 * Register block metadata for the form and child fields.
 	 */
 	public function register_blocks(): void {
+		// Prevent duplicate registration in test environments.
+		if ( self::$blocks_registered ) {
+			return;
+		}
+
 		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
 
 		register_block_type_from_metadata(
@@ -63,6 +69,8 @@ class Menu_Search_Block {
 		foreach ( self::FIELD_BLOCK_NAMES as $block_name ) {
 			$this->register_script_translations( $block_name, [ 'editorScript' ] );
 		}
+
+		self::$blocks_registered = true;
 	}
 
 	/**

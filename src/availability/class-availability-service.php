@@ -57,7 +57,7 @@ class Availability_Service {
 		self::DAY_STATUS_UNAVAILABLE,
 	];
 
-	private const SLOT_STEP_MINUTES = 10;
+	private const SLOT_STEP_MINUTES_DEFAULT = 10;
 
 	private Settings_Repository $settings_repository;
 
@@ -74,6 +74,18 @@ class Availability_Service {
 	 */
 	public function __construct( ?Settings_Repository $settings_repository = null ) {
 		$this->settings_repository = $settings_repository ?? new Settings_Repository();
+	}
+
+	/**
+	 * Get slot step minutes from settings.
+	 *
+	 * @return int Slot step in minutes.
+	 */
+	private function get_slot_step_minutes(): int {
+		$settings = $this->settings_repository->get_settings();
+		$slot_step = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : self::SLOT_STEP_MINUTES_DEFAULT;
+		$allowed_steps = [ 10, 15, 20, 30, 60 ];
+		return in_array( $slot_step, $allowed_steps, true ) ? $slot_step : self::SLOT_STEP_MINUTES_DEFAULT;
 	}
 
 	/**
@@ -368,7 +380,8 @@ class Availability_Service {
 		if ( ! $this->is_date_allowed_for_menu( (string) ( $menu_settings['reservation_day_type'] ?? '' ), $date, $timezone ) ) {
 			return [];
 		}
-		$total_block_min = max( self::SLOT_STEP_MINUTES, $menu_settings['total_duration'] );
+		$slot_step_minutes = $this->get_slot_step_minutes();
+		$total_block_min = max( $slot_step_minutes, $menu_settings['total_duration'] );
 		$service_minutes = $menu_settings['duration'];
 		$deadline_cutoff = null;
 
@@ -406,7 +419,8 @@ class Availability_Service {
 				$total_block_min,
 				$service_minutes,
 				$deadline_cutoff,
-				$bookings
+				$bookings,
+				$slot_step_minutes
 			);
 
 			if ( empty( $staff_slots ) ) {
@@ -564,6 +578,7 @@ class Availability_Service {
 	 * @param int                               $service_minutes Pure service minutes.
 	 * @param DateTimeImmutable|null            $deadline_cutoff Deadline cutoff.
 	 * @param array<int, array<string, DateTimeImmutable>> $bookings Existing bookings.
+	 * @param int                               $slot_step_minutes Slot step in minutes.
 	 * @return array<int, array<string, DateTimeImmutable>>
 	 */
 	private function build_slots_from_entry(
@@ -573,7 +588,8 @@ class Availability_Service {
 		int $block_minutes,
 		int $service_minutes,
 		?DateTimeImmutable $deadline_cutoff,
-		array $bookings
+		array $bookings,
+		int $slot_step_minutes
 	): array {
 		$result = [];
 
@@ -598,12 +614,12 @@ class Availability_Service {
 				}
 
 				if ( $deadline_cutoff && $cursor < $deadline_cutoff ) {
-					$cursor = $cursor->modify( sprintf( '+%d minutes', self::SLOT_STEP_MINUTES ) );
+					$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
 					continue;
 				}
 
 				if ( $this->has_booking_conflict( $cursor, $end, $bookings ) ) {
-					$cursor = $cursor->modify( sprintf( '+%d minutes', self::SLOT_STEP_MINUTES ) );
+					$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
 					continue;
 				}
 
@@ -616,7 +632,7 @@ class Availability_Service {
 					'service_duration' => $service_minutes,
 				];
 
-				$cursor = $cursor->modify( sprintf( '+%d minutes', self::SLOT_STEP_MINUTES ) );
+				$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
 			}
 		}
 
@@ -1008,7 +1024,8 @@ class Availability_Service {
 			$deadline      = '' === $deadline_meta ? $provider_deadline : (int) $deadline_meta;
 
 		$duration    = $duration > 0 ? $duration : 60;
-		$total_block = max( $duration + $buffer_after, self::SLOT_STEP_MINUTES );
+		$slot_step_minutes = $this->get_slot_step_minutes();
+		$total_block = max( $duration + $buffer_after, $slot_step_minutes );
 
 			$reservation_day_type = (string) get_post_meta( $menu_post->ID, self::MENU_META_RESERVATION_DAY_TYPE, true );
 			$allowed_day_types = [ '', 'weekend', 'weekday' ];

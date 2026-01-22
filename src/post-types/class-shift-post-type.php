@@ -28,21 +28,21 @@ class Shift_Post_Type {
 		}
 
 		$labels = [
-			'name'                  => __( 'shift', 'vk-booking-manager' ),
-			'singular_name'         => __( 'shift', 'vk-booking-manager' ),
-			'menu_name'             => __( 'BM shift', 'vk-booking-manager' ),
-			'name_admin_bar'        => __( 'shift', 'vk-booking-manager' ),
+			'name'                  => __( 'Shift', 'vk-booking-manager' ),
+			'singular_name'         => __( 'Shift', 'vk-booking-manager' ),
+			'menu_name'             => __( 'BM Shift', 'vk-booking-manager' ),
+			'name_admin_bar'        => __( 'Shift', 'vk-booking-manager' ),
 			'add_new'               => __( 'New addition', 'vk-booking-manager' ),
-			'add_new_item'          => __( 'add shift', 'vk-booking-manager' ),
+			'add_new_item'          => __( 'Add Shift', 'vk-booking-manager' ),
 			'edit_item'             => __( 'Edit shift', 'vk-booking-manager' ),
-			'new_item'              => __( 'new shift', 'vk-booking-manager' ),
-			'view_item'             => __( 'show shift', 'vk-booking-manager' ),
-			'search_items'          => __( 'search shift', 'vk-booking-manager' ),
+			'new_item'              => __( 'New Shift', 'vk-booking-manager' ),
+			'view_item'             => __( 'Show Shift', 'vk-booking-manager' ),
+			'search_items'          => __( 'Search Shift', 'vk-booking-manager' ),
 			'not_found'             => __( 'Shift not found.', 'vk-booking-manager' ),
 			'not_found_in_trash'    => __( 'There are no shifts in the trash.', 'vk-booking-manager' ),
-			'all_items'             => __( 'all shifts', 'vk-booking-manager' ),
-			'archives'              => __( 'shift archive', 'vk-booking-manager' ),
-			'attributes'            => __( 'shift attribute', 'vk-booking-manager' ),
+			'all_items'             => __( 'All Shifts', 'vk-booking-manager' ),
+			'archives'              => __( 'Shift Archive', 'vk-booking-manager' ),
+			'attributes'            => __( 'Shift Attribute', 'vk-booking-manager' ),
 		];
 
 		$args = [

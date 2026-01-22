@@ -5,6 +5,7 @@ export const BookingSummaryItems = ({
 	booking,
 	resourceLabel,
 	emptyValue = '',
+	currencySymbol = null,
 }) => {
 	const resolvedLabel =
 		typeof resourceLabel === 'string' && resourceLabel.trim() !== ''
@@ -39,7 +40,7 @@ export const BookingSummaryItems = ({
 					{__('Total basic fee', 'vk-booking-manager')}
 				</dt>
 				<dd className="vkbm-confirm__summary-item-value vkbm-confirm__summary-item-value--price">
-					{formatCurrencyJPY(booking?.total_price || 0)}
+					{formatCurrencyJPY(booking?.total_price || 0, currencySymbol)}
 				</dd>
 			</dl>
 			{typeof booking?.other_conditions === 'string' &&

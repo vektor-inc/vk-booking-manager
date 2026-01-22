@@ -77,6 +77,8 @@ class Provider_Settings_Controller {
 		}
 		$show_provider_logo = ! empty( $settings['reservation_show_provider_logo'] );
 		$show_provider_name = ! empty( $settings['reservation_show_provider_name'] );
+		$currency_symbol   = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$tax_label_text    = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
 		// Fetch provider logo URL for frontend display. / 予約画面表示用にロゴURLを取得します。
 		$provider_logo_url = $provider_logo_id > 0 ? wp_get_attachment_image_url( $provider_logo_id, 'medium' ) : '';
 		if ( ! is_string( $provider_logo_url ) ) {
@@ -101,6 +103,8 @@ class Provider_Settings_Controller {
 				'reservation_menu_list_display_mode' => $menu_list_display_mode,
 				'reservation_show_provider_logo' => $show_provider_logo,
 				'reservation_show_provider_name' => $show_provider_name,
+				'currency_symbol'    => $currency_symbol,
+				'tax_label_text'    => $tax_label_text,
 				'cancellation_policy'  => $cancellation_policy,
 				'terms_of_service'     => $terms_of_service,
 				'payment_method'       => $payment_method,

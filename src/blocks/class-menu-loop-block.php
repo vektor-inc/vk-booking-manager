@@ -41,6 +41,11 @@ class Menu_Loop_Block {
 	private $provider_settings = null;
 
 	/**
+	 * @var bool
+	 */
+	private static bool $block_registered = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Settings_Repository|null $settings_repository Provider settings repository.
@@ -60,6 +65,11 @@ class Menu_Loop_Block {
 	 * Register block metadata.
 	 */
 	public function register_block(): void {
+		// Prevent duplicate registration in test environments.
+		if ( self::$block_registered ) {
+			return;
+		}
+
 		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
 
 		register_block_type_from_metadata(
@@ -69,6 +79,8 @@ class Menu_Loop_Block {
 			]
 		);
 		$this->register_script_translations( 'vk-booking-manager/menu-loop', [ 'editorScript' ] );
+
+		self::$block_registered = true;
 	}
 
 	/**
@@ -1007,14 +1019,18 @@ class Menu_Loop_Block {
 		 * @return string
 		 */
 		private function format_price_display( int $base_price ): string {
-			$formatted_price = esc_html( number_format_i18n( $base_price ) );
-			$tax_label       = esc_html__( '(tax included)', 'vk-booking-manager' );
+			$formatted_price = esc_html( VKBM_Helper::format_currency( $base_price ) );
+			$tax_label       = VKBM_Helper::get_tax_included_label();
+
+			if ( '' === $tax_label ) {
+				return $formatted_price;
+			}
 
 			return sprintf(
 				/* translators: 1: price, 2: tax-included label */
-				'¥%1$s<span class="vkbm-menu-loop__card-price-tax">%2$s</span>',
+				'%1$s<span class="vkbm-menu-loop__card-price-tax">%2$s</span>',
 				$formatted_price,
-				$tax_label
+				esc_html( $tax_label )
 			);
 		}
 

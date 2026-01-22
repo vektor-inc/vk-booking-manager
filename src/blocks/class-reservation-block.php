@@ -28,6 +28,11 @@ class Reservation_Block {
 	private const CURRENT_USER_BOOTSTRAP_HANDLE = 'vkbm-current-user-bootstrap';
 
 	/**
+	 * @var bool
+	 */
+	private static bool $block_registered = false;
+
+	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
@@ -39,10 +44,17 @@ class Reservation_Block {
 	 * Register the block metadata with WordPress.
 	 */
 	public function register_block(): void {
+		// Prevent duplicate registration in test environments.
+		if ( self::$block_registered ) {
+			return;
+		}
+
 		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
 		register_block_type_from_metadata( $metadata_path );
 		$this->register_menu_loop_style();
 		$this->register_script_translations( 'vk-booking-manager/reservation', [ 'script', 'editorScript' ] );
+
+		self::$block_registered = true;
 	}
 
 	/**

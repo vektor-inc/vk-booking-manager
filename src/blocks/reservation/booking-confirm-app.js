@@ -248,6 +248,8 @@ export const BookingConfirmApp = ({
 	const [staffEnabled, setStaffEnabled] = useState(true);
 	const [resourceLabelSingular, setResourceLabelSingular] = useState(__('Staff', 'vk-booking-manager'));
 	const [resolvedReservationPageUrl, setResolvedReservationPageUrl] = useState(reservationPageUrl || '');
+	const [taxLabelText, setTaxLabelText] = useState('');
+	const [currencySymbol, setCurrencySymbol] = useState('');
 
 	const isLoggedIn = useLoginState();
 
@@ -264,8 +266,12 @@ export const BookingConfirmApp = ({
 
 	const pricingSummary = useMemo(() => {
 		const taxIncluded = Boolean(draft?.menu_price_tax_included);
+		const taxLabel =
+			taxLabelText.trim() !== ''
+				? taxLabelText
+				: '';
 		const ensureTaxLabel = (label) =>
-			taxIncluded ? `${label}${__('(tax included)', 'vk-booking-manager')}` : label;
+			taxIncluded && taxLabel ? `${label}${taxLabel}` : label;
 
 		const basePrice =
 			normalizePriceValue(draft?.menu_price) ??
@@ -277,12 +283,13 @@ export const BookingConfirmApp = ({
 					menu?.price
 			);
 
+		const currencySymbolValue = currencySymbol.trim() !== '' ? currencySymbol : null;
 		const formattedBase =
 			typeof draft?.menu_price_formatted === 'string' &&
 			draft.menu_price_formatted.trim() !== ''
 				? draft.menu_price_formatted
 				: basePrice !== null
-				? ensureTaxLabel(formatCurrencyJPY(basePrice))
+				? ensureTaxLabel(formatCurrencyJPY(basePrice, currencySymbolValue))
 				: '';
 
 		const nominationFee = staffEnabled
@@ -292,7 +299,7 @@ export const BookingConfirmApp = ({
 			typeof draft?.nomination_fee_formatted === 'string' &&
 			draft.nomination_fee_formatted.trim() !== ''
 				? draft.nomination_fee_formatted
-				: ensureTaxLabel(formatCurrencyJPY(nominationFee));
+				: ensureTaxLabel(formatCurrencyJPY(nominationFee, currencySymbolValue));
 
 		const totalPrice =
 			normalizePriceValue(draft?.total_price) ??
@@ -302,7 +309,7 @@ export const BookingConfirmApp = ({
 			draft.total_price_formatted.trim() !== ''
 				? draft.total_price_formatted
 				: totalPrice !== null
-				? ensureTaxLabel(formatCurrencyJPY(totalPrice))
+				? ensureTaxLabel(formatCurrencyJPY(totalPrice, currencySymbolValue))
 				: '';
 
 		return {
@@ -310,7 +317,7 @@ export const BookingConfirmApp = ({
 			nominationLabel: formattedNomination,
 			totalLabel: formattedTotal,
 		};
-	}, [draft, menu, staffEnabled]);
+	}, [draft, menu, staffEnabled, taxLabelText, currencySymbol]);
 
 	useEffect(() => {
 		if (!draftToken) {
@@ -400,6 +407,8 @@ export const BookingConfirmApp = ({
 				setShowProviderLogo(Boolean(response?.reservation_show_provider_logo));
 				setShowProviderName(Boolean(response?.reservation_show_provider_name));
 				setStaffEnabled(response?.staff_enabled !== false);
+				setTaxLabelText(typeof response?.tax_label_text === 'string' ? response.tax_label_text : '');
+				setCurrencySymbol(typeof response?.currency_symbol === 'string' ? response.currency_symbol : '');
 				if (!reservationPageUrl && typeof response?.reservation_page_url === 'string') {
 					setResolvedReservationPageUrl(response.reservation_page_url);
 				}
@@ -826,12 +835,15 @@ useEffect(() => {
 						(isConflict ? conflictMessage : parsed?.message) ||
 						(parsed?.code ? `${parsed.code} (HTTP ${response.status})` : `HTTP ${response.status}`) ||
 						__('Confirmation of reservation failed. Please try again later.', 'vk-booking-manager');
-					// eslint-disable-next-line no-console
-					console.error('vkbm booking confirm: request failed', {
-						status: response?.status,
-						parsed,
-						raw,
-					});
+					// Log error only in development mode
+					if (process.env.NODE_ENV === 'development') {
+						// eslint-disable-next-line no-console
+						console.error('vkbm booking confirm: request failed', {
+							status: response?.status,
+							parsed,
+							raw,
+						});
+					}
 					throw new Error(message);
 				}
 
@@ -1490,6 +1502,7 @@ useEffect(() => {
 											booking={booking}
 											resourceLabel={resourceLabelSingular}
 											emptyValue="—"
+											currencySymbol={currencySymbol.trim() !== '' ? currencySymbol : null}
 										/>
 									</div>
 								);
@@ -1530,7 +1543,7 @@ useEffect(() => {
 				{staffEnabled && (
 					<SummaryRow
 						label={__('nomination fee', 'vk-booking-manager')}
-						value={pricingSummary.nominationLabel || '¥0'}
+						value={pricingSummary.nominationLabel || formatCurrencyJPY(0)}
 					/>
 				)}
 				<SummaryRow

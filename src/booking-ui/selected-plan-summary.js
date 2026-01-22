@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 const SelectField = ({ label, options, value, onChange, disabled, placeholder }) => (
 	<label className="vkbm-plan-summary__field">
@@ -44,10 +44,55 @@ export const SelectedPlanSummary = ({
 	resourceLabelSingular = __('Staff', 'vk-booking-manager'),
 	lockStaffSelection = false,
 }) => {
-	const menuOptions = menus.map((menu) => ({
-		id: menu.id,
-		name: menu.title?.rendered ?? menu.title,
-	}));
+	const menuSelectionMessage = (() => {
+		const message = __('Please select a menu.', 'vk-booking-manager');
+		if (message.includes('%s')) {
+			return sprintf(message, __('Menu', 'vk-booking-manager'));
+		}
+		return message;
+	})();
+	const menuOptions = [...menus]
+		.sort((a, b) => {
+			const groupA = a?.vkbm_menu_group || null;
+			const groupB = b?.vkbm_menu_group || null;
+			const orderA = Number.isFinite(groupA?.order)
+				? groupA.order
+				: Number.MAX_SAFE_INTEGER;
+			const orderB = Number.isFinite(groupB?.order)
+				? groupB.order
+				: Number.MAX_SAFE_INTEGER;
+
+			if (orderA !== orderB) {
+				return orderA - orderB;
+			}
+
+			const hasGroupA = Boolean(groupA);
+			const hasGroupB = Boolean(groupB);
+			if (hasGroupA !== hasGroupB) {
+				return hasGroupA ? -1 : 1;
+			}
+
+			const nameA = String(groupA?.name ?? '');
+			const nameB = String(groupB?.name ?? '');
+			const groupNameCompare = nameA.localeCompare(nameB);
+			if (groupNameCompare !== 0) {
+				return groupNameCompare;
+			}
+
+			const menuOrderA = Number.isFinite(a?.menu_order) ? a.menu_order : 0;
+			const menuOrderB = Number.isFinite(b?.menu_order) ? b.menu_order : 0;
+			if (menuOrderA !== menuOrderB) {
+				return menuOrderA - menuOrderB;
+			}
+
+			const titleA = String(a?.title?.rendered ?? a?.title ?? '');
+			const titleB = String(b?.title?.rendered ?? b?.title ?? '');
+			return titleA.localeCompare(titleB);
+		})
+		.map((menu) => ({
+			id: menu.id,
+			name: menu.title?.rendered ?? menu.title,
+		}));
 
 	const staffItems = staffOptions.map((staff) => ({
 		id: staff.id,
@@ -127,7 +172,14 @@ export const SelectedPlanSummary = ({
 										.filter(Boolean)
 										.join(' ')}
 								>
-									{row.value ?? '—'}
+									<span className="vkbm-plan-summary__pricing-amount">
+										{row.value ?? '—'}
+									</span>
+									{row.taxLabel ? (
+										<span className="vkbm-plan-summary__pricing-tax">
+											{row.taxLabel}
+										</span>
+									) : null}
 								</strong>
 							</div>
 						))}
@@ -136,7 +188,7 @@ export const SelectedPlanSummary = ({
 				) : (
 					<div className="vkbm-plan-summary__pricing vkbm-plan-summary__pricing--alert">
 						<p className="vkbm-alert vkbm-alert__info vkbm-alert--compact" role="status">
-							{__('Please select a menu.', 'vk-booking-manager')}
+							{menuSelectionMessage}
 						</p>
 					</div>
 				)}

@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Admin;
 
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_Post;
@@ -149,13 +150,21 @@ class Service_Menu_Editor {
 		$catch_copy    = get_post_meta( $post->ID, '_vkbm_catch_copy', true );
 		$base_price    = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$disable_nomination_fee = (string) get_post_meta( $post->ID, self::META_DISABLE_NOMINATION_FEE, true );
+		$tax_label     = VKBM_Helper::get_tax_included_label();
 		?>
 		<div class="vkbm-service-menu-field">
 			<label for="vkbm_service_menu_catch_copy"><?php esc_html_e( 'Catchphrase', 'vk-booking-manager' ); ?></label>
 			<input type="text" id="vkbm_service_menu_catch_copy" name="vkbm_service_menu[catch_copy]" class="widefat" value="<?php echo esc_attr( $catch_copy ); ?>" />
 		</div>
 		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_base_price"><?php esc_html_e( 'Basic price (tax included)', 'vk-booking-manager' ); ?></label>
+			<label for="vkbm_service_menu_base_price">
+				<?php
+				esc_html_e( 'Basic price', 'vk-booking-manager' );
+				if ( '' !== $tax_label ) {
+					echo ' ' . esc_html( $tax_label );
+				}
+				?>
+			</label>
 			<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
 		</div>
 		<div class="vkbm-service-menu-field">

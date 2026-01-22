@@ -6,13 +6,19 @@ namespace VKBookingManager\PostTypes;
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\TermOrder\Term_Order_Manager;
 use WP_Post;
 use function add_action;
 use function current_user_can;
 use function get_current_screen;
+use function get_term_meta;
+use function get_the_terms;
+use function is_wp_error;
 use function register_post_meta;
+use function register_rest_field;
 use function wp_enqueue_script;
 use function wp_enqueue_style;
 
@@ -39,6 +45,7 @@ class Service_Menu_Post_Type {
 		add_action( 'init', [ $this, 'register_post_type' ] );
 		add_action( 'init', [ $this, 'register_taxonomy' ] );
 		add_action( 'init', [ $this, 'register_meta' ] );
+		add_action( 'rest_api_init', [ $this, 'register_rest_fields' ] );
 		add_action( self::TAXONOMY_GROUP . '_add_form_fields', [ $this, 'render_group_term_add_fields' ] );
 		add_action( self::TAXONOMY_GROUP . '_edit_form_fields', [ $this, 'render_group_term_edit_fields' ], 10, 2 );
 		add_action( 'created_' . self::TAXONOMY_GROUP, [ $this, 'save_group_term_display_mode' ] );
@@ -59,10 +66,10 @@ class Service_Menu_Post_Type {
 		}
 
 		$labels = [
-			'name'                  => __( 'Service menu', 'vk-booking-manager' ),
-			'singular_name'         => __( 'Service menu', 'vk-booking-manager' ),
-			'menu_name'             => __( 'BM service', 'vk-booking-manager' ),
-			'name_admin_bar'        => __( 'Service menu', 'vk-booking-manager' ),
+			'name'                  => __( 'Service Menu', 'vk-booking-manager' ),
+			'singular_name'         => __( 'Service Menu', 'vk-booking-manager' ),
+			'menu_name'             => __( 'BM Service', 'vk-booking-manager' ),
+			'name_admin_bar'        => __( 'Service Menu', 'vk-booking-manager' ),
 			'add_new'               => __( 'New addition', 'vk-booking-manager' ),
 			'add_new_item'          => __( 'Add service', 'vk-booking-manager' ),
 			'edit_item'             => __( 'Edit service menu', 'vk-booking-manager' ),
@@ -433,6 +440,7 @@ class Service_Menu_Post_Type {
 				],
 			]
 		);
+		$tax_label = VKBM_Helper::get_tax_included_label();
 
 		wp_nonce_field( 'vkbm_service_menu_quick_edit', '_vkbm_service_menu_quick_nonce' );
 		?>
@@ -440,7 +448,14 @@ class Service_Menu_Post_Type {
 				<div class="inline-edit-col">
 					<div class="inline-edit-group">
 						<label>
-							<span class="title"><?php esc_html_e( 'Price (tax included)', 'vk-booking-manager' ); ?></span>
+							<span class="title">
+								<?php
+								esc_html_e( 'Price', 'vk-booking-manager' );
+								if ( '' !== $tax_label ) {
+									echo ' ' . esc_html( $tax_label );
+								}
+								?>
+							</span>
 							<span class="input-text-wrap">
 								<input type="number" name="vkbm_service_menu_quick[base_price]" class="vkbm-qe-base-price" min="0" step="1" value="" />
 							</span>
@@ -701,8 +716,8 @@ class Service_Menu_Post_Type {
 	 */
 	private function register_tag_taxonomy(): void {
 		$labels = [
-			'name'              => __( 'service tag', 'vk-booking-manager' ),
-			'singular_name'     => __( 'service tag', 'vk-booking-manager' ),
+			'name'              => __( 'Service Tag', 'vk-booking-manager' ),
+			'singular_name'     => __( 'Service Tag', 'vk-booking-manager' ),
 			'search_items'      => __( 'Find your service tag', 'vk-booking-manager' ),
 			'all_items'         => __( 'all service tags', 'vk-booking-manager' ),
 			'parent_item'       => __( 'parent service tag', 'vk-booking-manager' ),
@@ -710,8 +725,8 @@ class Service_Menu_Post_Type {
 			'edit_item'         => __( 'Edit service tag', 'vk-booking-manager' ),
 			'update_item'       => __( 'Update service tag', 'vk-booking-manager' ),
 			'add_new_item'      => __( 'Add service tag', 'vk-booking-manager' ),
-			'new_item_name'     => __( 'New service tag name', 'vk-booking-manager' ),
-			'menu_name'         => __( 'service tag', 'vk-booking-manager' ),
+			'new_item_name'     => __( 'New Service Tag Name', 'vk-booking-manager' ),
+			'menu_name'         => __( 'Service Tag', 'vk-booking-manager' ),
 		];
 
 		$args = [
@@ -738,8 +753,8 @@ class Service_Menu_Post_Type {
 	 */
 	private function register_group_taxonomy(): void {
 		$labels = [
-			'name'              => __( 'Service menu group', 'vk-booking-manager' ),
-			'singular_name'     => __( 'Service menu group', 'vk-booking-manager' ),
+			'name'              => __( 'Service Menu Group', 'vk-booking-manager' ),
+			'singular_name'     => __( 'Service Menu Group', 'vk-booking-manager' ),
 			'search_items'      => __( 'Search service menu group', 'vk-booking-manager' ),
 			'all_items'         => __( 'All service menu groups', 'vk-booking-manager' ),
 			'parent_item'       => __( 'Parent service menu group', 'vk-booking-manager' ),
@@ -747,8 +762,8 @@ class Service_Menu_Post_Type {
 			'edit_item'         => __( 'Edit service menu group', 'vk-booking-manager' ),
 			'update_item'       => __( 'Update service menu group', 'vk-booking-manager' ),
 			'add_new_item'      => __( 'Add service menu group', 'vk-booking-manager' ),
-			'new_item_name'     => __( 'New service menu group name', 'vk-booking-manager' ),
-			'menu_name'         => __( 'service group', 'vk-booking-manager' ),
+			'new_item_name'     => __( 'New Service Menu Group Name', 'vk-booking-manager' ),
+			'menu_name'         => __( 'Service Group', 'vk-booking-manager' ),
 		];
 
 		$args = [
@@ -906,6 +921,158 @@ class Service_Menu_Post_Type {
 				'auth_callback'     => '__return_true',
 			]
 		);
+	}
+
+	/**
+	 * Register REST-exposed fields for menu group ordering.
+	 */
+	public function register_rest_fields(): void {
+		register_rest_field(
+			self::POST_TYPE,
+			'vkbm_menu_group',
+			[
+				'get_callback' => [ $this, 'get_menu_group_rest_field' ],
+				'schema'       => [
+					'description' => __( 'Primary service menu group information.', 'vk-booking-manager' ),
+					'type'        => [ 'object', 'null' ],
+					'context'     => [ 'view', 'edit' ],
+					'properties'  => [
+						'id'    => [ 'type' => 'integer' ],
+						'name'  => [ 'type' => 'string' ],
+						'order' => [ 'type' => 'integer' ],
+					],
+				],
+			]
+		);
+	}
+
+	/**
+	 * Resolve the primary group term for REST responses.
+	 *
+	 * @param array<string, mixed> $post REST post data.
+	 * @return array<string, mixed>|null
+	 */
+	public function get_menu_group_rest_field( array $post ): ?array {
+		$post_id = isset( $post['id'] ) ? (int) $post['id'] : 0;
+		if ( $post_id <= 0 ) {
+			return null;
+		}
+
+		$terms = get_the_terms( $post_id, self::TAXONOMY_GROUP );
+		if ( empty( $terms ) || is_wp_error( $terms ) ) {
+			return null;
+		}
+
+		$primary = self::resolve_primary_group_term( $terms );
+		if ( ! $primary ) {
+			return null;
+		}
+
+		return [
+			'id'    => (int) $primary->term_id,
+			'name'  => (string) $primary->name,
+			'order' => self::get_group_order_value( (int) $primary->term_id ),
+		];
+	}
+
+	/**
+	 * Sort service menus by group order and menu order.
+	 *
+	 * @param array<int, WP_Post> $posts Service menu posts.
+	 * @return array<int, WP_Post>
+	 */
+	public static function sort_menus_by_group( array $posts ): array {
+		$posts = array_values( $posts );
+		$index = [];
+
+		foreach ( $posts as $post ) {
+			$terms = get_the_terms( $post, self::TAXONOMY_GROUP );
+			$primary = ( empty( $terms ) || is_wp_error( $terms ) )
+				? null
+				: self::resolve_primary_group_term( $terms );
+
+			$index[ $post->ID ] = [
+				'group_order' => $primary ? self::get_group_order_value( (int) $primary->term_id ) : PHP_INT_MAX,
+				'group_name'  => $primary ? (string) $primary->name : '',
+				'has_group'   => $primary ? 1 : 0,
+				'menu_order'  => (int) $post->menu_order,
+				'title'       => (string) $post->post_title,
+			];
+		}
+
+		usort(
+			$posts,
+			static function ( WP_Post $a, WP_Post $b ) use ( $index ): int {
+				$meta_a = $index[ $a->ID ] ?? null;
+				$meta_b = $index[ $b->ID ] ?? null;
+
+				if ( ! $meta_a || ! $meta_b ) {
+					return 0;
+				}
+
+				if ( $meta_a['group_order'] !== $meta_b['group_order'] ) {
+					return $meta_a['group_order'] <=> $meta_b['group_order'];
+				}
+
+				if ( $meta_a['has_group'] !== $meta_b['has_group'] ) {
+					return $meta_a['has_group'] > $meta_b['has_group'] ? -1 : 1;
+				}
+
+				$group_name_compare = strcmp( $meta_a['group_name'], $meta_b['group_name'] );
+				if ( 0 !== $group_name_compare ) {
+					return $group_name_compare;
+				}
+
+				if ( $meta_a['menu_order'] !== $meta_b['menu_order'] ) {
+					return $meta_a['menu_order'] <=> $meta_b['menu_order'];
+				}
+
+				return strcmp( $meta_a['title'], $meta_b['title'] );
+			}
+		);
+
+		return $posts;
+	}
+
+	/**
+	 * Pick primary group term based on stored order (fallback: name).
+	 *
+	 * @param array<int, mixed> $terms Term list.
+	 * @return object|null
+	 */
+	private static function resolve_primary_group_term( array $terms ): ?object {
+		usort(
+			$terms,
+			static function ( $a, $b ): int {
+				$order_a = self::get_group_order_value( (int) $a->term_id );
+				$order_b = self::get_group_order_value( (int) $b->term_id );
+
+				if ( $order_a !== $order_b ) {
+					return $order_a <=> $order_b;
+				}
+
+				return strcmp( (string) $a->name, (string) $b->name );
+			}
+		);
+
+		return $terms[0] ?? null;
+	}
+
+	/**
+	 * Get group order value (smaller comes first).
+	 *
+	 * @param int $term_id Term ID.
+	 * @return int
+	 */
+	private static function get_group_order_value( int $term_id ): int {
+		$value = (string) get_term_meta( $term_id, Term_Order_Manager::META_KEY, true );
+		$value = trim( $value );
+
+		if ( '' === $value || ! is_numeric( $value ) ) {
+			return PHP_INT_MAX;
+		}
+
+		return (int) $value;
 	}
 
 	/**

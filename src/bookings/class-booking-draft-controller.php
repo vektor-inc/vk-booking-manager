@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Bookings;
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 use WP_REST_Request;
@@ -324,14 +325,13 @@ class Booking_Draft_Controller {
 
 	        $display_price = $base_price;
 
-        $formatted = sprintf(
-            /* translators: %s: price amount */
-            __( '¥%s', 'vk-booking-manager' ),
-            number_format_i18n( $display_price )
-        );
+        $formatted = VKBM_Helper::format_currency( (int) $display_price );
 
 	        if ( $tax_enabled ) {
-	            $formatted .= __( '(tax included)', 'vk-booking-manager' );
+	            $tax_label = VKBM_Helper::get_tax_included_label();
+	            if ( '' !== $tax_label ) {
+	                $formatted .= $tax_label;
+	            }
 	        }
 
         return [
@@ -378,14 +378,13 @@ class Booking_Draft_Controller {
      * @return string
      */
     private function format_currency_label( int $amount, bool $tax_included ): string {
-        $label = sprintf(
-            /* translators: %s: price amount */
-            __( '¥%s', 'vk-booking-manager' ),
-            number_format_i18n( max( 0, $amount ) )
-        );
+        $label = VKBM_Helper::format_currency( $amount );
 
         if ( $tax_included ) {
-            $label .= __( '(tax included)', 'vk-booking-manager' );
+            $tax_label = VKBM_Helper::get_tax_included_label();
+            if ( '' !== $tax_label ) {
+                $label .= $tax_label;
+            }
         }
 
         return $label;

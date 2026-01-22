@@ -12,6 +12,9 @@
 		var basicTemplate = '';
 		var $basicSlots;
 		var $basicNextIndex;
+		var reminderTemplate = '';
+		var $reminderList;
+		var $reminderIndex;
 
 		function updateBookingCancelModeState() {
 			var $mode = $( '#vkbm-provider-booking-cancel-mode' );
@@ -190,6 +193,22 @@
 		}
 	}
 
+	function addReminderRow() {
+		if ( ! reminderTemplate || ! $reminderList || ! $reminderIndex ) {
+			return;
+		}
+
+		var index = getNextIndex( $reminderIndex, $reminderList.children() );
+		var html = reminderTemplate.replace( /__INDEX__/g, index );
+
+		$reminderList.append( html );
+	}
+
+	function removeReminderRow( $button ) {
+		var $row = $button.closest( '.vkbm-reminder-hours__row' );
+		$row.remove();
+	}
+
 	function getWeeklySlotTemplate( $row ) {
 		var template = $row.find( '.vkbm-business-hours-slot-template' ).html() || '';
 
@@ -334,6 +353,16 @@
 		removeBasicSlot( $( this ) );
 	} );
 
+	$( document ).on( 'click', '.vkbm-reminder-hours-add', function( event ) {
+		event.preventDefault();
+		addReminderRow();
+	} );
+
+	$( document ).on( 'click', '.vkbm-reminder-hours-remove', function( event ) {
+		event.preventDefault();
+		removeReminderRow( $( this ) );
+	} );
+
 	$( document ).on( 'change', '.vkbm-business-hours-use-custom', function() {
 		var $row = $( this ).closest( '.vkbm-business-hours-row' );
 
@@ -374,9 +403,16 @@
 			}
 
 		basicTemplate = $( '#vkbm-business-hours-basic-slot-template' ).html() || '';
+		reminderTemplate = $( '#vkbm-booking-reminder-template' ).html() || '';
+		$reminderList    = $( '#vkbm-booking-reminder-hours-list' );
+		$reminderIndex   = $( '#vkbm-booking-reminder-next-index' );
 
 		if ( basicTemplate ) {
 			basicTemplate = basicTemplate.trim();
+		}
+
+		if ( reminderTemplate ) {
+			reminderTemplate = reminderTemplate.trim();
 		}
 
 			$( '.vkbm-business-hours-row' ).each( function() {

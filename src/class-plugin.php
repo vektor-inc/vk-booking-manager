@@ -244,6 +244,7 @@ class Plugin {
 		$this->booking_notification_service->register();
 		$this->oembed_override->register();
 		$this->roles_manager->register();
+		add_filter( 'load_script_translation_file', [ $this, 'filter_script_translation_file' ], 10, 3 );
 		add_action( 'init', [ $this, 'maybe_create_default_staff' ], 11 );
 		$this->shift_dashboard_page->register();
 		$this->owner_admin_menu_filter->register();
@@ -272,6 +273,187 @@ class Plugin {
 		$this->post_order_manager->register();
 		$this->term_order_manager->register();
 		$this->user_profile_fields->register();
+	}
+
+	/**
+	 * Prefer translation JSON files in the plugin languages directory.
+	 *
+	 * プラグインの languages ディレクトリの翻訳 JSON を優先します。
+	 * ハッシュが一致しない場合でも、利用可能なJSONファイルを検索します。
+	 *
+	 * @param string|false $file Translation file path.
+	 * @param string       $handle Script handle.
+	 * @param string       $domain Text domain.
+	 * @return string|false
+	 */
+	public function filter_script_translation_file( $file, string $handle, string $domain ) {
+		if ( 'vk-booking-manager' !== $domain || ! $file ) {
+			return $file;
+		}
+
+		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
+		
+		// First, try the exact filename WordPress expects.
+		$candidate = trailingslashit( $translation_path ) . basename( $file );
+		if ( file_exists( $candidate ) ) {
+			return $candidate;
+		}
+
+		// Debug: Log when exact match fails (only in development).
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+			error_log( sprintf( '[VKBM] Translation file not found for handle: %s, expected: %s', $handle, basename( $file ) ) );
+		}
+
+		// If exact match not found, search for any JSON file that might contain translations for this handle.
+		if ( ! is_dir( $translation_path ) ) {
+			return $file;
+		}
+
+		$locale = get_locale();
+		$pattern = sprintf( '%s-%s-*.json', $domain, $locale );
+		$json_files = glob( trailingslashit( $translation_path ) . $pattern );
+
+		// Also check backup directory if it exists
+		$backup_dir = trailingslashit( $translation_path ) . '.json-backup';
+		if ( is_dir( $backup_dir ) ) {
+			$backup_files = glob( trailingslashit( $backup_dir ) . $pattern );
+			if ( ! empty( $backup_files ) ) {
+				$json_files = array_merge( $json_files, $backup_files );
+			}
+		}
+
+		if ( empty( $json_files ) ) {
+			return $file;
+		}
+
+		// Extract block/script identifier from handle.
+		// Examples:
+		// - "vk-booking-manager-reservation-view-script" -> "reservation"
+		// - "vk-booking-manager-menu-search-editor-script" -> "menu-search"
+		$handle_clean = str_replace( [ 'vk-booking-manager-', 'booking-manager-' ], '', $handle );
+		$handle_clean = preg_replace( '/-(editor|view|script)$/', '', $handle_clean );
+		
+		// Build patterns to match against JSON source field.
+		$patterns_to_match = [];
+		
+		// Add the cleaned handle.
+		if ( ! empty( $handle_clean ) ) {
+			$patterns_to_match[] = $handle_clean;
+		}
+		
+		// Extract block name from handle (remove common prefixes and suffixes).
+		$block_name = preg_replace( '/^(vk-)?(booking-)?manager-/', '', $handle );
+		$block_name = preg_replace( '/-(editor|view|script)$/', '', $block_name );
+		if ( ! empty( $block_name ) && $block_name !== $handle_clean ) {
+			$patterns_to_match[] = $block_name;
+		}
+		
+		// Try specific block name patterns.
+		if ( false !== strpos( $handle, 'reservation' ) ) {
+			$patterns_to_match[] = 'reservation';
+		}
+		if ( false !== strpos( $handle, 'menu-search' ) || false !== strpos( $handle, 'menu_search' ) ) {
+			$patterns_to_match[] = 'menu-search';
+			$patterns_to_match[] = 'menu_search';
+		}
+		if ( false !== strpos( $handle, 'menu-loop' ) || false !== strpos( $handle, 'menu_loop' ) ) {
+			$patterns_to_match[] = 'menu-loop';
+			$patterns_to_match[] = 'menu_loop';
+		}
+		if ( false !== strpos( $handle, 'menu-search-staff' ) || false !== strpos( $handle, 'menu_search_staff' ) ) {
+			$patterns_to_match[] = 'menu-search-staff';
+			$patterns_to_match[] = 'menu_search_staff';
+		}
+		if ( false !== strpos( $handle, 'menu-search-category' ) || false !== strpos( $handle, 'menu_search_category' ) ) {
+			$patterns_to_match[] = 'menu-search-category';
+			$patterns_to_match[] = 'menu_search_category';
+		}
+		if ( false !== strpos( $handle, 'menu-search-keyword' ) || false !== strpos( $handle, 'menu_search_keyword' ) ) {
+			$patterns_to_match[] = 'menu-search-keyword';
+			$patterns_to_match[] = 'menu_search_keyword';
+		}
+		
+		// Also try booking-ui patterns.
+		if ( false !== strpos( $handle, 'selected-plan' ) || false !== strpos( $handle, 'selected_plan' ) ) {
+			$patterns_to_match[] = 'selected-plan-summary';
+		}
+		if ( false !== strpos( $handle, 'daily-slot' ) || false !== strpos( $handle, 'daily_slot' ) ) {
+			$patterns_to_match[] = 'daily-slot-list';
+		}
+		if ( false !== strpos( $handle, 'calendar-grid' ) || false !== strpos( $handle, 'calendar_grid' ) ) {
+			$patterns_to_match[] = 'calendar-grid';
+		}
+		if ( false !== strpos( $handle, 'booking-confirm' ) || false !== strpos( $handle, 'booking_confirm' ) ) {
+			$patterns_to_match[] = 'booking-confirm-app';
+		}
+		if ( false !== strpos( $handle, 'booking-summary' ) || false !== strpos( $handle, 'booking_summary' ) ) {
+			$patterns_to_match[] = 'booking-summary-items';
+		}
+		if ( false !== strpos( $handle, 'pricing' ) ) {
+			$patterns_to_match[] = 'pricing';
+		}
+		
+		// Search through all JSON files to find a match.
+		// First, try to find exact matches for reservation block (view.js or index.js)
+		if ( false !== strpos( $handle, 'reservation' ) ) {
+			foreach ( $json_files as $json_file ) {
+				$json_content = file_get_contents( $json_file );
+				if ( false === $json_content ) {
+					continue;
+				}
+
+				$json_data = json_decode( $json_content, true );
+				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+					continue;
+				}
+
+				$source = $json_data['source'];
+				
+				// For reservation block, prioritize view.js or index.js
+				if ( false !== strpos( $source, 'reservation' ) && ( false !== strpos( $source, 'view.js' ) || false !== strpos( $source, 'index.js' ) ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+						error_log( sprintf( '[VKBM] Found reservation translation file: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
+					}
+					return $json_file;
+				}
+			}
+		}
+		
+		// Then try pattern matching for all blocks
+		foreach ( $json_files as $json_file ) {
+			$json_content = file_get_contents( $json_file );
+			if ( false === $json_content ) {
+				continue;
+			}
+
+			$json_data = json_decode( $json_content, true );
+			if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+				continue;
+			}
+
+			$source = $json_data['source'];
+			
+			// Check if source matches any of our patterns.
+			foreach ( $patterns_to_match as $pattern ) {
+				if ( ! empty( $pattern ) && false !== strpos( $source, $pattern ) ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+						error_log( sprintf( '[VKBM] Found translation file by pattern: %s (pattern: %s, handle: %s, source: %s)', basename( $json_file ), $pattern, $handle, $source ) );
+					}
+					return $json_file;
+				}
+			}
+			
+			// Also check if the handle itself appears in the source path.
+			if ( false !== strpos( $source, $handle ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+					error_log( sprintf( '[VKBM] Found translation file by handle: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
+				}
+				return $json_file;
+			}
+		}
+
+		// If no match found, return the original file path.
+		return $file;
 	}
 
 	/**

@@ -317,6 +317,7 @@ class Provider_Settings_Page {
 			}
 		}
 		$reservation_deadline_hours         = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
+		$slot_step_minutes                 = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : 15;
 		$service_menu_buffer_after_minutes  = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
 		$booking_status_mode                = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : 'confirmed';
 		$cancellation_policy                = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
@@ -330,9 +331,35 @@ class Provider_Settings_Page {
 		}
 		$reservation_menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
 		$shift_alert_months                 = isset( $settings['shift_alert_months'] ) ? (int) $settings['shift_alert_months'] : 1;
+		$booking_reminder_hours             = $settings['booking_reminder_hours'] ?? [];
+		if ( ! is_array( $booking_reminder_hours ) ) {
+			$booking_reminder_hours = [];
+		}
+		$booking_reminder_hours = array_values(
+			array_filter(
+				array_map(
+					static function ( $value ): int {
+						return absint( $value );
+					},
+					$booking_reminder_hours
+				),
+				static function ( int $value ): bool {
+					return $value > 0;
+				}
+			)
+		);
+		$booking_reminder_rows = $booking_reminder_hours;
+		$booking_reminder_next_index = count( $booking_reminder_rows );
+		if ( [] === $booking_reminder_rows ) {
+			$booking_reminder_rows = [ '' ];
+			$booking_reminder_next_index = 1;
+		}
 		$design_primary_color               = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
 		$design_reservation_button_color    = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
 		$design_radius_md                   = isset( $settings['design_radius_md'] ) ? (int) $settings['design_radius_md'] : 8;
+		$currency_symbol                     = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$tax_label_text                     = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		$currency_placeholder                = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$reservation_menu_list_display_mode = 'card';
 		}
@@ -815,6 +842,61 @@ class Provider_Settings_Page {
 									</tr>
 								<?php endif; ?>
 
+								<?php if ( 'system' === $active_tab ) : ?>
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-currency-symbol-row">
+										<th scope="row">
+											<label for="vkbm-currency-symbol"><?php esc_html_e( 'Currency symbol', 'vk-booking-manager' ); ?></label>
+										</th>
+										<td>
+											<input
+												type="text"
+												class="regular-text"
+												id="vkbm-currency-symbol"
+												name="vkbm_provider_settings[currency_symbol]"
+												value="<?php echo esc_attr( $currency_symbol ); ?>"
+												placeholder="<?php echo esc_attr( $currency_placeholder ); ?>"
+											/>
+											<p class="description"><?php esc_html_e( 'Enter the currency symbol to display with prices (e.g., $, ¥, €). If left empty, the default symbol based on the site language will be used.', 'vk-booking-manager' ); ?></p>
+										</td>
+									</tr>
+								<?php endif; ?>
+
+								<?php if ( 'system' === $active_tab ) : ?>
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-tax-label-text-row">
+										<th scope="row">
+											<label for="vkbm-tax-label-text"><?php esc_html_e( 'Tax label text', 'vk-booking-manager' ); ?></label>
+										</th>
+										<td>
+											<input
+												type="text"
+												class="regular-text"
+												id="vkbm-tax-label-text"
+												name="vkbm_provider_settings[tax_label_text]"
+												value="<?php echo esc_attr( $tax_label_text ); ?>"
+											/>
+											<p class="description"><?php esc_html_e( 'Shown to the right of prices only when this field is filled (e.g., "(tax included)").', 'vk-booking-manager' ); ?></p>
+										</td>
+									</tr>
+								<?php endif; ?>
+
+								<tr class="vkbm-provider-settings__tab-system">
+									<th scope="row">
+										<label for="vkbm-slot-step-minutes"><?php esc_html_e( 'Reservation slot time', 'vk-booking-manager' ); ?></label>
+									</th>
+									<td>
+										<select
+											id="vkbm-slot-step-minutes"
+											name="vkbm_provider_settings[provider_slot_step_minutes]"
+										>
+											<option value="10" <?php selected( $slot_step_minutes, 10 ); ?>><?php esc_html_e( '10 minutes', 'vk-booking-manager' ); ?></option>
+											<option value="15" <?php selected( $slot_step_minutes, 15 ); ?>><?php esc_html_e( '15 minutes', 'vk-booking-manager' ); ?></option>
+											<option value="20" <?php selected( $slot_step_minutes, 20 ); ?>><?php esc_html_e( '20 minutes', 'vk-booking-manager' ); ?></option>
+											<option value="30" <?php selected( $slot_step_minutes, 30 ); ?>><?php esc_html_e( '30 minutes', 'vk-booking-manager' ); ?></option>
+											<option value="60" <?php selected( $slot_step_minutes, 60 ); ?>><?php esc_html_e( '60 minutes', 'vk-booking-manager' ); ?></option>
+										</select>
+									</td>
+								</tr>
+
 								<tr class="vkbm-provider-settings__tab-system" id="vkbm-service-menu-buffer-after-default-row">
 									<th scope="row">
 										<label for="vkbm-service-menu-buffer-after-default"><?php esc_html_e( 'Post-service buffer', 'vk-booking-manager' ); ?></label>
@@ -1213,6 +1295,62 @@ class Provider_Settings_Page {
 								<p class="description"><?php esc_html_e( 'Displayed if there is an unregistered month within the specified number of months including the current month.', 'vk-booking-manager' ); ?></p>
 							</td>
 						</tr>
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-booking-reminder-hours-0"><?php esc_html_e( 'Reservation reminder email', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<div class="vkbm-reminder-hours">
+									<input
+										type="hidden"
+										id="vkbm-booking-reminder-next-index"
+										value="<?php echo esc_attr( (string) $booking_reminder_next_index ); ?>"
+									/>
+									<div class="vkbm-reminder-hours__list" id="vkbm-booking-reminder-hours-list">
+										<?php foreach ( $booking_reminder_rows as $index => $hours ) : ?>
+											<div class="vkbm-reminder-hours__row">
+												<input
+													type="number"
+													class="small-text"
+													id="vkbm-booking-reminder-hours-<?php echo esc_attr( (string) $index ); ?>"
+													name="vkbm_provider_settings[booking_reminder_hours][<?php echo esc_attr( (string) $index ); ?>]"
+													min="1"
+													step="1"
+													value="<?php echo esc_attr( '' === $hours ? '' : (string) $hours ); ?>"
+												/>
+												<span class="vkbm-reminder-hours__suffix"><?php esc_html_e( 'hours before', 'vk-booking-manager' ); ?></span>
+												<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger">
+													<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
+												</button>
+											</div>
+										<?php endforeach; ?>
+									</div>
+									<button type="button" class="button vkbm-reminder-hours-add">
+										<?php esc_html_e( 'Add time', 'vk-booking-manager' ); ?>
+									</button>
+									<p class="description">
+										<?php esc_html_e( 'Sends reminder emails to customers before their reservation time.', 'vk-booking-manager' ); ?>
+									</p>
+								</div>
+								<script type="text/template" id="vkbm-booking-reminder-template">
+									<div class="vkbm-reminder-hours__row">
+										<input
+											type="number"
+											class="small-text"
+											id="vkbm-booking-reminder-hours-__INDEX__"
+											name="vkbm_provider_settings[booking_reminder_hours][__INDEX__]"
+											min="1"
+											step="1"
+											value=""
+										/>
+										<span class="vkbm-reminder-hours__suffix"><?php esc_html_e( 'hours before', 'vk-booking-manager' ); ?></span>
+										<button type="button" class="button-link vkbm-reminder-hours-remove">
+											<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
+										</button>
+									</div>
+								</script>
+							</td>
+						</tr>
 						<?php if ( Staff_Editor::is_enabled() ) : ?>
 							<tr class="vkbm-provider-settings__tab-system">
 								<th scope="row">
@@ -1331,10 +1469,10 @@ class Provider_Settings_Page {
 							</th>
 							<td>
 								<dl class="vkbm-provider-settings__faq">
-									<dt><?php esc_html_e( 'Q: Even after registering as a new user, the user does not receive a confirmation email.', 'vk-booking-manager' ); ?></dt>
+									<dt><?php esc_html_e( 'Even after registering as a new user, the user does not receive a confirmation email.', 'vk-booking-manager' ); ?></dt>
 									<dd>
 										<p>
-											<?php esc_html_e( 'A: To authenticate the email sender and prevent tampering, emails that do not have DKIM settings on the server may not even reach the spam folder.', 'vk-booking-manager' ); ?><br />
+											<?php esc_html_e( 'To authenticate the email sender and prevent tampering, emails that do not have DKIM settings on the server may not even reach the spam folder.', 'vk-booking-manager' ); ?><br />
 											<?php esc_html_e( "Especially if the user's email address is gmail, it will not arrive.", 'vk-booking-manager' ); ?>
 										</p>
 										<p><?php esc_html_e( 'Please check the following with the site administrator.', 'vk-booking-manager' ); ?></p>
@@ -1590,11 +1728,13 @@ class Provider_Settings_Page {
 		$output['reservation_menu_list_display_mode']             = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? 'card' ) );
 		$output['reservation_show_provider_logo']                 = ! empty( $input['reservation_show_provider_logo'] );
 		$output['reservation_show_provider_name']                 = ! empty( $input['reservation_show_provider_name'] );
+		$output['currency_symbol']                                = sanitize_text_field( $input['currency_symbol'] ?? '' );
 		$output['provider_email']                                 = sanitize_text_field( $input['provider_email'] ?? '' );
 		$output['provider_logo_id']                               = isset( $input['provider_logo_id'] ) ? absint( $input['provider_logo_id'] ) : 0;
 		$output['provider_cancellation_policy']                   = sanitize_textarea_field( $input['provider_cancellation_policy'] ?? '' );
 		$output['provider_terms_of_service']                      = sanitize_textarea_field( $input['provider_terms_of_service'] ?? '' );
 		$output['membership_redirect_wp_login']                   = ! empty( $input['membership_redirect_wp_login'] );
+		$output['booking_reminder_hours']                         = $this->sanitize_reminder_hours_input( $input['booking_reminder_hours'] ?? [] );
 		$output['provider_regular_holidays_disabled']             = ! empty( $input['provider_regular_holidays_disabled'] );
 		$output['provider_regular_holidays']                      = $output['provider_regular_holidays_disabled']
 			? array()
@@ -1750,6 +1890,38 @@ class Provider_Settings_Page {
 				'weekday'   => sanitize_text_field( $holiday['weekday'] ?? '' ),
 			);
 		}
+
+		return $sanitized;
+	}
+
+	/**
+	 * Sanitize reminder hours input for redisplay.
+	 *
+	 * @param mixed $raw Raw reminder hours input.
+	 * @return array<int, int>
+	 */
+	private function sanitize_reminder_hours_input( $raw ): array {
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		$sanitized = array();
+
+		foreach ( $raw as $value ) {
+			if ( '' === $value || null === $value ) {
+				continue;
+			}
+
+			$hours = absint( $value );
+			if ( $hours <= 0 ) {
+				continue;
+			}
+
+			$sanitized[] = $hours;
+		}
+
+		$sanitized = array_values( array_unique( $sanitized ) );
+		sort( $sanitized );
 
 		return $sanitized;
 	}

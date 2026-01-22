@@ -7,6 +7,7 @@ namespace VKBookingManager\Bookings;
 use DateTimeImmutable;
 use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -252,28 +253,17 @@ class Booking_Admin {
 		$services  = $this->get_service_menus();
 		$base_price_label = '—';
 		if ( $has_base_price_snapshot || $service_id > 0 ) {
-			$base_price_label = sprintf(
-				/* translators: %s: price amount */
-				__( '¥%s', 'vk-booking-manager' ),
-				number_format_i18n( max( 0, (int) $service_base_price ) )
-			);
+			$base_price_label = VKBM_Helper::format_currency( (int) $service_base_price );
 		}
+		$tax_label = VKBM_Helper::get_tax_included_label();
 		$base_total_label = '—';
 		if ( $has_base_price_snapshot || $service_id > 0 ) {
-			$base_total_label = sprintf(
-				/* translators: %s: price amount */
-				__( '¥%s', 'vk-booking-manager' ),
-				number_format_i18n( max( 0, (int) $base_total_price ) )
-			);
+			$base_total_label = VKBM_Helper::format_currency( (int) $base_total_price );
 		}
 		$effective_billed_total_price = $has_billed_total_price ? max( 0, (int) $billed_total_price ) : max( 0, (int) $base_total_price );
 		$effective_billed_total_label = '—';
 		if ( $has_base_price_snapshot || $service_id > 0 ) {
-			$effective_billed_total_label = sprintf(
-				/* translators: %s: price amount */
-				__( '¥%s', 'vk-booking-manager' ),
-				number_format_i18n( $effective_billed_total_price )
-			);
+			$effective_billed_total_label = VKBM_Helper::format_currency( (int) $effective_billed_total_price );
 		}
 		?>
 		<div class="vkbm-booking-meta">
@@ -404,14 +394,14 @@ class Booking_Admin {
 						<td>
 							<span class="vkbm-booking-meta__value">
 								<?php
-								printf(
-									/* translators: %s: price amount */
-									esc_html__( '¥%s', 'vk-booking-manager' ),
-									esc_html( number_format_i18n( max( 0, $nomination_fee ) ) )
-								);
+								echo esc_html( VKBM_Helper::format_currency( (int) $nomination_fee ) );
 								?>
 							</span>
-							<?php esc_html_e( '(tax included)', 'vk-booking-manager' ); ?>
+							<?php
+							if ( '' !== $tax_label ) {
+								echo ' ' . esc_html( $tax_label );
+							}
+							?>
 						</td>
 					</tr>
 					<tr>
@@ -439,7 +429,11 @@ class Booking_Admin {
 						<th scope="row"><?php esc_html_e( 'Service basic fee', 'vk-booking-manager' ); ?></th>
 						<td>
 							<span class="vkbm-booking-meta__value"><?php echo esc_html( $base_price_label ); ?></span>
-							<?php esc_html_e( '(tax included)', 'vk-booking-manager' ); ?>
+							<?php
+							if ( '' !== $tax_label ) {
+								echo ' ' . esc_html( $tax_label );
+							}
+							?>
 							<p class="description">
 								<?php esc_html_e( 'This is the basic service charge at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ); ?>
 							</p>
@@ -449,7 +443,11 @@ class Booking_Admin {
 						<th scope="row"><?php esc_html_e( 'Total basic fee', 'vk-booking-manager' ); ?></th>
 						<td>
 							<span class="vkbm-booking-meta__value"><?php echo esc_html( $base_total_label ); ?></span>
-							<?php esc_html_e( '(tax included)', 'vk-booking-manager' ); ?>
+							<?php
+							if ( '' !== $tax_label ) {
+								echo ' ' . esc_html( $tax_label );
+							}
+							?>
 							<p class="description">
 								<?php esc_html_e( 'This is the total of the basic service fee + nomination fee at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ); ?>
 							</p>
@@ -468,7 +466,11 @@ class Booking_Admin {
 								value="<?php echo esc_attr( '' === $billed_total_price ? '' : (string) max( 0, (int) $billed_total_price ) ); ?>"
 								placeholder="<?php echo esc_attr( (string) max( 0, (int) $base_total_price ) ); ?>"
 							/>
-							<?php esc_html_e( '(tax included)', 'vk-booking-manager' ); ?>
+							<?php
+							if ( '' !== $tax_label ) {
+								echo ' ' . esc_html( $tax_label );
+							}
+							?>
 							<p class="description">
 								<?php esc_html_e( 'If there are any service changes or additional charges, please enter the final amount charged, including the nomination fee. If not entered, the total basic fee will be applied.', 'vk-booking-manager' ); ?>
 							</p>
@@ -772,11 +774,7 @@ class Booking_Admin {
 				$amount = $has_billed_total ? (int) get_post_meta( $post_id, self::META_BILLED_TOTAL_PRICE, true ) : $base_total;
 				$amount = max( 0, (int) $amount );
 
-				printf(
-					/* translators: %s: price amount */
-					esc_html__( '¥%s', 'vk-booking-manager' ),
-					esc_html( number_format_i18n( $amount ) )
-				);
+				echo esc_html( VKBM_Helper::format_currency( (int) $amount ) );
 				break;
 		}
 	}
@@ -1510,7 +1508,7 @@ class Booking_Admin {
 	 * @return array<int, WP_Post>
 	 */
 	private function get_service_menus(): array {
-		return get_posts(
+		$posts = get_posts(
 			[
 				'post_type'      => Service_Menu_Post_Type::POST_TYPE,
 				'post_status'    => [ 'publish' ],
@@ -1519,6 +1517,8 @@ class Booking_Admin {
 				'no_found_rows'  => true,
 			]
 		);
+
+		return Service_Menu_Post_Type::sort_menus_by_group( $posts );
 	}
 
 	/**

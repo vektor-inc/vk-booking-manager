@@ -161,6 +161,7 @@ class Setup_Notices {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_setup_items(): array {
+		// 初期設定で不足している項目の定義一覧。
 		$items = [
 			[
 				'id'              => 'provider_name',
@@ -230,6 +231,7 @@ class Setup_Notices {
 			],
 		];
 
+		// スタッフ機能が有効な場合のみスタッフ設定を促す。
 		if ( Staff_Editor::is_enabled() ) {
 			$items[] = [
 				'id'              => 'staff',
@@ -243,6 +245,7 @@ class Setup_Notices {
 			];
 		}
 
+		// サービスメニューの登録は常に必須。
 		$items[] = [
 			'id'              => 'service_menu',
 			'capability'      => Capabilities::MANAGE_SERVICE_MENUS,

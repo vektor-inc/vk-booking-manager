@@ -6,6 +6,7 @@ namespace VKBookingManager\Notifications;
 
 use DateTimeImmutable;
 use VKBookingManager\Bookings\Customer_Name_Resolver;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
@@ -13,7 +14,9 @@ use WP_Post;
 use WP_User;
 use function absint;
 use function add_action;
+use function add_filter;
 use function __;
+use function current_time;
 use function error_log;
 use function get_user_by;
 use function get_option;
@@ -28,12 +31,16 @@ use function sanitize_email;
 use function sprintf;
 use function strtotime;
 use function wp_date;
+use function wp_next_scheduled;
 use function wp_parse_url;
+use function wp_schedule_event;
 use function wp_schedule_single_event;
 use function wp_timezone;
+use function wp_clear_scheduled_hook;
 use function wp_specialchars_decode;
 use function wp_strip_all_tags;
 use function wp_mail;
+use function update_post_meta;
 
 /**
  * Handles booking-related email notifications.
@@ -42,6 +49,12 @@ class Booking_Notification_Service {
 	private const RETRY_ACTION   = 'vkbm_retry_booking_email';
 	private const RETRY_DELAY    = 300;
 	private const MAX_ATTEMPTS   = 3;
+	private const REMINDER_ACTION = 'vkbm_send_booking_reminders';
+	private const REMINDER_SCHEDULE = 'vkbm_quarter_hour';
+	private const REMINDER_WINDOW = 3600;
+	private const META_REMINDER_SENT = '_vkbm_booking_reminder_sent';
+	private const META_DATE_START = '_vkbm_booking_service_start';
+	private const META_STATUS = '_vkbm_booking_status';
 	private const TYPE_PENDING_CUSTOMER  = 'pending_customer';
 	private const TYPE_PENDING_PROVIDER  = 'pending_provider';
 	private const TYPE_CONFIRMED_CUSTOMER = 'confirmed_customer';
@@ -75,6 +88,9 @@ class Booking_Notification_Service {
 	 */
 	public function register(): void {
 		add_action( self::RETRY_ACTION, [ $this, 'handle_retry' ], 10, 3 );
+		add_action( self::REMINDER_ACTION, [ $this, 'handle_reminders' ] );
+		add_action( 'init', [ $this, 'ensure_reminder_schedule' ] );
+		add_filter( 'cron_schedules', [ $this, 'register_cron_schedules' ] );
 	}
 
 	/**
@@ -133,6 +149,123 @@ class Booking_Notification_Service {
 	}
 
 	/**
+	 * Cron callback for reservation reminders.
+	 */
+	public function handle_reminders(): void {
+		$reminder_hours = $this->get_reminder_hours();
+		if ( [] === $reminder_hours ) {
+			return;
+		}
+
+		$max_hours = max( $reminder_hours );
+		$now = current_time( 'timestamp' );
+		$window_end = $now + ( $max_hours * HOUR_IN_SECONDS ) + self::REMINDER_WINDOW;
+		$start_min = wp_date( 'Y-m-d H:i:s', $now );
+		$start_max = wp_date( 'Y-m-d H:i:s', $window_end );
+
+		$query = new \WP_Query(
+			[
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				'post_status'    => 'publish',
+				'fields'         => 'ids',
+				'posts_per_page' => -1,
+				'no_found_rows'  => true,
+				'meta_query'     => [
+					[
+						'key'     => self::META_STATUS,
+						'value'   => 'confirmed',
+						'compare' => '=',
+					],
+					[
+						'key'     => self::META_DATE_START,
+						'value'   => [ $start_min, $start_max ],
+						'compare' => 'BETWEEN',
+						'type'    => 'DATETIME',
+					],
+				],
+			]
+		);
+
+		if ( ! $query->have_posts() ) {
+			return;
+		}
+
+		foreach ( $query->posts as $booking_id ) {
+			$start = (string) get_post_meta( (int) $booking_id, self::META_DATE_START, true );
+			if ( '' === $start ) {
+				continue;
+			}
+
+			$start_ts = $this->parse_datetime_to_timestamp( $start );
+			if ( ! $start_ts ) {
+				continue;
+			}
+
+			$sent = $this->get_sent_reminders( (int) $booking_id );
+
+			foreach ( $reminder_hours as $hours_before ) {
+				$target = $start_ts - ( $hours_before * HOUR_IN_SECONDS );
+				if ( $now < $target ) {
+					continue;
+				}
+
+				if ( ( $now - $target ) > self::REMINDER_WINDOW ) {
+					continue;
+				}
+
+				if ( $this->has_sent_reminder( $sent, $hours_before, $start ) ) {
+					continue;
+				}
+
+				if ( $this->send_customer_reminder( (int) $booking_id, $hours_before ) ) {
+					$sent[] = [
+						'hours'   => $hours_before,
+						'start'   => $start,
+						'sent_at' => wp_date( 'c', $now ),
+					];
+					update_post_meta( (int) $booking_id, self::META_REMINDER_SENT, $sent );
+				}
+			}
+		}
+	}
+
+	/**
+	 * Ensure reminder cron schedule exists if enabled.
+	 */
+	public function ensure_reminder_schedule(): void {
+		$reminder_hours = $this->get_reminder_hours();
+		$next_scheduled = wp_next_scheduled( self::REMINDER_ACTION );
+
+		if ( [] === $reminder_hours ) {
+			if ( $next_scheduled ) {
+				wp_clear_scheduled_hook( self::REMINDER_ACTION );
+			}
+			return;
+		}
+
+		if ( ! $next_scheduled ) {
+			wp_schedule_event( time() + 300, self::REMINDER_SCHEDULE, self::REMINDER_ACTION );
+		}
+	}
+
+	/**
+	 * Register custom cron schedules.
+	 *
+	 * @param array<string, array<string, mixed>> $schedules Existing schedules.
+	 * @return array<string, array<string, mixed>>
+	 */
+	public function register_cron_schedules( array $schedules ): array {
+		if ( ! isset( $schedules[ self::REMINDER_SCHEDULE ] ) ) {
+			$schedules[ self::REMINDER_SCHEDULE ] = [
+				'interval' => 900,
+				'display'  => __( 'Every 15 Minutes', 'vk-booking-manager' ),
+			];
+		}
+
+		return $schedules;
+	}
+
+	/**
 	 * Dispatch a notification and schedule retries on failure.
 	 *
 	 * @param string $type       Notification type.
@@ -178,6 +311,132 @@ class Booking_Notification_Service {
 				$attempt + 1,
 			]
 		);
+	}
+
+	/**
+	 * Return reminder hours configured in settings.
+	 *
+	 * @return array<int, int>
+	 */
+	private function get_reminder_hours(): array {
+		$settings = $this->settings_repository->get_settings();
+		$raw = $settings['booking_reminder_hours'] ?? [];
+
+		if ( ! is_array( $raw ) ) {
+			return [];
+		}
+
+		$hours = [];
+		foreach ( $raw as $value ) {
+			$normalized = absint( $value );
+			if ( $normalized <= 0 ) {
+				continue;
+			}
+			$hours[] = $normalized;
+		}
+
+		$hours = array_values( array_unique( $hours ) );
+		sort( $hours );
+
+		return $hours;
+	}
+
+	/**
+	 * Parse booking datetime string into a timestamp.
+	 *
+	 * @param string $value Datetime string in Y-m-d H:i:s.
+	 * @return int|null
+	 */
+	private function parse_datetime_to_timestamp( string $value ): ?int {
+		if ( '' === $value ) {
+			return null;
+		}
+
+		$timezone = wp_timezone();
+		$datetime = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $value, $timezone );
+
+		if ( $datetime ) {
+			return $datetime->getTimestamp();
+		}
+
+		$timestamp = strtotime( $value );
+		return false !== $timestamp ? (int) $timestamp : null;
+	}
+
+	/**
+	 * Get reminder send history for a booking.
+	 *
+	 * @param int $booking_id Booking ID.
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function get_sent_reminders( int $booking_id ): array {
+		$sent = get_post_meta( $booking_id, self::META_REMINDER_SENT, true );
+		if ( ! is_array( $sent ) ) {
+			return [];
+		}
+
+		return array_values( $sent );
+	}
+
+	/**
+	 * Check if a reminder was already sent for the given offset.
+	 *
+	 * @param array<int, array<string, mixed>> $sent Sent reminder list.
+	 * @param int                             $hours Hours before the booking.
+	 * @param string                          $start Booking start datetime.
+	 * @return bool
+	 */
+	private function has_sent_reminder( array $sent, int $hours, string $start ): bool {
+		foreach ( $sent as $entry ) {
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+
+			$entry_hours = isset( $entry['hours'] ) ? (int) $entry['hours'] : 0;
+			$entry_start = isset( $entry['start'] ) ? (string) $entry['start'] : '';
+
+			if ( $entry_hours === $hours && $entry_start === $start ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Send a reminder email to the booking customer.
+	 *
+	 * @param int $booking_id Booking ID.
+	 * @param int $hours_before Hours before reservation.
+	 * @return bool
+	 */
+	private function send_customer_reminder( int $booking_id, int $hours_before ): bool {
+		$payload = $this->build_booking_payload( $booking_id );
+		if ( [] === $payload ) {
+			return false;
+		}
+
+		$to = $payload['customer_email'];
+		if ( '' === trim( (string) $to ) || ! is_email( $to ) ) {
+			return false;
+		}
+
+		$subject = sprintf(
+			/* translators: %1$s: Provider name, %2$d: Hours before reservation. */
+			__( '[%1$s] Reservation reminder (%2$d hours before)', 'vk-booking-manager' ),
+			$payload['provider_name'],
+			$hours_before
+		);
+		$lead = sprintf(
+			/* translators: %d: Hours before reservation. */
+			__( 'This is a reminder for your reservation in %d hours.', 'vk-booking-manager' ),
+			$hours_before
+		);
+
+		$body = $this->render_customer_body( $payload, $lead );
+		$headers = $this->build_headers( $payload['site_name'] );
+
+		return (bool) wp_mail( $to, $subject, $body, $headers );
 	}
 
 	/**
@@ -535,12 +794,19 @@ class Booking_Notification_Service {
 
 			$display     = $base_price;
 
-			$label = sprintf( '¥%s', number_format_i18n( $display ) );
+			$label = VKBM_Helper::format_currency( (int) $display );
 
-			$label .= __( '(tax included)', 'vk-booking-manager' );
+			$tax_label = VKBM_Helper::get_tax_included_label();
+			if ( '' !== $tax_label ) {
+				$label .= $tax_label;
+			}
 
 		if ( $nomination_fee > 0 ) {
-			$label .= sprintf( __( '+ Nomination fee ¥%s', 'vk-booking-manager' ), number_format_i18n( absint( $nomination_fee ) ) );
+			$label .= sprintf(
+				/* translators: %s: nomination fee amount */
+				__( '+ Nomination fee %s', 'vk-booking-manager' ),
+				VKBM_Helper::format_currency( absint( $nomination_fee ) )
+			);
 		}
 
 		return $label;

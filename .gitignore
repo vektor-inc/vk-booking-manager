@@ -6,5 +6,3 @@
 /.vscode/
 /dist/
 .wp-env.override.json
-/languages/*-*.json
-/languages/*.po~
