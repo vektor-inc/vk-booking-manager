@@ -364,7 +364,7 @@ class Auth_Shortcodes {
 			'redirect'      => $this->get_current_url(),
 			'title'         => __( 'Create an account', 'vk-booking-manager' ),
 				'description'   => '',
-			'button_label'  => __( 'register', 'vk-booking-manager' ),
+			'button_label'  => __( 'Register', 'vk-booking-manager' ),
 			'auto_login'    => 'false',
 			'login_url'     => '',
 			'action_url'    => '',
@@ -431,7 +431,7 @@ class Auth_Shortcodes {
 					[
 						'id'           => 'vkbm-register-email',
 						'name'         => 'user_email',
-						'label'        => __( 'email address', 'vk-booking-manager' ),
+						'label'        => __( 'Email address', 'vk-booking-manager' ),
 						'value'        => $email_value,
 						'type'         => 'email',
 						'autocomplete' => 'email',
@@ -469,7 +469,7 @@ class Auth_Shortcodes {
 					[
 						'id'           => 'vkbm-register-phone',
 						'name'         => 'phone_number',
-						'label'        => __( 'telephone number', 'vk-booking-manager' ),
+						'label'        => __( 'Telephone number', 'vk-booking-manager' ),
 						'value'        => $phone_value,
 						'type'         => 'tel',
 						'autocomplete' => 'tel',
@@ -675,7 +675,7 @@ class Auth_Shortcodes {
 			'redirect'     => $this->get_current_url(),
 			'title'        => __( 'Edit user information', 'vk-booking-manager' ),
 			'description'  => '',
-			'button_label' => __( 'save', 'vk-booking-manager' ),
+			'button_label' => __( 'Save', 'vk-booking-manager' ),
 			'action_url'   => '',
 		);
 

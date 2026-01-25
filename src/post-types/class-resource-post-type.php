@@ -43,7 +43,7 @@ class Resource_Post_Type {
 			/* translators: %s: Resource label (singular). */
 			'edit_item'             => sprintf( __( 'Edit %s', 'vk-booking-manager' ), $singular ),
 			/* translators: %s: Resource label (singular). */
-			'new_item'              => sprintf( __( 'new %s', 'vk-booking-manager' ), $singular ),
+			'new_item'              => sprintf( __( 'New %s', 'vk-booking-manager' ), $singular ),
 			/* translators: %s: Resource label (singular). */
 			'view_item'             => sprintf( __( 'Show %s', 'vk-booking-manager' ), $singular ),
 			/* translators: %s: Resource label (singular). */

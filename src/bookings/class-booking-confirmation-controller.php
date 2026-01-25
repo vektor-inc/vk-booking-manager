@@ -223,7 +223,8 @@ class Booking_Confirmation_Controller {
 			$is_staff_preferred = false;
 		}
 
-		if ( $staff_id > 0 && ! empty( $assignable_staff ) && ! in_array( $staff_id, $assignable_staff, true ) ) {
+		// 無料版では選択可能スタッフの制限を解除
+		if ( Staff_Editor::is_enabled() && $staff_id > 0 && ! empty( $assignable_staff ) && ! in_array( $staff_id, $assignable_staff, true ) ) {
 			return new WP_Error(
 				'staff_unavailable',
 				__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),

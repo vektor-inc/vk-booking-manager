@@ -1487,7 +1487,7 @@ class Provider_Settings_Page {
 					</tbody>
 				</table>
 
-				<?php submit_button( __( 'save changes', 'vk-booking-manager' ) ); ?>
+				<?php submit_button( __( 'Save changes', 'vk-booking-manager' ) ); ?>
 			</form>
 		</div>
 		<?php
@@ -1499,7 +1499,7 @@ class Provider_Settings_Page {
 	 */
 	private function get_regular_holiday_frequency_options(): array {
 		return array(
-			'weekly' => __( 'weekly', 'vk-booking-manager' ),
+			'weekly' => __( 'Weekly', 'vk-booking-manager' ),
 			'nth-1'  => __( '1st', 'vk-booking-manager' ),
 			'nth-2'  => __( '2nd', 'vk-booking-manager' ),
 			'nth-3'  => __( '3rd', 'vk-booking-manager' ),
@@ -1539,7 +1539,7 @@ class Provider_Settings_Page {
 			'fri'         => __( 'Friday', 'vk-booking-manager' ),
 			'sat'         => __( 'Saturday', 'vk-booking-manager' ),
 			'sun'         => __( 'Sunday', 'vk-booking-manager' ),
-			'holiday'     => __( 'holiday', 'vk-booking-manager' ),
+			'holiday'     => __( 'Holiday', 'vk-booking-manager' ),
 			'holiday_eve' => __( 'The day before a public holiday', 'vk-booking-manager' ),
 		);
 	}

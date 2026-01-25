@@ -6,7 +6,7 @@ import {
 	CalendarGrid,
 	DailySlotList,
 	SelectedPlanSummary,
-} from '../../booking-ui';
+} from './booking-ui';
 import {
 	extractMenuBasePrice,
 	formatCurrencyJPY,
@@ -222,7 +222,8 @@ export const ReservationApp = ({
 		taxLabelText: '',
 		reservationPageUrl: '',
 		showMenuList: true,
-		staffEnabled: true,
+		staffEnabled: false,
+		defaultStaffId: 0,
 		resourceLabelSingular: __('Staff', 'vk-booking-manager'),
 		resourceLabelPlural: __('Staff', 'vk-booking-manager'),
 		showProviderLogo: false,
@@ -312,7 +313,8 @@ export const ReservationApp = ({
 							: '',
 					reservationPageUrl: settings?.reservation_page_url || '',
 					showMenuList: settings?.reservation_show_menu_list !== false,
-					staffEnabled: settings?.staff_enabled !== false,
+					staffEnabled: Boolean(settings?.staff_enabled),
+					defaultStaffId: Number(settings?.default_staff_id) || 0,
 					showProviderLogo: Boolean(settings?.reservation_show_provider_logo),
 					showProviderName: Boolean(settings?.reservation_show_provider_name),
 					resourceLabelSingular:
@@ -353,10 +355,20 @@ export const ReservationApp = ({
 	}, []);
 
 	useEffect(() => {
-		if (!providerSettings.staffEnabled && staffId !== 0) {
-			setStaffId(0);
+		// providerSettings が読み込まれるまで待つ
+		if (!providerSettingsLoaded) {
+			return;
 		}
-	}, [providerSettings.staffEnabled, staffId]);
+
+		if (!providerSettings.staffEnabled) {
+			// 無料版ではデフォルトスタッフIDを設定
+			if (providerSettings.defaultStaffId > 0 && staffId !== providerSettings.defaultStaffId) {
+				setStaffId(providerSettings.defaultStaffId);
+			} else if (providerSettings.defaultStaffId === 0 && staffId !== 0) {
+				setStaffId(0);
+			}
+		}
+	}, [providerSettingsLoaded, providerSettings.staffEnabled, providerSettings.defaultStaffId, staffId]);
 
 	useEffect(() => {
 		let isMounted = true;
@@ -672,16 +684,26 @@ useEffect(() => {
 	}, [currentMenu]);
 
 	const availableStaffOptions = useMemo(() => {
+		// 無料版では選択可能スタッフの制限を解除
+		if (!providerSettings.staffEnabled) {
+			return staffOptions;
+		}
+
 		if ( assignableStaffIds.length === 0 ) {
 			return staffOptions;
 		}
 
 		const allowedIds = new Set(assignableStaffIds);
 		return staffOptions.filter((staff) => allowedIds.has(staff.id));
-	}, [assignableStaffIds, staffOptions]);
+	}, [assignableStaffIds, staffOptions, providerSettings.staffEnabled]);
 	const shouldLockStaffSelection = assignableStaffIds.length === 1;
 
 	useEffect(() => {
+		// 無料版では assignableStaffIds のチェックをスキップ
+		if (!providerSettings.staffEnabled) {
+			return;
+		}
+
 		if (!menuId || assignableStaffIds.length === 0) {
 			return;
 		}
@@ -697,7 +719,7 @@ useEffect(() => {
 		if (staffId && !assignableStaffIds.includes(staffId)) {
 			setStaffId(0);
 		}
-	}, [menuId, assignableStaffIds, staffId]);
+	}, [menuId, assignableStaffIds, staffId, providerSettings.staffEnabled]);
 	const isNominationFeeDisabled = useMemo(() => {
 		const meta = currentMenu?.meta;
 		if (!meta) {
@@ -846,14 +868,13 @@ useEffect(() => {
 		if (providerSettings.staffEnabled) {
 			rows.splice(1, 0, {
 				key: 'nomination',
-				label: __('nomination fee', 'vk-booking-manager'),
-				...withTaxLabel(
-					staffNominationFee === null
-						? staffId
-							? formatCurrencyJPY(applyTax(0), currencySymbol)
-							: '—'
-						: formatCurrencyJPY(staffNominationFee, currencySymbol)
-				),
+				label: __('Nomination fee', 'vk-booking-manager'),
+				value: staffNominationFee === null
+					? staffId
+						? formatCurrencyJPY(applyTax(0), currencySymbol)
+						: '—'
+					: formatCurrencyJPY(staffNominationFee, currencySymbol),
+				taxLabel: '', // Nomination fee should not have tax label
 			});
 		}
 
@@ -928,9 +949,12 @@ useEffect(() => {
 			isMounted = false;
 		};
 	}, [menuId]);
-	const staffCollectionPath = providerSettings.staffEnabled
-		? '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee'
-		: '';
+	const staffCollectionPath = useMemo(() => {
+		if (!providerSettingsLoaded || !providerSettings.staffEnabled) {
+			return '';
+		}
+		return '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee';
+	}, [providerSettingsLoaded, providerSettings.staffEnabled]);
 	useCollection(staffCollectionPath, setStaffOptions);
 
 	const dayMetaMap = useMemo(() => {
@@ -1069,31 +1093,43 @@ useEffect(() => {
 	const handleMenuChange = (nextMenuId) => {
 		const nextMenu = menus.find((menu) => menu.id === nextMenuId);
 		const nextMeta = nextMenu?.meta;
-		const rawNextStaffIds = Array.isArray(nextMeta?._vkbm_staff_ids) && nextMeta._vkbm_staff_ids.length
-			? nextMeta._vkbm_staff_ids
-			: Array.isArray(nextMeta?.vkbm_staff_ids) && nextMeta.vkbm_staff_ids.length
-				? nextMeta.vkbm_staff_ids
-				: [];
-		const nextAssignableStaffIds = Array.from(
-			new Set(
-				rawNextStaffIds
-					.map((value) => {
-						if (typeof value === 'number') {
-							return value;
-						}
-						if (typeof value === 'string') {
-							return Number(value) || 0;
-						}
-						return 0;
-					})
-					.filter((id) => id > 0)
-			)
-		);
+		
+		// 無料版では staffEnabled が false なので、スタッフIDの処理をスキップ
+		if (providerSettings.staffEnabled) {
+			const rawNextStaffIds = Array.isArray(nextMeta?._vkbm_staff_ids) && nextMeta._vkbm_staff_ids.length
+				? nextMeta._vkbm_staff_ids
+				: Array.isArray(nextMeta?.vkbm_staff_ids) && nextMeta.vkbm_staff_ids.length
+					? nextMeta.vkbm_staff_ids
+					: [];
+			const nextAssignableStaffIds = Array.from(
+				new Set(
+					rawNextStaffIds
+						.map((value) => {
+							if (typeof value === 'number') {
+								return value;
+							}
+							if (typeof value === 'string') {
+								return Number(value) || 0;
+							}
+							return 0;
+						})
+						.filter((id) => id > 0)
+				)
+			);
 
-		if (nextAssignableStaffIds.length === 1) {
-			setStaffId(nextAssignableStaffIds[0]);
-		} else if (staffId && !nextAssignableStaffIds.includes(staffId)) {
-			setStaffId(0);
+			if (nextAssignableStaffIds.length === 1) {
+				setStaffId(nextAssignableStaffIds[0]);
+			} else if (staffId && !nextAssignableStaffIds.includes(staffId)) {
+				setStaffId(0);
+			}
+		} else {
+			// 無料版では常にデフォルトスタッフIDを設定
+			// providerSettings が読み込まれている場合のみ設定
+			if (providerSettingsLoaded && providerSettings.defaultStaffId > 0) {
+				setStaffId(providerSettings.defaultStaffId);
+			} else if (providerSettingsLoaded) {
+				setStaffId(0);
+			}
 		}
 
 		setMenuId(nextMenuId);
@@ -1286,7 +1322,7 @@ useEffect(() => {
 	const brandLinkHref = reservationPageUrl.trim();
 	const brandLogoAlt = shouldShowName
 		? providerSettings.providerName
-		: __('logo image', 'vk-booking-manager');
+		: __('Logo image', 'vk-booking-manager');
 
 	if (confirmDraftToken) {
 		return (
@@ -1358,7 +1394,7 @@ useEffect(() => {
 									className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
 									onClick={() => handleAuthLink(authMode || '')}
 								>
-									{__('return', 'vk-booking-manager')}
+									{__('Return', 'vk-booking-manager')}
 								</button>
 						) : isLoggedIn && canManageReservations ? (
 							<>
@@ -1757,6 +1793,7 @@ useEffect(() => {
 								onSelectDate={handleSelectDate}
 								onMonthChange={handleMonthChange}
 								isLoading={calendarLoading}
+								locale={userBootstrap?.locale}
 							/>
 
 							<div className="vkbm-reservation__slots">

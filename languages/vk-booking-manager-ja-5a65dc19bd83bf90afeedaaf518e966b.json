@@ -1,0 +1,180 @@
+{
+	"translation-revision-date": "2026-01-23 16:13+0900",
+	"generator": "WP-CLI/2.10.0",
+	"source": "src/blocks/reservation/app.js",
+	"domain": "messages",
+	"locale_data": {
+		"messages": {
+			"": {
+				"domain": "messages",
+				"lang": "ja",
+				"plural-forms": "nplurals=1; plural=0;"
+			},
+			"Log in": [
+				"ログイン"
+			],
+			"Shift/reservation table": [
+				"シフト・予約表"
+			],
+			"Staff": [
+				"スタッフ"
+			],
+			"Pending": [
+				"仮予約"
+			],
+			"Cancelled": [
+				"キャンセル"
+			],
+			"I agree to the terms of use": [
+				"利用規約に同意します"
+			],
+			"Edit user information": [
+				"ユーザー情報編集"
+			],
+			"Log out": [
+				"ログアウト"
+			],
+			"No preference": [
+				"指名なし"
+			],
+			"Proceed to Reservation": [
+				"予約に進む"
+			],
+			"Nomination fee": [
+				"指名料"
+			],
+			"Service basic fee": [
+				"サービス基本料金"
+			],
+			"Total basic fee": [
+				"基本料金合計"
+			],
+			"Could not get menu list.": [
+				""
+			],
+			"The form could not be displayed.": [
+				""
+			],
+			"Do you want to cancel this reservation?": [
+				""
+			],
+			"I was unable to cancel my reservation.": [
+				""
+			],
+			"The reservation list could not be loaded.": [
+				""
+			],
+			"Failed to retrieve menu information.": [
+				""
+			],
+			"Failed to load calendar.": [
+				""
+			],
+			"Failed to read free space.": [
+				""
+			],
+			"The editor does not transition to the confirmation page.": [
+				""
+			],
+			"Please select your menu and reservation slot before proceeding.": [
+				""
+			],
+			"Temporary reservation data save failed.": [
+				""
+			],
+			"Failed to save reservation details. Please try again later.": [
+				""
+			],
+			"Logo image": [
+				""
+			],
+			"Please check our cancellation policy before booking.": [
+				""
+			],
+			"Your reservation has been completed.": [
+				""
+			],
+			"Reservation block navigation": [
+				"予約ブロックナビゲーション"
+			],
+			"Return": [
+				"戻る"
+			],
+			"Confirm reservation": [
+				"予約内容を確認する"
+			],
+			"Sign up": [
+				"新規登録"
+			],
+			"return": [
+				"戻る"
+			],
+			"Loading...": [
+				"読み込み中..."
+			],
+			"There are no reservations to display.": [
+				"表示する予約はありません。"
+			],
+			"Processing...": [
+				"処理中..."
+			],
+			"Loading form...": [
+				"フォームを読み込み中..."
+			],
+			"Loading service menu...": [
+				"サービスメニューを読み込み中..."
+			],
+			"There are no service menus to display.": [
+				"表示するサービスメニューはありません。"
+			],
+			"Selected frame": [
+				"選択枠"
+			],
+			"Not selected": [
+				"未選択"
+			],
+			"Sun": [
+				"日"
+			],
+			"previous month": [
+				"前の月"
+			],
+			"next month": [
+				"次の月"
+			],
+			"Closed days": [
+				"休業日"
+			],
+			"Special Opening": [
+				"臨時営業"
+			],
+			"private": [
+				""
+			],
+			"When you select a date from the calendar, reservation candidates will be displayed.": [
+				"カレンダーから日付を選択すると、予約候補が表示されます。"
+			],
+			"Loading empty slots...": [
+				"予約可能なスロットを読み込んでいます..."
+			],
+			"There are no available reservation times for the selected criteria.": [
+				"選択した条件に該当する予約可能な時間がありません。"
+			],
+			"Menu": [
+				"メニュー"
+			],
+			"Select menu": [
+				"メニューを選択"
+			],
+			"Not set": [
+				"未設定"
+			],
+			"Please select a menu.": [
+				"メニューを選択してください。"
+			],
+			"Loading menu information...": [
+				"メニュー情報を読み込んでいます..."
+			]
+		}
+	}
+}

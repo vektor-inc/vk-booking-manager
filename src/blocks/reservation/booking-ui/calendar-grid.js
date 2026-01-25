@@ -20,6 +20,44 @@ const toISODate = (date) =>
 		padZero(date.getDate()),
 	].join('-');
 
+/**
+ * Format month label based on locale.
+ * Japanese: "2026年1月", English: "January 2026"
+ *
+ * @param {number} year  Year (e.g., 2026)
+ * @param {number} month Month (1-12)
+ * @param {string|undefined} locale WordPress locale (e.g., 'ja', 'en_US')
+ * @return {string} Formatted month label
+ */
+const formatMonthLabel = (year, month, locale) => {
+	// Create a date object for the first day of the month
+	const date = new Date(year, month - 1, 1);
+
+	// Default to 'en' if locale is not provided
+	const safeLocale = locale || 'en';
+
+	// Check if locale is Japanese (starts with 'ja')
+	const isJapanese = typeof safeLocale === 'string' && safeLocale.startsWith('ja');
+
+	if (isJapanese) {
+		// Japanese format: "2026年1月"
+		return new Intl.DateTimeFormat('ja-JP', {
+			year: 'numeric',
+			month: 'numeric',
+		}).format(date);
+	}
+
+	// For other locales, use the locale string directly or default to 'en-US'
+	// Convert WordPress locale format (e.g., 'en_US') to BCP 47 format (e.g., 'en-US')
+	const bcp47Locale = typeof safeLocale === 'string' ? safeLocale.replace('_', '-') : 'en-US';
+	
+	// English format: "January 2026" or locale-appropriate format
+	return new Intl.DateTimeFormat(bcp47Locale, {
+		year: 'numeric',
+		month: 'long',
+	}).format(date);
+};
+
 const buildCalendarMatrix = (year, month) => {
 	const firstDay = new Date(year, month - 1, 1);
 	const weeks = [];
@@ -55,6 +93,7 @@ export const CalendarGrid = ({
 	onSelectDate,
 	onMonthChange,
 	isLoading,
+	locale,
 }) => {
 	const renderStatusLabel = (status) => {
 		if (!status || status === 'normal') {
@@ -65,7 +104,7 @@ export const CalendarGrid = ({
 			case 'holiday':
 				return __('Closed days', 'vk-booking-manager');
 			case 'special_open':
-				return __('Special sales', 'vk-booking-manager');
+				return __('Special Opening', 'vk-booking-manager');
 			case 'special_close':
 				return __('Temporary closure', 'vk-booking-manager');
 			case 'off':
@@ -89,7 +128,7 @@ export const CalendarGrid = ({
 					‹
 				</button>
 				<div className="vkbm-calendar__current">
-					{year} / {padZero(month)}
+					{formatMonthLabel(year, month, locale)}
 					{isLoading && (
 						<span className="vkbm-calendar__spinner" aria-live="polite">
 							{__('Loading...', 'vk-booking-manager')}

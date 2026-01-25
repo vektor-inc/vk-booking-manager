@@ -521,7 +521,7 @@ class Booking_Notification_Service {
 			'end_label'       => $this->format_time( $end ),
 			'duration_label'  => $duration,
 			'price_label'     => $price_label,
-			'customer_name'   => $customer_name ?: __( 'customer', 'vk-booking-manager' ),
+			'customer_name'   => $customer_name ?: __( 'Customer', 'vk-booking-manager' ),
 			'customer_email'  => $customer_email,
 			'customer_tel'    => $customer_tel,
 			'memo'            => $memo ?: __( '(none)', 'vk-booking-manager' ),

@@ -1084,7 +1084,7 @@ useEffect(() => {
 		: '';
 	const brandLogoAlt = shouldShowName
 		? providerName
-		: __('logo image', 'vk-booking-manager');
+		: __('Logo image', 'vk-booking-manager');
 
 	return (
 		<div className="vkbm-confirm">
@@ -1181,7 +1181,7 @@ useEffect(() => {
 								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
 								onClick={handleBackClick}
 							>
-								{__('return', 'vk-booking-manager')}
+								{__('Return', 'vk-booking-manager')}
 							</button>
 							<span
 								className="vkbm-reservation-layout__nav-bracket"
@@ -1321,7 +1321,7 @@ useEffect(() => {
 								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
 								onClick={handleBackClick}
 							>
-								{__('return', 'vk-booking-manager')}
+								{__('Return', 'vk-booking-manager')}
 							</button>
 							<span
 								className="vkbm-reservation-layout__nav-bracket"
@@ -1542,7 +1542,7 @@ useEffect(() => {
 				/>
 				{staffEnabled && (
 					<SummaryRow
-						label={__('nomination fee', 'vk-booking-manager')}
+						label={__('Nomination fee', 'vk-booking-manager')}
 						value={pricingSummary.nominationLabel || formatCurrencyJPY(0)}
 					/>
 				)}
@@ -1641,7 +1641,7 @@ useEffect(() => {
 					</div>
 					<div className="vkbm-confirm__admin-field">
 						<label htmlFor="vkbm-confirm-customer-phone">
-							{__('telephone number', 'vk-booking-manager')}
+							{__('Telephone number', 'vk-booking-manager')}
 						</label>
 						<input
 							type="tel"

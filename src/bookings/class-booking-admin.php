@@ -385,12 +385,12 @@ class Booking_Admin {
 									esc_html( $singular )
 								);
 								?><br />
-								<?php esc_html_e( "Prices are based on the \"basic service fee\", \"nomination fee\", and \"total basic fee\" saved at the time of reservation. Please enter the \"total billing amount\" if necessary.", 'vk-booking-manager' ); ?>
+								<?php esc_html_e( "Prices are based on the \"basic service fee\", \"Nomination fee\", and \"total basic fee\" saved at the time of reservation. Please enter the \"total billing amount\" if necessary.", 'vk-booking-manager' ); ?>
 							</p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'nomination fee', 'vk-booking-manager' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'Nomination fee', 'vk-booking-manager' ); ?></th>
 						<td>
 							<span class="vkbm-booking-meta__value">
 								<?php
@@ -704,7 +704,7 @@ class Booking_Admin {
 		$new['title']    = __( 'Reservation title', 'vk-booking-manager' );
 		$new['vkbm_booking_datetime'] = __( 'Reservation date and time', 'vk-booking-manager' );
 		$new['vkbm_booking_service'] = __( 'Menu', 'vk-booking-manager' );
-		$new['vkbm_booking_resource'] = __( 'in charge', 'vk-booking-manager' );
+		$new['vkbm_booking_resource'] = __( 'In charge', 'vk-booking-manager' );
 		$new['vkbm_booking_status']   = __( 'Reservation status', 'vk-booking-manager' );
 		$new['vkbm_booking_billed_total'] = __( 'Total billing amount', 'vk-booking-manager' );
 
@@ -737,7 +737,7 @@ class Booking_Admin {
 				$resource_id = (int) get_post_meta( $post_id, self::META_RESOURCE_ID, true );
 				if ( $resource_id ) {
 					$resource = get_post( $resource_id );
-					echo esc_html( $resource ? $resource->post_title : __( 'not clear', 'vk-booking-manager' ) );
+					echo esc_html( $resource ? $resource->post_title : __( 'Not clear', 'vk-booking-manager' ) );
 				} else {
 					esc_html_e( 'Not set', 'vk-booking-manager' );
 				}
@@ -746,7 +746,7 @@ class Booking_Admin {
 				$service_id = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
 				if ( $service_id ) {
 					$service = get_post( $service_id );
-					echo esc_html( $service ? $service->post_title : __( 'not clear', 'vk-booking-manager' ) );
+					echo esc_html( $service ? $service->post_title : __( 'Not clear', 'vk-booking-manager' ) );
 				} else {
 					esc_html_e( 'Not set', 'vk-booking-manager' );
 				}
@@ -755,7 +755,7 @@ class Booking_Admin {
 			case 'vkbm_booking_status':
 				$status = (string) get_post_meta( $post_id, self::META_STATUS, true );
 				$options = $this->get_status_options();
-				echo esc_html( $options[ $status ] ?? __( 'not clear', 'vk-booking-manager' ) );
+				echo esc_html( $options[ $status ] ?? __( 'Not clear', 'vk-booking-manager' ) );
 				printf(
 					'<span class="vkbm-booking-qe" data-status="%s"></span>',
 					esc_attr( $status )

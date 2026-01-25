@@ -56,7 +56,7 @@ class Resource_Schedule_Meta_Box {
 			'fri'         => __( 'Friday', 'vk-booking-manager' ),
 			'sat'         => __( 'Saturday', 'vk-booking-manager' ),
 			'sun'         => __( 'Sunday', 'vk-booking-manager' ),
-			'holiday'     => __( 'holiday', 'vk-booking-manager' ),
+			'holiday'     => __( 'Holiday', 'vk-booking-manager' ),
 			'holiday_eve' => __( 'The day before a public holiday', 'vk-booking-manager' ),
 		];
 	}
@@ -67,7 +67,7 @@ class Resource_Schedule_Meta_Box {
 	public function add_meta_box(): void {
 		add_meta_box(
 			'vkbm-resource-schedule',
-			__( 'work template', 'vk-booking-manager' ),
+			__( 'Work template', 'vk-booking-manager' ),
 			[ $this, 'render_meta_box' ],
 			Resource_Post_Type::POST_TYPE,
 			'normal',

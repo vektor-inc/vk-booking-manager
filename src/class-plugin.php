@@ -138,37 +138,37 @@ class Plugin {
 	/**
 	 * Constructor.
 	 *
-	 * @param Common_Styles              $common_styles          Common style enqueuer.
-	 * @param Provider_Settings_Page     $provider_settings_page Provider settings handler.
-	 * @param Roles_Manager              $roles_manager          Roles handler.
-	 * @param Resource_Schedule_Meta_Box $resource_schedule_meta_box Resource schedule handler.
-	 * @param Shift_Editor               $shift_editor           Shift editor handler.
-	 * @param Staff_Editor               $staff_editor           Staff editor handler.
-	 * @param Service_Menu_Editor        $service_menu_editor    Service menu editor handler.
-	 * @param Shift_Dashboard_Page       $shift_dashboard_page   Shift dashboard page handler.
-	 * @param Owner_Admin_Menu_Filter    $owner_admin_menu_filter Owner admin menu filter handler.
-	 * @param Resource_Post_Type         $resource_post_type     Resource post type handler.
-	 * @param Shift_Post_Type            $shift_post_type        Shift post type handler.
-	 * @param Service_Menu_Post_Type     $service_menu_post_type Service menu post type handler.
-	 * @param Booking_Post_Type          $booking_post_type      Booking post type handler.
-	 * @param Booking_Admin              $booking_admin          Booking admin UI handler.
-	 * @param Booking_Draft_Controller   $booking_draft_controller Temporary reservation data persistence handler.
-	 * @param My_Bookings_Controller     $my_bookings_controller Current user bookings REST controller.
-	 * @param Menu_Search_Block          $menu_search_block      Menu search block handler.
-	 * @param Menu_Loop_Block            $menu_loop_block        Menu loop block handler.
-	 * @param Reservation_Block          $reservation_block      Reservation block handler.
-	 * @param Availability_Controller    $availability_controller Availability REST controller.
-	 * @param Current_User_Controller    $current_user_controller Current user REST controller.
+	 * @param Common_Styles                   $common_styles          Common style enqueuer.
+	 * @param Provider_Settings_Page          $provider_settings_page Provider settings handler.
+	 * @param Roles_Manager                   $roles_manager          Roles handler.
+	 * @param Resource_Schedule_Meta_Box      $resource_schedule_meta_box Resource schedule handler.
+	 * @param Shift_Editor                    $shift_editor           Shift editor handler.
+	 * @param Staff_Editor                    $staff_editor           Staff editor handler.
+	 * @param Service_Menu_Editor             $service_menu_editor    Service menu editor handler.
+	 * @param Shift_Dashboard_Page            $shift_dashboard_page   Shift dashboard page handler.
+	 * @param Owner_Admin_Menu_Filter         $owner_admin_menu_filter Owner admin menu filter handler.
+	 * @param Resource_Post_Type              $resource_post_type     Resource post type handler.
+	 * @param Shift_Post_Type                 $shift_post_type        Shift post type handler.
+	 * @param Service_Menu_Post_Type          $service_menu_post_type Service menu post type handler.
+	 * @param Booking_Post_Type               $booking_post_type      Booking post type handler.
+	 * @param Booking_Admin                   $booking_admin          Booking admin UI handler.
+	 * @param Booking_Draft_Controller        $booking_draft_controller Temporary reservation data persistence handler.
+	 * @param My_Bookings_Controller          $my_bookings_controller Current user bookings REST controller.
+	 * @param Menu_Search_Block               $menu_search_block      Menu search block handler.
+	 * @param Menu_Loop_Block                 $menu_loop_block        Menu loop block handler.
+	 * @param Reservation_Block               $reservation_block      Reservation block handler.
+	 * @param Availability_Controller         $availability_controller Availability REST controller.
+	 * @param Current_User_Controller         $current_user_controller Current user REST controller.
 	 * @param Booking_Confirmation_Controller $booking_confirmation_controller Booking confirmation REST controller.
-	 * @param Menu_Preview_Controller    $menu_preview_controller Menu preview REST controller.
-	 * @param Provider_Settings_Controller $provider_settings_controller Provider settings REST controller.
-	 * @param Booking_Notification_Service $booking_notification_service Booking notification handler.
-	 * @param OEmbed_Override               $oembed_override             oEmbed override handler.
-	 * @param Auth_Shortcodes              $auth_shortcodes         Auth shortcode handler.
-	 * @param Auth_Form_Controller         $auth_form_controller    Authentication form REST controller.
-	 * @param Post_Order_Manager           $post_order_manager      Post order handler.
-	 * @param Term_Order_Manager           $term_order_manager      Term order handler.
-	 * @param User_Profile_Fields          $user_profile_fields     User profile fields handler.
+	 * @param Menu_Preview_Controller         $menu_preview_controller Menu preview REST controller.
+	 * @param Provider_Settings_Controller    $provider_settings_controller Provider settings REST controller.
+	 * @param Booking_Notification_Service    $booking_notification_service Booking notification handler.
+	 * @param OEmbed_Override                 $oembed_override             oEmbed override handler.
+	 * @param Auth_Shortcodes                 $auth_shortcodes         Auth shortcode handler.
+	 * @param Auth_Form_Controller            $auth_form_controller    Authentication form REST controller.
+	 * @param Post_Order_Manager              $post_order_manager      Post order handler.
+	 * @param Term_Order_Manager              $term_order_manager      Term order handler.
+	 * @param User_Profile_Fields             $user_profile_fields     User profile fields handler.
 	 */
 	public function __construct(
 		Common_Styles $common_styles,
@@ -203,37 +203,37 @@ class Plugin {
 		Term_Order_Manager $term_order_manager,
 		User_Profile_Fields $user_profile_fields
 	) {
-		$this->common_styles            = $common_styles;
-		$this->provider_settings_page    = $provider_settings_page;
-		$this->roles_manager             = $roles_manager;
-		$this->resource_schedule_meta_box = $resource_schedule_meta_box;
-		$this->shift_editor              = $shift_editor;
-		$this->staff_editor              = $staff_editor;
-		$this->service_menu_editor       = $service_menu_editor;
-		$this->shift_dashboard_page      = $shift_dashboard_page;
-		$this->owner_admin_menu_filter   = $owner_admin_menu_filter;
-		$this->resource_post_type        = $resource_post_type;
-		$this->shift_post_type           = $shift_post_type;
-		$this->service_menu_post_type    = $service_menu_post_type;
-		$this->booking_post_type         = $booking_post_type;
-		$this->booking_admin             = $booking_admin;
-		$this->booking_draft_controller  = $booking_draft_controller;
-		$this->my_bookings_controller    = $my_bookings_controller;
-		$this->menu_search_block         = $menu_search_block;
-		$this->menu_loop_block           = $menu_loop_block;
-		$this->reservation_block         = $reservation_block;
-		$this->availability_controller   = $availability_controller;
-		$this->current_user_controller   = $current_user_controller;
+		$this->common_styles                   = $common_styles;
+		$this->provider_settings_page          = $provider_settings_page;
+		$this->roles_manager                   = $roles_manager;
+		$this->resource_schedule_meta_box      = $resource_schedule_meta_box;
+		$this->shift_editor                    = $shift_editor;
+		$this->staff_editor                    = $staff_editor;
+		$this->service_menu_editor             = $service_menu_editor;
+		$this->shift_dashboard_page            = $shift_dashboard_page;
+		$this->owner_admin_menu_filter         = $owner_admin_menu_filter;
+		$this->resource_post_type              = $resource_post_type;
+		$this->shift_post_type                 = $shift_post_type;
+		$this->service_menu_post_type          = $service_menu_post_type;
+		$this->booking_post_type               = $booking_post_type;
+		$this->booking_admin                   = $booking_admin;
+		$this->booking_draft_controller        = $booking_draft_controller;
+		$this->my_bookings_controller          = $my_bookings_controller;
+		$this->menu_search_block               = $menu_search_block;
+		$this->menu_loop_block                 = $menu_loop_block;
+		$this->reservation_block               = $reservation_block;
+		$this->availability_controller         = $availability_controller;
+		$this->current_user_controller         = $current_user_controller;
 		$this->booking_confirmation_controller = $booking_confirmation_controller;
-		$this->menu_preview_controller   = $menu_preview_controller;
-		$this->provider_settings_controller = $provider_settings_controller;
-		$this->booking_notification_service = $booking_notification_service;
-		$this->oembed_override              = $oembed_override;
-		$this->auth_shortcodes              = $auth_shortcodes;
-		$this->auth_form_controller         = $auth_form_controller;
-		$this->post_order_manager           = $post_order_manager;
-		$this->term_order_manager           = $term_order_manager;
-		$this->user_profile_fields          = $user_profile_fields;
+		$this->menu_preview_controller         = $menu_preview_controller;
+		$this->provider_settings_controller    = $provider_settings_controller;
+		$this->booking_notification_service    = $booking_notification_service;
+		$this->oembed_override                 = $oembed_override;
+		$this->auth_shortcodes                 = $auth_shortcodes;
+		$this->auth_form_controller            = $auth_form_controller;
+		$this->post_order_manager              = $post_order_manager;
+		$this->term_order_manager              = $term_order_manager;
+		$this->user_profile_fields             = $user_profile_fields;
 	}
 
 	/**
@@ -276,7 +276,7 @@ class Plugin {
 	}
 
 	/**
-	 * Prefer translation JSON files in the plugin languages directory.
+	 * WordPressの翻訳ファイル読み込み処理をフィルタリングして、プラグインの翻訳ファイルを優先的に読み込む
 	 *
 	 * プラグインの languages ディレクトリの翻訳 JSON を優先します。
 	 * ハッシュが一致しない場合でも、利用可能なJSONファイルを検索します。
@@ -287,114 +287,47 @@ class Plugin {
 	 * @return string|false
 	 */
 	public function filter_script_translation_file( $file, string $handle, string $domain ) {
+		// このプラグインのテキストドメインでない場合、またはファイルパスが無い場合はそのまま返す
 		if ( 'vk-booking-manager' !== $domain || ! $file ) {
 			return $file;
 		}
 
+		// プラグインの languages ディレクトリのパスを取得
 		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
 		
-		// First, try the exact filename WordPress expects.
+		// ステップ1: WordPressが期待するファイル名（ハッシュ値付き）で完全一致するファイルを探す
+		// 例: vk-booking-manager-ja-5a65dc19bd83bf90afeedaaf518e966b.json
 		$candidate = trailingslashit( $translation_path ) . basename( $file );
 		if ( file_exists( $candidate ) ) {
 			return $candidate;
 		}
 
-		// Debug: Log when exact match fails (only in development).
+		// デバッグモード時のみ、完全一致が見つからなかったことをログに記録
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
 			error_log( sprintf( '[VKBM] Translation file not found for handle: %s, expected: %s', $handle, basename( $file ) ) );
 		}
 
-		// If exact match not found, search for any JSON file that might contain translations for this handle.
+		// ステップ2: 完全一致が見つからなかった場合、このハンドル用の翻訳を含む可能性のあるJSONファイルを検索する
+		// マージ処理（bin/merge-json-translations.js）により、booking-uiコンポーネントの翻訳は全てapp.jsのJSONに統合されているため、
+		// reservationブロックの場合はapp.jsのJSONファイルを優先的に返すだけで十分
 		if ( ! is_dir( $translation_path ) ) {
 			return $file;
 		}
 
+		// 現在のロケール（例: ja）を取得し、該当するJSONファイルのパターンを作成
+		// 例: vk-booking-manager-ja-*.json
 		$locale = get_locale();
 		$pattern = sprintf( '%s-%s-*.json', $domain, $locale );
 		$json_files = glob( trailingslashit( $translation_path ) . $pattern );
 
-		// Also check backup directory if it exists
-		$backup_dir = trailingslashit( $translation_path ) . '.json-backup';
-		if ( is_dir( $backup_dir ) ) {
-			$backup_files = glob( trailingslashit( $backup_dir ) . $pattern );
-			if ( ! empty( $backup_files ) ) {
-				$json_files = array_merge( $json_files, $backup_files );
-			}
-		}
-
+		// JSONファイルが見つからない場合は、元のファイルパスをそのまま返す
 		if ( empty( $json_files ) ) {
 			return $file;
 		}
 
-		// Extract block/script identifier from handle.
-		// Examples:
-		// - "vk-booking-manager-reservation-view-script" -> "reservation"
-		// - "vk-booking-manager-menu-search-editor-script" -> "menu-search"
-		$handle_clean = str_replace( [ 'vk-booking-manager-', 'booking-manager-' ], '', $handle );
-		$handle_clean = preg_replace( '/-(editor|view|script)$/', '', $handle_clean );
-		
-		// Build patterns to match against JSON source field.
-		$patterns_to_match = [];
-		
-		// Add the cleaned handle.
-		if ( ! empty( $handle_clean ) ) {
-			$patterns_to_match[] = $handle_clean;
-		}
-		
-		// Extract block name from handle (remove common prefixes and suffixes).
-		$block_name = preg_replace( '/^(vk-)?(booking-)?manager-/', '', $handle );
-		$block_name = preg_replace( '/-(editor|view|script)$/', '', $block_name );
-		if ( ! empty( $block_name ) && $block_name !== $handle_clean ) {
-			$patterns_to_match[] = $block_name;
-		}
-		
-		// Try specific block name patterns.
-		if ( false !== strpos( $handle, 'reservation' ) ) {
-			$patterns_to_match[] = 'reservation';
-		}
-		if ( false !== strpos( $handle, 'menu-search' ) || false !== strpos( $handle, 'menu_search' ) ) {
-			$patterns_to_match[] = 'menu-search';
-			$patterns_to_match[] = 'menu_search';
-		}
-		if ( false !== strpos( $handle, 'menu-loop' ) || false !== strpos( $handle, 'menu_loop' ) ) {
-			$patterns_to_match[] = 'menu-loop';
-			$patterns_to_match[] = 'menu_loop';
-		}
-		if ( false !== strpos( $handle, 'menu-search-staff' ) || false !== strpos( $handle, 'menu_search_staff' ) ) {
-			$patterns_to_match[] = 'menu-search-staff';
-			$patterns_to_match[] = 'menu_search_staff';
-		}
-		if ( false !== strpos( $handle, 'menu-search-category' ) || false !== strpos( $handle, 'menu_search_category' ) ) {
-			$patterns_to_match[] = 'menu-search-category';
-			$patterns_to_match[] = 'menu_search_category';
-		}
-		if ( false !== strpos( $handle, 'menu-search-keyword' ) || false !== strpos( $handle, 'menu_search_keyword' ) ) {
-			$patterns_to_match[] = 'menu-search-keyword';
-			$patterns_to_match[] = 'menu_search_keyword';
-		}
-		
-		// Also try booking-ui patterns.
-		if ( false !== strpos( $handle, 'selected-plan' ) || false !== strpos( $handle, 'selected_plan' ) ) {
-			$patterns_to_match[] = 'selected-plan-summary';
-		}
-		if ( false !== strpos( $handle, 'daily-slot' ) || false !== strpos( $handle, 'daily_slot' ) ) {
-			$patterns_to_match[] = 'daily-slot-list';
-		}
-		if ( false !== strpos( $handle, 'calendar-grid' ) || false !== strpos( $handle, 'calendar_grid' ) ) {
-			$patterns_to_match[] = 'calendar-grid';
-		}
-		if ( false !== strpos( $handle, 'booking-confirm' ) || false !== strpos( $handle, 'booking_confirm' ) ) {
-			$patterns_to_match[] = 'booking-confirm-app';
-		}
-		if ( false !== strpos( $handle, 'booking-summary' ) || false !== strpos( $handle, 'booking_summary' ) ) {
-			$patterns_to_match[] = 'booking-summary-items';
-		}
-		if ( false !== strpos( $handle, 'pricing' ) ) {
-			$patterns_to_match[] = 'pricing';
-		}
-		
-		// Search through all JSON files to find a match.
-		// First, try to find exact matches for reservation block (view.js or index.js)
+		// ステップ3: reservationブロックの場合は、app.jsのJSONファイルを優先的に検索
+		// （app.jsにはcalendar-grid.js、daily-slot-list.js、selected-plan-summary.jsなどが全てバンドルされ、
+		//  build:i18n:json実行時にbin/merge-json-translations.jsで全ての翻訳がマージされている）
 		if ( false !== strpos( $handle, 'reservation' ) ) {
 			foreach ( $json_files as $json_file ) {
 				$json_content = file_get_contents( $json_file );
@@ -408,9 +341,9 @@ class Plugin {
 				}
 
 				$source = $json_data['source'];
-				
-				// For reservation block, prioritize view.js or index.js
-				if ( false !== strpos( $source, 'reservation' ) && ( false !== strpos( $source, 'view.js' ) || false !== strpos( $source, 'index.js' ) ) ) {
+
+				// app.jsのJSONファイルを探す（全てのbooking-uiコンポーネントの翻訳がマージされている）
+				if ( false !== strpos( $source, 'src/blocks/reservation/app.js' ) ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
 						error_log( sprintf( '[VKBM] Found reservation translation file: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
 					}
@@ -418,41 +351,37 @@ class Plugin {
 				}
 			}
 		}
+
+		// ステップ4: その他のブロックの場合は、ハンドル名からブロック名を抽出して検索
+		$handle_clean = str_replace( [ 'vk-booking-manager-', 'booking-manager-' ], '', $handle );
+		$handle_clean = preg_replace( '/-(editor|view|script)$/', '', $handle_clean );
 		
-		// Then try pattern matching for all blocks
-		foreach ( $json_files as $json_file ) {
-			$json_content = file_get_contents( $json_file );
-			if ( false === $json_content ) {
-				continue;
-			}
+		if ( ! empty( $handle_clean ) ) {
+			foreach ( $json_files as $json_file ) {
+				$json_content = file_get_contents( $json_file );
+				if ( false === $json_content ) {
+					continue;
+				}
 
-			$json_data = json_decode( $json_content, true );
-			if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
-				continue;
-			}
+				$json_data = json_decode( $json_content, true );
+				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+					continue;
+				}
 
-			$source = $json_data['source'];
-			
-			// Check if source matches any of our patterns.
-			foreach ( $patterns_to_match as $pattern ) {
-				if ( ! empty( $pattern ) && false !== strpos( $source, $pattern ) ) {
+				$source = $json_data['source'];
+				
+				// ハンドル名がsourceパスに含まれているか確認
+				if ( false !== strpos( $source, $handle_clean ) ) {
 					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-						error_log( sprintf( '[VKBM] Found translation file by pattern: %s (pattern: %s, handle: %s, source: %s)', basename( $json_file ), $pattern, $handle, $source ) );
+						error_log( sprintf( '[VKBM] Found translation file by handle: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
 					}
 					return $json_file;
 				}
 			}
-			
-			// Also check if the handle itself appears in the source path.
-			if ( false !== strpos( $source, $handle ) ) {
-				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-					error_log( sprintf( '[VKBM] Found translation file by handle: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
-				}
-				return $json_file;
-			}
 		}
 
-		// If no match found, return the original file path.
+		// ステップ7: どの方法でも見つからなかった場合、元のファイルパスをそのまま返す
+		// （WordPressのデフォルトの動作にフォールバック）
 		return $file;
 	}
 

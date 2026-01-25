@@ -18,19 +18,19 @@ use VKBookingManager\Staff\Staff_Editor;
 class Setup_Notices {
 	private const NONCE_ACTION = 'vkbm_dismiss_notice';
 
-	private const USER_META_KEY   = 'vkbm_dismissed_notices_user';
-	private const OPTION_META_KEY = 'vkbm_dismissed_notices_global';
-	private const SHIFT_META_YEAR = '_vkbm_shift_year';
+	private const USER_META_KEY    = 'vkbm_dismissed_notices_user';
+	private const OPTION_META_KEY  = 'vkbm_dismissed_notices_global';
+	private const SHIFT_META_YEAR  = '_vkbm_shift_year';
 	private const SHIFT_META_MONTH = '_vkbm_shift_month';
 
 	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'admin_notices', [ $this, 'render_notices' ] );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-		add_action( 'wp_ajax_vkbm_dismiss_notice', [ $this, 'handle_dismiss' ] );
-		add_action( 'vkbm_shift_dashboard_notices', [ $this, 'render_shift_dashboard_notice' ] );
+		add_action( 'admin_notices', array( $this, 'render_notices' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'wp_ajax_vkbm_dismiss_notice', array( $this, 'handle_dismiss' ) );
+		add_action( 'vkbm_shift_dashboard_notices', array( $this, 'render_shift_dashboard_notice' ) );
 	}
 
 	/**
@@ -43,13 +43,13 @@ class Setup_Notices {
 
 		if ( ! $this->is_setup_complete() ) {
 			$missing_items = $this->get_missing_setup_items_for_user();
-			if ( [] !== $missing_items ) {
+			if ( array() !== $missing_items ) {
 				$this->render_notice_markup( $missing_items );
 			}
 		}
 
 		$missing_shift_months = $this->get_missing_shift_months();
-		if ( [] !== $missing_shift_months ) {
+		if ( array() !== $missing_shift_months ) {
 			$this->render_shift_notice_markup( $missing_shift_months, ! $this->is_shift_post_type_screen() );
 		}
 	}
@@ -60,13 +60,13 @@ class Setup_Notices {
 	public function render_shift_dashboard_notice(): void {
 		if ( ! $this->is_setup_complete() ) {
 			$missing_items = $this->get_missing_setup_items_for_user();
-			if ( [] !== $missing_items ) {
+			if ( array() !== $missing_items ) {
 				$this->render_notice_markup( $missing_items );
 			}
 		}
 
 		$missing_shift_months = $this->get_missing_shift_months();
-		if ( [] !== $missing_shift_months ) {
+		if ( array() !== $missing_shift_months ) {
 			$this->render_shift_notice_markup( $missing_shift_months, ! $this->is_shift_post_type_screen() );
 		}
 	}
@@ -84,14 +84,14 @@ class Setup_Notices {
 					<li>
 						<?php if ( 'link' === ( $item['action_style'] ?? '' ) ) : ?>
 							<?php
-							$link = sprintf(
+							$link    = sprintf(
 								'<a href="%1$s">%2$s</a>',
 								esc_url( $item['primary_url'] ),
 								esc_html( $item['primary_label'] )
 							);
 							$message = sprintf( $item['message'], $link );
 							?>
-							<p><?php echo wp_kses( $message, [ 'a' => [ 'href' => [] ] ] ); ?></p>
+							<p><?php echo wp_kses( $message, array( 'a' => array( 'href' => array() ) ) ); ?></p>
 						<?php else : ?>
 							<p><?php echo esc_html( $item['message'] ); ?></p>
 							<div class="vkbm-buttons">
@@ -120,8 +120,8 @@ class Setup_Notices {
 	public function enqueue_assets( string $hook_suffix ): void {
 		unset( $hook_suffix );
 
-		$has_setup_notice = ! $this->is_setup_complete() && [] !== $this->get_missing_setup_items_for_user();
-		$has_shift_notice = [] !== $this->get_missing_shift_months();
+		$has_setup_notice = ! $this->is_setup_complete() && array() !== $this->get_missing_setup_items_for_user();
+		$has_shift_notice = array() !== $this->get_missing_shift_months();
 		if ( ! $has_setup_notice && ! $has_shift_notice ) {
 			return;
 		}
@@ -135,26 +135,26 @@ class Setup_Notices {
 	public function handle_dismiss(): void {
 		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
 		if ( ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
-			wp_send_json_error( [ 'message' => 'invalid_nonce' ], 403 );
+			wp_send_json_error( array( 'message' => 'invalid_nonce' ), 403 );
 		}
 
 		if ( ! $this->current_user_can_manage_notices() ) {
-			wp_send_json_error( [ 'message' => 'forbidden' ], 403 );
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 
 		$notice_id = isset( $_POST['notice_id'] ) ? sanitize_key( wp_unslash( $_POST['notice_id'] ) ) : '';
 		if ( '' === $notice_id ) {
-			wp_send_json_error( [ 'message' => 'missing_notice_id' ], 400 );
+			wp_send_json_error( array( 'message' => 'missing_notice_id' ), 400 );
 		}
 
 		$scope = isset( $_POST['scope'] ) ? sanitize_key( wp_unslash( $_POST['scope'] ) ) : 'user';
 		if ( 'global' === $scope ) {
 			$this->dismiss_notice_globally( $notice_id );
-			wp_send_json_success( [ 'scope' => 'global' ] );
+			wp_send_json_success( array( 'scope' => 'global' ) );
 		}
 
 		$this->dismiss_notice_for_user( get_current_user_id(), $notice_id );
-		wp_send_json_success( [ 'scope' => 'user' ] );
+		wp_send_json_success( array( 'scope' => 'user' ) );
 	}
 
 	/**
@@ -162,8 +162,8 @@ class Setup_Notices {
 	 */
 	private function get_setup_items(): array {
 		// 初期設定で不足している項目の定義一覧。
-		$items = [
-			[
+		$items = array(
+			array(
 				'id'              => 'provider_name',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_provider_name(),
@@ -173,8 +173,8 @@ class Setup_Notices {
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
-			],
-			[
+			),
+			array(
 				'id'              => 'regular_holidays',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_regular_holidays_or_disabled(),
@@ -184,8 +184,8 @@ class Setup_Notices {
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
-			],
-			[
+			),
+			array(
 				'id'              => 'business_hours_basic',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_basic_business_hours(),
@@ -195,8 +195,8 @@ class Setup_Notices {
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
-			],
-			[
+			),
+			array(
 				'id'              => 'reservation_page_url',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_reservation_page_url(),
@@ -206,8 +206,8 @@ class Setup_Notices {
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
-			],
-			[
+			),
+			array(
 				'id'              => 'provider_email',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_provider_email(),
@@ -217,8 +217,8 @@ class Setup_Notices {
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
-			],
-			[
+			),
+			array(
 				'id'              => 'privacy_policy_mode',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_privacy_policy_mode(),
@@ -228,25 +228,25 @@ class Setup_Notices {
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
-			],
-		];
+			),
+		);
 
 		// スタッフ機能が有効な場合のみスタッフ設定を促す。
 		if ( Staff_Editor::is_enabled() ) {
-			$items[] = [
+			$items[] = array(
 				'id'              => 'staff',
 				'capability'      => Capabilities::MANAGE_STAFF,
 				'is_missing'      => fn () => ! $this->has_posts( Resource_Post_Type::POST_TYPE ),
 				'message'         => __( 'No staff members have been registered yet. First, add staff.', 'vk-booking-manager' ),
-				'primary_label'   => __( 'add staff', 'vk-booking-manager' ),
+				'primary_label'   => __( 'Add staff', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'post-new.php?post_type=' . Resource_Post_Type::POST_TYPE ),
 				'secondary_label' => __( 'Staff list', 'vk-booking-manager' ),
 				'secondary_url'   => admin_url( 'edit.php?post_type=' . Resource_Post_Type::POST_TYPE ),
-			];
+			);
 		}
 
 		// サービスメニューの登録は常に必須。
-		$items[] = [
+		$items[] = array(
 			'id'              => 'service_menu',
 			'capability'      => Capabilities::MANAGE_SERVICE_MENUS,
 			'is_missing'      => fn () => ! $this->has_posts( Service_Menu_Post_Type::POST_TYPE ),
@@ -255,7 +255,7 @@ class Setup_Notices {
 			'primary_url'     => admin_url( 'post-new.php?post_type=' . Service_Menu_Post_Type::POST_TYPE ),
 			'secondary_label' => __( 'Service list', 'vk-booking-manager' ),
 			'secondary_url'   => admin_url( 'edit.php?post_type=' . Service_Menu_Post_Type::POST_TYPE ),
-		];
+		);
 
 		return $items;
 	}
@@ -264,7 +264,7 @@ class Setup_Notices {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_missing_setup_items(): array {
-		$missing = [];
+		$missing = array();
 		foreach ( $this->get_setup_items() as $item ) {
 			if ( ! isset( $item['is_missing'] ) || ! is_callable( $item['is_missing'] ) ) {
 				continue;
@@ -284,7 +284,7 @@ class Setup_Notices {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_missing_setup_items_for_user(): array {
-		$missing = [];
+		$missing = array();
 		foreach ( $this->get_missing_setup_items() as $item ) {
 			if ( isset( $item['capability'] ) && ! current_user_can( (string) $item['capability'] ) ) {
 				continue;
@@ -297,7 +297,7 @@ class Setup_Notices {
 	}
 
 	private function is_setup_complete(): bool {
-		return [] === $this->get_missing_setup_items();
+		return array() === $this->get_missing_setup_items();
 	}
 
 	private function has_posts( string $post_type ): bool {
@@ -307,7 +307,7 @@ class Setup_Notices {
 		}
 
 		$total = 0;
-		foreach ( [ 'publish', 'future', 'draft', 'pending', 'private' ] as $status ) {
+		foreach ( array( 'publish', 'future', 'draft', 'pending', 'private' ) as $status ) {
 			if ( isset( $counts->$status ) ) {
 				$total += (int) $counts->$status;
 			}
@@ -319,9 +319,9 @@ class Setup_Notices {
 	private function has_basic_business_hours(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
-		$basic      = $settings['provider_business_hours_basic'] ?? [];
+		$basic      = $settings['provider_business_hours_basic'] ?? array();
 
-		return is_array( $basic ) && [] !== $basic;
+		return is_array( $basic ) && array() !== $basic;
 	}
 
 	private function has_provider_name(): bool {
@@ -341,9 +341,9 @@ class Setup_Notices {
 			return true;
 		}
 
-		$holidays = $settings['provider_regular_holidays'] ?? [];
+		$holidays = $settings['provider_regular_holidays'] ?? array();
 
-		return is_array( $holidays ) && [] !== $holidays;
+		return is_array( $holidays ) && array() !== $holidays;
 	}
 
 	private function has_reservation_page_url(): bool {
@@ -359,7 +359,7 @@ class Setup_Notices {
 	 */
 	private function get_missing_shift_months(): array {
 		if ( ! $this->has_published_resources() ) {
-			return [];
+			return array();
 		}
 
 		$months_ahead = $this->get_shift_alert_months();
@@ -369,7 +369,7 @@ class Setup_Notices {
 		$now      = new \DateTimeImmutable( 'now', $timezone );
 		$current  = $now->setDate( (int) $now->format( 'Y' ), (int) $now->format( 'n' ), 1 );
 
-		$missing = [];
+		$missing = array();
 
 		for ( $offset = 0; $offset <= $months_ahead; $offset++ ) {
 			$target = $current->modify( sprintf( '+%d months', $offset ) );
@@ -384,10 +384,10 @@ class Setup_Notices {
 				continue;
 			}
 
-			$missing[] = [
+			$missing[] = array(
 				'year'  => $year,
 				'month' => $month,
-			];
+			);
 		}
 
 		return $missing;
@@ -404,27 +404,27 @@ class Setup_Notices {
 
 	private function has_shift_for_month( int $year, int $month ): bool {
 		$posts = get_posts(
-			[
+			array(
 				'post_type'      => Shift_Post_Type::POST_TYPE,
 				'post_status'    => 'publish',
 				'posts_per_page' => 1,
 				'fields'         => 'ids',
 				'no_found_rows'  => true,
-				'meta_query'     => [
-					[
+				'meta_query'     => array(
+					array(
 						'key'     => self::SHIFT_META_YEAR,
 						'value'   => (string) $year,
 						'compare' => '=',
 						'type'    => 'NUMERIC',
-					],
-					[
+					),
+					array(
 						'key'     => self::SHIFT_META_MONTH,
 						'value'   => (string) $month,
 						'compare' => '=',
 						'type'    => 'NUMERIC',
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
 		return ! empty( $posts );
@@ -440,7 +440,7 @@ class Setup_Notices {
 
 	/**
 	 * @param array<int, array{year:int,month:int}> $missing_months Missing shift months.
-	 * @param bool                                 $show_action     Whether to show action button.
+	 * @param bool                                  $show_action     Whether to show action button.
 	 */
 	private function render_shift_notice_markup( array $missing_months, bool $show_action ): void {
 		?>
@@ -518,7 +518,7 @@ class Setup_Notices {
 
 		$dismissed = get_user_meta( $user_id, self::USER_META_KEY, true );
 		if ( ! is_array( $dismissed ) ) {
-			$dismissed = [];
+			$dismissed = array();
 		}
 
 		return array_key_exists( $notice_id, $dismissed );
@@ -531,7 +531,7 @@ class Setup_Notices {
 
 		$dismissed = get_user_meta( $user_id, self::USER_META_KEY, true );
 		if ( ! is_array( $dismissed ) ) {
-			$dismissed = [];
+			$dismissed = array();
 		}
 
 		$dismissed[ $notice_id ] = time();
@@ -539,9 +539,9 @@ class Setup_Notices {
 	}
 
 	private function dismiss_notice_globally( string $notice_id ): void {
-		$dismissed = get_option( self::OPTION_META_KEY, [] );
+		$dismissed = get_option( self::OPTION_META_KEY, array() );
 		if ( ! is_array( $dismissed ) ) {
-			$dismissed = [];
+			$dismissed = array();
 		}
 
 		$dismissed[ $notice_id ] = time();

@@ -52,7 +52,7 @@ class Reservation_Block {
 		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
 		register_block_type_from_metadata( $metadata_path );
 		$this->register_menu_loop_style();
-		$this->register_script_translations( 'vk-booking-manager/reservation', [ 'script', 'editorScript' ] );
+		$this->register_script_translations( 'vk-booking-manager/reservation', [ 'script', 'viewScript', 'editorScript' ] );
 
 		self::$block_registered = true;
 	}
@@ -105,11 +105,14 @@ class Reservation_Block {
 		$current_url = $this->get_current_url( $post );
 		$redirect    = wp_validate_redirect( $current_url, home_url() );
 
+		$locale = function_exists( 'get_locale' ) ? (string) get_locale() : 'en_US';
+
 		$bootstrap = [
 			'canManageReservations' => $is_logged_in && current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 			'canViewPrivateMenus'   => $is_logged_in && current_user_can( Capabilities::VIEW_SERVICE_MENUS ),
 			'shiftDashboardUrl'     => $is_logged_in ? admin_url( 'admin.php?page=vkbm-shift-dashboard' ) : '',
 			'logoutUrl'             => $is_logged_in ? wp_logout_url( $redirect ) : '',
+			'locale'                => $locale,
 		];
 
 		$inline = 'window.vkbmCurrentUserBootstrap = ' . wp_json_encode( $bootstrap ) . ';';
@@ -172,6 +175,10 @@ class Reservation_Block {
 		foreach ( $fields as $field ) {
 			$handle = $this->resolve_script_handle( $block_name, $field );
 			if ( $handle ) {
+				// Debug: Log the handle being registered
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					error_log( sprintf( 'Registering translations for handle: %s (field: %s, block: %s)', $handle, $field, $block_name ) );
+				}
 				wp_set_script_translations( $handle, 'vk-booking-manager', $translation_path );
 			}
 		}
@@ -188,6 +195,8 @@ class Reservation_Block {
 	 */
 	private function resolve_script_handle( string $block_name, string $field ): string {
 		if ( function_exists( 'generate_block_asset_handle' ) ) {
+			// For 'script' field, WordPress generates handle with '-script' suffix
+			// even though it's treated as viewScript internally
 			return (string) generate_block_asset_handle( $block_name, $field );
 		}
 
@@ -198,7 +207,7 @@ class Reservation_Block {
 				return $base . '-editor-script';
 			case 'viewScript':
 				return $base . '-view-script';
-			case 'script':
+			case 'script': // block.json 'script' field generates '-script' handle
 				return $base . '-script';
 			default:
 				return $base . '-' . sanitize_key( $field );

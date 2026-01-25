@@ -158,7 +158,12 @@ class Shift_Dashboard_Page {
 		$iso_date   = $selected_date->format( 'Y-m-d' );
 		$date_format = get_option( 'date_format' );
 		$day_label   = wp_date( $date_format, $selected_date->getTimestamp() );
-		$month_label = wp_date( $date_format, $selected_date->getTimestamp() );
+		
+		// Format month label based on locale
+		// Japanese: "2026年2月", English: "February 2026"
+		$locale = determine_locale();
+		$month_format = ( 'ja' === substr( $locale, 0, 2 ) ) ? 'Y年n月' : 'F Y';
+		$month_label  = wp_date( $month_format, $selected_date->getTimestamp() );
 
 		$resources = $this->get_resource_posts();
 		$shift_map = $this->get_shift_map( $resources, $year, $month );
@@ -237,10 +242,10 @@ class Shift_Dashboard_Page {
 								</span>
 								<div class="vkbm-calendar-header__actions">
 									<a class="button button-secondary" href="<?php echo esc_url( $prev_day_url ); ?>">
-										<?php esc_html_e( 'previous day', 'vk-booking-manager' ); ?>
+										<?php esc_html_e( 'Previous day', 'vk-booking-manager' ); ?>
 									</a>
 									<a class="button button-secondary" href="<?php echo esc_url( $next_day_url ); ?>">
-										<?php esc_html_e( 'the next day', 'vk-booking-manager' ); ?>
+										<?php esc_html_e( 'Next day', 'vk-booking-manager' ); ?>
 									</a>
 								</div>
 							</div>
@@ -408,10 +413,25 @@ class Shift_Dashboard_Page {
 								<span class="vkbm-calendar-header__label"><?php echo esc_html( $month_label ); ?></span>
 								<div class="vkbm-calendar-header__actions">
 									<a class="button button-secondary" href="<?php echo esc_url( $prev_month_url ); ?>">
-										<?php esc_html_e( 'previous month', 'vk-booking-manager' ); ?>
+										<?php
+										$prev_month_text = __( 'previous month', 'vk-booking-manager' );
+										// Capitalize first letter of each word for English locales
+										$locale = determine_locale();
+										if ( 'en' === substr( $locale, 0, 2 ) ) {
+											$prev_month_text = ucwords( $prev_month_text );
+										}
+										echo esc_html( $prev_month_text );
+										?>
 									</a>
 									<a class="button button-secondary" href="<?php echo esc_url( $next_month_url ); ?>">
-										<?php esc_html_e( 'next month', 'vk-booking-manager' ); ?>
+										<?php
+										$next_month_text = __( 'next month', 'vk-booking-manager' );
+										// Capitalize first letter of each word for English locales
+										if ( 'en' === substr( $locale, 0, 2 ) ) {
+											$next_month_text = ucwords( $next_month_text );
+										}
+										echo esc_html( $next_month_text );
+										?>
 									</a>
 								</div>
 							</div>
@@ -1287,7 +1307,7 @@ class Shift_Dashboard_Page {
 		?>
 		<aside class="vkbm-shift-dashboard__panel vkbm-notification-panel" aria-label="<?php esc_attr_e( 'Pending booking notifications', 'vk-booking-manager' ); ?>">
 			<div class="vkbm-notification-panel__inner">
-				<h2 class="vkbm-notification-panel__title"><?php esc_html_e( 'notice', 'vk-booking-manager' ); ?></h2>
+				<h2 class="vkbm-notification-panel__title"><?php esc_html_e( 'Notice', 'vk-booking-manager' ); ?></h2>
 				<p class="vkbm-notification-panel__lead">
 					<?php
 					if ( $has_pending ) {
@@ -1325,7 +1345,7 @@ class Shift_Dashboard_Page {
 													class="button button-secondary button-small"
 													href="<?php echo esc_url( $url ); ?>"
 												>
-													<?php esc_html_e( 'detail', 'vk-booking-manager' ); ?>
+													<?php esc_html_e( 'Detail', 'vk-booking-manager' ); ?>
 												</a>
 											<?php endif; ?>
 											<?php if ( ! empty( $notification['id'] ) ) : ?>
@@ -1391,9 +1411,9 @@ class Shift_Dashboard_Page {
 	private function get_month_booking_status_badge( string $status ): string {
 		switch ( $status ) {
 			case self::BOOKING_STATUS_CONFIRMED:
-				return __( 'certain', 'vk-booking-manager' );
+				return __( 'Certain', 'vk-booking-manager' );
 			case self::BOOKING_STATUS_PENDING:
-				return __( 'tentative', 'vk-booking-manager' );
+				return __( 'Tentative', 'vk-booking-manager' );
 			default:
 				$labels = $this->get_booking_status_labels();
 				return $labels[ $status ] ?? '';
@@ -1581,7 +1601,7 @@ class Shift_Dashboard_Page {
 			case self::STATUS_UNAVAILABLE:
 				return __( 'Off', 'vk-booking-manager' );
 			default:
-				return __( 'work', 'vk-booking-manager' );
+				return __( 'Work', 'vk-booking-manager' );
 		}
 	}
 

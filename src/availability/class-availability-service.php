@@ -12,6 +12,7 @@ use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 use WP_Query;
 use WP_Error;
@@ -316,11 +317,19 @@ class Availability_Service {
 		$staff_ids = get_post_meta( $menu_post->ID, self::MENU_META_STAFF_IDS, true );
 		$staff_ids = is_array( $staff_ids ) ? array_values( array_unique( array_map( 'intval', $staff_ids ) ) ) : [];
 
+		// 無料版では選択可能スタッフの制限を解除
+		$is_staff_enabled = Staff_Editor::is_enabled();
+
 		if ( $preferred_staff > 0 ) {
 			if ( empty( $staff_ids ) ) {
 				$staff_ids = [ $preferred_staff ];
 			} elseif ( ! in_array( $preferred_staff, $staff_ids, true ) ) {
-				return new WP_Error( 'staff_not_assigned', __( 'The specified staff member cannot be in charge of this menu.', 'vk-booking-manager' ) );
+				// 無料版ではスタッフ制限チェックをスキップ
+				if ( $is_staff_enabled ) {
+					return new WP_Error( 'staff_not_assigned', __( 'The specified staff member cannot be in charge of this menu.', 'vk-booking-manager' ) );
+				}
+				// 無料版では preferred_staff を使用
+				$staff_ids = [ $preferred_staff ];
 			} else {
 				$staff_ids = [ $preferred_staff ];
 			}

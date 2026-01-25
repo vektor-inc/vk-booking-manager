@@ -339,7 +339,7 @@ class Shift_Editor {
 				'strings'           => [
 					'daySuffix'    => __( 'Sun', 'vk-booking-manager' ),
 					'noResource'   => __( 'Please select staff (resources).', 'vk-booking-manager' ),
-					'statusLabel'  => __( 'operational status', 'vk-booking-manager' ),
+					'statusLabel'  => __( 'Operational status', 'vk-booking-manager' ),
 					'closedMessage' => __( 'You cannot set the time zone in this status.', 'vk-booking-manager' ),
 					'weekdayShort' => [
 						'sun' => __( 'Sun', 'vk-booking-manager' ),
@@ -618,6 +618,11 @@ class Shift_Editor {
 
 		$options = [];
 
+		// Use locale-appropriate date format
+		// Japanese: "2026年1月", English: "January 2026"
+		$locale = determine_locale();
+		$format = ( 'ja' === substr( $locale, 0, 2 ) ) ? 'Y年n月' : 'F Y';
+
 		for ( $i = 0; $i <= 4; $i++ ) {
 			$target = $base->modify( sprintf( '+%d month', $i ) );
 			if ( ! $target instanceof \DateTimeImmutable ) {
@@ -628,12 +633,9 @@ class Shift_Editor {
 			$month = (int) $target->format( 'n' );
 			$value = sprintf( '%04d-%02d', $year, $month );
 
-			$options[ $value ] = sprintf(
-				/* translators: 1: year, 2: month */
-				__( '%1$d year %2$d month', 'vk-booking-manager' ),
-				$year,
-				$month
-			);
+			// Use wp_date() for locale-aware formatting
+			$timestamp = $target->getTimestamp();
+			$options[ $value ] = wp_date( $format, $timestamp, $timezone );
 		}
 
 		return $options;

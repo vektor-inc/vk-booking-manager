@@ -268,7 +268,7 @@ class Menu_Loop_Block {
 				$sections[] = $this->render_group_section( '', $ungrouped, $attributes, null, $group_mode );
 			} else {
 				$group_mode = $this->resolve_group_display_mode( $attributes, null );
-				$sections[] = $this->render_group_section( __( 'others', 'vk-booking-manager' ), $ungrouped, $attributes, null, $group_mode );
+				$sections[] = $this->render_group_section( __( 'Others', 'vk-booking-manager' ), $ungrouped, $attributes, null, $group_mode );
 			}
 		}
 
@@ -1108,7 +1108,7 @@ class Menu_Loop_Block {
 		return sprintf(
 			'<span class="vkbm-menu-loop__edit-link"><a href="%1$s">%2$s</a></span>',
 			esc_url( $edit_link ),
-			esc_html__( 'edit', 'vk-booking-manager' )
+			esc_html__( 'Edit', 'vk-booking-manager' )
 		);
 	}
 

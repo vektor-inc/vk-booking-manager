@@ -42,8 +42,8 @@ class Style_Guide_Page {
 		$pages = [
 			[
 				'slug'     => self::MENU_SLUG_FRONT,
-				'title'    => __( 'style guide', 'vk-booking-manager' ),
-				'menu'     => __( 'style guide', 'vk-booking-manager' ),
+				'title'    => __( 'Style guide', 'vk-booking-manager' ),
+				'menu'     => __( 'Style guide', 'vk-booking-manager' ),
 				'filename' => 'style-guide.html',
 				'callback' => [ $this, 'render_front_page' ],
 			],
@@ -114,7 +114,7 @@ class Style_Guide_Page {
 	 */
 	public function render_front_page(): void {
 		$this->render_docs_page(
-			__( 'style guide', 'vk-booking-manager' ),
+			__( 'Style guide', 'vk-booking-manager' ),
 			$this->docs_html_path( 'style-guide.html' )
 		);
 	}

@@ -483,13 +483,13 @@ class Menu_Search_Block {
 				case 'vk-booking-manager/menu-search-field-category':
 					$fields[] = [
 						'type'  => 'category',
-						'label' => $this->resolve_label( $attrs['label'] ?? '', __( 'service tag', 'vk-booking-manager' ) ),
+						'label' => $this->resolve_label( $attrs['label'] ?? '', __( 'Service tag', 'vk-booking-manager' ) ),
 					];
 					break;
 				case 'vk-booking-manager/menu-search-field-keyword':
 					$fields[] = [
 						'type'        => 'keyword',
-						'label'       => $this->resolve_label( $attrs['label'] ?? '', __( 'keyword', 'vk-booking-manager' ) ),
+						'label'       => $this->resolve_label( $attrs['label'] ?? '', __( 'Keyword', 'vk-booking-manager' ) ),
 						'placeholder' => $attrs['placeholder'] ?? '',
 					];
 					break;
@@ -514,11 +514,11 @@ class Menu_Search_Block {
 			],
 			[
 				'type'  => 'category',
-				'label' => __( 'service tag', 'vk-booking-manager' ),
+				'label' => __( 'Service tag', 'vk-booking-manager' ),
 			],
 			[
 				'type'        => 'keyword',
-				'label'       => __( 'keyword', 'vk-booking-manager' ),
+				'label'       => __( 'Keyword', 'vk-booking-manager' ),
 				'placeholder' => '',
 			],
 		];
@@ -549,7 +549,7 @@ class Menu_Search_Block {
 		$options = [
 			[
 				'value' => 0,
-				'label' => __( 'all', 'vk-booking-manager' ),
+				'label' => __( 'All', 'vk-booking-manager' ),
 			],
 		];
 

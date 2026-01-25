@@ -641,7 +641,7 @@ class Settings_Sanitizer {
 			'fri'         => __( 'Friday', 'vk-booking-manager' ),
 			'sat'         => __( 'Saturday', 'vk-booking-manager' ),
 			'sun'         => __( 'Sunday', 'vk-booking-manager' ),
-			'holiday'     => __( 'holiday', 'vk-booking-manager' ),
+			'holiday'     => __( 'Holiday', 'vk-booking-manager' ),
 			'holiday_eve' => __( 'The day before a public holiday', 'vk-booking-manager' ),
 		];
 

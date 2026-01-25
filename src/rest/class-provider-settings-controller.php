@@ -4,12 +4,15 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\REST;
 
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_REST_Response;
 use WP_REST_Server;
 use function add_action;
 use function esc_url_raw;
+use function get_posts;
+use function get_post;
 use function home_url;
 use function is_ssl;
 use function str_starts_with;
@@ -88,12 +91,20 @@ class Provider_Settings_Controller {
 		$cancellation_policy = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
 		$terms_of_service    = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
 		$payment_method      = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
+		$staff_enabled       = Staff_Editor::is_enabled();
+		
+		// 無料版ではデフォルトスタッフのIDを取得する
+		$default_staff_id = 0;
+		if ( ! $staff_enabled ) {
+			$default_staff_id = $this->get_default_staff_id();
+		}
 
 		return new WP_REST_Response(
 			[
 				'tax_enabled' => true,
 				'tax_rate'    => 0.0,
-				'staff_enabled' => Staff_Editor::is_enabled(),
+				'staff_enabled' => $staff_enabled,
+				'default_staff_id' => $default_staff_id,
 				'resource_label_singular' => $resource_label_singular,
 				'resource_label_plural'   => $resource_label_plural,
 				'provider_name'           => $provider_name,
@@ -110,6 +121,44 @@ class Provider_Settings_Controller {
 				'payment_method'       => $payment_method,
 			]
 		);
+	}
+
+	/**
+	 * Get default staff ID for Free edition.
+	 *
+	 * 無料版のデフォルトスタッフIDを取得します。
+	 *
+	 * @return int Default staff ID, or 0 if not found.
+	 */
+	private function get_default_staff_id(): int {
+		if ( ! post_type_exists( Resource_Post_Type::POST_TYPE ) ) {
+			return 0;
+		}
+
+		$title = __( 'Default Staff', 'vk-booking-manager' );
+
+		$published_staff = get_posts(
+			[
+				'post_type'      => Resource_Post_Type::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			]
+		);
+
+		foreach ( $published_staff as $staff_id ) {
+			$post = get_post( $staff_id );
+			if ( ! $post ) {
+				continue;
+			}
+
+			if ( $title === $post->post_title ) {
+				return (int) $post->ID;
+			}
+		}
+
+		return 0;
 	}
 
 	/**
