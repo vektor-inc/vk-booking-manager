@@ -1,4 +1,9 @@
 <?php
+/**
+ * Shift editor for managing shift posts.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -16,8 +21,8 @@ use WP_Post;
  * Handles the Shift editing UI and meta persistence.
  */
 class Shift_Editor {
-	private const NONCE_ACTION = 'vkbm_shift_meta';
-	private const NONCE_NAME   = '_vkbm_shift_meta_nonce';
+	private const NONCE_ACTION      = 'vkbm_shift_meta';
+	private const NONCE_NAME        = '_vkbm_shift_meta_nonce';
 	private const BULK_NONCE_ACTION = 'vkbm_shift_bulk_create';
 	private const BULK_NONCE_NAME   = '_vkbm_shift_bulk_create_nonce';
 	private const BULK_ACTION       = 'vkbm_shift_bulk_create';
@@ -38,23 +43,23 @@ class Shift_Editor {
 	 *
 	 * @var array<int, string>
 	 */
-	private const CLOSED_DAY_STATUSES = [
+	private const CLOSED_DAY_STATUSES = array(
 		self::DAY_STATUS_REGULAR_HOLIDAY,
 		self::DAY_STATUS_TEMPORARY_CLOSED,
 		self::DAY_STATUS_UNAVAILABLE,
-	];
+	);
 
 	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'add_meta_boxes', [ $this, 'add_meta_box' ] );
-		add_action( 'save_post_' . Shift_Post_Type::POST_TYPE, [ $this, 'save_post' ], 10, 2 );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-		add_action( 'wp_ajax_vkbm_shift_get_template', [ $this, 'ajax_get_template' ] );
-		add_action( 'admin_notices', [ $this, 'render_bulk_create_panel' ], 1 );
-		add_action( 'admin_notices', [ $this, 'render_bulk_create_notice' ], 5 );
-		add_action( 'admin_post_' . self::BULK_ACTION, [ $this, 'handle_bulk_create' ] );
+		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
+		add_action( 'save_post_' . Shift_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'wp_ajax_vkbm_shift_get_template', array( $this, 'ajax_get_template' ) );
+		add_action( 'admin_notices', array( $this, 'render_bulk_create_panel' ), 1 );
+		add_action( 'admin_notices', array( $this, 'render_bulk_create_notice' ), 5 );
+		add_action( 'admin_post_' . self::BULK_ACTION, array( $this, 'handle_bulk_create' ) );
 	}
 
 	/**
@@ -80,7 +85,7 @@ class Shift_Editor {
 		add_meta_box(
 			'vkbm-shift-editor',
 			__( 'Shift details', 'vk-booking-manager' ),
-			[ $this, 'render_meta_box' ],
+			array( $this, 'render_meta_box' ),
 			Shift_Post_Type::POST_TYPE,
 			'normal',
 			'high'
@@ -193,7 +198,7 @@ class Shift_Editor {
 						<span class="vkbm-schedule-colon">:</span>
 						<label class="screen-reader-text" data-field="start_minute"><?php esc_html_e( 'Start time (minutes)', 'vk-booking-manager' ); ?></label>
 						<select class="vkbm-schedule-minute" data-field="start_minute">
-							<?php foreach ( [ '00', '10', '20', '30', '40', '50' ] as $minute ) : ?>
+							<?php foreach ( array( '00', '10', '20', '30', '40', '50' ) as $minute ) : ?>
 								<option value="<?php echo esc_attr( $minute ); ?>"><?php echo esc_html( $minute ); ?></option>
 							<?php endforeach; ?>
 						</select>
@@ -211,7 +216,7 @@ class Shift_Editor {
 						<span class="vkbm-schedule-colon">:</span>
 						<label class="screen-reader-text" data-field="end_minute"><?php esc_html_e( 'End time (minutes)', 'vk-booking-manager' ); ?></label>
 						<select class="vkbm-schedule-minute" data-field="end_minute">
-							<?php foreach ( [ '00', '10', '20', '30', '40', '50' ] as $minute ) : ?>
+							<?php foreach ( array( '00', '10', '20', '30', '40', '50' ) as $minute ) : ?>
 								<option value="<?php echo esc_attr( $minute ); ?>"><?php echo esc_html( $minute ); ?></option>
 							<?php endforeach; ?>
 						</select>
@@ -248,7 +253,7 @@ class Shift_Editor {
 			return;
 		}
 
-		$payload     = isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ? wp_unslash( $_POST['vkbm_shift'] ) : [];
+		$payload     = isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ? wp_unslash( $_POST['vkbm_shift'] ) : array();
 		$resource_id = isset( $payload['resource_id'] ) ? (int) $payload['resource_id'] : 0;
 		$year        = isset( $payload['year'] ) ? (int) $payload['year'] : 0;
 		$month       = isset( $payload['month'] ) ? (int) $payload['month'] : 0;
@@ -286,8 +291,9 @@ class Shift_Editor {
 		}
 
 		$base_url = plugin_dir_url( VKBM_PLUGIN_FILE );
-		$post_id = isset( $_GET['post'] ) ? (int) $_GET['post'] : ( isset( $_POST['post_ID'] ) ? (int) $_POST['post_ID'] : 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only context
-		$state   = $this->get_editor_state( $post_id );
+		$get_post = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only context.
+		$post_id  = $get_post > 0 ? $get_post : ( isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only context.
+		$state    = $this->get_editor_state( $post_id );
 
 		if ( 'edit.php' === $hook ) {
 			wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
@@ -295,7 +301,7 @@ class Shift_Editor {
 			wp_enqueue_script(
 				'vkbm-shift-bulk-create',
 				$base_url . 'assets/js/shift-bulk-create.js',
-				[],
+				array(),
 				VKBM_VERSION,
 				true
 			);
@@ -303,7 +309,7 @@ class Shift_Editor {
 			return;
 		}
 
-		if ( ! in_array( $hook, [ 'post.php', 'post-new.php' ], true ) ) {
+		if ( ! in_array( $hook, array( 'post.php', 'post-new.php' ), true ) ) {
 			return;
 		}
 
@@ -312,7 +318,7 @@ class Shift_Editor {
 		wp_enqueue_script(
 			'vkbm-shift-editor',
 			$base_url . 'assets/js/shift-editor.js',
-			[ 'jquery' ],
+			array( 'jquery' ),
 			VKBM_VERSION,
 			true
 		);
@@ -320,28 +326,28 @@ class Shift_Editor {
 		wp_localize_script(
 			'vkbm-shift-editor',
 			'vkbmShiftEditor',
-			[
-				'daysJsonField'     => '#vkbm-shift-days-json',
-				'daysContainer'     => '#vkbm-shift-days',
-				'daysTableBody'     => '#vkbm-shift-days-body',
-				'yearSelector'      => '#vkbm-shift-year',
-				'monthSelector'     => '#vkbm-shift-month',
-				'resourceSelector'  => '#vkbm-shift-resource',
-				'dayRowTemplate'    => '#vkbm-shift-day-row-template',
-				'slotTemplate'      => '#vkbm-shift-slot-template',
-				'daysData'          => $state['days_for_editor'],
-				'holidayRules'      => $state['holiday_rules'],
-				'statusOptions'     => $this->get_day_status_options(),
-				'defaultDays'       => $state['default_days'],
-				'weekdayDefaults'   => $state['weekday_defaults'],
-				'initialYear'       => $state['year'],
-				'initialMonth'      => $state['month'],
-				'strings'           => [
-					'daySuffix'    => __( 'Sun', 'vk-booking-manager' ),
-					'noResource'   => __( 'Please select staff (resources).', 'vk-booking-manager' ),
-					'statusLabel'  => __( 'Operational status', 'vk-booking-manager' ),
+			array(
+				'daysJsonField'    => '#vkbm-shift-days-json',
+				'daysContainer'    => '#vkbm-shift-days',
+				'daysTableBody'    => '#vkbm-shift-days-body',
+				'yearSelector'     => '#vkbm-shift-year',
+				'monthSelector'    => '#vkbm-shift-month',
+				'resourceSelector' => '#vkbm-shift-resource',
+				'dayRowTemplate'   => '#vkbm-shift-day-row-template',
+				'slotTemplate'     => '#vkbm-shift-slot-template',
+				'daysData'         => $state['days_for_editor'],
+				'holidayRules'     => $state['holiday_rules'],
+				'statusOptions'    => $this->get_day_status_options(),
+				'defaultDays'      => $state['default_days'],
+				'weekdayDefaults'  => $state['weekday_defaults'],
+				'initialYear'      => $state['year'],
+				'initialMonth'     => $state['month'],
+				'strings'          => array(
+					'daySuffix'     => __( 'Sun', 'vk-booking-manager' ),
+					'noResource'    => __( 'Please select staff (resources).', 'vk-booking-manager' ),
+					'statusLabel'   => __( 'Operational status', 'vk-booking-manager' ),
 					'closedMessage' => __( 'You cannot set the time zone in this status.', 'vk-booking-manager' ),
-					'weekdayShort' => [
+					'weekdayShort'  => array(
 						'sun' => __( 'Sun', 'vk-booking-manager' ),
 						'mon' => __( 'Mon', 'vk-booking-manager' ),
 						'tue' => __( 'Tue', 'vk-booking-manager' ),
@@ -349,13 +355,13 @@ class Shift_Editor {
 						'thu' => __( 'Thu', 'vk-booking-manager' ),
 						'fri' => __( 'Fri', 'vk-booking-manager' ),
 						'sat' => __( 'Sat', 'vk-booking-manager' ),
-					],
-				],
-				'ajax'             => [
+					),
+				),
+				'ajax'             => array(
 					'url'   => admin_url( 'admin-ajax.php' ),
 					'nonce' => wp_create_nonce( 'vkbm_shift_template' ),
-				],
-			]
+				),
+			)
 		);
 	}
 
@@ -366,12 +372,15 @@ class Shift_Editor {
 	 */
 	private function get_resource_posts(): array {
 		return get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
-				'orderby'        => [ 'menu_order' => 'ASC', 'title' => 'ASC' ],
+				'post_status'    => array( 'publish' ),
+				'orderby'        => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
 				'posts_per_page' => -1,
-			]
+			)
 		);
 	}
 
@@ -382,7 +391,7 @@ class Shift_Editor {
 		check_ajax_referer( 'vkbm_shift_template' );
 
 		if ( ! current_user_can( Capabilities::MANAGE_STAFF ) ) {
-			wp_send_json_error( [ 'message' => __( "You don't have permission.", 'vk-booking-manager' ) ], 403 );
+			wp_send_json_error( array( 'message' => __( "You don't have permission.", 'vk-booking-manager' ) ), 403 );
 		}
 
 		$resource_id = isset( $_POST['resource_id'] ) ? (int) $_POST['resource_id'] : 0;
@@ -390,12 +399,12 @@ class Shift_Editor {
 		$month       = isset( $_POST['month'] ) ? (int) $_POST['month'] : 0;
 
 		if ( $resource_id <= 0 ) {
-			wp_send_json_error( [ 'message' => __( 'Please select a staff member.', 'vk-booking-manager' ) ], 400 );
+			wp_send_json_error( array( 'message' => __( 'Please select a staff member.', 'vk-booking-manager' ) ), 400 );
 		}
 
 		$days = $this->derive_days_from_template( $resource_id, $year, $month );
 
-		wp_send_json_success( [ 'days' => $days ] );
+		wp_send_json_success( array( 'days' => $days ) );
 	}
 
 	/**
@@ -410,7 +419,7 @@ class Shift_Editor {
 			return;
 		}
 
-		if ( [] === $this->get_resource_posts() ) {
+		if ( array() === $this->get_resource_posts() ) {
 			return;
 		}
 
@@ -454,15 +463,15 @@ class Shift_Editor {
 		check_admin_referer( self::BULK_NONCE_ACTION, self::BULK_NONCE_NAME );
 
 		$redirect_base = add_query_arg(
-			[
+			array(
 				'post_type' => Shift_Post_Type::POST_TYPE,
-			],
+			),
 			admin_url( 'edit.php' )
 		);
 
 		$payload = isset( $_POST['vkbm_shift_bulk'] ) && is_array( $_POST['vkbm_shift_bulk'] )
 			? wp_unslash( $_POST['vkbm_shift_bulk'] )
-			: [];
+			: array();
 
 		$period = isset( $payload['period'] ) ? sanitize_text_field( (string) $payload['period'] ) : '';
 
@@ -476,9 +485,9 @@ class Shift_Editor {
 		if ( $year <= 0 || $month <= 0 ) {
 			wp_safe_redirect(
 				add_query_arg(
-					[
+					array(
 						'vkbm_shift_bulk_error' => 'invalid_period',
-					],
+					),
 					$redirect_base
 				)
 			);
@@ -497,7 +506,7 @@ class Shift_Editor {
 			}
 
 			if ( $this->shift_exists( $resource_id, $year, $month ) ) {
-				$skipped++;
+				++$skipped;
 				continue;
 			}
 
@@ -510,11 +519,11 @@ class Shift_Editor {
 			);
 
 			$post_id = wp_insert_post(
-				[
+				array(
 					'post_type'   => Shift_Post_Type::POST_TYPE,
 					'post_status' => 'draft',
 					'post_title'  => $title,
-				],
+				),
 				true
 			);
 
@@ -528,16 +537,16 @@ class Shift_Editor {
 			update_post_meta( (int) $post_id, self::META_MONTH, $month );
 			update_post_meta( (int) $post_id, self::META_DAYS, $days );
 
-			$created++;
+			++$created;
 		}
 
 		$redirect_url = add_query_arg(
-			[
-				'vkbm_shift_bulk_created'   => (string) $created,
-				'vkbm_shift_bulk_skipped'   => (string) $skipped,
-				'vkbm_shift_bulk_year'      => (string) $year,
-				'vkbm_shift_bulk_month'     => (string) $month,
-			],
+			array(
+				'vkbm_shift_bulk_created' => (string) $created,
+				'vkbm_shift_bulk_skipped' => (string) $skipped,
+				'vkbm_shift_bulk_year'    => (string) $year,
+				'vkbm_shift_bulk_month'   => (string) $month,
+			),
 			$redirect_base
 		);
 
@@ -616,10 +625,10 @@ class Shift_Editor {
 		$now      = new \DateTimeImmutable( 'now', $timezone );
 		$base     = $now->setDate( (int) $now->format( 'Y' ), (int) $now->format( 'n' ), 1 );
 
-		$options = [];
+		$options = array();
 
-		// Use locale-appropriate date format
-		// Japanese: "2026年1月", English: "January 2026"
+		// Use locale-appropriate date format.
+		// Japanese: "2026年1月", English: "January 2026".
 		$locale = determine_locale();
 		$format = ( 'ja' === substr( $locale, 0, 2 ) ) ? 'Y年n月' : 'F Y';
 
@@ -633,8 +642,8 @@ class Shift_Editor {
 			$month = (int) $target->format( 'n' );
 			$value = sprintf( '%04d-%02d', $year, $month );
 
-			// Use wp_date() for locale-aware formatting
-			$timestamp = $target->getTimestamp();
+			// Use wp_date() for locale-aware formatting.
+			$timestamp         = $target->getTimestamp();
 			$options[ $value ] = wp_date( $format, $timestamp, $timezone );
 		}
 
@@ -651,30 +660,30 @@ class Shift_Editor {
 	 */
 	private function shift_exists( int $resource_id, int $year, int $month ): bool {
 		$query = new \WP_Query(
-			[
+			array(
 				'post_type'      => Shift_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish', 'draft', 'pending', 'private' ],
+				'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
 				'posts_per_page' => 1,
 				'no_found_rows'  => true,
 				'fields'         => 'ids',
-				'meta_query'     => [
-					[
+				'meta_query'     => array(
+					array(
 						'key'     => self::META_RESOURCE,
 						'value'   => $resource_id,
 						'compare' => '=',
-					],
-					[
+					),
+					array(
 						'key'     => self::META_YEAR,
 						'value'   => $year,
 						'compare' => '=',
-					],
-					[
+					),
+					array(
 						'key'     => self::META_MONTH,
 						'value'   => $month,
 						'compare' => '=',
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
 		return $query->have_posts();
@@ -693,7 +702,7 @@ class Shift_Editor {
 		$days        = get_post_meta( $post_id, self::META_DAYS, true );
 
 		if ( ! is_array( $days ) ) {
-			$days = [];
+			$days = array();
 		}
 
 		$timestamp     = current_time( 'timestamp' );
@@ -710,7 +719,7 @@ class Shift_Editor {
 
 		$resource_id = $this->sanitize_resource_id( $resource_id );
 
-		$days_for_editor = [];
+		$days_for_editor = array();
 		$default_days    = $this->derive_days_from_template( $resource_id, $year, $month );
 
 		if ( ! empty( $days ) ) {
@@ -721,18 +730,18 @@ class Shift_Editor {
 			$days_for_editor = $default_days;
 		}
 
-		return [
-			'resource_id'     => $resource_id,
-			'year'            => $year,
-			'month'           => $month,
-			'days'            => $days_for_editor,
-			'days_for_editor' => $days_for_editor,
-			'current_year'    => $current_year,
-			'current_month'   => $current_month,
-			'holiday_rules'   => $this->get_provider_holiday_rules(),
-			'default_days'    => $default_days,
+		return array(
+			'resource_id'      => $resource_id,
+			'year'             => $year,
+			'month'            => $month,
+			'days'             => $days_for_editor,
+			'days_for_editor'  => $days_for_editor,
+			'current_year'     => $current_year,
+			'current_month'    => $current_month,
+			'holiday_rules'    => $this->get_provider_holiday_rules(),
+			'default_days'     => $default_days,
 			'weekday_defaults' => $this->build_weekday_defaults( $default_days, $year, $month ),
-		];
+		);
 	}
 
 	/**
@@ -741,28 +750,28 @@ class Shift_Editor {
 	 * @return array<int, array<string, string>>
 	 */
 	private function get_day_status_options(): array {
-		return [
-			[
+		return array(
+			array(
 				'value' => self::DAY_STATUS_OPEN,
 				'label' => __( 'Normal', 'vk-booking-manager' ),
-			],
-			[
+			),
+			array(
 				'value' => self::DAY_STATUS_UNAVAILABLE,
 				'label' => __( 'Off', 'vk-booking-manager' ),
-			],
-			[
+			),
+			array(
 				'value' => self::DAY_STATUS_REGULAR_HOLIDAY,
 				'label' => __( 'Regular holiday', 'vk-booking-manager' ),
-			],
-			[
+			),
+			array(
 				'value' => self::DAY_STATUS_TEMPORARY_OPEN,
 				'label' => __( 'Special opening', 'vk-booking-manager' ),
-			],
-			[
+			),
+			array(
 				'value' => self::DAY_STATUS_TEMPORARY_CLOSED,
 				'label' => __( 'Temporary closure', 'vk-booking-manager' ),
-			],
-		];
+			),
+		);
 	}
 
 	/**
@@ -772,13 +781,13 @@ class Shift_Editor {
 	 */
 	private function get_provider_holiday_rules(): array {
 		$settings = $this->get_provider_settings();
-		$rules    = $settings['provider_regular_holidays'] ?? [];
+		$rules    = $settings['provider_regular_holidays'] ?? array();
 
 		if ( ! is_array( $rules ) ) {
-			return [];
+			return array();
 		}
 
-		$normalized = [];
+		$normalized = array();
 
 		foreach ( $rules as $rule ) {
 			if ( ! is_array( $rule ) ) {
@@ -792,10 +801,10 @@ class Shift_Editor {
 				continue;
 			}
 
-			$normalized[] = [
+			$normalized[] = array(
 				'frequency' => $frequency,
 				'weekday'   => $weekday,
-			];
+			);
 		}
 
 		return $normalized;
@@ -805,12 +814,12 @@ class Shift_Editor {
 	 * Build default templates for each weekday based on derived days.
 	 *
 	 * @param array<int, array<string, mixed>> $days  Derived day map.
-	 * @param int                               $year Year.
-	 * @param int                               $month Month.
+	 * @param int                              $year Year.
+	 * @param int                              $month Month.
 	 * @return array<string, array<string, mixed>>
 	 */
 	private function build_weekday_defaults( array $days, int $year, int $month ): array {
-		$map = [];
+		$map = array();
 
 		foreach ( $days as $day => $entry ) {
 			$day_number = (int) $day;
@@ -826,7 +835,7 @@ class Shift_Editor {
 			}
 
 			$status = self::DAY_STATUS_OPEN;
-			$slots  = [];
+			$slots  = array();
 
 			if ( is_array( $entry ) ) {
 				if ( isset( $entry['status'] ) && is_string( $entry['status'] ) && in_array( $entry['status'], $this->get_day_status_keys(), true ) ) {
@@ -838,10 +847,10 @@ class Shift_Editor {
 				}
 			}
 
-			$map[ $weekday_key ] = [
+			$map[ $weekday_key ] = array(
 				'status' => $status,
 				'slots'  => $slots,
-			];
+			);
 		}
 
 		return $map;
@@ -853,13 +862,13 @@ class Shift_Editor {
 	 * @return array<int, string>
 	 */
 	private function get_day_status_keys(): array {
-		return [
+		return array(
 			self::DAY_STATUS_OPEN,
 			self::DAY_STATUS_REGULAR_HOLIDAY,
 			self::DAY_STATUS_TEMPORARY_OPEN,
 			self::DAY_STATUS_TEMPORARY_CLOSED,
 			self::DAY_STATUS_UNAVAILABLE,
-		];
+		);
 	}
 
 	/**
@@ -881,7 +890,7 @@ class Shift_Editor {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function normalize_day_entries( array $days, int $year, int $month ): array {
-		$normalized = [];
+		$normalized     = array();
 		$valid_statuses = $this->get_day_status_keys();
 
 		foreach ( $days as $day => $entry ) {
@@ -892,7 +901,7 @@ class Shift_Editor {
 			}
 
 			$status      = self::DAY_STATUS_OPEN;
-			$slots_input = [];
+			$slots_input = array();
 
 			if ( is_array( $entry ) ) {
 				if ( isset( $entry['status'] ) ) {
@@ -912,13 +921,13 @@ class Shift_Editor {
 			$slots = $this->normalize_slot_collection( $slots_input );
 
 			if ( $this->is_closed_status( $status ) ) {
-				$slots = [];
+				$slots = array();
 			}
 
-			$normalized[ $day_number ] = [
+			$normalized[ $day_number ] = array(
 				'status' => $status,
 				'slots'  => $slots,
-			];
+			);
 		}
 
 		return $normalized;
@@ -966,22 +975,22 @@ class Shift_Editor {
 			return $this->derive_days_from_provider( $year, $month );
 		}
 
-		$template       = $template_repository->get_template( $resource_id );
-		$holiday_rules  = $this->get_provider_holiday_rules();
+		$template      = $template_repository->get_template( $resource_id );
+		$holiday_rules = $this->get_provider_holiday_rules();
 
 		if ( empty( $template ) ) {
 			return $this->derive_days_from_provider( $year, $month );
 		}
 
-		$days_in_month       = (int) wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) );
-		$template_days       = is_array( $template['days'] ?? null ) ? $template['days'] : [];
-		$use_provider_hours  = ! empty( $template['use_provider_hours'] );
-		$provider_settings   = $use_provider_hours ? $this->get_provider_settings() : [];
-		$derived             = [];
+		$days_in_month      = (int) wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) );
+		$template_days      = is_array( $template['days'] ?? null ) ? $template['days'] : array();
+		$use_provider_hours = ! empty( $template['use_provider_hours'] );
+		$provider_settings  = $use_provider_hours ? $this->get_provider_settings() : array();
+		$derived            = array();
 
 		for ( $day = 1; $day <= $days_in_month; $day++ ) {
 			$weekday_key    = $this->get_weekday_key( (int) gmdate( 'w', gmmktime( 0, 0, 0, $month, $day, $year ) ) );
-			$template_slots = $this->normalize_slot_collection( $template_days[ $weekday_key ] ?? [] );
+			$template_slots = $this->normalize_slot_collection( $template_days[ $weekday_key ] ?? array() );
 
 			if ( empty( $template_slots ) && $use_provider_hours ) {
 				$template_slots = $this->get_provider_day_slots( $provider_settings, $weekday_key );
@@ -989,9 +998,9 @@ class Shift_Editor {
 
 			$status = $this->determine_default_day_status( $weekday_key, $year, $month, $day, $holiday_rules );
 
-		if ( ! empty( $template_slots ) && $this->is_closed_status( $status ) && self::DAY_STATUS_REGULAR_HOLIDAY !== $status ) {
-			$status = self::DAY_STATUS_TEMPORARY_OPEN;
-		}
+			if ( ! empty( $template_slots ) && $this->is_closed_status( $status ) && self::DAY_STATUS_REGULAR_HOLIDAY !== $status ) {
+				$status = self::DAY_STATUS_TEMPORARY_OPEN;
+			}
 
 			if ( ! empty( $template_slots ) || $this->is_closed_status( $status ) ) {
 				$derived[ $day ] = $this->build_day_entry( $status, $template_slots );
@@ -1012,7 +1021,7 @@ class Shift_Editor {
 		$provider_settings = $this->get_provider_settings();
 		$holiday_rules     = $this->get_provider_holiday_rules();
 		$days_in_month     = (int) wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) );
-		$derived           = [];
+		$derived           = array();
 
 		for ( $day = 1; $day <= $days_in_month; $day++ ) {
 			$weekday_key = $this->get_weekday_key( (int) gmdate( 'w', gmmktime( 0, 0, 0, $month, $day, $year ) ) );
@@ -1030,10 +1039,10 @@ class Shift_Editor {
 	/**
 	 * Determine the default day status based on provider holiday rules.
 	 *
-	 * @param string $weekday_key Weekday key (sun, mon, ...).
-	 * @param int    $year        Year.
-	 * @param int    $month       Month.
-	 * @param int    $day         Day of month.
+	 * @param string                            $weekday_key Weekday key (sun, mon, ...).
+	 * @param int                               $year        Year.
+	 * @param int                               $month       Month.
+	 * @param int                               $day         Day of month.
 	 * @param array<int, array<string, string>> $holiday_rules Holiday rules.
 	 * @return string
 	 */
@@ -1046,10 +1055,10 @@ class Shift_Editor {
 	/**
 	 * Check if the given date matches a provider-defined regular holiday.
 	 *
-	 * @param string $weekday_key Weekday key.
-	 * @param int    $year        Year.
-	 * @param int    $month       Month.
-	 * @param int    $day         Day of month.
+	 * @param string                            $weekday_key Weekday key.
+	 * @param int                               $year        Year.
+	 * @param int                               $month       Month.
+	 * @param int                               $day         Day of month.
 	 * @param array<int, array<string, string>> $holiday_rules Holiday rules.
 	 * @return bool
 	 */
@@ -1116,7 +1125,7 @@ class Shift_Editor {
 			$settings   = $repository->get_settings();
 		}
 
-		return is_array( $settings ) ? $settings : [];
+		return is_array( $settings ) ? $settings : array();
 	}
 
 	/**
@@ -1129,15 +1138,15 @@ class Shift_Editor {
 	private function get_provider_day_slots( array $provider_settings, string $weekday_key ): array {
 		$weekly = isset( $provider_settings['provider_business_hours_weekly'] ) && is_array( $provider_settings['provider_business_hours_weekly'] )
 			? $provider_settings['provider_business_hours_weekly']
-			: [];
+			: array();
 		$basic  = isset( $provider_settings['provider_business_hours_basic'] ) && is_array( $provider_settings['provider_business_hours_basic'] )
 			? $provider_settings['provider_business_hours_basic']
-			: [];
+			: array();
 
-		$slots = [];
+		$slots = array();
 
 		if ( isset( $weekly[ $weekday_key ] ) && ! empty( $weekly[ $weekday_key ]['use_custom'] ) ) {
-			$slots = $weekly[ $weekday_key ]['time_slots'] ?? [];
+			$slots = $weekly[ $weekday_key ]['time_slots'] ?? array();
 		}
 
 		if ( empty( $slots ) ) {
@@ -1154,7 +1163,7 @@ class Shift_Editor {
 	 * @return array<int, array<string, string>>
 	 */
 	private function normalize_slot_collection( array $slots ): array {
-		$normalized = [];
+		$normalized = array();
 
 		foreach ( $slots as $slot ) {
 			if ( ! is_array( $slot ) ) {
@@ -1176,10 +1185,10 @@ class Shift_Editor {
 				continue;
 			}
 
-			$normalized[] = [
+			$normalized[] = array(
 				'start' => $start,
 				'end'   => $end,
-			];
+			);
 		}
 
 		return $normalized;
@@ -1188,19 +1197,19 @@ class Shift_Editor {
 	/**
 	 * Build a normalized day entry.
 	 *
-	 * @param string $status Status value.
+	 * @param string                            $status Status value.
 	 * @param array<int, array<string, string>> $slots Slot collection.
 	 * @return array<string, mixed>
 	 */
 	private function build_day_entry( string $status, array $slots ): array {
 		if ( $this->is_closed_status( $status ) ) {
-			$slots = [];
+			$slots = array();
 		}
 
-		return [
+		return array(
 			'status' => $status,
 			'slots'  => $slots,
-		];
+		);
 	}
 
 	/**
@@ -1266,11 +1275,11 @@ class Shift_Editor {
 		$data = json_decode( $json, true );
 
 		if ( ! is_array( $data ) || $year <= 0 || $month <= 0 ) {
-			return [];
+			return array();
 		}
 
 		$normalized = $this->normalize_day_entries( $data, $year, $month );
-		$filtered   = [];
+		$filtered   = array();
 
 		foreach ( $normalized as $day_number => $entry ) {
 			if ( self::DAY_STATUS_OPEN === ( $entry['status'] ?? '' ) && empty( $entry['slots'] ) ) {
@@ -1310,7 +1319,7 @@ class Shift_Editor {
 	 * @return string Weekday key.
 	 */
 	private function get_weekday_key( int $index ): string {
-		$map = [
+		$map = array(
 			0 => 'sun',
 			1 => 'mon',
 			2 => 'tue',
@@ -1318,7 +1327,7 @@ class Shift_Editor {
 			4 => 'thu',
 			5 => 'fri',
 			6 => 'sat',
-		];
+		);
 
 		return $map[ $index ] ?? 'sun';
 	}
@@ -1340,14 +1349,14 @@ class Shift_Editor {
 
 		$new_title = sprintf( '%d year %02d month %s', $year, $month, $resource_title );
 
-		remove_action( 'save_post_' . Shift_Post_Type::POST_TYPE, [ $this, 'save_post' ], 10 );
+		remove_action( 'save_post_' . Shift_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10 );
 		wp_update_post(
-			[
+			array(
 				'ID'         => $post_id,
 				'post_title' => $new_title,
-			]
+			)
 		);
-		add_action( 'save_post_' . Shift_Post_Type::POST_TYPE, [ $this, 'save_post' ], 10, 2 );
+		add_action( 'save_post_' . Shift_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
 	}
 
 	/**
@@ -1357,7 +1366,7 @@ class Shift_Editor {
 	 * @return array<int>
 	 */
 	private function get_year_options( int $current_year ): array {
-		$years = [];
+		$years = array();
 
 		for ( $y = $current_year - 2; $y <= $current_year + 2; $y++ ) {
 			$years[] = $y;

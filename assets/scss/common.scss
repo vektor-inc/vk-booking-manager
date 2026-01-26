@@ -15,6 +15,10 @@
 	& :is(dt,dd){
 		text-box: trim-both text;
 	}
+	// プレースホルダーの文字色を指定
+	input:where(:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit']))::placeholder{
+		color: #ccc;
+	}
  }
 .vkbm-form__label--block{
 	display: block;

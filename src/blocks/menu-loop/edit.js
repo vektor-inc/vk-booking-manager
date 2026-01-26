@@ -226,26 +226,10 @@ const ORDER_BY_OPTIONS = [
 						checked={attributes.showMeta}
 						onChange={(value) => setAttributes({ showMeta: value })}
 					/>
-					<TextControl
-						label={__('button text', 'vk-booking-manager')}
-						value={attributes.buttonLabel}
-						onChange={(value) => setAttributes({ buttonLabel: value })}
-					/>
-						<ToggleControl
-							label={__('Show details button', 'vk-booking-manager')}
-							checked={attributes.showDetailButton}
-							onChange={(value) => setAttributes({ showDetailButton: value })}
-						/>
-						<TextControl
-							label={__('Book button text', 'vk-booking-manager')}
-							value={attributes.reserveButtonLabel}
-							onChange={(value) => setAttributes({ reserveButtonLabel: value })}
-					/>
-					<TextControl
-						label={__('Reservation button link', 'vk-booking-manager')}
-						help={__('If not set, it will be a link to the details page.', 'vk-booking-manager')}
-						value={attributes.reserveButtonUrl}
-						onChange={(value) => setAttributes({ reserveButtonUrl: value })}
+					<ToggleControl
+						label={__('Show details button', 'vk-booking-manager')}
+						checked={attributes.showDetailButton}
+						onChange={(value) => setAttributes({ showDetailButton: value })}
 					/>
 					<TextControl
 						label={__('Zero messages', 'vk-booking-manager')}

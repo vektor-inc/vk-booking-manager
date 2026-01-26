@@ -1,4 +1,9 @@
 <?php
+/**
+ * Persists provider settings to the WordPress options table.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -36,43 +41,53 @@ class Settings_Repository {
 	public function get_default_settings(): array {
 		$is_japanese = $this->is_japanese_locale();
 
-		return [
-			'provider_name'             => '',
-			'provider_address'          => '',
-			'provider_phone'            => '',
-			'provider_payment_method'  => $is_japanese
-				? __( "ご来店時に店舗にてお支払いください。
-現金、クレジットカード、交通系ICカードがご利用いただけます。", 'vk-booking-manager' )
-				: __( "Please pay at the store when you visit.
-You can use cash, credit cards, and transportation ICs.", 'vk-booking-manager' ),
-			'resource_label_singular'   => 'Staff',
-			'resource_label_plural'     => 'Staff',
-			'resource_label_menu'       => 'Staff available',
-				'provider_business_hours'   => '',
-			'provider_reservation_deadline_hours' => 3,
-			'provider_slot_step_minutes' => 15,
-				'provider_service_menu_buffer_after_minutes' => 0,
-				'provider_booking_status_mode' => 'confirmed',
-			'provider_booking_cancel_mode' => 'hours',
-			'provider_booking_cancel_deadline_hours' => 24,
-			'provider_allow_staff_overlap_admin' => false,
-			'provider_website_url'      => '',
-			'provider_email'            => '',
-			'shift_alert_months'        => 1,
-			'booking_reminder_hours'    => [],
-			'design_primary_color'      => '',
-			'design_reservation_button_color' => '',
-			'design_radius_md'          => 8,
-			'provider_logo_id'          => 0,
-			'provider_cancellation_policy' => $is_japanese
+		return array(
+			'provider_name'                              => '',
+			'provider_address'                           => '',
+			'provider_phone'                             => '',
+			'provider_payment_method'                    => $is_japanese
+				? __(
+					'ご来店時に店舗にてお支払いください。
+現金、クレジットカード、交通系ICカードがご利用いただけます。',
+					'vk-booking-manager'
+				)
+				: __(
+					'Please pay at the store when you visit.
+You can use cash, credit cards, and transportation ICs.',
+					'vk-booking-manager'
+				),
+			'resource_label_singular'                    => 'Staff',
+			'resource_label_plural'                      => 'Staff',
+			'resource_label_menu'                        => 'Staff available',
+			'provider_business_hours'                    => '',
+			'provider_reservation_deadline_hours'        => 3,
+			'provider_slot_step_minutes'                 => 15,
+			'provider_service_menu_buffer_after_minutes' => 0,
+			'provider_booking_status_mode'               => 'confirmed',
+			'provider_booking_cancel_mode'               => 'hours',
+			'provider_booking_cancel_deadline_hours'     => 24,
+			'provider_allow_staff_overlap_admin'         => false,
+			'provider_website_url'                       => '',
+			'provider_email'                             => '',
+			'shift_alert_months'                         => 1,
+			'booking_reminder_hours'                     => array(),
+			'design_primary_color'                       => '',
+			'design_reservation_button_color'            => '',
+			'design_radius_md'                           => 8,
+			'provider_logo_id'                           => 0,
+			'provider_cancellation_policy'               => $is_japanese
 				? $this->get_default_cancellation_policy_ja()
-				: __( "For cancellations or changes, please contact us during business hours the day before your reservation date.
+				: __(
+					'For cancellations or changes, please contact us during business hours the day before your reservation date.
 If you cancel on the day, 100% of the treatment fee will be charged as a cancellation fee.
 In case of cancellation without notice, 100% of the treatment fee will be charged.
-Please be sure to contact us if you will be late for your reservation time. If you are late, your treatment time may be shortened (the price will not change).", 'vk-booking-manager' ),
-			'provider_terms_of_service' => $is_japanese
+Please be sure to contact us if you will be late for your reservation time. If you are late, your treatment time may be shortened (the price will not change).',
+					'vk-booking-manager'
+				),
+			'provider_terms_of_service'                  => $is_japanese
 				? $this->get_default_terms_of_service_ja()
-				: __( "[System Terms of Use]
+				: __(
+					"[System Terms of Use]
 
 These Terms set forth the terms of use of the reservation system (hereinafter referred to as the \"Service\") provided by our store. Customers who use this service (hereinafter referred to as \"users\") must agree to these terms before using the service.
 
@@ -107,12 +122,15 @@ Our store may change the contents of these Terms as necessary. The revised Terms
 
 9. Governing law/jurisdiction
 Japanese law shall be the governing law for the interpretation of these Terms, and in the event of any dispute regarding this service, the court with jurisdiction over the location of our store shall have exclusive jurisdiction.
-", 'vk-booking-manager' ),
-			'provider_privacy_policy_mode' => 'none',
-			'provider_privacy_policy_url'  => '',
-			'provider_privacy_policy_content' => $is_japanese
+",
+					'vk-booking-manager'
+				),
+			'provider_privacy_policy_mode'               => 'none',
+			'provider_privacy_policy_url'                => '',
+			'provider_privacy_policy_content'            => $is_japanese
 				? $this->get_default_privacy_policy_ja()
-				: __( "[Privacy Policy]
+				: __(
+					"[Privacy Policy]
 
 Our store uses customers' personal information for the following purposes.
 1. Management and communication of reservations
@@ -127,25 +145,29 @@ Storage and management: We will take necessary safety management measures to pre
 
 Disclosure/Correction/Deletion: If there is a request from the person in question, we will respond according to the prescribed method.
 
-Contact us: Please contact our store.", 'vk-booking-manager' ),
-			'reservation_page_url'      => '',
-			'reservation_show_menu_list' => true,
-			'reservation_menu_list_display_mode' => 'card',
-			'reservation_show_provider_logo' => false,
-			'reservation_show_provider_name' => false,
-			'currency_symbol'        => '',
-			'tax_label_text'          => __( '(tax included)', 'vk-booking-manager' ),
-			'provider_regular_holidays' => [],
-			'provider_regular_holidays_disabled' => false,
-			'provider_business_hours_basic'  => [],
-			'provider_business_hours_weekly' => $this->get_default_business_hours_weekly(),
-			'registration_email_verification_enabled' => true,
-			'membership_redirect_wp_register' => true,
-			'membership_redirect_wp_login'  => true,
-			'auth_rate_limit_enabled'        => true,
-			'auth_rate_limit_register_max'   => 5,
-			'auth_rate_limit_login_max'      => 10,
-		];
+Contact us: Please contact our store.",
+					'vk-booking-manager'
+				),
+			'reservation_page_url'                       => '',
+			'reservation_show_menu_list'                 => true,
+			'reservation_menu_list_display_mode'         => 'card',
+			'reservation_show_provider_logo'             => false,
+			'reservation_show_provider_name'             => false,
+			'currency_symbol'                            => '',
+			'tax_label_text'                             => __( '(tax included)', 'vk-booking-manager' ),
+			'provider_regular_holidays'                  => array(),
+			'provider_regular_holidays_disabled'         => false,
+			'provider_business_hours_basic'              => array(),
+			'provider_business_hours_weekly'             => $this->get_default_business_hours_weekly(),
+			'registration_email_verification_enabled'    => true,
+			'membership_redirect_wp_register'            => true,
+			'membership_redirect_wp_login'               => true,
+			'auth_rate_limit_enabled'                    => true,
+			'auth_rate_limit_register_max'               => 5,
+			'auth_rate_limit_login_max'                  => 10,
+			'email_log_enabled'                          => false,
+			'email_log_retention_days'                   => 1,
+		);
 	}
 
 	/**
@@ -154,21 +176,21 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 	 * @return array<string, mixed>
 	 */
 	public function get_settings(): array {
-		$stored = get_option( $this->option_key, [] );
+		$stored = get_option( $this->option_key, array() );
 
 		if ( ! is_array( $stored ) ) {
-			$stored = [];
+			$stored = array();
 		}
 
 		$defaults = $this->get_default_settings();
 		$settings = array_merge( $defaults, $stored );
 
 		$settings['provider_business_hours_basic'] = $this->normalize_business_hours_basic(
-			$settings['provider_business_hours_basic'] ?? []
+			$settings['provider_business_hours_basic'] ?? array()
 		);
 
 		$settings['provider_business_hours_weekly'] = $this->normalize_business_hours_weekly(
-			$settings['provider_business_hours_weekly'] ?? []
+			$settings['provider_business_hours_weekly'] ?? array()
 		);
 
 		return $settings;
@@ -203,10 +225,13 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 	 * @return string
 	 */
 	private function get_default_cancellation_policy_ja(): string {
-		return __( "キャンセル・変更の場合は、予約日の前日までに営業時間内にご連絡ください。
+		return __(
+			'キャンセル・変更の場合は、予約日の前日までに営業時間内にご連絡ください。
 当日キャンセルの場合、施術料金の100%をキャンセル料として頂戴いたします。
 無断キャンセルの場合、施術料金の100%をキャンセル料として頂戴いたします。
-予約時間に遅れる場合は必ずご連絡ください。遅刻された場合、施術時間が短縮となる場合がございます（料金の変更はございません）。", 'vk-booking-manager' );
+予約時間に遅れる場合は必ずご連絡ください。遅刻された場合、施術時間が短縮となる場合がございます（料金の変更はございません）。',
+			'vk-booking-manager'
+		);
 	}
 
 	/**
@@ -218,7 +243,8 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 	 * @return string
 	 */
 	private function get_default_terms_of_service_ja(): string {
-		return __( "[システム利用規約]
+		return __(
+			'[システム利用規約]
 
 本規約は、当店が提供する予約システム（以下「本サービス」といいます）の利用条件を定めるものです。本サービスをご利用のお客様（以下「ユーザー」といいます）は、本サービスを利用する前に、本規約に同意していただく必要があります。
 
@@ -252,7 +278,9 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 当店は、必要に応じて本規約の内容を変更することがあります。変更後の規約は、本サービス上への掲示その他当店が適切と判断する方法により通知し、ユーザーが通知後に本サービスを利用した場合、変更後の規約に同意したものとみなします。
 
 第9条（準拠法・管轄裁判所）
-本規約の解釈にあたっては、日本法を準拠法とし、本サービスに関する紛争については、当店所在地を管轄する裁判所を専属的合意管轄裁判所とします。", 'vk-booking-manager' );
+本規約の解釈にあたっては、日本法を準拠法とし、本サービスに関する紛争については、当店所在地を管轄する裁判所を専属的合意管轄裁判所とします。',
+			'vk-booking-manager'
+		);
 	}
 
 	/**
@@ -264,7 +292,8 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 	 * @return string
 	 */
 	private function get_default_privacy_policy_ja(): string {
-		return __( "[プライバシーポリシー]
+		return __(
+			'[プライバシーポリシー]
 
 当店は、お客様の個人情報を以下の目的で利用いたします。
 1. 予約の管理および連絡
@@ -279,7 +308,9 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 
 開示・訂正・削除：本人からの請求があった場合、所定の方法に従い対応いたします。
 
-お問い合わせ：当店までご連絡ください。", 'vk-booking-manager' );
+お問い合わせ：当店までご連絡ください。',
+			'vk-booking-manager'
+		);
 	}
 
 	/**
@@ -288,7 +319,7 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 	 * @return array<string, array<string, mixed>>
 	 */
 	private function get_default_business_hours_weekly(): array {
-		$keys = [
+		$keys = array(
 			'mon',
 			'tue',
 			'wed',
@@ -298,15 +329,15 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 			'sun',
 			'holiday',
 			'holiday_eve',
-		];
+		);
 
-		$defaults = [];
+		$defaults = array();
 
 		foreach ( $keys as $key ) {
-			$defaults[ $key ] = [
+			$defaults[ $key ] = array(
 				'use_custom' => false,
-				'time_slots' => [],
-			];
+				'time_slots' => array(),
+			);
 		}
 
 		return $defaults;
@@ -320,10 +351,10 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 	 */
 	private function normalize_business_hours_basic( $raw ): array {
 		if ( ! is_array( $raw ) ) {
-			return [];
+			return array();
 		}
 
-		$normalized = [];
+		$normalized = array();
 
 		foreach ( $raw as $slot ) {
 			if ( ! is_array( $slot ) ) {
@@ -337,10 +368,10 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 				continue;
 			}
 
-			$normalized[] = [
+			$normalized[] = array(
 				'start' => $start,
 				'end'   => $end,
-			];
+			);
 		}
 
 		return $normalized;
@@ -372,7 +403,7 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 			}
 
 			$use_custom = isset( $day_value['use_custom'] ) ? (bool) $day_value['use_custom'] : false;
-			$time_slots = [];
+			$time_slots = array();
 
 			if ( isset( $day_value['time_slots'] ) && is_array( $day_value['time_slots'] ) ) {
 				foreach ( $day_value['time_slots'] as $slot ) {
@@ -387,10 +418,10 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 						continue;
 					}
 
-					$time_slots[] = [
+					$time_slots[] = array(
 						'start' => $start,
 						'end'   => $end,
-					];
+					);
 				}
 			} elseif ( isset( $day_value['start'], $day_value['end'] ) ) {
 				// Legacy single slot format.
@@ -398,17 +429,17 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 				$end   = (string) $day_value['end'];
 
 				if ( '' !== $start && '' !== $end ) {
-					$time_slots[] = [
+					$time_slots[] = array(
 						'start' => $start,
 						'end'   => $end,
-					];
+					);
 				}
 			}
 
-			$normalized[ $day_key ] = [
+			$normalized[ $day_key ] = array(
 				'use_custom' => $use_custom,
 				'time_slots' => $time_slots,
-			];
+			);
 		}
 
 		return $normalized;
@@ -435,13 +466,13 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 		}
 
 		if ( array_key_exists( 'use_basic', $value ) ) {
-			$use_basic   = ! empty( $value['use_basic'] );
-			$time_slots = isset( $value['time_slots'] ) && is_array( $value['time_slots'] ) ? $value['time_slots'] : [];
+			$use_basic  = ! empty( $value['use_basic'] );
+			$time_slots = isset( $value['time_slots'] ) && is_array( $value['time_slots'] ) ? $value['time_slots'] : array();
 
-			return [
+			return array(
 				'use_custom' => ! $use_basic,
 				'time_slots' => $time_slots,
-			];
+			);
 		}
 
 		$enabled = ! empty( $value['enabled'] );
@@ -449,20 +480,20 @@ Contact us: Please contact our store.", 'vk-booking-manager' ),
 		$end     = isset( $value['end'] ) ? (string) $value['end'] : '';
 
 		if ( ! $enabled || '' === $start || '' === $end ) {
-			return [
+			return array(
 				'use_custom' => false,
-				'time_slots' => [],
-			];
+				'time_slots' => array(),
+			);
 		}
 
-		return [
+		return array(
 			'use_custom' => true,
-			'time_slots' => [
-				[
+			'time_slots' => array(
+				array(
 					'start' => $start,
 					'end'   => $end,
-				],
-			],
-		];
+				),
+			),
+		);
 	}
 }

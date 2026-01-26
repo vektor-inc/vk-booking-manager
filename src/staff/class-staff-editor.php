@@ -1,4 +1,11 @@
 <?php
+/**
+ * Free edition: staff editor is disabled.
+ *
+ * 日本語: Free版ではスタッフ編集UIを無効化する。
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -26,6 +33,6 @@ class Staff_Editor {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		// No-op for Free edition. / Free版では登録処理を行わない。
+		// No-op for Free edition. / Free版では登録処理を行わない.
 	}
 }

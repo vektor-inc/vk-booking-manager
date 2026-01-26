@@ -1,4 +1,10 @@
 <?php
+/**
+ * Override oEmbed title/author for the reservation page URL.
+ *
+ * @package VKBookingManager
+ */
+
 namespace VKBookingManager\OEmbed;
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -12,11 +18,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Override oEmbed title/author for the reservation page URL.
  */
 class OEmbed_Override {
+	/**
+	 * Register hooks.
+	 */
 	public function register(): void {
-		add_filter( 'oembed_response_data', [ $this, 'override_response' ], 10, 2 );
+		add_filter( 'oembed_response_data', array( $this, 'override_response' ), 10, 2 );
 	}
 
 	/**
+	 * Override oEmbed response data.
+	 *
 	 * @param array<string, mixed> $data oEmbed response data.
 	 * @param WP_Post              $post Post object.
 	 * @return array<string, mixed>

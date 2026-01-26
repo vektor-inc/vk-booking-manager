@@ -1,4 +1,9 @@
 <?php
+/**
+ * Handles Booking post type admin UI and meta persistence.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -31,35 +36,37 @@ class Booking_Admin {
 	private const NONCE_ACTION = 'vkbm_booking_meta';
 	private const NONCE_NAME   = '_vkbm_booking_meta_nonce';
 
-	private const META_DATE_START   = '_vkbm_booking_service_start';
-	private const META_DATE_END     = '_vkbm_booking_service_end';
-	private const META_RESOURCE_ID  = '_vkbm_booking_resource_id';
-	private const META_SERVICE_ID   = '_vkbm_booking_service_id';
-	private const META_CUSTOMER     = '_vkbm_booking_customer_name';
-	private const META_CUSTOMER_TEL = '_vkbm_booking_customer_tel';
-	private const META_CUSTOMER_MAIL = '_vkbm_booking_customer_email';
-	private const META_ATTACHMENTS = '_vkbm_booking_attachment_ids';
+	private const META_DATE_START             = '_vkbm_booking_service_start';
+	private const META_DATE_END               = '_vkbm_booking_service_end';
+	private const META_RESOURCE_ID            = '_vkbm_booking_resource_id';
+	private const META_SERVICE_ID             = '_vkbm_booking_service_id';
+	private const META_CUSTOMER               = '_vkbm_booking_customer_name';
+	private const META_CUSTOMER_TEL           = '_vkbm_booking_customer_tel';
+	private const META_CUSTOMER_MAIL          = '_vkbm_booking_customer_email';
+	private const META_ATTACHMENTS            = '_vkbm_booking_attachment_ids';
 	private const META_ATTACHMENT_UPLOAD_FLAG = '_vkbm_booking_uploaded_attachment';
-	private const META_STATUS       = '_vkbm_booking_status';
-	private const META_NOTE         = '_vkbm_booking_note';
-	private const META_INTERNAL_NOTE = '_vkbm_booking_internal_note';
-	private const META_NOMINATION_FEE = '_vkbm_booking_nomination_fee';
-	private const META_BASE_TOTAL_PRICE   = '_vkbm_booking_base_total_price';
-	private const META_BILLED_TOTAL_PRICE = '_vkbm_booking_billed_total_price';
-	private const META_IS_PREFERRED = '_vkbm_booking_is_staff_preferred';
-	private const META_TOTAL_END   = '_vkbm_booking_total_end';
-	private const META_SERVICE_BASE_PRICE = '_vkbm_booking_service_base_price';
+	private const META_STATUS                 = '_vkbm_booking_status';
+	private const META_NOTE                   = '_vkbm_booking_note';
+	private const META_INTERNAL_NOTE          = '_vkbm_booking_internal_note';
+	private const META_NOMINATION_FEE         = '_vkbm_booking_nomination_fee';
+	private const META_BASE_TOTAL_PRICE       = '_vkbm_booking_base_total_price';
+	private const META_BILLED_TOTAL_PRICE     = '_vkbm_booking_billed_total_price';
+	private const META_IS_PREFERRED           = '_vkbm_booking_is_staff_preferred';
+	private const META_TOTAL_END              = '_vkbm_booking_total_end';
+	private const META_SERVICE_BASE_PRICE     = '_vkbm_booking_service_base_price';
 
-	private const STATUS_CONFIRMED = 'confirmed';
-	private const STATUS_PENDING   = 'pending';
-	private const STATUS_CANCELLED = 'cancelled';
-	private const STATUS_NO_SHOW   = 'no_show';
-	private const ADMIN_NOTICE_QUERY_VAR = 'vkbm_booking_staff_conflict';
+	private const STATUS_CONFIRMED              = 'confirmed';
+	private const STATUS_PENDING                = 'pending';
+	private const STATUS_CANCELLED              = 'cancelled';
+	private const STATUS_NO_SHOW                = 'no_show';
+	private const ADMIN_NOTICE_QUERY_VAR        = 'vkbm_booking_staff_conflict';
 	private const ADMIN_NOTICE_TRANSIENT_PREFIX = 'vkbm_booking_staff_conflict_';
-	private const ADMIN_NOTICE_TYPE_ERROR = 'error';
-	private const ADMIN_NOTICE_TYPE_WARNING = 'warning';
+	private const ADMIN_NOTICE_TYPE_ERROR       = 'error';
+	private const ADMIN_NOTICE_TYPE_WARNING     = 'warning';
 
 	/**
+	 * Notification service.
+	 *
 	 * @var Booking_Notification_Service|null
 	 */
 	private $notification_service;
@@ -77,21 +84,21 @@ class Booking_Admin {
 	 * Register admin hooks.
 	 */
 	public function register(): void {
-		add_action( 'add_meta_boxes', [ $this, 'add_meta_box' ] );
-		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, [ $this, 'save_post' ], 10, 2 );
-		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, [ $this, 'save_quick_edit' ], 10, 3 );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_quick_edit_assets' ] );
-		add_action( 'admin_menu', [ $this, 'register_reservation_page_menu' ] );
-		add_action( 'admin_notices', [ $this, 'render_staff_conflict_notice' ] );
-		add_filter( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_columns', [ $this, 'register_columns' ] );
-		add_action( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_custom_column', [ $this, 'render_column' ], 10, 2 );
-		add_filter( 'manage_edit-' . Booking_Post_Type::POST_TYPE . '_sortable_columns', [ $this, 'sortable_columns' ] );
-		add_action( 'pre_get_posts', [ $this, 'handle_sortable_query' ] );
-		add_action( 'quick_edit_custom_box', [ $this, 'render_quick_edit_fields' ], 10, 2 );
-		add_action( 'add_meta_boxes_' . Booking_Post_Type::POST_TYPE, [ $this, 'remove_author_meta_box' ], 100 );
-		add_filter( 'wp_generate_attachment_metadata', [ $this, 'filter_booking_attachment_metadata' ], 10, 2 );
-		add_filter( 'wp_editor_set_quality', [ $this, 'filter_booking_upload_quality' ], 10, 2 );
+		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
+		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
+		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_quick_edit' ), 10, 3 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_quick_edit_assets' ) );
+		add_action( 'admin_menu', array( $this, 'register_reservation_page_menu' ) );
+		add_action( 'admin_notices', array( $this, 'render_staff_conflict_notice' ) );
+		add_filter( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_columns', array( $this, 'register_columns' ) );
+		add_action( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_custom_column', array( $this, 'render_column' ), 10, 2 );
+		add_filter( 'manage_edit-' . Booking_Post_Type::POST_TYPE . '_sortable_columns', array( $this, 'sortable_columns' ) );
+		add_action( 'pre_get_posts', array( $this, 'handle_sortable_query' ) );
+		add_action( 'quick_edit_custom_box', array( $this, 'render_quick_edit_fields' ), 10, 2 );
+		add_action( 'add_meta_boxes_' . Booking_Post_Type::POST_TYPE, array( $this, 'remove_author_meta_box' ), 100 );
+		add_filter( 'wp_generate_attachment_metadata', array( $this, 'filter_booking_attachment_metadata' ), 10, 2 );
+		add_filter( 'wp_editor_set_quality', array( $this, 'filter_booking_upload_quality' ), 10, 2 );
 	}
 
 	/**
@@ -148,9 +155,11 @@ class Booking_Admin {
 
 	/**
 	 * Enqueue admin assets for booking edit screens.
+	 *
+	 * @param string $hook_suffix Current admin page hook suffix.
 	 */
 	public function enqueue_assets( string $hook_suffix ): void {
-		if ( ! in_array( $hook_suffix, [ 'post.php', 'post-new.php' ], true ) ) {
+		if ( ! in_array( $hook_suffix, array( 'post.php', 'post-new.php' ), true ) ) {
 			return;
 		}
 
@@ -163,7 +172,7 @@ class Booking_Admin {
 		wp_enqueue_script(
 			'vkbm-booking-admin',
 			plugins_url( 'assets/js/booking-admin.js', VKBM_PLUGIN_FILE ),
-			[],
+			array(),
 			VKBM_VERSION,
 			true
 		);
@@ -171,6 +180,8 @@ class Booking_Admin {
 
 	/**
 	 * Enqueue Quick Edit JS for booking list table.
+	 *
+	 * @param string $hook_suffix Current admin page hook suffix.
 	 */
 	public function enqueue_quick_edit_assets( string $hook_suffix ): void {
 		if ( 'edit.php' !== $hook_suffix ) {
@@ -185,7 +196,7 @@ class Booking_Admin {
 		wp_enqueue_script(
 			'vkbm-booking-quick-edit',
 			plugins_url( 'assets/js/booking-quick-edit.js', VKBM_PLUGIN_FILE ),
-			[ 'jquery', 'inline-edit-post' ],
+			array( 'jquery', 'inline-edit-post' ),
 			VKBM_VERSION,
 			true
 		);
@@ -198,7 +209,7 @@ class Booking_Admin {
 		add_meta_box(
 			'vkbm-booking-details',
 			__( 'Reservation details', 'vk-booking-manager' ),
-			[ $this, 'render_meta_box' ],
+			array( $this, 'render_meta_box' ),
 			Booking_Post_Type::POST_TYPE,
 			'normal',
 			'high'
@@ -213,21 +224,21 @@ class Booking_Admin {
 	public function render_meta_box( WP_Post $post ): void {
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
-		$start        = get_post_meta( $post->ID, self::META_DATE_START, true );
-		$end          = get_post_meta( $post->ID, self::META_DATE_END, true );
-		$resource_id  = (int) get_post_meta( $post->ID, self::META_RESOURCE_ID, true );
-		$service_id   = (int) get_post_meta( $post->ID, self::META_SERVICE_ID, true );
+		$start                   = get_post_meta( $post->ID, self::META_DATE_START, true );
+		$end                     = get_post_meta( $post->ID, self::META_DATE_END, true );
+		$resource_id             = (int) get_post_meta( $post->ID, self::META_RESOURCE_ID, true );
+		$service_id              = (int) get_post_meta( $post->ID, self::META_SERVICE_ID, true );
 		$has_base_price_snapshot = metadata_exists( 'post', $post->ID, self::META_SERVICE_BASE_PRICE );
 		$service_base_price      = $has_base_price_snapshot
 			? (int) get_post_meta( $post->ID, self::META_SERVICE_BASE_PRICE, true )
 			: ( $service_id > 0 ? max( 0, (int) get_post_meta( $service_id, '_vkbm_base_price', true ) ) : 0 );
-		$customer     = (string) get_post_meta( $post->ID, self::META_CUSTOMER, true );
-		$customer_tel = (string) get_post_meta( $post->ID, self::META_CUSTOMER_TEL, true );
-		$customer_mail = (string) get_post_meta( $post->ID, self::META_CUSTOMER_MAIL, true );
-		$status       = (string) get_post_meta( $post->ID, self::META_STATUS, true );
-		$note         = (string) get_post_meta( $post->ID, self::META_NOTE, true );
-		$internal_note = (string) get_post_meta( $post->ID, self::META_INTERNAL_NOTE, true );
-		$nomination_fee = (int) get_post_meta( $post->ID, self::META_NOMINATION_FEE, true );
+		$customer                = (string) get_post_meta( $post->ID, self::META_CUSTOMER, true );
+		$customer_tel            = (string) get_post_meta( $post->ID, self::META_CUSTOMER_TEL, true );
+		$customer_mail           = (string) get_post_meta( $post->ID, self::META_CUSTOMER_MAIL, true );
+		$status                  = (string) get_post_meta( $post->ID, self::META_STATUS, true );
+		$note                    = (string) get_post_meta( $post->ID, self::META_NOTE, true );
+		$internal_note           = (string) get_post_meta( $post->ID, self::META_INTERNAL_NOTE, true );
+		$nomination_fee          = (int) get_post_meta( $post->ID, self::META_NOMINATION_FEE, true );
 		if ( ! Staff_Editor::is_enabled() ) {
 			$nomination_fee = 0;
 		}
@@ -240,22 +251,22 @@ class Booking_Admin {
 		}
 		$has_billed_total_price = metadata_exists( 'post', $post->ID, self::META_BILLED_TOTAL_PRICE );
 		$billed_total_price     = $has_billed_total_price ? (int) get_post_meta( $post->ID, self::META_BILLED_TOTAL_PRICE, true ) : '';
-		$is_preferred = '1' === (string) get_post_meta( $post->ID, self::META_IS_PREFERRED, true );
-		$author_options = $this->get_booking_author_options( $post );
-		$attachment_ids = $this->normalize_attachment_ids( get_post_meta( $post->ID, self::META_ATTACHMENTS, true ) );
-		$attachment_ids_csv = implode( ',', $attachment_ids );
+		$is_preferred           = '1' === (string) get_post_meta( $post->ID, self::META_IS_PREFERRED, true );
+		$author_options         = $this->get_booking_author_options( $post );
+		$attachment_ids         = $this->normalize_attachment_ids( get_post_meta( $post->ID, self::META_ATTACHMENTS, true ) );
+		$attachment_ids_csv     = implode( ',', $attachment_ids );
 
 		$start_date = $this->format_datetime_for_input( $start, 'date' );
 		$start_time = $this->format_datetime_for_input( $start, 'time' );
 		$end_time   = $this->format_datetime_for_input( $end, 'time' );
 
-		$resources = $this->get_resources();
-		$services  = $this->get_service_menus();
+		$resources        = $this->get_resources();
+		$services         = $this->get_service_menus();
 		$base_price_label = '—';
 		if ( $has_base_price_snapshot || $service_id > 0 ) {
 			$base_price_label = VKBM_Helper::format_currency( (int) $service_base_price );
 		}
-		$tax_label = VKBM_Helper::get_tax_included_label();
+		$tax_label        = VKBM_Helper::get_tax_included_label();
 		$base_total_label = '—';
 		if ( $has_base_price_snapshot || $service_id > 0 ) {
 			$base_total_label = VKBM_Helper::format_currency( (int) $base_total_price );
@@ -282,10 +293,10 @@ class Booking_Admin {
 							<?php if ( $post->post_author ) : ?>
 								<?php
 								$author_url = add_query_arg(
-									[
+									array(
 										'post_type' => Booking_Post_Type::POST_TYPE,
 										'author'    => (int) $post->post_author,
-									],
+									),
 									admin_url( 'edit.php' )
 								);
 								?>
@@ -384,8 +395,9 @@ class Booking_Admin {
 									esc_html__( 'Checked when a customer makes a reservation by naming %s.', 'vk-booking-manager' ),
 									esc_html( $singular )
 								);
-								?><br />
-								<?php esc_html_e( "Prices are based on the \"basic service fee\", \"Nomination fee\", and \"total basic fee\" saved at the time of reservation. Please enter the \"total billing amount\" if necessary.", 'vk-booking-manager' ); ?>
+								?>
+								<br />
+								<?php esc_html_e( 'Prices are based on the "basic service fee", "Nomination fee", and "total basic fee" saved at the time of reservation. Please enter the "total billing amount" if necessary.', 'vk-booking-manager' ); ?>
 							</p>
 						</td>
 					</tr>
@@ -515,10 +527,10 @@ class Booking_Admin {
 												$attachment_id,
 												'thumbnail',
 												false,
-												[
+												array(
 													'class' => 'vkbm-booking-attachments__image',
-													'data-full-url' => wp_get_attachment_image_url( $attachment_id, 'full' ) ?: '',
-												]
+													'data-full-url' => wp_get_attachment_image_url( $attachment_id, 'full' ) ? wp_get_attachment_image_url( $attachment_id, 'full' ) : '',
+												)
 											);
 											?>
 											<button type="button" class="vkbm-button vkbm-button__xs vkbm-button-outline vkbm-button-outline__danger vkbm-booking-attachments__remove">
@@ -591,7 +603,7 @@ class Booking_Admin {
 
 		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] )
 			? wp_unslash( $_POST['vkbm_booking'] )
-			: [];
+			: array();
 
 		$previous_status = (string) get_post_meta( $post_id, self::META_STATUS, true );
 
@@ -602,27 +614,27 @@ class Booking_Admin {
 		$start = ( $date && $start_time ) ? $this->combine_datetime( $date, $start_time ) : '';
 		$end   = ( $date && $end_time ) ? $this->combine_datetime( $date, $end_time ) : '';
 
-		$resource_id = isset( $data['resource_id'] ) ? $this->sanitize_resource_id( (int) $data['resource_id'] ) : 0;
-		$service_id_locked = isset( $data['service_id'] ) ? $this->sanitize_service_id( (int) $data['service_id'] ) : 0;
-		$service_id_select = isset( $data['service_id_select'] ) ? $this->sanitize_service_id( (int) $data['service_id_select'] ) : 0;
+		$resource_id          = isset( $data['resource_id'] ) ? $this->sanitize_resource_id( (int) $data['resource_id'] ) : 0;
+		$service_id_locked    = isset( $data['service_id'] ) ? $this->sanitize_service_id( (int) $data['service_id'] ) : 0;
+		$service_id_select    = isset( $data['service_id_select'] ) ? $this->sanitize_service_id( (int) $data['service_id_select'] ) : 0;
 		$allow_service_change = isset( $data['allow_service_change'] );
-		$service_id = $allow_service_change ? $service_id_select : $service_id_locked;
-		$customer    = isset( $data['customer'] ) ? sanitize_text_field( $data['customer'] ) : '';
-		$customer_tel = isset( $data['customer_tel'] ) ? sanitize_text_field( $data['customer_tel'] ) : '';
-		$customer_mail = isset( $data['customer_email'] ) ? sanitize_email( $data['customer_email'] ) : '';
-		$billed_total_price = array_key_exists( 'billed_total_price', $data )
+		$service_id           = $allow_service_change ? $service_id_select : $service_id_locked;
+		$customer             = isset( $data['customer'] ) ? sanitize_text_field( $data['customer'] ) : '';
+		$customer_tel         = isset( $data['customer_tel'] ) ? sanitize_text_field( $data['customer_tel'] ) : '';
+		$customer_mail        = isset( $data['customer_email'] ) ? sanitize_email( $data['customer_email'] ) : '';
+		$billed_total_price   = array_key_exists( 'billed_total_price', $data )
 			? $this->sanitize_base_price( $data['billed_total_price'] )
 			: '';
-		$status      = isset( $data['status'] ) ? $this->sanitize_status( (string) $data['status'] ) : self::STATUS_CONFIRMED;
-		$note        = isset( $data['note'] ) ? wp_kses_post( $data['note'] ) : '';
-		$internal_note = isset( $data['internal_note'] ) ? wp_kses_post( $data['internal_note'] ) : '';
-		$is_preferred = isset( $data['is_staff_preferred'] ) ? '1' : '';
-		$author_id = isset( $data['author_id'] ) ? absint( $data['author_id'] ) : 0;
-		$author_id = $this->sanitize_author_id( $author_id );
-		$attachment_ids = isset( $data['attachment_ids'] ) ? $this->normalize_attachment_ids( (string) $data['attachment_ids'] ) : [];
+		$status               = isset( $data['status'] ) ? $this->sanitize_status( (string) $data['status'] ) : self::STATUS_CONFIRMED;
+		$note                 = isset( $data['note'] ) ? wp_kses_post( $data['note'] ) : '';
+		$internal_note        = isset( $data['internal_note'] ) ? wp_kses_post( $data['internal_note'] ) : '';
+		$is_preferred         = isset( $data['is_staff_preferred'] ) ? '1' : '';
+		$author_id            = isset( $data['author_id'] ) ? absint( $data['author_id'] ) : 0;
+		$author_id            = $this->sanitize_author_id( $author_id );
+		$attachment_ids       = isset( $data['attachment_ids'] ) ? $this->normalize_attachment_ids( $data['attachment_ids'] ) : array();
 
-		$has_conflict = $this->has_staff_conflict( $post_id, $resource_id, $start, $end );
-		$settings = ( new Settings_Repository() )->get_settings();
+		$has_conflict        = $this->has_staff_conflict( $post_id, $resource_id, $start, $end );
+		$settings            = ( new Settings_Repository() )->get_settings();
 		$allow_overlap_admin = ! empty( $settings['provider_allow_staff_overlap_admin'] );
 
 		if ( $has_conflict && ! $allow_overlap_admin ) {
@@ -636,21 +648,21 @@ class Booking_Admin {
 
 		// 基本料金は管理画面から編集させない（POST値は信頼しない）.
 		// 予約時点のスナップショットは後から更新しない（過去データで未保存の場合のみ補完する）.
-		$service_base_price = '';
+		$service_base_price              = '';
 		$should_fill_base_price_snapshot = ! metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE );
 		if ( $should_fill_base_price_snapshot && $service_id > 0 ) {
-			$raw_price = get_post_meta( $service_id, '_vkbm_base_price', true );
+			$raw_price          = get_post_meta( $service_id, '_vkbm_base_price', true );
 			$service_base_price = ( '' !== $raw_price && is_numeric( $raw_price ) ) ? max( 0, (int) $raw_price ) : '';
 		}
 
-		if ( $author_id > 0 && $author_id !== (int) $post->post_author ) {
+		if ( $author_id > 0 && (int) $post->post_author !== $author_id ) {
 			// Update booking author when a valid user is selected.
-			// 有効なユーザーが選択された場合に予約投稿者を更新する。
+			// 有効なユーザーが選択された場合に予約投稿者を更新する.
 			wp_update_post(
-				[
+				array(
 					'ID'          => $post_id,
 					'post_author' => $author_id,
-				]
+				)
 			);
 		}
 
@@ -664,7 +676,7 @@ class Booking_Admin {
 		}
 		$should_fill_base_total_price = ! metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE );
 		if ( $should_fill_base_total_price ) {
-			$base_price_for_total = metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE )
+			$base_price_for_total     = metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE )
 				? (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true )
 				: ( '' === $service_base_price ? 0 : (int) $service_base_price );
 			$nomination_fee_for_total = (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true );
@@ -699,13 +711,13 @@ class Booking_Admin {
 	 * @return array<string, string>
 	 */
 	public function register_columns( array $columns ): array {
-		$new = [];
-		$new['cb']       = $columns['cb'] ?? '';
-		$new['title']    = __( 'Reservation title', 'vk-booking-manager' );
-		$new['vkbm_booking_datetime'] = __( 'Reservation date and time', 'vk-booking-manager' );
-		$new['vkbm_booking_service'] = __( 'Menu', 'vk-booking-manager' );
-		$new['vkbm_booking_resource'] = __( 'In charge', 'vk-booking-manager' );
-		$new['vkbm_booking_status']   = __( 'Reservation status', 'vk-booking-manager' );
+		$new                              = array();
+		$new['cb']                        = $columns['cb'] ?? '';
+		$new['title']                     = __( 'Reservation title', 'vk-booking-manager' );
+		$new['vkbm_booking_datetime']     = __( 'Reservation date and time', 'vk-booking-manager' );
+		$new['vkbm_booking_service']      = __( 'Menu', 'vk-booking-manager' );
+		$new['vkbm_booking_resource']     = __( 'In charge', 'vk-booking-manager' );
+		$new['vkbm_booking_status']       = __( 'Reservation status', 'vk-booking-manager' );
 		$new['vkbm_booking_billed_total'] = __( 'Total billing amount', 'vk-booking-manager' );
 
 		return $new;
@@ -753,7 +765,7 @@ class Booking_Admin {
 				break;
 
 			case 'vkbm_booking_status':
-				$status = (string) get_post_meta( $post_id, self::META_STATUS, true );
+				$status  = (string) get_post_meta( $post_id, self::META_STATUS, true );
 				$options = $this->get_status_options();
 				echo esc_html( $options[ $status ] ?? __( 'Not clear', 'vk-booking-manager' ) );
 				printf(
@@ -763,7 +775,7 @@ class Booking_Admin {
 				break;
 			case 'vkbm_booking_billed_total':
 				$has_base_total = metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE );
-				$base_total = $has_base_total
+				$base_total     = $has_base_total
 					? (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true )
 					: ( (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true ) + (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
 				if ( ! Staff_Editor::is_enabled() ) {
@@ -771,8 +783,8 @@ class Booking_Admin {
 				}
 
 				$has_billed_total = metadata_exists( 'post', $post_id, self::META_BILLED_TOTAL_PRICE );
-				$amount = $has_billed_total ? (int) get_post_meta( $post_id, self::META_BILLED_TOTAL_PRICE, true ) : $base_total;
-				$amount = max( 0, (int) $amount );
+				$amount           = $has_billed_total ? (int) get_post_meta( $post_id, self::META_BILLED_TOTAL_PRICE, true ) : $base_total;
+				$amount           = max( 0, (int) $amount );
 
 				echo esc_html( VKBM_Helper::format_currency( (int) $amount ) );
 				break;
@@ -894,12 +906,11 @@ class Booking_Admin {
 			return;
 		}
 
-		$data = $_POST['vkbm_booking'] ?? null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] ) ? wp_unslash( $_POST['vkbm_booking'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 		if ( ! is_array( $data ) ) {
 			return;
 		}
 
-		$data = wp_unslash( $data );
 		$status = isset( $data['status'] ) ? $this->sanitize_status( (string) $data['status'] ) : '';
 		if ( '' === $status ) {
 			return;
@@ -929,9 +940,9 @@ class Booking_Admin {
 	/**
 	 * Update or delete meta value.
 	 *
-	 * @param int         $post_id Post ID.
-	 * @param string      $meta_key Meta key.
-	 * @param string|int  $value Value.
+	 * @param int        $post_id Post ID.
+	 * @param string     $meta_key Meta key.
+	 * @param string|int $value Value.
 	 */
 	private function update_meta_value( int $post_id, string $meta_key, $value ): void {
 		if ( '' === $value || 0 === $value ) {
@@ -945,9 +956,9 @@ class Booking_Admin {
 	/**
 	 * Update or delete meta value (0 is a valid value).
 	 *
-	 * @param int            $post_id  Post ID.
-	 * @param string         $meta_key Meta key.
-	 * @param string|int|''  $value    Value.
+	 * @param int           $post_id  Post ID.
+	 * @param string        $meta_key Meta key.
+	 * @param string|int|'' $value    Value.
 	 */
 	private function update_meta_value_allow_zero( int $post_id, string $meta_key, $value ): void {
 		if ( '' === $value ) {
@@ -972,7 +983,7 @@ class Booking_Admin {
 		}
 
 		// Store attachment IDs as an array for safe retrieval.
-		// 添付画像IDは配列で保存して安全に取得する。
+		// 添付画像IDは配列で保存して安全に取得する.
 		update_post_meta( $post_id, self::META_ATTACHMENTS, $ids );
 	}
 
@@ -984,7 +995,7 @@ class Booking_Admin {
 	 * @return array<int>
 	 */
 	private function normalize_attachment_ids( $raw ): array {
-		$ids = [];
+		$ids = array();
 
 		if ( is_array( $raw ) ) {
 			$ids = $raw;
@@ -1045,11 +1056,11 @@ class Booking_Admin {
 			return;
 		}
 
-		$width  = (int) $size['width'];
-		$height = (int) $size['height'];
-		$max_edge = 2000;
-		$mime_type = (string) get_post_mime_type( $attachment_id );
-		$needs_convert = ! in_array( $mime_type, [ 'image/jpeg', 'image/jpg' ], true );
+		$width         = (int) $size['width'];
+		$height        = (int) $size['height'];
+		$max_edge      = 2000;
+		$mime_type     = (string) get_post_mime_type( $attachment_id );
+		$needs_convert = ! in_array( $mime_type, array( 'image/jpeg', 'image/jpg' ), true );
 		$needs_resize  = $width > $max_edge || $height > $max_edge;
 
 		if ( ! $needs_convert && ! $needs_resize ) {
@@ -1081,10 +1092,10 @@ class Booking_Admin {
 		if ( $needs_convert && $target_file !== $file ) {
 			update_attached_file( $attachment_id, $target_file );
 			wp_update_post(
-				[
+				array(
 					'ID'             => $attachment_id,
 					'post_mime_type' => 'image/jpeg',
-				]
+				)
 			);
 			if ( function_exists( 'wp_delete_file' ) ) {
 				wp_delete_file( $file );
@@ -1095,11 +1106,11 @@ class Booking_Admin {
 
 		$metadata = wp_get_attachment_metadata( $attachment_id );
 		if ( ! is_array( $metadata ) ) {
-			$metadata = [];
+			$metadata = array();
 		}
 		$metadata['width']  = isset( $saved['width'] ) ? (int) $saved['width'] : $width;
 		$metadata['height'] = isset( $saved['height'] ) ? (int) $saved['height'] : $height;
-		$filesize = filesize( $target_file );
+		$filesize           = filesize( $target_file );
 		if ( false !== $filesize ) {
 			$metadata['filesize'] = (int) $filesize;
 		}
@@ -1139,10 +1150,10 @@ class Booking_Admin {
 	 * @return array{enabled:bool,rate:float}
 	 */
 	private function get_tax_settings(): array {
-		return [
+		return array(
 			'enabled' => true,
 			'rate'    => 0.0,
-		];
+		);
 	}
 
 	/**
@@ -1163,53 +1174,53 @@ class Booking_Admin {
 			$end_at = $start_at;
 		}
 
-		// 同一スタッフの重複予約があるかを、現在の予約を除外してチェックする。
+		// 同一スタッフの重複予約があるかを、現在の予約を除外してチェックする.
 		$query = new WP_Query(
-			[
+			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
+				'post_status'    => array( 'publish' ),
 				'posts_per_page' => 1,
 				'no_found_rows'  => true,
 				'fields'         => 'ids',
-				'post__not_in'   => [ $post_id ],
-				'meta_query'     => [
+				'post__not_in'   => array( $post_id ),
+				'meta_query'     => array(
 					'relation' => 'AND',
-					[
+					array(
 						'key'     => self::META_RESOURCE_ID,
 						'value'   => $staff_id,
 						'compare' => '=',
-					],
-					[
+					),
+					array(
 						'key'     => self::META_STATUS,
-						'value'   => [ self::STATUS_CONFIRMED, self::STATUS_PENDING ],
+						'value'   => array( self::STATUS_CONFIRMED, self::STATUS_PENDING ),
 						'compare' => 'IN',
-					],
-					[
-						// 既存の予約開始が、現在の予約終了より前なら時間帯が重なる可能性がある。
+					),
+					array(
+						// 既存の予約開始が、現在の予約終了より前なら時間帯が重なる可能性がある.
 						'key'     => self::META_DATE_START,
 						'value'   => $end_at,
 						'compare' => '<',
 						'type'    => 'DATETIME',
-					],
-					[
+					),
+					array(
 						'relation' => 'OR',
-						[
-							// 既存の総終了時刻が、現在の予約開始より後なら時間帯が重なる。
+						array(
+							// 既存の総終了時刻が、現在の予約開始より後なら時間帯が重なる.
 							'key'     => self::META_TOTAL_END,
 							'value'   => $start_at,
 							'compare' => '>',
 							'type'    => 'DATETIME',
-						],
-						[
-							// 総終了がなければ通常の終了時刻で判定する。
+						),
+						array(
+							// 総終了がなければ通常の終了時刻で判定する.
 							'key'     => self::META_DATE_END,
 							'value'   => $start_at,
 							'compare' => '>',
 							'type'    => 'DATETIME',
-						],
-					],
-				],
-			]
+						),
+					),
+				),
+			)
 		);
 
 		return $query->have_posts();
@@ -1218,8 +1229,9 @@ class Booking_Admin {
 	/**
 	 * Persist staff conflict notice and enqueue redirect flag.
 	 *
-	 * @param int $post_id    Booking post ID.
-	 * @param int $staff_id   Selected staff ID.
+	 * @param int    $post_id     Booking post ID.
+	 * @param int    $staff_id    Selected staff ID.
+	 * @param string $notice_type Notice type.
 	 */
 	private function set_staff_conflict_notice( int $post_id, int $staff_id, string $notice_type ): void {
 		$label = vkbm_get_resource_label_singular();
@@ -1258,13 +1270,13 @@ class Booking_Admin {
 		}
 
 		$user_id = get_current_user_id();
-		$key = self::ADMIN_NOTICE_TRANSIENT_PREFIX . $user_id . '_' . $post_id;
+		$key     = self::ADMIN_NOTICE_TRANSIENT_PREFIX . $user_id . '_' . $post_id;
 		set_transient(
 			$key,
-			[
+			array(
 				'message' => $message,
 				'type'    => $notice_type,
-			],
+			),
 			30
 		);
 
@@ -1295,7 +1307,7 @@ class Booking_Admin {
 		}
 
 		$user_id = get_current_user_id();
-		$key = self::ADMIN_NOTICE_TRANSIENT_PREFIX . $user_id . '_' . $post_id;
+		$key     = self::ADMIN_NOTICE_TRANSIENT_PREFIX . $user_id . '_' . $post_id;
 		$payload = get_transient( $key );
 		if ( false === $payload ) {
 			return;
@@ -1330,7 +1342,7 @@ class Booking_Admin {
 			return;
 		}
 
-		$title_parts = [];
+		$title_parts = array();
 
 		if ( $customer ) {
 			$title_parts[] = $customer;
@@ -1345,10 +1357,10 @@ class Booking_Admin {
 		}
 
 		wp_update_post(
-			[
+			array(
 				'ID'         => $post_id,
 				'post_title' => implode( ' / ', $title_parts ),
-			]
+			)
 		);
 	}
 
@@ -1465,7 +1477,7 @@ class Booking_Admin {
 	 * @return string
 	 */
 	private function sanitize_status( string $status ): string {
-		$status = sanitize_key( $status );
+		$status  = sanitize_key( $status );
 		$options = array_keys( $this->get_status_options() );
 
 		return in_array( $status, $options, true ) ? $status : self::STATUS_CONFIRMED;
@@ -1477,12 +1489,12 @@ class Booking_Admin {
 	 * @return array<string, string>
 	 */
 	private function get_status_options(): array {
-		return [
+		return array(
 			self::STATUS_CONFIRMED => __( 'Confirmed', 'vk-booking-manager' ),
 			self::STATUS_PENDING   => __( 'Pending', 'vk-booking-manager' ),
 			self::STATUS_CANCELLED => __( 'Cancelled', 'vk-booking-manager' ),
 			self::STATUS_NO_SHOW   => __( 'No-show', 'vk-booking-manager' ),
-		];
+		);
 	}
 
 	/**
@@ -1492,13 +1504,16 @@ class Booking_Admin {
 	 */
 	private function get_resources(): array {
 		return get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
-				'orderby'        => [ 'menu_order' => 'ASC', 'title' => 'ASC' ],
+				'post_status'    => array( 'publish' ),
+				'orderby'        => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
-			]
+			)
 		);
 	}
 
@@ -1509,13 +1524,16 @@ class Booking_Admin {
 	 */
 	private function get_service_menus(): array {
 		$posts = get_posts(
-			[
+			array(
 				'post_type'      => Service_Menu_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
-				'orderby'        => [ 'menu_order' => 'ASC', 'title' => 'ASC' ],
+				'post_status'    => array( 'publish' ),
+				'orderby'        => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
-			]
+			)
 		);
 
 		return Service_Menu_Post_Type::sort_menus_by_group( $posts );
@@ -1538,17 +1556,17 @@ class Booking_Admin {
 	 */
 	private function get_booking_author_options( WP_Post $post ): array {
 		$roles      = wp_roles();
-		$role_names = $roles ? array_keys( $roles->roles ) : [];
-		$options    = [];
+		$role_names = $roles ? array_keys( $roles->roles ) : array();
+		$options    = array();
 		$resolver   = new Customer_Name_Resolver();
 
 		$users = get_users(
-			[
+			array(
 				'role__in'    => $role_names,
 				'orderby'     => 'display_name',
 				'order'       => 'ASC',
 				'count_total' => false,
-			]
+			)
 		);
 
 		foreach ( $users as $user ) {
@@ -1579,7 +1597,7 @@ class Booking_Admin {
 	 */
 	private function resolve_author_label( WP_User $user, Customer_Name_Resolver $resolver ): string {
 		// Prefer full name > kana > display name, and fall back to user ID.
-		// 姓名 > ふりがな > 表示名 を優先し、なければユーザーIDにする。
+		// 姓名 > ふりがな > 表示名 を優先し、なければユーザーIDにする.
 		$label = trim( $resolver->resolve_for_user( $user ) );
 		if ( '' !== $label ) {
 			return $label;
@@ -1652,8 +1670,8 @@ class Booking_Admin {
 			return $metadata;
 		}
 
-		$width  = (int) $size['width'];
-		$height = (int) $size['height'];
+		$width    = (int) $size['width'];
+		$height   = (int) $size['height'];
 		$max_edge = 2000;
 
 		$editor->set_quality( 50 );
@@ -1671,7 +1689,7 @@ class Booking_Admin {
 		}
 
 		$jpg_file = $path_info['dirname'] . '/' . $path_info['filename'] . '.jpg';
-		$saved = $editor->save( $jpg_file, 'image/jpeg' );
+		$saved    = $editor->save( $jpg_file, 'image/jpeg' );
 		if ( is_wp_error( $saved ) || ! is_array( $saved ) ) {
 			return $metadata;
 		}
@@ -1679,10 +1697,10 @@ class Booking_Admin {
 		if ( $jpg_file !== $file ) {
 			update_attached_file( $attachment_id, $jpg_file );
 			wp_update_post(
-				[
+				array(
 					'ID'             => $attachment_id,
 					'post_mime_type' => 'image/jpeg',
-				]
+				)
 			);
 			if ( function_exists( 'wp_delete_file' ) ) {
 				wp_delete_file( $file );
@@ -1694,7 +1712,7 @@ class Booking_Admin {
 
 		$metadata['width']  = isset( $saved['width'] ) ? (int) $saved['width'] : $metadata['width'];
 		$metadata['height'] = isset( $saved['height'] ) ? (int) $saved['height'] : $metadata['height'];
-		$filesize = filesize( $jpg_file );
+		$filesize           = filesize( $jpg_file );
 		if ( false !== $filesize ) {
 			$metadata['filesize'] = (int) $filesize;
 		}

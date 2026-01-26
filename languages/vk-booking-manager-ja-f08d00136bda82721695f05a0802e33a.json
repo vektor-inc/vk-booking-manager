@@ -1,0 +1,108 @@
+{
+	"translation-revision-date": "2026-01-26 14:55+0900",
+	"generator": "WP-CLI/2.10.0",
+	"source": "src/blocks/menu-loop/index.js",
+	"domain": "messages",
+	"locale_data": {
+		"messages": {
+			"": {
+				"domain": "messages",
+				"lang": "ja",
+				"plural-forms": "nplurals=1; plural=0;"
+			},
+			"Menu Loop Block": [
+				"メニューループブロック"
+			],
+			"card": [
+				"カード"
+			],
+			"text": [
+				"テキスト"
+			],
+			"Menu order": [
+				"メニュー順"
+			],
+			"title": [
+				"タイトル"
+			],
+			"Release date": [
+				"公開日"
+			],
+			"Update date": [
+				"更新日"
+			],
+			"random": [
+				"ランダム"
+			],
+			"ascending order": [
+				"昇順"
+			],
+			"descending order": [
+				"降順"
+			],
+			"All service groups": [
+				"すべてのサービスグループ"
+			],
+			"Specified service group": [
+				"指定したサービスグループ"
+			],
+			"Menu display settings": [
+				"メニュー表示設定"
+			],
+			"Menu loop ID": [
+				"メニューループID"
+			],
+			"This is an identifier for linking with the search block.": [
+				"検索ブロックと連携するための識別子です。"
+			],
+			"A menu loop with the same ID exists. Please change to another ID.": [
+				"同じIDのメニューループが存在します。別のIDに変更してください。"
+			],
+			"display mode": [
+				"表示モード"
+			],
+			"Do not display the proceed to reservation button": [
+				"予約に進むボタンを表示しない"
+			],
+			"Sort": [
+				"並び替え"
+			],
+			"sort order": [
+				"並び順"
+			],
+			"service group": [
+				"サービスグループ"
+			],
+			"Service group has not been registered yet.": [
+				"サービスグループがまだ登録されていません。"
+			],
+			"Do not display service group name": [
+				"サービスグループ名を表示しない"
+			],
+			"Display element": [
+				"表示要素"
+			],
+			"Display featured image": [
+				"アイキャッチ画像を表示"
+			],
+			"View Service Tag": [
+				"サービスタグを表示"
+			],
+			"Show excerpt": [
+				"抜粋を表示"
+			],
+			"Show required time/price": [
+				"所要時間/料金を表示"
+			],
+			"Show details button": [
+				"詳細ボタンを表示"
+			],
+			"Zero messages": [
+				"0件時のメッセージ"
+			],
+			"If the field is left blank, automatic text will be displayed.": [
+				"未記入の場合は自動テキストが表示されます。"
+			]
+		}
+	}
+}

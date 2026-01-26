@@ -1,4 +1,9 @@
 <?php
+/**
+ * Provider settings admin page.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -17,21 +22,29 @@ class Provider_Settings_Page {
 	private const NONCE_NAME   = 'vkbm_provider_settings_nonce';
 
 	/**
+	 * Parent admin menu slug.
+	 *
 	 * @var string
 	 */
 	private $parent_slug;
 
 	/**
+	 * Provider settings service.
+	 *
 	 * @var Settings_Service
 	 */
 	private $settings_service;
 
 	/**
+	 * Capability required to access the page.
+	 *
 	 * @var string
 	 */
 	private $capability;
 
 	/**
+	 * Page hook for the admin page.
+	 *
 	 * @var string
 	 */
 	private $page_hook = '';
@@ -113,13 +126,11 @@ class Provider_Settings_Page {
 		$users_can_register = ! empty( $_POST['vkbm_users_can_register'] ) ? 1 : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
 		update_option( 'users_can_register', $users_can_register );
 
-		$payload = $_POST['vkbm_provider_settings'] ?? array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
+		$payload = isset( $_POST['vkbm_provider_settings'] ) && is_array( $_POST['vkbm_provider_settings'] ) ? wp_unslash( $_POST['vkbm_provider_settings'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above. Array sanitized in settings_service->save_settings.
 
 		if ( ! is_array( $payload ) ) {
 			$payload = array();
 		}
-
-		$payload      = wp_unslash( $payload );
 		$result       = $this->settings_service->save_settings( $payload );
 		$saved        = true;
 		$field_errors = array();
@@ -173,7 +184,7 @@ class Provider_Settings_Page {
 		}
 
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
-		if ( ! in_array( $active_tab, array( 'store', 'system', 'registration', 'consent', 'design', 'faq' ), true ) ) {
+		if ( ! in_array( $active_tab, array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' ), true ) ) {
 			$active_tab = '';
 		}
 
@@ -201,9 +212,9 @@ class Provider_Settings_Page {
 			return;
 		}
 
-		$plugin_root                = dirname( __DIR__, 2 );
-		$settings_js                = $plugin_root . '/assets/js/provider-settings.js';
-		$settings_js_version        = defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0';
+		$plugin_root         = dirname( __DIR__, 2 );
+		$settings_js         = $plugin_root . '/assets/js/provider-settings.js';
+		$settings_js_version = defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0';
 		if ( is_string( $settings_js ) && file_exists( $settings_js ) ) {
 			$settings_js_version = (string) filemtime( $settings_js );
 		}
@@ -294,48 +305,51 @@ class Provider_Settings_Page {
 			delete_transient( 'vkbm_provider_settings_field_errors' );
 		}
 
-		$basic_field_errors                 = is_array( $field_errors['basic'] ?? null ) ? $field_errors['basic'] : array();
-		$weekly_field_errors                = is_array( $field_errors['weekly'] ?? null ) ? $field_errors['weekly'] : array();
-		$next_holiday_index                 = count( $regular_holidays );
-		$email_verification_enabled         = ! empty( $settings['registration_email_verification_enabled'] );
-		$membership_redirect_enabled        = ! empty( $settings['membership_redirect_wp_register'] );
-		$login_redirect_enabled             = ! empty( $settings['membership_redirect_wp_login'] );
-		$auth_rate_limit_enabled            = ! empty( $settings['auth_rate_limit_enabled'] );
-		$auth_rate_limit_register_max       = isset( $settings['auth_rate_limit_register_max'] ) ? (int) $settings['auth_rate_limit_register_max'] : 5;
-		$auth_rate_limit_login_max          = isset( $settings['auth_rate_limit_login_max'] ) ? (int) $settings['auth_rate_limit_login_max'] : 10;
-		$wp_users_can_register              = (bool) get_option( 'users_can_register' );
-		$resource_label_singular            = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
-		$resource_label_plural              = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
-		$resource_label_menu                = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : 'Staff available';
-		$locale                              = function_exists( 'get_locale' ) ? (string) get_locale() : '';
-		$no_plural_locales                   = array( 'ja', 'zh', 'ko' );
-		$has_plural_forms_in_locale          = true;
+		$basic_field_errors           = is_array( $field_errors['basic'] ?? null ) ? $field_errors['basic'] : array();
+		$weekly_field_errors          = is_array( $field_errors['weekly'] ?? null ) ? $field_errors['weekly'] : array();
+		$next_holiday_index           = count( $regular_holidays );
+		$email_verification_enabled   = ! empty( $settings['registration_email_verification_enabled'] );
+		$membership_redirect_enabled  = ! empty( $settings['membership_redirect_wp_register'] );
+		$login_redirect_enabled       = ! empty( $settings['membership_redirect_wp_login'] );
+		$auth_rate_limit_enabled      = ! empty( $settings['auth_rate_limit_enabled'] );
+		$email_log_enabled            = ! empty( $settings['email_log_enabled'] );
+		$email_log_retention_days     = isset( $settings['email_log_retention_days'] ) ? (int) $settings['email_log_retention_days'] : 1;
+		$email_log_retention_days     = max( 1, $email_log_retention_days );
+		$auth_rate_limit_register_max = isset( $settings['auth_rate_limit_register_max'] ) ? (int) $settings['auth_rate_limit_register_max'] : 5;
+		$auth_rate_limit_login_max    = isset( $settings['auth_rate_limit_login_max'] ) ? (int) $settings['auth_rate_limit_login_max'] : 10;
+		$wp_users_can_register        = (bool) get_option( 'users_can_register' );
+		$resource_label_singular      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
+		$resource_label_plural        = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
+		$resource_label_menu          = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : 'Staff available';
+		$locale                       = function_exists( 'get_locale' ) ? (string) get_locale() : '';
+		$no_plural_locales            = array( 'ja', 'zh', 'ko' );
+		$has_plural_forms_in_locale   = true;
 		foreach ( $no_plural_locales as $prefix ) {
 			if ( '' !== $locale && 0 === strpos( $locale, $prefix ) ) {
 				$has_plural_forms_in_locale = false;
 				break;
 			}
 		}
-		$reservation_deadline_hours         = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
+		$reservation_deadline_hours        = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
 		$slot_step_minutes                 = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : 15;
-		$service_menu_buffer_after_minutes  = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
-		$booking_status_mode                = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : 'confirmed';
-		$cancellation_policy                = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
-		$terms_of_service                   = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
-		$privacy_policy_mode                = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
-		$privacy_policy_url                 = isset( $settings['provider_privacy_policy_url'] ) ? (string) $settings['provider_privacy_policy_url'] : '';
-		$privacy_policy_content             = isset( $settings['provider_privacy_policy_content'] ) ? (string) $settings['provider_privacy_policy_content'] : '';
-		$payment_method                     = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
+		$service_menu_buffer_after_minutes = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
+		$booking_status_mode               = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : 'confirmed';
+		$cancellation_policy               = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
+		$terms_of_service                  = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
+		$privacy_policy_mode               = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
+		$privacy_policy_url                = isset( $settings['provider_privacy_policy_url'] ) ? (string) $settings['provider_privacy_policy_url'] : '';
+		$privacy_policy_content            = isset( $settings['provider_privacy_policy_content'] ) ? (string) $settings['provider_privacy_policy_content'] : '';
+		$payment_method                    = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
 		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
 			$privacy_policy_mode = 'none';
 		}
 		$reservation_menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
 		$shift_alert_months                 = isset( $settings['shift_alert_months'] ) ? (int) $settings['shift_alert_months'] : 1;
-		$booking_reminder_hours             = $settings['booking_reminder_hours'] ?? [];
+		$booking_reminder_hours             = $settings['booking_reminder_hours'] ?? array();
 		if ( ! is_array( $booking_reminder_hours ) ) {
-			$booking_reminder_hours = [];
+			$booking_reminder_hours = array();
 		}
-		$booking_reminder_hours = array_values(
+		$booking_reminder_hours      = array_values(
 			array_filter(
 				array_map(
 					static function ( $value ): int {
@@ -348,23 +362,23 @@ class Provider_Settings_Page {
 				}
 			)
 		);
-		$booking_reminder_rows = $booking_reminder_hours;
+		$booking_reminder_rows       = $booking_reminder_hours;
 		$booking_reminder_next_index = count( $booking_reminder_rows );
-		if ( [] === $booking_reminder_rows ) {
-			$booking_reminder_rows = [ '' ];
+		if ( array() === $booking_reminder_rows ) {
+			$booking_reminder_rows       = array( '' );
 			$booking_reminder_next_index = 1;
 		}
-		$design_primary_color               = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
-		$design_reservation_button_color    = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
-		$design_radius_md                   = isset( $settings['design_radius_md'] ) ? (int) $settings['design_radius_md'] : 8;
-		$currency_symbol                     = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
-		$tax_label_text                     = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
-		$currency_placeholder                = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
+		$design_primary_color            = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
+		$design_reservation_button_color = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
+		$design_radius_md                = isset( $settings['design_radius_md'] ) ? (int) $settings['design_radius_md'] : 8;
+		$currency_symbol                 = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$tax_label_text                  = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		$currency_placeholder            = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$reservation_menu_list_display_mode = 'card';
 		}
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
-		if ( ! in_array( $active_tab, array( 'store', 'system', 'registration', 'consent', 'design', 'faq' ), true ) ) {
+		if ( ! in_array( $active_tab, array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' ), true ) ) {
 			$active_tab = 'store';
 		}
 
@@ -413,6 +427,12 @@ class Provider_Settings_Page {
 					class="nav-tab<?php echo 'faq' === $active_tab ? ' nav-tab-active' : ''; ?>"
 				>
 					<?php esc_html_e( 'FAQ', 'vk-booking-manager' ); ?>
+				</a>
+				<a
+					href="<?php echo esc_url( add_query_arg( 'tab', 'advanced', $base_url ) ); ?>"
+					class="nav-tab<?php echo 'advanced' === $active_tab ? ' nav-tab-active' : ''; ?>"
+				>
+					<?php esc_html_e( 'Advanced settings', 'vk-booking-manager' ); ?>
 				</a>
 			</h2>
 			<?php settings_errors( self::MENU_SLUG ); ?>
@@ -527,6 +547,7 @@ class Provider_Settings_Page {
 											<?php
 											$frequency_value = isset( $holiday['frequency'] ) ? (string) $holiday['frequency'] : 'weekly';
 											$weekday_value   = isset( $holiday['weekday'] ) ? (string) $holiday['weekday'] : 'mon';
+											// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
 											echo $this->render_regular_holiday_row(
 												(string) $index,
 												$frequency_options,
@@ -535,7 +556,8 @@ class Provider_Settings_Page {
 													'frequency' => $frequency_value,
 													'weekday'   => $weekday_value,
 												)
-											); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
+											);
+											// phpcs:enable
 											?>
 										<?php endforeach; ?>
 									</tbody>
@@ -547,6 +569,7 @@ class Provider_Settings_Page {
 								<p class="description"><?php esc_html_e( 'Register regular holidays by combining "every week", "1st to 5th", and days of the week.', 'vk-booking-manager' ); ?></p>
 								<script type="text/template" id="vkbm-regular-holiday-row-template">
 									<?php
+									// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 									echo $this->render_regular_holiday_row(
 										'__INDEX__',
 										$frequency_options,
@@ -555,7 +578,8 @@ class Provider_Settings_Page {
 											'frequency' => 'weekly',
 											'weekday'   => 'mon',
 										)
-									); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
+									);
+									// phpcs:enable
 									?>
 								</script>
 								</div>
@@ -589,6 +613,7 @@ class Provider_Settings_Page {
 									>
 				<?php foreach ( $basic_slots as $slot_values ) : ?>
 					<?php
+					// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
 					echo $this->render_basic_business_hours_slot(
 						(string) $slot_values['index'],
 						$slot_values,
@@ -596,7 +621,8 @@ class Provider_Settings_Page {
 						$end_hour_options,
 						$minute_options,
 						$basic_field_errors
-					); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
+					);
+					// phpcs:enable
 					?>
 				<?php endforeach; ?>
 									</div>
@@ -606,6 +632,7 @@ class Provider_Settings_Page {
 									</button>
 				<script type="text/template" id="vkbm-business-hours-basic-slot-template">
 					<?php
+					// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 					echo $this->render_basic_business_hours_slot(
 						'__INDEX__',
 						array(
@@ -619,7 +646,8 @@ class Provider_Settings_Page {
 						$end_hour_options,
 						$minute_options,
 						array()
-					); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
+					);
+					// phpcs:enable
 					?>
 				</script>
 									<p class="description"><?php esc_html_e( 'Register the business hours that are common to the entire facility.', 'vk-booking-manager' ); ?></p>
@@ -695,6 +723,7 @@ class Provider_Settings_Page {
 													>
 							<?php foreach ( $slots_for_day as $slot_values ) : ?>
 								<?php
+								// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
 								echo $this->render_weekly_business_hours_slot(
 									$day_key,
 									(string) $slot_values['index'],
@@ -705,7 +734,8 @@ class Provider_Settings_Page {
 									$minute_options,
 									$is_regular_holiday || ! $use_custom,
 									$day_field_errors
-								); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
+								);
+								// phpcs:enable
 								?>
 							<?php endforeach; ?>
 						</div>
@@ -719,6 +749,7 @@ class Provider_Settings_Page {
 													</button>
 													<script type="text/template" class="vkbm-business-hours-slot-template">
 							<?php
+								// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 								echo $this->render_weekly_business_hours_slot(
 									$day_key,
 									'__INDEX__',
@@ -735,7 +766,8 @@ class Provider_Settings_Page {
 									$minute_options,
 									$is_regular_holiday || ! $use_custom,
 									array()
-								); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
+								);
+								// phpcs:enable // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 							?>
 							</script>
 												</td>
@@ -1118,7 +1150,8 @@ class Provider_Settings_Page {
 									<?php
 									echo esc_html(
 										sprintf(
-											__( 'Login by IP is limited to %d times/10 minutes, and user registration is limited to %d times/30 minutes.', 'vk-booking-manager' ),
+											/* translators: 1: login rate limit, 2: registration rate limit */
+											__( 'Login by IP is limited to %1$d times/10 minutes, and user registration is limited to %2$d times/30 minutes.', 'vk-booking-manager' ),
 											$auth_rate_limit_login_max,
 											$auth_rate_limit_register_max
 										)
@@ -1408,6 +1441,40 @@ class Provider_Settings_Page {
 								</tr>
 							<?php endif; ?>
 						<?php endif; ?>
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-menu-loop-reserve-button-label"><?php esc_html_e( 'Reservation button text', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-menu-loop-reserve-button-label"
+									name="vkbm_provider_settings[menu_loop_reserve_button_label]"
+									value="<?php echo esc_attr( $settings['menu_loop_reserve_button_label'] ?? '' ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Display text for the button that proceeds to the reservation page from the menu loop.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-menu-loop-detail-button-label"><?php esc_html_e( 'Detail button text', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-menu-loop-detail-button-label"
+									name="vkbm_provider_settings[menu_loop_detail_button_label]"
+									value="<?php echo esc_attr( $settings['menu_loop_detail_button_label'] ?? '' ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Display text for the button that proceeds to the service detail page from the menu loop.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
 						<tr class="vkbm-provider-settings__tab-design">
 							<th scope="row">
 								<label for="vkbm-design-primary-color"><?php esc_html_e( 'primary color', 'vk-booking-manager' ); ?></label>
@@ -1461,6 +1528,43 @@ class Provider_Settings_Page {
 									value="<?php echo esc_attr( (string) $design_radius_md ); ?>"
 								/> px
 								<p class="description"><?php esc_html_e( 'Applies to rounded corners (--vkbm--radius--md) in the main component.', 'vk-booking-manager' ); ?></p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-advanced">
+							<th scope="row"><?php esc_html_e( 'Email debug', 'vk-booking-manager' ); ?></th>
+							<td>
+								<label class="vkbm-inline-checkbox">
+									<input
+										type="checkbox"
+										name="vkbm_provider_settings[email_log_enabled]"
+										value="1"
+										<?php checked( $email_log_enabled ); ?>
+									/>
+									<?php esc_html_e( 'Enable email log', 'vk-booking-manager' ); ?>
+								</label>
+								<p class="description">
+									<?php esc_html_e( 'When enabled, the Email Log page becomes available and email send attempts are recorded.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-advanced">
+							<th scope="row">
+								<label for="vkbm-email-log-retention-days"><?php esc_html_e( 'Email log retention period', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="number"
+									class="small-text"
+									id="vkbm-email-log-retention-days"
+									name="vkbm_provider_settings[email_log_retention_days]"
+									min="1"
+									step="1"
+									value="<?php echo esc_attr( (string) $email_log_retention_days ); ?>"
+								/>
+								<?php esc_html_e( 'days', 'vk-booking-manager' ); ?>
+								<p class="description">
+									<?php esc_html_e( 'Logs older than this will be automatically deleted.', 'vk-booking-manager' ); ?>
+								</p>
 							</td>
 						</tr>
 						<tr class="vkbm-provider-settings__tab-faq">
@@ -1636,7 +1740,9 @@ class Provider_Settings_Page {
 	/**
 	 * Normalize weekly business hours slots for display.
 	 *
-	 * @param array<string, mixed> $day_settings Day settings.
+	 * @param array<string, mixed> $day_settings         Day settings.
+	 * @param array<string, mixed> $basic_template_slots Basic template slots.
+	 * @param bool                 $use_custom           Whether to use custom settings.
 	 * @return array<int, array<string, string>>
 	 */
 	private function prepare_weekly_business_hours_slots( array $day_settings, array $basic_template_slots, bool $use_custom ): array {
@@ -1712,7 +1818,7 @@ class Provider_Settings_Page {
 		$output['provider_name']                                  = sanitize_text_field( $input['provider_name'] ?? '' );
 		$output['provider_address']                               = sanitize_textarea_field( $input['provider_address'] ?? '' );
 		$output['provider_phone']                                 = sanitize_text_field( $input['provider_phone'] ?? '' );
-		$output['provider_payment_method']                       = sanitize_textarea_field( $input['provider_payment_method'] ?? '' );
+		$output['provider_payment_method']                        = sanitize_textarea_field( $input['provider_payment_method'] ?? '' );
 		$output['resource_label_singular']                        = sanitize_text_field( $input['resource_label_singular'] ?? 'Staff' );
 		$output['resource_label_plural']                          = sanitize_text_field( $input['resource_label_plural'] ?? 'Staff' );
 		$output['resource_label_menu']                            = sanitize_text_field( $input['resource_label_menu'] ?? 'Staff available' );
@@ -1734,18 +1840,24 @@ class Provider_Settings_Page {
 		$output['provider_cancellation_policy']                   = sanitize_textarea_field( $input['provider_cancellation_policy'] ?? '' );
 		$output['provider_terms_of_service']                      = sanitize_textarea_field( $input['provider_terms_of_service'] ?? '' );
 		$output['membership_redirect_wp_login']                   = ! empty( $input['membership_redirect_wp_login'] );
-		$output['booking_reminder_hours']                         = $this->sanitize_reminder_hours_input( $input['booking_reminder_hours'] ?? [] );
+		$output['email_log_enabled']                              = ! empty( $input['email_log_enabled'] );
+		$output['email_log_retention_days']                       = max( 1, absint( $input['email_log_retention_days'] ?? 1 ) );
+		$output['booking_reminder_hours']                         = $this->sanitize_reminder_hours_input( $input['booking_reminder_hours'] ?? array() );
 		$output['provider_regular_holidays_disabled']             = ! empty( $input['provider_regular_holidays_disabled'] );
 		$output['provider_regular_holidays']                      = $output['provider_regular_holidays_disabled']
 			? array()
 			: $this->sanitize_regular_holidays_input( $input['provider_regular_holidays'] ?? array() );
 		$output['provider_business_hours_basic']                  = $this->sanitize_basic_posted_slots( $input['provider_business_hours_basic'] ?? array() );
 		$output['provider_business_hours_weekly']                 = $this->sanitize_weekly_posted_slots( $input['provider_business_hours_weekly'] ?? array() );
+		$output['menu_loop_reserve_button_label']                 = sanitize_text_field( $input['menu_loop_reserve_button_label'] ?? '' );
+		$output['menu_loop_detail_button_label']                  = sanitize_text_field( $input['menu_loop_detail_button_label'] ?? '' );
 
 		return $output;
 	}
 
 	/**
+	 * Prepare basic business hours slots for display.
+	 *
 	 * @param array<string, mixed> $settings Current settings.
 	 * @param string               $base_url Base URL for the settings page.
 	 * @return array<int, array<string, string>>
@@ -2059,14 +2171,15 @@ class Provider_Settings_Page {
 	/**
 	 * Render a weekly business hour slot control group.
 	 *
-	 * @param string                $day_key        Day key.
-	 * @param string                $slot_key       Slot key.
-	 * @param string                $day_label      Day label.
-	 * @param array<string, string> $slot_values    Slot values.
+	 * @param string                $day_key           Day key.
+	 * @param string                $slot_key          Slot key.
+	 * @param string                $day_label         Day label.
+	 * @param array<string, string> $slot_values       Slot values.
 	 * @param array<string, string> $start_hour_options Start hour options.
-	 * @param array<string, string> $end_hour_options End hour options.
-	 * @param array<string, string> $minute_options Minute options.
-	 * @param bool                  $is_disabled    Whether inputs should be disabled.
+	 * @param array<string, string> $end_hour_options  End hour options.
+	 * @param array<string, string> $minute_options    Minute options.
+	 * @param bool                  $is_disabled       Whether the slot is disabled.
+	 * @param array<string, string> $field_errors      Field errors.
 	 * @return string
 	 */
 	private function render_weekly_business_hours_slot(
@@ -2206,7 +2319,7 @@ class Provider_Settings_Page {
 					type="button"
 					class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-business-hours-remove-slot vkbm-schedule-remove-slot"
 					<?php disabled( $is_disabled ); ?>
-					aria-label="<?php echo esc_attr( sprintf( __( 'Remove time slot for %s', 'vk-booking-manager' ), $day_label ) ); ?>"
+					aria-label="<?php /* translators: %s: day label */ echo esc_attr( sprintf( __( 'Remove time slot for %s', 'vk-booking-manager' ), $day_label ) ); ?>"
 				>
 					<?php esc_html_e( 'delete', 'vk-booking-manager' ); ?>
 				</button>
@@ -2246,7 +2359,7 @@ class Provider_Settings_Page {
 	 * @return array<string, string>
 	 */
 	private function get_end_hour_options(): array {
-		$options        = $this->get_hour_options();
+		$options       = $this->get_hour_options();
 		$options['24'] = '24';
 
 		return $options;

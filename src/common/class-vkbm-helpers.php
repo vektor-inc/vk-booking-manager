@@ -1,4 +1,9 @@
 <?php
+/**
+ * Common helper utilities for VK Booking Manager.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -22,7 +27,7 @@ class VKBM_Helper {
 	public static function format_currency( int $amount ): string {
 		$formatted = number_format_i18n( max( 0, $amount ) );
 
-		$settings = ( new Settings_Repository() )->get_settings();
+		$settings        = ( new Settings_Repository() )->get_settings();
 		$currency_symbol = isset( $settings['currency_symbol'] ) ? trim( (string) $settings['currency_symbol'] ) : '';
 
 		if ( '' !== $currency_symbol ) {
@@ -44,8 +49,8 @@ class VKBM_Helper {
 	 * @return string
 	 */
 	public static function get_tax_included_label(): string {
-		$settings = ( new Settings_Repository() )->get_settings();
-		$label    = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		$settings  = ( new Settings_Repository() )->get_settings();
+		$label     = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
 		$has_label = '' !== trim( $label );
 
 		if ( ! $has_label ) {
@@ -135,12 +140,12 @@ class VKBM_Helper {
 	 *
 	 * @param int|WP_Post           $post       Post ID or post instance.
 	 * @param string|array<int,int> $size       Image size.
-	 * @param string               $check_type 'direct' ignores filters by using the stored attachment ID,
-	 *                                        'hook' uses WordPress thumbnail APIs (filters may apply).
-	 * @param array<string,mixed>  $attr       Optional image attributes.
+	 * @param string                $check_type 'direct' ignores filters by using the stored attachment ID,
+	 *                                         'hook' uses WordPress thumbnail APIs (filters may apply).
+	 * @param array<string,mixed>   $attr       Optional image attributes.
 	 * @return string
 	 */
-	public static function get_thumbnail_html( $post, $size = 'thumbnail', string $check_type = 'direct', array $attr = [] ): string {
+	public static function get_thumbnail_html( $post, $size = 'thumbnail', string $check_type = 'direct', array $attr = array() ): string {
 		$post_id = self::normalize_post_id( $post );
 		if ( $post_id <= 0 ) {
 			return '';

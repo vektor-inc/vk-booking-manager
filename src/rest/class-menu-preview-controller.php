@@ -1,4 +1,9 @@
 <?php
+/**
+ * REST controller for menu preview.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -17,6 +22,11 @@ use function __;
 class Menu_Preview_Controller {
 	private const NAMESPACE = 'vkbm/v1';
 
+	/**
+	 * Menu loop block renderer.
+	 *
+	 * @var Menu_Loop_Block
+	 */
 	private Menu_Loop_Block $menu_loop_block;
 
 	/**
@@ -32,7 +42,7 @@ class Menu_Preview_Controller {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**
@@ -42,29 +52,29 @@ class Menu_Preview_Controller {
 		register_rest_route(
 			self::NAMESPACE,
 			'/menu-preview/(?P<id>\d+)',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'get_menu_preview' ],
+				'callback'            => array( $this, 'get_menu_preview' ),
 				'permission_callback' => '__return_true',
-				'args'                => [
-					'id' => [
+				'args'                => array(
+					'id' => array(
 						'required'          => true,
 						'type'              => 'integer',
 						'description'       => __( 'Service menu post ID', 'vk-booking-manager' ),
 						'validate_callback' => 'rest_validate_request_arg',
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
 		register_rest_route(
 			self::NAMESPACE,
 			'/menu-loop',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'get_menu_loop' ],
+				'callback'            => array( $this, 'get_menu_loop' ),
 				'permission_callback' => '__return_true',
-			]
+			)
 		);
 	}
 
@@ -86,26 +96,26 @@ class Menu_Preview_Controller {
 
 		$html = $this->menu_loop_block->render_menu_card(
 			$menu_id,
-			[
+			array(
 				'showDetailButton'  => false,
 				'showReserveButton' => false,
-			]
+			)
 		);
 
 		if ( '' === $html ) {
 			return new WP_Error(
 				'vkbm_menu_not_found',
 				__( 'The specified menu was not found.', 'vk-booking-manager' ),
-				[
+				array(
 					'status' => 404,
-				]
+				)
 			);
 		}
 
 		return new WP_REST_Response(
-			[
+			array(
 				'html' => $html,
-			]
+			)
 		);
 	}
 
@@ -118,9 +128,9 @@ class Menu_Preview_Controller {
 		$html = $this->menu_loop_block->render_menu_selection_list();
 
 		return new WP_REST_Response(
-			[
+			array(
 				'html' => $html,
-			]
+			)
 		);
 	}
 }

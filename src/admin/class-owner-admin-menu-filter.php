@@ -1,4 +1,9 @@
 <?php
+/**
+ * Hides WordPress admin menus that should not be visible to salon owners.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -46,7 +51,7 @@ class Owner_Admin_Menu_Filter {
 			return;
 		}
 
-		$page = $_GET['page'] ?? '';
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
 
 		if ( 'post_type_manage' === $page ) {
 			wp_safe_redirect( admin_url() );
@@ -74,7 +79,8 @@ class Owner_Admin_Menu_Filter {
 
 		global $pagenow;
 
-		if ( 'admin.php' === $pagenow && ( $_GET['page'] ?? '' ) === 'vkbm-shift-dashboard' ) {
+		$get_page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		if ( 'admin.php' === $pagenow && 'vkbm-shift-dashboard' === $get_page ) {
 			return;
 		}
 
@@ -107,14 +113,20 @@ class Owner_Admin_Menu_Filter {
 		return false;
 	}
 
+	/**
+	 * Register hooks.
+	 */
 	public function register(): void {
-		add_action( 'admin_menu', [ $this, 'remove_restricted_menus' ], 20 );
-		add_action( 'admin_init', [ $this, 'block_restricted_pages' ], 20 );
-		add_action( 'admin_init', [ $this, 'redirect_salon_owner_dashboard' ], 5 );
+		add_action( 'admin_menu', array( $this, 'remove_restricted_menus' ), 20 );
+		add_action( 'admin_init', array( $this, 'block_restricted_pages' ), 20 );
+		add_action( 'admin_init', array( $this, 'redirect_salon_owner_dashboard' ), 5 );
 	}
 
 	/**
 	 * Check if the current user has the salon owner role.
+	 *
+	 * @param WP_User $user User object.
+	 * @return bool
 	 */
 	private function is_salon_owner( WP_User $user ): bool {
 		if ( ! $user instanceof WP_User ) {

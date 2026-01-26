@@ -1,4 +1,9 @@
 <?php
+/**
+ * Provides setup notices in wp-admin.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -72,6 +77,8 @@ class Setup_Notices {
 	}
 
 	/**
+	 * Render notice markup for missing setup items.
+	 *
 	 * @param array<int, array<string, mixed>> $missing_items Missing setup items.
 	 */
 	private function render_notice_markup( array $missing_items ): void {
@@ -158,15 +165,18 @@ class Setup_Notices {
 	}
 
 	/**
+	 * Get setup items definition.
+	 *
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_setup_items(): array {
-		// 初期設定で不足している項目の定義一覧。
+		// 初期設定で不足している項目の定義一覧.
 		$items = array(
 			array(
 				'id'              => 'provider_name',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_provider_name(),
+				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Business name', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-provider-name' ),
@@ -178,6 +188,7 @@ class Setup_Notices {
 				'id'              => 'regular_holidays',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_regular_holidays_or_disabled(),
+				/* translators: %s: item name */
 				'message'         => __( '%s is not set. Please register "No regular holidays" or regular holidays.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Regular holiday', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-regular-holiday-disabled' ),
@@ -189,6 +200,7 @@ class Setup_Notices {
 				'id'              => 'business_hours_basic',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_basic_business_hours(),
+				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Basic business hours', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-basic-business-hours' ),
@@ -200,6 +212,7 @@ class Setup_Notices {
 				'id'              => 'reservation_page_url',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_reservation_page_url(),
+				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Reservation page URL', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-reservation-page-url' ),
@@ -211,6 +224,7 @@ class Setup_Notices {
 				'id'              => 'provider_email',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_provider_email(),
+				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Representative email address', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-provider-email' ),
@@ -222,6 +236,7 @@ class Setup_Notices {
 				'id'              => 'privacy_policy_mode',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
 				'is_missing'      => fn () => ! $this->has_privacy_policy_mode(),
+				/* translators: %s: item name */
 				'message'         => __( 'Please select %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Privacy policy', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=consent#vkbm-provider-privacy-policy-mode' ),
@@ -231,7 +246,7 @@ class Setup_Notices {
 			),
 		);
 
-		// スタッフ機能が有効な場合のみスタッフ設定を促す。
+		// スタッフ機能が有効な場合のみスタッフ設定を促す.
 		if ( Staff_Editor::is_enabled() ) {
 			$items[] = array(
 				'id'              => 'staff',
@@ -245,7 +260,7 @@ class Setup_Notices {
 			);
 		}
 
-		// サービスメニューの登録は常に必須。
+		// サービスメニューの登録は常に必須.
 		$items[] = array(
 			'id'              => 'service_menu',
 			'capability'      => Capabilities::MANAGE_SERVICE_MENUS,
@@ -261,6 +276,8 @@ class Setup_Notices {
 	}
 
 	/**
+	 * Get missing setup items.
+	 *
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_missing_setup_items(): array {
@@ -281,6 +298,8 @@ class Setup_Notices {
 	}
 
 	/**
+	 * Get missing setup items for current user.
+	 *
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_missing_setup_items_for_user(): array {
@@ -296,10 +315,21 @@ class Setup_Notices {
 		return $missing;
 	}
 
+	/**
+	 * Check if setup is complete.
+	 *
+	 * @return bool
+	 */
 	private function is_setup_complete(): bool {
 		return array() === $this->get_missing_setup_items();
 	}
 
+	/**
+	 * Check if posts exist for the given post type.
+	 *
+	 * @param string $post_type Post type.
+	 * @return bool
+	 */
 	private function has_posts( string $post_type ): bool {
 		$counts = wp_count_posts( $post_type );
 		if ( ! is_object( $counts ) ) {
@@ -316,6 +346,11 @@ class Setup_Notices {
 		return $total > 0;
 	}
 
+	/**
+	 * Check if basic business hours are set.
+	 *
+	 * @return bool
+	 */
 	private function has_basic_business_hours(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -324,6 +359,11 @@ class Setup_Notices {
 		return is_array( $basic ) && array() !== $basic;
 	}
 
+	/**
+	 * Check if provider name is set.
+	 *
+	 * @return bool
+	 */
 	private function has_provider_name(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -332,6 +372,11 @@ class Setup_Notices {
 		return '' !== $name;
 	}
 
+	/**
+	 * Check if regular holidays are set or disabled.
+	 *
+	 * @return bool
+	 */
 	private function has_regular_holidays_or_disabled(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -346,6 +391,11 @@ class Setup_Notices {
 		return is_array( $holidays ) && array() !== $holidays;
 	}
 
+	/**
+	 * Check if reservation page URL is set.
+	 *
+	 * @return bool
+	 */
 	private function has_reservation_page_url(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -355,6 +405,8 @@ class Setup_Notices {
 	}
 
 	/**
+	 * Get missing shift months.
+	 *
 	 * @return array<int, array{year:int,month:int}>
 	 */
 	private function get_missing_shift_months(): array {
@@ -393,6 +445,11 @@ class Setup_Notices {
 		return $missing;
 	}
 
+	/**
+	 * Check if published resources exist.
+	 *
+	 * @return bool
+	 */
 	private function has_published_resources(): bool {
 		$counts = wp_count_posts( Resource_Post_Type::POST_TYPE );
 		if ( ! is_object( $counts ) ) {
@@ -402,6 +459,13 @@ class Setup_Notices {
 		return isset( $counts->publish ) && (int) $counts->publish > 0;
 	}
 
+	/**
+	 * Check if shift exists for the given month.
+	 *
+	 * @param int $year  Year.
+	 * @param int $month Month.
+	 * @return bool
+	 */
 	private function has_shift_for_month( int $year, int $month ): bool {
 		$posts = get_posts(
 			array(
@@ -430,6 +494,11 @@ class Setup_Notices {
 		return ! empty( $posts );
 	}
 
+	/**
+	 * Get shift alert months setting.
+	 *
+	 * @return int
+	 */
 	private function get_shift_alert_months(): int {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -439,6 +508,8 @@ class Setup_Notices {
 	}
 
 	/**
+	 * Render shift notice markup.
+	 *
 	 * @param array<int, array{year:int,month:int}> $missing_months Missing shift months.
 	 * @param bool                                  $show_action     Whether to show action button.
 	 */
@@ -470,6 +541,11 @@ class Setup_Notices {
 		<?php
 	}
 
+	/**
+	 * Check if current screen is shift dashboard.
+	 *
+	 * @return bool
+	 */
 	private function is_shift_dashboard_screen(): bool {
 		if ( function_exists( 'get_current_screen' ) ) {
 			$screen = get_current_screen();
@@ -478,9 +554,15 @@ class Setup_Notices {
 			}
 		}
 
-		return isset( $_GET['page'] ) && 'vkbm-shift-dashboard' === (string) $_GET['page']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		return 'vkbm-shift-dashboard' === $page;
 	}
 
+	/**
+	 * Check if current screen is shift post type.
+	 *
+	 * @return bool
+	 */
 	private function is_shift_post_type_screen(): bool {
 		if ( function_exists( 'get_current_screen' ) ) {
 			$screen = get_current_screen();
@@ -489,9 +571,15 @@ class Setup_Notices {
 			}
 		}
 
-		return isset( $_GET['post_type'] ) && Shift_Post_Type::POST_TYPE === (string) $_GET['post_type']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		$post_type = isset( $_GET['post_type'] ) ? sanitize_text_field( wp_unslash( $_GET['post_type'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		return Shift_Post_Type::POST_TYPE === $post_type;
 	}
 
+	/**
+	 * Check if provider email is set.
+	 *
+	 * @return bool
+	 */
 	private function has_provider_email(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -500,6 +588,11 @@ class Setup_Notices {
 		return '' !== $email;
 	}
 
+	/**
+	 * Check if privacy policy mode is set.
+	 *
+	 * @return bool
+	 */
 	private function has_privacy_policy_mode(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
@@ -510,6 +603,12 @@ class Setup_Notices {
 		return 'none' !== $mode;
 	}
 
+	/**
+	 * Check if notice is dismissed for user.
+	 *
+	 * @param string $notice_id Notice ID.
+	 * @return bool
+	 */
 	private function is_notice_dismissed_for_user( string $notice_id ): bool {
 		$user_id = get_current_user_id();
 		if ( $user_id <= 0 ) {
@@ -524,6 +623,12 @@ class Setup_Notices {
 		return array_key_exists( $notice_id, $dismissed );
 	}
 
+	/**
+	 * Dismiss notice for user.
+	 *
+	 * @param int    $user_id   User ID.
+	 * @param string $notice_id Notice ID.
+	 */
 	private function dismiss_notice_for_user( int $user_id, string $notice_id ): void {
 		if ( $user_id <= 0 ) {
 			return;
@@ -538,6 +643,11 @@ class Setup_Notices {
 		update_user_meta( $user_id, self::USER_META_KEY, $dismissed );
 	}
 
+	/**
+	 * Dismiss notice globally.
+	 *
+	 * @param string $notice_id Notice ID.
+	 */
 	private function dismiss_notice_globally( string $notice_id ): void {
 		$dismissed = get_option( self::OPTION_META_KEY, array() );
 		if ( ! is_array( $dismissed ) ) {
@@ -548,6 +658,11 @@ class Setup_Notices {
 		update_option( self::OPTION_META_KEY, $dismissed, false );
 	}
 
+	/**
+	 * Check if current user can manage notices.
+	 *
+	 * @return bool
+	 */
 	private function current_user_can_manage_notices(): bool {
 		foreach ( $this->get_setup_items() as $item ) {
 			if ( isset( $item['capability'] ) && current_user_can( (string) $item['capability'] ) ) {

@@ -1,4 +1,9 @@
 <?php
+/**
+ * Resource schedule meta box handler.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -37,9 +42,9 @@ class Resource_Schedule_Meta_Box {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'add_meta_boxes', [ $this, 'add_meta_box' ] );
-		add_action( 'save_post_' . Resource_Post_Type::POST_TYPE, [ $this, 'save_post' ], 10, 2 );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
+		add_action( 'save_post_' . Resource_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 	}
 
 	/**
@@ -48,7 +53,7 @@ class Resource_Schedule_Meta_Box {
 	 * @return array<string, string>
 	 */
 	private function get_day_labels(): array {
-		return [
+		return array(
 			'mon'         => __( 'Monday', 'vk-booking-manager' ),
 			'tue'         => __( 'Tuesday', 'vk-booking-manager' ),
 			'wed'         => __( 'Wednesday', 'vk-booking-manager' ),
@@ -58,7 +63,7 @@ class Resource_Schedule_Meta_Box {
 			'sun'         => __( 'Sunday', 'vk-booking-manager' ),
 			'holiday'     => __( 'Holiday', 'vk-booking-manager' ),
 			'holiday_eve' => __( 'The day before a public holiday', 'vk-booking-manager' ),
-		];
+		);
 	}
 
 	/**
@@ -68,7 +73,7 @@ class Resource_Schedule_Meta_Box {
 		add_meta_box(
 			'vkbm-resource-schedule',
 			__( 'Work template', 'vk-booking-manager' ),
-			[ $this, 'render_meta_box' ],
+			array( $this, 'render_meta_box' ),
 			Resource_Post_Type::POST_TYPE,
 			'normal',
 			'default'
@@ -81,14 +86,14 @@ class Resource_Schedule_Meta_Box {
 	 * @param WP_Post $post Current resource post.
 	 */
 	public function render_meta_box( WP_Post $post ): void {
-		$template       = $this->repository->get_template( $post->ID );
-		$hour_options   = $this->get_hour_options();
+		$template         = $this->repository->get_template( $post->ID );
+		$hour_options     = $this->get_hour_options();
 		$end_hour_options = $this->get_end_hour_options();
-		$minute_options = $this->get_minute_options();
-		$empty_parts    = [
+		$minute_options   = $this->get_minute_options();
+		$empty_parts      = array(
 			'hour'   => '',
 			'minute' => '',
-		];
+		);
 
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 		?>
@@ -106,7 +111,7 @@ class Resource_Schedule_Meta_Box {
 				<tbody>
 					<?php foreach ( $this->get_day_labels() as $day_key => $day_label ) : ?>
 						<?php
-						$slots = is_array( $template['days'][ $day_key ] ?? null ) ? $template['days'][ $day_key ] : [];
+						$slots = is_array( $template['days'][ $day_key ] ?? null ) ? $template['days'][ $day_key ] : array();
 						$slots = array_values(
 							array_filter(
 								$slots,
@@ -117,12 +122,12 @@ class Resource_Schedule_Meta_Box {
 						);
 
 						if ( empty( $slots ) ) {
-							$slots = [
-								[
+							$slots = array(
+								array(
 									'start' => '',
 									'end'   => '',
-								],
-							];
+								),
+							);
 						}
 						?>
 						<tr class="vkbm-resource-schedule-day" data-day="<?php echo esc_attr( $day_key ); ?>">
@@ -186,15 +191,15 @@ class Resource_Schedule_Meta_Box {
 	 * @param array<string, string> $minute_options Minute options.
 	 */
 	private function render_slot_row( string $day, string $index, array $start_parts, array $end_parts, array $start_hour_options, array $end_hour_options, array $minute_options ): void {
-		$name_prefix    = sprintf( 'vkbm_resource_schedule[days][%s][%s]', $day, $index );
-		$start_hour     = $start_parts['hour'] ?? '';
-		$start_minute   = $start_parts['minute'] ?? '';
-		$end_hour       = $end_parts['hour'] ?? '';
-		$end_minute     = $end_parts['minute'] ?? '';
-		$start_hour_id  = sprintf( 'vkbm-resource-schedule-%s-%s-start_hour', $day, $index );
-		$start_min_id   = sprintf( 'vkbm-resource-schedule-%s-%s-start_minute', $day, $index );
-		$end_hour_id    = sprintf( 'vkbm-resource-schedule-%s-%s-end_hour', $day, $index );
-		$end_minute_id  = sprintf( 'vkbm-resource-schedule-%s-%s-end_minute', $day, $index );
+		$name_prefix   = sprintf( 'vkbm_resource_schedule[days][%s][%s]', $day, $index );
+		$start_hour    = $start_parts['hour'] ?? '';
+		$start_minute  = $start_parts['minute'] ?? '';
+		$end_hour      = $end_parts['hour'] ?? '';
+		$end_minute    = $end_parts['minute'] ?? '';
+		$start_hour_id = sprintf( 'vkbm-resource-schedule-%s-%s-start_hour', $day, $index );
+		$start_min_id  = sprintf( 'vkbm-resource-schedule-%s-%s-start_minute', $day, $index );
+		$end_hour_id   = sprintf( 'vkbm-resource-schedule-%s-%s-end_hour', $day, $index );
+		$end_minute_id = sprintf( 'vkbm-resource-schedule-%s-%s-end_minute', $day, $index );
 		?>
 		<div class="vkbm-resource-schedule-slot vkbm-schedule-slot">
 			<div class="vkbm-resource-schedule-time-range vkbm-schedule-time-range">
@@ -210,7 +215,10 @@ class Resource_Schedule_Meta_Box {
 					>
 						<option value="00"><?php esc_html_e( '00', 'vk-booking-manager' ); ?></option>
 						<?php foreach ( $start_hour_options as $value => $label ) : ?>
-							<?php if ( '00' === $value ) { continue; } ?>
+							<?php
+							if ( '00' === $value ) {
+								continue; }
+							?>
 							<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $start_hour, $value ); ?>>
 								<?php echo esc_html( $label ); ?>
 							</option>
@@ -228,7 +236,10 @@ class Resource_Schedule_Meta_Box {
 					>
 						<option value="00"><?php esc_html_e( '00', 'vk-booking-manager' ); ?></option>
 						<?php foreach ( $minute_options as $value => $label ) : ?>
-							<?php if ( '00' === $value ) { continue; } ?>
+							<?php
+							if ( '00' === $value ) {
+								continue; }
+							?>
 							<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $start_minute, $value ); ?>>
 								<?php echo esc_html( $label ); ?>
 							</option>
@@ -248,7 +259,10 @@ class Resource_Schedule_Meta_Box {
 					>
 						<option value="00"><?php esc_html_e( '00', 'vk-booking-manager' ); ?></option>
 						<?php foreach ( $end_hour_options as $value => $label ) : ?>
-							<?php if ( '00' === $value ) { continue; } ?>
+							<?php
+							if ( '00' === $value ) {
+								continue; }
+							?>
 							<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $end_hour, $value ); ?>>
 								<?php echo esc_html( $label ); ?>
 							</option>
@@ -266,7 +280,10 @@ class Resource_Schedule_Meta_Box {
 					>
 						<option value="00"><?php esc_html_e( '00', 'vk-booking-manager' ); ?></option>
 						<?php foreach ( $minute_options as $value => $label ) : ?>
-							<?php if ( '00' === $value ) { continue; } ?>
+							<?php
+							if ( '00' === $value ) {
+								continue; }
+							?>
 							<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $end_minute, $value ); ?>>
 								<?php echo esc_html( $label ); ?>
 							</option>
@@ -304,7 +321,7 @@ class Resource_Schedule_Meta_Box {
 			return;
 		}
 
-		$payload = $_POST['vkbm_resource_schedule'] ?? null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- intentionally handled.
+		$payload = isset( $_POST['vkbm_resource_schedule'] ) && is_array( $_POST['vkbm_resource_schedule'] ) ? wp_unslash( $_POST['vkbm_resource_schedule'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- intentionally handled.
 
 		if ( ! is_array( $payload ) ) {
 			$this->repository->delete_template( $post_id );
@@ -334,7 +351,7 @@ class Resource_Schedule_Meta_Box {
 	 * @param string $hook Current admin hook.
 	 */
 	public function enqueue_assets( string $hook ): void {
-		if ( ! in_array( $hook, [ 'post.php', 'post-new.php' ], true ) ) {
+		if ( ! in_array( $hook, array( 'post.php', 'post-new.php' ), true ) ) {
 			return;
 		}
 
@@ -351,7 +368,7 @@ class Resource_Schedule_Meta_Box {
 		wp_enqueue_script(
 			'vkbm-resource-schedule',
 			$base_url . 'assets/js/resource-schedule.js',
-			[ 'jquery' ],
+			array( 'jquery' ),
 			VKBM_VERSION,
 			true
 		);
@@ -359,11 +376,11 @@ class Resource_Schedule_Meta_Box {
 		wp_localize_script(
 			'vkbm-resource-schedule',
 			'vkbmResourceSchedule',
-			[
+			array(
 				'useProviderHoursSelector' => '#vkbm-resource-schedule-use-provider-hours',
 				'daysContainerSelector'    => '#vkbm-resource-schedule-days',
 				'defaultSlotsByDay'        => $this->get_provider_default_slots_by_day(),
-			]
+			)
 		);
 	}
 
@@ -374,11 +391,11 @@ class Resource_Schedule_Meta_Box {
 	 */
 	private function get_provider_default_days(): array {
 		$default_slots_by_day = $this->get_provider_default_slots_by_day();
-		$default_days         = [];
+		$default_days         = array();
 
 		foreach ( array_keys( $this->get_day_labels() ) as $day_key ) {
 			if ( isset( $default_slots_by_day[ $day_key ] ) ) {
-				$default_days[ $day_key ] = [ $default_slots_by_day[ $day_key ] ];
+				$default_days[ $day_key ] = array( $default_slots_by_day[ $day_key ] );
 			}
 		}
 
@@ -397,7 +414,7 @@ class Resource_Schedule_Meta_Box {
 			return $cached;
 		}
 
-		$cached = [];
+		$cached = array();
 
 		if ( ! class_exists( Settings_Repository::class ) ) {
 			return $cached;
@@ -406,23 +423,23 @@ class Resource_Schedule_Meta_Box {
 		$settings = ( new Settings_Repository() )->get_settings();
 		$weekly   = isset( $settings['provider_business_hours_weekly'] ) && is_array( $settings['provider_business_hours_weekly'] )
 			? $settings['provider_business_hours_weekly']
-			: [];
+			: array();
 		$basic    = isset( $settings['provider_business_hours_basic'] ) && is_array( $settings['provider_business_hours_basic'] )
 			? $settings['provider_business_hours_basic']
-			: [];
+			: array();
 
 		foreach ( array_keys( $this->get_day_labels() ) as $day_key ) {
-			$slots = [];
+			$slots = array();
 
 			if ( isset( $weekly[ $day_key ] ) && ! empty( $weekly[ $day_key ]['use_custom'] ) ) {
-				$slots = $weekly[ $day_key ]['time_slots'] ?? [];
+				$slots = $weekly[ $day_key ]['time_slots'] ?? array();
 			}
 
 			if ( empty( $slots ) ) {
 				$slots = $basic;
 			}
 
-			$normalized = $this->normalize_slot_collection( is_array( $slots ) ? $slots : [] );
+			$normalized = $this->normalize_slot_collection( is_array( $slots ) ? $slots : array() );
 
 			if ( ! empty( $normalized[0] ) ) {
 				$cached[ $day_key ] = $normalized[0];
@@ -440,17 +457,17 @@ class Resource_Schedule_Meta_Box {
 	 */
 	private function sanitize_template( array $payload ): array {
 		$use_provider_hours = ! empty( $payload['use_provider_hours'] );
-		$sanitized_days     = [];
+		$sanitized_days     = array();
 
 		if ( ! $use_provider_hours && isset( $payload['days'] ) && is_array( $payload['days'] ) ) {
 			foreach ( $this->get_day_labels() as $day_key => $unused ) {
-				$day_slots = $payload['days'][ $day_key ] ?? [];
+				$day_slots = $payload['days'][ $day_key ] ?? array();
 
 				if ( ! is_array( $day_slots ) ) {
 					continue;
 				}
 
-				$sanitized_slots = [];
+				$sanitized_slots = array();
 
 				foreach ( $day_slots as $slot ) {
 					if ( ! is_array( $slot ) ) {
@@ -468,10 +485,10 @@ class Resource_Schedule_Meta_Box {
 						continue;
 					}
 
-					$sanitized_slots[] = [
+					$sanitized_slots[] = array(
 						'start' => $start,
 						'end'   => $end,
-					];
+					);
 				}
 
 				if ( ! empty( $sanitized_slots ) ) {
@@ -480,10 +497,10 @@ class Resource_Schedule_Meta_Box {
 			}
 		}
 
-		return [
+		return array(
 			'use_provider_hours' => $use_provider_hours,
 			'days'               => $sanitized_days,
-		];
+		);
 	}
 
 	/**
@@ -493,7 +510,7 @@ class Resource_Schedule_Meta_Box {
 	 * @return array<int, array{start:string,end:string}>
 	 */
 	private function normalize_slot_collection( array $slots ): array {
-		$normalized = [];
+		$normalized = array();
 
 		foreach ( $slots as $slot ) {
 			if ( ! is_array( $slot ) ) {
@@ -519,10 +536,10 @@ class Resource_Schedule_Meta_Box {
 				continue;
 			}
 
-			$normalized[] = [
+			$normalized[] = array(
 				'start' => $start,
 				'end'   => $end,
-			];
+			);
 		}
 
 		return $normalized;
@@ -568,18 +585,18 @@ class Resource_Schedule_Meta_Box {
 		$time = $this->sanitize_time( $time );
 
 		if ( '' === $time ) {
-			return [
+			return array(
 				'hour'   => '',
 				'minute' => '',
-			];
+			);
 		}
 
 		[ $hour, $minute ] = explode( ':', $time );
 
-		return [
+		return array(
 			'hour'   => $hour,
 			'minute' => $minute,
-		];
+		);
 	}
 
 	/**
@@ -611,7 +628,8 @@ class Resource_Schedule_Meta_Box {
 	/**
 	 * Sanitize hour component.
 	 *
-	 * @param string $hour Raw hour.
+	 * @param string $hour     Raw hour.
+	 * @param bool   $allow_24 Whether to allow 24 as hour value.
 	 * @return string
 	 */
 	private function sanitize_hour( string $hour, bool $allow_24 = false ): string {
@@ -659,7 +677,7 @@ class Resource_Schedule_Meta_Box {
 	 * @return array<string, string>
 	 */
 	private function get_hour_options(): array {
-		$options = [];
+		$options = array();
 
 		for ( $i = 0; $i < 24; $i++ ) {
 			$value             = sprintf( '%02d', $i );
@@ -675,7 +693,7 @@ class Resource_Schedule_Meta_Box {
 	 * @return array<string, string>
 	 */
 	private function get_end_hour_options(): array {
-		$options        = $this->get_hour_options();
+		$options       = $this->get_hour_options();
 		$options['24'] = '24';
 
 		return $options;
@@ -687,8 +705,8 @@ class Resource_Schedule_Meta_Box {
 	 * @return array<string, string>
 	 */
 	private function get_minute_options(): array {
-		$values  = [ '00', '10', '20', '30', '40', '50' ];
-		$options = [];
+		$values  = array( '00', '10', '20', '30', '40', '50' );
+		$options = array();
 
 		foreach ( $values as $value ) {
 			$options[ $value ] = $value;

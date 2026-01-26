@@ -1,4 +1,9 @@
 <?php
+/**
+ * REST controller for availability data.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -17,6 +22,11 @@ use function __;
 class Availability_Controller {
 	private const NAMESPACE = 'vkbm/v1';
 
+	/**
+	 * Availability service.
+	 *
+	 * @var Availability_Service
+	 */
 	private Availability_Service $service;
 
 	/**
@@ -32,7 +42,7 @@ class Availability_Controller {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**
@@ -42,23 +52,23 @@ class Availability_Controller {
 		register_rest_route(
 			self::NAMESPACE,
 			'/calendar-meta',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'handle_calendar_meta' ],
+				'callback'            => array( $this, 'handle_calendar_meta' ),
 				'permission_callback' => '__return_true',
 				'args'                => $this->get_calendar_args(),
-			]
+			)
 		);
 
 		register_rest_route(
 			self::NAMESPACE,
 			'/availabilities',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'handle_daily_slots' ],
+				'callback'            => array( $this, 'handle_daily_slots' ),
 				'permission_callback' => '__return_true',
 				'args'                => $this->get_daily_args(),
-			]
+			)
 		);
 	}
 
@@ -70,13 +80,13 @@ class Availability_Controller {
 	 */
 	public function handle_calendar_meta( WP_REST_Request $request ) {
 		$data = $this->service->get_calendar_meta(
-			[
-				'menu_id'  => (int) $request['menu_id'],
+			array(
+				'menu_id'     => (int) $request['menu_id'],
 				'resource_id' => isset( $request['resource_id'] ) ? (int) $request['resource_id'] : null,
-				'year'     => (int) $request['year'],
-				'month'    => (int) $request['month'],
-				'timezone' => (string) $request['timezone'],
-			]
+				'year'        => (int) $request['year'],
+				'month'       => (int) $request['month'],
+				'timezone'    => (string) $request['timezone'],
+			)
 		);
 
 		if ( is_wp_error( $data ) ) {
@@ -94,12 +104,12 @@ class Availability_Controller {
 	 */
 	public function handle_daily_slots( WP_REST_Request $request ) {
 		$data = $this->service->get_daily_slots(
-			[
-				'menu_id'  => (int) $request['menu_id'],
+			array(
+				'menu_id'     => (int) $request['menu_id'],
 				'resource_id' => isset( $request['resource_id'] ) ? (int) $request['resource_id'] : null,
-				'date'     => (string) $request['date'],
-				'timezone' => (string) $request['timezone'],
-			]
+				'date'        => (string) $request['date'],
+				'timezone'    => (string) $request['timezone'],
+			)
 		);
 
 		if ( is_wp_error( $data ) ) {
@@ -115,40 +125,40 @@ class Availability_Controller {
 	 * @return array<string, array<string, mixed>>
 	 */
 	private function get_calendar_args(): array {
-		return [
-			'menu_id'  => [
+		return array(
+			'menu_id'     => array(
 				'required'          => true,
 				'type'              => 'integer',
 				'description'       => __( 'Service menu post ID', 'vk-booking-manager' ),
 				'validate_callback' => 'rest_validate_request_arg',
-			],
-			'resource_id' => [
+			),
+			'resource_id' => array(
 				'required'          => false,
 				'type'              => 'integer',
 				'description'       => __( 'Nominated resource ID (optional)', 'vk-booking-manager' ),
 				'validate_callback' => 'rest_validate_request_arg',
-			],
-			'year'     => [
+			),
+			'year'        => array(
 				'required'    => true,
 				'type'        => 'integer',
 				'description' => __( 'Target year (YYYY)', 'vk-booking-manager' ),
 				'minimum'     => 2000,
 				'maximum'     => 2100,
-			],
-			'month'    => [
+			),
+			'month'       => array(
 				'required'    => true,
 				'type'        => 'integer',
 				'description' => __( 'Target month (1-12)', 'vk-booking-manager' ),
 				'minimum'     => 1,
 				'maximum'     => 12,
-			],
-			'timezone' => [
+			),
+			'timezone'    => array(
 				'required'    => false,
 				'type'        => 'string',
 				'description' => __( 'Time zone name (Site setting if not specified)', 'vk-booking-manager' ),
 				'default'     => '',
-			],
-		];
+			),
+		);
 	}
 
 	/**
@@ -157,16 +167,16 @@ class Availability_Controller {
 	 * @return array<string, array<string, mixed>>
 	 */
 	private function get_daily_args(): array {
-		return [
-			'menu_id'  => $this->get_calendar_args()['menu_id'],
+		return array(
+			'menu_id'     => $this->get_calendar_args()['menu_id'],
 			'resource_id' => $this->get_calendar_args()['resource_id'],
-			'date'     => [
+			'date'        => array(
 				'required'    => true,
 				'type'        => 'string',
 				'description' => __( 'Target date (YYYY-MM-DD)', 'vk-booking-manager' ),
 				'pattern'     => '^\d{4}-\d{2}-\d{2}$',
-			],
-			'timezone' => $this->get_calendar_args()['timezone'],
-		];
+			),
+			'timezone'    => $this->get_calendar_args()['timezone'],
+		);
 	}
 }

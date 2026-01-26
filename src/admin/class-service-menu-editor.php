@@ -1,4 +1,9 @@
 <?php
+/**
+ * Handles the Service Menu editing UI and meta persistence.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -8,26 +13,27 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 
 /**
  * Handles the Service Menu editing UI and meta persistence.
  */
 class Service_Menu_Editor {
-	private const NONCE_ACTION = 'vkbm_service_menu_meta';
-	private const NONCE_NAME   = '_vkbm_service_menu_nonce';
-	private const META_USE_DETAIL_PAGE = '_vkbm_use_detail_page';
-	private const META_RESERVATION_DAY_TYPE = '_vkbm_reservation_day_type';
-	private const META_OTHER_CONDITIONS = '_vkbm_other_conditions';
+	private const NONCE_ACTION                = 'vkbm_service_menu_meta';
+	private const NONCE_NAME                  = '_vkbm_service_menu_nonce';
+	private const META_USE_DETAIL_PAGE        = '_vkbm_use_detail_page';
+	private const META_RESERVATION_DAY_TYPE   = '_vkbm_reservation_day_type';
+	private const META_OTHER_CONDITIONS       = '_vkbm_other_conditions';
 	private const META_DISABLE_NOMINATION_FEE = '_vkbm_disable_nomination_fee';
 
 	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'add_meta_boxes', [ $this, 'add_meta_boxes' ], 1 );
-		add_action( 'do_meta_boxes', [ $this, 'promote_vkbm_meta_box' ], 10, 3 );
-		add_action( 'save_post_' . Service_Menu_Post_Type::POST_TYPE, [ $this, 'save_post' ], 10, 2 );
+		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ), 1 );
+		add_action( 'do_meta_boxes', array( $this, 'promote_vkbm_meta_box' ), 10, 3 );
+		add_action( 'save_post_' . Service_Menu_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
 	}
 
 	/**
@@ -43,25 +49,28 @@ class Service_Menu_Editor {
 		add_meta_box(
 			'vkbm_service_menu_vkbm',
 			__( 'VK Booking Manager', 'vk-booking-manager' ),
-			[ $this, 'render_vkbm_meta_box' ],
+			array( $this, 'render_vkbm_meta_box' ),
 			$post_type,
 			'normal',
 			'high'
 		);
 
-		add_meta_box(
-			'vkbm_service_menu_staff',
-			__( 'Staff collaboration', 'vk-booking-manager' ),
-			[ $this, 'render_staff_meta_box' ],
-			$post_type,
-			'side',
-			'default'
-		);
+		if ( Staff_Editor::is_enabled() ) {
+			// Only show staff linkage UI when staff editor is enabled. / スタッフ編集が有効な場合のみ連携UIを表示します.
+			add_meta_box(
+				'vkbm_service_menu_staff',
+				__( 'Staff collaboration', 'vk-booking-manager' ),
+				array( $this, 'render_staff_meta_box' ),
+				$post_type,
+				'side',
+				'default'
+			);
+		}
 
 		add_meta_box(
 			'vkbm_service_menu_publish',
 			__( 'Public settings', 'vk-booking-manager' ),
-			[ $this, 'render_publish_meta_box' ],
+			array( $this, 'render_publish_meta_box' ),
 			$post_type,
 			'side',
 			'default'
@@ -73,9 +82,9 @@ class Service_Menu_Editor {
 	 *
 	 * Note: Users can still reorder meta boxes via screen options. This tries to keep the default order.
 	 *
-	 * @param string  $post_type Current post type.
-	 * @param string  $context   Meta box context.
-	 * @param mixed   $object    Screen object (post, dashboard object, etc.).
+	 * @param string $post_type Current post type.
+	 * @param string $context   Meta box context.
+	 * @param mixed  $object    Screen object (post, dashboard object, etc.).
 	 */
 	public function promote_vkbm_meta_box( string $post_type, string $context, $object ): void {
 		if ( Service_Menu_Post_Type::POST_TYPE !== $post_type || 'normal' !== $context ) {
@@ -95,7 +104,7 @@ class Service_Menu_Editor {
 		$meta_box_id = 'vkbm_service_menu_vkbm';
 		$meta_box    = null;
 
-		foreach ( [ 'high', 'core', 'default', 'low' ] as $priority ) {
+		foreach ( array( 'high', 'core', 'default', 'low' ) as $priority ) {
 			if ( isset( $wp_meta_boxes[ $post_type ]['normal'][ $priority ][ $meta_box_id ] ) ) {
 				$meta_box = $wp_meta_boxes[ $post_type ]['normal'][ $priority ][ $meta_box_id ];
 				unset( $wp_meta_boxes[ $post_type ]['normal'][ $priority ][ $meta_box_id ] );
@@ -108,10 +117,10 @@ class Service_Menu_Editor {
 		}
 
 		if ( empty( $wp_meta_boxes[ $post_type ]['normal']['high'] ) ) {
-			$wp_meta_boxes[ $post_type ]['normal']['high'] = [];
+			$wp_meta_boxes[ $post_type ]['normal']['high'] = array();
 		}
 
-		$wp_meta_boxes[ $post_type ]['normal']['high'] = [ $meta_box_id => $meta_box ] + $wp_meta_boxes[ $post_type ]['normal']['high'];
+		$wp_meta_boxes[ $post_type ]['normal']['high'] = array( $meta_box_id => $meta_box ) + $wp_meta_boxes[ $post_type ]['normal']['high'];
 	}
 
 	/**
@@ -131,15 +140,15 @@ class Service_Menu_Editor {
 		 *
 		 * @param WP_Post $post Current post object.
 		 */
-		private function render_internal_memo_field( WP_Post $post ): void {
-			$internal_memo = get_post_meta( $post->ID, '_vkbm_internal_memo', true );
-			?>
+	private function render_internal_memo_field( WP_Post $post ): void {
+		$internal_memo = get_post_meta( $post->ID, '_vkbm_internal_memo', true );
+		?>
 			<div class="vkbm-service-menu-field">
 				<label for="vkbm_service_menu_internal_memo"><?php esc_html_e( 'Internal memo (customer hidden)', 'vk-booking-manager' ); ?></label><br />
 				<textarea id="vkbm_service_menu_internal_memo" name="vkbm_service_menu[internal_memo]" class="widefat" rows="4"><?php echo esc_textarea( $internal_memo ); ?></textarea>
 			</div>
 			<?php
-		}
+	}
 
 		/**
 		 * Render the basic information meta box.
@@ -147,10 +156,10 @@ class Service_Menu_Editor {
 		 * @param WP_Post $post Current post object.
 		 */
 	public function render_basic_meta_box( WP_Post $post ): void {
-		$catch_copy    = get_post_meta( $post->ID, '_vkbm_catch_copy', true );
-		$base_price    = get_post_meta( $post->ID, '_vkbm_base_price', true );
+		$catch_copy             = get_post_meta( $post->ID, '_vkbm_catch_copy', true );
+		$base_price             = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$disable_nomination_fee = (string) get_post_meta( $post->ID, self::META_DISABLE_NOMINATION_FEE, true );
-		$tax_label     = VKBM_Helper::get_tax_included_label();
+		$tax_label              = VKBM_Helper::get_tax_included_label();
 		?>
 		<div class="vkbm-service-menu-field">
 			<label for="vkbm_service_menu_catch_copy"><?php esc_html_e( 'Catchphrase', 'vk-booking-manager' ); ?></label>
@@ -182,12 +191,12 @@ class Service_Menu_Editor {
 	 * @param WP_Post $post Current post object.
 	 */
 	public function render_conditions_meta_box( WP_Post $post ): void {
-		$duration_minutes        = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
-		$buffer_after_minutes    = get_post_meta( $post->ID, '_vkbm_buffer_after_minutes', true );
-		$reservation_deadline    = get_post_meta( $post->ID, '_vkbm_reservation_deadline_hours', true );
-		$reservation_day_type    = (string) get_post_meta( $post->ID, self::META_RESERVATION_DAY_TYPE, true );
-		$other_conditions        = get_post_meta( $post->ID, self::META_OTHER_CONDITIONS, true );
-		$use_detail_page         = get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
+		$duration_minutes     = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
+		$buffer_after_minutes = get_post_meta( $post->ID, '_vkbm_buffer_after_minutes', true );
+		$reservation_deadline = get_post_meta( $post->ID, '_vkbm_reservation_deadline_hours', true );
+		$reservation_day_type = (string) get_post_meta( $post->ID, self::META_RESERVATION_DAY_TYPE, true );
+		$other_conditions     = get_post_meta( $post->ID, self::META_OTHER_CONDITIONS, true );
+		$use_detail_page      = get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
 		?>
 		<div class="vkbm-service-menu-field">
 			<label for="vkbm_service_menu_duration_minutes"><?php esc_html_e( 'Time required (minutes)', 'vk-booking-manager' ); ?></label>
@@ -225,7 +234,7 @@ class Service_Menu_Editor {
 						</p>
 					</div>
 					<?php
-				}
+	}
 
 	/**
 	 * Render the staff linkage meta box.
@@ -234,15 +243,18 @@ class Service_Menu_Editor {
 	 */
 	public function render_staff_meta_box( WP_Post $post ): void {
 		$selected_staff = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
-		$selected_staff = is_array( $selected_staff ) ? array_map( 'intval', $selected_staff ) : [];
+		$selected_staff = is_array( $selected_staff ) ? array_map( 'intval', $selected_staff ) : array();
 
 		$resources = get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
-				'orderby'        => [ 'menu_order' => 'ASC', 'title' => 'ASC' ],
+				'post_status'    => array( 'publish' ),
+				'orderby'        => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
 				'posts_per_page' => -1,
-			]
+			)
 		);
 
 		?>
@@ -287,7 +299,7 @@ class Service_Menu_Editor {
 			}
 		}
 
-		$is_archived      = get_post_meta( $post->ID, '_vkbm_is_archived', true );
+		$is_archived = get_post_meta( $post->ID, '_vkbm_is_archived', true );
 		?>
 		<div class="vkbm-service-menu-field">
 			<label>
@@ -327,25 +339,25 @@ class Service_Menu_Editor {
 			return;
 		}
 
-		$data = $_POST['vkbm_service_menu'] ?? [];
+		$data = isset( $_POST['vkbm_service_menu'] ) ? wp_unslash( $_POST['vkbm_service_menu'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 
 		if ( ! is_array( $data ) ) {
 			return;
 		}
 
-		$catch_copy    = $this->sanitize_text_value( $data, 'catch_copy' );
-		$internal_memo = $this->sanitize_textarea_value( $data, 'internal_memo' );
-		$other_conditions = $this->sanitize_textarea_value( $data, 'other_conditions' );
-			$base_price    = $this->sanitize_numeric_value( $data, 'base_price' );
-			$duration      = $this->sanitize_numeric_value( $data, 'duration_minutes' );
-			$buffer_after  = $this->sanitize_numeric_value( $data, 'buffer_after_minutes' );
-				$deadline      = $this->sanitize_numeric_value( $data, 'reservation_deadline_hours' );
-				$reservation_day_type = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
-				$online_unavailable = isset( $data['online_unavailable'] ) ? '1' : '';
-				$archive       = isset( $data['is_archived'] ) ? '1' : '';
-				$use_detail_page = isset( $data['use_detail_page'] ) ? '1' : '';
+		$catch_copy                     = $this->sanitize_text_value( $data, 'catch_copy' );
+		$internal_memo                  = $this->sanitize_textarea_value( $data, 'internal_memo' );
+		$other_conditions               = $this->sanitize_textarea_value( $data, 'other_conditions' );
+			$base_price                 = $this->sanitize_numeric_value( $data, 'base_price' );
+			$duration                   = $this->sanitize_numeric_value( $data, 'duration_minutes' );
+			$buffer_after               = $this->sanitize_numeric_value( $data, 'buffer_after_minutes' );
+				$deadline               = $this->sanitize_numeric_value( $data, 'reservation_deadline_hours' );
+				$reservation_day_type   = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
+				$online_unavailable     = isset( $data['online_unavailable'] ) ? '1' : '';
+				$archive                = isset( $data['is_archived'] ) ? '1' : '';
+				$use_detail_page        = isset( $data['use_detail_page'] ) ? '1' : '';
 				$disable_nomination_fee = isset( $data['disable_nomination_fee'] ) ? '1' : '';
-				$staff_ids     = $this->sanitize_staff_ids( $data['staff_ids'] ?? [] );
+				$staff_ids              = $this->sanitize_staff_ids( $data['staff_ids'] ?? array() );
 
 			$this->update_meta_value( $post_id, '_vkbm_catch_copy', $catch_copy );
 			$this->update_meta_value( $post_id, '_vkbm_internal_memo', $internal_memo );
@@ -360,8 +372,10 @@ class Service_Menu_Editor {
 				$this->update_meta_value( $post_id, '_vkbm_is_archived', $archive );
 				$this->update_meta_value( $post_id, self::META_USE_DETAIL_PAGE, $use_detail_page );
 				$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
-				$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
+		if ( Staff_Editor::is_enabled() ) {
+			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
 		}
+	}
 
 	/**
 	 * Sanitize simple text values.
@@ -400,7 +414,7 @@ class Service_Menu_Editor {
 	 * @param string $key  Array key.
 	 * @return string
 	 */
-		private function sanitize_numeric_value( array $data, string $key ): string {
+	private function sanitize_numeric_value( array $data, string $key ): string {
 		if ( ! isset( $data[ $key ] ) ) {
 			return '';
 		}
@@ -413,8 +427,8 @@ class Service_Menu_Editor {
 
 		$value = max( 0, (int) $raw );
 
-			return (string) $value;
-		}
+		return (string) $value;
+	}
 
 		/**
 		 * Sanitize reservation day type.
@@ -422,15 +436,15 @@ class Service_Menu_Editor {
 		 * @param mixed $raw Raw value.
 		 * @return string
 		 */
-		private function sanitize_reservation_day_type( $raw ): string {
-			$value = sanitize_text_field( wp_unslash( (string) $raw ) );
-			if ( '' === $value ) {
-				return '';
-			}
-
-			$allowed = [ 'weekend', 'weekday' ];
-			return in_array( $value, $allowed, true ) ? $value : '';
+	private function sanitize_reservation_day_type( $raw ): string {
+		$value = sanitize_text_field( wp_unslash( (string) $raw ) );
+		if ( '' === $value ) {
+			return '';
 		}
+
+		$allowed = array( 'weekend', 'weekday' );
+		return in_array( $value, $allowed, true ) ? $value : '';
+	}
 
 	/**
 	 * Sanitize date value formatted as Y-m-d.
@@ -447,7 +461,7 @@ class Service_Menu_Editor {
 	 */
 	private function sanitize_staff_ids( $ids ): array {
 		if ( ! is_array( $ids ) ) {
-			return [];
+			return array();
 		}
 
 		$ids = array_map(
@@ -470,10 +484,10 @@ class Service_Menu_Editor {
 	/**
 	 * Update or delete post meta.
 	 *
-	 * @param int         $post_id     Post ID.
-	 * @param string      $meta_key    Meta key.
-	 * @param mixed       $value       Value to store.
-	 * @param bool        $allow_array Whether the value can be an array.
+	 * @param int    $post_id     Post ID.
+	 * @param string $meta_key    Meta key.
+	 * @param mixed  $value       Value to store.
+	 * @param bool   $allow_array Whether the value can be an array.
 	 */
 	private function update_meta_value( int $post_id, string $meta_key, $value, bool $allow_array = false ): void {
 		if ( ! $allow_array && '' === $value ) {

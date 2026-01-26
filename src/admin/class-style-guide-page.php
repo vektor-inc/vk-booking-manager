@@ -1,4 +1,11 @@
 <?php
+/**
+ * Development-only style guide page.
+ *
+ * The menu is only registered when the style guide HTML file exists under docs/.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -15,46 +22,58 @@ class Style_Guide_Page {
 	private const MENU_SLUG_ADMIN = 'vkbm-style-guide-admin';
 
 	/**
+	 * Capability required to access the page.
+	 *
 	 * @var string
 	 */
 	private $capability;
 
 	/**
+	 * Page hooks for registered pages.
+	 *
 	 * @var array<string, string>
 	 */
-	private $page_hooks = [];
+	private $page_hooks = array();
 
+	/**
+	 * Constructor.
+	 *
+	 * @param string $capability Capability required to access the page.
+	 */
 	public function __construct( string $capability ) {
 		$this->capability = $capability;
 	}
 
+	/**
+	 * Register hooks.
+	 */
 	public function register(): void {
 		// Register after the main "BM settings" menu is created so we don't accidentally create
 		// an orphan submenu entry that can confuse WordPress' menu URL handling.
-		add_action( 'admin_menu', [ $this, 'register_menu' ], 30 );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+		add_action( 'admin_menu', array( $this, 'register_menu' ), 30 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 	}
 
 	/**
 	 * Register style guide submenu if docs/ui/style-guide.html exists.
 	 */
 	public function register_menu(): void {
-		$pages = [
-			[
+		$pages = array(
+			array(
 				'slug'     => self::MENU_SLUG_FRONT,
 				'title'    => __( 'Style guide', 'vk-booking-manager' ),
 				'menu'     => __( 'Style guide', 'vk-booking-manager' ),
 				'filename' => 'style-guide.html',
-				'callback' => [ $this, 'render_front_page' ],
-			],
-			[
+				'callback' => array( $this, 'render_front_page' ),
+			),
+			array(
 				'slug'     => self::MENU_SLUG_ADMIN,
 				'title'    => __( 'Style guide (management screen)', 'vk-booking-manager' ),
 				'menu'     => __( 'Style guide (management screen)', 'vk-booking-manager' ),
 				'filename' => 'style-guide-admin.html',
-				'callback' => [ $this, 'render_admin_page' ],
-			],
-		];
+				'callback' => array( $this, 'render_admin_page' ),
+			),
+		);
 
 		foreach ( $pages as $page ) {
 			$html_path = $this->docs_html_path( (string) $page['filename'] );
@@ -106,7 +125,7 @@ class Style_Guide_Page {
 		$style_url = plugins_url( 'build/blocks/reservation/style-index.css', VKBM_PLUGIN_FILE );
 		$version   = (string) filemtime( $style_path );
 
-		wp_enqueue_style( $style_handle, $style_url, [], $version );
+		wp_enqueue_style( $style_handle, $style_url, array(), $version );
 	}
 
 	/**
@@ -129,10 +148,17 @@ class Style_Guide_Page {
 		);
 	}
 
+	/**
+	 * Render docs page.
+	 *
+	 * @param string $title     Page title.
+	 * @param string $html_path HTML file path.
+	 */
 	private function render_docs_page( string $title, string $html_path ): void {
 		if ( '' === $html_path || ! file_exists( $html_path ) ) {
 			echo '<div class="wrap"><h1>' . esc_html( $title ) . '</h1><p>' . esc_html__( 'Style guide file not found.', 'vk-booking-manager' ) . '</p>';
-			$paths = $this->docs_html_candidate_paths( basename( $html_path ) ?: 'style-guide.html' );
+			$basename = basename( $html_path );
+			$paths    = $this->docs_html_candidate_paths( '' !== $basename ? $basename : 'style-guide.html' );
 			if ( ! empty( $paths ) ) {
 				echo '<p><strong>Checked paths</strong></p><ul>';
 				foreach ( $paths as $path ) {
@@ -155,6 +181,12 @@ class Style_Guide_Page {
 		<?php
 	}
 
+	/**
+	 * Get docs HTML file path.
+	 *
+	 * @param string $filename HTML filename.
+	 * @return string
+	 */
 	private function docs_html_path( string $filename ): string {
 		foreach ( $this->docs_html_candidate_paths( $filename ) as $candidate ) {
 			if ( '' !== $candidate && file_exists( $candidate ) ) {
@@ -172,7 +204,7 @@ class Style_Guide_Page {
 	 * @return string[]
 	 */
 	private function docs_html_candidate_paths( string $filename ): array {
-		$paths = [];
+		$paths = array();
 
 		$filename = ltrim( $filename, '/\\' );
 
@@ -186,5 +218,4 @@ class Style_Guide_Page {
 
 		return array_values( array_unique( array_filter( $paths ) ) );
 	}
-
 }

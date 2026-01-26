@@ -1,4 +1,9 @@
 <?php
+/**
+ * Handles persistence of resource schedule templates via post meta.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -25,10 +30,10 @@ class Resource_Schedule_Template_Repository {
 
 		return array_merge(
 			$this->get_default_template(),
-			[
+			array(
 				'use_provider_hours' => ! empty( $stored['use_provider_hours'] ),
-				'days'               => is_array( $stored['days'] ?? null ) ? $stored['days'] : [],
-			]
+				'days'               => is_array( $stored['days'] ?? null ) ? $stored['days'] : array(),
+			)
 		);
 	}
 
@@ -57,9 +62,9 @@ class Resource_Schedule_Template_Repository {
 	 * @return array<string, mixed>
 	 */
 	private function get_default_template(): array {
-		return [
+		return array(
 			'use_provider_hours' => true,
-			'days'               => [],
-		];
+			'days'               => array(),
+		);
 	}
 }

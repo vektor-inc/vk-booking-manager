@@ -1,4 +1,9 @@
 <?php
+/**
+ * Resource label helper functions.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 

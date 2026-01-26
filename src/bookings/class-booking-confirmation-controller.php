@@ -1,4 +1,9 @@
 <?php
+/**
+ * REST controller that finalizes reservation drafts into confirmed bookings.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -68,21 +73,29 @@ class Booking_Confirmation_Controller {
 	private const OWNER_COOKIE                   = 'vkbm_draft_owner';
 
 	/**
+	 * Availability service.
+	 *
 	 * @var Availability_Service
 	 */
 	private $availability_service;
 
 	/**
+	 * Notification handler.
+	 *
 	 * @var Booking_Notification_Service
 	 */
 	private $notification_service;
 
 	/**
+	 * Provider settings repository.
+	 *
 	 * @var Settings_Repository
 	 */
 	private $settings_repository;
 
 	/**
+	 * Customer name resolver.
+	 *
 	 * @var Customer_Name_Resolver
 	 */
 	private $customer_name_resolver;
@@ -103,8 +116,8 @@ class Booking_Confirmation_Controller {
 	) {
 		$this->notification_service   = $notification_service;
 		$this->settings_repository    = $settings_repository;
-		$this->customer_name_resolver = $customer_name_resolver ?: new Customer_Name_Resolver();
-		$this->availability_service   = $availability_service ?: new Availability_Service( $settings_repository );
+		$this->customer_name_resolver = null !== $customer_name_resolver ? $customer_name_resolver : new Customer_Name_Resolver();
+		$this->availability_service   = null !== $availability_service ? $availability_service : new Availability_Service( $settings_repository );
 	}
 
 	/**
@@ -199,13 +212,13 @@ class Booking_Confirmation_Controller {
 			$timezone = sanitize_text_field( (string) ( $draft['meta']['timezone'] ?? '' ) );
 		}
 
-		// Re-check availability for the selected slot before confirming. / 予約確定前に空きを再検証します。
+		// Re-check availability for the selected slot before confirming. / 予約確定前に空きを再検証します.
 		$available_slot = $this->revalidate_draft_slot( $menu_id, $staff_id, $slot, $timezone );
 		if ( is_wp_error( $available_slot ) ) {
 			return $available_slot;
 		}
 
-		// Use the latest slot snapshot for staff assignment checks. / 最新の空き情報に基づいて指名判定を行います。
+		// Use the latest slot snapshot for staff assignment checks. / 最新の空き情報に基づいて指名判定を行います.
 		if ( isset( $available_slot['staff'] ) && is_array( $available_slot['staff'] ) ) {
 			$slot['staff'] = $available_slot['staff'];
 		}
@@ -223,7 +236,7 @@ class Booking_Confirmation_Controller {
 			$is_staff_preferred = false;
 		}
 
-		// 無料版では選択可能スタッフの制限を解除
+		// 無料版では選択可能スタッフの制限を解除.
 		if ( Staff_Editor::is_enabled() && $staff_id > 0 && ! empty( $assignable_staff ) && ! in_array( $staff_id, $assignable_staff, true ) ) {
 			return new WP_Error(
 				'staff_unavailable',
@@ -264,7 +277,7 @@ class Booking_Confirmation_Controller {
 		$internal_note          = $can_override_contact
 			? sanitize_textarea_field( (string) ( $request['internal_note'] ?? '' ) )
 			: '';
-		$customer_name_value    = $customer_name_override ?: $this->customer_name_resolver->resolve_for_user( $user );
+		$customer_name_value    = '' !== $customer_name_override ? $customer_name_override : $this->customer_name_resolver->resolve_for_user( $user );
 		$booking_author_id      = (int) $user->ID;
 		$customer_email         = (string) $user->user_email;
 		$matched_user_id        = 0;
@@ -273,7 +286,7 @@ class Booking_Confirmation_Controller {
 			$normalized_phone = VKBM_Helper::normalize_phone_number( $customer_phone );
 			if ( '' !== $normalized_phone ) {
 				// Assign booking author by matching phone number when possible.
-				// 電話番号が一致するユーザーがいれば予約投稿者を割り当てる。
+				// 電話番号が一致するユーザーがいれば予約投稿者を割り当てる.
 				$matched_user = $this->get_user_by_phone_number( $normalized_phone );
 				if ( $matched_user instanceof WP_User ) {
 					$booking_author_id = (int) $matched_user->ID;
@@ -348,14 +361,16 @@ class Booking_Confirmation_Controller {
 		$service_end_at        = isset( $slot['service_end_at'] ) ? (string) $slot['service_end_at'] : '';
 		$service_end_for_store = $this->format_datetime_for_storage( $service_end_at );
 
-		update_post_meta( $booking_id, self::META_DATE_START, $start_for_storage ?: $start_at );
+		$start_meta_value = '' !== $start_for_storage ? $start_for_storage : $start_at;
+		update_post_meta( $booking_id, self::META_DATE_START, $start_meta_value );
 
-		$service_end_value = $service_end_for_store ?: ( $service_end_at ?: ( $end_for_storage ?: $end_at ) );
+		$service_end_value = '' !== $service_end_for_store ? $service_end_for_store : ( '' !== $service_end_at ? $service_end_at : ( '' !== $end_for_storage ? $end_for_storage : $end_at ) );
 		if ( $service_end_value ) {
 			update_post_meta( $booking_id, self::META_DATE_END, $service_end_value );
 		}
-		if ( $end_for_storage || $end_at ) {
-			update_post_meta( $booking_id, self::META_DATE_TOTAL_END, $end_for_storage ?: $end_at );
+		if ( '' !== $end_for_storage || '' !== $end_at ) {
+			$total_end_value = '' !== $end_for_storage ? $end_for_storage : $end_at;
+			update_post_meta( $booking_id, self::META_DATE_TOTAL_END, $total_end_value );
 		}
 		if ( $staff_id > 0 ) {
 			update_post_meta( $booking_id, self::META_RESOURCE_ID, $staff_id );
@@ -601,6 +616,9 @@ class Booking_Confirmation_Controller {
 
 	/**
 	 * Build transient key name.
+	 *
+	 * @param string $token Token.
+	 * @return string
 	 */
 	private function build_transient_key( string $token ): string {
 		return self::DRAFT_PREFIX . $token;
@@ -608,6 +626,9 @@ class Booking_Confirmation_Controller {
 
 	/**
 	 * Sanitize token input.
+	 *
+	 * @param string $token Token.
+	 * @return string
 	 */
 	private function sanitize_token( string $token ): string {
 		$token = sanitize_key( $token );
@@ -677,6 +698,10 @@ class Booking_Confirmation_Controller {
 
 	/**
 	 * Generate readable booking title.
+	 *
+	 * @param string $customer Customer name.
+	 * @param string $start_at Start datetime.
+	 * @return string
 	 */
 	private function generate_booking_title( string $customer, string $start_at ): string {
 		$label           = $customer ? $customer : __( 'Reservation', 'vk-booking-manager' );
@@ -743,7 +768,7 @@ class Booking_Confirmation_Controller {
 		}
 
 		// Match on normalized phone number to avoid formatting differences.
-		// 表記揺れを避けるため正規化済みの電話番号で検索する。
+		// 表記揺れを避けるため正規化済みの電話番号で検索する.
 		$users = get_users(
 			array(
 				'meta_key'    => 'phone_number',
@@ -821,7 +846,7 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-		// Resolve timezone from draft or slot data. / 予約一時データまたは枠情報からタイムゾーンを補正します。
+		// Resolve timezone from draft or slot data. / 予約一時データまたは枠情報からタイムゾーンを補正します.
 		$timezone = sanitize_text_field( $timezone );
 		if ( '' === $timezone ) {
 			$timezone = $this->extract_timezone_from_datetime( $start_at );
@@ -897,7 +922,8 @@ class Booking_Confirmation_Controller {
 			try {
 				$datetime = $datetime->setTimezone( new DateTimeZone( $timezone ) );
 			} catch ( Exception $e ) {
-				// Ignore invalid timezone and use original. / タイムゾーンが不正な場合は元の値を使います。
+				// Ignore invalid timezone and use original. / タイムゾーンが不正な場合は元の値を使います.
+				// phpcs:ignore Squiz.Commenting.EmptyCatchComment -- Timezone error is intentionally ignored.
 			}
 		}
 

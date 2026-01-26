@@ -1,4 +1,9 @@
 <?php
+/**
+ * Main plugin orchestrator.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -40,99 +45,221 @@ use VKBookingManager\Staff\Staff_Editor;
  * Main plugin orchestrator.
  */
 class Plugin {
-	/** @var Common_Styles */
+	/**
+	 * Common style enqueuer.
+	 *
+	 * @var Common_Styles
+	 */
 	private $common_styles;
 
-	/** @var Provider_Settings_Page */
+	/**
+	 * Provider settings handler.
+	 *
+	 * @var Provider_Settings_Page
+	 */
 	private $provider_settings_page;
 
-	/** @var Roles_Manager */
+	/**
+	 * Roles handler.
+	 *
+	 * @var Roles_Manager
+	 */
 	private $roles_manager;
 
-	/** @var Resource_Schedule_Meta_Box */
+	/**
+	 * Resource schedule handler.
+	 *
+	 * @var Resource_Schedule_Meta_Box
+	 */
 	private $resource_schedule_meta_box;
 
-	/** @var Shift_Editor */
+	/**
+	 * Shift editor handler.
+	 *
+	 * @var Shift_Editor
+	 */
 	private $shift_editor;
 
-	/** @var Staff_Editor */
+	/**
+	 * Staff editor handler.
+	 *
+	 * @var Staff_Editor
+	 */
 	private $staff_editor;
 
-	/** @var Service_Menu_Editor */
+	/**
+	 * Service menu editor handler.
+	 *
+	 * @var Service_Menu_Editor
+	 */
 	private $service_menu_editor;
 
-	/** @var Shift_Dashboard_Page */
+	/**
+	 * Shift dashboard page handler.
+	 *
+	 * @var Shift_Dashboard_Page
+	 */
 	private $shift_dashboard_page;
 
-	/** @var Owner_Admin_Menu_Filter */
+	/**
+	 * Owner admin menu filter handler.
+	 *
+	 * @var Owner_Admin_Menu_Filter
+	 */
 	private $owner_admin_menu_filter;
 
-	/** @var Resource_Post_Type */
+	/**
+	 * Resource post type handler.
+	 *
+	 * @var Resource_Post_Type
+	 */
 	private $resource_post_type;
 
-	/** @var Shift_Post_Type */
+	/**
+	 * Shift post type handler.
+	 *
+	 * @var Shift_Post_Type
+	 */
 	private $shift_post_type;
 
-	/** @var Service_Menu_Post_Type */
+	/**
+	 * Service menu post type handler.
+	 *
+	 * @var Service_Menu_Post_Type
+	 */
 	private $service_menu_post_type;
 
-	/** @var Booking_Post_Type */
+	/**
+	 * Booking post type handler.
+	 *
+	 * @var Booking_Post_Type
+	 */
 	private $booking_post_type;
 
-	/** @var Booking_Admin */
+	/**
+	 * Booking admin UI handler.
+	 *
+	 * @var Booking_Admin
+	 */
 	private $booking_admin;
 
-	/** @var Booking_Draft_Controller */
+	/**
+	 * Temporary reservation data persistence handler.
+	 *
+	 * @var Booking_Draft_Controller
+	 */
 	private $booking_draft_controller;
 
-	/** @var My_Bookings_Controller */
+	/**
+	 * Current user bookings REST controller.
+	 *
+	 * @var My_Bookings_Controller
+	 */
 	private $my_bookings_controller;
 
-
-	/** @var Menu_Search_Block */
+	/**
+	 * Menu search block handler.
+	 *
+	 * @var Menu_Search_Block
+	 */
 	private $menu_search_block;
 
-	/** @var Menu_Loop_Block */
+	/**
+	 * Menu loop block handler.
+	 *
+	 * @var Menu_Loop_Block
+	 */
 	private $menu_loop_block;
 
-	/** @var Reservation_Block */
+	/**
+	 * Reservation block handler.
+	 *
+	 * @var Reservation_Block
+	 */
 	private $reservation_block;
 
-	/** @var Availability_Controller */
+	/**
+	 * Availability REST controller.
+	 *
+	 * @var Availability_Controller
+	 */
 	private $availability_controller;
 
-	/** @var Current_User_Controller */
+	/**
+	 * Current user REST controller.
+	 *
+	 * @var Current_User_Controller
+	 */
 	private $current_user_controller;
 
-	/** @var Booking_Confirmation_Controller */
+	/**
+	 * Booking confirmation REST controller.
+	 *
+	 * @var Booking_Confirmation_Controller
+	 */
 	private $booking_confirmation_controller;
 
-	/** @var Menu_Preview_Controller */
+	/**
+	 * Menu preview REST controller.
+	 *
+	 * @var Menu_Preview_Controller
+	 */
 	private $menu_preview_controller;
 
-	/** @var Provider_Settings_Controller */
+	/**
+	 * Provider settings REST controller.
+	 *
+	 * @var Provider_Settings_Controller
+	 */
 	private $provider_settings_controller;
 
-	/** @var Booking_Notification_Service */
+	/**
+	 * Booking notification handler.
+	 *
+	 * @var Booking_Notification_Service
+	 */
 	private $booking_notification_service;
 
-	/** @var OEmbed_Override */
+	/**
+	 * OEmbed override handler.
+	 *
+	 * @var OEmbed_Override
+	 */
 	private $oembed_override;
 
-	/** @var Auth_Shortcodes */
+	/**
+	 * Auth shortcode handler.
+	 *
+	 * @var Auth_Shortcodes
+	 */
 	private $auth_shortcodes;
 
-
-	/** @var Auth_Form_Controller */
+	/**
+	 * Authentication form REST controller.
+	 *
+	 * @var Auth_Form_Controller
+	 */
 	private $auth_form_controller;
 
-	/** @var Post_Order_Manager */
+	/**
+	 * Post order handler.
+	 *
+	 * @var Post_Order_Manager
+	 */
 	private $post_order_manager;
 
-	/** @var Term_Order_Manager */
+	/**
+	 * Term order handler.
+	 *
+	 * @var Term_Order_Manager
+	 */
 	private $term_order_manager;
 
-	/** @var User_Profile_Fields */
+	/**
+	 * User profile fields handler.
+	 *
+	 * @var User_Profile_Fields
+	 */
 	private $user_profile_fields;
 
 	/**
@@ -244,8 +371,8 @@ class Plugin {
 		$this->booking_notification_service->register();
 		$this->oembed_override->register();
 		$this->roles_manager->register();
-		add_filter( 'load_script_translation_file', [ $this, 'filter_script_translation_file' ], 10, 3 );
-		add_action( 'init', [ $this, 'maybe_create_default_staff' ], 11 );
+		add_filter( 'load_script_translation_file', array( $this, 'filter_script_translation_file' ), 10, 3 );
+		add_action( 'init', array( $this, 'maybe_create_default_staff' ), 11 );
 		$this->shift_dashboard_page->register();
 		$this->owner_admin_menu_filter->register();
 		$this->provider_settings_page->register();
@@ -287,47 +414,50 @@ class Plugin {
 	 * @return string|false
 	 */
 	public function filter_script_translation_file( $file, string $handle, string $domain ) {
-		// このプラグインのテキストドメインでない場合、またはファイルパスが無い場合はそのまま返す
-		if ( 'vk-booking-manager' !== $domain || ! $file ) {
+		// このプラグインのテキストドメインでない場合はそのまま返す.
+		if ( 'vk-booking-manager' !== $domain ) {
 			return $file;
 		}
 
-		// プラグインの languages ディレクトリのパスを取得
+		// ファイルパスが無い場合でも、menu-loopブロックの場合は処理を続行（edit.jsのJSONを探すため）.
+		// その他の場合は早期リターン.
+		if ( ! $file && false === strpos( $handle, 'menu-loop' ) ) {
+			return $file;
+		}
+
+		// プラグインの languages ディレクトリのパスを取得.
 		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
-		
-		// ステップ1: WordPressが期待するファイル名（ハッシュ値付き）で完全一致するファイルを探す
-		// 例: vk-booking-manager-ja-5a65dc19bd83bf90afeedaaf518e966b.json
-		$candidate = trailingslashit( $translation_path ) . basename( $file );
-		if ( file_exists( $candidate ) ) {
-			return $candidate;
+
+		// ステップ1: WordPressが期待するファイル名（ハッシュ値付き）で完全一致するファイルを探す.
+		// 例: vk-booking-manager-ja-5a65dc19bd83bf90afeedaaf518e966b.json.
+		if ( $file ) {
+			$candidate = trailingslashit( $translation_path ) . basename( $file );
+			if ( file_exists( $candidate ) ) {
+				return $candidate;
+			}
 		}
 
-		// デバッグモード時のみ、完全一致が見つからなかったことをログに記録
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-			error_log( sprintf( '[VKBM] Translation file not found for handle: %s, expected: %s', $handle, basename( $file ) ) );
-		}
-
-		// ステップ2: 完全一致が見つからなかった場合、このハンドル用の翻訳を含む可能性のあるJSONファイルを検索する
+		// ステップ2: 完全一致が見つからなかった場合、このハンドル用の翻訳を含む可能性のあるJSONファイルを検索する.
 		// マージ処理（bin/merge-json-translations.js）により、booking-uiコンポーネントの翻訳は全てapp.jsのJSONに統合されているため、
-		// reservationブロックの場合はapp.jsのJSONファイルを優先的に返すだけで十分
+		// reservationブロックの場合はapp.jsのJSONファイルを優先的に返すだけで十分.
 		if ( ! is_dir( $translation_path ) ) {
 			return $file;
 		}
 
-		// 現在のロケール（例: ja）を取得し、該当するJSONファイルのパターンを作成
-		// 例: vk-booking-manager-ja-*.json
-		$locale = get_locale();
-		$pattern = sprintf( '%s-%s-*.json', $domain, $locale );
+		// 現在のロケール（例: ja）を取得し、該当するJSONファイルのパターンを作成.
+		// 例: vk-booking-manager-ja-*.json.
+		$locale     = get_locale();
+		$pattern    = sprintf( '%s-%s-*.json', $domain, $locale );
 		$json_files = glob( trailingslashit( $translation_path ) . $pattern );
 
-		// JSONファイルが見つからない場合は、元のファイルパスをそのまま返す
+		// JSONファイルが見つからない場合は、元のファイルパスをそのまま返す.
 		if ( empty( $json_files ) ) {
 			return $file;
 		}
 
-		// ステップ3: reservationブロックの場合は、app.jsのJSONファイルを優先的に検索
+		// ステップ3: reservationブロックの場合は、app.jsのJSONファイルを優先的に検索.
 		// （app.jsにはcalendar-grid.js、daily-slot-list.js、selected-plan-summary.jsなどが全てバンドルされ、
-		//  build:i18n:json実行時にbin/merge-json-translations.jsで全ての翻訳がマージされている）
+		// build:i18n:json実行時にbin/merge-json-translations.jsで全ての翻訳がマージされている）.
 		if ( false !== strpos( $handle, 'reservation' ) ) {
 			foreach ( $json_files as $json_file ) {
 				$json_content = file_get_contents( $json_file );
@@ -342,20 +472,66 @@ class Plugin {
 
 				$source = $json_data['source'];
 
-				// app.jsのJSONファイルを探す（全てのbooking-uiコンポーネントの翻訳がマージされている）
+				// app.jsのJSONファイルを探す（全てのbooking-uiコンポーネントの翻訳がマージされている）.
 				if ( false !== strpos( $source, 'src/blocks/reservation/app.js' ) ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-						error_log( sprintf( '[VKBM] Found reservation translation file: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
-					}
 					return $json_file;
 				}
 			}
 		}
 
-		// ステップ4: その他のブロックの場合は、ハンドル名からブロック名を抽出して検索
-		$handle_clean = str_replace( [ 'vk-booking-manager-', 'booking-manager-' ], '', $handle );
+		// ステップ3-2: menu-loopブロックの場合は、index.jsのJSONファイルを優先的に検索.
+		// （index.jsにはダミーの翻訳文字列が追加され、build:i18n:json実行時にbin/merge-json-translations.jsで
+		// edit.jsの翻訳がindex.jsのJSONにマージされている）.
+		// ハンドル名のパターン: vk-booking-manager-menu-loop-editor-script または vk-booking-manager/menu-loop-editor-script.
+		if ( false !== strpos( $handle, 'menu-loop' ) ) {
+			foreach ( $json_files as $json_file ) {
+				$json_content = file_get_contents( $json_file );
+				if ( false === $json_content ) {
+					continue;
+				}
+
+				$json_data = json_decode( $json_content, true );
+				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+					continue;
+				}
+
+				$source = $json_data['source'];
+
+				// index.jsのJSONファイルを優先的に探す（edit.jsの翻訳がマージされている）.
+				if ( false !== strpos( $source, 'src/blocks/menu-loop/index.js' ) ||
+					false !== strpos( $source, 'blocks/menu-loop/index.js' ) ||
+					false !== strpos( $source, 'menu-loop/index.js' ) ) {
+					return $json_file;
+				}
+			}
+
+			// index.jsのJSONが見つからない場合、edit.jsのJSONをフォールバックとして探す.
+			foreach ( $json_files as $json_file ) {
+				$json_content = file_get_contents( $json_file );
+				if ( false === $json_content ) {
+					continue;
+				}
+
+				$json_data = json_decode( $json_content, true );
+				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+					continue;
+				}
+
+				$source = $json_data['source'];
+
+				// edit.jsのJSONファイルを探す（フォールバック）.
+				if ( false !== strpos( $source, 'src/blocks/menu-loop/edit.js' ) ||
+					false !== strpos( $source, 'blocks/menu-loop/edit.js' ) ||
+					false !== strpos( $source, 'menu-loop/edit.js' ) ) {
+					return $json_file;
+				}
+			}
+		}
+
+		// ステップ4: その他のブロックの場合は、ハンドル名からブロック名を抽出して検索.
+		$handle_clean = str_replace( array( 'vk-booking-manager-', 'booking-manager-' ), '', $handle );
 		$handle_clean = preg_replace( '/-(editor|view|script)$/', '', $handle_clean );
-		
+
 		if ( ! empty( $handle_clean ) ) {
 			foreach ( $json_files as $json_file ) {
 				$json_content = file_get_contents( $json_file );
@@ -369,19 +545,16 @@ class Plugin {
 				}
 
 				$source = $json_data['source'];
-				
-				// ハンドル名がsourceパスに含まれているか確認
+
+				// ハンドル名がsourceパスに含まれているか確認.
 				if ( false !== strpos( $source, $handle_clean ) ) {
-					if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-						error_log( sprintf( '[VKBM] Found translation file by handle: %s (handle: %s, source: %s)', basename( $json_file ), $handle, $source ) );
-					}
 					return $json_file;
 				}
 			}
 		}
 
-		// ステップ7: どの方法でも見つからなかった場合、元のファイルパスをそのまま返す
-		// （WordPressのデフォルトの動作にフォールバック）
+		// ステップ7: どの方法でも見つからなかった場合、元のファイルパスをそのまま返す.
+		// （WordPressのデフォルトの動作にフォールバック）.
 		return $file;
 	}
 
@@ -409,13 +582,13 @@ class Plugin {
 		$title = __( 'Default Staff', 'vk-booking-manager' );
 
 		$published_staff = get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
 				'post_status'    => 'publish',
 				'posts_per_page' => -1,
 				'fields'         => 'ids',
 				'no_found_rows'  => true,
-			]
+			)
 		);
 
 		$keep_id = 0;
@@ -433,19 +606,19 @@ class Plugin {
 
 		if ( 0 === $keep_id ) {
 			$default_id = wp_insert_post(
-				[
+				array(
 					'post_type'   => Resource_Post_Type::POST_TYPE,
 					'post_status' => 'publish',
 					'post_title'  => $title,
 					'post_author' => get_current_user_id(),
-				]
+				)
 			);
 
 			if ( is_wp_error( $default_id ) ) {
 				return;
 			}
 
-			$keep_id = (int) $default_id;
+			$keep_id           = (int) $default_id;
 			$published_staff[] = $keep_id;
 		}
 
@@ -455,10 +628,10 @@ class Plugin {
 			}
 
 			wp_update_post(
-				[
+				array(
 					'ID'          => (int) $staff_id,
 					'post_status' => 'draft',
-				]
+				)
 			);
 		}
 	}

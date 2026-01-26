@@ -1804,6 +1804,7 @@ useEffect(() => {
 									selectedSlotId={selectedSlot?.slot_id}
 									isLoading={slotLoading}
 									error={calendarError || slotError}
+									showStaffLabel={providerSettings.staffEnabled}
 									selectedStaffLabel={
 										staffId
 											? currentStaff?.title?.rendered ??

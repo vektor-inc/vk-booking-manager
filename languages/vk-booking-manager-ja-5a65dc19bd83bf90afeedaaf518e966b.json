@@ -1,5 +1,5 @@
 {
-	"translation-revision-date": "2026-01-23 16:13+0900",
+	"translation-revision-date": "2026-01-26 14:55+0900",
 	"generator": "WP-CLI/2.10.0",
 	"source": "src/blocks/reservation/app.js",
 	"domain": "messages",
@@ -50,49 +50,49 @@
 				"基本料金合計"
 			],
 			"Could not get menu list.": [
-				""
+				"メニュー一覧を取得できませんでした。"
 			],
 			"The form could not be displayed.": [
-				""
+				"フォームを表示できませんでした。"
 			],
 			"Do you want to cancel this reservation?": [
-				""
+				"この予約をキャンセルしますか？"
 			],
 			"I was unable to cancel my reservation.": [
-				""
+				"予約をキャンセルできませんでした。"
 			],
 			"The reservation list could not be loaded.": [
-				""
+				"予約一覧を読み込めませんでした。"
 			],
 			"Failed to retrieve menu information.": [
-				""
+				"メニュー情報の取得に失敗しました。"
 			],
 			"Failed to load calendar.": [
-				""
+				"カレンダーの読み込みに失敗しました。"
 			],
 			"Failed to read free space.": [
-				""
+				"空き状況の読み込みに失敗しました。"
 			],
 			"The editor does not transition to the confirmation page.": [
-				""
+				"エディターが確認ページに遷移しません。"
 			],
 			"Please select your menu and reservation slot before proceeding.": [
-				""
+				"進む前にメニューと予約枠を選択してください。"
 			],
 			"Temporary reservation data save failed.": [
-				""
+				"仮予約データの保存に失敗しました。"
 			],
 			"Failed to save reservation details. Please try again later.": [
-				""
+				"予約詳細の保存に失敗しました。後でもう一度お試しください。"
 			],
 			"Logo image": [
-				""
+				"ロゴ画像"
 			],
 			"Please check our cancellation policy before booking.": [
-				""
+				"予約前にキャンセルポリシーをご確認ください。"
 			],
 			"Your reservation has been completed.": [
-				""
+				"予約が完了しました。"
 			],
 			"Reservation block navigation": [
 				"予約ブロックナビゲーション"
@@ -133,6 +133,24 @@
 			"Not selected": [
 				"未選択"
 			],
+			"Mon": [
+				"月"
+			],
+			"Tue": [
+				"火"
+			],
+			"Wed": [
+				"水"
+			],
+			"Thu": [
+				"木"
+			],
+			"Fri": [
+				"金"
+			],
+			"Sat": [
+				"土"
+			],
 			"Sun": [
 				"日"
 			],
@@ -142,6 +160,9 @@
 			"next month": [
 				"次の月"
 			],
+			"Temporary closure": [
+				"臨時休業"
+			],
 			"Closed days": [
 				"休業日"
 			],
@@ -149,7 +170,7 @@
 				"臨時営業"
 			],
 			"private": [
-				""
+				"プライベート"
 			],
 			"When you select a date from the calendar, reservation candidates will be displayed.": [
 				"カレンダーから日付を選択すると、予約候補が表示されます。"
@@ -174,6 +195,84 @@
 			],
 			"Loading menu information...": [
 				"メニュー情報を読み込んでいます..."
+			],
+			"Payment method": [
+				"決済方法"
+			],
+			"Cancellation policy": [
+				"キャンセルポリシー"
+			],
+			"System Terms of Use": [
+				"システム利用規約"
+			],
+			"Telephone number": [
+				"電話番号"
+			],
+			"You must agree to the terms of use.": [
+				"利用規約への同意が必要です。"
+			],
+			"Management memo": [
+				"運営側メモ"
+			],
+			"Reservation date and time": [
+				"予約日時"
+			],
+			"You must agree to the cancellation policy.": [
+				"キャンセルポリシーへの同意が必要です。"
+			],
+			"A reservation for the same date and time already exists. Please change the date and time.": [
+				"同じ日時の予約が既に存在します。日時を変更してください。"
+			],
+			"The response is not a valid JSON response.": [
+				"有効な JSON 応答ではありません。"
+			],
+			"The URL does not include a temporary reservation data parameter. Please try again from the reservation page.": [
+				"URLに一時予約データパラメータが含まれていません。予約ページからもう一度お試しください。"
+			],
+			"Couldn't load temporary reservation data. Please try again from the reservation page.": [
+				"仮予約データを読み込めませんでした。予約ページから再度お試しください。"
+			],
+			"Confirmation of reservation failed. Please try again later.": [
+				"予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
+			],
+			"Loading temporary reservation data...": [
+				"一時予約データを読み込んでいます..."
+			],
+			"Your tentative reservation has been completed.": [
+				"仮予約が完了しました。"
+			],
+			"Please enter any contact information": [
+				"連絡先情報を入力してください"
+			],
+			"No entry": [
+				"記入なし"
+			],
+			"I agree to the cancellation policy": [
+				"キャンセルポリシーに同意します"
+			],
+			"You must log in to confirm your reservation.": [
+				"予約を確認するにはログインする必要があります。"
+			],
+			"Requests/Notes": [
+				"ご要望・備考"
+			],
+			"Reserved name": [
+				"予約者名"
+			],
+			"Please enter customer name.": [
+				"お名前を入力してください。"
+			],
+			"Please enter your contact phone number.": [
+				"ご連絡先の電話番号を入力してください。"
+			],
+			"Please enter any internal notes.": [
+				"社内用メモがあれば入力してください。"
+			],
+			"Reserve with this content": [
+				"この内容で予約する"
+			],
+			"Other conditions": [
+				"その他条件"
 			]
 		}
 	}

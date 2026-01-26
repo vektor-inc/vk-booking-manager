@@ -15,6 +15,7 @@ export const DailySlotList = ({
 	isLoading,
 	error,
 	selectedStaffLabel = '',
+	showStaffLabel = true,
 }) => {
 	if ( error ) {
 		return (
@@ -76,12 +77,14 @@ export const DailySlotList = ({
 						{formatDisplayTime(slot.start_at)} -{' '}
 						{formatDisplayTime(slot.service_end_at || slot.end_at)}
 					</div>
-					<div className="vkbm-slot-list__staff">
-						{slot.staff_label ||
-							slot.staff?.name ||
-							selectedStaffLabel ||
-							__('No preference', 'vk-booking-manager')}
-					</div>
+					{showStaffLabel && (
+						<div className="vkbm-slot-list__staff">
+							{slot.staff_label ||
+								slot.staff?.name ||
+								selectedStaffLabel ||
+								__('No preference', 'vk-booking-manager')}
+						</div>
+					)}
 				</button>
 			))}
 		</div>

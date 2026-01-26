@@ -1,4 +1,9 @@
 <?php
+/**
+ * Adds VKBM user meta fields to the WordPress user profile screens.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -25,10 +30,10 @@ class User_Profile_Fields {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'show_user_profile', [ $this, 'render_fields' ] );
-		add_action( 'edit_user_profile', [ $this, 'render_fields' ] );
-		add_action( 'personal_options_update', [ $this, 'save_fields' ] );
-		add_action( 'edit_user_profile_update', [ $this, 'save_fields' ] );
+		add_action( 'show_user_profile', array( $this, 'render_fields' ) );
+		add_action( 'edit_user_profile', array( $this, 'render_fields' ) );
+		add_action( 'personal_options_update', array( $this, 'save_fields' ) );
+		add_action( 'edit_user_profile_update', array( $this, 'save_fields' ) );
 	}
 
 	/**
@@ -116,13 +121,13 @@ class User_Profile_Fields {
 
 		$raw = wp_unslash( $_POST );
 
-		$kana  = sanitize_text_field( $raw['vkbm_user_kana'] ?? '' );
+		$kana      = sanitize_text_field( $raw['vkbm_user_kana'] ?? '' );
 		$phone_raw = sanitize_text_field( $raw['vkbm_user_phone'] ?? '' );
-		$phone = VKBM_Helper::normalize_phone_number( $phone_raw );
-		$year  = sanitize_text_field( $raw['vkbm_birth_year'] ?? '' );
-		$month = sanitize_text_field( $raw['vkbm_birth_month'] ?? '' );
-		$day   = sanitize_text_field( $raw['vkbm_birth_day'] ?? '' );
-		$birth = $this->build_birth_date( $year, $month, $day );
+		$phone     = VKBM_Helper::normalize_phone_number( $phone_raw );
+		$year      = sanitize_text_field( $raw['vkbm_birth_year'] ?? '' );
+		$month     = sanitize_text_field( $raw['vkbm_birth_month'] ?? '' );
+		$day       = sanitize_text_field( $raw['vkbm_birth_day'] ?? '' );
+		$birth     = $this->build_birth_date( $year, $month, $day );
 
 		$this->update_user_meta_value( $user_id, 'vkbm_kana_name', $kana );
 		$this->update_user_meta_value( $user_id, 'phone_number', $phone );
@@ -149,11 +154,11 @@ class User_Profile_Fields {
 			}
 		}
 
-		return [
+		return array(
 			'year'  => $birth_year,
 			'month' => $birth_month,
 			'day'   => $birth_day,
-		];
+		);
 	}
 
 	/**
@@ -165,7 +170,7 @@ class User_Profile_Fields {
 	 * @return string
 	 */
 	private function build_birth_date( string $birth_year, string $birth_month, string $birth_day ): string {
-		// Normalize numeric parts before composing. / 数値に正規化してから日付を構成。
+		// Normalize numeric parts before composing. / 数値に正規化してから日付を構成.
 		if ( '' === $birth_year && '' === $birth_month && '' === $birth_day ) {
 			return '';
 		}
@@ -190,7 +195,7 @@ class User_Profile_Fields {
 	 * @return void
 	 */
 	private function update_user_meta_value( int $user_id, string $key, string $value ): void {
-		// Save when non-empty, otherwise remove. / 空なら削除。
+		// Save when non-empty, otherwise remove. / 空なら削除.
 		if ( '' === $value ) {
 			delete_user_meta( $user_id, $key );
 			return;

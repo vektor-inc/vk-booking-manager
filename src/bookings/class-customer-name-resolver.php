@@ -1,4 +1,9 @@
 <?php
+/**
+ * Resolves customer names from user data.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 

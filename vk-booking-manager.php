@@ -32,7 +32,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once __DIR__ . '/src/admin/class-edition-plugin-deactivator.php';
 
 // English: Ensure both editions can be active without fatal errors and prefer Pro.
-// 日本語: 両エディションの同時有効化で致命的エラーが起きないようにし、Proを優先します。
+// 日本語: 両エディションの同時有効化で致命的エラーが起きないようにし、Proを優先します.
 $current_edition = \VKBookingManager\Admin\Edition_Plugin_Deactivator::detect_current_edition( __FILE__ );
 if ( \VKBookingManager\Admin\Edition_Plugin_Deactivator::handle_conflict( $current_edition ) ) {
 	return;
@@ -40,7 +40,7 @@ if ( \VKBookingManager\Admin\Edition_Plugin_Deactivator::handle_conflict( $curre
 
 if ( ! defined( 'VKBM_VERSION' ) ) {
 	$data = get_file_data( __FILE__, array( 'version' => 'Version' ) );
-	define( 'VKBM_VERSION',  $data['version'] );
+	define( 'VKBM_VERSION', $data['version'] );
 }
 
 if ( ! defined( 'VKBM_PLUGIN_FILE' ) ) {
@@ -77,9 +77,12 @@ require_once __DIR__ . '/src/admin/class-owner-admin-menu-filter.php';
 require_once __DIR__ . '/src/admin/class-style-guide-page.php';
 require_once __DIR__ . '/src/admin/class-setup-notices.php';
 require_once __DIR__ . '/src/admin/class-user-profile-fields.php';
+require_once __DIR__ . '/src/admin/class-email-log-repository.php';
+require_once __DIR__ . '/src/admin/class-email-log-page.php';
 require_once __DIR__ . '/src/oembed/class-oembed-override.php';
 require_once __DIR__ . '/src/resources/resource-labels.php';
 
+use VKBookingManager\Admin\Email_Log_Page;
 use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\Admin\Owner_Admin_Menu_Filter;
 use VKBookingManager\Admin\Service_Menu_Editor;
@@ -142,58 +145,60 @@ function vkbm_plugin(): ?Plugin {
 	$settings_sanitizer  = new Settings_Sanitizer();
 	$settings_service    = new Settings_Service( $settings_repository, $settings_sanitizer );
 
-	$common_styles                    = new Common_Styles();
-	$roles_manager                     = new Roles_Manager();
-	$shift_dashboard_page              = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
-	$provider_settings_page            = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '' );
+	$common_styles          = new Common_Styles();
+	$roles_manager          = new Roles_Manager();
+	$shift_dashboard_page   = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
+	$provider_settings_page = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '' );
+	$email_log_page         = new Email_Log_Page( 'vkbm-provider-settings', Capabilities::MANAGE_PROVIDER_SETTINGS );
 	// Development-only: keep access permissive (file presence is the main gate).
-	$style_guide_page                  = new Style_Guide_Page( 'read' );
-	$setup_notices                     = new Setup_Notices();
-	$user_profile_fields               = new User_Profile_Fields();
-	$resource_schedule_repository      = new Resource_Schedule_Template_Repository();
-	$resource_schedule_meta_box        = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
-	$shift_editor                      = new Shift_Editor();
-	$staff_editor                      = new Staff_Editor();
-	$service_menu_editor               = new Service_Menu_Editor();
-	$resource_post_type                = new Resource_Post_Type();
-	$owner_admin_menu_filter           = new Owner_Admin_Menu_Filter();
-	$shift_post_type                   = new Shift_Post_Type();
-	$service_menu_post_type            = new Service_Menu_Post_Type();
-	$booking_post_type                 = new Booking_Post_Type();
-	$customer_name_resolver            = new Customer_Name_Resolver();
-	$booking_notification_service      = new Booking_Notification_Service( $settings_repository, $customer_name_resolver );
-	$oembed_override                   = new OEmbed_Override();
-	$booking_admin                     = new Booking_Admin( $booking_notification_service );
-	$booking_draft_controller          = new Booking_Draft_Controller( $settings_repository );
-	$availability_service              = new Availability_Service( $settings_repository );
-	$booking_confirmation_controller   = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $customer_name_resolver, $availability_service );
-	$my_bookings_controller            = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
-	$menu_search_block                 = new Menu_Search_Block();
-	$menu_loop_block                   = new Menu_Loop_Block();
-	$reservation_block                 = new Reservation_Block();
-	$availability_controller           = new Availability_Controller( $availability_service );
-	$current_user_controller           = new Current_User_Controller( $settings_service );
-	$menu_preview_controller           = new Menu_Preview_Controller( $menu_loop_block );
-	$provider_settings_controller      = new Provider_Settings_Controller( $settings_repository );
-	$auth_shortcodes                   = new Auth_Shortcodes( $settings_service );
-	$auth_form_controller              = new Auth_Form_Controller( $auth_shortcodes );
-	$post_order_manager                = new Post_Order_Manager(
-		[
+	$style_guide_page                = new Style_Guide_Page( 'read' );
+	$setup_notices                   = new Setup_Notices();
+	$user_profile_fields             = new User_Profile_Fields();
+	$resource_schedule_repository    = new Resource_Schedule_Template_Repository();
+	$resource_schedule_meta_box      = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
+	$shift_editor                    = new Shift_Editor();
+	$staff_editor                    = new Staff_Editor();
+	$service_menu_editor             = new Service_Menu_Editor();
+	$resource_post_type              = new Resource_Post_Type();
+	$owner_admin_menu_filter         = new Owner_Admin_Menu_Filter();
+	$shift_post_type                 = new Shift_Post_Type();
+	$service_menu_post_type          = new Service_Menu_Post_Type();
+	$booking_post_type               = new Booking_Post_Type();
+	$customer_name_resolver          = new Customer_Name_Resolver();
+	$booking_notification_service    = new Booking_Notification_Service( $settings_repository, $customer_name_resolver );
+	$oembed_override                 = new OEmbed_Override();
+	$booking_admin                   = new Booking_Admin( $booking_notification_service );
+	$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository );
+	$availability_service            = new Availability_Service( $settings_repository );
+	$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $customer_name_resolver, $availability_service );
+	$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
+	$menu_search_block               = new Menu_Search_Block();
+	$menu_loop_block                 = new Menu_Loop_Block();
+	$reservation_block               = new Reservation_Block();
+	$availability_controller         = new Availability_Controller( $availability_service );
+	$current_user_controller         = new Current_User_Controller( $settings_service );
+	$menu_preview_controller         = new Menu_Preview_Controller( $menu_loop_block );
+	$provider_settings_controller    = new Provider_Settings_Controller( $settings_repository );
+	$auth_shortcodes                 = new Auth_Shortcodes( $settings_service );
+	$auth_form_controller            = new Auth_Form_Controller( $auth_shortcodes );
+	$post_order_manager              = new Post_Order_Manager(
+		array(
 			Resource_Post_Type::POST_TYPE,
 			Service_Menu_Post_Type::POST_TYPE,
-		]
+		)
 	);
-	$term_order_manager                = new Term_Order_Manager(
-		[
+	$term_order_manager              = new Term_Order_Manager(
+		array(
 			Service_Menu_Post_Type::TAXONOMY,
 			Service_Menu_Post_Type::TAXONOMY_GROUP,
-		]
+		)
 	);
 
 	// Register development-only style guide page (menu appears only when docs/ui/style-guide.html exists).
 	$style_guide_page->register();
 	$setup_notices->register();
-	$plugin                            = new Plugin(
+	$email_log_page->register();
+	$plugin = new Plugin(
 		$common_styles,
 		$provider_settings_page,
 		$roles_manager,

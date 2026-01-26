@@ -1,4 +1,9 @@
 <?php
+/**
+ * Registers and renders the service menu loop block.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -25,22 +30,28 @@ use function wp_set_script_translations;
  * Registers and renders the service menu loop block.
  */
 class Menu_Loop_Block {
-	private const METADATA_PATH = 'build/blocks/menu-loop';
-	public const REQUEST_KEY    = 'vkbm_menu_search';
-	private const META_USE_DETAIL_PAGE = '_vkbm_use_detail_page';
-	private const TERM_ORDER_META_KEY = 'vkbm_term_order';
+	private const METADATA_PATH                    = 'build/blocks/menu-loop';
+	public const REQUEST_KEY                       = 'vkbm_menu_search';
+	private const META_USE_DETAIL_PAGE             = '_vkbm_use_detail_page';
+	private const TERM_ORDER_META_KEY              = 'vkbm_term_order';
 	private const TERM_GROUP_DISPLAY_MODE_META_KEY = 'vkbm_menu_group_display_mode';
 	/**
+	 * Settings repository.
+	 *
 	 * @var Settings_Repository
 	 */
 	private $settings_repository;
 
 	/**
+	 * Provider settings cache.
+	 *
 	 * @var array<string,mixed>|null
 	 */
 	private $provider_settings = null;
 
 	/**
+	 * Whether blocks are registered.
+	 *
 	 * @var bool
 	 */
 	private static bool $block_registered = false;
@@ -58,7 +69,7 @@ class Menu_Loop_Block {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'init', [ $this, 'register_block' ] );
+		add_action( 'init', array( $this, 'register_block' ) );
 	}
 
 	/**
@@ -74,11 +85,11 @@ class Menu_Loop_Block {
 
 		register_block_type_from_metadata(
 			$metadata_path,
-			[
-				'render_callback' => [ $this, 'render_block' ],
-			]
+			array(
+				'render_callback' => array( $this, 'render_block' ),
+			)
 		);
-		$this->register_script_translations( 'vk-booking-manager/menu-loop', [ 'editorScript' ] );
+		$this->register_script_translations( 'vk-booking-manager/menu-loop', array( 'editorScript' ) );
 
 		self::$block_registered = true;
 	}
@@ -109,7 +120,7 @@ class Menu_Loop_Block {
 			return $this->render_empty_state( $message, $loop_id, $attributes );
 		}
 
-		$posts = [];
+		$posts = array();
 		while ( $query->have_posts() ) {
 			$query->the_post();
 			$post = get_post();
@@ -119,8 +130,8 @@ class Menu_Loop_Block {
 		}
 		wp_reset_postdata();
 
-		$style_attr = $this->build_wrapper_style( $attributes );
-		$mode       = $this->normalize_display_mode( (string) ( $attributes['displayMode'] ?? 'card' ) );
+		$style_attr   = $this->build_wrapper_style( $attributes );
+		$mode         = $this->normalize_display_mode( (string) ( $attributes['displayMode'] ?? 'card' ) );
 		$items_markup = $this->render_grouped_items( $posts, $attributes );
 
 		return sprintf(
@@ -137,7 +148,7 @@ class Menu_Loop_Block {
 	 *
 	 * プラグインの languages ディレクトリからブロックスクリプトの翻訳を登録します。
 	 *
-	 * @param string $block_name Block name.
+	 * @param string            $block_name Block name.
 	 * @param array<int,string> $fields Script fields.
 	 * @return void
 	 */
@@ -187,13 +198,13 @@ class Menu_Loop_Block {
 	/**
 	 * Render items grouped by the service menu group taxonomy.
 	 *
-	 * @param array<int,WP_Post>        $posts      Posts.
-	 * @param array<string,mixed>       $attributes Block attributes.
+	 * @param array<int,WP_Post>  $posts      Posts.
+	 * @param array<string,mixed> $attributes Block attributes.
 	 * @return string
 	 */
 	private function render_grouped_items( array $posts, array $attributes ): string {
-		$term_groups = [];
-		$ungrouped   = [];
+		$term_groups = array();
+		$ungrouped   = array();
 
 		foreach ( $posts as $post ) {
 			$terms = get_the_terms( $post, Service_Menu_Post_Type::TAXONOMY_GROUP );
@@ -205,10 +216,10 @@ class Menu_Loop_Block {
 
 			$term = $this->pick_primary_term_by_order( $terms );
 			if ( ! isset( $term_groups[ $term->term_id ] ) ) {
-				$term_groups[ $term->term_id ] = [
+				$term_groups[ $term->term_id ] = array(
 					'term'  => $term,
-					'posts' => [],
-				];
+					'posts' => array(),
+				);
 			}
 
 			$term_groups[ $term->term_id ]['posts'][] = $post;
@@ -229,7 +240,7 @@ class Menu_Loop_Block {
 			return $group_posts;
 		};
 
-		$sections = [];
+		$sections = array();
 
 		if ( ! empty( $term_groups ) ) {
 			$terms = array_map(
@@ -319,10 +330,11 @@ class Menu_Loop_Block {
 	/**
 	 * Render a single group section.
 	 *
-	 * @param string                $title      Group title.
-	 * @param array<int,WP_Post>    $posts      Group posts.
-	 * @param array<string,mixed>   $attributes Block attributes.
-	 * @param int|null              $term_id    Term ID.
+	 * @param string              $title      Group title.
+	 * @param array<int,WP_Post>  $posts      Group posts.
+	 * @param array<string,mixed> $attributes Block attributes.
+	 * @param int|null            $term_id    Term ID.
+	 * @param string              $group_mode Group display mode.
 	 * @return string
 	 */
 	private function render_group_section( string $title, array $posts, array $attributes, ?int $term_id, string $group_mode ): string {
@@ -336,7 +348,7 @@ class Menu_Loop_Block {
 			);
 		}
 
-		$group_attributes = $attributes;
+		$group_attributes                = $attributes;
 		$group_attributes['displayMode'] = $group_mode;
 
 		$items_markup = implode(
@@ -349,7 +361,7 @@ class Menu_Loop_Block {
 			)
 		);
 
-		$term_attr = null !== $term_id ? sprintf( ' data-term-id="%s"', esc_attr( (string) $term_id ) ) : '';
+		$term_attr        = null !== $term_id ? sprintf( ' data-term-id="%s"', esc_attr( (string) $term_id ) ) : '';
 		$group_mode_class = sprintf( ' vkbm-menu-loop__group--mode-%s', esc_attr( $group_mode ) );
 
 		return sprintf(
@@ -370,7 +382,7 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function resolve_group_display_mode( array $attributes, ?int $term_id ): string {
-		$global_mode = $this->normalize_display_mode( (string) ( $attributes['displayMode'] ?? 'card' ) );
+		$global_mode       = $this->normalize_display_mode( (string) ( $attributes['displayMode'] ?? 'card' ) );
 		$group_filter_mode = (string) ( $attributes['groupFilterMode'] ?? 'all' );
 
 		if ( null === $term_id || 'all' !== $group_filter_mode ) {
@@ -399,61 +411,61 @@ class Menu_Loop_Block {
 		$order_by = $this->normalize_order_by( (string) ( $attributes['orderBy'] ?? 'menu_order' ) );
 		$filters  = $this->get_filters_from_request( $loop_id );
 
-		$meta_query = [
+		$meta_query = array(
 			'relation' => 'AND',
-			[
+			array(
 				'relation' => 'OR',
-				[
+				array(
 					'key'     => '_vkbm_is_archived',
 					'compare' => 'NOT EXISTS',
-				],
-				[
+				),
+				array(
 					'key'     => '_vkbm_is_archived',
 					'value'   => '1',
 					'compare' => '!=',
-				],
-			],
-		];
+				),
+			),
+		);
 
 		if ( $filters['staff'] > 0 ) {
-			$meta_query[] = [
+			$meta_query[] = array(
 				'key'     => '_vkbm_staff_ids',
 				'value'   => sprintf( 'i:%d;', $filters['staff'] ),
 				'compare' => 'LIKE',
-			];
+			);
 		}
 
-		$args = [
+		$args = array(
 			'post_type'           => Service_Menu_Post_Type::POST_TYPE,
 			'post_status'         => $this->get_menu_post_statuses(),
 			'posts_per_page'      => -1,
 			'orderby'             => 'menu_order' === $order_by
-				? [
+				? array(
 					'menu_order' => $order,
 					'title'      => 'ASC',
-				]
+				)
 				: $order_by,
 			'order'               => $order,
 			'ignore_sticky_posts' => true,
 			'meta_query'          => $meta_query,
-		];
+		);
 
-		$tax_query = [];
+		$tax_query = array();
 
 		if ( '' !== $filters['keyword'] ) {
 			$args['s'] = $filters['keyword'];
 		}
 
 		if ( $filters['category'] > 0 ) {
-			$tax_query[] = [
+			$tax_query[] = array(
 				'taxonomy' => Service_Menu_Post_Type::TAXONOMY,
 				'field'    => 'term_id',
 				'terms'    => $filters['category'],
-			];
+			);
 		}
 
 		$group_mode = (string) ( $attributes['groupFilterMode'] ?? 'all' );
-		$group_ids  = $attributes['selectedGroupIds'] ?? [];
+		$group_ids  = $attributes['selectedGroupIds'] ?? array();
 		if ( 'selected' === $group_mode && is_array( $group_ids ) ) {
 			$group_ids = array_values(
 				array_filter(
@@ -465,17 +477,17 @@ class Menu_Loop_Block {
 			);
 
 			if ( ! empty( $group_ids ) ) {
-				$tax_query[] = [
+				$tax_query[] = array(
 					'taxonomy' => Service_Menu_Post_Type::TAXONOMY_GROUP,
 					'field'    => 'term_id',
 					'terms'    => $group_ids,
-				];
+				);
 			}
 		}
 
 		if ( ! empty( $tax_query ) ) {
 			$args['tax_query'] = count( $tax_query ) > 1
-				? array_merge( [ 'relation' => 'AND' ], $tax_query )
+				? array_merge( array( 'relation' => 'AND' ), $tax_query )
 				: $tax_query;
 		}
 
@@ -491,7 +503,7 @@ class Menu_Loop_Block {
 	private function normalize_display_mode( string $mode ): string {
 		$mode = strtolower( trim( $mode ) );
 
-		if ( in_array( $mode, [ 'card', 'text' ], true ) ) {
+		if ( in_array( $mode, array( 'card', 'text' ), true ) ) {
 			return $mode;
 		}
 
@@ -505,9 +517,9 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function build_wrapper_style( array $attributes ): string {
-		$styles = [
+		$styles = array(
 			'--vkbm-menu-loop-gap:1.5rem',
-		];
+		);
 
 		return $styles ? ' style="' . esc_attr( implode( ';', $styles ) ) . '"' : '';
 	}
@@ -525,7 +537,7 @@ class Menu_Loop_Block {
 			return $this->render_text_item( $post, $attributes );
 		}
 
-		$parts = [];
+		$parts = array();
 
 		if ( ! empty( $attributes['showImage'] ) && VKBM_Helper::has_thumbnail( $post, 'direct' ) ) {
 			$parts[] = sprintf(
@@ -553,7 +565,7 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function render_text_item( WP_Post $post, array $attributes ): string {
-		$segments = [];
+		$segments = array();
 
 		$title_text = esc_html( get_the_title( $post ) );
 		$edit_link  = $this->get_menu_edit_link_markup( $post );
@@ -572,7 +584,7 @@ class Menu_Loop_Block {
 		$segments[] = sprintf( '<div class="vkbm-menu-loop__text-title">%s</div>', wp_kses_post( $title_markup ) );
 
 		$price_markup = '';
-		$price = get_post_meta( $post->ID, '_vkbm_base_price', true );
+		$price        = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		if ( is_numeric( $price ) && (int) $price >= 0 ) {
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__text-price">%s</div>',
@@ -584,9 +596,9 @@ class Menu_Loop_Block {
 			$post,
 			array_merge(
 				$attributes,
-				[
+				array(
 					'showDetailButton' => false,
-				]
+				)
 			)
 		);
 		if ( '' !== $actions ) {
@@ -595,7 +607,7 @@ class Menu_Loop_Block {
 			$actions_markup = '';
 		}
 
-		$trailing_markup = implode( '', array_filter( [ $price_markup, $actions_markup ] ) );
+		$trailing_markup = implode( '', array_filter( array( $price_markup, $actions_markup ) ) );
 		if ( '' !== $trailing_markup ) {
 			$segments[] = sprintf( '<div class="vkbm-menu-loop__text-trailing">%s</div>', $trailing_markup );
 		}
@@ -614,7 +626,7 @@ class Menu_Loop_Block {
 	 * @param array<string,mixed> $overrides  Attribute overrides.
 	 * @return string
 	 */
-	public function render_menu_card( int $menu_id, array $overrides = [] ): string {
+	public function render_menu_card( int $menu_id, array $overrides = array() ): string {
 		$post = get_post( $menu_id );
 
 		if ( ! $post instanceof WP_Post || Service_Menu_Post_Type::POST_TYPE !== $post->post_type ) {
@@ -640,39 +652,39 @@ class Menu_Loop_Block {
 	 */
 	public function render_menu_selection_list(): string {
 		$query = new WP_Query(
-			[
+			array(
 				'post_type'           => Service_Menu_Post_Type::POST_TYPE,
 				'post_status'         => $this->get_menu_post_statuses(),
 				'posts_per_page'      => -1,
-				'orderby'             => [
+				'orderby'             => array(
 					'menu_order' => 'ASC',
 					'title'      => 'ASC',
-				],
+				),
 				'order'               => 'ASC',
 				'ignore_sticky_posts' => true,
-				'meta_query'          => [
+				'meta_query'          => array(
 					'relation' => 'AND',
-					[
+					array(
 						'relation' => 'OR',
-						[
+						array(
 							'key'     => '_vkbm_is_archived',
 							'compare' => 'NOT EXISTS',
-						],
-						[
+						),
+						array(
 							'key'     => '_vkbm_is_archived',
 							'value'   => '1',
 							'compare' => '!=',
-						],
-					],
-				],
-			]
+						),
+					),
+				),
+			)
 		);
 
 		if ( ! $query->have_posts() ) {
 			return '';
 		}
 
-		$posts = [];
+		$posts = array();
 		while ( $query->have_posts() ) {
 			$query->the_post();
 			$post = get_post();
@@ -684,15 +696,15 @@ class Menu_Loop_Block {
 
 		$attributes = array_merge(
 			$this->get_default_attributes(),
-			[
+			array(
 				'showDetailButton'  => true,
 				'showReserveButton' => true,
 				'disableTitleLink'  => true,
-			]
+			)
 		);
 
-		$provider_settings = $this->get_provider_settings();
-		$mode              = $this->normalize_display_mode(
+		$provider_settings         = $this->get_provider_settings();
+		$mode                      = $this->normalize_display_mode(
 			(string) ( $provider_settings['reservation_menu_list_display_mode'] ?? 'card' )
 		);
 		$attributes['displayMode'] = $mode;
@@ -701,8 +713,7 @@ class Menu_Loop_Block {
 
 		return sprintf(
 			'<div class="vkbm-menu-loop vkbm-menu-loop--selection vkbm-menu-loop--mode-%2$s"><div class="vkbm-menu-loop__list vkbm-menu-loop__list--%2$s">%1$s</div></div>',
-			$items_markup
-			,
+			$items_markup,
 			esc_attr( $mode )
 		);
 	}
@@ -714,10 +725,10 @@ class Menu_Loop_Block {
 	 */
 	private function get_menu_post_statuses(): array {
 		if ( current_user_can( Capabilities::VIEW_SERVICE_MENUS ) ) {
-			return [ 'publish', 'private' ];
+			return array( 'publish', 'private' );
 		}
 
-		return [ 'publish' ];
+		return array( 'publish' );
 	}
 
 	/**
@@ -728,7 +739,7 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function render_card_body( WP_Post $post, array $attributes ): string {
-		$segments = [];
+		$segments  = array();
 		$edit_link = $this->get_menu_edit_link_markup( $post );
 
 		if ( ! empty( $attributes['showCategories'] ) ) {
@@ -791,13 +802,13 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function render_meta_information( WP_Post $post, array $attributes ): string {
-		$duration = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
-		$price    = get_post_meta( $post->ID, '_vkbm_base_price', true );
+		$duration             = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
+		$price                = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$reservation_day_type = (string) get_post_meta( $post->ID, '_vkbm_reservation_day_type', true );
-		$other_conditions = trim( (string) get_post_meta( $post->ID, '_vkbm_other_conditions', true ) );
-		$staff_ids = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
-		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : [];
-		$staff_ids = array_values(
+		$other_conditions     = trim( (string) get_post_meta( $post->ID, '_vkbm_other_conditions', true ) );
+		$staff_ids            = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
+		$staff_ids            = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+		$staff_ids            = array_values(
 			array_filter(
 				$staff_ids,
 				static function ( int $staff_id ): bool {
@@ -806,8 +817,8 @@ class Menu_Loop_Block {
 			)
 		);
 
-		$items = [];
-		$price_markup = '';
+		$items          = array();
+		$price_markup   = '';
 		$resource_label = $this->get_resource_label_menu();
 
 		if ( is_numeric( $duration ) && (int) $duration > 0 ) {
@@ -825,16 +836,16 @@ class Menu_Loop_Block {
 
 		if ( ! empty( $staff_ids ) ) {
 			$staff_posts = get_posts(
-				[
+				array(
 					'post_type'      => Resource_Post_Type::POST_TYPE,
-					'post_status'    => [ 'publish' ],
+					'post_status'    => array( 'publish' ),
 					'posts_per_page' => -1,
-					'orderby'        => [
+					'orderby'        => array(
 						'menu_order' => 'ASC',
 						'title'      => 'ASC',
-					],
+					),
 					'include'        => $staff_ids,
-				]
+				)
 			);
 
 			$names = array_values(
@@ -913,7 +924,7 @@ class Menu_Loop_Block {
 			return '';
 		}
 
-		$side_markup = implode( '', array_filter( [ $price_markup, $actions_markup ] ) );
+		$side_markup = implode( '', array_filter( array( $price_markup, $actions_markup ) ) );
 		if ( '' !== $side_markup ) {
 			$side_markup = sprintf( '<div class="vkbm-menu-loop__card-meta-side">%s</div>', $side_markup );
 		}
@@ -936,12 +947,13 @@ class Menu_Loop_Block {
 		$show_detail  = array_key_exists( 'showDetailButton', $attributes ) ? (bool) $attributes['showDetailButton'] : true;
 		$show_reserve = ! empty( $attributes['showReserveButton'] );
 
-		$buttons = [];
+		$buttons = array();
 
 		$use_detail_page = '1' === (string) get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
 
 		if ( $show_detail && $use_detail_page ) {
-			$label = trim( (string) ( $attributes['buttonLabel'] ?? '' ) );
+			$settings = $this->get_provider_settings();
+			$label    = trim( (string) ( $settings['menu_loop_detail_button_label'] ?? '' ) );
 			if ( '' === $label ) {
 				$label = __( 'View details', 'vk-booking-manager' );
 			}
@@ -954,15 +966,13 @@ class Menu_Loop_Block {
 		}
 
 		if ( $show_reserve ) {
-			$label = trim( (string) ( $attributes['reserveButtonLabel'] ?? '' ) );
+			$settings = $this->get_provider_settings();
+			$label    = trim( (string) ( $settings['menu_loop_reserve_button_label'] ?? '' ) );
 			if ( '' === $label ) {
 				$label = __( 'Proceed to Reservation', 'vk-booking-manager' );
 			}
 
-			$reserve_url = trim( (string) ( $attributes['reserveButtonUrl'] ?? '' ) );
-			if ( '' === $reserve_url ) {
-				$reserve_url = $this->build_reservation_link( $post );
-			}
+			$reserve_url = $this->build_reservation_link( $post );
 			if ( '' === $reserve_url ) {
 				$reserve_url = get_permalink( $post );
 			}
@@ -1018,21 +1028,21 @@ class Menu_Loop_Block {
 		 * @param int $base_price Base (tax-included) price.
 		 * @return string
 		 */
-		private function format_price_display( int $base_price ): string {
-			$formatted_price = esc_html( VKBM_Helper::format_currency( $base_price ) );
-			$tax_label       = VKBM_Helper::get_tax_included_label();
+	private function format_price_display( int $base_price ): string {
+		$formatted_price = esc_html( VKBM_Helper::format_currency( $base_price ) );
+		$tax_label       = VKBM_Helper::get_tax_included_label();
 
-			if ( '' === $tax_label ) {
-				return $formatted_price;
-			}
-
-			return sprintf(
-				/* translators: 1: price, 2: tax-included label */
-				'%1$s<span class="vkbm-menu-loop__card-price-tax">%2$s</span>',
-				$formatted_price,
-				esc_html( $tax_label )
-			);
+		if ( '' === $tax_label ) {
+			return $formatted_price;
 		}
+
+		return sprintf(
+			/* translators: 1: price, 2: tax-included label */
+			'%1$s<span class="vkbm-menu-loop__card-price-tax">%2$s</span>',
+			$formatted_price,
+			esc_html( $tax_label )
+		);
+	}
 
 	/**
 	 * Default attribute set matching block settings.
@@ -1040,18 +1050,18 @@ class Menu_Loop_Block {
 	 * @return array<string,mixed>
 	 */
 	private function get_default_attributes(): array {
-		return [
+		return array(
 			'showImage'         => true,
 			'showExcerpt'       => true,
 			'showMeta'          => true,
 			'showCategories'    => true,
 			'displayMode'       => 'card',
 			'groupFilterMode'   => 'all',
-			'selectedGroupIds'  => [],
+			'selectedGroupIds'  => array(),
 			'hideGroupTitle'    => false,
 			'showDetailButton'  => true,
 			'showReserveButton' => true,
-		];
+		);
 	}
 
 	/**
@@ -1068,9 +1078,9 @@ class Menu_Loop_Block {
 		}
 
 		return add_query_arg(
-			[
+			array(
 				'menu_id' => (string) $post->ID,
-			],
+			),
 			$reservation_url
 		);
 	}
@@ -1082,8 +1092,8 @@ class Menu_Loop_Block {
 	 */
 	private function get_provider_settings(): array {
 		if ( null === $this->provider_settings ) {
-			$settings = $this->settings_repository->get_settings();
-			$this->provider_settings = is_array( $settings ) ? $settings : [];
+			$settings                = $this->settings_repository->get_settings();
+			$this->provider_settings = is_array( $settings ) ? $settings : array();
 		}
 
 		return $this->provider_settings;
@@ -1122,7 +1132,7 @@ class Menu_Loop_Block {
 	 */
 	private function get_resource_label_singular(): string {
 		$settings = $this->get_provider_settings();
-		$label = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : '';
+		$label    = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : '';
 
 		return '' !== trim( $label ) ? $label : __( 'Staff', 'vk-booking-manager' );
 	}
@@ -1137,7 +1147,7 @@ class Menu_Loop_Block {
 	 */
 	private function get_resource_label_menu(): string {
 		$settings = $this->get_provider_settings();
-		$label = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : '';
+		$label    = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : '';
 
 		return '' !== trim( $label ) ? $label : __( 'Staff available', 'vk-booking-manager' );
 	}
@@ -1230,12 +1240,15 @@ class Menu_Loop_Block {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		$raw_request = $_GET[ self::REQUEST_KEY ] ?? []; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$raw_request = isset( $_GET[ self::REQUEST_KEY ] ) && is_array( $_GET[ self::REQUEST_KEY ] ) ? wp_unslash( $_GET[ self::REQUEST_KEY ] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! is_array( $raw_request ) ) {
+			$raw_request = array();
+		}
 		if ( ! is_array( $raw_request ) ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		$target = $raw_request[ $loop_id ] ?? [];
+		$target = $raw_request[ $loop_id ] ?? array();
 		if ( ! is_array( $target ) ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
@@ -1255,11 +1268,11 @@ class Menu_Loop_Block {
 			$keyword = sanitize_text_field( wp_unslash( (string) $target['keyword'] ) );
 		}
 
-		return [
+		return array(
 			'staff'    => $staff,
 			'category' => $category,
 			'keyword'  => $keyword,
-		];
+		);
 	}
 
 	/**
@@ -1292,7 +1305,7 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function normalize_order_by( string $order_by ): string {
-		$allowed = [ 'menu_order', 'title', 'date', 'modified', 'rand' ];
+		$allowed = array( 'menu_order', 'title', 'date', 'modified', 'rand' );
 
 		return in_array( $order_by, $allowed, true ) ? $order_by : 'menu_order';
 	}
@@ -1306,6 +1319,6 @@ class Menu_Loop_Block {
 	private function normalize_order( string $order ): string {
 		$order = strtoupper( $order );
 
-		return in_array( $order, [ 'ASC', 'DESC' ], true ) ? $order : 'ASC';
+		return in_array( $order, array( 'ASC', 'DESC' ), true ) ? $order : 'ASC';
 	}
 }

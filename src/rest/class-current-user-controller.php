@@ -1,4 +1,9 @@
 <?php
+/**
+ * REST controller for current user data.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -47,7 +52,7 @@ class Current_User_Controller extends WP_REST_Controller {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**
@@ -57,11 +62,11 @@ class Current_User_Controller extends WP_REST_Controller {
 		register_rest_route(
 			self::REST_NAMESPACE,
 			'/current-user',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'get_current_user_flags' ],
+				'callback'            => array( $this, 'get_current_user_flags' ),
 				'permission_callback' => '__return_true',
-			]
+			)
 		);
 	}
 
@@ -73,17 +78,18 @@ class Current_User_Controller extends WP_REST_Controller {
 	 */
 	public function get_current_user_flags( WP_REST_Request $request ) {
 		if ( ! is_user_logged_in() ) {
-			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), [ 'status' => 401 ] );
+			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
 		}
 
-		$redirect = $this->get_reservation_page_redirect() ?: $this->determine_redirect_target( $request );
+		$reservation_redirect = $this->get_reservation_page_redirect();
+		$redirect             = '' !== $reservation_redirect ? $reservation_redirect : $this->determine_redirect_target( $request );
 
 		return new WP_REST_Response(
-			[
+			array(
 				'can_manage_reservations' => current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 				'shift_dashboard_url'     => admin_url( 'admin.php?page=vkbm-shift-dashboard' ),
 				'logout_url'              => wp_logout_url( $redirect ),
-			]
+			)
 		);
 	}
 
@@ -113,8 +119,8 @@ class Current_User_Controller extends WP_REST_Controller {
 	 * @return string
 	 */
 	private function get_reservation_page_redirect(): string {
-		$settings = $this->settings_service->get_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
+		$settings   = $this->settings_service->get_settings();
+		$url        = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 		$normalized = $this->normalize_reservation_page_url( $url );
 
 		if ( '' === $normalized ) {

@@ -1,4 +1,9 @@
 <?php
+/**
+ * Provides the Booking Manager shift dashboard.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -38,22 +43,22 @@ class Shift_Dashboard_Page {
 	 *
 	 * @var array<int, string>
 	 */
-	private const CLOSED_STATUSES = [
+	private const CLOSED_STATUSES = array(
 		self::STATUS_REGULAR_HOLIDAY,
 		self::STATUS_TEMPORARY_CLOSED,
 		self::STATUS_UNAVAILABLE,
-	];
+	);
 
-	private const META_BOOKING_START      = '_vkbm_booking_service_start';
-	private const META_BOOKING_END        = '_vkbm_booking_service_end';
-	private const META_BOOKING_TOTAL_END  = '_vkbm_booking_total_end';
-	private const META_BOOKING_RESOURCE   = '_vkbm_booking_resource_id';
-	private const META_BOOKING_SERVICE  = '_vkbm_booking_service_id';
-	private const META_BOOKING_CUSTOMER = '_vkbm_booking_customer_name';
-	private const META_BOOKING_TEL      = '_vkbm_booking_customer_tel';
-	private const META_BOOKING_EMAIL    = '_vkbm_booking_customer_email';
-	private const META_BOOKING_STATUS   = '_vkbm_booking_status';
-	private const META_BOOKING_NOTE     = '_vkbm_booking_note';
+	private const META_BOOKING_START     = '_vkbm_booking_service_start';
+	private const META_BOOKING_END       = '_vkbm_booking_service_end';
+	private const META_BOOKING_TOTAL_END = '_vkbm_booking_total_end';
+	private const META_BOOKING_RESOURCE  = '_vkbm_booking_resource_id';
+	private const META_BOOKING_SERVICE   = '_vkbm_booking_service_id';
+	private const META_BOOKING_CUSTOMER  = '_vkbm_booking_customer_name';
+	private const META_BOOKING_TEL       = '_vkbm_booking_customer_tel';
+	private const META_BOOKING_EMAIL     = '_vkbm_booking_customer_email';
+	private const META_BOOKING_STATUS    = '_vkbm_booking_status';
+	private const META_BOOKING_NOTE      = '_vkbm_booking_note';
 
 	private const BOOKING_STATUS_CONFIRMED = 'confirmed';
 	private const BOOKING_STATUS_PENDING   = 'pending';
@@ -61,11 +66,15 @@ class Shift_Dashboard_Page {
 	private const BOOKING_STATUS_NO_SHOW   = 'no_show';
 
 	/**
+	 * Capability required to access the page.
+	 *
 	 * @var string
 	 */
 	private $capability;
 
 	/**
+	 * Page hook for the admin page.
+	 *
 	 * @var string
 	 */
 	private $page_hook = '';
@@ -83,9 +92,9 @@ class Shift_Dashboard_Page {
 	 * Register WordPress hooks for the dashboard page.
 	 */
 	public function register(): void {
-		add_action( 'admin_menu', [ $this, 'register_menu' ] );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
-		add_action( 'wp_ajax_vkbm_confirm_booking', [ $this, 'ajax_confirm_booking' ] );
+		add_action( 'admin_menu', array( $this, 'register_menu' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+		add_action( 'wp_ajax_vkbm_confirm_booking', array( $this, 'ajax_confirm_booking' ) );
 	}
 
 	/**
@@ -97,7 +106,7 @@ class Shift_Dashboard_Page {
 			__( 'BM shift/reservation', 'vk-booking-manager' ),
 			$this->capability,
 			self::MENU_SLUG,
-			[ $this, 'render_page' ],
+			array( $this, 'render_page' ),
 			'dashicons-calendar-alt',
 			56
 		);
@@ -118,7 +127,7 @@ class Shift_Dashboard_Page {
 		wp_enqueue_script(
 			'vkbm-shift-dashboard-view-toggle',
 			plugins_url( 'assets/js/shift-dashboard.js', dirname( __DIR__ ) ),
-			[],
+			array(),
 			VKBM_VERSION,
 			true
 		);
@@ -126,15 +135,15 @@ class Shift_Dashboard_Page {
 		wp_localize_script(
 			'vkbm-shift-dashboard-view-toggle',
 			'vkbmShiftDashboard',
-			[
+			array(
 				'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
 				'confirmNonce' => wp_create_nonce( 'vkbm_confirm_booking' ),
-				'i18n'        => [
-					'confirm'   => __( 'Confirmed', 'vk-booking-manager' ),
-					'confirming'=> __( 'Confirmation processing in progress...', 'vk-booking-manager' ),
-					'error'     => __( 'Confirmation failed. Please try again later.', 'vk-booking-manager' ),
-				],
-			]
+				'i18n'         => array(
+					'confirm'    => __( 'Confirmed', 'vk-booking-manager' ),
+					'confirming' => __( 'Confirmation processing in progress...', 'vk-booking-manager' ),
+					'error'      => __( 'Confirmation failed. Please try again later.', 'vk-booking-manager' ),
+				),
+			)
 		);
 	}
 
@@ -151,58 +160,58 @@ class Shift_Dashboard_Page {
 		$selected_view = $this->get_selected_view();
 		$selected_date = $this->get_selected_date();
 
-		$year       = (int) $selected_date->format( 'Y' );
-		$month      = (int) $selected_date->format( 'n' );
-		$day        = (int) $selected_date->format( 'j' );
-		$month_key  = $selected_date->format( 'Y-m' );
-		$iso_date   = $selected_date->format( 'Y-m-d' );
+		$year        = (int) $selected_date->format( 'Y' );
+		$month       = (int) $selected_date->format( 'n' );
+		$day         = (int) $selected_date->format( 'j' );
+		$month_key   = $selected_date->format( 'Y-m' );
+		$iso_date    = $selected_date->format( 'Y-m-d' );
 		$date_format = get_option( 'date_format' );
 		$day_label   = wp_date( $date_format, $selected_date->getTimestamp() );
-		
-		// Format month label based on locale
-		// Japanese: "2026年2月", English: "February 2026"
-		$locale = determine_locale();
+
+		// Format month label based on locale.
+		// Japanese: "2026年2月", English: "February 2026".
+		$locale       = determine_locale();
 		$month_format = ( 'ja' === substr( $locale, 0, 2 ) ) ? 'Y年n月' : 'F Y';
 		$month_label  = wp_date( $month_format, $selected_date->getTimestamp() );
 
 		$resources = $this->get_resource_posts();
 		$shift_map = $this->get_shift_map( $resources, $year, $month );
 
-		$resource_names = [];
+		$resource_names = array();
 		foreach ( $resources as $resource ) {
 			$resource_names[ $resource->ID ] = get_the_title( $resource );
 		}
 
-		$bookings_map    = $this->get_bookings_for_day( $selected_date );
-		$month_bookings  = $this->get_bookings_for_month( $year, $month );
+		$bookings_map          = $this->get_bookings_for_day( $selected_date );
+		$month_bookings        = $this->get_bookings_for_month( $year, $month );
 		$pending_notifications = $this->get_pending_booking_notifications();
 
 		$day_view   = $this->build_day_view_data( $resources, $shift_map, $bookings_map, $selected_date );
 		$month_view = $this->build_month_view_data( $shift_map, $year, $month, count( $resources ), $resource_names, $month_bookings );
 
 		$prev_day_url   = $this->get_dashboard_url(
-			[
+			array(
 				'vkbm_date' => $selected_date->modify( '-1 day' )->format( 'Y-m-d' ),
 				'vkbm_view' => 'day',
-			]
+			)
 		);
 		$next_day_url   = $this->get_dashboard_url(
-			[
+			array(
 				'vkbm_date' => $selected_date->modify( '+1 day' )->format( 'Y-m-d' ),
 				'vkbm_view' => 'day',
-			]
+			)
 		);
 		$prev_month_url = $this->get_dashboard_url(
-			[
+			array(
 				'vkbm_date' => $selected_date->modify( 'first day of previous month' )->format( 'Y-m-d' ),
 				'vkbm_view' => 'month',
-			]
+			)
 		);
 		$next_month_url = $this->get_dashboard_url(
-			[
+			array(
 				'vkbm_date' => $selected_date->modify( 'first day of next month' )->format( 'Y-m-d' ),
 				'vkbm_view' => 'month',
-			]
+			)
 		);
 
 		$day_button_is_active   = ( 'day' === $selected_view );
@@ -210,7 +219,7 @@ class Shift_Dashboard_Page {
 
 		$resource_count = max( 1, count( $day_view['resource_cards'] ) );
 
-		$month_weekdays = [
+		$month_weekdays = array(
 			__( 'Mon', 'vk-booking-manager' ),
 			__( 'Tue', 'vk-booking-manager' ),
 			__( 'Wed', 'vk-booking-manager' ),
@@ -218,7 +227,7 @@ class Shift_Dashboard_Page {
 			__( 'Fri', 'vk-booking-manager' ),
 			__( 'Sat', 'vk-booking-manager' ),
 			__( 'Sun', 'vk-booking-manager' ),
-		];
+		);
 
 		?>
 		<div class="wrap vkbm-shift-dashboard">
@@ -324,7 +333,7 @@ class Shift_Dashboard_Page {
 
 													<?php foreach ( $lane['shifts'] as $shift_index => $shift ) : ?>
 														<?php
-														$shift_classes = [ 'vkbm-shift-block' ];
+														$shift_classes = array( 'vkbm-shift-block' );
 
 														if ( 0 === $shift_index ) {
 															$shift_classes[] = 'vkbm-shift-block--edge-top';
@@ -350,7 +359,7 @@ class Shift_Dashboard_Page {
 																<div class="vkbm-bookings">
 																	<?php foreach ( $shift['bookings'] as $booking ) : ?>
 																		<?php
-																		$booking_classes = [ 'vkbm-booking-card' ];
+																		$booking_classes = array( 'vkbm-booking-card' );
 																		if ( ! empty( $booking['class'] ) ) {
 																			$booking_classes[] = $booking['class'];
 																		}
@@ -415,7 +424,7 @@ class Shift_Dashboard_Page {
 									<a class="button button-secondary" href="<?php echo esc_url( $prev_month_url ); ?>">
 										<?php
 										$prev_month_text = __( 'previous month', 'vk-booking-manager' );
-										// Capitalize first letter of each word for English locales
+										// Capitalize first letter of each word for English locales.
 										$locale = determine_locale();
 										if ( 'en' === substr( $locale, 0, 2 ) ) {
 											$prev_month_text = ucwords( $prev_month_text );
@@ -426,7 +435,7 @@ class Shift_Dashboard_Page {
 									<a class="button button-secondary" href="<?php echo esc_url( $next_month_url ); ?>">
 										<?php
 										$next_month_text = __( 'next month', 'vk-booking-manager' );
-										// Capitalize first letter of each word for English locales
+										// Capitalize first letter of each word for English locales.
 										if ( 'en' === substr( $locale, 0, 2 ) ) {
 											$next_month_text = ucwords( $next_month_text );
 										}
@@ -466,7 +475,7 @@ class Shift_Dashboard_Page {
 									<?php foreach ( $month_view['weeks'] as $week ) : ?>
 										<?php foreach ( $week as $cell ) : ?>
 											<?php
-											$cell_classes = [ 'vkbm-month-calendar__cell' ];
+											$cell_classes = array( 'vkbm-month-calendar__cell' );
 
 											if ( ! empty( $cell['type'] ) ) {
 												$cell_classes[] = 'vkbm-month-calendar__cell--' . $cell['type'];
@@ -488,7 +497,7 @@ class Shift_Dashboard_Page {
 														<div class="vkbm-month-calendar__bookings">
 															<?php foreach ( $cell['entries'] as $entry ) : ?>
 																<?php
-																$entry_classes = [ 'vkbm-month-booking' ];
+																$entry_classes = array( 'vkbm-month-booking' );
 																if ( ! empty( $entry['class'] ) ) {
 																	$entry_classes[] = $entry['class'];
 																}
@@ -534,7 +543,7 @@ class Shift_Dashboard_Page {
 		if ( isset( $_GET['vkbm_view'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only.
 			$view = sanitize_key( wp_unslash( $_GET['vkbm_view'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only.
 
-			if ( in_array( $view, [ 'day', 'month' ], true ) ) {
+			if ( in_array( $view, array( 'day', 'month' ), true ) ) {
 				return $view;
 			}
 		}
@@ -569,16 +578,16 @@ class Shift_Dashboard_Page {
 	 */
 	private function get_resource_posts(): array {
 		return get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
-				'orderby'        => [
+				'post_status'    => array( 'publish' ),
+				'orderby'        => array(
 					'menu_order' => 'ASC',
 					'title'      => 'ASC',
-				],
+				),
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
-			]
+			)
 		);
 	}
 
@@ -591,14 +600,14 @@ class Shift_Dashboard_Page {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_shift_map( array $resources, int $year, int $month ): array {
-		$map          = [];
-		$resource_ids = [];
+		$map          = array();
+		$resource_ids = array();
 
 		foreach ( $resources as $resource ) {
-			$resource_ids[]          = (int) $resource->ID;
-			$map[ (int) $resource->ID ] = [
-				'days' => [],
-			];
+			$resource_ids[]             = (int) $resource->ID;
+			$map[ (int) $resource->ID ] = array(
+				'days' => array(),
+			);
 		}
 
 		if ( empty( $resource_ids ) ) {
@@ -606,22 +615,22 @@ class Shift_Dashboard_Page {
 		}
 
 		$shift_posts = get_posts(
-			[
+			array(
 				'post_type'      => Shift_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
+				'post_status'    => array( 'publish' ),
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
-				'meta_query'     => [
-					[
+				'meta_query'     => array(
+					array(
 						'key'   => self::META_SHIFT_YEAR,
 						'value' => $year,
-					],
-					[
+					),
+					array(
 						'key'   => self::META_SHIFT_MONTH,
 						'value' => $month,
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
 		foreach ( $shift_posts as $shift_post ) {
@@ -632,9 +641,9 @@ class Shift_Dashboard_Page {
 			}
 
 			if ( ! isset( $map[ $resource_id ] ) ) {
-				$map[ $resource_id ] = [
-					'days' => [],
-				];
+				$map[ $resource_id ] = array(
+					'days' => array(),
+				);
 			}
 
 			$raw_days = get_post_meta( $shift_post->ID, self::META_SHIFT_DAYS, true );
@@ -654,7 +663,7 @@ class Shift_Dashboard_Page {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function normalize_day_map( array $days ): array {
-		$normalized = [];
+		$normalized = array();
 
 		foreach ( $days as $day => $entry ) {
 			$day_number = (int) $day;
@@ -664,12 +673,12 @@ class Shift_Dashboard_Page {
 			}
 
 			$status = self::STATUS_OPEN;
-			$slots  = [];
+			$slots  = array();
 
 			if ( is_array( $entry ) ) {
 				if ( isset( $entry['status'] ) ) {
 					$status_candidate = (string) $entry['status'];
-					$status           = $status_candidate ?: self::STATUS_OPEN;
+					$status           = '' !== $status_candidate ? $status_candidate : self::STATUS_OPEN;
 				}
 
 				if ( isset( $entry['slots'] ) && is_array( $entry['slots'] ) ) {
@@ -677,10 +686,10 @@ class Shift_Dashboard_Page {
 				}
 			}
 
-			$normalized[ $day_number ] = [
+			$normalized[ $day_number ] = array(
 				'status' => $status,
 				'slots'  => $slots,
-			];
+			);
 		}
 
 		return $normalized;
@@ -689,9 +698,10 @@ class Shift_Dashboard_Page {
 	/**
 	 * Assemble data required to render the day view.
 	 *
-	 * @param array<int, WP_Post>        $resources Resource posts.
-	 * @param array<int, array>          $shift_map Month shift map.
-	 * @param int                        $day       Selected day of month.
+	 * @param array<int, WP_Post> $resources     Resource posts.
+	 * @param array<int, array>   $shift_map     Month shift map.
+	 * @param array<int, array>   $bookings_map  Bookings map.
+	 * @param DateTimeImmutable   $date          Selected date.
 	 * @return array<string, mixed>
 	 */
 	private function build_day_view_data( array $resources, array $shift_map, array $bookings_map, DateTimeImmutable $date ): array {
@@ -700,25 +710,25 @@ class Shift_Dashboard_Page {
 		$day_start      = $date->setTime( 0, 0 );
 		$day            = (int) $date->format( 'j' );
 
-		$resource_cards = [];
-		$lanes          = [];
+		$resource_cards = array();
+		$lanes          = array();
 
 		foreach ( $resources as $resource ) {
-			$resource_id = (int) $resource->ID;
-			$days        = $shift_map[ $resource_id ]['days'] ?? [];
-			$day_entry   = $days[ $day ] ?? null;
-			$resource_bookings = $bookings_map[ $resource_id ] ?? [];
+			$resource_id         = (int) $resource->ID;
+			$days                = $shift_map[ $resource_id ]['days'] ?? array();
+			$day_entry           = $days[ $day ] ?? null;
+			$resource_bookings   = $bookings_map[ $resource_id ] ?? array();
 			$unassigned_bookings = $resource_bookings;
 
 			$status_key = self::STATUS_NOT_SET;
-			$slots      = [];
+			$slots      = array();
 
 			if ( is_array( $day_entry ) ) {
 				$status_key = (string) ( $day_entry['status'] ?? self::STATUS_OPEN );
-				$slots      = $this->normalize_slots( $day_entry['slots'] ?? [] );
+				$slots      = $this->normalize_slots( $day_entry['slots'] ?? array() );
 			}
 
-			$shifts       = [];
+			$shifts       = array();
 			$total_hours  = 0.0;
 			$last_end     = null;
 			$slot_counter = 0;
@@ -735,7 +745,7 @@ class Shift_Dashboard_Page {
 				$timeline_end   = null === $timeline_end ? $end : max( $timeline_end, $end );
 
 				$total_hours += ( $end - $start );
-				$slot_counter++;
+				++$slot_counter;
 				$last_end = $end;
 
 				$slot_bookings = $this->collect_bookings_for_slot( $unassigned_bookings, $start, $end );
@@ -751,13 +761,13 @@ class Shift_Dashboard_Page {
 					$slot_bookings
 				);
 
-				$shifts[] = [
-					'start'  => $start,
-					'end'    => $end,
-					'time'   => $this->format_time_range( $slot['start'], $slot['end'] ),
-					'status' => $this->get_slot_status_label( $status_key ),
+				$shifts[] = array(
+					'start'    => $start,
+					'end'      => $end,
+					'time'     => $this->format_time_range( $slot['start'], $slot['end'] ),
+					'status'   => $this->get_slot_status_label( $status_key ),
 					'bookings' => $booking_cards,
-				];
+				);
 			}
 
 			if ( null === $timeline_start || null === $timeline_end ) {
@@ -772,19 +782,19 @@ class Shift_Dashboard_Page {
 
 			$status_info = $this->resolve_resource_status( $status_key, $slot_counter, $total_hours );
 
-			$resource_cards[] = [
+			$resource_cards[] = array(
 				'id'          => $resource_id,
 				'name'        => get_the_title( $resource ),
 				'role'        => $this->derive_resource_role( $resource ),
 				'status'      => $status_info['label'],
 				'status_type' => $status_info['type'],
-			];
+			);
 
 			$unassigned_bookings = array_values( $unassigned_bookings );
 
 			foreach ( $unassigned_bookings as $booking_index => $booking ) {
-				$booking_cards = [ $this->map_booking_to_card( $booking ) ];
-				$shifts[]      = [
+				$booking_cards = array( $this->map_booking_to_card( $booking ) );
+				$shifts[]      = array(
 					'start'    => $booking['start_decimal'],
 					'end'      => $booking['end_decimal'],
 					'time'     => $booking['time_range'],
@@ -796,18 +806,18 @@ class Shift_Dashboard_Page {
 						},
 						$booking_cards
 					),
-				];
+				);
 				unset( $unassigned_bookings[ $booking_index ] );
 			}
 
-			$lanes[] = [
+			$lanes[] = array(
 				'resource_id'    => $resource_id,
 				'shifts'         => $shifts,
 				'status_label'   => $status_info['label'],
 				'is_closed'      => ( 'off' === $status_info['type'] ),
 				'timeline_start' => null,
 				'timeline_end'   => null,
-			];
+			);
 		}
 
 		if ( null === $timeline_start || null === $timeline_end ) {
@@ -830,21 +840,18 @@ class Shift_Dashboard_Page {
 		}
 		unset( $lane );
 
-		return [
-			'timeline'      => $timeline_labels,
-			'resource_cards'=> $resource_cards,
-			'lanes'         => $lanes,
-		];
+		return array(
+			'timeline'       => $timeline_labels,
+			'resource_cards' => $resource_cards,
+			'lanes'          => $lanes,
+		);
 	}
 
 	/**
-	 * Build data required to render the monthly overview grid.
+	 * Get bookings for a specific day.
 	 *
-	 * @param array<int, array> $shift_map      Month shift map.
-	 * @param int               $year           Target year.
-	 * @param int               $month          Target month (1-12).
-	 * @param int               $resource_count Number of resources.
-	 * @return array<string, array<int, array<int, array<string, string>>>>
+	 * @param DateTimeImmutable $date Target date.
+	 * @return array<int, array>
 	 */
 	private function get_bookings_for_day( DateTimeImmutable $date ): array {
 		$timezone     = wp_timezone();
@@ -852,34 +859,34 @@ class Shift_Dashboard_Page {
 		$end_of_day   = $date->setTime( 23, 59, 59 );
 
 		$query = new WP_Query(
-			[
+			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
+				'post_status'    => array( 'publish' ),
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
 				'orderby'        => 'meta_value',
 				'order'          => 'ASC',
 				'meta_key'       => self::META_BOOKING_START,
-				'meta_query'     => [
+				'meta_query'     => array(
 					'relation' => 'AND',
-					[
+					array(
 						'key'     => self::META_BOOKING_START,
-						'value'   => [
+						'value'   => array(
 							$start_of_day->format( 'Y-m-d H:i:s' ),
 							$end_of_day->format( 'Y-m-d H:i:s' ),
-						],
+						),
 						'compare' => 'BETWEEN',
 						'type'    => 'DATETIME',
-					],
-					[
+					),
+					array(
 						'key'     => self::META_BOOKING_RESOURCE,
 						'compare' => 'EXISTS',
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
-		$map            = [];
+		$map             = array();
 		$start_of_day_ts = $start_of_day->getTimestamp();
 
 		if ( $query->have_posts() ) {
@@ -893,9 +900,9 @@ class Shift_Dashboard_Page {
 					continue;
 				}
 
-				$start_raw     = (string) get_post_meta( $post_id, self::META_BOOKING_START, true );
+				$start_raw       = (string) get_post_meta( $post_id, self::META_BOOKING_START, true );
 				$service_end_raw = (string) get_post_meta( $post_id, self::META_BOOKING_END, true );
-				$total_end_raw = (string) get_post_meta( $post_id, self::META_BOOKING_TOTAL_END, true );
+				$total_end_raw   = (string) get_post_meta( $post_id, self::META_BOOKING_TOTAL_END, true );
 
 				if ( '' === $start_raw ) {
 					continue;
@@ -921,7 +928,7 @@ class Shift_Dashboard_Page {
 				$service_id    = (int) get_post_meta( $post_id, self::META_BOOKING_SERVICE, true );
 				$service_title = $service_id > 0 ? get_the_title( $service_id ) : '';
 
-				$booking = [
+				$booking = array(
 					'post_id'       => $post_id,
 					'start_decimal' => $start_decimal,
 					'end_decimal'   => $end_decimal,
@@ -936,7 +943,7 @@ class Shift_Dashboard_Page {
 					'service'       => $service_title,
 					'status'        => (string) get_post_meta( $post_id, self::META_BOOKING_STATUS, true ),
 					'note'          => (string) get_post_meta( $post_id, self::META_BOOKING_NOTE, true ),
-				];
+				);
 
 				$map[ $resource_id ][] = $booking;
 			}
@@ -966,40 +973,40 @@ class Shift_Dashboard_Page {
 	 * @return array<int, array<int, array<string, mixed>>>
 	 */
 	private function get_bookings_for_month( int $year, int $month ): array {
-		$timezone   = wp_timezone();
-		$first_day  = new DateTimeImmutable( sprintf( '%04d-%02d-01', $year, $month ), $timezone );
-		$start      = $first_day->setTime( 0, 0, 0 );
-		$end        = $first_day->modify( 'last day of this month' )->setTime( 23, 59, 59 );
+		$timezone  = wp_timezone();
+		$first_day = new DateTimeImmutable( sprintf( '%04d-%02d-01', $year, $month ), $timezone );
+		$start     = $first_day->setTime( 0, 0, 0 );
+		$end       = $first_day->modify( 'last day of this month' )->setTime( 23, 59, 59 );
 
 		$query = new WP_Query(
-			[
+			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
+				'post_status'    => array( 'publish' ),
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
 				'orderby'        => 'meta_value',
 				'order'          => 'ASC',
 				'meta_key'       => self::META_BOOKING_START,
-				'meta_query'     => [
+				'meta_query'     => array(
 					'relation' => 'AND',
-					[
+					array(
 						'key'     => self::META_BOOKING_START,
-						'value'   => [
+						'value'   => array(
 							$start->format( 'Y-m-d H:i:s' ),
 							$end->format( 'Y-m-d H:i:s' ),
-						],
+						),
 						'compare' => 'BETWEEN',
 						'type'    => 'DATETIME',
-					],
-					[
+					),
+					array(
 						'key'     => self::META_BOOKING_RESOURCE,
 						'compare' => 'EXISTS',
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
-		$map = [];
+		$map = array();
 
 		if ( $query->have_posts() ) {
 			while ( $query->have_posts() ) {
@@ -1042,15 +1049,15 @@ class Shift_Dashboard_Page {
 					$edit_url = admin_url( sprintf( 'post.php?post=%d&action=edit', $post_id ) );
 				}
 
-				$map[ $day_index ][] = [
-					'post_id'      => $post_id,
-					'resource_id'  => $resource_id,
-					'start_label'  => $start_dt->format( 'H:i' ),
-					'end_label'    => ( $service_end_dt ?? $block_end_dt )->format( 'H:i' ),
-					'status'       => (string) get_post_meta( $post_id, self::META_BOOKING_STATUS, true ),
-					'customer'     => (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true ),
-					'edit_url'     => $edit_url,
-				];
+				$map[ $day_index ][] = array(
+					'post_id'     => $post_id,
+					'resource_id' => $resource_id,
+					'start_label' => $start_dt->format( 'H:i' ),
+					'end_label'   => ( $service_end_dt ?? $block_end_dt )->format( 'H:i' ),
+					'status'      => (string) get_post_meta( $post_id, self::META_BOOKING_STATUS, true ),
+					'customer'    => (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true ),
+					'edit_url'    => $edit_url,
+				);
 			}
 
 			wp_reset_postdata();
@@ -1078,23 +1085,23 @@ class Shift_Dashboard_Page {
 	private function get_pending_booking_notifications(): array {
 		$timezone = wp_timezone();
 		$query    = new WP_Query(
-			[
+			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
+				'post_status'    => array( 'publish' ),
 				'posts_per_page' => 10,
 				'orderby'        => 'meta_value',
 				'order'          => 'ASC',
 				'meta_key'       => self::META_BOOKING_START,
-				'meta_query'     => [
-					[
+				'meta_query'     => array(
+					array(
 						'key'   => self::META_BOOKING_STATUS,
 						'value' => self::BOOKING_STATUS_PENDING,
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
-		$notifications = [];
+		$notifications = array();
 
 		if ( $query->have_posts() ) {
 			while ( $query->have_posts() ) {
@@ -1123,7 +1130,7 @@ class Shift_Dashboard_Page {
 
 				$resource_id   = (int) get_post_meta( $post_id, self::META_BOOKING_RESOURCE, true );
 				$resource_name = $resource_id > 0 ? get_the_title( $resource_id ) : '';
-				$resource_name = $resource_name ?: __( 'Person in charge undecided', 'vk-booking-manager' );
+				$resource_name = '' !== $resource_name ? $resource_name : __( 'Person in charge undecided', 'vk-booking-manager' );
 
 				$customer_name = (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true );
 				$customer_name = '' !== trim( $customer_name ) ? $customer_name : __( 'Name not entered', 'vk-booking-manager' );
@@ -1134,19 +1141,19 @@ class Shift_Dashboard_Page {
 					$edit_url = admin_url( sprintf( 'post.php?post=%d&action=edit', $post_id ) );
 				}
 
-				$date_format = get_option( 'date_format' );
-				$time_format = get_option( 'time_format' );
-				$notifications[] = [
-					'id'        => (string) $post_id,
-					'time_label'=> sprintf(
+				$date_format     = get_option( 'date_format' );
+				$time_format     = get_option( 'time_format' );
+				$notifications[] = array(
+					'id'         => (string) $post_id,
+					'time_label' => sprintf(
 						'%s - %s',
 						wp_date( sprintf( '%s %s', $date_format, $time_format ), $start_dt->getTimestamp() ),
 						wp_date( $time_format, $block_end_dt->getTimestamp() )
 					),
-					'customer'  => $customer_name,
-					'staff'     => $resource_name,
-					'url'       => $edit_url,
-				];
+					'customer'   => $customer_name,
+					'staff'      => $resource_name,
+					'url'        => $edit_url,
+				);
 			}
 
 			wp_reset_postdata();
@@ -1158,92 +1165,93 @@ class Shift_Dashboard_Page {
 	/**
 	 * Build data required to render the monthly overview grid.
 	 *
-	 * @param array<int, array> $shift_map         Month shift map keyed by resource.
-	 * @param int               $year              Target year.
-	 * @param int               $month             Target month (1-12).
-	 * @param int               $resource_count    Total resources.
+	 * @param array<int, array>  $shift_map         Month shift map keyed by resource.
+	 * @param int                $year              Target year.
+	 * @param int                $month             Target month (1-12).
+	 * @param int                $resource_count    Total resources.
 	 * @param array<int, string> $resource_names   Resource display names.
-	 * @param array<int, array> $monthly_bookings  Bookings grouped by day.
+	 * @param array<int, array>  $monthly_bookings  Bookings grouped by day.
 	 * @return array<string, mixed>
 	 */
-		private function build_month_view_data( array $shift_map, int $year, int $month, int $resource_count, array $resource_names, array $monthly_bookings ): array {
-			$timezone    = wp_timezone();
-			$first_day   = new DateTimeImmutable( sprintf( '%04d-%02d-01', $year, $month ), $timezone );
-			$days_in_month = (int) $first_day->format( 't' );
-			$start_weekday = (int) $first_day->format( 'N' ); // 1 (Mon) .. 7 (Sun).
+	private function build_month_view_data( array $shift_map, int $year, int $month, int $resource_count, array $resource_names, array $monthly_bookings ): array {
+		$timezone      = wp_timezone();
+		$first_day     = new DateTimeImmutable( sprintf( '%04d-%02d-01', $year, $month ), $timezone );
+		$days_in_month = (int) $first_day->format( 't' );
+		$start_weekday = (int) $first_day->format( 'N' ); // 1 (Mon) .. 7 (Sun).
 
-		$weeks = [];
-		$week  = [];
+		$weeks = array();
+		$week  = array();
 
 		for ( $i = 1; $i < $start_weekday; $i++ ) {
-			$week[] = [
-				'day' => '',
-				'type' => 'muted',
-				'url' => '',
-				'entries' => [],
-			];
+			$week[] = array(
+				'day'     => '',
+				'type'    => 'muted',
+				'url'     => '',
+				'entries' => array(),
+			);
 		}
 
-			for ( $day = 1; $day <= $days_in_month; $day++ ) {
-				$working_count = 0;
-				$closed_count  = 0;
+		for ( $day = 1; $day <= $days_in_month; $day++ ) {
+			$working_count = 0;
+			$closed_count  = 0;
 
-				foreach ( $shift_map as $resource_id => $data ) {
-					$entry = $data['days'][ $day ] ?? null;
+			foreach ( $shift_map as $resource_id => $data ) {
+				$entry = $data['days'][ $day ] ?? null;
 
-					if ( ! is_array( $entry ) ) {
-						continue;
-					}
-
-					$slots = $this->normalize_slots( $entry['slots'] ?? [] );
-					$status = (string) ( $entry['status'] ?? self::STATUS_OPEN );
-
-					if ( ! empty( $slots ) ) {
-						$working_count++;
-					} elseif ( $this->is_closed_status( $status ) ) {
-						$closed_count++;
-					}
+				if ( ! is_array( $entry ) ) {
+					continue;
 				}
 
-				$booking_count = isset( $monthly_bookings[ $day ] ) && is_array( $monthly_bookings[ $day ] ) ? count( $monthly_bookings[ $day ] ) : 0;
-				$cell_type     = $this->resolve_month_cell_type( $working_count, $closed_count, $resource_count, $booking_count );
-				$entries   = $this->format_month_cell_bookings( $monthly_bookings[ $day ] ?? [], $resource_names );
+				$slots  = $this->normalize_slots( $entry['slots'] ?? array() );
+				$status = (string) ( $entry['status'] ?? self::STATUS_OPEN );
 
-				$cell_date = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+				if ( ! empty( $slots ) ) {
+					++$working_count;
+				} elseif ( $this->is_closed_status( $status ) ) {
+					++$closed_count;
+				}
+			}
 
-			$week[] = [
-				'day'      => $day,
-				'type'     => $cell_type,
-				'entries'  => $entries,
-				'url'      => $this->get_dashboard_url(
-					[
+			$booking_count = isset( $monthly_bookings[ $day ] ) && is_array( $monthly_bookings[ $day ] ) ? count( $monthly_bookings[ $day ] ) : 0;
+			$cell_type     = $this->resolve_month_cell_type( $working_count, $closed_count, $resource_count, $booking_count );
+			$entries       = $this->format_month_cell_bookings( $monthly_bookings[ $day ] ?? array(), $resource_names );
+
+			$cell_date = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+
+			$week[] = array(
+				'day'     => $day,
+				'type'    => $cell_type,
+				'entries' => $entries,
+				'url'     => $this->get_dashboard_url(
+					array(
 						'vkbm_date' => $cell_date,
 						'vkbm_view' => 'day',
-					]
+					)
 				),
-			];
+			);
 
 			if ( 7 === count( $week ) ) {
 				$weeks[] = $week;
-				$week    = [];
+				$week    = array();
 			}
 		}
 
 		if ( ! empty( $week ) ) {
-			while ( count( $week ) < 7 ) {
-				$week[] = [
-					'day' => '',
-					'type' => 'muted',
-					'url' => '',
-					'entries' => [],
-				];
+			$week_count = count( $week );
+			while ( $week_count < 7 ) {
+				$week[] = array(
+					'day'     => '',
+					'type'    => 'muted',
+					'url'     => '',
+					'entries' => array(),
+				);
 			}
 			$weeks[] = $week;
 		}
 
-		return [
+		return array(
 			'weeks' => $weeks,
-		];
+		);
 	}
 
 	/**
@@ -1254,7 +1262,7 @@ class Shift_Dashboard_Page {
 	 * @return array<int, array<string, string>>
 	 */
 	private function format_month_cell_bookings( array $bookings, array $resource_names ): array {
-		$entries = [];
+		$entries = array();
 
 		foreach ( $bookings as $booking ) {
 			$start_label = (string) ( $booking['start_label'] ?? '' );
@@ -1268,7 +1276,7 @@ class Shift_Dashboard_Page {
 				continue;
 			}
 
-			$customer_label = $customer !== '' ? $customer : __( 'Name not entered', 'vk-booking-manager' );
+			$customer_label = '' !== $customer ? $customer : __( 'Name not entered', 'vk-booking-manager' );
 			$staff_label    = $resource_names[ $resource_id ] ?? __( 'Person in charge not set', 'vk-booking-manager' );
 
 			$status_badge = $this->get_month_booking_status_badge( $status );
@@ -1285,13 +1293,13 @@ class Shift_Dashboard_Page {
 				$staff_label
 			);
 
-			$entries[] = [
+			$entries[] = array(
 				'id'            => (string) ( $booking['post_id'] ?? '' ),
 				'time_line'     => $time_label,
 				'customer_line' => $customer_line,
 				'url'           => $url,
 				'class'         => 'vkbm-month-booking--' . $this->booking_status_to_month_modifier( $status ),
-			];
+			);
 		}
 
 		return $entries;
@@ -1371,29 +1379,30 @@ class Shift_Dashboard_Page {
 	/**
 	 * Resolve the cell type for the month calendar.
 	 *
-	 * @param int $working_count Number of working resources.
-	 * @param int $closed_count  Number of closed resources.
-	 * @param int $resource_count Total resources.
+	 * @param int $working_count  Number of working resources.
+	 * @param int $closed_count    Number of closed resources.
+	 * @param int $resource_count  Total resources.
+	 * @param int $booking_count   Number of bookings.
 	 * @return string
 	 */
-		private function resolve_month_cell_type( int $working_count, int $closed_count, int $resource_count, int $booking_count ): string {
-			if ( $resource_count <= 0 ) {
-				return 'muted';
-			}
+	private function resolve_month_cell_type( int $working_count, int $closed_count, int $resource_count, int $booking_count ): string {
+		if ( $resource_count <= 0 ) {
+			return 'muted';
+		}
 
-			if ( 0 === $working_count ) {
-				return ( $closed_count > 0 ) ? 'holiday' : 'muted';
-			}
+		if ( 0 === $working_count ) {
+			return ( $closed_count > 0 ) ? 'holiday' : 'muted';
+		}
 
-			if ( $booking_count <= 0 ) {
-				return 'light';
-			}
+		if ( $booking_count <= 0 ) {
+			return 'light';
+		}
 
-			$ratio = $booking_count / max( 1, $resource_count );
+		$ratio = $booking_count / max( 1, $resource_count );
 
-			if ( $ratio >= 0.75 ) {
-				return 'busy';
-			}
+		if ( $ratio >= 0.75 ) {
+			return 'busy';
+		}
 
 		if ( $ratio >= 0.4 ) {
 			return 'balanced';
@@ -1469,7 +1478,7 @@ class Shift_Dashboard_Page {
 
 		if ( ! current_user_can( $this->capability ) ) {
 			wp_send_json_error(
-				[ 'message' => __( "You don't have permission.", 'vk-booking-manager' ) ],
+				array( 'message' => __( "You don't have permission.", 'vk-booking-manager' ) ),
 				403
 			);
 		}
@@ -1477,7 +1486,7 @@ class Shift_Dashboard_Page {
 		$booking_id = isset( $_POST['booking_id'] ) ? (int) $_POST['booking_id'] : 0;
 		if ( $booking_id <= 0 ) {
 			wp_send_json_error(
-				[ 'message' => __( 'No reservations found.', 'vk-booking-manager' ) ],
+				array( 'message' => __( 'No reservations found.', 'vk-booking-manager' ) ),
 				400
 			);
 		}
@@ -1485,20 +1494,20 @@ class Shift_Dashboard_Page {
 		$booking_post = get_post( $booking_id );
 		if ( ! $booking_post || Booking_Post_Type::POST_TYPE !== $booking_post->post_type ) {
 			wp_send_json_error(
-				[ 'message' => __( 'The target reservation could not be retrieved.', 'vk-booking-manager' ) ],
+				array( 'message' => __( 'The target reservation could not be retrieved.', 'vk-booking-manager' ) ),
 				404
 			);
 		}
 
 		$current_status = (string) get_post_meta( $booking_id, self::META_BOOKING_STATUS, true );
 		if ( self::BOOKING_STATUS_CONFIRMED === $current_status ) {
-			wp_send_json_success( [ 'status' => self::BOOKING_STATUS_CONFIRMED ] );
+			wp_send_json_success( array( 'status' => self::BOOKING_STATUS_CONFIRMED ) );
 		}
 
 		$updated = update_post_meta( $booking_id, self::META_BOOKING_STATUS, self::BOOKING_STATUS_CONFIRMED );
 		if ( ! $updated ) {
 			wp_send_json_error(
-				[ 'message' => __( 'Your reservation could not be updated.', 'vk-booking-manager' ) ],
+				array( 'message' => __( 'Your reservation could not be updated.', 'vk-booking-manager' ) ),
 				500
 			);
 		}
@@ -1506,7 +1515,7 @@ class Shift_Dashboard_Page {
 		$notification_service = new Booking_Notification_Service( new Settings_Repository(), new Customer_Name_Resolver() );
 		$notification_service->handle_status_transition( $booking_id, $current_status, self::BOOKING_STATUS_CONFIRMED );
 
-		wp_send_json_success( [ 'status' => self::BOOKING_STATUS_CONFIRMED ] );
+		wp_send_json_success( array( 'status' => self::BOOKING_STATUS_CONFIRMED ) );
 	}
 
 	/**
@@ -1516,7 +1525,7 @@ class Shift_Dashboard_Page {
 	 * @return array<int, array<string, string>>
 	 */
 	private function normalize_slots( array $slots ): array {
-		$normalized = [];
+		$normalized = array();
 
 		foreach ( $slots as $slot ) {
 			if ( ! is_array( $slot ) ) {
@@ -1530,10 +1539,10 @@ class Shift_Dashboard_Page {
 				continue;
 			}
 
-			$normalized[] = [
+			$normalized[] = array(
 				'start' => $start,
 				'end'   => $end,
-			];
+			);
 		}
 
 		return $normalized;
@@ -1616,41 +1625,41 @@ class Shift_Dashboard_Page {
 	private function resolve_resource_status( string $status_key, int $slot_count, float $total_hours ): array {
 		if ( 0 === $slot_count ) {
 			if ( $this->is_closed_status( $status_key ) ) {
-				return [
+				return array(
 					'label' => $this->get_closed_status_label( $status_key ),
 					'type'  => 'off',
-				];
+				);
 			}
 
-			return [
+			return array(
 				'label' => __( 'Shift not set', 'vk-booking-manager' ),
 				'type'  => 'pending',
-			];
+			);
 		}
 
 		if ( self::STATUS_TEMPORARY_OPEN === $status_key ) {
-			return [
+			return array(
 				'label' => __( 'Temporary work', 'vk-booking-manager' ),
 				'type'  => 'working',
-			];
+			);
 		}
 
-		return [
+		return array(
 			'label' => __( 'Work schedule', 'vk-booking-manager' ),
 			'type'  => 'working',
-		];
+		);
 	}
 
 	/**
 	 * Partition bookings that intersect the provided slot.
 	 *
 	 * @param array<int, array<string, mixed>> &$bookings Bookings list (will be mutated).
-	 * @param float                             $slot_start Slot start (hours).
-	 * @param float                             $slot_end   Slot end (hours).
+	 * @param float                            $slot_start Slot start (hours).
+	 * @param float                            $slot_end   Slot end (hours).
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function collect_bookings_for_slot( array &$bookings, float $slot_start, float $slot_end ): array {
-		$assigned = [];
+		$assigned = array();
 
 		foreach ( $bookings as $index => $booking ) {
 			$booking_start = (float) $booking['start_decimal'];
@@ -1665,10 +1674,10 @@ class Shift_Dashboard_Page {
 
 			$assigned[] = array_merge(
 				$booking,
-				[
+				array(
 					'start_decimal' => $clamped_start,
 					'end_decimal'   => max( $clamped_start + 0.1, $clamped_end ),
-				]
+				)
 			);
 			unset( $bookings[ $index ] );
 		}
@@ -1683,10 +1692,10 @@ class Shift_Dashboard_Page {
 	 * @return array<string, mixed>
 	 */
 	private function map_booking_to_card( array $booking ): array {
-		$status      = (string) ( $booking['status'] ?? self::BOOKING_STATUS_CONFIRMED );
-		$status_map  = $this->get_booking_status_labels();
-		$class       = $this->booking_status_to_class( $status );
-		$badges      = [];
+		$status       = (string) ( $booking['status'] ?? self::BOOKING_STATUS_CONFIRMED );
+		$status_map   = $this->get_booking_status_labels();
+		$class        = $this->booking_status_to_class( $status );
+		$badges       = array();
 		$status_label = $status_map[ $status ] ?? '';
 
 		if ( self::BOOKING_STATUS_CONFIRMED !== $status && '' !== $status_label ) {
@@ -1710,16 +1719,16 @@ class Shift_Dashboard_Page {
 			}
 		}
 
-		return [
-			'class'    => $class,
-			'time'     => $booking['time_range'] ?? '',
-			'customer' => $booking['customer'] ?? '',
-			'service'  => $booking['service'] ?? '',
-			'badges'   => $badges,
+		return array(
+			'class'         => $class,
+			'time'          => $booking['time_range'] ?? '',
+			'customer'      => $booking['customer'] ?? '',
+			'service'       => $booking['service'] ?? '',
+			'badges'        => $badges,
 			'start_decimal' => $booking['start_decimal'] ?? 0,
 			'end_decimal'   => $booking['end_decimal'] ?? 0,
-			'url'      => $edit_url,
-		];
+			'url'           => $edit_url,
+		);
 	}
 
 	/**
@@ -1728,12 +1737,12 @@ class Shift_Dashboard_Page {
 	 * @return array<string, string>
 	 */
 	private function get_booking_status_labels(): array {
-		return [
+		return array(
 			self::BOOKING_STATUS_CONFIRMED => __( 'Confirmed', 'vk-booking-manager' ),
 			self::BOOKING_STATUS_PENDING   => __( 'Pending', 'vk-booking-manager' ),
 			self::BOOKING_STATUS_CANCELLED => __( 'Cancelled', 'vk-booking-manager' ),
 			self::BOOKING_STATUS_NO_SHOW   => __( 'No-show', 'vk-booking-manager' ),
-		];
+		);
 	}
 
 	/**
@@ -1792,7 +1801,7 @@ class Shift_Dashboard_Page {
 	 * @return array<int, string>
 	 */
 	private function build_timeline_labels( int $start_hour, int $end_hour ): array {
-		$labels = [];
+		$labels = array();
 
 		for ( $hour = $start_hour; $hour <= $end_hour; $hour++ ) {
 			$labels[] = sprintf( '%02d:00', $hour );
@@ -1848,7 +1857,7 @@ class Shift_Dashboard_Page {
 	 * @param array<string, string> $args Query args.
 	 * @return string
 	 */
-	private function get_dashboard_url( array $args = [] ): string {
+	private function get_dashboard_url( array $args = array() ): string {
 		$base = menu_page_url( self::MENU_SLUG, false );
 
 		return add_query_arg( $args, $base );

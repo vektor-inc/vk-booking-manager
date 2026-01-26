@@ -1,4 +1,9 @@
 <?php
+/**
+ * Prevents Free/Pro conflicts and deactivates the Free edition when Pro is active.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -6,7 +11,7 @@ namespace VKBookingManager\Admin;
 
 if ( class_exists( __NAMESPACE__ . '\\Edition_Plugin_Deactivator', false ) ) {
 	// English: Avoid redeclaring the class if another edition already loaded it.
-	// 日本語: 先に別エディションが読み込んだ場合は再宣言を防ぎます。
+	// 日本語: 先に別エディションが読み込んだ場合は再宣言を防ぎます.
 	return;
 }
 
@@ -23,10 +28,10 @@ class Edition_Plugin_Deactivator {
 	 *
 	 * @var string[]
 	 */
-	private const FREE_PLUGIN_CANDIDATES = [
+	private const FREE_PLUGIN_CANDIDATES = array(
 		'vk-booking-manager/vk-booking-manager.php',
 		'vk-booking-manager-free/vk-booking-manager.php',
-	];
+	);
 
 	/**
 	 * Detect current edition from the plugin directory name.
@@ -76,7 +81,7 @@ class Edition_Plugin_Deactivator {
 		}
 
 		// English: Only attempt deactivation on admin requests where plugin.php is available.
-		// 日本語: プラグイン管理系のAPIが使える管理画面リクエストのみ無効化を試みます。
+		// 日本語: プラグイン管理系のAPIが使える管理画面リクエストのみ無効化を試みます.
 		if ( is_admin() ) {
 			self::deactivate_free_plugin();
 		}
@@ -93,7 +98,7 @@ class Edition_Plugin_Deactivator {
 	 */
 	private static function deactivate_free_plugin(): bool {
 		// English: Load plugin APIs lazily for safety.
-		// 日本語: プラグイン管理APIを必要時のみ読み込みます。
+		// 日本語: プラグイン管理APIを必要時のみ読み込みます.
 		if ( ! function_exists( 'is_plugin_active' ) || ! function_exists( 'get_plugins' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
@@ -140,7 +145,7 @@ class Edition_Plugin_Deactivator {
 		}
 
 		// English: Fallback to matching by text domain and excluding Pro by name.
-		// 日本語: テキストドメインで絞り込み、Pro表記は除外します。
+		// 日本語: テキストドメインで絞り込み、Pro表記は除外します.
 		foreach ( $plugins as $plugin_file => $data ) {
 			$name        = isset( $data['Name'] ) ? (string) $data['Name'] : '';
 			$text_domain = isset( $data['TextDomain'] ) ? (string) $data['TextDomain'] : '';

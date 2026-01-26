@@ -1,4 +1,9 @@
 <?php
+/**
+ * Post order manager for custom post types.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -41,7 +46,7 @@ use function wp_unslash;
  * Provides drag-and-drop ordering for selected post types.
  */
 class Post_Order_Manager {
-	private const AJAX_ACTION        = 'vkbm_update_post_order';
+	private const AJAX_ACTION          = 'vkbm_update_post_order';
 	private const ORDER_VERSION_OPTION = 'vkbm_post_order_version';
 
 	/**
@@ -64,10 +69,10 @@ class Post_Order_Manager {
 	 * Register WordPress hooks.
 	 */
 	public function register(): void {
-		add_action( 'pre_get_posts', [ $this, 'apply_default_order' ] );
-		add_action( 'rest_api_init', [ $this, 'register_rest_fields' ] );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
-		add_action( 'wp_ajax_' . self::AJAX_ACTION, [ $this, 'handle_update_order' ] );
+		add_action( 'pre_get_posts', array( $this, 'apply_default_order' ) );
+		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
+		add_action( 'wp_ajax_' . self::AJAX_ACTION, array( $this, 'handle_update_order' ) );
 	}
 
 	/**
@@ -82,10 +87,10 @@ class Post_Order_Manager {
 
 		$query->set(
 			'orderby',
-			[
+			array(
 				'menu_order' => 'ASC',
 				'title'      => 'ASC',
-			]
+			)
 		);
 		$query->set( 'order', 'ASC' );
 	}
@@ -98,17 +103,17 @@ class Post_Order_Manager {
 			register_rest_field(
 				$post_type,
 				'order',
-				[
+				array(
 					'get_callback' => static function ( array $object ): int {
 						$post_id = isset( $object['id'] ) ? (int) $object['id'] : 0;
 						return $post_id > 0 ? (int) get_post_field( 'menu_order', $post_id ) : 0;
 					},
-					'schema'       => [
+					'schema'       => array(
 						'description' => __( 'Menu order', 'vk-booking-manager' ),
 						'type'        => 'integer',
-						'context'     => [ 'view', 'edit' ],
-					],
-				]
+						'context'     => array( 'view', 'edit' ),
+					),
+				)
 			);
 		}
 	}
@@ -139,7 +144,7 @@ class Post_Order_Manager {
 		wp_enqueue_script(
 			'vkbm-post-order-admin',
 			plugins_url( 'assets/js/post-order.js', VKBM_PLUGIN_FILE ),
-			[ 'jquery', 'jquery-ui-sortable' ],
+			array( 'jquery', 'jquery-ui-sortable' ),
 			VKBM_VERSION,
 			true
 		);
@@ -147,17 +152,17 @@ class Post_Order_Manager {
 		wp_localize_script(
 			'vkbm-post-order-admin',
 			'vkbmPostOrder',
-			[
+			array(
 				'action'   => self::AJAX_ACTION,
 				'postType' => $screen->post_type,
 				'nonce'    => wp_create_nonce( self::AJAX_ACTION ),
 				'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-				'i18n'     => [
+				'i18n'     => array(
 					'saving' => __( 'Saving sort order...', 'vk-booking-manager' ),
 					'saved'  => __( 'Sort order saved', 'vk-booking-manager' ),
 					'error'  => __( 'Saving failed. Please try again later.', 'vk-booking-manager' ),
-				],
-			]
+				),
+			)
 		);
 	}
 
@@ -170,31 +175,31 @@ class Post_Order_Manager {
 		$post_type = isset( $_POST['postType'] ) ? sanitize_key( wp_unslash( $_POST['postType'] ) ) : '';
 		if ( ! in_array( $post_type, $this->post_types, true ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => __( 'Unsupported post type.', 'vk-booking-manager' ),
-				],
+				),
 				400
 			);
 		}
 
 		if ( ! $this->current_user_can_edit_post_type( $post_type ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => __( 'You do not have permission to perform this operation.', 'vk-booking-manager' ),
-				],
+				),
 				403
 			);
 		}
 
 		$ordered_ids = $this->sanitize_ids(
-			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : []
+			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : array()
 		);
 
 		if ( empty( $ordered_ids ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => __( 'No sorting targets found.', 'vk-booking-manager' ),
-				],
+				),
 				400
 			);
 		}
@@ -203,18 +208,18 @@ class Post_Order_Manager {
 
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => $result->get_error_message(),
-				],
+				),
 				400
 			);
 		}
 
 		wp_send_json_success(
-			[
+			array(
 				'updated' => $result,
 				'version' => (int) get_option( self::ORDER_VERSION_OPTION, 0 ),
-			]
+			)
 		);
 	}
 
@@ -229,18 +234,18 @@ class Post_Order_Manager {
 		global $wpdb;
 
 		$query = new WP_Query(
-			[
+			array(
 				'post_type'      => $post_type,
 				'post_status'    => 'any',
 				'posts_per_page' => -1,
-				'orderby'        => [
+				'orderby'        => array(
 					'menu_order' => 'ASC',
 					'title'      => 'ASC',
-				],
+				),
 				'order'          => 'ASC',
 				'fields'         => 'ids',
 				'no_found_rows'  => true,
-			]
+			)
 		);
 
 		$all_ids = $query->posts;
@@ -272,7 +277,7 @@ class Post_Order_Manager {
 			);
 		}
 
-		$updated_ids = [];
+		$updated_ids = array();
 
 		foreach ( $all_ids as $position => $post_id ) {
 			$new_order     = $position + 1;
@@ -284,10 +289,10 @@ class Post_Order_Manager {
 
 			$updated = $wpdb->update(
 				$wpdb->posts,
-				[ 'menu_order' => $new_order ],
-				[ 'ID' => $post_id ],
-				[ '%d' ],
-				[ '%d' ]
+				array( 'menu_order' => $new_order ),
+				array( 'ID' => $post_id ),
+				array( '%d' ),
+				array( '%d' )
 			);
 
 			if ( false === $updated ) {
@@ -335,7 +340,7 @@ class Post_Order_Manager {
 
 		$order_by = strtolower( (string) $order_by );
 
-		return in_array( $order_by, [ 'date', 'post_date', 'post_date_gmt' ], true );
+		return in_array( $order_by, array( 'date', 'post_date', 'post_date_gmt' ), true );
 	}
 
 	/**
@@ -365,7 +370,7 @@ class Post_Order_Manager {
 	 * @return int[]
 	 */
 	private function sanitize_ids( array $ids ): array {
-		$sanitized = [];
+		$sanitized = array();
 
 		foreach ( $ids as $id ) {
 			$value = absint( $id );

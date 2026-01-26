@@ -1,9 +1,15 @@
 <?php
+/**
+ * Front-end login & registration shortcodes.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
 namespace VKBookingManager\Auth;
 
+use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Settings_Service;
@@ -15,34 +21,66 @@ use function apply_filters;
  * Front-end login & registration shortcodes.
  */
 class Auth_Shortcodes {
-	private const EMAIL_TOKEN_TTL = DAY_IN_SECONDS;
-	private const RATE_LIMIT_LOGIN_MAX = 10;
-	private const RATE_LIMIT_LOGIN_WINDOW = 600;
-	private const RATE_LIMIT_REGISTER_MAX = 5;
+	private const EMAIL_TOKEN_TTL            = DAY_IN_SECONDS;
+	private const RATE_LIMIT_LOGIN_MAX       = 10;
+	private const RATE_LIMIT_LOGIN_WINDOW    = 600;
+	private const RATE_LIMIT_REGISTER_MAX    = 5;
 	private const RATE_LIMIT_REGISTER_WINDOW = 1800;
 
-	/** @var WP_Error|null */
+	/**
+	 * Login errors.
+	 *
+	 * @var WP_Error|null
+	 */
 	private $login_errors;
 
-	/** @var WP_Error|null */
+	/**
+	 * Registration errors.
+	 *
+	 * @var WP_Error|null
+	 */
 	private $registration_errors;
 
-	/** @var array<string,mixed> */
+	/**
+	 * Login posted data.
+	 *
+	 * @var array<string,mixed>
+	 */
 	private $login_posted_data = array();
 
-	/** @var array<string,mixed> */
+	/**
+	 * Registration posted data.
+	 *
+	 * @var array<string,mixed>
+	 */
 	private $registration_posted_data = array();
 
-	/** @var array<string,mixed> */
+	/**
+	 * Registration raw data.
+	 *
+	 * @var array<string,mixed>
+	 */
 	private $registration_raw_data = array();
 
-	/** @var WP_Error|null */
+	/**
+	 * Profile errors.
+	 *
+	 * @var WP_Error|null
+	 */
 	private $profile_errors;
 
-	/** @var array<string,mixed> */
+	/**
+	 * Profile posted data.
+	 *
+	 * @var array<string,mixed>
+	 */
 	private $profile_posted_data = array();
 
-	/** @var Settings_Service */
+	/**
+	 * Provider settings helper.
+	 *
+	 * @var Settings_Service
+	 */
 	private $settings_service;
 
 	/**
@@ -164,7 +202,8 @@ class Auth_Shortcodes {
 	 * Processes login + registration requests before rendering.
 	 */
 	public function handle_form_submission(): void {
-		if ( 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- We compare verb only.
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+		if ( 'POST' !== $request_method ) {
 			return;
 		}
 
@@ -208,7 +247,7 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$user = $user[0];
+		$user    = $user[0];
 		$expires = (int) get_user_meta( $user->ID, 'vkbm_email_verify_expires', true );
 
 		if ( $expires && $expires < time() ) {
@@ -262,8 +301,8 @@ class Auth_Shortcodes {
 		$lost_password_url = ! empty( $atts['lost_password_url'] )
 			? esc_url_raw( (string) $atts['lost_password_url'] )
 			: wp_lostpassword_url();
-		$action_base = $this->normalize_redirect( $atts['action_url'] ?? '' );
-		$form_action = $this->get_auth_action_url( 'login', $action_base );
+		$action_base       = $this->normalize_redirect( $atts['action_url'] ?? '' );
+		$form_action       = $this->get_auth_action_url( 'login', $action_base );
 
 		$username_value  = isset( $this->login_posted_data['user_login'] ) ? (string) $this->login_posted_data['user_login'] : '';
 		$remember_active = isset( $this->login_posted_data['remember'] ) ? (bool) $this->login_posted_data['remember'] : true;
@@ -329,7 +368,7 @@ class Auth_Shortcodes {
 				<div class="vkbm-auth-form__actions">
 					<button type="submit" class="vkbm-auth-button vkbm-button vkbm-button__md vkbm-button__primary"><?php echo esc_html( $atts['button_label'] ); ?></button>
 				</div>
-				<?php echo wp_nonce_field( 'vkbm_login_form', 'vkbm_login_nonce', true, false ); ?>
+				<?php echo wp_nonce_field( 'vkbm_login_form', 'vkbm_login_nonce', true, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_nonce_field() outputs escaped HTML. ?>
 				<input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>">
 				<input type="hidden" name="vkbm_login_form" value="1">
 				<input type="hidden" name="vkbm_auth" value="login">
@@ -361,50 +400,50 @@ class Auth_Shortcodes {
 		$this->restore_registration_errors();
 
 		$defaults = array(
-			'redirect'      => $this->get_current_url(),
-			'title'         => __( 'Create an account', 'vk-booking-manager' ),
-				'description'   => '',
-			'button_label'  => __( 'Register', 'vk-booking-manager' ),
-			'auto_login'    => 'false',
-			'login_url'     => '',
-			'action_url'    => '',
+			'redirect'     => $this->get_current_url(),
+			'title'        => __( 'Create an account', 'vk-booking-manager' ),
+			'description'  => '',
+			'button_label' => __( 'Register', 'vk-booking-manager' ),
+			'auto_login'   => 'false',
+			'login_url'    => '',
+			'action_url'   => '',
 		);
 
 		$atts        = shortcode_atts( $defaults, $atts, 'vkbm_register_form' );
 		$redirect_to = $this->normalize_redirect( $atts['redirect'] ?? '' );
 		$auto_login  = $this->is_truthy( $atts['auto_login'] ?? true );
-		$login_url = ! empty( $atts['login_url'] )
+		$login_url   = ! empty( $atts['login_url'] )
 			? esc_url_raw( (string) $atts['login_url'] )
 			: wp_login_url();
 		$action_base = $this->normalize_redirect( $atts['action_url'] ?? '' );
 		$form_action = $this->get_auth_action_url( 'register', $action_base );
 
-		$username_raw   = isset( $this->registration_raw_data['user_login'] ) ? (string) $this->registration_raw_data['user_login'] : '';
-		$username_value = $username_raw !== '' ? $username_raw : ( isset( $this->registration_posted_data['user_login'] ) ? (string) $this->registration_posted_data['user_login'] : '' );
-		$email_value    = isset( $this->registration_posted_data['user_email'] ) ? (string) $this->registration_posted_data['user_email'] : '';
-		$first_value    = isset( $this->registration_posted_data['first_name'] ) ? (string) $this->registration_posted_data['first_name'] : '';
-		$last_value     = isset( $this->registration_posted_data['last_name'] ) ? (string) $this->registration_posted_data['last_name'] : '';
-		$name_value     = isset( $this->registration_posted_data['full_name'] ) ? (string) $this->registration_posted_data['full_name'] : '';
-		$kana_value     = isset( $this->registration_posted_data['kana_name'] ) ? (string) $this->registration_posted_data['kana_name'] : '';
-		$phone_value    = isset( $this->registration_posted_data['phone_number'] ) ? (string) $this->registration_posted_data['phone_number'] : '';
-		$birth_value = isset( $this->registration_posted_data['birth_date'] ) ? (string) $this->registration_posted_data['birth_date'] : '';
-		$birth_parts = $this->resolve_birth_parts( $this->registration_posted_data, $birth_value );
-		$birth_year_value  = $birth_parts['year'];
-		$birth_month_value = $birth_parts['month'];
-		$birth_day_value   = $birth_parts['day'];
-		$gender_value   = isset( $this->registration_posted_data['gender'] ) ? (string) $this->registration_posted_data['gender'] : '';
-		$agree_terms_value = ! empty( $this->registration_posted_data['agree_terms_of_service'] );
-		$agree_privacy_value = ! empty( $this->registration_posted_data['agree_privacy_policy'] );
-		$settings = $this->settings_service->get_settings();
-		$terms_of_service = isset( $settings['provider_terms_of_service'] ) ? trim( (string) $settings['provider_terms_of_service'] ) : '';
-		$privacy_policy_mode = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
-		$privacy_policy_url = isset( $settings['provider_privacy_policy_url'] ) ? trim( (string) $settings['provider_privacy_policy_url'] ) : '';
+		$username_raw           = isset( $this->registration_raw_data['user_login'] ) ? (string) $this->registration_raw_data['user_login'] : '';
+		$username_value         = '' !== $username_raw ? $username_raw : ( isset( $this->registration_posted_data['user_login'] ) ? (string) $this->registration_posted_data['user_login'] : '' );
+		$email_value            = isset( $this->registration_posted_data['user_email'] ) ? (string) $this->registration_posted_data['user_email'] : '';
+		$first_value            = isset( $this->registration_posted_data['first_name'] ) ? (string) $this->registration_posted_data['first_name'] : '';
+		$last_value             = isset( $this->registration_posted_data['last_name'] ) ? (string) $this->registration_posted_data['last_name'] : '';
+		$name_value             = isset( $this->registration_posted_data['full_name'] ) ? (string) $this->registration_posted_data['full_name'] : '';
+		$kana_value             = isset( $this->registration_posted_data['kana_name'] ) ? (string) $this->registration_posted_data['kana_name'] : '';
+		$phone_value            = isset( $this->registration_posted_data['phone_number'] ) ? (string) $this->registration_posted_data['phone_number'] : '';
+		$birth_value            = isset( $this->registration_posted_data['birth_date'] ) ? (string) $this->registration_posted_data['birth_date'] : '';
+		$birth_parts            = $this->resolve_birth_parts( $this->registration_posted_data, $birth_value );
+		$birth_year_value       = $birth_parts['year'];
+		$birth_month_value      = $birth_parts['month'];
+		$birth_day_value        = $birth_parts['day'];
+		$gender_value           = isset( $this->registration_posted_data['gender'] ) ? (string) $this->registration_posted_data['gender'] : '';
+		$agree_terms_value      = ! empty( $this->registration_posted_data['agree_terms_of_service'] );
+		$agree_privacy_value    = ! empty( $this->registration_posted_data['agree_privacy_policy'] );
+		$settings               = $this->settings_service->get_settings();
+		$terms_of_service       = isset( $settings['provider_terms_of_service'] ) ? trim( (string) $settings['provider_terms_of_service'] ) : '';
+		$privacy_policy_mode    = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
+		$privacy_policy_url     = isset( $settings['provider_privacy_policy_url'] ) ? trim( (string) $settings['provider_privacy_policy_url'] ) : '';
 		$privacy_policy_content = isset( $settings['provider_privacy_policy_content'] ) ? trim( (string) $settings['provider_privacy_policy_content'] ) : '';
-		if ( ! in_array( $privacy_policy_mode, [ 'none', 'url', 'content' ], true ) ) {
+		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
 			$privacy_policy_mode = 'none';
 		}
-		$show_terms = '' !== $terms_of_service;
-		$show_privacy_url = 'url' === $privacy_policy_mode && '' !== $privacy_policy_url;
+		$show_terms           = '' !== $terms_of_service;
+		$show_privacy_url     = 'url' === $privacy_policy_mode && '' !== $privacy_policy_url;
 		$show_privacy_content = 'content' === $privacy_policy_mode && '' !== $privacy_policy_content;
 
 		ob_start();
@@ -428,7 +467,7 @@ class Auth_Shortcodes {
 				</div>
 				<?php
 				$this->render_text_field(
-					[
+					array(
 						'id'           => 'vkbm-register-email',
 						'name'         => 'user_email',
 						'label'        => __( 'Email address', 'vk-booking-manager' ),
@@ -436,7 +475,7 @@ class Auth_Shortcodes {
 						'type'         => 'email',
 						'autocomplete' => 'email',
 						'required'     => true,
-					]
+					)
 				);
 				?>
 				<div class="vkbm-auth-form__field">
@@ -456,17 +495,17 @@ class Auth_Shortcodes {
 				<?php
 				$this->render_name_fields( 'register', $last_value, $first_value, false );
 				$this->render_text_field(
-					[
+					array(
 						'id'           => 'vkbm-register-kana',
 						'name'         => 'kana_name',
 						'label'        => __( 'Furigana', 'vk-booking-manager' ),
 						'value'        => $kana_value,
 						'autocomplete' => 'off',
 						'required'     => true,
-					]
+					)
 				);
 				$this->render_text_field(
-					[
+					array(
 						'id'           => 'vkbm-register-phone',
 						'name'         => 'phone_number',
 						'label'        => __( 'Telephone number', 'vk-booking-manager' ),
@@ -474,7 +513,7 @@ class Auth_Shortcodes {
 						'type'         => 'tel',
 						'autocomplete' => 'tel',
 						'required'     => true,
-					]
+					)
 				);
 				$this->render_gender_field( 'vkbm-register-gender', $gender_value );
 				?>
@@ -555,15 +594,16 @@ class Auth_Shortcodes {
 											esc_url( $privacy_policy_url ),
 											esc_html__( 'Privacy policy', 'vk-booking-manager' )
 										);
+										/* translators: %s: privacy policy link */
 										echo wp_kses(
-											sprintf( __( 'I agree with %s', 'vk-booking-manager' ), $privacy_link ),
-											[
-												'a' => [
+											sprintf( __( 'I agree with %s', 'vk-booking-manager' ), $privacy_link ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Already escaped by wp_kses.
+											array(
+												'a' => array(
 													'href' => true,
 													'target' => true,
-													'rel' => true,
-												],
-											]
+													'rel'  => true,
+												),
+											)
 										);
 										?>
 									</label>
@@ -584,7 +624,7 @@ class Auth_Shortcodes {
 					<div class="vkbm-auth-form__actions">
 						<button type="submit" class="vkbm-auth-button vkbm-button vkbm-button__md vkbm-button__primary"><?php echo esc_html( $atts['button_label'] ); ?></button>
 					</div>
-				<?php echo wp_nonce_field( 'vkbm_registration_form', 'vkbm_registration_nonce', true, false ); ?>
+				<?php echo wp_nonce_field( 'vkbm_registration_form', 'vkbm_registration_nonce', true, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_nonce_field() outputs escaped HTML. ?>
 				<input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>">
 				<input type="hidden" name="auto_login" value="<?php echo $auto_login ? '1' : '0'; ?>">
 				<input type="hidden" name="vkbm_registration_form" value="1">
@@ -684,18 +724,18 @@ class Auth_Shortcodes {
 		$action_base = $this->normalize_redirect( $atts['action_url'] ?? '' );
 		$form_action = $this->get_auth_action_url( 'profile', $action_base );
 
-		$current_user = wp_get_current_user();
-		$first_value  = $this->profile_posted_data['first_name'] ?? (string) $current_user->first_name;
-		$last_value   = $this->profile_posted_data['last_name'] ?? (string) $current_user->last_name;
-		$email_value  = $this->profile_posted_data['user_email'] ?? (string) $current_user->user_email;
-		$kana_value   = $this->profile_posted_data['kana_name'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_kana_name', true );
-		$phone_value  = $this->profile_posted_data['phone_number'] ?? (string) get_user_meta( $current_user->ID, 'phone_number', true );
-		$birth_value  = $this->profile_posted_data['birth_date'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_birth_date', true );
-		$birth_parts = $this->resolve_birth_parts( $this->profile_posted_data, $birth_value );
+		$current_user      = wp_get_current_user();
+		$first_value       = $this->profile_posted_data['first_name'] ?? (string) $current_user->first_name;
+		$last_value        = $this->profile_posted_data['last_name'] ?? (string) $current_user->last_name;
+		$email_value       = $this->profile_posted_data['user_email'] ?? (string) $current_user->user_email;
+		$kana_value        = $this->profile_posted_data['kana_name'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_kana_name', true );
+		$phone_value       = $this->profile_posted_data['phone_number'] ?? (string) get_user_meta( $current_user->ID, 'phone_number', true );
+		$birth_value       = $this->profile_posted_data['birth_date'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_birth_date', true );
+		$birth_parts       = $this->resolve_birth_parts( $this->profile_posted_data, $birth_value );
 		$birth_year_value  = $birth_parts['year'];
 		$birth_month_value = $birth_parts['month'];
 		$birth_day_value   = $birth_parts['day'];
-		$gender_value = $this->profile_posted_data['gender'] ?? (string) get_user_meta( $current_user->ID, 'gender', true );
+		$gender_value      = $this->profile_posted_data['gender'] ?? (string) get_user_meta( $current_user->ID, 'gender', true );
 
 		$message = $this->consume_profile_notice();
 
@@ -721,36 +761,36 @@ class Auth_Shortcodes {
 				</div>
 				<?php
 				$this->render_text_field(
-					[
-						'id'       => 'vkbm-profile-email',
-						'name'     => 'user_email',
-						'label'    => __( 'email address', 'vk-booking-manager' ),
-						'value'    => $email_value,
-						'type'     => 'email',
+					array(
+						'id'           => 'vkbm-profile-email',
+						'name'         => 'user_email',
+						'label'        => __( 'email address', 'vk-booking-manager' ),
+						'value'        => $email_value,
+						'type'         => 'email',
 						'autocomplete' => 'email',
-						'required' => true,
-					]
+						'required'     => true,
+					)
 				);
 				$this->render_name_fields( 'profile', $last_value, $first_value, false );
 				$this->render_text_field(
-					[
-						'id'       => 'vkbm-profile-kana',
-						'name'     => 'kana_name',
-						'label'    => __( 'Furigana', 'vk-booking-manager' ),
-						'value'    => $kana_value,
+					array(
+						'id'           => 'vkbm-profile-kana',
+						'name'         => 'kana_name',
+						'label'        => __( 'Furigana', 'vk-booking-manager' ),
+						'value'        => $kana_value,
 						'autocomplete' => 'off',
-						'required' => true,
-					]
+						'required'     => true,
+					)
 				);
 				$this->render_text_field(
-					[
+					array(
 						'id'       => 'vkbm-profile-phone',
 						'name'     => 'phone_number',
 						'label'    => __( 'telephone number', 'vk-booking-manager' ),
 						'value'    => $phone_value,
 						'type'     => 'tel',
 						'required' => true,
-					]
+					)
 				);
 				$this->render_gender_field( 'vkbm-profile-gender', $gender_value );
 				?>
@@ -806,7 +846,7 @@ class Auth_Shortcodes {
 					<div class="vkbm-auth-form__actions">
 						<button type="submit" class="vkbm-auth-button vkbm-button vkbm-button__md vkbm-button__primary"><?php echo esc_html( $atts['button_label'] ); ?></button>
 					</div>
-				<?php echo wp_nonce_field( 'vkbm_profile_form', 'vkbm_profile_nonce', true, false ); ?>
+				<?php echo wp_nonce_field( 'vkbm_profile_form', 'vkbm_profile_nonce', true, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_nonce_field() outputs escaped HTML. ?>
 				<input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>">
 				<input type="hidden" name="vkbm_profile_form" value="1">
 				<input type="hidden" name="vkbm_auth" value="profile">
@@ -831,18 +871,18 @@ class Auth_Shortcodes {
 
 		$raw = wp_unslash( $_POST );
 
-		$first_name = sanitize_text_field( $raw['first_name'] ?? '' );
-		$last_name  = sanitize_text_field( $raw['last_name'] ?? '' );
-		$kana_name  = sanitize_text_field( $raw['kana_name'] ?? '' );
-		$phone_raw  = sanitize_text_field( $raw['phone_number'] ?? '' );
-		$phone      = VKBM_Helper::normalize_phone_number( $phone_raw );
-		$gender     = sanitize_text_field( $raw['gender'] ?? '' );
-		$birth_year  = sanitize_text_field( $raw['birth_year'] ?? '' );
-		$birth_month = sanitize_text_field( $raw['birth_month'] ?? '' );
-		$birth_day   = sanitize_text_field( $raw['birth_day'] ?? '' );
-		$birth       = $this->build_birth_date( $birth_year, $birth_month, $birth_day );
-		$email      = sanitize_email( $raw['user_email'] ?? '' );
-		$new_pass   = (string) ( $raw['new_password'] ?? '' );
+		$first_name   = sanitize_text_field( $raw['first_name'] ?? '' );
+		$last_name    = sanitize_text_field( $raw['last_name'] ?? '' );
+		$kana_name    = sanitize_text_field( $raw['kana_name'] ?? '' );
+		$phone_raw    = sanitize_text_field( $raw['phone_number'] ?? '' );
+		$phone        = VKBM_Helper::normalize_phone_number( $phone_raw );
+		$gender       = sanitize_text_field( $raw['gender'] ?? '' );
+		$birth_year   = sanitize_text_field( $raw['birth_year'] ?? '' );
+		$birth_month  = sanitize_text_field( $raw['birth_month'] ?? '' );
+		$birth_day    = sanitize_text_field( $raw['birth_day'] ?? '' );
+		$birth        = $this->build_birth_date( $birth_year, $birth_month, $birth_day );
+		$email        = sanitize_email( $raw['user_email'] ?? '' );
+		$new_pass     = (string) ( $raw['new_password'] ?? '' );
 		$pass_confirm = (string) ( $raw['new_password_confirm'] ?? '' );
 
 		$this->profile_posted_data = array(
@@ -863,18 +903,18 @@ class Auth_Shortcodes {
 
 		$this->add_required_field_errors(
 			$errors,
-			[
-				[
+			array(
+				array(
 					'value'   => $kana_name,
 					'code'    => 'missing_kana_name',
 					'message' => $this->get_required_field_message( 'kana_name' ),
-				],
-				[
+				),
+				array(
 					'value'   => $phone,
 					'code'    => 'missing_phone',
 					'message' => $this->get_required_field_message( 'phone_number' ),
-				],
-			]
+				),
+			)
 		);
 		$this->validate_email_for_context( $errors, $email, 'profile', $user_id );
 
@@ -948,7 +988,7 @@ class Auth_Shortcodes {
 		}
 
 		$username = isset( $_POST['log'] ) ? sanitize_user( wp_unslash( $_POST['log'] ) ) : '';
-		$password = isset( $_POST['pwd'] ) ? (string) wp_unslash( $_POST['pwd'] ) : '';
+		$password = isset( $_POST['pwd'] ) ? (string) wp_unslash( $_POST['pwd'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Password should not be sanitized.
 		$remember = ! empty( $_POST['rememberme'] );
 
 		$this->login_posted_data = array(
@@ -956,9 +996,9 @@ class Auth_Shortcodes {
 			'remember'   => $remember,
 		);
 
-			if ( '' === $username ) {
-				$this->login_errors->add( 'empty_username', __( 'Please enter your username (or email address).', 'vk-booking-manager' ) );
-			}
+		if ( '' === $username ) {
+			$this->login_errors->add( 'empty_username', __( 'Please enter your username (or email address).', 'vk-booking-manager' ) );
+		}
 
 		if ( '' === $password ) {
 			$this->login_errors->add( 'empty_password', __( 'Please enter your password.', 'vk-booking-manager' ) );
@@ -1001,7 +1041,8 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$redirect_to = isset( $_POST['redirect_to'] ) ? $this->normalize_redirect( $_POST['redirect_to'] ) : $this->get_current_url();
+		$redirect_to_raw = isset( $_POST['redirect_to'] ) ? sanitize_text_field( wp_unslash( $_POST['redirect_to'] ) ) : '';
+		$redirect_to     = '' !== $redirect_to_raw ? $this->normalize_redirect( $redirect_to_raw ) : $this->get_current_url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 
 		wp_safe_redirect( $redirect_to );
 		exit;
@@ -1013,7 +1054,7 @@ class Auth_Shortcodes {
 	private function process_registration_request(): void {
 		$this->registration_errors = new WP_Error();
 
-		$nonce = isset( $_POST['vkbm_registration_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_registration_nonce'] ) ) : '';
+		$nonce    = isset( $_POST['vkbm_registration_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_registration_nonce'] ) ) : '';
 		$honeypot = isset( $_POST['vkbm_hp_email'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_hp_email'] ) ) : '';
 
 		if ( ! wp_verify_nonce( $nonce, 'vkbm_registration_form' ) ) {
@@ -1045,41 +1086,41 @@ class Auth_Shortcodes {
 		}
 
 		$original_username = isset( $_POST['user_login'] ) ? wp_unslash( $_POST['user_login'] ) : '';
-		$username  = sanitize_user( $original_username, true );
-		$email     = isset( $_POST['user_email'] ) ? sanitize_email( wp_unslash( $_POST['user_email'] ) ) : '';
-		$last_name = isset( $_POST['last_name'] ) ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) ) : '';
-		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( wp_unslash( $_POST['first_name'] ) ) : '';
-			$kana_name = isset( $_POST['kana_name'] ) ? sanitize_text_field( wp_unslash( $_POST['kana_name'] ) ) : '';
-			$phone_raw = isset( $_POST['phone_number'] ) ? sanitize_text_field( wp_unslash( $_POST['phone_number'] ) ) : '';
-			$phone     = VKBM_Helper::normalize_phone_number( $phone_raw );
-		$birth_year  = isset( $_POST['birth_year'] ) ? sanitize_text_field( wp_unslash( $_POST['birth_year'] ) ) : '';
-		$birth_month = isset( $_POST['birth_month'] ) ? sanitize_text_field( wp_unslash( $_POST['birth_month'] ) ) : '';
-		$birth_day   = isset( $_POST['birth_day'] ) ? sanitize_text_field( wp_unslash( $_POST['birth_day'] ) ) : '';
-		$birth       = $this->build_birth_date( $birth_year, $birth_month, $birth_day );
-			$gender    = isset( $_POST['gender'] ) ? sanitize_text_field( wp_unslash( $_POST['gender'] ) ) : '';
-		$agree_terms = ! empty( $_POST['vkbm_agree_terms_of_service'] );
-		$agree_privacy = ! empty( $_POST['vkbm_agree_privacy_policy'] );
-		$password = isset( $_POST['user_pass'] ) ? (string) wp_unslash( $_POST['user_pass'] ) : '';
-		$confirm  = isset( $_POST['user_pass_confirm'] ) ? (string) wp_unslash( $_POST['user_pass_confirm'] ) : '';
+		$username          = sanitize_user( $original_username, true );
+		$email             = isset( $_POST['user_email'] ) ? sanitize_email( wp_unslash( $_POST['user_email'] ) ) : '';
+		$last_name         = isset( $_POST['last_name'] ) ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) ) : '';
+		$first_name        = isset( $_POST['first_name'] ) ? sanitize_text_field( wp_unslash( $_POST['first_name'] ) ) : '';
+			$kana_name     = isset( $_POST['kana_name'] ) ? sanitize_text_field( wp_unslash( $_POST['kana_name'] ) ) : '';
+			$phone_raw     = isset( $_POST['phone_number'] ) ? sanitize_text_field( wp_unslash( $_POST['phone_number'] ) ) : '';
+			$phone         = VKBM_Helper::normalize_phone_number( $phone_raw );
+		$birth_year        = isset( $_POST['birth_year'] ) ? sanitize_text_field( wp_unslash( $_POST['birth_year'] ) ) : '';
+		$birth_month       = isset( $_POST['birth_month'] ) ? sanitize_text_field( wp_unslash( $_POST['birth_month'] ) ) : '';
+		$birth_day         = isset( $_POST['birth_day'] ) ? sanitize_text_field( wp_unslash( $_POST['birth_day'] ) ) : '';
+		$birth             = $this->build_birth_date( $birth_year, $birth_month, $birth_day );
+			$gender        = isset( $_POST['gender'] ) ? sanitize_text_field( wp_unslash( $_POST['gender'] ) ) : '';
+		$agree_terms       = ! empty( $_POST['vkbm_agree_terms_of_service'] );
+		$agree_privacy     = ! empty( $_POST['vkbm_agree_privacy_policy'] );
+		$password          = isset( $_POST['user_pass'] ) ? (string) wp_unslash( $_POST['user_pass'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Password should not be sanitized.
+		$confirm           = isset( $_POST['user_pass_confirm'] ) ? (string) wp_unslash( $_POST['user_pass_confirm'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Password should not be sanitized.
 
 			$this->registration_posted_data = array(
-				'user_login'   => $username,
-				'user_email'   => $email,
-				'first_name'   => $first_name,
-				'last_name'    => $last_name,
-				'kana_name'    => $kana_name,
-				'phone_number' => $phone,
-				'birth_year'   => $birth_year,
-				'birth_month'  => $birth_month,
-				'birth_day'    => $birth_day,
-				'birth_date'   => $birth,
-				'gender'       => $gender,
+				'user_login'             => $username,
+				'user_email'             => $email,
+				'first_name'             => $first_name,
+				'last_name'              => $last_name,
+				'kana_name'              => $kana_name,
+				'phone_number'           => $phone,
+				'birth_year'             => $birth_year,
+				'birth_month'            => $birth_month,
+				'birth_day'              => $birth_day,
+				'birth_date'             => $birth,
+				'gender'                 => $gender,
 				'agree_terms_of_service' => $agree_terms,
-				'agree_privacy_policy' => $agree_privacy,
+				'agree_privacy_policy'   => $agree_privacy,
 			);
-		$this->registration_raw_data = array(
-			'user_login' => $original_username,
-		);
+			$this->registration_raw_data    = array(
+				'user_login' => $original_username,
+			);
 
 			if ( '' === $username ) {
 				if ( '' !== trim( $original_username ) ) {
@@ -1092,29 +1133,29 @@ class Auth_Shortcodes {
 				}
 			}
 
-		$this->validate_email_for_context( $this->registration_errors, $email, 'register' );
+			$this->validate_email_for_context( $this->registration_errors, $email, 'register' );
 
-		if ( '' === $password ) {
-			$this->registration_errors->add( 'empty_password', __( 'Please enter your password.', 'vk-booking-manager' ) );
-		}
+			if ( '' === $password ) {
+				$this->registration_errors->add( 'empty_password', __( 'Please enter your password.', 'vk-booking-manager' ) );
+			}
 
 			$this->validate_password_pair( $this->registration_errors, $password, $confirm, true );
 			$this->add_required_field_errors(
 				$this->registration_errors,
-				[
-					[
+				array(
+					array(
 						'value'   => $kana_name,
 						'code'    => 'missing_kana_name',
 						'message' => $this->get_required_field_message( 'kana_name' ),
-					],
-					[
+					),
+					array(
 						'value'   => $phone,
 						'code'    => 'empty_phone',
 						'message' => $this->get_required_field_message( 'phone_number' ),
-					],
-				]
+					),
+				)
 			);
-		$settings = $this->settings_service->get_settings();
+		$settings         = $this->settings_service->get_settings();
 		$terms_of_service = isset( $settings['provider_terms_of_service'] ) ? trim( (string) $settings['provider_terms_of_service'] ) : '';
 		if ( '' !== $terms_of_service && ! $agree_terms ) {
 			$this->registration_errors->add(
@@ -1123,12 +1164,12 @@ class Auth_Shortcodes {
 			);
 		}
 		$privacy_policy_mode = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
-		if ( ! in_array( $privacy_policy_mode, [ 'none', 'url', 'content' ], true ) ) {
+		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
 			$privacy_policy_mode = 'none';
 		}
-		$privacy_policy_url = isset( $settings['provider_privacy_policy_url'] ) ? trim( (string) $settings['provider_privacy_policy_url'] ) : '';
+		$privacy_policy_url     = isset( $settings['provider_privacy_policy_url'] ) ? trim( (string) $settings['provider_privacy_policy_url'] ) : '';
 		$privacy_policy_content = isset( $settings['provider_privacy_policy_content'] ) ? trim( (string) $settings['provider_privacy_policy_content'] ) : '';
-		$requires_privacy = ( 'url' === $privacy_policy_mode && '' !== $privacy_policy_url )
+		$requires_privacy       = ( 'url' === $privacy_policy_mode && '' !== $privacy_policy_url )
 			|| ( 'content' === $privacy_policy_mode && '' !== $privacy_policy_content );
 		if ( $requires_privacy && ! $agree_privacy ) {
 			$this->registration_errors->add(
@@ -1155,7 +1196,7 @@ class Auth_Shortcodes {
 
 		$this->store_registration_metadata( $user_id, $first_name, $last_name, $kana_name, $phone, $birth, $gender );
 
-		$redirect_to = isset( $_POST['redirect_to'] ) ? $this->normalize_redirect( $_POST['redirect_to'] ) : $this->get_current_url();
+		$redirect_to           = isset( $_POST['redirect_to'] ) ? $this->normalize_redirect( wp_unslash( $_POST['redirect_to'] ) ) : $this->get_current_url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 		$requires_verification = $this->requires_email_verification();
 
 		if ( $requires_verification ) {
@@ -1209,11 +1250,11 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$payload = [
+		$payload = array(
 			'messages' => $this->registration_errors->get_error_messages(),
 			'posted'   => $this->registration_posted_data,
 			'raw'      => $this->registration_raw_data,
-		];
+		);
 
 		$this->set_notice_cookie( 'vkbm_registration_errors', wp_json_encode( $payload ), '/' );
 	}
@@ -1232,9 +1273,9 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$messages = is_array( $data['messages'] ?? null ) ? $data['messages'] : [];
-		$this->registration_posted_data = is_array( $data['posted'] ?? null ) ? $data['posted'] : [];
-		$this->registration_raw_data    = is_array( $data['raw'] ?? null ) ? $data['raw'] : [];
+		$messages                       = isset( $data['messages'] ) && is_array( $data['messages'] ) ? $data['messages'] : array();
+		$this->registration_posted_data = isset( $data['posted'] ) && is_array( $data['posted'] ) ? $data['posted'] : array();
+		$this->registration_raw_data    = isset( $data['raw'] ) && is_array( $data['raw'] ) ? $data['raw'] : array();
 
 		if ( empty( $messages ) ) {
 			return;
@@ -1279,15 +1320,15 @@ class Auth_Shortcodes {
 	 */
 	private function get_allowed_error_tags(): array {
 		return array(
-			'a' => array(
-				'href' => true,
-				'class' => true,
-				'rel' => true,
+			'a'      => array(
+				'href'   => true,
+				'class'  => true,
+				'rel'    => true,
 				'target' => true,
 			),
 			'strong' => array(),
-			'em' => array(),
-			'br' => array(),
+			'em'     => array(),
+			'br'     => array(),
 		);
 	}
 
@@ -1342,8 +1383,8 @@ class Auth_Shortcodes {
 	public function enqueue_assets(): void {
 		wp_enqueue_style( Common_Styles::AUTH_HANDLE );
 
-		$plugin_root = dirname( __DIR__, 2 );
-		$auth_js     = $plugin_root . '/assets/js/auth-forms.js';
+		$plugin_root  = dirname( __DIR__, 2 );
+		$auth_js      = $plugin_root . '/assets/js/auth-forms.js';
 		$auth_version = defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0';
 		if ( file_exists( $auth_js ) ) {
 			$auth_version = (string) filemtime( $auth_js );
@@ -1352,7 +1393,7 @@ class Auth_Shortcodes {
 		wp_enqueue_script(
 			'vkbm-auth-forms',
 			plugins_url( 'assets/js/auth-forms.js', dirname( __DIR__ ) ),
-			[],
+			array(),
 			$auth_version,
 			true
 		);
@@ -1373,7 +1414,7 @@ class Auth_Shortcodes {
 			}
 		}
 
-		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '/';
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
 
 		if ( isset( $wp->request ) && $wp->request ) {
 			$base = home_url( '/' . ltrim( $wp->request, '/' ) );
@@ -1392,7 +1433,8 @@ class Auth_Shortcodes {
 	/**
 	 * Build action URL that retains auth mode query.
 	 *
-	 * @param string $mode Auth mode name.
+	 * @param string      $mode     Auth mode name.
+	 * @param string|null $base_url Base URL. Defaults to current URL if null.
 	 * @return string
 	 */
 	private function get_auth_action_url( string $mode, ?string $base_url = null ): string {
@@ -1443,10 +1485,10 @@ class Auth_Shortcodes {
 	 * @param string $first_name First name.
 	 * @param string $last_name Last name.
 	 * @param string $kana_name Kana.
-				 * @param string $phone     Phone number.
-				 * @param string $birth     Birth date.
-				 * @param string $gender    Gender value.
-				 */
+	 * @param string $phone     Phone number.
+	 * @param string $birth     Birth date.
+	 * @param string $gender    Gender value.
+	 */
 	private function store_registration_metadata( int $user_id, string $first_name, string $last_name, string $kana_name, string $phone, string $birth, string $gender ): void {
 		if ( '' !== $first_name ) {
 			update_user_meta( $user_id, 'first_name', $first_name );
@@ -1497,26 +1539,53 @@ class Auth_Shortcodes {
 	 * @return bool True if the email was queued, false otherwise.
 	 */
 	private function send_verification_email( string $email, string $redirect_to, string $token ): bool {
-		$target_url = $redirect_to ?: home_url();
+		$target_url       = '' !== $redirect_to ? $redirect_to : home_url();
 		$verification_url = add_query_arg( 'vkbm_verify_email', $token, $target_url );
-		$site_name = get_bloginfo( 'name' );
+		$site_name        = get_bloginfo( 'name' );
+		/* translators: %s: site name */
 		$subject = sprintf( __( '[%s] Confirm email address', 'vk-booking-manager' ), $site_name );
-		$message = sprintf(
-			__(
-				"Thank you for registering. \\n\\nClick the link below to complete email address verification. \\n\\n%s\\n\\nLink expires in %d hours.",
-				'vk-booking-manager'
-			),
-			$verification_url,
-			(int) ( self::EMAIL_TOKEN_TTL / HOUR_IN_SECONDS )
-		);
-		$headers = array( 'Content-Type: text/plain; charset=UTF-8' );
+
+		// Build email message by translating each sentence separately.
+		$message  = __( 'Thank you for registering.', 'vk-booking-manager' ) . "\n\n";
+		$message .= __( 'Click the link below to complete email address verification.', 'vk-booking-manager' ) . "\n\n";
+		$message .= $verification_url . "\n\n";
+		/* translators: %d: number of hours */
+		$message .= sprintf( __( 'Link expires in %d hours.', 'vk-booking-manager' ), (int) ( self::EMAIL_TOKEN_TTL / HOUR_IN_SECONDS ) );
+
+		$headers    = array( 'Content-Type: text/plain; charset=UTF-8' );
 		$from_email = sanitize_email( (string) get_option( 'admin_email' ) );
 		if ( '' !== $from_email && is_email( $from_email ) ) {
 			$from_name = wp_specialchars_decode( (string) get_bloginfo( 'name' ), ENT_QUOTES );
 			$headers[] = sprintf( 'From: %s <%s>', $from_name, $from_email );
 		}
 
-		return (bool) wp_mail( $email, $subject, $message, $headers );
+		$provider_settings = $this->settings_service->get_settings();
+		$email_log_enabled = ! empty( $provider_settings['email_log_enabled'] );
+
+		$result = wp_mail( $email, $subject, $message, $headers );
+
+		// Get error information if available.
+		$error_info = '';
+		if ( ! $result ) {
+			global $phpmailer;
+			if ( isset( $phpmailer ) && is_object( $phpmailer ) ) {
+				$phpmailer_error = isset( $phpmailer->ErrorInfo ) ? $phpmailer->ErrorInfo : ''; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHPMailer property name.
+				if ( ! empty( $phpmailer_error ) ) {
+					$error_info = $phpmailer_error;
+				}
+			}
+			if ( empty( $error_info ) ) {
+				$error_info = 'Unknown error';
+			}
+		}
+
+		// Save log entry.
+		if ( $email_log_enabled ) {
+			$log_repository = new Email_Log_Repository();
+			$log_repository->add_log( $email, $subject, (bool) $result, $error_info );
+		}
+
+		return (bool) $result;
 	}
 
 	/**
@@ -1549,14 +1618,14 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$cookie_path = $path ?? ( COOKIEPATH ?: '/' );
+		$cookie_path = null !== $path ? $path : ( defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/' );
 
 		setcookie(
 			$name,
 			rawurlencode( $message ),
 			time() + 30,
 			$cookie_path,
-			COOKIE_DOMAIN ?: '',
+			defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '',
 			$this->is_request_secure(),
 			true
 		);
@@ -1591,16 +1660,18 @@ class Auth_Shortcodes {
 			return null;
 		}
 
-		$value = rawurldecode( (string) wp_unslash( $_COOKIE[ $name ] ) );
+		$cookie_value = isset( $_COOKIE[ $name ] ) ? (string) wp_unslash( $_COOKIE[ $name ] ) : '';
+		$value        = rawurldecode( $cookie_value );
 
 		if ( headers_sent() ) {
 			return $value;
 		}
 
-		$primary_path = COOKIEPATH ?: '/';
-		setcookie( $name, '', time() - 3600, $primary_path, COOKIE_DOMAIN ?: '' );
+		$primary_path   = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
+		$cookie_domain  = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
+		setcookie( $name, '', time() - 3600, $primary_path, $cookie_domain );
 		if ( '/' !== $primary_path ) {
-			setcookie( $name, '', time() - 3600, '/', COOKIE_DOMAIN ?: '' );
+			setcookie( $name, '', time() - 3600, '/', $cookie_domain );
 		}
 
 		return $value;
@@ -1627,7 +1698,7 @@ class Auth_Shortcodes {
 	 * Resolve birth date parts from posted data and stored date.
 	 *
 	 * @param array<string, mixed> $posted Post values.
-	 * @param string              $birth_value Stored birth date (YYYY-MM-DD).
+	 * @param string               $birth_value Stored birth date (YYYY-MM-DD).
 	 * @return array{year: string, month: string, day: string}
 	 */
 	private function resolve_birth_parts( array $posted, string $birth_value ): array {
@@ -1645,11 +1716,11 @@ class Auth_Shortcodes {
 			}
 		}
 
-		return [
+		return array(
 			'year'  => $birth_year,
 			'month' => $birth_month,
 			'day'   => $birth_day,
-		];
+		);
 	}
 
 	/**
@@ -1661,7 +1732,7 @@ class Auth_Shortcodes {
 	 * @return string
 	 */
 	private function build_birth_date( string $birth_year, string $birth_month, string $birth_day ): string {
-		// Normalize numeric parts before composing. / 数値に正規化してから日付を構成。
+		// Normalize numeric parts before composing. / 数値に正規化してから日付を構成.
 		if ( '' === $birth_year && '' === $birth_month && '' === $birth_day ) {
 			return '';
 		}
@@ -1753,7 +1824,7 @@ class Auth_Shortcodes {
 	 */
 	private function render_birth_month_options( string $selected ): void {
 		// Use zero-padded month values to match stored format.
-		// 保存形式に合わせてゼロ埋めの月を使用する。
+		// 保存形式に合わせてゼロ埋めの月を使用する.
 		echo '<option value="">' . esc_html__( 'Select', 'vk-booking-manager' ) . '</option>';
 		for ( $month = 1; $month <= 12; $month++ ) {
 			$value = sprintf( '%02d', $month );
@@ -1796,6 +1867,8 @@ class Auth_Shortcodes {
 	 *   label: string,
 	 *   value: string,
 	 *   type?: string,
+	 *   args?: array<string, mixed>
+	 * } $args Field arguments.
 	 *   autocomplete?: string,
 	 *   required?: bool
 	 * } $args Field settings.
@@ -1906,12 +1979,12 @@ class Auth_Shortcodes {
 	 *
 	 * 共通の必須エラーをまとめて追加します。
 	 *
-	 * @param WP_Error                    $errors Error bag.
+	 * @param WP_Error                        $errors Error bag.
 	 * @param array<int, array<string,mixed>> $requirements Required rules.
 	 * @return void
 	 */
 	private function add_required_field_errors( WP_Error $errors, array $requirements ): void {
-		// Apply shared "required" messages. / 共通の必須チェックを適用。
+		// Apply shared "required" messages. / 共通の必須チェックを適用.
 		foreach ( $requirements as $requirement ) {
 			$value   = isset( $requirement['value'] ) ? (string) $requirement['value'] : '';
 			$code    = isset( $requirement['code'] ) ? (string) $requirement['code'] : 'required';
@@ -1985,7 +2058,7 @@ class Auth_Shortcodes {
 	 * @return void
 	 */
 	private function validate_password_pair( WP_Error $errors, string $password, string $confirm, bool $is_register ): void {
-		// Skip when both are empty for profile updates. / プロフィール更新時は未入力ならスキップ。
+		// Skip when both are empty for profile updates. / プロフィール更新時は未入力ならスキップ.
 		if ( ! $is_register && '' === $password && '' === $confirm ) {
 			return;
 		}
@@ -2030,7 +2103,7 @@ class Auth_Shortcodes {
 	 */
 	private function get_rate_limit_register_max(): int {
 		$settings = $this->settings_service->get_settings();
-		$limit = isset( $settings['auth_rate_limit_register_max'] )
+		$limit    = isset( $settings['auth_rate_limit_register_max'] )
 			? (int) $settings['auth_rate_limit_register_max']
 			: self::RATE_LIMIT_REGISTER_MAX;
 
@@ -2044,7 +2117,7 @@ class Auth_Shortcodes {
 	 */
 	private function get_rate_limit_login_max(): int {
 		$settings = $this->settings_service->get_settings();
-		$limit = isset( $settings['auth_rate_limit_login_max'] )
+		$limit    = isset( $settings['auth_rate_limit_login_max'] )
 			? (int) $settings['auth_rate_limit_login_max']
 			: self::RATE_LIMIT_LOGIN_MAX;
 
@@ -2071,10 +2144,10 @@ class Auth_Shortcodes {
 
 		$state = get_transient( $key );
 		if ( ! is_array( $state ) ) {
-			$state = [
+			$state = array(
 				'count' => 0,
 				'reset' => $now + $window,
-			];
+			);
 		}
 
 		$reset = isset( $state['reset'] ) ? (int) $state['reset'] : 0;
@@ -2087,13 +2160,27 @@ class Auth_Shortcodes {
 
 		if ( $count >= $max ) {
 			$ttl = max( 1, $reset - $now );
-			set_transient( $key, [ 'count' => $count, 'reset' => $reset ], $ttl );
+			set_transient(
+				$key,
+				array(
+					'count' => $count,
+					'reset' => $reset,
+				),
+				$ttl
+			);
 			return false;
 		}
 
-		$count++;
+		++$count;
 		$ttl = max( 1, $reset - $now );
-		set_transient( $key, [ 'count' => $count, 'reset' => $reset ], $ttl );
+		set_transient(
+			$key,
+			array(
+				'count' => $count,
+				'reset' => $reset,
+			),
+			$ttl
+		);
 
 		return true;
 	}
@@ -2110,10 +2197,10 @@ class Auth_Shortcodes {
 			$remote_addr = trim( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
 		}
 
-		$remote_addr = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $remote_addr );
-		$trusted_proxies = apply_filters( 'vkbm_trusted_proxy_ips', [] );
+		$remote_addr     = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $remote_addr );
+		$trusted_proxies = apply_filters( 'vkbm_trusted_proxy_ips', array() );
 		if ( ! is_array( $trusted_proxies ) ) {
-			$trusted_proxies = [];
+			$trusted_proxies = array();
 		}
 
 		$forwarded_ip = '';
@@ -2123,7 +2210,7 @@ class Auth_Shortcodes {
 			&& in_array( $remote_addr, $trusted_proxies, true )
 		) {
 			// Respect XFF only for trusted proxies. / 信頼できるプロキシ経由のみXFFを採用します。
-			$candidates  = explode( ',', (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
+			$candidates   = explode( ',', (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
 			$forwarded_ip = trim( (string) ( $candidates[0] ?? '' ) );
 			$forwarded_ip = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $forwarded_ip );
 		}
@@ -2148,8 +2235,8 @@ class Auth_Shortcodes {
 			'vkbm_login_error',
 			$cookie_value,
 			time() + 30,
-			COOKIEPATH ?: '/',
-			COOKIE_DOMAIN ?: '',
+			defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/',
+			defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '',
 			$this->is_request_secure(),
 			true
 		);
@@ -2167,7 +2254,9 @@ class Auth_Shortcodes {
 
 		$value = rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) );
 
-		setcookie( 'vkbm_login_error', '', time() - 3600, COOKIEPATH ?: '/', COOKIE_DOMAIN ?: '' );
+		$cookie_path  = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
+		$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
+		setcookie( 'vkbm_login_error', '', time() - 3600, $cookie_path, $cookie_domain );
 
 		return $value;
 	}

@@ -1,4 +1,9 @@
 <?php
+/**
+ * Term order manager for custom taxonomies.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -67,10 +72,10 @@ class Term_Order_Manager {
 	 * Register WordPress hooks.
 	 */
 	public function register(): void {
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_admin_assets' ] );
-		add_action( 'created_term', [ $this, 'ensure_created_term_order' ], 10, 3 );
-		add_action( 'wp_ajax_' . self::AJAX_ACTION, [ $this, 'handle_update_order' ] );
-		add_action( 'pre_get_terms', [ $this, 'apply_default_order' ] );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
+		add_action( 'created_term', array( $this, 'ensure_created_term_order' ), 10, 3 );
+		add_action( 'wp_ajax_' . self::AJAX_ACTION, array( $this, 'handle_update_order' ) );
+		add_action( 'pre_get_terms', array( $this, 'apply_default_order' ) );
 	}
 
 	/**
@@ -101,7 +106,7 @@ class Term_Order_Manager {
 		wp_enqueue_script(
 			'vkbm-term-order-admin',
 			plugins_url( 'assets/js/term-order.js', VKBM_PLUGIN_FILE ),
-			[ 'jquery', 'jquery-ui-sortable' ],
+			array( 'jquery', 'jquery-ui-sortable' ),
 			VKBM_VERSION,
 			true
 		);
@@ -109,17 +114,17 @@ class Term_Order_Manager {
 		wp_localize_script(
 			'vkbm-term-order-admin',
 			'vkbmTermOrder',
-			[
+			array(
 				'action'   => self::AJAX_ACTION,
 				'taxonomy' => $screen->taxonomy,
 				'nonce'    => wp_create_nonce( self::AJAX_ACTION ),
 				'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
-				'i18n'     => [
+				'i18n'     => array(
 					'saving' => __( 'Saving sort order...', 'vk-booking-manager' ),
 					'saved'  => __( 'Sort order saved', 'vk-booking-manager' ),
 					'error'  => __( 'Saving failed. Please try again later.', 'vk-booking-manager' ),
-				],
-			]
+				),
+			)
 		);
 	}
 
@@ -144,7 +149,8 @@ class Term_Order_Manager {
 			return;
 		}
 
-		if ( isset( $_GET['orderby'] ) && '' !== (string) wp_unslash( $_GET['orderby'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Sorting override.
+		$orderby = isset( $_GET['orderby'] ) ? sanitize_text_field( wp_unslash( $_GET['orderby'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Sorting override.
+		if ( '' !== $orderby ) {
 			return;
 		}
 
@@ -185,31 +191,31 @@ class Term_Order_Manager {
 		$taxonomy = isset( $_POST['taxonomy'] ) ? sanitize_key( wp_unslash( $_POST['taxonomy'] ) ) : '';
 		if ( '' === $taxonomy || ! in_array( $taxonomy, $this->taxonomies, true ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => __( 'Unsupported taxonomy.', 'vk-booking-manager' ),
-				],
+				),
 				400
 			);
 		}
 
 		if ( ! $this->current_user_can_manage_taxonomy( $taxonomy ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => __( 'You do not have permission to perform this operation.', 'vk-booking-manager' ),
-				],
+				),
 				403
 			);
 		}
 
 		$ordered_ids = $this->sanitize_ids(
-			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : []
+			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : array()
 		);
 
 		if ( empty( $ordered_ids ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => __( 'No sorting targets found.', 'vk-booking-manager' ),
-				],
+				),
 				400
 			);
 		}
@@ -220,18 +226,18 @@ class Term_Order_Manager {
 
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error(
-				[
+				array(
 					'message' => $result->get_error_message(),
-				],
+				),
 				400
 			);
 		}
 
 		wp_send_json_success(
-			[
+			array(
 				'updated' => $result,
 				'version' => (int) get_option( self::ORDER_VERSION_OPTION, 0 ),
-			]
+			)
 		);
 	}
 
@@ -244,14 +250,14 @@ class Term_Order_Manager {
 	 */
 	private function persist_order( string $taxonomy, array $ordered_ids ) {
 		$all_ids = get_terms(
-			[
+			array(
 				'taxonomy'   => $taxonomy,
 				'hide_empty' => false,
 				'fields'     => 'ids',
 				'meta_key'   => self::META_KEY,
 				'orderby'    => 'meta_value_num',
 				'order'      => 'ASC',
-			]
+			)
 		);
 
 		if ( is_wp_error( $all_ids ) || empty( $all_ids ) ) {
@@ -281,7 +287,7 @@ class Term_Order_Manager {
 			);
 		}
 
-		$updated_ids = [];
+		$updated_ids = array();
 
 		foreach ( $all_ids as $position => $term_id ) {
 			$new_order     = $position + 1;
@@ -344,7 +350,7 @@ class Term_Order_Manager {
 				continue;
 			}
 
-			$max_value++;
+			++$max_value;
 			update_term_meta( $term_id, self::META_KEY, (string) $max_value );
 			wp_cache_delete( $term_id, 'term_meta' );
 		}
@@ -380,7 +386,7 @@ class Term_Order_Manager {
 	 * @return int[]
 	 */
 	private function sanitize_ids( array $ids ): array {
-		$sanitized = [];
+		$sanitized = array();
 
 		foreach ( $ids as $id ) {
 			$value = absint( $id );

@@ -1,4 +1,9 @@
 <?php
+/**
+ * REST controller for authentication forms.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -21,7 +26,11 @@ use function wp_validate_redirect;
 class Auth_Form_Controller {
 	private const NAMESPACE = 'vkbm/v1';
 
-	/** @var Auth_Shortcodes */
+	/**
+	 * Auth shortcodes handler.
+	 *
+	 * @var Auth_Shortcodes
+	 */
 	private $shortcodes;
 
 	/**
@@ -37,7 +46,7 @@ class Auth_Form_Controller {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**
@@ -47,11 +56,11 @@ class Auth_Form_Controller {
 		register_rest_route(
 			self::NAMESPACE,
 			'/auth-form',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'get_form' ],
+				'callback'            => array( $this, 'get_form' ),
 				'permission_callback' => '__return_true',
-			]
+			)
 		);
 	}
 
@@ -62,11 +71,11 @@ class Auth_Form_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function get_form( WP_REST_Request $request ): WP_REST_Response {
-		$type            = sanitize_text_field( (string) $request->get_param( 'type' ) );
-		$redirect        = $this->sanitize_url_param( (string) $request->get_param( 'redirect' ) );
-		$action_url      = $this->sanitize_url_param( (string) $request->get_param( 'action_url' ) );
-		$login_url       = $this->sanitize_url_param( (string) $request->get_param( 'login_url' ) );
-		$register_url    = $this->sanitize_url_param( (string) $request->get_param( 'register_url' ) );
+		$type         = sanitize_text_field( (string) $request->get_param( 'type' ) );
+		$redirect     = $this->sanitize_url_param( (string) $request->get_param( 'redirect' ) );
+		$action_url   = $this->sanitize_url_param( (string) $request->get_param( 'action_url' ) );
+		$login_url    = $this->sanitize_url_param( (string) $request->get_param( 'login_url' ) );
+		$register_url = $this->sanitize_url_param( (string) $request->get_param( 'register_url' ) );
 
 		if ( '' === $action_url ) {
 			$action_url = $redirect;
@@ -77,65 +86,65 @@ class Auth_Form_Controller {
 		if ( 'register' === $type ) {
 			if ( ! get_option( 'users_can_register' ) ) {
 				return new WP_REST_Response(
-					[
+					array(
 						'html'    => '',
 						'message' => __( 'We are currently not accepting user registration.', 'vk-booking-manager' ),
-					],
+					),
 					403
 				);
 			}
 
 			$markup = $this->shortcodes->render_registration_form(
 				array_filter(
-					[
+					array(
 						'redirect'   => $redirect,
 						'login_url'  => $login_url,
 						'auto_login' => 'false',
-						'action_url'  => $action_url,
-					]
+						'action_url' => $action_url,
+					)
 				)
 			);
 		} elseif ( 'profile' === $type ) {
 			if ( ! is_user_logged_in() ) {
 				return new WP_REST_Response(
-					[
+					array(
 						'html' => '',
-					],
+					),
 					401
 				);
 			}
 
 			$markup = $this->shortcodes->render_profile_form(
 				array_filter(
-					[
-						'redirect' => $redirect,
+					array(
+						'redirect'   => $redirect,
 						'action_url' => $action_url,
-					]
+					)
 				)
 			);
 		} else {
 			$markup = $this->shortcodes->render_login_form(
 				array_filter(
-					[
+					array(
 						'redirect'                => $redirect,
 						'register_url'            => $register_url,
 						'show_lost_password_link' => 'true',
 						'lost_password_url'       => wp_lostpassword_url( $redirect ),
 						'action_url'              => $action_url,
-					]
+					)
 				)
 			);
 		}
 
 		$response = new WP_REST_Response(
-			[
+			array(
 				'html' => $markup,
-			]
+			)
 		);
 		$response->set_headers(
-			[
+			array(
 				'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-			]
+			)
 		);
 
 		return $response;
@@ -161,6 +170,6 @@ class Auth_Form_Controller {
 
 		$validated = wp_validate_redirect( $sanitized, '' );
 
-		return $validated ?: '';
+		return '' !== $validated ? $validated : '';
 	}
 }

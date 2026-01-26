@@ -1,4 +1,9 @@
 <?php
+/**
+ * Registers the Service Menu custom post type.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -9,6 +14,7 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\TermOrder\Term_Order_Manager;
 use WP_Post;
 use function add_action;
@@ -26,35 +32,39 @@ use function wp_enqueue_style;
  * Registers the Service Menu custom post type and related taxonomy.
  */
 class Service_Menu_Post_Type {
-	public const POST_TYPE = 'vkbm_service_menu';
-	public const TAXONOMY  = 'vkbm_service_menu_tag';
-	public const TAXONOMY_GROUP = 'vkbm_service_menu_group';
+	public const POST_TYPE                         = 'vkbm_service_menu';
+	public const TAXONOMY                          = 'vkbm_service_menu_tag';
+	public const TAXONOMY_GROUP                    = 'vkbm_service_menu_group';
 	private const TERM_GROUP_DISPLAY_MODE_META_KEY = 'vkbm_menu_group_display_mode';
-	private const META_OTHER_CONDITIONS = '_vkbm_other_conditions';
-	private const META_STAFF_IDS = '_vkbm_staff_ids';
-	private const META_RESERVATION_DAY_TYPE = '_vkbm_reservation_day_type';
-	private const META_DISABLE_NOMINATION_FEE = '_vkbm_disable_nomination_fee';
+	private const META_OTHER_CONDITIONS            = '_vkbm_other_conditions';
+	private const META_STAFF_IDS                   = '_vkbm_staff_ids';
+	private const META_RESERVATION_DAY_TYPE        = '_vkbm_reservation_day_type';
+	private const META_DISABLE_NOMINATION_FEE      = '_vkbm_disable_nomination_fee';
 
-	/** @var array<int, string> */
-	private array $staff_title_cache = [];
+	/**
+	 * Staff title cache.
+	 *
+	 * @var array<int, string>
+	 */
+	private array $staff_title_cache = array();
 
 	/**
 	 * Hook registrations for the post type and taxonomy.
 	 */
 	public function register(): void {
-		add_action( 'init', [ $this, 'register_post_type' ] );
-		add_action( 'init', [ $this, 'register_taxonomy' ] );
-		add_action( 'init', [ $this, 'register_meta' ] );
-		add_action( 'rest_api_init', [ $this, 'register_rest_fields' ] );
-		add_action( self::TAXONOMY_GROUP . '_add_form_fields', [ $this, 'render_group_term_add_fields' ] );
-		add_action( self::TAXONOMY_GROUP . '_edit_form_fields', [ $this, 'render_group_term_edit_fields' ], 10, 2 );
-		add_action( 'created_' . self::TAXONOMY_GROUP, [ $this, 'save_group_term_display_mode' ] );
-		add_action( 'edited_' . self::TAXONOMY_GROUP, [ $this, 'save_group_term_display_mode' ] );
-		add_filter( 'manage_edit-' . self::POST_TYPE . '_columns', [ $this, 'filter_admin_columns' ] );
-		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', [ $this, 'render_admin_columns' ], 10, 2 );
-		add_action( 'quick_edit_custom_box', [ $this, 'render_quick_edit_fields' ], 10, 2 );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_quick_edit_assets' ] );
-		add_action( 'save_post_' . self::POST_TYPE, [ $this, 'save_quick_edit' ], 20, 3 );
+		add_action( 'init', array( $this, 'register_post_type' ) );
+		add_action( 'init', array( $this, 'register_taxonomy' ) );
+		add_action( 'init', array( $this, 'register_meta' ) );
+		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
+		add_action( self::TAXONOMY_GROUP . '_add_form_fields', array( $this, 'render_group_term_add_fields' ) );
+		add_action( self::TAXONOMY_GROUP . '_edit_form_fields', array( $this, 'render_group_term_edit_fields' ), 10, 2 );
+		add_action( 'created_' . self::TAXONOMY_GROUP, array( $this, 'save_group_term_display_mode' ) );
+		add_action( 'edited_' . self::TAXONOMY_GROUP, array( $this, 'save_group_term_display_mode' ) );
+		add_filter( 'manage_edit-' . self::POST_TYPE . '_columns', array( $this, 'filter_admin_columns' ) );
+		add_action( 'manage_' . self::POST_TYPE . '_posts_custom_column', array( $this, 'render_admin_columns' ), 10, 2 );
+		add_action( 'quick_edit_custom_box', array( $this, 'render_quick_edit_fields' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_quick_edit_assets' ) );
+		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_quick_edit' ), 20, 3 );
 	}
 
 	/**
@@ -65,7 +75,7 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$labels = [
+		$labels = array(
 			'name'                  => __( 'Service Menu', 'vk-booking-manager' ),
 			'singular_name'         => __( 'Service Menu', 'vk-booking-manager' ),
 			'menu_name'             => __( 'BM Service', 'vk-booking-manager' ),
@@ -83,27 +93,27 @@ class Service_Menu_Post_Type {
 			'attributes'            => __( 'Service menu attributes', 'vk-booking-manager' ),
 			'insert_into_item'      => __( 'Insert into service menu', 'vk-booking-manager' ),
 			'uploaded_to_this_item' => __( 'Upload to this service menu', 'vk-booking-manager' ),
-		];
+		);
 
-		$args = [
-			'labels'             => $labels,
-			'public'             => true,
-			'publicly_queryable' => true,
-			'exclude_from_search'=> true,
-			'show_ui'            => true,
-			'show_in_menu'       => true,
-			'show_in_admin_bar'  => true,
-			'show_in_nav_menus'  => false,
-			'show_in_rest'       => true,
-			'supports'           => [ 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields' ],
-			'has_archive'        => false,
-			'hierarchical'       => false,
-			'rewrite'            => false,
-			'menu_position'      => 25,
-			'menu_icon'          => 'dashicons-clipboard',
-			'capabilities'       => $this->get_post_type_capabilities(),
-			'map_meta_cap'       => false,
-		];
+		$args = array(
+			'labels'              => $labels,
+			'public'              => true,
+			'publicly_queryable'  => true,
+			'exclude_from_search' => true,
+			'show_ui'             => true,
+			'show_in_menu'        => true,
+			'show_in_admin_bar'   => true,
+			'show_in_nav_menus'   => false,
+			'show_in_rest'        => true,
+			'supports'            => array( 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields' ),
+			'has_archive'         => false,
+			'hierarchical'        => false,
+			'rewrite'             => false,
+			'menu_position'       => 25,
+			'menu_icon'           => 'dashicons-clipboard',
+			'capabilities'        => $this->get_post_type_capabilities(),
+			'map_meta_cap'        => false,
+		);
 
 		register_post_type( self::POST_TYPE, $args );
 	}
@@ -119,7 +129,7 @@ class Service_Menu_Post_Type {
 			return $columns;
 		}
 
-		$reordered = [];
+		$reordered = array();
 		foreach ( $columns as $key => $label ) {
 			if ( 'date' === $key ) {
 				continue;
@@ -131,12 +141,15 @@ class Service_Menu_Post_Type {
 				continue;
 			}
 
-			$reordered['vkbm_price']            = __( 'Fee', 'vk-booking-manager' );
-			$reordered['vkbm_duration']         = __( 'Time required', 'vk-booking-manager' );
+			$reordered['vkbm_price']                = __( 'Fee', 'vk-booking-manager' );
+			$reordered['vkbm_duration']             = __( 'Time required', 'vk-booking-manager' );
 			$reordered['vkbm_reservation_deadline'] = __( 'Reservation deadline', 'vk-booking-manager' );
-			$reordered['vkbm_buffer_after']     = __( 'Post-service buffer', 'vk-booking-manager' );
-			$reordered['vkbm_staff']            = __( 'Staff available', 'vk-booking-manager' );
-			$reordered['vkbm_other_conditions'] = __( 'Other conditions', 'vk-booking-manager' );
+			$reordered['vkbm_buffer_after']         = __( 'Post-service buffer', 'vk-booking-manager' );
+			if ( Staff_Editor::is_enabled() ) {
+				// Only show the staff column when staff editor is enabled. / スタッフ編集が有効な場合のみスタッフ列を表示します.
+				$reordered['vkbm_staff'] = __( 'Staff available', 'vk-booking-manager' );
+			}
+			$reordered['vkbm_other_conditions']     = __( 'Other conditions', 'vk-booking-manager' );
 			$reordered['vkbm_reservation_day_type'] = __( 'Reservation date', 'vk-booking-manager' );
 		}
 
@@ -150,17 +163,17 @@ class Service_Menu_Post_Type {
 	 * @param int    $post_id Current post ID.
 	 */
 	public function render_admin_columns( string $column, int $post_id ): void {
-		$price    = (int) get_post_meta( $post_id, '_vkbm_base_price', true );
-		$duration = (int) get_post_meta( $post_id, '_vkbm_duration_minutes', true );
-		$buffer_meta = get_post_meta( $post_id, '_vkbm_buffer_after_minutes', true );
-		$buffer_has_value = '' !== $buffer_meta || metadata_exists( 'post', $post_id, '_vkbm_buffer_after_minutes' );
-		$buffer = $buffer_has_value ? (int) $buffer_meta : 0;
-		$reservation_deadline_meta = get_post_meta( $post_id, '_vkbm_reservation_deadline_hours', true );
+		$price                          = (int) get_post_meta( $post_id, '_vkbm_base_price', true );
+		$duration                       = (int) get_post_meta( $post_id, '_vkbm_duration_minutes', true );
+		$buffer_meta                    = get_post_meta( $post_id, '_vkbm_buffer_after_minutes', true );
+		$buffer_has_value               = '' !== $buffer_meta || metadata_exists( 'post', $post_id, '_vkbm_buffer_after_minutes' );
+		$buffer                         = $buffer_has_value ? (int) $buffer_meta : 0;
+		$reservation_deadline_meta      = get_post_meta( $post_id, '_vkbm_reservation_deadline_hours', true );
 		$reservation_deadline_has_value = '' !== $reservation_deadline_meta || metadata_exists( 'post', $post_id, '_vkbm_reservation_deadline_hours' );
-		$reservation_deadline = $reservation_deadline_has_value ? (int) $reservation_deadline_meta : 0;
-		$staff_ids = get_post_meta( $post_id, self::META_STAFF_IDS, true );
-		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : [];
-		$staff_ids = array_values(
+		$reservation_deadline           = $reservation_deadline_has_value ? (int) $reservation_deadline_meta : 0;
+		$staff_ids                      = get_post_meta( $post_id, self::META_STAFF_IDS, true );
+		$staff_ids                      = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+		$staff_ids                      = array_values(
 			array_filter(
 				$staff_ids,
 				static function ( int $staff_id ): bool {
@@ -168,18 +181,18 @@ class Service_Menu_Post_Type {
 				}
 			)
 		);
-		$other_conditions = get_post_meta( $post_id, self::META_OTHER_CONDITIONS, true );
-		$other_conditions = is_string( $other_conditions ) ? $other_conditions : '';
-		$reservation_day_type = (string) get_post_meta( $post_id, self::META_RESERVATION_DAY_TYPE, true );
-		$disable_nomination_fee = (string) get_post_meta( $post_id, self::META_DISABLE_NOMINATION_FEE, true );
+		$other_conditions               = get_post_meta( $post_id, self::META_OTHER_CONDITIONS, true );
+		$other_conditions               = is_string( $other_conditions ) ? $other_conditions : '';
+		$reservation_day_type           = (string) get_post_meta( $post_id, self::META_RESERVATION_DAY_TYPE, true );
+		$disable_nomination_fee         = (string) get_post_meta( $post_id, self::META_DISABLE_NOMINATION_FEE, true );
 
-		$data_price    = $price > 0 ? (string) $price : '';
-		$data_duration = $duration > 0 ? (string) $duration : '';
-		$data_buffer   = $buffer_has_value ? (string) $buffer : '';
-		$data_staff_ids = wp_json_encode( $staff_ids );
-		$data_other_conditions = wp_json_encode( $other_conditions );
-		$data_reservation_deadline = $reservation_deadline_has_value ? (string) $reservation_deadline : '';
-		$data_reservation_day_type = $reservation_day_type;
+		$data_price                  = $price > 0 ? (string) $price : '';
+		$data_duration               = $duration > 0 ? (string) $duration : '';
+		$data_buffer                 = $buffer_has_value ? (string) $buffer : '';
+		$data_staff_ids              = wp_json_encode( $staff_ids );
+		$data_other_conditions       = wp_json_encode( $other_conditions );
+		$data_reservation_deadline   = $reservation_deadline_has_value ? (string) $reservation_deadline : '';
+		$data_reservation_day_type   = $reservation_day_type;
 		$data_disable_nomination_fee = '1' === $disable_nomination_fee ? '1' : '';
 
 		switch ( $column ) {
@@ -268,22 +281,26 @@ class Service_Menu_Post_Type {
 				break;
 
 			case 'vkbm_staff':
+				if ( ! Staff_Editor::is_enabled() ) {
+					return;
+				}
+
 				if ( empty( $staff_ids ) ) {
 					echo esc_html( '—' );
 					break;
 				}
 
 				$staff_posts = get_posts(
-					[
+					array(
 						'post_type'      => Resource_Post_Type::POST_TYPE,
-						'post_status'    => [ 'publish' ],
+						'post_status'    => array( 'publish' ),
 						'posts_per_page' => -1,
-						'orderby'        => [
+						'orderby'        => array(
 							'menu_order' => 'ASC',
 							'title'      => 'ASC',
-						],
+						),
 						'include'        => $staff_ids,
-					]
+					)
 				);
 
 				$names = array_values(
@@ -423,23 +440,30 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		if ( ! in_array( $column_name, [ 'vkbm_price', 'vkbm_duration', 'vkbm_buffer_after', 'vkbm_staff', 'vkbm_other_conditions' ], true ) ) {
+		$columns = array( 'vkbm_price', 'vkbm_duration', 'vkbm_buffer_after', 'vkbm_other_conditions' );
+		if ( Staff_Editor::is_enabled() ) {
+			$columns[] = 'vkbm_staff';
+		}
+		if ( ! in_array( $column_name, $columns, true ) ) {
 			return;
 		}
 
 		$rendered = true;
 
-		$staff_posts = get_posts(
-			[
-				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
-				'posts_per_page' => -1,
-				'orderby'        => [
-					'menu_order' => 'ASC',
-					'title'      => 'ASC',
-				],
-			]
-		);
+		$staff_posts = array();
+		if ( Staff_Editor::is_enabled() ) {
+			$staff_posts = get_posts(
+				array(
+					'post_type'      => Resource_Post_Type::POST_TYPE,
+					'post_status'    => array( 'publish' ),
+					'posts_per_page' => -1,
+					'orderby'        => array(
+						'menu_order' => 'ASC',
+						'title'      => 'ASC',
+					),
+				)
+			);
+		}
 		$tax_label = VKBM_Helper::get_tax_included_label();
 
 		wp_nonce_field( 'vkbm_service_menu_quick_edit', '_vkbm_service_menu_quick_nonce' );
@@ -490,24 +514,26 @@ class Service_Menu_Post_Type {
 								<?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?>
 							</p>
 						</label>
-						<label>
-							<span class="title"><?php esc_html_e( 'Staff available', 'vk-booking-manager' ); ?></span>
-							<span class="input-text-wrap">
-								<ul class="vkbm-qe-staff-checkboxes">
-									<?php foreach ( $staff_posts as $staff_post ) : ?>
-										<?php if ( ! $staff_post instanceof WP_Post ) : ?>
-											<?php continue; ?>
-										<?php endif; ?>
-										<li>
-											<label>
-												<input type="checkbox" name="vkbm_service_menu_quick[staff_ids][]" class="vkbm-qe-staff-id" value="<?php echo esc_attr( (string) $staff_post->ID ); ?>" />
-												<?php echo esc_html( get_the_title( $staff_post ) ); ?>
-											</label>
-										</li>
-									<?php endforeach; ?>
-								</ul>
-							</span>
-						</label>
+						<?php if ( Staff_Editor::is_enabled() ) : ?>
+							<label>
+								<span class="title"><?php esc_html_e( 'Staff available', 'vk-booking-manager' ); ?></span>
+								<span class="input-text-wrap">
+									<ul class="vkbm-qe-staff-checkboxes">
+										<?php foreach ( $staff_posts as $staff_post ) : ?>
+											<?php if ( ! $staff_post instanceof WP_Post ) : ?>
+												<?php continue; ?>
+											<?php endif; ?>
+											<li>
+												<label>
+													<input type="checkbox" name="vkbm_service_menu_quick[staff_ids][]" class="vkbm-qe-staff-id" value="<?php echo esc_attr( (string) $staff_post->ID ); ?>" />
+													<?php echo esc_html( get_the_title( $staff_post ) ); ?>
+												</label>
+											</li>
+										<?php endforeach; ?>
+									</ul>
+								</span>
+							</label>
+						<?php endif; ?>
 						<label>
 							<span class="title"><?php esc_html_e( 'Other conditions', 'vk-booking-manager' ); ?></span>
 							<span class="input-text-wrap">
@@ -528,7 +554,7 @@ class Service_Menu_Post_Type {
 				</div>
 			</fieldset>
 			<?php
-		}
+	}
 
 	/**
 	 * Enqueue Quick Edit JS for service menu list table.
@@ -550,7 +576,7 @@ class Service_Menu_Post_Type {
 		wp_enqueue_script(
 			'vkbm-service-menu-quick-edit',
 			plugins_url( 'assets/js/service-menu-quick-edit.js', dirname( __DIR__ ) ),
-			[ 'jquery', 'inline-edit-post' ],
+			array( 'jquery', 'inline-edit-post' ),
 			VKBM_VERSION,
 			true
 		);
@@ -589,27 +615,27 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$data = $_POST['vkbm_service_menu_quick'] ?? null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$data = isset( $_POST['vkbm_service_menu_quick'] ) && is_array( $_POST['vkbm_service_menu_quick'] ) ? wp_unslash( $_POST['vkbm_service_menu_quick'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 		if ( ! is_array( $data ) ) {
 			return;
 		}
 
-		$data = wp_unslash( $data );
-
-		$base_price    = $this->sanitize_numeric_value( $data['base_price'] ?? '' );
-		$duration      = $this->sanitize_numeric_value( $data['duration_minutes'] ?? '' );
-		$buffer_after  = $this->sanitize_numeric_value( $data['buffer_after_minutes'] ?? '' );
-		$reservation_deadline = $this->sanitize_numeric_value( $data['reservation_deadline_hours'] ?? '' );
-		$staff_ids     = $this->sanitize_staff_ids( $data['staff_ids'] ?? [] );
-		$other_conditions = isset( $data['other_conditions'] ) ? sanitize_textarea_field( (string) $data['other_conditions'] ) : '';
-		$reservation_day_type = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
+		$base_price             = $this->sanitize_numeric_value( $data['base_price'] ?? '' );
+		$duration               = $this->sanitize_numeric_value( $data['duration_minutes'] ?? '' );
+		$buffer_after           = $this->sanitize_numeric_value( $data['buffer_after_minutes'] ?? '' );
+		$reservation_deadline   = $this->sanitize_numeric_value( $data['reservation_deadline_hours'] ?? '' );
+		$staff_ids              = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( $data['staff_ids'] ?? array() ) : null;
+		$other_conditions       = isset( $data['other_conditions'] ) ? sanitize_textarea_field( (string) $data['other_conditions'] ) : '';
+		$reservation_day_type   = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
 		$disable_nomination_fee = ! empty( $data['disable_nomination_fee'] ) ? '1' : '';
 
 		$this->update_meta_value( $post_id, '_vkbm_base_price', $base_price );
 		$this->update_meta_value( $post_id, '_vkbm_duration_minutes', $duration );
 		$this->update_meta_value( $post_id, '_vkbm_buffer_after_minutes', $buffer_after );
 		$this->update_meta_value( $post_id, '_vkbm_reservation_deadline_hours', $reservation_deadline );
-		$this->update_meta_value( $post_id, self::META_STAFF_IDS, $staff_ids, true );
+		if ( null !== $staff_ids ) {
+			$this->update_meta_value( $post_id, self::META_STAFF_IDS, $staff_ids, true );
+		}
 		$this->update_meta_value( $post_id, self::META_OTHER_CONDITIONS, $other_conditions );
 		$this->update_meta_value( $post_id, self::META_RESERVATION_DAY_TYPE, $reservation_day_type );
 		$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
@@ -645,16 +671,17 @@ class Service_Menu_Post_Type {
 			return '';
 		}
 
-		$allowed = [ 'weekend', 'weekday' ];
+		$allowed = array( 'weekend', 'weekday' );
 		return in_array( $value, $allowed, true ) ? $value : '';
 	}
 
 	/**
 	 * Update or delete post meta.
 	 *
-	 * @param int    $post_id  Post ID.
-	 * @param string $meta_key Meta key.
-	 * @param string $value    Value to store.
+	 * @param int    $post_id     Post ID.
+	 * @param string $meta_key    Meta key.
+	 * @param mixed  $value       Value to store.
+	 * @param bool   $allow_array Whether to allow array values.
 	 */
 	private function update_meta_value( int $post_id, string $meta_key, $value, bool $allow_array = false ): void {
 		if ( ! $allow_array && '' === $value ) {
@@ -678,7 +705,7 @@ class Service_Menu_Post_Type {
 	 */
 	private function sanitize_staff_ids( $ids ): array {
 		if ( ! is_array( $ids ) ) {
-			return [];
+			return array();
 		}
 
 		$ids = array_map(
@@ -715,7 +742,7 @@ class Service_Menu_Post_Type {
 	 * Register the taxonomy used to tag service menus.
 	 */
 	private function register_tag_taxonomy(): void {
-		$labels = [
+		$labels = array(
 			'name'              => __( 'Service Tag', 'vk-booking-manager' ),
 			'singular_name'     => __( 'Service Tag', 'vk-booking-manager' ),
 			'search_items'      => __( 'Find your service tag', 'vk-booking-manager' ),
@@ -727,9 +754,9 @@ class Service_Menu_Post_Type {
 			'add_new_item'      => __( 'Add service tag', 'vk-booking-manager' ),
 			'new_item_name'     => __( 'New Service Tag Name', 'vk-booking-manager' ),
 			'menu_name'         => __( 'Service Tag', 'vk-booking-manager' ),
-		];
+		);
 
-		$args = [
+		$args = array(
 			'labels'            => $labels,
 			'public'            => false,
 			'show_ui'           => true,
@@ -737,13 +764,13 @@ class Service_Menu_Post_Type {
 			'show_admin_column' => true,
 			'show_in_rest'      => true,
 			'hierarchical'      => true,
-			'capabilities'      => [
+			'capabilities'      => array(
 				'manage_terms' => Capabilities::MANAGE_SERVICE_MENUS,
 				'edit_terms'   => Capabilities::MANAGE_SERVICE_MENUS,
 				'delete_terms' => Capabilities::MANAGE_SERVICE_MENUS,
 				'assign_terms' => Capabilities::MANAGE_SERVICE_MENUS,
-			],
-		];
+			),
+		);
 
 		register_taxonomy( self::TAXONOMY, self::POST_TYPE, $args );
 	}
@@ -752,7 +779,7 @@ class Service_Menu_Post_Type {
 	 * Register the taxonomy used to group service menus.
 	 */
 	private function register_group_taxonomy(): void {
-		$labels = [
+		$labels = array(
 			'name'              => __( 'Service Menu Group', 'vk-booking-manager' ),
 			'singular_name'     => __( 'Service Menu Group', 'vk-booking-manager' ),
 			'search_items'      => __( 'Search service menu group', 'vk-booking-manager' ),
@@ -764,9 +791,9 @@ class Service_Menu_Post_Type {
 			'add_new_item'      => __( 'Add service menu group', 'vk-booking-manager' ),
 			'new_item_name'     => __( 'New Service Menu Group Name', 'vk-booking-manager' ),
 			'menu_name'         => __( 'Service Group', 'vk-booking-manager' ),
-		];
+		);
 
-		$args = [
+		$args = array(
 			'labels'            => $labels,
 			'public'            => false,
 			'show_ui'           => true,
@@ -774,13 +801,13 @@ class Service_Menu_Post_Type {
 			'show_admin_column' => true,
 			'show_in_rest'      => true,
 			'hierarchical'      => true,
-			'capabilities'      => [
+			'capabilities'      => array(
 				'manage_terms' => Capabilities::MANAGE_SERVICE_MENUS,
 				'edit_terms'   => Capabilities::MANAGE_SERVICE_MENUS,
 				'delete_terms' => Capabilities::MANAGE_SERVICE_MENUS,
 				'assign_terms' => Capabilities::MANAGE_SERVICE_MENUS,
-			],
-		];
+			),
+		);
 
 		register_taxonomy( self::TAXONOMY_GROUP, self::POST_TYPE, $args );
 	}
@@ -847,14 +874,14 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$nonce = $_POST['vkbm_menu_group_display_mode_nonce'] ?? '';
-		if ( ! is_string( $nonce ) || '' === $nonce || ! wp_verify_nonce( $nonce, 'vkbm_menu_group_display_mode' ) ) {
+		$nonce = isset( $_POST['vkbm_menu_group_display_mode_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_menu_group_display_mode_nonce'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified below.
+		if ( '' === $nonce || ! wp_verify_nonce( $nonce, 'vkbm_menu_group_display_mode' ) ) {
 			return;
 		}
 
-		$raw_value = $_POST['vkbm_menu_group_display_mode'] ?? '';
+		$raw_value = isset( $_POST['vkbm_menu_group_display_mode'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_menu_group_display_mode'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 		$value     = sanitize_key( is_string( $raw_value ) ? $raw_value : '' );
-		$allowed   = [ 'inherit', 'text', 'card' ];
+		$allowed   = array( 'inherit', 'text', 'card' );
 
 		if ( ! in_array( $value, $allowed, true ) ) {
 			$value = 'inherit';
@@ -876,20 +903,20 @@ class Service_Menu_Post_Type {
 		register_post_meta(
 			self::POST_TYPE,
 			'_vkbm_base_price',
-			[
+			array(
 				'type'              => 'integer',
 				'single'            => true,
 				'default'           => 0,
 				'show_in_rest'      => true,
-				'sanitize_callback' => [ $this, 'sanitize_price_meta' ],
+				'sanitize_callback' => array( $this, 'sanitize_price_meta' ),
 				'auth_callback'     => '__return_true',
-			]
+			)
 		);
 
 		register_post_meta(
 			self::POST_TYPE,
 			self::META_DISABLE_NOMINATION_FEE,
-			[
+			array(
 				'type'              => 'boolean',
 				'single'            => true,
 				'default'           => false,
@@ -898,28 +925,28 @@ class Service_Menu_Post_Type {
 					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
 				},
 				'auth_callback'     => '__return_true',
-			]
+			)
 		);
 
 		register_post_meta(
 			self::POST_TYPE,
 			self::META_STAFF_IDS,
-			[
+			array(
 				'type'              => 'array',
 				'single'            => true,
-				'show_in_rest'      => [
-					'schema' => [
-						'type'  => 'array',
-						'items' => [
-							'type' => 'integer',
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type'    => 'array',
+						'items'   => array(
+							'type'    => 'integer',
 							'minimum' => 1,
-						],
-						'context' => [ 'view', 'edit' ],
-					],
-				],
-				'sanitize_callback' => [ $this, 'sanitize_staff_ids' ],
+						),
+						'context' => array( 'view', 'edit' ),
+					),
+				),
+				'sanitize_callback' => array( $this, 'sanitize_staff_ids' ),
 				'auth_callback'     => '__return_true',
-			]
+			)
 		);
 	}
 
@@ -930,19 +957,19 @@ class Service_Menu_Post_Type {
 		register_rest_field(
 			self::POST_TYPE,
 			'vkbm_menu_group',
-			[
-				'get_callback' => [ $this, 'get_menu_group_rest_field' ],
-				'schema'       => [
+			array(
+				'get_callback' => array( $this, 'get_menu_group_rest_field' ),
+				'schema'       => array(
 					'description' => __( 'Primary service menu group information.', 'vk-booking-manager' ),
-					'type'        => [ 'object', 'null' ],
-					'context'     => [ 'view', 'edit' ],
-					'properties'  => [
-						'id'    => [ 'type' => 'integer' ],
-						'name'  => [ 'type' => 'string' ],
-						'order' => [ 'type' => 'integer' ],
-					],
-				],
-			]
+					'type'        => array( 'object', 'null' ),
+					'context'     => array( 'view', 'edit' ),
+					'properties'  => array(
+						'id'    => array( 'type' => 'integer' ),
+						'name'  => array( 'type' => 'string' ),
+						'order' => array( 'type' => 'integer' ),
+					),
+				),
+			)
 		);
 	}
 
@@ -968,11 +995,11 @@ class Service_Menu_Post_Type {
 			return null;
 		}
 
-		return [
+		return array(
 			'id'    => (int) $primary->term_id,
 			'name'  => (string) $primary->name,
 			'order' => self::get_group_order_value( (int) $primary->term_id ),
-		];
+		);
 	}
 
 	/**
@@ -983,21 +1010,21 @@ class Service_Menu_Post_Type {
 	 */
 	public static function sort_menus_by_group( array $posts ): array {
 		$posts = array_values( $posts );
-		$index = [];
+		$index = array();
 
 		foreach ( $posts as $post ) {
-			$terms = get_the_terms( $post, self::TAXONOMY_GROUP );
+			$terms   = get_the_terms( $post, self::TAXONOMY_GROUP );
 			$primary = ( empty( $terms ) || is_wp_error( $terms ) )
 				? null
 				: self::resolve_primary_group_term( $terms );
 
-			$index[ $post->ID ] = [
+			$index[ $post->ID ] = array(
 				'group_order' => $primary ? self::get_group_order_value( (int) $primary->term_id ) : PHP_INT_MAX,
 				'group_name'  => $primary ? (string) $primary->name : '',
 				'has_group'   => $primary ? 1 : 0,
 				'menu_order'  => (int) $post->menu_order,
 				'title'       => (string) $post->post_title,
-			];
+			);
 		}
 
 		usort(
@@ -1096,7 +1123,7 @@ class Service_Menu_Post_Type {
 	 * @return array<string, string>
 	 */
 	private function get_post_type_capabilities(): array {
-		return [
+		return array(
 			'edit_post'              => Capabilities::MANAGE_SERVICE_MENUS,
 			'read_post'              => Capabilities::VIEW_SERVICE_MENUS,
 			'delete_post'            => Capabilities::MANAGE_SERVICE_MENUS,
@@ -1111,6 +1138,6 @@ class Service_Menu_Post_Type {
 			'edit_private_posts'     => Capabilities::MANAGE_SERVICE_MENUS,
 			'edit_published_posts'   => Capabilities::MANAGE_SERVICE_MENUS,
 			'create_posts'           => Capabilities::MANAGE_SERVICE_MENUS,
-		];
+		);
 	}
 }

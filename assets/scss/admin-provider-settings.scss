@@ -4,6 +4,7 @@
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-advanced,
 		.vkbm-provider-settings__tab-faq {
 			display: none;
 		}
@@ -102,6 +103,7 @@
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-advanced,
 		.vkbm-provider-settings__tab-faq {
 			display: none;
 		}
@@ -112,6 +114,7 @@
 		.vkbm-provider-settings__tab-system,
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-advanced,
 		.vkbm-provider-settings__tab-faq {
 			display: none;
 		}
@@ -122,6 +125,18 @@
 		.vkbm-provider-settings__tab-system,
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-advanced,
+		.vkbm-provider-settings__tab-faq {
+			display: none;
+		}
+	}
+
+	&[data-active-tab="advanced"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-design,
 		.vkbm-provider-settings__tab-faq {
 			display: none;
 		}
@@ -132,7 +147,8 @@
 		.vkbm-provider-settings__tab-system,
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-design {
+		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-advanced {
 			display: none;
 		}
 		.vkbm-provider-settings__faq {
@@ -168,6 +184,7 @@
 		.vkbm-provider-settings__tab-system,
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-advanced,
 		.vkbm-provider-settings__tab-faq {
 			display: none;
 		}

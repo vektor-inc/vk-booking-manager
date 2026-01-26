@@ -1,4 +1,9 @@
 <?php
+/**
+ * Coordinates repository interactions and data sanitization.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -11,11 +16,15 @@ use WP_Error;
  */
 class Settings_Service {
 	/**
+	 * Settings repository.
+	 *
 	 * @var Settings_Repository
 	 */
 	private $repository;
 
 	/**
+	 * Settings sanitizer.
+	 *
 	 * @var Settings_Sanitizer
 	 */
 	private $sanitizer;
@@ -56,7 +65,7 @@ class Settings_Service {
 	 */
 	public function get_missing_required_settings(): array {
 		$settings = $this->repository->get_settings();
-		$missing  = [];
+		$missing  = array();
 
 		$provider_name = isset( $settings['provider_name'] ) ? trim( (string) $settings['provider_name'] ) : '';
 		if ( '' === $provider_name ) {
@@ -64,13 +73,13 @@ class Settings_Service {
 		}
 
 		$regular_holidays_disabled = ! empty( $settings['provider_regular_holidays_disabled'] );
-		$regular_holidays          = $settings['provider_regular_holidays'] ?? [];
-		if ( ! $regular_holidays_disabled && ( ! is_array( $regular_holidays ) || [] === $regular_holidays ) ) {
+		$regular_holidays          = $settings['provider_regular_holidays'] ?? array();
+		if ( ! $regular_holidays_disabled && ( ! is_array( $regular_holidays ) || array() === $regular_holidays ) ) {
 			$missing[] = 'provider_regular_holidays';
 		}
 
-		$basic = $settings['provider_business_hours_basic'] ?? [];
-		if ( ! is_array( $basic ) || [] === $basic ) {
+		$basic = $settings['provider_business_hours_basic'] ?? array();
+		if ( ! is_array( $basic ) || array() === $basic ) {
 			$missing[] = 'provider_business_hours_basic';
 		}
 
@@ -86,7 +95,7 @@ class Settings_Service {
 	 * Whether provider settings has any missing required values.
 	 */
 	public function has_missing_required_settings(): bool {
-		return [] !== $this->get_missing_required_settings();
+		return array() !== $this->get_missing_required_settings();
 	}
 
 	/**
@@ -106,10 +115,10 @@ class Settings_Service {
 			return new WP_Error(
 				'vkbm_settings_invalid',
 				__( 'There is a problem with the input content.', 'vk-booking-manager' ),
-				[
+				array(
 					'messages' => $errors,
 					'fields'   => $field_errors,
-				]
+				)
 			);
 		}
 

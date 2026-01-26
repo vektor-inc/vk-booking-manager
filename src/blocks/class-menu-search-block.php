@@ -1,4 +1,9 @@
 <?php
+/**
+ * Registers and renders the booking search form block.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -17,29 +22,52 @@ use function wp_set_script_translations;
  * Registers and renders the booking search form block.
  */
 class Menu_Search_Block {
-	private const METADATA_PATH = 'build/blocks/menu-search';
-	private const FIELD_BLOCKS  = [
+	private const METADATA_PATH     = 'build/blocks/menu-search';
+	private const FIELD_BLOCKS      = array(
 		'build/blocks/menu-search-staff',
 		'build/blocks/menu-search-category',
 		'build/blocks/menu-search-keyword',
-	];
-	private const FIELD_BLOCK_NAMES = [
+	);
+	private const FIELD_BLOCK_NAMES = array(
 		'vk-booking-manager/menu-search-field-staff',
 		'vk-booking-manager/menu-search-field-category',
 		'vk-booking-manager/menu-search-field-keyword',
-	];
-	private const REQUEST_KEY   = 'vkbm_menu_search';
+	);
+	private const REQUEST_KEY       = 'vkbm_menu_search';
 
-	private ?array $staff_cache     = null;
-	private ?array $category_cache  = null;
-	private static array $loop_cache = [];
+	/**
+	 * Staff cache.
+	 *
+	 * @var array|null
+	 */
+	private ?array $staff_cache = null;
+
+	/**
+	 * Category cache.
+	 *
+	 * @var array|null
+	 */
+	private ?array $category_cache = null;
+
+	/**
+	 * Loop cache.
+	 *
+	 * @var array<string, array>
+	 */
+	private static array $loop_cache = array();
+
+	/**
+	 * Whether blocks are registered.
+	 *
+	 * @var bool
+	 */
 	private static bool $blocks_registered = false;
 
 	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'init', [ $this, 'register_blocks' ] );
+		add_action( 'init', array( $this, 'register_blocks' ) );
 	}
 
 	/**
@@ -55,11 +83,11 @@ class Menu_Search_Block {
 
 		register_block_type_from_metadata(
 			$metadata_path,
-			[
-				'render_callback' => [ $this, 'render_block' ],
-			]
+			array(
+				'render_callback' => array( $this, 'render_block' ),
+			)
 		);
-		$this->register_script_translations( 'vk-booking-manager/menu-search', [ 'editorScript' ] );
+		$this->register_script_translations( 'vk-booking-manager/menu-search', array( 'editorScript' ) );
 
 		foreach ( self::FIELD_BLOCKS as $relative_path ) {
 			$path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . $relative_path;
@@ -67,7 +95,7 @@ class Menu_Search_Block {
 		}
 
 		foreach ( self::FIELD_BLOCK_NAMES as $block_name ) {
-			$this->register_script_translations( $block_name, [ 'editorScript' ] );
+			$this->register_script_translations( $block_name, array( 'editorScript' ) );
 		}
 
 		self::$blocks_registered = true;
@@ -92,9 +120,9 @@ class Menu_Search_Block {
 			return $this->render_notice( __( 'The menu loop block to be displayed was not found.', 'vk-booking-manager' ) );
 		}
 
-		$fields     = $this->extract_field_definitions( $block );
-		$values     = $this->get_filters_from_request( $target_id );
-		$action_url = $this->get_form_action_url();
+		$fields       = $this->extract_field_definitions( $block );
+		$values       = $this->get_filters_from_request( $target_id );
+		$action_url   = $this->get_form_action_url();
 		$submit_label = trim( (string) ( $attributes['submitLabel'] ?? '' ) );
 		if ( '' === $submit_label ) {
 			$submit_label = __( 'Search with these conditions', 'vk-booking-manager' );
@@ -124,7 +152,7 @@ class Menu_Search_Block {
 	 *
 	 * プラグインの languages ディレクトリからブロックスクリプトの翻訳を登録します。
 	 *
-	 * @param string $block_name Block name.
+	 * @param string            $block_name Block name.
 	 * @param array<int,string> $fields Script fields.
 	 * @return void
 	 */
@@ -190,8 +218,8 @@ class Menu_Search_Block {
 	 * @return string
 	 */
 	private function get_form_action_url(): string {
-		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( (string) $_SERVER['REQUEST_URI'] ) : '';
-		$host        = isset( $_SERVER['HTTP_HOST'] ) ? wp_unslash( (string) $_SERVER['HTTP_HOST'] ) : '';
+		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
+		$host        = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['HTTP_HOST'] ) ) : '';
 		$url         = '';
 
 		if ( '' !== $host && '' !== $request_uri ) {
@@ -215,7 +243,7 @@ class Menu_Search_Block {
 	/**
 	 * Determine whether any filters are active.
 	 *
-	 * @param array{staff:int,category:int,keyword:string} $values Filters.
+	 * @param array{staff:int,category:string,keyword:string} $values Filters.
 	 * @return bool
 	 */
 	private function has_active_filters( array $values ): bool {
@@ -225,9 +253,9 @@ class Menu_Search_Block {
 	/**
 	 * Render individual field markup.
 	 *
-	 * @param array<string,mixed>                                $field     Field definition.
-	 * @param string                                             $target_id Loop ID.
-	 * @param array{staff:int,category:int,keyword:string}    $values    Current values.
+	 * @param array<string,mixed>                             $field     Field definition.
+	 * @param string                                          $target_id Loop ID.
+	 * @param array{staff:int,category:string,keyword:string} $values    Current values.
 	 * @return string
 	 */
 	private function render_field( array $field, string $target_id, array $values ): string {
@@ -252,7 +280,7 @@ class Menu_Search_Block {
 	 * @return string
 	 */
 	private function render_staff_field( array $field, string $target_id, int $current ): string {
-		$options = $this->get_staff_options();
+		$options  = $this->get_staff_options();
 		$field_id = sprintf( 'vkbm-menu-search-%s-staff', $target_id );
 
 		$markup  = '<div class="vkbm-menu-search__field">';
@@ -286,12 +314,12 @@ class Menu_Search_Block {
 	 * Render category selector.
 	 *
 	 * @param array<string,mixed> $field     Field definition.
-	 * @param string              $target_id Loop ID.
+	 * @param string              $target_id Target ID.
 	 * @param string              $current   Selected slug.
 	 * @return string
 	 */
-	private function render_category_field( array $field, string $target_id, int $current ): string {
-		$options = $this->get_category_options();
+	private function render_category_field( array $field, string $target_id, string $current ): string {
+		$options  = $this->get_category_options();
 		$field_id = sprintf( 'vkbm-menu-search-%s-category', $target_id );
 
 		$markup  = '<div class="vkbm-menu-search__field">';
@@ -347,14 +375,17 @@ class Menu_Search_Block {
 	 * Extract requested filters from query vars.
 	 *
 	 * @param string $target_id Loop ID.
-	 * @return array{staff:int,category:int,keyword:string}
+	 * @return array{staff:int,category:string,keyword:string}
 	 */
 	private function get_filters_from_request( string $target_id ): array {
 		$staff    = 0;
-		$category = 0;
+		$category = '';
 		$keyword  = '';
 
-		$raw = $_GET[ self::REQUEST_KEY ] ?? []; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$raw = isset( $_GET[ self::REQUEST_KEY ] ) && is_array( $_GET[ self::REQUEST_KEY ] ) ? wp_unslash( $_GET[ self::REQUEST_KEY ] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! is_array( $raw ) ) {
+			$raw = array();
+		}
 		if ( ! is_array( $raw ) || ! isset( $raw[ $target_id ] ) || ! is_array( $raw[ $target_id ] ) ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
@@ -369,18 +400,21 @@ class Menu_Search_Block {
 		}
 
 		if ( isset( $data['category'] ) ) {
-			$category = absint( $data['category'] );
+			$category = (string) absint( $data['category'] );
+			if ( '0' === $category ) {
+				$category = '';
+			}
 		}
 
 		if ( isset( $data['keyword'] ) ) {
 			$keyword = sanitize_text_field( wp_unslash( (string) $data['keyword'] ) );
 		}
 
-		return [
+		return array(
 			'staff'    => $staff,
 			'category' => $category,
 			'keyword'  => $keyword,
-		];
+		);
 	}
 
 	/**
@@ -401,14 +435,14 @@ class Menu_Search_Block {
 				$content = '';
 			}
 
-			$blocks = parse_blocks( $content );
+			$blocks                       = parse_blocks( $content );
 			self::$loop_cache[ $post_id ] = $this->collect_loop_ids( $blocks );
 		}
 
 		$loops = self::$loop_cache[ $post_id ];
 
 		if ( empty( $loops ) ) {
-			// テンプレート化などで検出できないケースでは警告を出さない。
+			// テンプレート化などで検出できないケースでは警告を出さない.
 			return true;
 		}
 
@@ -422,7 +456,7 @@ class Menu_Search_Block {
 	 * @return array<int,string>
 	 */
 	private function collect_loop_ids( array $blocks ): array {
-		$ids = [];
+		$ids = array();
 
 		foreach ( $blocks as $block ) {
 			if ( ! is_array( $block ) ) {
@@ -432,7 +466,7 @@ class Menu_Search_Block {
 			$name = $block['blockName'] ?? '';
 
 			if ( 'vk-booking-manager/menu-loop' === $name ) {
-				$attrs = $block['attrs'] ?? [];
+				$attrs = $block['attrs'] ?? array();
 				$id    = $this->sanitize_identifier( (string) ( $attrs['loopId'] ?? '' ) );
 
 				if ( '' !== $id ) {
@@ -459,46 +493,46 @@ class Menu_Search_Block {
 			return $this->default_fields();
 		}
 
-		$inner_blocks = $block->parsed_block['innerBlocks'] ?? [];
+		$inner_blocks = $block->parsed_block['innerBlocks'] ?? array();
 		if ( empty( $inner_blocks ) ) {
 			return $this->default_fields();
 		}
 
-		$fields = [];
+		$fields = array();
 		foreach ( $inner_blocks as $inner_block ) {
 			if ( ! is_array( $inner_block ) ) {
 				continue;
 			}
 
 			$name  = $inner_block['blockName'] ?? '';
-			$attrs = $inner_block['attrs'] ?? [];
+			$attrs = $inner_block['attrs'] ?? array();
 
 			switch ( $name ) {
 				case 'vk-booking-manager/menu-search-field-staff':
-					$fields[] = [
+					$fields[] = array(
 						'type'  => 'staff',
 						'label' => $this->resolve_label( $attrs['label'] ?? '', __( 'Staff', 'vk-booking-manager' ) ),
-					];
+					);
 					break;
 				case 'vk-booking-manager/menu-search-field-category':
-					$fields[] = [
+					$fields[] = array(
 						'type'  => 'category',
 						'label' => $this->resolve_label( $attrs['label'] ?? '', __( 'Service tag', 'vk-booking-manager' ) ),
-					];
+					);
 					break;
 				case 'vk-booking-manager/menu-search-field-keyword':
-					$fields[] = [
+					$fields[] = array(
 						'type'        => 'keyword',
 						'label'       => $this->resolve_label( $attrs['label'] ?? '', __( 'Keyword', 'vk-booking-manager' ) ),
 						'placeholder' => $attrs['placeholder'] ?? '',
-					];
+					);
 					break;
 				default:
 					break;
 			}
 		}
 
-		return $fields ?: $this->default_fields();
+		return ! empty( $fields ) ? $fields : $this->default_fields();
 	}
 
 	/**
@@ -507,21 +541,21 @@ class Menu_Search_Block {
 	 * @return array<int,array<string,mixed>>
 	 */
 	private function default_fields(): array {
-		return [
-			[
+		return array(
+			array(
 				'type'  => 'staff',
 				'label' => __( 'Staff', 'vk-booking-manager' ),
-			],
-			[
+			),
+			array(
 				'type'  => 'category',
 				'label' => __( 'Service tag', 'vk-booking-manager' ),
-			],
-			[
+			),
+			array(
 				'type'        => 'keyword',
 				'label'       => __( 'Keyword', 'vk-booking-manager' ),
 				'placeholder' => '',
-			],
-		];
+			),
+		);
 	}
 
 	/**
@@ -546,21 +580,21 @@ class Menu_Search_Block {
 			return $this->staff_cache;
 		}
 
-		$options = [
-			[
+		$options = array(
+			array(
 				'value' => 0,
 				'label' => __( 'All', 'vk-booking-manager' ),
-			],
-		];
+			),
+		);
 
 		$staff_posts = get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => [ 'publish' ],
+				'post_status'    => array( 'publish' ),
 				'posts_per_page' => 100,
 				'orderby'        => 'menu_order title',
 				'order'          => 'ASC',
-			]
+			)
 		);
 
 		foreach ( $staff_posts as $staff ) {
@@ -568,10 +602,10 @@ class Menu_Search_Block {
 				continue;
 			}
 
-			$options[] = [
+			$options[] = array(
 				'value' => (int) $staff->ID,
 				'label' => get_the_title( $staff ),
-			];
+			);
 		}
 
 		$this->staff_cache = $options;
@@ -589,18 +623,18 @@ class Menu_Search_Block {
 			return $this->category_cache;
 		}
 
-		$options = [
-			[
+		$options = array(
+			array(
 				'value' => '',
 				'label' => __( 'all', 'vk-booking-manager' ),
-			],
-		];
+			),
+		);
 
 		$terms = get_terms(
-			[
+			array(
 				'taxonomy'   => Service_Menu_Post_Type::TAXONOMY,
 				'hide_empty' => false,
-			]
+			)
 		);
 
 		if ( ! is_wp_error( $terms ) ) {
@@ -609,10 +643,10 @@ class Menu_Search_Block {
 					continue;
 				}
 
-				$options[] = [
+				$options[] = array(
 					'value' => (string) $term->term_id,
 					'label' => $term->name,
-				];
+				);
 			}
 		}
 

@@ -1,4 +1,9 @@
 <?php
+/**
+ * Registers the Resource custom post type.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -18,7 +23,7 @@ class Resource_Post_Type {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'init', [ $this, 'register_post_type' ] );
+		add_action( 'init', array( $this, 'register_post_type' ) );
 	}
 
 	/**
@@ -32,7 +37,7 @@ class Resource_Post_Type {
 		$singular = vkbm_get_resource_label_singular();
 		$plural   = vkbm_get_resource_label_plural();
 
-		$labels = [
+		$labels = array(
 			'name'                  => $plural,
 			'singular_name'         => $singular,
 			'menu_name'             => sprintf( 'BM %s', $plural ),
@@ -62,29 +67,29 @@ class Resource_Post_Type {
 			'insert_into_item'      => sprintf( __( 'Insert into %s', 'vk-booking-manager' ), $singular ),
 			/* translators: %s: Resource label (singular). */
 			'uploaded_to_this_item' => sprintf( __( 'Upload to this %s', 'vk-booking-manager' ), $singular ),
-		];
+		);
 
-		$args = [
-			'labels'             => $labels,
-			'public'             => false,
-			'show_ui'            => true,
-			'show_in_menu'       => true,
-			'show_in_admin_bar'  => false,
-			'show_in_nav_menus'  => false,
-			'show_in_rest'       => true,
-			'supports'           => [ 'title' ],
-			'has_archive'        => false,
-			'hierarchical'       => false,
-			'rewrite'            => false,
-			'menu_position'      => 26,
-			'menu_icon'          => 'dashicons-groups',
-			'capability_type'    => 'post',
-			'capabilities'       => $this->get_capabilities(),
-			'map_meta_cap'       => false,
-		];
+		$args = array(
+			'labels'            => $labels,
+			'public'            => false,
+			'show_ui'           => true,
+			'show_in_menu'      => true,
+			'show_in_admin_bar' => false,
+			'show_in_nav_menus' => false,
+			'show_in_rest'      => true,
+			'supports'          => array( 'title' ),
+			'has_archive'       => false,
+			'hierarchical'      => false,
+			'rewrite'           => false,
+			'menu_position'     => 26,
+			'menu_icon'         => 'dashicons-groups',
+			'capability_type'   => 'post',
+			'capabilities'      => $this->get_capabilities(),
+			'map_meta_cap'      => false,
+		);
 
 		$config = $this->get_config();
-		if ( [] !== $config ) {
+		if ( array() !== $config ) {
 			$args = array_merge( $args, $config );
 		}
 
@@ -99,11 +104,11 @@ class Resource_Post_Type {
 	private function get_config(): array {
 		$config_path = __DIR__ . '/resource-post-type-config.php';
 		if ( ! file_exists( $config_path ) ) {
-			return [];
+			return array();
 		}
 
 		$config = require $config_path;
-		return is_array( $config ) ? $config : [];
+		return is_array( $config ) ? $config : array();
 	}
 
 	/**
@@ -112,7 +117,7 @@ class Resource_Post_Type {
 	 * @return array<string, string>
 	 */
 	private function get_capabilities(): array {
-		return [
+		return array(
 			'edit_post'              => Capabilities::MANAGE_STAFF,
 			'read_post'              => Capabilities::MANAGE_STAFF,
 			'delete_post'            => Capabilities::MANAGE_STAFF,
@@ -127,6 +132,6 @@ class Resource_Post_Type {
 			'edit_private_posts'     => Capabilities::MANAGE_STAFF,
 			'edit_published_posts'   => Capabilities::MANAGE_STAFF,
 			'create_posts'           => Capabilities::MANAGE_STAFF,
-		];
+		);
 	}
 }

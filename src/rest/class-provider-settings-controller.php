@@ -1,4 +1,9 @@
 <?php
+/**
+ * REST controller for provider settings.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -26,6 +31,11 @@ use function wp_registration_url;
 class Provider_Settings_Controller {
 	private const NAMESPACE = 'vkbm/v1';
 
+	/**
+	 * Settings repository.
+	 *
+	 * @var Settings_Repository
+	 */
 	private Settings_Repository $settings_repository;
 
 	/**
@@ -41,7 +51,7 @@ class Provider_Settings_Controller {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**
@@ -51,11 +61,11 @@ class Provider_Settings_Controller {
 		register_rest_route(
 			self::NAMESPACE,
 			'/provider-settings',
-			[
+			array(
 				'methods'             => WP_REST_Server::READABLE,
-				'callback'            => [ $this, 'get_settings' ],
+				'callback'            => array( $this, 'get_settings' ),
 				'permission_callback' => '__return_true',
-			]
+			)
 		);
 	}
 
@@ -65,61 +75,61 @@ class Provider_Settings_Controller {
 	 * @return WP_REST_Response
 	 */
 	public function get_settings(): WP_REST_Response {
-		$settings    = $this->settings_repository->get_settings();
+		$settings                = $this->settings_repository->get_settings();
 		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
 		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
-		$provider_name = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
-		$provider_logo_id = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
-		$reservation = $this->normalize_reservation_page_url(
+		$provider_name           = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
+		$provider_logo_id        = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
+		$reservation             = $this->normalize_reservation_page_url(
 			isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : ''
 		);
-		$show_menu_list = ! empty( $settings['reservation_show_menu_list'] );
-		$menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
-		if ( ! in_array( $menu_list_display_mode, [ 'card', 'text' ], true ) ) {
+		$show_menu_list          = ! empty( $settings['reservation_show_menu_list'] );
+		$menu_list_display_mode  = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
+		if ( ! in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$menu_list_display_mode = 'card';
 		}
 		$show_provider_logo = ! empty( $settings['reservation_show_provider_logo'] );
 		$show_provider_name = ! empty( $settings['reservation_show_provider_name'] );
-		$currency_symbol   = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
-		$tax_label_text    = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
-		// Fetch provider logo URL for frontend display. / 予約画面表示用にロゴURLを取得します。
+		$currency_symbol    = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$tax_label_text     = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		// Fetch provider logo URL for frontend display. / 予約画面表示用にロゴURLを取得します.
 		$provider_logo_url = $provider_logo_id > 0 ? wp_get_attachment_image_url( $provider_logo_id, 'medium' ) : '';
 		if ( ! is_string( $provider_logo_url ) ) {
 			$provider_logo_url = '';
 		}
-		$provider_logo_url = '' !== $provider_logo_url ? esc_url_raw( $provider_logo_url ) : '';
+		$provider_logo_url   = '' !== $provider_logo_url ? esc_url_raw( $provider_logo_url ) : '';
 		$cancellation_policy = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
 		$terms_of_service    = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
 		$payment_method      = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
 		$staff_enabled       = Staff_Editor::is_enabled();
-		
-		// 無料版ではデフォルトスタッフのIDを取得する
+
+		// 無料版ではデフォルトスタッフのIDを取得する.
 		$default_staff_id = 0;
 		if ( ! $staff_enabled ) {
 			$default_staff_id = $this->get_default_staff_id();
 		}
 
 		return new WP_REST_Response(
-			[
-				'tax_enabled' => true,
-				'tax_rate'    => 0.0,
-				'staff_enabled' => $staff_enabled,
-				'default_staff_id' => $default_staff_id,
-				'resource_label_singular' => $resource_label_singular,
-				'resource_label_plural'   => $resource_label_plural,
-				'provider_name'           => $provider_name,
-				'provider_logo_url'       => $provider_logo_url,
-				'reservation_page_url' => $reservation,
-				'reservation_show_menu_list' => $show_menu_list,
+			array(
+				'tax_enabled'                        => true,
+				'tax_rate'                           => 0.0,
+				'staff_enabled'                      => $staff_enabled,
+				'default_staff_id'                   => $default_staff_id,
+				'resource_label_singular'            => $resource_label_singular,
+				'resource_label_plural'              => $resource_label_plural,
+				'provider_name'                      => $provider_name,
+				'provider_logo_url'                  => $provider_logo_url,
+				'reservation_page_url'               => $reservation,
+				'reservation_show_menu_list'         => $show_menu_list,
 				'reservation_menu_list_display_mode' => $menu_list_display_mode,
-				'reservation_show_provider_logo' => $show_provider_logo,
-				'reservation_show_provider_name' => $show_provider_name,
-				'currency_symbol'    => $currency_symbol,
-				'tax_label_text'    => $tax_label_text,
-				'cancellation_policy'  => $cancellation_policy,
-				'terms_of_service'     => $terms_of_service,
-				'payment_method'       => $payment_method,
-			]
+				'reservation_show_provider_logo'     => $show_provider_logo,
+				'reservation_show_provider_name'     => $show_provider_name,
+				'currency_symbol'                    => $currency_symbol,
+				'tax_label_text'                     => $tax_label_text,
+				'cancellation_policy'                => $cancellation_policy,
+				'terms_of_service'                   => $terms_of_service,
+				'payment_method'                     => $payment_method,
+			)
 		);
 	}
 
@@ -138,13 +148,13 @@ class Provider_Settings_Controller {
 		$title = __( 'Default Staff', 'vk-booking-manager' );
 
 		$published_staff = get_posts(
-			[
+			array(
 				'post_type'      => Resource_Post_Type::POST_TYPE,
 				'post_status'    => 'publish',
 				'posts_per_page' => -1,
 				'fields'         => 'ids',
 				'no_found_rows'  => true,
-			]
+			)
 		);
 
 		foreach ( $published_staff as $staff_id ) {

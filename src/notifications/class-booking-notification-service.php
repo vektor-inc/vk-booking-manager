@@ -1,4 +1,9 @@
 <?php
+/**
+ * Booking notification service.
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -46,28 +51,32 @@ use function update_post_meta;
  * Handles booking-related email notifications.
  */
 class Booking_Notification_Service {
-	private const RETRY_ACTION   = 'vkbm_retry_booking_email';
-	private const RETRY_DELAY    = 300;
-	private const MAX_ATTEMPTS   = 3;
-	private const REMINDER_ACTION = 'vkbm_send_booking_reminders';
-	private const REMINDER_SCHEDULE = 'vkbm_quarter_hour';
-	private const REMINDER_WINDOW = 3600;
-	private const META_REMINDER_SENT = '_vkbm_booking_reminder_sent';
-	private const META_DATE_START = '_vkbm_booking_service_start';
-	private const META_STATUS = '_vkbm_booking_status';
-	private const TYPE_PENDING_CUSTOMER  = 'pending_customer';
-	private const TYPE_PENDING_PROVIDER  = 'pending_provider';
+	private const RETRY_ACTION            = 'vkbm_retry_booking_email';
+	private const RETRY_DELAY             = 300;
+	private const MAX_ATTEMPTS            = 3;
+	private const REMINDER_ACTION         = 'vkbm_send_booking_reminders';
+	private const REMINDER_SCHEDULE       = 'vkbm_quarter_hour';
+	private const REMINDER_WINDOW         = 3600;
+	private const META_REMINDER_SENT      = '_vkbm_booking_reminder_sent';
+	private const META_DATE_START         = '_vkbm_booking_service_start';
+	private const META_STATUS             = '_vkbm_booking_status';
+	private const TYPE_PENDING_CUSTOMER   = 'pending_customer';
+	private const TYPE_PENDING_PROVIDER   = 'pending_provider';
 	private const TYPE_CONFIRMED_CUSTOMER = 'confirmed_customer';
 	private const TYPE_CONFIRMED_PROVIDER = 'confirmed_provider';
 	private const TYPE_CANCELLED_CUSTOMER = 'cancelled_customer';
 	private const TYPE_CANCELLED_PROVIDER = 'cancelled_provider';
 
 	/**
+	 * Settings store.
+	 *
 	 * @var Settings_Repository
 	 */
 	private $settings_repository;
 
 	/**
+	 * Customer name resolver.
+	 *
 	 * @var Customer_Name_Resolver
 	 */
 	private $customer_name_resolver;
@@ -75,22 +84,22 @@ class Booking_Notification_Service {
 	/**
 	 * Constructor.
 	 *
-	 * @param Settings_Repository $settings_repository Settings store.
+	 * @param Settings_Repository         $settings_repository Settings store.
 	 * @param Customer_Name_Resolver|null $customer_name_resolver Customer name resolver.
 	 */
 	public function __construct( Settings_Repository $settings_repository, ?Customer_Name_Resolver $customer_name_resolver = null ) {
-		$this->settings_repository = $settings_repository;
-		$this->customer_name_resolver = $customer_name_resolver ?: new Customer_Name_Resolver();
+		$this->settings_repository    = $settings_repository;
+		$this->customer_name_resolver = null !== $customer_name_resolver ? $customer_name_resolver : new Customer_Name_Resolver();
 	}
 
 	/**
 	 * Register cron hook listeners.
 	 */
 	public function register(): void {
-		add_action( self::RETRY_ACTION, [ $this, 'handle_retry' ], 10, 3 );
-		add_action( self::REMINDER_ACTION, [ $this, 'handle_reminders' ] );
-		add_action( 'init', [ $this, 'ensure_reminder_schedule' ] );
-		add_filter( 'cron_schedules', [ $this, 'register_cron_schedules' ] );
+		add_action( self::RETRY_ACTION, array( $this, 'handle_retry' ), 10, 3 );
+		add_action( self::REMINDER_ACTION, array( $this, 'handle_reminders' ) );
+		add_action( 'init', array( $this, 'ensure_reminder_schedule' ) );
+		add_filter( 'cron_schedules', array( $this, 'register_cron_schedules' ) );
 	}
 
 	/**
@@ -153,37 +162,37 @@ class Booking_Notification_Service {
 	 */
 	public function handle_reminders(): void {
 		$reminder_hours = $this->get_reminder_hours();
-		if ( [] === $reminder_hours ) {
+		if ( array() === $reminder_hours ) {
 			return;
 		}
 
-		$max_hours = max( $reminder_hours );
-		$now = current_time( 'timestamp' );
+		$max_hours  = max( $reminder_hours );
+		$now        = current_time( 'timestamp' );
 		$window_end = $now + ( $max_hours * HOUR_IN_SECONDS ) + self::REMINDER_WINDOW;
-		$start_min = wp_date( 'Y-m-d H:i:s', $now );
-		$start_max = wp_date( 'Y-m-d H:i:s', $window_end );
+		$start_min  = wp_date( 'Y-m-d H:i:s', $now );
+		$start_max  = wp_date( 'Y-m-d H:i:s', $window_end );
 
 		$query = new \WP_Query(
-			[
+			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
 				'post_status'    => 'publish',
 				'fields'         => 'ids',
 				'posts_per_page' => -1,
 				'no_found_rows'  => true,
-				'meta_query'     => [
-					[
+				'meta_query'     => array(
+					array(
 						'key'     => self::META_STATUS,
 						'value'   => 'confirmed',
 						'compare' => '=',
-					],
-					[
+					),
+					array(
 						'key'     => self::META_DATE_START,
-						'value'   => [ $start_min, $start_max ],
+						'value'   => array( $start_min, $start_max ),
 						'compare' => 'BETWEEN',
 						'type'    => 'DATETIME',
-					],
-				],
-			]
+					),
+				),
+			)
 		);
 
 		if ( ! $query->have_posts() ) {
@@ -218,11 +227,11 @@ class Booking_Notification_Service {
 				}
 
 				if ( $this->send_customer_reminder( (int) $booking_id, $hours_before ) ) {
-					$sent[] = [
+					$sent[] = array(
 						'hours'   => $hours_before,
 						'start'   => $start,
 						'sent_at' => wp_date( 'c', $now ),
-					];
+					);
 					update_post_meta( (int) $booking_id, self::META_REMINDER_SENT, $sent );
 				}
 			}
@@ -236,7 +245,7 @@ class Booking_Notification_Service {
 		$reminder_hours = $this->get_reminder_hours();
 		$next_scheduled = wp_next_scheduled( self::REMINDER_ACTION );
 
-		if ( [] === $reminder_hours ) {
+		if ( array() === $reminder_hours ) {
 			if ( $next_scheduled ) {
 				wp_clear_scheduled_hook( self::REMINDER_ACTION );
 			}
@@ -256,10 +265,10 @@ class Booking_Notification_Service {
 	 */
 	public function register_cron_schedules( array $schedules ): array {
 		if ( ! isset( $schedules[ self::REMINDER_SCHEDULE ] ) ) {
-			$schedules[ self::REMINDER_SCHEDULE ] = [
+			$schedules[ self::REMINDER_SCHEDULE ] = array(
 				'interval' => 900,
 				'display'  => __( 'Every 15 Minutes', 'vk-booking-manager' ),
-			];
+			);
 		}
 
 		return $schedules;
@@ -305,11 +314,11 @@ class Booking_Notification_Service {
 		wp_schedule_single_event(
 			time() + self::RETRY_DELAY,
 			self::RETRY_ACTION,
-			[
+			array(
 				$type,
 				$booking_id,
 				$attempt + 1,
-			]
+			)
 		);
 	}
 
@@ -320,13 +329,13 @@ class Booking_Notification_Service {
 	 */
 	private function get_reminder_hours(): array {
 		$settings = $this->settings_repository->get_settings();
-		$raw = $settings['booking_reminder_hours'] ?? [];
+		$raw      = $settings['booking_reminder_hours'] ?? array();
 
 		if ( ! is_array( $raw ) ) {
-			return [];
+			return array();
 		}
 
-		$hours = [];
+		$hours = array();
 		foreach ( $raw as $value ) {
 			$normalized = absint( $value );
 			if ( $normalized <= 0 ) {
@@ -372,7 +381,7 @@ class Booking_Notification_Service {
 	private function get_sent_reminders( int $booking_id ): array {
 		$sent = get_post_meta( $booking_id, self::META_REMINDER_SENT, true );
 		if ( ! is_array( $sent ) ) {
-			return [];
+			return array();
 		}
 
 		return array_values( $sent );
@@ -382,8 +391,8 @@ class Booking_Notification_Service {
 	 * Check if a reminder was already sent for the given offset.
 	 *
 	 * @param array<int, array<string, mixed>> $sent Sent reminder list.
-	 * @param int                             $hours Hours before the booking.
-	 * @param string                          $start Booking start datetime.
+	 * @param int                              $hours Hours before the booking.
+	 * @param string                           $start Booking start datetime.
 	 * @return bool
 	 */
 	private function has_sent_reminder( array $sent, int $hours, string $start ): bool {
@@ -412,7 +421,7 @@ class Booking_Notification_Service {
 	 */
 	private function send_customer_reminder( int $booking_id, int $hours_before ): bool {
 		$payload = $this->build_booking_payload( $booking_id );
-		if ( [] === $payload ) {
+		if ( array() === $payload ) {
 			return false;
 		}
 
@@ -433,7 +442,7 @@ class Booking_Notification_Service {
 			$hours_before
 		);
 
-		$body = $this->render_customer_body( $payload, $lead );
+		$body    = $this->render_customer_body( $payload, $lead );
 		$headers = $this->build_headers( $payload['site_name'] );
 
 		return (bool) wp_mail( $to, $subject, $body, $headers );
@@ -449,14 +458,14 @@ class Booking_Notification_Service {
 		$from_email = get_option( 'admin_email' );
 
 		if ( ! is_email( $from_email ) ) {
-			$host = wp_parse_url( home_url(), PHP_URL_HOST );
+			$host       = wp_parse_url( home_url(), PHP_URL_HOST );
 			$from_email = $host ? 'wordpress@' . $host : 'wordpress@localhost';
 		}
 
-		return [
+		return array(
 			sprintf( 'From: %s <%s>', $site_name, $from_email ),
 			'Content-Type: text/plain; charset=UTF-8',
-		];
+		);
 	}
 
 	/**
@@ -469,21 +478,21 @@ class Booking_Notification_Service {
 		$booking = get_post( $booking_id );
 
 		if ( ! $booking instanceof WP_Post || Booking_Post_Type::POST_TYPE !== $booking->post_type ) {
-			return [];
+			return array();
 		}
 
-		$settings        = $this->settings_repository->get_settings();
-		$menu_id         = (int) get_post_meta( $booking_id, '_vkbm_booking_service_id', true );
-		$staff_id        = (int) get_post_meta( $booking_id, '_vkbm_booking_resource_id', true );
+		$settings           = $this->settings_repository->get_settings();
+		$menu_id            = (int) get_post_meta( $booking_id, '_vkbm_booking_service_id', true );
+		$staff_id           = (int) get_post_meta( $booking_id, '_vkbm_booking_resource_id', true );
 		$is_staff_preferred = '1' === (string) get_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', true );
-		$start           = (string) get_post_meta( $booking_id, '_vkbm_booking_service_start', true );
-		$end             = (string) get_post_meta( $booking_id, '_vkbm_booking_service_end', true );
-		$customer_name   = (string) get_post_meta( $booking_id, '_vkbm_booking_customer_name', true );
-		$customer_email  = sanitize_email( (string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ) );
-		$customer_tel    = (string) get_post_meta( $booking_id, '_vkbm_booking_customer_tel', true );
-		$memo            = wp_strip_all_tags( (string) get_post_meta( $booking_id, '_vkbm_booking_note', true ) );
-		$status          = (string) get_post_meta( $booking_id, '_vkbm_booking_status', true );
-		$nomination_fee  = (int) get_post_meta( $booking_id, '_vkbm_booking_nomination_fee', true );
+		$start              = (string) get_post_meta( $booking_id, '_vkbm_booking_service_start', true );
+		$end                = (string) get_post_meta( $booking_id, '_vkbm_booking_service_end', true );
+		$customer_name      = (string) get_post_meta( $booking_id, '_vkbm_booking_customer_name', true );
+		$customer_email     = sanitize_email( (string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ) );
+		$customer_tel       = (string) get_post_meta( $booking_id, '_vkbm_booking_customer_tel', true );
+		$memo               = wp_strip_all_tags( (string) get_post_meta( $booking_id, '_vkbm_booking_note', true ) );
+		$status             = (string) get_post_meta( $booking_id, '_vkbm_booking_status', true );
+		$nomination_fee     = (int) get_post_meta( $booking_id, '_vkbm_booking_nomination_fee', true );
 		if ( ! Staff_Editor::is_enabled() ) {
 			$nomination_fee = 0;
 		}
@@ -491,7 +500,7 @@ class Booking_Notification_Service {
 		$base_price         = $has_price_snapshot
 			? (int) get_post_meta( $booking_id, '_vkbm_booking_service_base_price', true )
 			: (int) get_post_meta( $menu_id, '_vkbm_base_price', true );
-		$base_price = max( 0, $base_price );
+		$base_price         = max( 0, $base_price );
 
 		$menu_title  = $menu_id > 0 ? get_the_title( $menu_id ) : '';
 		$staff_title = '';
@@ -513,28 +522,28 @@ class Booking_Notification_Service {
 			$edit_url = admin_url( sprintf( 'post.php?post=%d&action=edit', $booking_id ) );
 		}
 
-		return [
-			'booking_id'      => $booking_id,
-			'menu_title'      => $menu_title ?: __( 'Not set', 'vk-booking-manager' ),
-			'staff_title'     => $staff_title ?: __( 'TBD', 'vk-booking-manager' ),
-			'start_label'     => $this->format_datetime( $start ),
-			'end_label'       => $this->format_time( $end ),
-			'duration_label'  => $duration,
-			'price_label'     => $price_label,
-			'customer_name'   => $customer_name ?: __( 'Customer', 'vk-booking-manager' ),
-			'customer_email'  => $customer_email,
-			'customer_tel'    => $customer_tel,
-			'memo'            => $memo ?: __( '(none)', 'vk-booking-manager' ),
-			'status'          => $status,
-			'provider_email'  => sanitize_email( (string) ( $settings['provider_email'] ?? '' ) ),
-			'provider_name'   => $settings['provider_name'] ?: wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
-			'provider_phone'  => $settings['provider_phone'] ?? '',
-			'provider_address' => $settings['provider_address'] ?? '',
-			'provider_site'   => $settings['provider_website_url'] ?: home_url(),
+		return array(
+			'booking_id'                   => $booking_id,
+			'menu_title'                   => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
+			'staff_title'                  => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
+			'start_label'                  => $this->format_datetime( $start ),
+			'end_label'                    => $this->format_time( $end ),
+			'duration_label'               => $duration,
+			'price_label'                  => $price_label,
+			'customer_name'                => '' !== $customer_name ? $customer_name : __( 'Customer', 'vk-booking-manager' ),
+			'customer_email'               => $customer_email,
+			'customer_tel'                 => $customer_tel,
+			'memo'                         => '' !== $memo ? $memo : __( '(none)', 'vk-booking-manager' ),
+			'status'                       => $status,
+			'provider_email'               => sanitize_email( (string) ( $settings['provider_email'] ?? '' ) ),
+			'provider_name'                => isset( $settings['provider_name'] ) && '' !== $settings['provider_name'] ? $settings['provider_name'] : wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'provider_phone'               => $settings['provider_phone'] ?? '',
+			'provider_address'             => $settings['provider_address'] ?? '',
+			'provider_site'                => isset( $settings['provider_website_url'] ) && '' !== $settings['provider_website_url'] ? $settings['provider_website_url'] : home_url(),
 			'provider_cancellation_policy' => isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '',
-			'site_name'       => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
-			'edit_url'        => $edit_url,
-		];
+			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'edit_url'                     => $edit_url,
+		);
 	}
 
 	/**
@@ -567,49 +576,49 @@ class Booking_Notification_Service {
 	private function build_message( string $type, array $payload ): array {
 		switch ( $type ) {
 			case self::TYPE_PENDING_PROVIDER:
-				return [
+				return array(
 					'to'      => $payload['provider_email'],
 					'subject' => sprintf( '[%s][%s] A new reservation has been made.', $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
 					'body'    => $this->render_provider_body( $payload, __( 'Pending', 'vk-booking-manager' ) ),
-				];
+				);
 
 			case self::TYPE_CONFIRMED_PROVIDER:
-				return [
+				return array(
 					'to'      => $payload['provider_email'],
 					'subject' => sprintf( '[%s] Reservation confirmed', $payload['provider_name'] ),
 					'body'    => $this->render_provider_body( $payload, __( 'Confirmed', 'vk-booking-manager' ) ),
-				];
+				);
 
 			case self::TYPE_CONFIRMED_CUSTOMER:
-				return [
+				return array(
 					'to'      => $payload['customer_email'],
 					'subject' => sprintf( '[%s] Your reservation has been confirmed', $payload['provider_name'] ),
 					'body'    => $this->render_customer_body( $payload, __( 'Your reservation has been confirmed.', 'vk-booking-manager' ) ),
-				];
+				);
 
 			case self::TYPE_CANCELLED_CUSTOMER:
-				return [
+				return array(
 					'to'      => $payload['customer_email'],
 					'subject' => sprintf( '[%s] Your reservation has been canceled', $payload['provider_name'] ),
 					'body'    => $this->render_customer_body( $payload, __( 'Your reservation has been cancelled.', 'vk-booking-manager' ) ),
-				];
+				);
 
 			case self::TYPE_CANCELLED_PROVIDER:
-				return [
+				return array(
 					'to'      => $payload['provider_email'],
 					'subject' => sprintf( '[%s] Reservation canceled', $payload['provider_name'] ),
 					'body'    => $this->render_provider_body( $payload, __( 'Cancelled', 'vk-booking-manager' ) ),
-				];
+				);
 
 			case self::TYPE_PENDING_CUSTOMER:
 			default:
-				return [
+				return array(
 					'to'      => $payload['customer_email'],
 					'subject' => sprintf( '[%s][%s] Your reservation has been accepted.', $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
 					'body'    => $this->render_customer_body( $payload, __( 'We have tentatively accepted your reservation.', 'vk-booking-manager' ) ),
-				];
-			}
+				);
 		}
+	}
 
 	/**
 	 * Format message body for customers.
@@ -619,7 +628,7 @@ class Booking_Notification_Service {
 	 * @return string
 	 */
 	private function render_customer_body( array $payload, string $lead ): string {
-		$lines   = [];
+		$lines               = array();
 		$cancellation_policy = trim( (string) ( $payload['provider_cancellation_policy'] ?? '' ) );
 
 		$lines[] = sprintf( 'Dear %s', $payload['customer_name'] );
@@ -641,10 +650,11 @@ class Booking_Notification_Service {
 		if ( $payload['price_label'] ) {
 			$lines[] = sprintf( 'Price guide: %s', $payload['price_label'] );
 		}
-		$lines[] = sprintf( 'Contact: %s', $payload['customer_tel'] ?: __( 'Not provided', 'vk-booking-manager' ) );
-		$lines[] = 'Request contents/memo:';
-		$lines[] = $payload['memo'];
-		$lines[] = '';
+		$customer_tel = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
+		$lines[]      = sprintf( 'Contact: %s', $customer_tel );
+		$lines[]      = 'Request contents/memo:';
+		$lines[]      = $payload['memo'];
+		$lines[]      = '';
 		if ( '' !== $cancellation_policy ) {
 			$lines[] = '';
 			$lines[] = '--- Cancellation Policy ---';
@@ -675,12 +685,12 @@ class Booking_Notification_Service {
 	 * @return string
 	 */
 	private function render_provider_body( array $payload, string $status_label ): string {
-		$lines   = [];
+		$lines               = array();
 		$cancellation_policy = trim( (string) ( $payload['provider_cancellation_policy'] ?? '' ) );
 
 		if ( __( 'Cancelled', 'vk-booking-manager' ) === $status_label ) {
 			// Use a clearer lead for cancellation notifications.
-			// キャンセル通知では自然な表現に置き換える。
+			// キャンセル通知では自然な表現に置き換える.
 			$lines[] = __( 'Your reservation has been cancelled.', 'vk-booking-manager' );
 		} else {
 			$lines[] = sprintf( 'A new %s has been registered.', $status_label );
@@ -698,13 +708,15 @@ class Booking_Notification_Service {
 		if ( $payload['price_label'] ) {
 			$lines[] = sprintf( 'Price guide: %s', $payload['price_label'] );
 		}
-		$lines[] = '';
-		$lines[] = '--- Customer information ---';
-		$lines[] = sprintf( 'Name: %s', $payload['customer_name'] );
-		$lines[] = sprintf( 'Email: %s', $payload['customer_email'] ?: __( 'Not provided', 'vk-booking-manager' ) );
-		$lines[] = sprintf( 'Phone number: %s', $payload['customer_tel'] ?: __( 'Not provided', 'vk-booking-manager' ) );
-		$lines[] = 'Note:';
-		$lines[] = $payload['memo'];
+		$lines[]        = '';
+		$lines[]        = '--- Customer information ---';
+		$lines[]        = sprintf( 'Name: %s', $payload['customer_name'] );
+		$customer_email = isset( $payload['customer_email'] ) && '' !== $payload['customer_email'] ? $payload['customer_email'] : __( 'Not provided', 'vk-booking-manager' );
+		$customer_tel   = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
+		$lines[]        = sprintf( 'Email: %s', $customer_email );
+		$lines[]        = sprintf( 'Phone number: %s', $customer_tel );
+		$lines[]        = 'Note:';
+		$lines[]        = $payload['memo'];
 		if ( '' !== $cancellation_policy ) {
 			$lines[] = '';
 			$lines[] = '--- Cancellation Policy ---';
@@ -778,28 +790,29 @@ class Booking_Notification_Service {
 			return '';
 		}
 
+		/* translators: %d: duration in minutes */
 		return sprintf( __( '%d minutes', 'vk-booking-manager' ), $duration );
 	}
 
 	/**
 	 * Build the price label, including nomination fee if present.
 	 *
-	 * @param int                  $menu_id        Menu ID.
-	 * @param int                  $nomination_fee Nomination fee.
-	 * @param array<string,mixed>  $settings       Provider settings.
+	 * @param int                 $base_price    Base price.
+	 * @param int                 $nomination_fee Nomination fee.
+	 * @param array<string,mixed> $settings      Provider settings.
 	 * @return string
 	 */
-		private function get_menu_price_label( int $base_price, int $nomination_fee, array $settings ): string {
-			$base_price = max( 0, $base_price );
+	private function get_menu_price_label( int $base_price, int $nomination_fee, array $settings ): string {
+		$base_price = max( 0, $base_price );
 
-			$display     = $base_price;
+		$display = $base_price;
 
-			$label = VKBM_Helper::format_currency( (int) $display );
+		$label = VKBM_Helper::format_currency( (int) $display );
 
-			$tax_label = VKBM_Helper::get_tax_included_label();
-			if ( '' !== $tax_label ) {
-				$label .= $tax_label;
-			}
+		$tax_label = VKBM_Helper::get_tax_included_label();
+		if ( '' !== $tax_label ) {
+			$label .= $tax_label;
+		}
 
 		if ( $nomination_fee > 0 ) {
 			$label .= sprintf(
