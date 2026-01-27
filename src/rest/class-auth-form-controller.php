@@ -1,4 +1,5 @@
 <?php
+
 /**
  * REST controller for authentication forms.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\REST;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Auth\Auth_Shortcodes;
 use WP_REST_Request;

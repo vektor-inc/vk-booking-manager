@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Term order manager for custom taxonomies.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\TermOrder;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Assets\Common_Styles;
 use WP_Error;

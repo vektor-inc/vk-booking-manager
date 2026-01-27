@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Registers and renders the booking search form block.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Blocks;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Handles registering and maintaining custom roles and capabilities.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Capabilities;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use WP_Role;
 

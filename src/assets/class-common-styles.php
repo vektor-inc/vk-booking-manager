@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Enqueues common CSS for the whole plugin.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Assets;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
 

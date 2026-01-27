@@ -1,4 +1,5 @@
 <?php
+
 /**
  * REST controller for menu preview.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\REST;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use WP_Error;

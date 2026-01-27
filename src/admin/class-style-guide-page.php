@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Development-only style guide page.
  *
@@ -10,6 +11,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Assets\Common_Styles;
 /**

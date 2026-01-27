@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Email log repository.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 /**
  * Handles email log persistence.

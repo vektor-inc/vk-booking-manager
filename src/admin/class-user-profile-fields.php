@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Adds VKBM user meta fields to the WordPress user profile screens.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Common\VKBM_Helper;
 use WP_User;

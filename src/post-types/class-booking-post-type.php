@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Registers the Booking custom post type.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\PostTypes;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Capabilities\Capabilities;

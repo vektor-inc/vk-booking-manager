@@ -1,4 +1,5 @@
 <?php
+
 /**
  * REST controller that finalizes reservation drafts into confirmed bookings.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Bookings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use DateTimeImmutable;
 use DateTimeZone;

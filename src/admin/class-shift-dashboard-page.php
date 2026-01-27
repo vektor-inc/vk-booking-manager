@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Provides the Booking Manager shift dashboard.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use DateTimeImmutable;
 use VKBookingManager\Assets\Common_Styles;

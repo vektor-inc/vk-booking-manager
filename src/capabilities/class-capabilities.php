@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Defines reusable capability identifiers for the plugin.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Capabilities;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 /**
  * Defines reusable capability identifiers for the plugin.

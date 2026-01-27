@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Front-end login & registration shortcodes.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Auth;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Assets\Common_Styles;

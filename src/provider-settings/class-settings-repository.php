@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Persists provider settings to the WordPress options table.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\ProviderSettings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use function __;
 

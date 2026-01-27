@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Sanitizes provider settings form submissions.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\ProviderSettings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 /**
  * Sanitizes provider settings form submissions.

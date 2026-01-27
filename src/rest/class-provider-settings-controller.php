@@ -1,4 +1,5 @@
 <?php
+
 /**
  * REST controller for provider settings.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\REST;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;

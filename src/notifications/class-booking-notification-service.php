@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Booking notification service.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Notifications;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use DateTimeImmutable;
 use VKBookingManager\Bookings\Customer_Name_Resolver;

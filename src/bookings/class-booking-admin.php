@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Handles Booking post type admin UI and meta persistence.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Bookings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use DateTimeImmutable;
 use VKBookingManager\Bookings\Customer_Name_Resolver;

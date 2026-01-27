@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Handles persistence of resource schedule templates via post meta.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Resources;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 /**
  * Handles persistence of resource schedule templates via post meta.

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Registers the Shift custom post type.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\PostTypes;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Capabilities\Capabilities;
 

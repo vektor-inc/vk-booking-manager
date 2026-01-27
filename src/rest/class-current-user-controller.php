@@ -1,4 +1,5 @@
 <?php
+
 /**
  * REST controller for current user data.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\REST;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Service;

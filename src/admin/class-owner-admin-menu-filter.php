@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Hides WordPress admin menus that should not be visible to salon owners.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Capabilities\Roles_Manager;
 use WP_User;

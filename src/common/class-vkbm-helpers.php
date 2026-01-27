@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Common helper utilities for VK Booking Manager.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Common;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;

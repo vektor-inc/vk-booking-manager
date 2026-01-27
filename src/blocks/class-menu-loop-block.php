@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Registers and renders the service menu loop block.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Blocks;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\VKBM_Helper;

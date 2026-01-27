@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Provides calculated availability data for menus and staff resources.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Availability;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use DateTimeImmutable;
 use DateTimeZone;

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Resolves customer names from user data.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Bookings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use WP_User;
 use function get_user_meta;

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Prevents Free/Pro conflicts and deactivates the Free edition when Pro is active.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 if ( class_exists( __NAMESPACE__ . '\\Edition_Plugin_Deactivator', false ) ) {
 	// English: Avoid redeclaring the class if another edition already loaded it.

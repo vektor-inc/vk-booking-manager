@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Override oEmbed title/author for the reservation page URL.
  *
@@ -7,12 +8,13 @@
 
 namespace VKBookingManager\OEmbed;
 
-use VKBookingManager\ProviderSettings\Settings_Repository;
-use WP_Post;
-
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+use VKBookingManager\ProviderSettings\Settings_Repository;
+use WP_Post;
+
 
 /**
  * Override oEmbed title/author for the reservation page URL.

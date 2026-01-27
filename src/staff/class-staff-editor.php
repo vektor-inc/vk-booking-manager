@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Free edition: staff editor is disabled.
  *
@@ -10,6 +11,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Staff;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 /**
  * Free edition: staff editor is disabled.

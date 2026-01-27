@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Coordinates repository interactions and data sanitization.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\ProviderSettings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use WP_Error;
 

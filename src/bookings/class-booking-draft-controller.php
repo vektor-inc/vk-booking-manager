@@ -1,4 +1,5 @@
 <?php
+
 /**
  * REST controller for booking draft persistence.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Bookings;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Common\VKBM_Helper;

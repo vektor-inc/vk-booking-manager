@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Main plugin orchestrator.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Admin\Owner_Admin_Menu_Filter;
 use VKBookingManager\Admin\Provider_Settings_Page;

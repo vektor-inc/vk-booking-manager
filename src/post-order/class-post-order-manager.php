@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Post order manager for custom post types.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\PostOrder;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Assets\Common_Styles;
 use WP_Error;

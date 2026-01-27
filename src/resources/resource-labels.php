@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Resource label helper functions.
  *
@@ -6,6 +7,10 @@
  */
 
 declare( strict_types=1 );
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
 

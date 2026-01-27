@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Handles the Service Menu editing UI and meta persistence.
  *
@@ -8,6 +9,10 @@
 declare( strict_types=1 );
 
 namespace VKBookingManager\Admin;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\VKBM_Helper;
