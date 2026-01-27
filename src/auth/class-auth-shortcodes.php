@@ -599,9 +599,12 @@ class Auth_Shortcodes {
 											esc_url( $privacy_policy_url ),
 											esc_html__( 'Privacy policy', 'vk-booking-manager' )
 										);
-										/* translators: %s: privacy policy link */
 										echo wp_kses(
-											sprintf( __( 'I agree with %s', 'vk-booking-manager' ), $privacy_link ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Already escaped by wp_kses.
+											sprintf(
+												/* translators: %s: privacy policy link */
+												__( 'I agree with %s', 'vk-booking-manager' ),
+												$privacy_link
+											), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Already escaped by wp_kses.
 											array(
 												'a' => array(
 													'href' => true,
@@ -1090,7 +1093,7 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$original_username = isset( $_POST['user_login'] ) ? wp_unslash( $_POST['user_login'] ) : '';
+		$original_username = isset( $_POST['user_login'] ) ? sanitize_text_field( wp_unslash( $_POST['user_login'] ) ) : '';
 		$username          = sanitize_user( $original_username, true );
 		$email             = isset( $_POST['user_email'] ) ? sanitize_email( wp_unslash( $_POST['user_email'] ) ) : '';
 		$last_name         = isset( $_POST['last_name'] ) ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) ) : '';
@@ -1201,7 +1204,8 @@ class Auth_Shortcodes {
 
 		$this->store_registration_metadata( $user_id, $first_name, $last_name, $kana_name, $phone, $birth, $gender );
 
-		$redirect_to           = isset( $_POST['redirect_to'] ) ? $this->normalize_redirect( wp_unslash( $_POST['redirect_to'] ) ) : $this->get_current_url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$redirect_to_raw       = isset( $_POST['redirect_to'] ) ? sanitize_text_field( wp_unslash( $_POST['redirect_to'] ) ) : '';
+		$redirect_to           = '' !== $redirect_to_raw ? $this->normalize_redirect( $redirect_to_raw ) : $this->get_current_url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 		$requires_verification = $this->requires_email_verification();
 
 		if ( $requires_verification ) {
@@ -1665,8 +1669,10 @@ class Auth_Shortcodes {
 			return null;
 		}
 
-		$cookie_value = isset( $_COOKIE[ $name ] ) ? (string) wp_unslash( $_COOKIE[ $name ] ) : '';
-		$value        = rawurldecode( $cookie_value );
+		$cookie_raw = isset( $_COOKIE[ $name ] )
+			? (string) wp_unslash( $_COOKIE[ $name ] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Decoded then sanitized below.
+			: '';
+		$value      = sanitize_text_field( rawurldecode( $cookie_raw ) );
 
 		if ( headers_sent() ) {
 			return $value;
@@ -2199,7 +2205,7 @@ class Auth_Shortcodes {
 		$remote_addr = '';
 
 		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			$remote_addr = trim( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
+			$remote_addr = trim( sanitize_text_field( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) );
 		}
 
 		$remote_addr     = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $remote_addr );
@@ -2215,7 +2221,7 @@ class Auth_Shortcodes {
 			&& in_array( $remote_addr, $trusted_proxies, true )
 		) {
 			// Respect XFF only for trusted proxies. / 信頼できるプロキシ経由のみXFFを採用します。
-			$candidates   = explode( ',', (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
+			$candidates   = explode( ',', sanitize_text_field( (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
 			$forwarded_ip = trim( (string) ( $candidates[0] ?? '' ) );
 			$forwarded_ip = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $forwarded_ip );
 		}
@@ -2257,7 +2263,10 @@ class Auth_Shortcodes {
 			return null;
 		}
 
-		$value = rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) );
+		$cookie_raw = isset( $_COOKIE['vkbm_login_error'] )
+			? (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Decoded then sanitized below.
+			: '';
+		$value      = sanitize_text_field( rawurldecode( $cookie_raw ) );
 
 		$cookie_path  = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
 		$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';

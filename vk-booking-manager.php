@@ -33,14 +33,14 @@ require_once __DIR__ . '/src/admin/class-edition-plugin-deactivator.php';
 
 // English: Ensure both editions can be active without fatal errors and prefer Pro.
 // 日本語: 両エディションの同時有効化で致命的エラーが起きないようにし、Proを優先します.
-$current_edition = \VKBookingManager\Admin\Edition_Plugin_Deactivator::detect_current_edition( __FILE__ );
-if ( \VKBookingManager\Admin\Edition_Plugin_Deactivator::handle_conflict( $current_edition ) ) {
+$vkbm_current_edition = \VKBookingManager\Admin\Edition_Plugin_Deactivator::detect_current_edition( __FILE__ );
+if ( \VKBookingManager\Admin\Edition_Plugin_Deactivator::handle_conflict( $vkbm_current_edition ) ) {
 	return;
 }
 
 if ( ! defined( 'VKBM_VERSION' ) ) {
-	$data = get_file_data( __FILE__, array( 'version' => 'Version' ) );
-	define( 'VKBM_VERSION', $data['version'] );
+	$vkbm_plugin_data = get_file_data( __FILE__, array( 'version' => 'Version' ) );
+	define( 'VKBM_VERSION', $vkbm_plugin_data['version'] );
 }
 
 if ( ! defined( 'VKBM_PLUGIN_FILE' ) ) {
