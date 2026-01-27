@@ -1430,7 +1430,8 @@ class Auth_Shortcodes {
 
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Building current URL from query string.
 			if ( ! empty( $_GET ) ) {
-				$query_args = wp_unslash( $_GET ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Building URL, values will be escaped by add_query_arg().
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Building URL, values will be escaped by add_query_arg().
+				$query_args = wp_unslash( $_GET );
 				return add_query_arg( $query_args, $base );
 			}
 

@@ -298,7 +298,7 @@ class Shift_Editor {
 		$base_url = plugin_dir_url( VKBM_PLUGIN_FILE );
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only context for asset enqueuing.
 		$get_post = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only context for asset enqueuing.
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only context for asset enqueuing. Value sanitized with absint().
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only context for asset enqueuing. Value sanitized with absint().
 		$post_id  = $get_post > 0 ? $get_post : ( isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0 );
 		$state    = $this->get_editor_state( $post_id );
 
