@@ -67,7 +67,11 @@ const Edit = ({ attributes, setAttributes }) => {
 						)}
 					/>
 					<TextControl
-						label={sprintf(__('Default %sID', 'vk-booking-manager'), resourceLabelSingular)}
+						label={sprintf(
+							/* translators: %s: resource label (singular). */
+							__('Default %sID', 'vk-booking-manager'),
+							resourceLabelSingular
+						)}
 						type="number"
 						value={defaultResourceId || ''}
 						onChange={(value) => setAttributes({ defaultResourceId: toNumber(value) })}
@@ -78,7 +82,11 @@ const Edit = ({ attributes, setAttributes }) => {
 						onChange={(value) => setAttributes({ allowMenuSelection: value })}
 					/>
 					<ToggleControl
-						label={sprintf(__('%s Allow nomination', 'vk-booking-manager'), resourceLabelSingular)}
+						label={sprintf(
+							/* translators: %s: resource label (singular). */
+							__('%s Allow nomination', 'vk-booking-manager'),
+							resourceLabelSingular
+						)}
 						checked={allowStaffSelection}
 						onChange={(value) => setAttributes({ allowStaffSelection: value })}
 					/>

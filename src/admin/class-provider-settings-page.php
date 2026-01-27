@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Provider settings admin page.
  *
@@ -2324,7 +2323,17 @@ class Provider_Settings_Page {
 					type="button"
 					class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-business-hours-remove-slot vkbm-schedule-remove-slot"
 					<?php disabled( $is_disabled ); ?>
-					aria-label="<?php /* translators: %s: day label */ echo esc_attr( sprintf( __( 'Remove time slot for %s', 'vk-booking-manager' ), $day_label ) ); ?>"
+					aria-label="
+					<?php
+					echo esc_attr(
+						sprintf(
+							/* translators: %s: day label */
+							__( 'Remove time slot for %s', 'vk-booking-manager' ),
+							$day_label
+						)
+					);
+					?>
+					"
 				>
 					<?php esc_html_e( 'delete', 'vk-booking-manager' ); ?>
 				</button>

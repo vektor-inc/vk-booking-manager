@@ -1102,11 +1102,7 @@ class Booking_Admin {
 					'post_mime_type' => 'image/jpeg',
 				)
 			);
-			if ( function_exists( 'wp_delete_file' ) ) {
-				wp_delete_file( $file );
-			} else {
-				@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort cleanup.
-			}
+			wp_delete_file( $file );
 		}
 
 		$metadata = wp_get_attachment_metadata( $attachment_id );
@@ -1707,11 +1703,7 @@ class Booking_Admin {
 					'post_mime_type' => 'image/jpeg',
 				)
 			);
-			if ( function_exists( 'wp_delete_file' ) ) {
-				wp_delete_file( $file );
-			} else {
-				@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Best-effort cleanup.
-			}
+			wp_delete_file( $file );
 			$metadata['file'] = _wp_relative_upload_path( $jpg_file );
 		}
 
