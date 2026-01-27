@@ -245,7 +245,11 @@ function vkbm_init_plugin(): void {
 		return;
 	}
 
-	load_plugin_textdomain( 'vk-booking-manager', false, dirname( plugin_basename( VKBM_PLUGIN_FILE ) ) . '/languages' );
+	// Load textdomain (excluded in free edition GitHub releases for WordPress.org).
+	$textdomain_file = __DIR__ . '/load-plugin-textdomain.php';
+	if ( file_exists( $textdomain_file ) ) {
+		require_once $textdomain_file;
+	}
 
 	$plugin->register();
 
