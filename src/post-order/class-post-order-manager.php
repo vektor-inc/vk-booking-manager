@@ -292,6 +292,7 @@ class Post_Order_Manager {
 				continue;
 			}
 
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Bulk update of menu_order requires direct query for performance.
 			$updated = $wpdb->update(
 				$wpdb->posts,
 				array( 'menu_order' => $new_order ),
