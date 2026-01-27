@@ -296,8 +296,10 @@ class Shift_Editor {
 		}
 
 		$base_url = plugin_dir_url( VKBM_PLUGIN_FILE );
-		$get_post = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only context.
-		$post_id  = $get_post > 0 ? $get_post : ( isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only context.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only context for asset enqueuing.
+		$get_post = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only context for asset enqueuing.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only context for asset enqueuing. Value sanitized with absint().
+		$post_id  = $get_post > 0 ? $get_post : ( isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0 );
 		$state    = $this->get_editor_state( $post_id );
 
 		if ( 'edit.php' === $hook ) {

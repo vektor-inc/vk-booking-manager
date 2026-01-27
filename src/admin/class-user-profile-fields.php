@@ -124,6 +124,7 @@ class User_Profile_Fields {
 			return;
 		}
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verification is handled by WordPress core hooks (edit_user_profile_update/personal_options_update).
 		$raw = wp_unslash( $_POST );
 
 		$kana      = sanitize_text_field( $raw['vkbm_user_kana'] ?? '' );

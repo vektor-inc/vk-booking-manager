@@ -229,11 +229,11 @@ class Auth_Shortcodes {
 	 * Handles verification callback from email link.
 	 */
 	public function handle_email_verification(): void {
-		if ( empty( $_GET['vkbm_verify_email'] ) ) {
+		if ( empty( $_GET['vkbm_verify_email'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Email verification link uses token-based authentication.
 			return;
 		}
 
-		$token = sanitize_text_field( wp_unslash( $_GET['vkbm_verify_email'] ) );
+		$token = sanitize_text_field( wp_unslash( $_GET['vkbm_verify_email'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Email verification link uses token-based authentication.
 		if ( '' === $token ) {
 			return;
 		}
@@ -1428,8 +1428,9 @@ class Auth_Shortcodes {
 		if ( isset( $wp->request ) && $wp->request ) {
 			$base = home_url( '/' . ltrim( $wp->request, '/' ) );
 
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Building current URL from query string.
 			if ( ! empty( $_GET ) ) {
-				$query_args = wp_unslash( $_GET ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Building current URL.
+				$query_args = wp_unslash( $_GET ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Building URL, values will be escaped by add_query_arg().
 				return add_query_arg( $query_args, $base );
 			}
 
