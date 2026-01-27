@@ -607,7 +607,7 @@ class Booking_Admin {
 		}
 
 		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] )
-			? wp_unslash( $_POST['vkbm_booking'] )
+			? wp_unslash( $_POST['vkbm_booking'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
 			: array();
 
 		$previous_status = (string) get_post_meta( $post_id, self::META_STATUS, true );
@@ -911,7 +911,7 @@ class Booking_Admin {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] ) ? wp_unslash( $_POST['vkbm_booking'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] ) ? wp_unslash( $_POST['vkbm_booking'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified above. Individual fields are sanitized below.
 		if ( ! is_array( $data ) ) {
 			return;
 		}

@@ -258,7 +258,7 @@ class Shift_Editor {
 			return;
 		}
 
-		$payload     = isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ? wp_unslash( $_POST['vkbm_shift'] ) : array();
+		$payload     = isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ? wp_unslash( $_POST['vkbm_shift'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
 		$resource_id = isset( $payload['resource_id'] ) ? (int) $payload['resource_id'] : 0;
 		$year        = isset( $payload['year'] ) ? (int) $payload['year'] : 0;
 		$month       = isset( $payload['month'] ) ? (int) $payload['month'] : 0;
@@ -475,7 +475,7 @@ class Shift_Editor {
 		);
 
 		$payload = isset( $_POST['vkbm_shift_bulk'] ) && is_array( $_POST['vkbm_shift_bulk'] )
-			? wp_unslash( $_POST['vkbm_shift_bulk'] )
+			? wp_unslash( $_POST['vkbm_shift_bulk'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
 			: array();
 
 		$period = isset( $payload['period'] ) ? sanitize_text_field( (string) $payload['period'] ) : '';

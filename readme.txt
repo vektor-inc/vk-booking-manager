@@ -1,6 +1,6 @@
 === VK Booking Manager ===
 Contributors: vektor-inc,kurudrive
-Tags: booking, scheduling, reservations, appointment, salon, beauty, chiropractic, lessons
+Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.7
 Tested up to: 6.9
 Requires PHP: 8.1

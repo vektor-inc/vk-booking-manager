@@ -197,7 +197,7 @@ class Post_Order_Manager {
 		}
 
 		$ordered_ids = $this->sanitize_ids(
-			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : array()
+			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : array() // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by sanitize_ids() below.
 		);
 
 		if ( empty( $ordered_ids ) ) {

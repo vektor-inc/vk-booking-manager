@@ -326,7 +326,7 @@ class Resource_Schedule_Meta_Box {
 			return;
 		}
 
-		$payload = isset( $_POST['vkbm_resource_schedule'] ) && is_array( $_POST['vkbm_resource_schedule'] ) ? wp_unslash( $_POST['vkbm_resource_schedule'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- intentionally handled.
+		$payload = isset( $_POST['vkbm_resource_schedule'] ) && is_array( $_POST['vkbm_resource_schedule'] ) ? wp_unslash( $_POST['vkbm_resource_schedule'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
 
 		if ( ! is_array( $payload ) ) {
 			$this->repository->delete_template( $post_id );

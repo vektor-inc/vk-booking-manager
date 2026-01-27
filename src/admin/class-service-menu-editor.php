@@ -344,7 +344,7 @@ class Service_Menu_Editor {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_service_menu'] ) ? wp_unslash( $_POST['vkbm_service_menu'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$data = isset( $_POST['vkbm_service_menu'] ) ? wp_unslash( $_POST['vkbm_service_menu'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified above. Individual fields are sanitized below.
 
 		if ( ! is_array( $data ) ) {
 			return;

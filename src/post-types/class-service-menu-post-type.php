@@ -620,7 +620,7 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_service_menu_quick'] ) && is_array( $_POST['vkbm_service_menu_quick'] ) ? wp_unslash( $_POST['vkbm_service_menu_quick'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$data = isset( $_POST['vkbm_service_menu_quick'] ) && is_array( $_POST['vkbm_service_menu_quick'] ) ? wp_unslash( $_POST['vkbm_service_menu_quick'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified above. Individual fields are sanitized below.
 		if ( ! is_array( $data ) ) {
 			return;
 		}

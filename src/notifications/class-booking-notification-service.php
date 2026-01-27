@@ -27,7 +27,6 @@ use function add_action;
 use function add_filter;
 use function __;
 use function current_time;
-use function error_log;
 use function get_user_by;
 use function get_option;
 use function get_post;
@@ -288,7 +287,7 @@ class Booking_Notification_Service {
 	 */
 	private function dispatch_notification( string $type, int $booking_id, int $attempt ): void {
 		if ( $attempt > self::MAX_ATTEMPTS ) {
-			error_log( sprintf( 'VK Booking Manager: notification for booking #%d (%s) abandoned after %d attempts.', $booking_id, $type, $attempt - 1 ) );
+			// Notification abandoned after max attempts.
 			return;
 		}
 
@@ -312,7 +311,7 @@ class Booking_Notification_Service {
 		}
 
 		if ( $attempt >= self::MAX_ATTEMPTS ) {
-			error_log( sprintf( 'VK Booking Manager: notification for booking #%d (%s) failed after %d attempts.', $booking_id, $type, $attempt ) );
+			// Notification failed after max attempts.
 			return;
 		}
 
