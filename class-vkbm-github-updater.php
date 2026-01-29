@@ -36,14 +36,21 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		 *
 		 * @var string
 		 */
-		private $repo;
+	private $repo;
 
-		/**
-		 * Plugin file path.
-		 *
+	/**
+	 * Plugin file path.
+	 *
 		 * @var string
 		 */
-		private $plugin_file;
+	private $plugin_file;
+
+	/**
+	 * Expected asset filename.
+	 *
+	 * @var string
+	 */
+	private $asset_filename = 'vk-booking-manager.zip';
 
 		/**
 		 * GitHub API result.
@@ -143,13 +150,13 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 				return $transient;
 			}
 
-			$tag_version    = $this->normalize_version( (string) $this->github_api_result->tag_name );
+			$tag_version     = $this->normalize_version( (string) $this->github_api_result->tag_name );
 			$current_version = $this->normalize_version( (string) $this->plugin_data['Version'] );
 
 			$do_update = version_compare( $tag_version, $current_version, '>' );
 
 			if ( $do_update && ! empty( $this->github_api_result->assets ) ) {
-				$package = $this->github_api_result->assets[0]->browser_download_url ?? '';
+				$package = $this->find_asset_package( $this->github_api_result->assets );
 
 				if ( '' === $package ) {
 					return $transient;
@@ -195,10 +202,27 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 			);
 
 			if ( ! empty( $this->github_api_result->assets ) ) {
-				$response->download_link = $this->github_api_result->assets[0]->browser_download_url ?? '';
+				$response->download_link = $this->find_asset_package( $this->github_api_result->assets );
 			}
 
 			return $response;
+		}
+
+		/**
+		 * Find the package URL by asset filename.
+		 *
+		 * @param array $assets GitHub release assets.
+		 * @return string Package URL or empty string.
+		 */
+		private function find_asset_package( array $assets ): string {
+			foreach ( $assets as $asset ) {
+				$name = is_object( $asset ) && isset( $asset->name ) ? (string) $asset->name : '';
+				if ( $name === $this->asset_filename && isset( $asset->browser_download_url ) ) {
+					return (string) $asset->browser_download_url;
+				}
+			}
+
+			return '';
 		}
 
 		/**
