@@ -1173,9 +1173,7 @@ msgstr "スタッフ一覧"
 
 #: src/admin/class-setup-notices.php:268
 msgid "Service not registered yet. First, add a service menu."
-msgstr ""
-"サービスがまだ登録されていません。まず、サービスメニューを追加してください。"
-"サービスがまだ登録されていません。まずはサービスメニューを追加してください。"
+msgstr "サービスがまだ登録されていません。まず、サービスメニューを追加してください。"
 
 #: src/admin/class-setup-notices.php:269
 #: src/post-types/class-service-menu-post-type.php:84

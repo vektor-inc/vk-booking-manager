@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://github.com/vektor-inc/vk-booking-manager/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     0.1.0
+ * Version:     0.0.21
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -29,12 +29,110 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+if ( ! function_exists( 'vkbm_pro_is_pro_edition' ) ) {
+	/**
+	 * Check whether this plugin is the Pro edition (robust to folder naming).
+	 *
+	 * 日本語: ディレクトリ名だけに依存せず Pro 版かどうかを判定します。
+	 *
+	 * @return bool
+	 */
+	function vkbm_pro_is_pro_edition(): bool {
+		// English: Prefer plugin header (handles folders without "-pro").
+		// 日本語: まずヘッダ情報で判定します（-pro を含まないフォルダ対策）。
+		if ( function_exists( 'get_file_data' ) ) {
+			$plugin_data = get_file_data( __FILE__, array( 'name' => 'Plugin Name' ) );
+			$name        = isset( $plugin_data['name'] ) ? (string) $plugin_data['name'] : '';
+			if ( '' !== $name && false !== stripos( $name, 'pro' ) ) {
+				return true;
+			}
+		}
+
+		// English: Fallback to directory name heuristic.
+		// 日本語: フォルダ名の判定にフォールバックします。
+		return false !== strpos( basename( __DIR__ ), '-pro' );
+	}
+}
+
+if ( ! function_exists( 'vkbm_pro_get_free_plugin_basename' ) ) {
+	/**
+	 * Get the Free edition plugin basename (for Pro-only early conflict handling).
+	 *
+	 * @return string Plugin basename or empty string if not found.
+	 */
+	function vkbm_pro_get_free_plugin_basename(): string {
+		$candidates = array(
+			'vk-booking-manager/vk-booking-manager.php',
+			'vk-booking-manager-free/vk-booking-manager.php',
+		);
+		$plugins    = get_plugins();
+		foreach ( $candidates as $candidate ) {
+			if ( isset( $plugins[ $candidate ] ) ) {
+				return $candidate;
+			}
+		}
+		foreach ( $plugins as $plugin_file => $data ) {
+			$name        = isset( $data['Name'] ) ? (string) $data['Name'] : '';
+			$text_domain = isset( $data['TextDomain'] ) ? (string) $data['TextDomain'] : '';
+			if ( 'vk-booking-manager' !== $text_domain ) {
+				continue;
+			}
+			if ( '' !== $name && false !== stripos( $name, 'pro' ) ) {
+				continue;
+			}
+			return $plugin_file;
+		}
+		return '';
+	}
+}
+
+if ( ! function_exists( 'vkbm_pro_deactivate_free_on_activated' ) ) {
+	/**
+	 * Callback for 'activated_plugin': deactivate Free edition when Pro was just activated.
+	 *
+	 * @param string $activated_plugin Plugin basename that was activated.
+	 */
+	function vkbm_pro_deactivate_free_on_activated( string $activated_plugin ): void {
+		if ( plugin_basename( __FILE__ ) !== $activated_plugin ) {
+			return;
+		}
+		$free_basename = vkbm_pro_get_free_plugin_basename();
+		if ( '' === $free_basename ) {
+			return;
+		}
+		if ( is_multisite() && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( $free_basename ) ) {
+			deactivate_plugins( $free_basename, true, true );
+			return;
+		}
+		if ( is_plugin_active( $free_basename ) ) {
+			deactivate_plugins( $free_basename, true );
+		}
+	}
+}
+
+// English: If this is Pro and Free is active, schedule deactivation of Free on 'activated_plugin' and bail out without loading any Pro code. This avoids fatal errors (e.g. class redeclaration) when both editions would be in memory.
+// 日本語: Pro であり無料版が有効な場合は、'activated_plugin' で無料版を無効化するだけ登録して何も読み込まずに終了する。両エディションがメモリに乗る際の致命的エラー（クラス重複等）を防ぐ.
+if ( is_admin() ) {
+	if ( ! function_exists( 'is_plugin_active' ) || ! function_exists( 'get_plugins' ) || ! function_exists( 'get_file_data' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/plugin.php';
+	}
+	if ( vkbm_pro_is_pro_edition() ) {
+		$vkbm_free_basename = vkbm_pro_get_free_plugin_basename();
+		$free_is_active     = ( '' !== $vkbm_free_basename ) && is_plugin_active( $vkbm_free_basename );
+		$free_is_network    = ( '' !== $vkbm_free_basename ) && is_multisite() && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( $vkbm_free_basename );
+		if ( $free_is_active || $free_is_network ) {
+			add_action( 'activated_plugin', 'vkbm_pro_deactivate_free_on_activated', 10, 1 );
+			return;
+		}
+	}
+}
+
 require_once __DIR__ . '/src/admin/class-edition-plugin-deactivator.php';
 
 // English: Ensure both editions can be active without fatal errors and prefer Pro.
 // 日本語: 両エディションの同時有効化で致命的エラーが起きないようにし、Proを優先します.
 $vkbm_current_edition = \VKBookingManager\Admin\Edition_Plugin_Deactivator::detect_current_edition( __FILE__ );
-if ( \VKBookingManager\Admin\Edition_Plugin_Deactivator::handle_conflict( $vkbm_current_edition ) ) {
+if ( \VKBookingManager\Admin\Edition_Plugin_Deactivator::handle_conflict( $vkbm_current_edition, __FILE__ ) ) {
 	return;
 }
 
@@ -130,16 +228,17 @@ use VKBookingManager\Staff\Staff_Editor;
  *
  * @return Plugin|null
  */
-function vkbm_plugin(): ?Plugin {
-	static $plugin = null;
+if ( ! function_exists( 'vkbm_plugin' ) ) {
+	function vkbm_plugin(): ?Plugin {
+		static $plugin = null;
 
-	if ( null !== $plugin ) {
-		return $plugin;
-	}
+		if ( null !== $plugin ) {
+			return $plugin;
+		}
 
-	if ( ! class_exists( Plugin::class ) ) {
-		return null;
-	}
+		if ( ! class_exists( Plugin::class ) ) {
+			return null;
+		}
 
 	$settings_repository = new Settings_Repository();
 	$settings_sanitizer  = new Settings_Sanitizer();
@@ -232,41 +331,53 @@ function vkbm_plugin(): ?Plugin {
 		$user_profile_fields
 	);
 
-	return $plugin;
+		return $plugin;
+	}
 }
 
 /**
  * Bootstraps the plugin.
  */
-function vkbm_init_plugin(): void {
-	$plugin = vkbm_plugin();
+if ( ! function_exists( 'vkbm_init_plugin' ) ) {
+	function vkbm_init_plugin(): void {
+		$plugin = vkbm_plugin();
 
-	if ( ! $plugin instanceof Plugin ) {
-		return;
-	}
-
-	// Load textdomain (excluded in free edition GitHub releases for WordPress.org).
-	$textdomain_file = __DIR__ . '/load-plugin-textdomain.php';
-	if ( file_exists( $textdomain_file ) ) {
-		require_once $textdomain_file;
-	}
-
-	$plugin->register();
-
-	add_action(
-		'after_setup_theme',
-		function () {
-			if ( is_admin() ) {
-				return;
-			}
-
-			if ( current_user_can( Capabilities::MANAGE_RESERVATIONS ) ) {
-				return;
-			}
-
-			show_admin_bar( false );
+		if ( ! $plugin instanceof Plugin ) {
+			return;
 		}
-	);
+
+		// Load textdomain (excluded in free edition GitHub releases for WordPress.org).
+		$textdomain_file = __DIR__ . '/load-plugin-textdomain.php';
+		if ( file_exists( $textdomain_file ) ) {
+			require_once $textdomain_file;
+		}
+
+		// Load GitHub updater for free edition (excluded from .org package).
+		$updater_file = __DIR__ . '/class-vkbm-github-updater.php';
+		if ( ! vkbm_pro_is_pro_edition() && file_exists( $updater_file ) ) {
+			require_once $updater_file;
+			if ( class_exists( 'VKBM_GitHub_Updater' ) ) {
+				new VKBM_GitHub_Updater( __FILE__ );
+			}
+		}
+
+		$plugin->register();
+
+		add_action(
+			'after_setup_theme',
+			function () {
+				if ( is_admin() ) {
+					return;
+				}
+
+				if ( current_user_can( Capabilities::MANAGE_RESERVATIONS ) ) {
+					return;
+				}
+
+				show_admin_bar( false );
+			}
+		);
+	}
 }
 
 add_action( 'plugins_loaded', 'vkbm_init_plugin' );
@@ -274,14 +385,16 @@ add_action( 'plugins_loaded', 'vkbm_init_plugin' );
 /**
  * Activation callback.
  */
-function vkbm_activate_plugin(): void {
-	$plugin = vkbm_plugin();
+if ( ! function_exists( 'vkbm_activate_plugin' ) ) {
+	function vkbm_activate_plugin(): void {
+		$plugin = vkbm_plugin();
 
-	if ( ! $plugin instanceof Plugin ) {
-		return;
+		if ( ! $plugin instanceof Plugin ) {
+			return;
+		}
+
+		$plugin->activate();
 	}
-
-	$plugin->activate();
 }
 
 register_activation_hook( __FILE__, 'vkbm_activate_plugin' );
@@ -292,28 +405,30 @@ register_activation_hook( __FILE__, 'vkbm_activate_plugin' );
  * @param string $url Raw URL from settings.
  * @return string
  */
-function vkbm_normalize_reservation_page_url( string $url ): string {
-	$url = trim( $url );
+if ( ! function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
+	function vkbm_normalize_reservation_page_url( string $url ): string {
+		$url = trim( $url );
 
-	if ( '' === $url ) {
-		return '';
+		if ( '' === $url ) {
+			return '';
+		}
+
+		if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
+			return esc_url_raw( $url );
+		}
+
+		if ( str_starts_with( $url, '//' ) ) {
+			$scheme = is_ssl() ? 'https:' : 'http:';
+
+			return esc_url_raw( $scheme . $url );
+		}
+
+		if ( ! str_starts_with( $url, '/' ) ) {
+			$url = '/' . $url;
+		}
+
+		return esc_url_raw( home_url( $url ) );
 	}
-
-	if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
-		return esc_url_raw( $url );
-	}
-
-	if ( str_starts_with( $url, '//' ) ) {
-		$scheme = is_ssl() ? 'https:' : 'http:';
-
-		return esc_url_raw( $scheme . $url );
-	}
-
-	if ( ! str_starts_with( $url, '/' ) ) {
-		$url = '/' . $url;
-	}
-
-	return esc_url_raw( home_url( $url ) );
 }
 
 /**
@@ -321,20 +436,22 @@ function vkbm_normalize_reservation_page_url( string $url ): string {
  *
  * @return string
  */
-function vkbm_get_reservation_page_logout_url(): string {
-	static $cached = null;
+if ( ! function_exists( 'vkbm_get_reservation_page_logout_url' ) ) {
+	function vkbm_get_reservation_page_logout_url(): string {
+		static $cached = null;
 
-	if ( null !== $cached ) {
+		if ( null !== $cached ) {
+			return $cached;
+		}
+
+		$repository = new Settings_Repository();
+		$settings   = $repository->get_settings();
+		$raw_url    = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
+
+		$cached = vkbm_normalize_reservation_page_url( $raw_url );
+
 		return $cached;
 	}
-
-	$repository = new Settings_Repository();
-	$settings   = $repository->get_settings();
-	$raw_url    = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-	$cached = vkbm_normalize_reservation_page_url( $raw_url );
-
-	return $cached;
 }
 
 /**

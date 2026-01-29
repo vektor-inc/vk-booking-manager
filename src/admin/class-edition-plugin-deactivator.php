@@ -29,6 +29,13 @@ class Edition_Plugin_Deactivator {
 	public const EDITION_FREE = 'free';
 
 	/**
+	 * Pro plugin main file path (set when scheduling deactivation via activated_plugin hook).
+	 *
+	 * @var string
+	 */
+	private static $pro_plugin_file = '';
+
+	/**
 	 * Known Free edition plugin file paths.
 	 *
 	 * @var string[]
@@ -47,6 +54,19 @@ class Edition_Plugin_Deactivator {
 	 * @return string
 	 */
 	public static function detect_current_edition( string $plugin_file ): string {
+		// English: Prefer plugin header to handle folders without "-pro".
+		// 日本語: フォルダ名に "-pro" が含まれないケースを考慮してヘッダを優先します。
+		if ( ! function_exists( 'get_file_data' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		if ( function_exists( 'get_file_data' ) ) {
+			$plugin_data = get_file_data( $plugin_file, array( 'name' => 'Plugin Name' ) );
+			$name        = isset( $plugin_data['name'] ) ? (string) $plugin_data['name'] : '';
+			if ( '' !== $name && false !== stripos( $name, 'pro' ) ) {
+				return self::EDITION_PRO;
+			}
+		}
+
 		$directory = basename( dirname( $plugin_file ) );
 
 		if ( false !== strpos( $directory, '-pro' ) ) {
@@ -62,17 +82,20 @@ class Edition_Plugin_Deactivator {
 	 * 日本語: エディションの競合を検知し、必要に応じて無料版を無効化します。
 	 *
 	 * @param string $current_edition Current edition string.
+	 * @param string $plugin_file     Optional. Current plugin main file path (e.g. __FILE__). When set, Free is deactivated via 'activated_plugin' hook to avoid fatals during activation.
 	 * @return bool Whether the current plugin should bail out for this request.
 	 */
-	public static function handle_conflict( string $current_edition ): bool {
+	public static function handle_conflict( string $current_edition, string $plugin_file = '' ): bool {
 		if ( defined( 'VKBM_EDITION' ) ) {
 			if ( VKBM_EDITION === $current_edition ) {
 				return false;
 			}
 
-			// English: Another edition already loaded; avoid class conflicts.
-			// 日本語: 既に別エディションが読み込まれているため競合を避けます。
-			if ( is_admin() ) {
+			// English: Another edition already loaded; deactivate Free after this request to avoid fatals.
+			// 日本語: 既に別エディションが読み込まれているため、有効化処理後に無料版を無効化します。
+			if ( is_admin() && '' !== $plugin_file ) {
+				self::schedule_deactivate_free_on_activated( $plugin_file );
+			} elseif ( is_admin() ) {
 				self::deactivate_free_plugin();
 			}
 
@@ -85,13 +108,50 @@ class Edition_Plugin_Deactivator {
 			return false;
 		}
 
-		// English: Only attempt deactivation on admin requests where plugin.php is available.
-		// 日本語: プラグイン管理系のAPIが使える管理画面リクエストのみ無効化を試みます.
+		// English: Only attempt deactivation on admin requests; use hook to avoid fatals during activation.
+		// 日本語: 管理画面でのみ無効化を試み、有効化処理中の致命的エラーを防ぐためフックで実行します.
 		if ( is_admin() ) {
-			self::deactivate_free_plugin();
+			if ( '' !== $plugin_file ) {
+				self::schedule_deactivate_free_on_activated( $plugin_file );
+				return true;
+			}
+			if ( self::deactivate_free_plugin() ) {
+				return true;
+			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * Schedule deactivation of Free edition when Pro is activated (runs on 'activated_plugin').
+	 *
+	 * 日本語: Pro が有効化されたときに無料版を無効化するよう 'activated_plugin' で実行します。
+	 *
+	 * @param string $plugin_file Current plugin main file path (e.g. __FILE__).
+	 * @return void
+	 */
+	public static function schedule_deactivate_free_on_activated( string $plugin_file ): void {
+		self::$pro_plugin_file = $plugin_file;
+		add_action( 'activated_plugin', array( self::class, 'on_activated_plugin' ), 10, 1 );
+	}
+
+	/**
+	 * Callback for 'activated_plugin': deactivate Free if the activated plugin was Pro.
+	 *
+	 * 日本語: 'activated_plugin' のコールバック。有効化されたプラグインが Pro なら無料版を無効化します。
+	 *
+	 * @param string $activated_plugin Plugin basename that was activated.
+	 * @return void
+	 */
+	public static function on_activated_plugin( string $activated_plugin ): void {
+		if ( '' === self::$pro_plugin_file ) {
+			return;
+		}
+		if ( plugin_basename( self::$pro_plugin_file ) !== $activated_plugin ) {
+			return;
+		}
+		self::deactivate_free_plugin();
 	}
 
 	/**
