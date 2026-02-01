@@ -2,7 +2,7 @@ import { __ } from '@wordpress/i18n';
 import { useCallback, useEffect, useMemo, useState } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
-import { formatCurrencyJPY, normalizePriceValue } from '../shared/pricing';
+import { formatCurrency, normalizePriceValue } from '../shared/pricing';
 import { sanitizeDraftToken } from '../shared/draft-token';
 import { BookingSummaryItems } from './components/booking-summary-items';
 
@@ -289,7 +289,7 @@ export const BookingConfirmApp = ({
 			draft.menu_price_formatted.trim() !== ''
 				? draft.menu_price_formatted
 				: basePrice !== null
-				? ensureTaxLabel(formatCurrencyJPY(basePrice, currencySymbolValue))
+				? ensureTaxLabel(formatCurrency(basePrice, currencySymbolValue))
 				: '';
 
 		const nominationFee = staffEnabled
@@ -299,7 +299,7 @@ export const BookingConfirmApp = ({
 			typeof draft?.nomination_fee_formatted === 'string' &&
 			draft.nomination_fee_formatted.trim() !== ''
 				? draft.nomination_fee_formatted
-				: ensureTaxLabel(formatCurrencyJPY(nominationFee, currencySymbolValue));
+				: ensureTaxLabel(formatCurrency(nominationFee, currencySymbolValue));
 
 		const totalPrice =
 			normalizePriceValue(draft?.total_price) ??
@@ -309,7 +309,7 @@ export const BookingConfirmApp = ({
 			draft.total_price_formatted.trim() !== ''
 				? draft.total_price_formatted
 				: totalPrice !== null
-				? ensureTaxLabel(formatCurrencyJPY(totalPrice, currencySymbolValue))
+				? ensureTaxLabel(formatCurrency(totalPrice, currencySymbolValue))
 				: '';
 
 		return {
@@ -1543,7 +1543,10 @@ useEffect(() => {
 				{staffEnabled && (
 					<SummaryRow
 						label={__('Nomination fee', 'vk-booking-manager')}
-						value={pricingSummary.nominationLabel || formatCurrencyJPY(0)}
+						value={
+							pricingSummary.nominationLabel ||
+							formatCurrency(0, currencySymbol.trim() !== '' ? currencySymbol : null)
+						}
 					/>
 				)}
 				<SummaryRow

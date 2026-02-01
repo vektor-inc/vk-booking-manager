@@ -9,7 +9,7 @@ import {
 } from './booking-ui';
 import {
 	extractMenuBasePrice,
-	formatCurrencyJPY,
+	formatCurrency,
 	normalizePriceValue,
 } from '../shared/pricing';
 import { BookingConfirmApp } from './booking-confirm-app';
@@ -852,14 +852,14 @@ useEffect(() => {
 				key: 'base',
 				label: __('Service basic fee', 'vk-booking-manager'),
 				...withTaxLabel(
-					basePrice !== null ? formatCurrencyJPY(basePrice, currencySymbol) : '—'
+					basePrice !== null ? formatCurrency(basePrice, currencySymbol) : '—'
 				),
 			},
 			{
 				key: 'total',
 				label: __('Total basic fee', 'vk-booking-manager'),
 				...withTaxLabel(
-					totalPrice !== null ? formatCurrencyJPY(totalPrice, currencySymbol) : '—'
+					totalPrice !== null ? formatCurrency(totalPrice, currencySymbol) : '—'
 				),
 				highlight: true,
 			},
@@ -871,9 +871,9 @@ useEffect(() => {
 				label: __('Nomination fee', 'vk-booking-manager'),
 				value: staffNominationFee === null
 					? staffId
-						? formatCurrencyJPY(applyTax(0), currencySymbol)
+						? formatCurrency(applyTax(0), currencySymbol)
 						: '—'
-					: formatCurrencyJPY(staffNominationFee, currencySymbol),
+					: formatCurrency(staffNominationFee, currencySymbol),
 				taxLabel: '', // Nomination fee should not have tax label
 			});
 		}

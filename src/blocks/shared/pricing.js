@@ -26,18 +26,39 @@ export const normalizePriceValue = (value) => {
 	return null;
 };
 
-export const formatCurrencyJPY = (value, currencySymbol = null) => {
+const resolveDefaultCurrencySymbol = () => {
+	if (typeof window === 'undefined') {
+		return '$';
+	}
+
+	const locale = window?.vkbmCurrentUserBootstrap?.locale;
+	if (typeof locale === 'string' && locale.trim() !== '' && locale.toLowerCase().startsWith('ja')) {
+		return '¥';
+	}
+
+	return '$';
+};
+
+export const formatCurrency = (value, currencySymbol = null) => {
 	const normalized = normalizePriceValue(value);
 
 	if (normalized === null) {
 		return '';
 	}
 
-	const formatter = new Intl.NumberFormat('ja-JP');
+	let formatter;
+	try {
+		formatter = new Intl.NumberFormat(resolveNumberFormatLocale());
+	} catch (error) {
+		formatter = new Intl.NumberFormat('ja-JP');
+	}
 	const formattedAmount = formatter.format(normalized);
 
-	if (currencySymbol !== null && currencySymbol !== undefined && currencySymbol.trim() !== '') {
-		return `${currencySymbol}${formattedAmount}`;
+	const trimmedSymbol = typeof currencySymbol === 'string' ? currencySymbol.trim() : '';
+	const resolvedSymbol = trimmedSymbol !== '' ? trimmedSymbol : resolveDefaultCurrencySymbol();
+
+	if (resolvedSymbol !== '') {
+		return `${resolvedSymbol}${formattedAmount}`;
 	}
 
 	return sprintf(
@@ -45,6 +66,19 @@ export const formatCurrencyJPY = (value, currencySymbol = null) => {
 		__('$%s', 'vk-booking-manager'),
 		formattedAmount
 	);
+};
+
+const resolveNumberFormatLocale = () => {
+	if (typeof window === 'undefined') {
+		return 'ja-JP';
+	}
+
+	const locale = window?.vkbmCurrentUserBootstrap?.locale;
+	if (typeof locale === 'string' && locale.trim() !== '') {
+		return locale.trim();
+	}
+
+	return 'ja-JP';
 };
 
 export const extractMenuBasePrice = (menu) => {

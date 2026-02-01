@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_REST_Response;
@@ -95,7 +96,7 @@ class Provider_Settings_Controller {
 		}
 		$show_provider_logo = ! empty( $settings['reservation_show_provider_logo'] );
 		$show_provider_name = ! empty( $settings['reservation_show_provider_name'] );
-		$currency_symbol    = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$currency_symbol    = VKBM_Helper::get_currency_symbol();
 		$tax_label_text     = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
 		// Fetch provider logo URL for frontend display. / 予約画面表示用にロゴURLを取得します.
 		$provider_logo_url = $provider_logo_id > 0 ? wp_get_attachment_image_url( $provider_logo_id, 'medium' ) : '';

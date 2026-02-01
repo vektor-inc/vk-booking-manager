@@ -32,18 +32,32 @@ class VKBM_Helper {
 	public static function format_currency( int $amount ): string {
 		$formatted = number_format_i18n( max( 0, $amount ) );
 
+		$currency_symbol = self::get_currency_symbol();
+
+		return sprintf( '%s%s', $currency_symbol, $formatted );
+	}
+
+	/**
+	 * Resolve currency symbol from settings or locale.
+	 *
+	 * 日本語: 設定値またはロケールから通貨記号を取得します。
+	 *
+	 * @return string
+	 */
+	public static function get_currency_symbol(): string {
 		$settings        = ( new Settings_Repository() )->get_settings();
 		$currency_symbol = isset( $settings['currency_symbol'] ) ? trim( (string) $settings['currency_symbol'] ) : '';
 
 		if ( '' !== $currency_symbol ) {
-			return sprintf( '%s%s', $currency_symbol, $formatted );
+			return $currency_symbol;
 		}
 
-		return sprintf(
-			/* translators: %s: price amount */
-			__( '$%s', 'vk-booking-manager' ),
-			$formatted
-		);
+		$locale = function_exists( 'get_locale' ) ? (string) get_locale() : '';
+		if ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) {
+			return '¥';
+		}
+
+		return '$';
 	}
 
 	/**

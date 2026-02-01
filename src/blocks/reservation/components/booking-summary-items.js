@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { formatCurrencyJPY } from '../../shared/pricing';
+import { formatCurrency } from '../../shared/pricing';
 
 export const BookingSummaryItems = ({
 	booking,
@@ -40,7 +40,7 @@ export const BookingSummaryItems = ({
 					{__('Total basic fee', 'vk-booking-manager')}
 				</dt>
 				<dd className="vkbm-confirm__summary-item-value vkbm-confirm__summary-item-value--price">
-					{formatCurrencyJPY(booking?.total_price || 0, currencySymbol)}
+					{formatCurrency(booking?.total_price || 0, currencySymbol)}
 				</dd>
 			</dl>
 			{typeof booking?.other_conditions === 'string' &&

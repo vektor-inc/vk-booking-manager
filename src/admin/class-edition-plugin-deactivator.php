@@ -113,7 +113,7 @@ class Edition_Plugin_Deactivator {
 		if ( is_admin() ) {
 			if ( '' !== $plugin_file ) {
 				self::schedule_deactivate_free_on_activated( $plugin_file );
-				return true;
+				return false;
 			}
 			if ( self::deactivate_free_plugin() ) {
 				return true;
