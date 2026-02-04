@@ -1250,6 +1250,7 @@ class Shift_Dashboard_Page {
 					'url'     => '',
 					'entries' => array(),
 				);
+				$week_count++;
 			}
 			$weeks[] = $week;
 		}
