@@ -136,6 +136,11 @@ class Auth_Shortcodes {
 			return;
 		}
 
+		// Only redirect if the reservation page contains the reservation block.
+		if ( ! self::reservation_page_has_block( $reservation_url ) ) {
+			return;
+		}
+
 		$redirect_url = add_query_arg( 'vkbm_auth', 'register', $reservation_url );
 		wp_safe_redirect( $redirect_url );
 		exit;
@@ -165,6 +170,11 @@ class Auth_Shortcodes {
 		}
 
 		if ( '' === $reservation_url ) {
+			return;
+		}
+
+		// Only redirect if the reservation page contains the reservation block.
+		if ( ! self::reservation_page_has_block( $reservation_url ) ) {
 			return;
 		}
 
@@ -1479,6 +1489,36 @@ class Auth_Shortcodes {
 	}
 
 	/**
+	 * Check if the reservation page URL contains the reservation block.
+	 *
+	 * 予約ページURLに予約ブロックが含まれているかチェックします。
+	 *
+	 * @param string $url Reservation page URL.
+	 * @return bool True if the page contains the reservation block, false otherwise.
+	 */
+	public static function reservation_page_has_block( string $url ): bool {
+		if ( '' === $url ) {
+			return false;
+		}
+
+		$post_id = url_to_postid( $url );
+		if ( $post_id <= 0 ) {
+			return false;
+		}
+
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'has_block' ) ) {
+			return false;
+		}
+
+		return has_block( 'vk-booking-manager/reservation', $post );
+	}
+
+	/**
 	 * Evaluates various truthy/falsey values passed as shortcode atts.
 	 *
 	 * @param mixed $value Raw value.
@@ -1685,8 +1725,8 @@ class Auth_Shortcodes {
 			return $value;
 		}
 
-		$primary_path   = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
-		$cookie_domain  = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
+		$primary_path  = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
+		$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
 		setcookie( $name, '', time() - 3600, $primary_path, $cookie_domain );
 		if ( '/' !== $primary_path ) {
 			setcookie( $name, '', time() - 3600, '/', $cookie_domain );
@@ -2275,7 +2315,7 @@ class Auth_Shortcodes {
 			: '';
 		$value      = sanitize_text_field( rawurldecode( $cookie_raw ) );
 
-		$cookie_path  = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
+		$cookie_path   = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
 		$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
 		setcookie( 'vkbm_login_error', '', time() - 3600, $cookie_path, $cookie_domain );
 

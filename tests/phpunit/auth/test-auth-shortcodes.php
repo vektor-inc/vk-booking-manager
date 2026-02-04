@@ -273,4 +273,203 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		unset( $_COOKIE['vkbm_registration_errors'] );
 		update_option( 'users_can_register', $original_registration );
 	}
+
+	public function test_reservation_page_has_block(): void {
+		// Create test pages. / テスト用のページを作成。
+		$page_without_block_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Test Page Without Block',
+				'post_content' => '<!-- wp:paragraph --><p>Some content</p><!-- /wp:paragraph -->',
+			)
+		);
+
+		$page_with_block_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Test Page With Block',
+				'post_content' => '<!-- wp:vk-booking-manager/reservation /-->',
+			)
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '空URLの場合 => false',
+				'url'                 => '',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '無効なURLの場合 => false',
+				'url'                 => 'https://example.com/nonexistent-page',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '予約ブロックがないページのURLの場合 => false',
+				'url'                 => get_permalink( $page_without_block_id ),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '予約ブロックがあるページのURLの場合 => true',
+				'url'                 => get_permalink( $page_with_block_id ),
+				'expected'            => true,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Auth_Shortcodes::reservation_page_has_block( $case['url'] );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	public function test_redirect_wp_login_to_vkbm(): void {
+		// リダイレクトするケース（リダイレクトON・予約ブロックあり）は未テスト。リダイレクト時に wp_safe_redirect() の直後で exit が呼ばれテストプロセスが終了するため、アサートまで到達できない。
+		// Ensure user is not logged in. / ユーザーがログインしていないことを確認。
+		wp_set_current_user( 0 );
+
+		// Create test pages. / テスト用のページを作成。
+		$page_without_block_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Reservation Page Without Block',
+				'post_content' => '<!-- wp:paragraph --><p>Some content</p><!-- /wp:paragraph -->',
+			)
+		);
+
+		$page_with_block_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Reservation Page With Block',
+				'post_content' => '<!-- wp:vk-booking-manager/reservation /-->',
+			)
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'リダイレクトON・予約ブロックなしのページURL => リダイレクトしない',
+				'conditions'          => array(
+					'redirect_enabled'  => true,
+					'reservation_url'   => get_permalink( $page_without_block_id ),
+					'action'            => 'login',
+				),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'リダイレクトOFF・予約ブロックありのページURL => リダイレクトしない',
+				'conditions'          => array(
+					'redirect_enabled'  => false,
+					'reservation_url'   => get_permalink( $page_with_block_id ),
+					'action'            => 'login',
+				),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'リダイレクトON・予約ページURLが空 => リダイレクトしない',
+				'conditions'          => array(
+					'redirect_enabled'  => true,
+					'reservation_url'   => '',
+					'action'            => 'login',
+				),
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// Set up settings. / 設定をセットアップ。
+			$repository = new Settings_Repository();
+			$settings   = $repository->get_settings();
+			$settings['membership_redirect_wp_login'] = $case['conditions']['redirect_enabled'];
+			$settings['reservation_page_url']           = $case['conditions']['reservation_url'];
+			$repository->update_settings( $settings );
+
+			// Mock $_REQUEST to simulate login action. / ログインアクションをシミュレート。
+			$previous_request = $_REQUEST;
+			$_REQUEST['action'] = $case['conditions']['action'];
+
+			$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+			$shortcodes = new Auth_Shortcodes( $service );
+
+			// Capture output to verify redirect is not called. / リダイレクトが呼ばれないことを確認するため出力をキャプチャ。
+			ob_start();
+			$shortcodes->redirect_wp_login_to_vkbm();
+			$output = ob_get_clean();
+
+			$this->assertEmpty( $output, $case['test_condition_name'] );
+
+			// Restore globals. / グローバルを復元。
+			$_REQUEST = $previous_request;
+		}
+	}
+
+	public function test_redirect_wp_register_to_vkbm(): void {
+		// リダイレクトするケース（リダイレクトON・予約ブロックあり）は未テスト。リダイレクト時に wp_safe_redirect() の直後で exit が呼ばれテストプロセスが終了するため、アサートまで到達できない。
+		// Ensure registration is enabled. / ユーザー登録を有効化。
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		// Create test pages. / テスト用のページを作成。
+		$page_without_block_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Reservation Page Without Block',
+				'post_content' => '<!-- wp:paragraph --><p>Some content</p><!-- /wp:paragraph -->',
+			)
+		);
+
+		$page_with_block_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Reservation Page With Block',
+				'post_content' => '<!-- wp:vk-booking-manager/reservation /-->',
+			)
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'リダイレクトON・予約ブロックなしのページURL => リダイレクトしない',
+				'conditions'          => array(
+					'redirect_enabled'  => true,
+					'reservation_url'   => get_permalink( $page_without_block_id ),
+				),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'リダイレクトOFF・予約ブロックありのページURL => リダイレクトしない',
+				'conditions'          => array(
+					'redirect_enabled'  => false,
+					'reservation_url'   => get_permalink( $page_with_block_id ),
+				),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'リダイレクトON・予約ページURLが空 => リダイレクトしない',
+				'conditions'          => array(
+					'redirect_enabled'  => true,
+					'reservation_url'   => '',
+				),
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// Set up settings. / 設定をセットアップ。
+			$repository = new Settings_Repository();
+			$settings   = $repository->get_settings();
+			$settings['membership_redirect_wp_register'] = $case['conditions']['redirect_enabled'];
+			$settings['reservation_page_url']              = $case['conditions']['reservation_url'];
+			$repository->update_settings( $settings );
+
+			$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+			$shortcodes = new Auth_Shortcodes( $service );
+
+			// Capture output to verify redirect is not called. / リダイレクトが呼ばれないことを確認するため出力をキャプチャ。
+			ob_start();
+			$shortcodes->redirect_wp_register_to_vkbm();
+			$output = ob_get_clean();
+
+			$this->assertEmpty( $output, $case['test_condition_name'] );
+		}
+
+		// Restore settings. / 設定を復元。
+		update_option( 'users_can_register', $original_registration );
+	}
 }
