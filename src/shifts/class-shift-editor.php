@@ -32,10 +32,11 @@ class Shift_Editor {
 	private const BULK_NONCE_NAME   = '_vkbm_shift_bulk_create_nonce';
 	private const BULK_ACTION       = 'vkbm_shift_bulk_create';
 
-	private const META_RESOURCE = '_vkbm_shift_resource_id';
-	private const META_YEAR     = '_vkbm_shift_year';
-	private const META_MONTH    = '_vkbm_shift_month';
+	public const META_RESOURCE = '_vkbm_shift_resource_id';
+	public const META_YEAR     = '_vkbm_shift_year';
+	public const META_MONTH    = '_vkbm_shift_month';
 	private const META_DAYS     = '_vkbm_shift_days';
+	private const META_DEFAULT_STAFF_FLAG = '_vkbm_shift_default_staff';
 
 	private const DAY_STATUS_OPEN             = 'open';
 	private const DAY_STATUS_REGULAR_HOLIDAY  = 'regular_holiday';
@@ -277,6 +278,10 @@ class Shift_Editor {
 		update_post_meta( $post_id, self::META_YEAR, $year );
 		update_post_meta( $post_id, self::META_MONTH, $month );
 		update_post_meta( $post_id, self::META_DAYS, $days );
+
+		if ( ! Staff_Editor::is_enabled() && $resource_id > 0 ) {
+			update_post_meta( $post_id, self::META_DEFAULT_STAFF_FLAG, 1 );
+		}
 
 		if ( $resource_id && $year && $month ) {
 			$this->maybe_update_post_title( $post_id, $resource_id, $year, $month );
@@ -543,6 +548,9 @@ class Shift_Editor {
 			update_post_meta( (int) $post_id, self::META_YEAR, $year );
 			update_post_meta( (int) $post_id, self::META_MONTH, $month );
 			update_post_meta( (int) $post_id, self::META_DAYS, $days );
+			if ( ! Staff_Editor::is_enabled() && $resource_id > 0 ) {
+				update_post_meta( (int) $post_id, self::META_DEFAULT_STAFF_FLAG, 1 );
+			}
 
 			++$created;
 		}

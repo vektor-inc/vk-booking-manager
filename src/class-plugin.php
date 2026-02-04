@@ -50,6 +50,7 @@ use VKBookingManager\Staff\Staff_Editor;
  * Main plugin orchestrator.
  */
 class Plugin {
+	private const META_SHIFT_DEFAULT_STAFF_FLAG = '_vkbm_shift_default_staff';
 	/**
 	 * Common style enqueuer.
 	 *
@@ -661,5 +662,76 @@ class Plugin {
 				)
 			);
 		}
+
+		$this->migrate_default_staff_shifts( $keep_id );
+	}
+
+	/**
+	 * Migrate shifts flagged as Default Staff shifts to the current Default Staff.
+	 *
+	 * 日本語: デフォルトスタッフ用フラグ付きシフトを現行の Default Staff に付け替えます。
+	 *
+	 * @param int $default_staff_id Default staff ID.
+	 */
+	private function migrate_default_staff_shifts( int $default_staff_id ): void {
+		if ( $default_staff_id <= 0 || ! post_type_exists( Shift_Post_Type::POST_TYPE ) ) {
+			return;
+		}
+
+		$shift_posts = get_posts(
+			array(
+				'post_type'      => Shift_Post_Type::POST_TYPE,
+				'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+				'posts_per_page' => -1,
+				'no_found_rows'  => true,
+				'meta_query'     => array(
+					array(
+						'key'   => self::META_SHIFT_DEFAULT_STAFF_FLAG,
+						'value' => 1,
+					),
+				),
+			)
+		);
+
+		foreach ( $shift_posts as $shift_post ) {
+			$resource_id = (int) get_post_meta( $shift_post->ID, Shift_Editor::META_RESOURCE, true );
+			if ( $resource_id === $default_staff_id ) {
+				continue;
+			}
+
+			update_post_meta( $shift_post->ID, Shift_Editor::META_RESOURCE, $default_staff_id );
+
+			$year  = (int) get_post_meta( $shift_post->ID, Shift_Editor::META_YEAR, true );
+			$month = (int) get_post_meta( $shift_post->ID, Shift_Editor::META_MONTH, true );
+			$this->update_shift_title( (int) $shift_post->ID, $default_staff_id, $year, $month );
+		}
+	}
+
+	/**
+	 * Update shift post title based on resource and period.
+	 *
+	 * @param int $post_id Post ID.
+	 * @param int $resource_id Resource ID.
+	 * @param int $year Year.
+	 * @param int $month Month.
+	 */
+	private function update_shift_title( int $post_id, int $resource_id, int $year, int $month ): void {
+		if ( $year <= 0 || $month <= 0 ) {
+			return;
+		}
+
+		$resource_title = get_the_title( $resource_id );
+		if ( ! $resource_title ) {
+			return;
+		}
+
+		$new_title = sprintf( '%d year %02d month %s', $year, $month, $resource_title );
+
+		wp_update_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => $new_title,
+			)
+		);
 	}
 }
