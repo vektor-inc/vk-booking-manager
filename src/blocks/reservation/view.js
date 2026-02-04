@@ -8,21 +8,19 @@ const bootstrap = () => {
 	);
 
 		nodes.forEach((node) => {
-			const {
-				defaultMenuId = '0',
-				defaultResourceId = '0',
-				allowMenuSelection = '1',
-				allowStaffSelection = '1',
-			} = node.dataset;
+			// Reservation block settings are configured from BM basic settings; defaults for when no data attributes (e.g. block saved after attributes were removed).
+			const dataset = node.dataset || {};
+			const defaultMenuId = dataset.defaultMenuId ?? '0';
+			const defaultResourceId = dataset.defaultResourceId ?? '0';
+			const allowStaffSelection = dataset.allowStaffSelection ?? '1';
 
 			const props = {
 				defaultMenuId: Number(defaultMenuId) || 0,
 				defaultStaffId: Number(defaultResourceId) || 0,
-				allowMenuSelection: allowMenuSelection !== '0',
 				allowStaffSelection: allowStaffSelection !== '0',
 			};
 
-		render(<ReservationApp {...props} />, node);
+			render(<ReservationApp {...props} />, node);
 	});
 };
 

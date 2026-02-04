@@ -187,7 +187,6 @@ const formatBookingDateTimeParts = (startAt, endAt) => {
 export const ReservationApp = ({
 	defaultMenuId = 0,
 	defaultStaffId = 0,
-	allowMenuSelection = true,
 	allowStaffSelection = true,
 	isEditor = false,
 }) => {
@@ -1771,7 +1770,6 @@ useEffect(() => {
 							staffOptions={availableStaffOptions}
 							onMenuChange={handleMenuChange}
 							onStaffChange={handleStaffChange}
-							allowMenuSelection={allowMenuSelection}
 							allowStaffSelection={staffSelectionEnabled}
 							showStaffField={providerSettings.staffEnabled}
 							lockStaffSelection={shouldLockStaffSelection}

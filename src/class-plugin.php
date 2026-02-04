@@ -460,10 +460,32 @@ class Plugin {
 			return $file;
 		}
 
-		// ステップ3: reservationブロックの場合は、app.jsのJSONファイルを優先的に検索.
+		// ステップ3: reservationブロックの場合は、
+		// editorScript なら edit.js のJSON、その他は app.js のJSON を優先的に検索.
 		// （app.jsにはcalendar-grid.js、daily-slot-list.js、selected-plan-summary.jsなどが全てバンドルされ、
 		// build:i18n:json実行時にbin/merge-json-translations.jsで全ての翻訳がマージされている）.
 		if ( false !== strpos( $handle, 'reservation' ) ) {
+			if ( false !== strpos( $handle, 'editor' ) ) {
+				foreach ( $json_files as $json_file ) {
+					$json_content = file_get_contents( $json_file );
+					if ( false === $json_content ) {
+						continue;
+					}
+
+					$json_data = json_decode( $json_content, true );
+					if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+						continue;
+					}
+
+					$source = $json_data['source'];
+
+					// edit.js のJSONファイルを優先的に探す.
+					if ( false !== strpos( $source, 'src/blocks/reservation/edit.js' ) ) {
+						return $json_file;
+					}
+				}
+			}
+
 			foreach ( $json_files as $json_file ) {
 				$json_content = file_get_contents( $json_file );
 				if ( false === $json_content ) {

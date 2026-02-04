@@ -34,7 +34,6 @@ export const SelectedPlanSummary = ({
 	staffOptions,
 	onMenuChange,
 	onStaffChange,
-	allowMenuSelection,
 	allowStaffSelection,
 	showStaffField = true,
 	pricingRows = [],
@@ -102,22 +101,14 @@ export const SelectedPlanSummary = ({
 	return (
 		<div className="vkbm-plan-summary">
 			<div className="vkbm-plan-summary__selectors">
-				{allowMenuSelection ? (
-					<SelectField
-						label={__('Menu', 'vk-booking-manager')}
-						options={menuOptions}
-						value={menuId}
-						onChange={(value) => onMenuChange(Number(value) || 0)}
-						placeholder={__('Select menu', 'vk-booking-manager')}
-						disabled={!menuOptions.length}
-					/>
-				) : (
-					<ReadOnlyField
-						label={__('Menu', 'vk-booking-manager')}
-						value={menuOptions.find((menu) => menu.id === menuId)?.name}
-						placeholder={__('Not set', 'vk-booking-manager')}
-					/>
-				)}
+				<SelectField
+					label={__('Menu', 'vk-booking-manager')}
+					options={menuOptions}
+					value={menuId}
+					onChange={(value) => onMenuChange(Number(value) || 0)}
+					placeholder={__('Select menu', 'vk-booking-manager')}
+					disabled={!menuOptions.length}
+				/>
 				{showStaffField &&
 					(allowStaffSelection ? (
 						<SelectField

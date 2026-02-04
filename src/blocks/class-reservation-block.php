@@ -50,6 +50,7 @@ class Reservation_Block {
 	public function register(): void {
 		add_action( 'init', array( $this, 'register_block' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'maybe_enqueue_menu_loop_styles' ) );
+		add_action( 'enqueue_block_editor_assets', array( $this, 'localize_reservation_editor_script' ) );
 	}
 
 	/**
@@ -67,6 +68,25 @@ class Reservation_Block {
 		$this->register_script_translations( 'vk-booking-manager/reservation', array( 'script', 'viewScript', 'editorScript' ) );
 
 		self::$block_registered = true;
+	}
+
+	/**
+	 * Pass provider settings URL to the reservation block editor for the "configure from basic settings" message link.
+	 *
+	 * @return void
+	 */
+	public function localize_reservation_editor_script(): void {
+		$handle = generate_block_asset_handle( 'vk-booking-manager/reservation', 'editorScript' );
+		if ( ! wp_script_is( $handle, 'registered' ) ) {
+			return;
+		}
+		wp_localize_script(
+			$handle,
+			'vkbmReservationBlock',
+			array(
+				'providerSettingsUrl' => admin_url( 'admin.php?page=vkbm-provider-settings' ),
+			)
+		);
 	}
 
 	/**

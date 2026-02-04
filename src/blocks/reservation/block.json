@@ -6,24 +6,7 @@
 	"category": "widgets",
 	"icon": "calendar-alt",
 	"textdomain": "vk-booking-manager",
-	"attributes": {
-		"defaultMenuId": {
-			"type": "number",
-			"default": 0
-		},
-		"defaultResourceId": {
-			"type": "number",
-			"default": 0
-		},
-		"allowMenuSelection": {
-			"type": "boolean",
-			"default": true
-		},
-			"allowStaffSelection": {
-				"type": "boolean",
-				"default": true
-			}
-	},
+	"attributes": {},
 	"supports": {
 		"align": [
 			"wide",
