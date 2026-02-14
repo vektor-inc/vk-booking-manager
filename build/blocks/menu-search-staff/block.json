@@ -1,0 +1,25 @@
+{
+  "apiVersion": 3,
+  "name": "vk-booking-manager/menu-search-field-staff",
+  "title": "Resource search field",
+  "parent": [
+    "vk-booking-manager/menu-search"
+  ],
+  "category": "widgets",
+  "icon": "admin-users",
+  "textdomain": "vk-booking-manager",
+  "usesContext": [
+    "vk-booking-manager/menuSearchTargetId"
+  ],
+  "attributes": {
+    "label": {
+      "type": "string",
+      "default": "resource"
+    }
+  },
+  "supports": {
+    "customClassName": false,
+    "html": false
+  },
+  "editorScript": "file:./index.js"
+}

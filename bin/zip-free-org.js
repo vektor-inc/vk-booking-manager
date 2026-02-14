@@ -37,7 +37,6 @@ try {
 
 	// Create zip file with exclusions
 	const excludePatterns = [
-		'vk-booking-manager/.wp-env.json',
 		'vk-booking-manager/phpunit.xml.dist',
 		'vk-booking-manager/tests/*',
 		'vk-booking-manager/tests/*/*',
@@ -50,19 +49,10 @@ try {
 		'vk-booking-manager/docs/*',
 		'vk-booking-manager/docs/*/*',
 		'vk-booking-manager/docs/*/*/*',
-		'vk-booking-manager/.github/*',
-		'vk-booking-manager/.github/*/*',
-		'vk-booking-manager/.github/*/*/*',
-		'vk-booking-manager/.gitignore',
 		'vk-booking-manager/load-plugin-textdomain.php',
 		'vk-booking-manager/class-vkbm-github-updater.php',
 		'vk-booking-manager/languages/*',
-		'vk-booking-manager/.agent',
-		'vk-booking-manager/.claude',
-		'vk-booking-manager/.codex',
-		'vk-booking-manager/.cursor',
-		'vk-booking-manager/AGENT.md',
-		'vk-booking-manager/AGENTS.md',
+
 	];
 
 	const excludeArgs = excludePatterns.map((pattern) => `-x "${pattern}"`).join(' ');

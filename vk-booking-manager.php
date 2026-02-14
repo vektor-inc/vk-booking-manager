@@ -118,9 +118,9 @@ if ( is_admin() ) {
 	}
 	if ( vkbm_pro_is_pro_edition() ) {
 		$vkbm_free_basename = vkbm_pro_get_free_plugin_basename();
-		$free_is_active     = ( '' !== $vkbm_free_basename ) && is_plugin_active( $vkbm_free_basename );
-		$free_is_network    = ( '' !== $vkbm_free_basename ) && is_multisite() && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( $vkbm_free_basename );
-		if ( $free_is_active || $free_is_network ) {
+		$vkbm_free_is_active  = ( '' !== $vkbm_free_basename ) && is_plugin_active( $vkbm_free_basename );
+		$vkbm_free_is_network = ( '' !== $vkbm_free_basename ) && is_multisite() && function_exists( 'is_plugin_active_for_network' ) && is_plugin_active_for_network( $vkbm_free_basename );
+		if ( $vkbm_free_is_active || $vkbm_free_is_network ) {
 			add_action( 'activated_plugin', 'vkbm_pro_deactivate_free_on_activated', 10, 1 );
 			return;
 		}

@@ -1245,11 +1245,14 @@ class Menu_Loop_Block {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		if ( ! isset( $_GET[ self::REQUEST_KEY ] ) || ! is_array( $_GET[ self::REQUEST_KEY ] ) || ! isset( $_GET[ self::REQUEST_KEY ][ $loop_id ] ) || ! is_array( $_GET[ self::REQUEST_KEY ][ $loop_id ] ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Search/filter parameters do not require nonce.
+		$request_data = isset( $_GET[ self::REQUEST_KEY ] ) ? wp_unslash( $_GET[ self::REQUEST_KEY ] ) : null;
+
+		if ( ! is_array( $request_data ) || ! isset( $request_data[ $loop_id ] ) || ! is_array( $request_data[ $loop_id ] ) ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		$target = $_GET[ self::REQUEST_KEY ][ $loop_id ]; // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each key is sanitized below.
+		$target = $request_data[ $loop_id ];
 		if ( isset( $target['staff'] ) ) {
 			$staff = max( 0, (int) $target['staff'] );
 		}

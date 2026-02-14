@@ -121,6 +121,7 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 
 = 0.1.2 =
 * Delete unused files.
+* Improve `$_GET` and `$_COOKIE` data handling and clarify `phpcs:ignore` comments for security.
 
 = 0.1.1 =
 * Fix security issues.

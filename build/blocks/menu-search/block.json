@@ -1,0 +1,37 @@
+{
+  "apiVersion": 3,
+  "name": "vk-booking-manager/menu-search",
+  "title": "Service menu search",
+  "description": "You can search by resource, service tag, etc. in conjunction with the menu loop.",
+  "category": "widgets",
+  "icon": "search",
+  "textdomain": "vk-booking-manager",
+  "keywords": [
+    "booking",
+    "search"
+  ],
+  "attributes": {
+    "targetId": {
+      "type": "string",
+      "default": ""
+    },
+    "submitLabel": {
+      "type": "string",
+      "default": "Search with these conditions"
+    }
+  },
+  "providesContext": {
+    "vk-booking-manager/menuSearchTargetId": "targetId"
+  },
+  "supports": {
+    "anchor": true,
+    "customClassName": true,
+    "spacing": {
+      "margin": true,
+      "padding": true
+    }
+  },
+  "style": "file:./style-index.css",
+  "editorStyle": "file:./index.css",
+  "editorScript": "file:./index.js"
+}

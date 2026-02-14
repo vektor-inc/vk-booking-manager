@@ -1,0 +1,29 @@
+{
+  "apiVersion": 3,
+  "name": "vk-booking-manager/menu-search-field-keyword",
+  "title": "Keyword search field",
+  "parent": [
+    "vk-booking-manager/menu-search"
+  ],
+  "category": "widgets",
+  "icon": "editor-italic",
+  "textdomain": "vk-booking-manager",
+  "usesContext": [
+    "vk-booking-manager/menuSearchTargetId"
+  ],
+  "attributes": {
+    "label": {
+      "type": "string",
+      "default": "keyword"
+    },
+    "placeholder": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "supports": {
+    "customClassName": false,
+    "html": false
+  },
+  "editorScript": "file:./index.js"
+}

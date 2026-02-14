@@ -387,11 +387,14 @@ class Menu_Search_Block {
 		$category = '';
 		$keyword  = '';
 
-		if ( ! isset( $_GET[ self::REQUEST_KEY ] ) || ! is_array( $_GET[ self::REQUEST_KEY ] ) || ! isset( $_GET[ self::REQUEST_KEY ][ $target_id ] ) || ! is_array( $_GET[ self::REQUEST_KEY ][ $target_id ] ) ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Search/filter parameters do not require nonce.
+		$request_data = isset( $_GET[ self::REQUEST_KEY ] ) ? wp_unslash( $_GET[ self::REQUEST_KEY ] ) : null;
+
+		if ( ! is_array( $request_data ) || ! isset( $request_data[ $target_id ] ) || ! is_array( $request_data[ $target_id ] ) ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		$data = $_GET[ self::REQUEST_KEY ][ $target_id ]; // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each key is sanitized below.
+		$data = $request_data[ $target_id ];
 		if ( isset( $data['staff'] ) ) {
 			$staff = max( 0, (int) $data['staff'] );
 		}

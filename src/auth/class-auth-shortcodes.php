@@ -1463,7 +1463,7 @@ class Auth_Shortcodes {
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Building current URL from query string.
 			if ( ! empty( $_GET ) ) {
 				$query_args = array();
-				foreach ( wp_unslash( $_GET ) as $key => $value ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Key and value sanitized in loop body.
+				foreach ( wp_unslash( $_GET ) as $key => $value ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Non-destructive public search request. Values sanitized via map_deep in loop.
 					$sanitized_key                = sanitize_key( (string) $key );
 					$query_args[ $sanitized_key ] = map_deep( $value, 'sanitize_text_field' );
 				}
@@ -1739,7 +1739,7 @@ class Auth_Shortcodes {
 		// Decode first, then sanitize. This prevents destruction of encoded chars (e.g. %) while ensuring sanitization happens on the line.
 		// 先にデコードしてからサニタイズする。これにより、エンコードされた文字（%など）の破壊を防ぎつつ、行内でのサニタイズを確実にする。
 		$value = isset( $_COOKIE[ $name ] )
-			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE[ $name ] ) ) )
+			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE[ $name ] ) ) ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Correctly sanitized AFTER decode to prevent XSS. WPCS scanner does not track through rawurldecode.
 			: '';
 
 		if ( headers_sent() ) {
@@ -2332,7 +2332,7 @@ class Auth_Shortcodes {
 		}
 
 		$value = isset( $_COOKIE['vkbm_login_error'] )
-			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) ) )
+			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) ) ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Correctly sanitized AFTER decode to prevent XSS. WPCS scanner does not track through rawurldecode.
 			: '';
 
 		$cookie_path   = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';

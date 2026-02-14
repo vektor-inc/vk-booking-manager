@@ -1,0 +1,25 @@
+{
+  "apiVersion": 3,
+  "name": "vk-booking-manager/reservation",
+  "title": "reserved block",
+  "description": "This is a reservation UI that allows you to select menus and search for available slots.",
+  "category": "widgets",
+  "icon": "calendar-alt",
+  "textdomain": "vk-booking-manager",
+  "attributes": {},
+  "supports": {
+    "align": [
+      "wide",
+      "full"
+    ],
+    "anchor": true,
+    "spacing": {
+      "margin": true,
+      "padding": true
+    }
+  },
+  "editorScript": "file:./index.js",
+  "viewScript": "file:./view.js",
+  "style": "file:./style-index.css",
+  "editorStyle": "file:./index.css"
+}
