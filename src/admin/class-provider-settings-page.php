@@ -130,7 +130,9 @@ class Provider_Settings_Page {
 		$users_can_register = ! empty( $_POST['vkbm_users_can_register'] ) ? 1 : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
 		update_option( 'users_can_register', $users_can_register );
 
-		$payload = isset( $_POST['vkbm_provider_settings'] ) && is_array( $_POST['vkbm_provider_settings'] ) ? wp_unslash( $_POST['vkbm_provider_settings'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above. Array sanitized in settings_service->save_settings.
+		$payload = isset( $_POST['vkbm_provider_settings'] ) && is_array( $_POST['vkbm_provider_settings'] )
+			? wp_unslash( $_POST['vkbm_provider_settings'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized inside settings_service->save_settings().
+			: array();
 
 		if ( ! is_array( $payload ) ) {
 			$payload = array();
@@ -241,6 +243,20 @@ class Provider_Settings_Page {
 				'logoFrameButton' => __( 'Select', 'vk-booking-manager' ),
 			)
 		);
+
+		$regular_holiday_toggle = "(function () {
+			var checkbox = document.getElementById('vkbm-regular-holiday-disabled');
+			var panel = document.getElementById('vkbm-regular-holiday-settings');
+			if (!checkbox || !panel) {
+				return;
+			}
+			var toggle = function () {
+				panel.style.display = checkbox.checked ? 'none' : '';
+			};
+			checkbox.addEventListener('change', toggle);
+			toggle();
+		})();";
+		wp_add_inline_script( 'vkbm-provider-settings', $regular_holiday_toggle, 'after' );
 
 		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 	}
@@ -571,7 +587,7 @@ class Provider_Settings_Page {
 									<?php esc_html_e( 'Add regular holidays', 'vk-booking-manager' ); ?>
 								</button>
 								<p class="description"><?php esc_html_e( 'Register regular holidays by combining "every week", "1st to 5th", and days of the week.', 'vk-booking-manager' ); ?></p>
-								<script type="text/template" id="vkbm-regular-holiday-row-template">
+								<template id="vkbm-regular-holiday-row-template">
 									<?php
 									// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 									echo $this->render_regular_holiday_row(
@@ -585,22 +601,8 @@ class Provider_Settings_Page {
 									);
 									// phpcs:enable
 									?>
-								</script>
+								</template>
 								</div>
-								<script>
-									(function () {
-										var checkbox = document.getElementById('vkbm-regular-holiday-disabled');
-										var panel = document.getElementById('vkbm-regular-holiday-settings');
-										if (!checkbox || !panel) {
-											return;
-										}
-										var toggle = function () {
-											panel.style.display = checkbox.checked ? 'none' : '';
-										};
-										checkbox.addEventListener('change', toggle);
-										toggle();
-									})();
-								</script>
 							</td>
 						</tr>
 
@@ -634,7 +636,7 @@ class Provider_Settings_Page {
 									<button type="button" class="button button-secondary vkbm-business-hours-basic-add-slot vkbm-schedule-add-slot">
 										<?php esc_html_e( 'Add time zone', 'vk-booking-manager' ); ?>
 									</button>
-				<script type="text/template" id="vkbm-business-hours-basic-slot-template">
+				<template id="vkbm-business-hours-basic-slot-template">
 					<?php
 					// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 					echo $this->render_basic_business_hours_slot(
@@ -653,7 +655,7 @@ class Provider_Settings_Page {
 					);
 					// phpcs:enable
 					?>
-				</script>
+				</template>
 									<p class="description"><?php esc_html_e( 'Register the business hours that are common to the entire facility.', 'vk-booking-manager' ); ?></p>
 								</div>
 							</td>
@@ -751,7 +753,7 @@ class Provider_Settings_Page {
 					>
 														<?php esc_html_e( 'Add time zone', 'vk-booking-manager' ); ?>
 													</button>
-													<script type="text/template" class="vkbm-business-hours-slot-template">
+													<template class="vkbm-business-hours-slot-template">
 							<?php
 								// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 								echo $this->render_weekly_business_hours_slot(
@@ -773,7 +775,7 @@ class Provider_Settings_Page {
 								);
 								// phpcs:enable // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 							?>
-							</script>
+							</template>
 												</td>
 											</tr>
 										<?php endforeach; ?>
@@ -1369,7 +1371,7 @@ class Provider_Settings_Page {
 										<?php esc_html_e( 'Sends reminder emails to customers before their reservation time.', 'vk-booking-manager' ); ?>
 									</p>
 								</div>
-								<script type="text/template" id="vkbm-booking-reminder-template">
+								<template id="vkbm-booking-reminder-template">
 									<div class="vkbm-reminder-hours__row">
 										<input
 											type="number"
@@ -1385,7 +1387,7 @@ class Provider_Settings_Page {
 											<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
 										</button>
 									</div>
-								</script>
+								</template>
 							</td>
 						</tr>
 						<?php if ( Staff_Editor::is_enabled() ) : ?>

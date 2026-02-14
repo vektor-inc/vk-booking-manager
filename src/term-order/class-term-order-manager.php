@@ -212,9 +212,10 @@ class Term_Order_Manager {
 			);
 		}
 
-		$ordered_ids = $this->sanitize_ids(
-			isset( $_POST['orderedIds'] ) ? (array) wp_unslash( $_POST['orderedIds'] ) : array() // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by sanitize_ids() below.
-		);
+		$raw_ids = isset( $_POST['orderedIds'] ) && is_array( $_POST['orderedIds'] )
+			? array_map( 'absint', wp_unslash( $_POST['orderedIds'] ) )
+			: array();
+		$ordered_ids = $this->sanitize_ids( $raw_ids );
 
 		if ( empty( $ordered_ids ) ) {
 			wp_send_json_error(

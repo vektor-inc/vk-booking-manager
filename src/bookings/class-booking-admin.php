@@ -606,37 +606,33 @@ class Booking_Admin {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] )
-			? wp_unslash( $_POST['vkbm_booking'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
-			: array();
+		$raw  = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] ) ? wp_unslash( $_POST['vkbm_booking'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by sanitize_booking_post_data().
+		$data = $this->sanitize_booking_post_data( $raw );
 
 		$previous_status = (string) get_post_meta( $post_id, self::META_STATUS, true );
 
-		$date       = isset( $data['date'] ) ? $this->sanitize_date( $data['date'] ) : '';
-		$start_time = isset( $data['start_time'] ) ? $this->sanitize_time( $data['start_time'] ) : '';
-		$end_time   = isset( $data['end_time'] ) ? $this->sanitize_time( $data['end_time'] ) : '';
+		$date       = $data['date'];
+		$start_time = $data['start_time'];
+		$end_time   = $data['end_time'];
 
 		$start = ( $date && $start_time ) ? $this->combine_datetime( $date, $start_time ) : '';
 		$end   = ( $date && $end_time ) ? $this->combine_datetime( $date, $end_time ) : '';
 
-		$resource_id          = isset( $data['resource_id'] ) ? $this->sanitize_resource_id( (int) $data['resource_id'] ) : 0;
-		$service_id_locked    = isset( $data['service_id'] ) ? $this->sanitize_service_id( (int) $data['service_id'] ) : 0;
-		$service_id_select    = isset( $data['service_id_select'] ) ? $this->sanitize_service_id( (int) $data['service_id_select'] ) : 0;
-		$allow_service_change = isset( $data['allow_service_change'] );
+		$resource_id          = $data['resource_id'];
+		$service_id_locked    = $data['service_id'];
+		$service_id_select    = $data['service_id_select'];
+		$allow_service_change = $data['allow_service_change'];
 		$service_id           = $allow_service_change ? $service_id_select : $service_id_locked;
-		$customer             = isset( $data['customer'] ) ? sanitize_text_field( $data['customer'] ) : '';
-		$customer_tel         = isset( $data['customer_tel'] ) ? sanitize_text_field( $data['customer_tel'] ) : '';
-		$customer_mail        = isset( $data['customer_email'] ) ? sanitize_email( $data['customer_email'] ) : '';
-		$billed_total_price   = array_key_exists( 'billed_total_price', $data )
-			? $this->sanitize_base_price( $data['billed_total_price'] )
-			: '';
-		$status               = isset( $data['status'] ) ? $this->sanitize_status( (string) $data['status'] ) : self::STATUS_CONFIRMED;
-		$note                 = isset( $data['note'] ) ? wp_kses_post( $data['note'] ) : '';
-		$internal_note        = isset( $data['internal_note'] ) ? wp_kses_post( $data['internal_note'] ) : '';
-		$is_preferred         = isset( $data['is_staff_preferred'] ) ? '1' : '';
-		$author_id            = isset( $data['author_id'] ) ? absint( $data['author_id'] ) : 0;
-		$author_id            = $this->sanitize_author_id( $author_id );
-		$attachment_ids       = isset( $data['attachment_ids'] ) ? $this->normalize_attachment_ids( $data['attachment_ids'] ) : array();
+		$customer             = $data['customer'];
+		$customer_tel         = $data['customer_tel'];
+		$customer_mail        = $data['customer_email'];
+		$billed_total_price   = $data['billed_total_price'];
+		$status               = $data['status'];
+		$note                 = $data['note'];
+		$internal_note        = $data['internal_note'];
+		$is_preferred         = $data['is_staff_preferred'];
+		$author_id            = $this->sanitize_author_id( $data['author_id'] );
+		$attachment_ids       = $data['attachment_ids'];
 
 		$has_conflict        = $this->has_staff_conflict( $post_id, $resource_id, $start, $end );
 		$settings            = ( new Settings_Repository() )->get_settings();
@@ -911,17 +907,62 @@ class Booking_Admin {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_booking'] ) && is_array( $_POST['vkbm_booking'] ) ? wp_unslash( $_POST['vkbm_booking'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified above. Individual fields are sanitized below.
-		if ( ! is_array( $data ) ) {
+		if ( ! isset( $_POST['vkbm_booking'] ) || ! is_array( $_POST['vkbm_booking'] ) ) {
 			return;
 		}
 
-		$status = isset( $data['status'] ) ? $this->sanitize_status( (string) $data['status'] ) : '';
+		$status = isset( $_POST['vkbm_booking']['status'] ) ? $this->sanitize_status( sanitize_text_field( wp_unslash( $_POST['vkbm_booking']['status'] ) ) ) : '';
 		if ( '' === $status ) {
 			return;
 		}
 
 		$this->update_meta_value( $post_id, self::META_STATUS, $status );
+	}
+
+	/**
+	 * Sanitize raw booking POST data. All values are sanitized at read time.
+	 *
+	 * @param array<string, mixed> $raw Raw POST data.
+	 * @return array<string, mixed> Sanitized data with keys: date, start_time, end_time, resource_id, service_id, service_id_select, allow_service_change, customer, customer_tel, customer_email, billed_total_price, status, note, internal_note, is_staff_preferred, author_id, attachment_ids.
+	 */
+	private function sanitize_booking_post_data( array $raw ): array {
+		$date                 = isset( $raw['date'] ) ? $this->sanitize_date( sanitize_text_field( (string) $raw['date'] ) ) : '';
+		$start_time           = isset( $raw['start_time'] ) ? $this->sanitize_time( sanitize_text_field( (string) $raw['start_time'] ) ) : '';
+		$end_time             = isset( $raw['end_time'] ) ? $this->sanitize_time( sanitize_text_field( (string) $raw['end_time'] ) ) : '';
+		$resource_id          = isset( $raw['resource_id'] ) ? $this->sanitize_resource_id( (int) $raw['resource_id'] ) : 0;
+		$service_id           = isset( $raw['service_id'] ) ? $this->sanitize_service_id( (int) $raw['service_id'] ) : 0;
+		$service_id_select    = isset( $raw['service_id_select'] ) ? $this->sanitize_service_id( (int) $raw['service_id_select'] ) : 0;
+		$allow_service_change = isset( $raw['allow_service_change'] );
+		$customer             = isset( $raw['customer'] ) ? sanitize_text_field( (string) $raw['customer'] ) : '';
+		$customer_tel         = isset( $raw['customer_tel'] ) ? sanitize_text_field( (string) $raw['customer_tel'] ) : '';
+		$customer_email       = isset( $raw['customer_email'] ) ? sanitize_email( (string) $raw['customer_email'] ) : '';
+		$billed_total_price   = array_key_exists( 'billed_total_price', $raw ) ? $this->sanitize_base_price( $raw['billed_total_price'] ) : '';
+		$status               = isset( $raw['status'] ) ? $this->sanitize_status( (string) $raw['status'] ) : self::STATUS_CONFIRMED;
+		$note                 = isset( $raw['note'] ) ? wp_kses_post( (string) $raw['note'] ) : '';
+		$internal_note        = isset( $raw['internal_note'] ) ? wp_kses_post( (string) $raw['internal_note'] ) : '';
+		$is_staff_preferred   = isset( $raw['is_staff_preferred'] ) ? '1' : '';
+		$author_id            = isset( $raw['author_id'] ) ? absint( $raw['author_id'] ) : 0;
+		$attachment_ids       = isset( $raw['attachment_ids'] ) ? $this->normalize_attachment_ids( $raw['attachment_ids'] ) : array();
+
+		return array(
+			'date'                 => $date,
+			'start_time'           => $start_time,
+			'end_time'             => $end_time,
+			'resource_id'          => $resource_id,
+			'service_id'           => $service_id,
+			'service_id_select'    => $service_id_select,
+			'allow_service_change' => $allow_service_change,
+			'customer'             => $customer,
+			'customer_tel'         => $customer_tel,
+			'customer_email'       => $customer_email,
+			'billed_total_price'   => $billed_total_price,
+			'status'               => $status,
+			'note'                 => $note,
+			'internal_note'        => $internal_note,
+			'is_staff_preferred'   => $is_staff_preferred,
+			'author_id'            => $author_id,
+			'attachment_ids'       => $attachment_ids,
+		);
 	}
 
 	/**

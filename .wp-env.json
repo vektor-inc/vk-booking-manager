@@ -3,6 +3,8 @@
     "plugins": [
         "."
 	],
+	"port": 1900,
+	"testsPort": 1901,
 	"config": {
 		"WP_DEBUG": true,
 		"SCRIPT_DEBUG": true,

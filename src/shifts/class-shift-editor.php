@@ -259,11 +259,22 @@ class Shift_Editor {
 			return;
 		}
 
-		$payload     = isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ? wp_unslash( $_POST['vkbm_shift'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
-		$resource_id = isset( $payload['resource_id'] ) ? (int) $payload['resource_id'] : 0;
-		$year        = isset( $payload['year'] ) ? (int) $payload['year'] : 0;
-		$month       = isset( $payload['month'] ) ? (int) $payload['month'] : 0;
-		$days_json   = isset( $payload['days_json'] ) ? (string) $payload['days_json'] : '';
+		$payload = array(
+			'resource_id' => 0,
+			'year'        => 0,
+			'month'       => 0,
+			'days_json'   => '',
+		);
+		if ( isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ) {
+			$payload['resource_id'] = absint( wp_unslash( $_POST['vkbm_shift']['resource_id'] ?? 0 ) );
+			$payload['year']        = absint( wp_unslash( $_POST['vkbm_shift']['year'] ?? 0 ) );
+			$payload['month']       = absint( wp_unslash( $_POST['vkbm_shift']['month'] ?? 0 ) );
+			$payload['days_json']   = sanitize_text_field( (string) wp_unslash( $_POST['vkbm_shift']['days_json'] ?? '' ) );
+		}
+		$resource_id = $payload['resource_id'];
+		$year        = $payload['year'];
+		$month       = $payload['month'];
+		$days_json   = $payload['days_json'];
 
 		$resource_id = $this->sanitize_resource_id( $resource_id );
 		$year        = $this->sanitize_year( $year );
@@ -481,11 +492,10 @@ class Shift_Editor {
 			admin_url( 'edit.php' )
 		);
 
-		$payload = isset( $_POST['vkbm_shift_bulk'] ) && is_array( $_POST['vkbm_shift_bulk'] )
-			? wp_unslash( $_POST['vkbm_shift_bulk'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
-			: array();
-
-		$period = isset( $payload['period'] ) ? sanitize_text_field( (string) $payload['period'] ) : '';
+		$period = '';
+		if ( isset( $_POST['vkbm_shift_bulk'] ) && is_array( $_POST['vkbm_shift_bulk'] ) && isset( $_POST['vkbm_shift_bulk']['period'] ) ) {
+			$period = sanitize_text_field( (string) wp_unslash( $_POST['vkbm_shift_bulk']['period'] ) );
+		}
 
 		$period_parts = explode( '-', $period );
 		$year         = isset( $period_parts[0] ) ? (int) $period_parts[0] : 0;

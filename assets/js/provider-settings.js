@@ -16,6 +16,26 @@
 		var $reminderList;
 		var $reminderIndex;
 
+		/**
+		 * Get HTML string from a template or script element (for HTML5 <template> or legacy script type="text/template").
+		 * @param {string|Element|jQuery} selectorOrElement - CSS selector, DOM element, or jQuery object.
+		 * @return {string}
+		 */
+		function getTemplateHtml( selectorOrElement ) {
+			var el = typeof selectorOrElement === 'string' ?
+				document.querySelector( selectorOrElement ) :
+				( selectorOrElement && selectorOrElement[ 0 ] !== undefined ? selectorOrElement[ 0 ] : selectorOrElement );
+			if ( ! el ) {
+				return '';
+			}
+			if ( el.tagName === 'TEMPLATE' && el.content ) {
+				var div = document.createElement( 'div' );
+				div.appendChild( el.content.cloneNode( true ) );
+				return div.innerHTML;
+			}
+			return el.innerHTML || '';
+		}
+
 		function updateBookingCancelModeState() {
 			var $mode = $( '#vkbm-provider-booking-cancel-mode' );
 			var $hoursField = $( '#vkbm-provider-booking-cancel-hours-field' );
@@ -210,7 +230,7 @@
 	}
 
 	function getWeeklySlotTemplate( $row ) {
-		var template = $row.find( '.vkbm-business-hours-slot-template' ).html() || '';
+		var template = getTemplateHtml( $row.find( '.vkbm-business-hours-slot-template' ) ) || '';
 
 		if ( template ) {
 			template = template.trim();
@@ -392,7 +412,7 @@
 		} );
 
 	$( function() {
-		holidayTemplate = $( '#vkbm-regular-holiday-row-template' ).html() || '';
+		holidayTemplate = getTemplateHtml( '#vkbm-regular-holiday-row-template' ) || '';
 			$holidayTable   = $( '#vkbm-regular-holiday-rows' );
 			$holidayIndex   = $( '#vkbm-regular-holiday-next-index' );
 			$basicSlots     = $( '#vkbm-business-hours-basic-slots' );
@@ -402,8 +422,8 @@
 				holidayTemplate = holidayTemplate.trim();
 			}
 
-		basicTemplate = $( '#vkbm-business-hours-basic-slot-template' ).html() || '';
-		reminderTemplate = $( '#vkbm-booking-reminder-template' ).html() || '';
+		basicTemplate = getTemplateHtml( '#vkbm-business-hours-basic-slot-template' ) || '';
+		reminderTemplate = getTemplateHtml( '#vkbm-booking-reminder-template' ) || '';
 		$reminderList    = $( '#vkbm-booking-reminder-hours-list' );
 		$reminderIndex   = $( '#vkbm-booking-reminder-next-index' );
 

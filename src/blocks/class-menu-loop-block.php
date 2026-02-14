@@ -1245,29 +1245,19 @@ class Menu_Loop_Block {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		$raw_request = isset( $_GET[ self::REQUEST_KEY ] ) && is_array( $_GET[ self::REQUEST_KEY ] ) ? wp_unslash( $_GET[ self::REQUEST_KEY ] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
-		if ( ! is_array( $raw_request ) ) {
+		if ( ! isset( $_GET[ self::REQUEST_KEY ] ) || ! is_array( $_GET[ self::REQUEST_KEY ] ) || ! isset( $_GET[ self::REQUEST_KEY ][ $loop_id ] ) || ! is_array( $_GET[ self::REQUEST_KEY ][ $loop_id ] ) ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		$target = $raw_request[ $loop_id ] ?? array();
-		if ( ! is_array( $target ) ) {
-			return compact( 'staff', 'category', 'keyword' );
-		}
-
+		$target = $_GET[ self::REQUEST_KEY ][ $loop_id ]; // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each key is sanitized below.
 		if ( isset( $target['staff'] ) ) {
-			$staff = (int) $target['staff'];
-			if ( $staff < 0 ) {
-				$staff = 0;
-			}
+			$staff = max( 0, (int) $target['staff'] );
 		}
-
 		if ( isset( $target['category'] ) ) {
 			$category = absint( $target['category'] );
 		}
-
 		if ( isset( $target['keyword'] ) ) {
-			$keyword = sanitize_text_field( wp_unslash( (string) $target['keyword'] ) );
+			$keyword = sanitize_text_field( (string) wp_unslash( $target['keyword'] ) );
 		}
 
 		return array(

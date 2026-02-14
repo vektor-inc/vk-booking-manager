@@ -344,25 +344,24 @@ class Service_Menu_Editor {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_service_menu'] ) ? wp_unslash( $_POST['vkbm_service_menu'] ) : array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified above. Individual fields are sanitized below.
-
-		if ( ! is_array( $data ) ) {
+		if ( ! isset( $_POST['vkbm_service_menu'] ) || ! is_array( $_POST['vkbm_service_menu'] ) ) {
 			return;
 		}
 
+		$data = wp_unslash( $_POST['vkbm_service_menu'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each key is sanitized via sanitize_*_value() below.
 		$catch_copy                     = $this->sanitize_text_value( $data, 'catch_copy' );
 		$internal_memo                  = $this->sanitize_textarea_value( $data, 'internal_memo' );
 		$other_conditions               = $this->sanitize_textarea_value( $data, 'other_conditions' );
-			$base_price                 = $this->sanitize_numeric_value( $data, 'base_price' );
-			$duration                   = $this->sanitize_numeric_value( $data, 'duration_minutes' );
-			$buffer_after               = $this->sanitize_numeric_value( $data, 'buffer_after_minutes' );
-				$deadline               = $this->sanitize_numeric_value( $data, 'reservation_deadline_hours' );
-				$reservation_day_type   = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
-				$online_unavailable     = isset( $data['online_unavailable'] ) ? '1' : '';
-				$archive                = isset( $data['is_archived'] ) ? '1' : '';
-				$use_detail_page        = isset( $data['use_detail_page'] ) ? '1' : '';
-				$disable_nomination_fee = isset( $data['disable_nomination_fee'] ) ? '1' : '';
-				$staff_ids              = $this->sanitize_staff_ids( $data['staff_ids'] ?? array() );
+		$base_price                     = $this->sanitize_numeric_value( $data, 'base_price' );
+		$duration                       = $this->sanitize_numeric_value( $data, 'duration_minutes' );
+		$buffer_after                   = $this->sanitize_numeric_value( $data, 'buffer_after_minutes' );
+		$deadline                       = $this->sanitize_numeric_value( $data, 'reservation_deadline_hours' );
+		$reservation_day_type           = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
+		$online_unavailable             = isset( $data['online_unavailable'] ) ? '1' : '';
+		$archive                        = isset( $data['is_archived'] ) ? '1' : '';
+		$use_detail_page                = isset( $data['use_detail_page'] ) ? '1' : '';
+		$disable_nomination_fee         = isset( $data['disable_nomination_fee'] ) ? '1' : '';
+		$staff_ids                      = $this->sanitize_staff_ids( $data['staff_ids'] ?? array() );
 
 			$this->update_meta_value( $post_id, '_vkbm_catch_copy', $catch_copy );
 			$this->update_meta_value( $post_id, '_vkbm_internal_memo', $internal_memo );

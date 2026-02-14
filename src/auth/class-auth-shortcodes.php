@@ -218,6 +218,9 @@ class Auth_Shortcodes {
 	 */
 	public function handle_form_submission(): void {
 		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+		
+
+
 		if ( 'POST' !== $request_method ) {
 			return;
 		}
@@ -649,56 +652,9 @@ class Auth_Shortcodes {
 				<input type="hidden" name="vkbm_auth" value="register">
 			</form>
 			<p id="vkbm-register-username-feedback" class="vkbm-auth-form__feedback" aria-live="polite" hidden></p>
-			<script>
-				(function () {
-					var form = document.getElementById('vkbm-provider-register-form');
-					var usernameInput = document.getElementById('vkbm-register-username');
-					var feedback = document.getElementById('vkbm-register-username-feedback');
-					if (!form || !usernameInput || !feedback) {
-						return;
-					}
-
-					var submitButton = form.querySelector('button[type="submit"]');
-					var pattern = /^[A-Za-z0-9_@.\-]+$/;
-
-					var evaluate = function () {
-						var value = usernameInput.value.trim();
-						if (value === '') {
-							feedback.textContent = '';
-							if (submitButton) {
-								submitButton.disabled = false;
-							}
-							return true;
-						}
-
-						if (!pattern.test(value)) {
-							var message = '<?php echo esc_js( __( 'Please enter the username using only half-width alphanumeric characters, _, @, ., and -.', 'vk-booking-manager' ) ); ?>';
-							feedback.textContent = message;
-							usernameInput.setCustomValidity(message);
-							if (submitButton) {
-								submitButton.disabled = true;
-							}
-							return false;
-						}
-
-						feedback.textContent = '';
-						usernameInput.setCustomValidity('');
-						if (submitButton) {
-							submitButton.disabled = false;
-						}
-						return true;
-					};
-
-					usernameInput.addEventListener('input', evaluate);
-
-					form.addEventListener('submit', function (event) {
-						if (!evaluate()) {
-							event.preventDefault();
-							usernameInput.focus();
-						}
-					});
-				})();
-			</script>
+			<?php
+			wp_add_inline_script( 'vkbm-auth-forms', $this->get_register_username_validation_script(), 'after' );
+			?>
 			<?php if ( ! empty( $login_url ) ) : ?>
 				<p class="vkbm-auth-form__footer vkbm-auth-form__footer--login-link">
 					<a class="vkbm-auth-form__link" href="<?php echo esc_url( $login_url ); ?>">
@@ -1070,12 +1026,14 @@ class Auth_Shortcodes {
 	 * Handles registration submission.
 	 */
 	private function process_registration_request(): void {
+
 		$this->registration_errors = new WP_Error();
 
 		$nonce    = isset( $_POST['vkbm_registration_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_registration_nonce'] ) ) : '';
 		$honeypot = isset( $_POST['vkbm_hp_email'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_hp_email'] ) ) : '';
 
 		if ( ! wp_verify_nonce( $nonce, 'vkbm_registration_form' ) ) {
+
 			$this->registration_errors->add( 'invalid_nonce', __( 'Security check failed. Please reload the page and try again.', 'vk-booking-manager' ) );
 			$this->persist_registration_errors();
 			return;
@@ -1207,10 +1165,13 @@ class Auth_Shortcodes {
 		$user_id = wp_create_user( $username, $password, $email );
 
 		if ( is_wp_error( $user_id ) ) {
+
 			$this->registration_errors->add( 'registration_failed', $user_id->get_error_message() );
 			$this->persist_registration_errors();
 			return;
 		}
+
+
 
 		$this->store_registration_metadata( $user_id, $first_name, $last_name, $kana_name, $phone, $birth, $gender );
 
@@ -1291,6 +1252,9 @@ class Auth_Shortcodes {
 		if ( ! is_array( $data ) ) {
 			return;
 		}
+
+		// Sanitize the decoded array data. / デコードされた配列データをサニタイズ。
+		$data = map_deep( $data, 'sanitize_text_field' );
 
 		$messages                       = isset( $data['messages'] ) && is_array( $data['messages'] ) ? $data['messages'] : array();
 		$this->registration_posted_data = isset( $data['posted'] ) && is_array( $data['posted'] ) ? $data['posted'] : array();
@@ -1419,6 +1383,64 @@ class Auth_Shortcodes {
 	}
 
 	/**
+	 * Returns inline script for register form username validation (enqueued via wp_add_inline_script).
+	 *
+	 * @return string
+	 */
+	private function get_register_username_validation_script(): string {
+		$message = __( 'Please enter the username using only half-width alphanumeric characters, _, @, ., and -.', 'vk-booking-manager' );
+
+		return sprintf(
+			'(function () {
+				var form = document.getElementById("vkbm-provider-register-form");
+				var usernameInput = document.getElementById("vkbm-register-username");
+				var feedback = document.getElementById("vkbm-register-username-feedback");
+				if (!form || !usernameInput || !feedback) {
+					return;
+				}
+				var submitButton = form.querySelector("button[type=\\"submit\\"]");
+				var pattern = /^[A-Za-z0-9_@.\\-]+$/;
+				var message = %s;
+				var evaluate = function () {
+					var value = usernameInput.value.trim();
+					if (value === "") {
+						feedback.textContent = "";
+						feedback.hidden = true;
+						if (submitButton) {
+							submitButton.disabled = false;
+						}
+						return true;
+					}
+					if (!pattern.test(value)) {
+						feedback.textContent = message;
+						feedback.hidden = false;
+						usernameInput.setCustomValidity(message);
+						if (submitButton) {
+							submitButton.disabled = true;
+						}
+						return false;
+					}
+					feedback.textContent = "";
+					feedback.hidden = true;
+					usernameInput.setCustomValidity("");
+					if (submitButton) {
+						submitButton.disabled = false;
+					}
+					return true;
+				};
+				usernameInput.addEventListener("input", evaluate);
+				form.addEventListener("submit", function (event) {
+					if (!evaluate()) {
+						event.preventDefault();
+						usernameInput.focus();
+					}
+				});
+			})();',
+			wp_json_encode( $message )
+		);
+	}
+
+	/**
 	 * Attempts to build the current URL.
 	 *
 	 * @return string
@@ -1440,10 +1462,8 @@ class Auth_Shortcodes {
 
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Building current URL from query string.
 			if ( ! empty( $_GET ) ) {
-				// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Building URL, sanitize keys/values before add_query_arg().
-				$raw_query_args = wp_unslash( $_GET );
-				$query_args     = array();
-				foreach ( $raw_query_args as $key => $value ) {
+				$query_args = array();
+				foreach ( wp_unslash( $_GET ) as $key => $value ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Key and value sanitized in loop body.
 					$sanitized_key                = sanitize_key( (string) $key );
 					$query_args[ $sanitized_key ] = map_deep( $value, 'sanitize_text_field' );
 				}
@@ -1716,10 +1736,11 @@ class Auth_Shortcodes {
 			return null;
 		}
 
-		$cookie_raw = isset( $_COOKIE[ $name ] )
-			? (string) wp_unslash( $_COOKIE[ $name ] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Decoded then sanitized below.
+		// Decode first, then sanitize. This prevents destruction of encoded chars (e.g. %) while ensuring sanitization happens on the line.
+		// 先にデコードしてからサニタイズする。これにより、エンコードされた文字（%など）の破壊を防ぎつつ、行内でのサニタイズを確実にする。
+		$value = isset( $_COOKIE[ $name ] )
+			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE[ $name ] ) ) )
 			: '';
-		$value      = sanitize_text_field( rawurldecode( $cookie_raw ) );
 
 		if ( headers_sent() ) {
 			return $value;
@@ -2310,10 +2331,9 @@ class Auth_Shortcodes {
 			return null;
 		}
 
-		$cookie_raw = isset( $_COOKIE['vkbm_login_error'] )
-			? (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Decoded then sanitized below.
+		$value = isset( $_COOKIE['vkbm_login_error'] )
+			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) ) )
 			: '';
-		$value      = sanitize_text_field( rawurldecode( $cookie_raw ) );
 
 		$cookie_path   = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
 		$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';

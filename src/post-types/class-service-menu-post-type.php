@@ -620,19 +620,18 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$data = isset( $_POST['vkbm_service_menu_quick'] ) && is_array( $_POST['vkbm_service_menu_quick'] ) ? wp_unslash( $_POST['vkbm_service_menu_quick'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce verified above. Individual fields are sanitized below.
-		if ( ! is_array( $data ) ) {
+		if ( ! isset( $_POST['vkbm_service_menu_quick'] ) || ! is_array( $_POST['vkbm_service_menu_quick'] ) ) {
 			return;
 		}
 
-		$base_price             = $this->sanitize_numeric_value( $data['base_price'] ?? '' );
-		$duration               = $this->sanitize_numeric_value( $data['duration_minutes'] ?? '' );
-		$buffer_after           = $this->sanitize_numeric_value( $data['buffer_after_minutes'] ?? '' );
-		$reservation_deadline   = $this->sanitize_numeric_value( $data['reservation_deadline_hours'] ?? '' );
-		$staff_ids              = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( $data['staff_ids'] ?? array() ) : null;
-		$other_conditions       = isset( $data['other_conditions'] ) ? sanitize_textarea_field( (string) $data['other_conditions'] ) : '';
-		$reservation_day_type   = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
-		$disable_nomination_fee = ! empty( $data['disable_nomination_fee'] ) ? '1' : '';
+		$base_price             = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['base_price'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['base_price'] ) ) : '' );
+		$duration               = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ) : '' );
+		$buffer_after           = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ) : '' );
+		$reservation_deadline   = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ) : '' );
+		$staff_ids              = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( isset( $_POST['vkbm_service_menu_quick']['staff_ids'] ) && is_array( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ) : array() ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by array_map( 'absint' ) and sanitize_staff_ids().
+		$other_conditions       = isset( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ) : '';
+		$reservation_day_type   = $this->sanitize_reservation_day_type( isset( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ) : '' );
+		$disable_nomination_fee = ! empty( $_POST['vkbm_service_menu_quick']['disable_nomination_fee'] ) ? '1' : '';
 
 		$this->update_meta_value( $post_id, '_vkbm_base_price', $base_price );
 		$this->update_meta_value( $post_id, '_vkbm_duration_minutes', $duration );

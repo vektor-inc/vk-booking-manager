@@ -15,6 +15,8 @@
 		"build:i18n:mo": "msgfmt -o languages/vk-booking-manager-ja.mo languages/vk-booking-manager-ja.po",
 		"build:i18n:json": "wp i18n make-json languages/vk-booking-manager-ja.po languages --no-purge && node bin/merge-json-translations.js",
 		"start": "wp-scripts start",
+		"skills:sync": "node bin/sync-ai-skills.js",
+		"skills:update": "node bin/update-official-skills.js",
 		"lint:css": "wp-scripts lint-style",
 		"lint:js": "wp-scripts lint-js",
 		"format": "wp-scripts format",

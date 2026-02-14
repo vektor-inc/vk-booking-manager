@@ -19,7 +19,7 @@
 		}
 	},
 	"editorScript": "file:./index.js",
-	"script": "file:./view.js",
+	"viewScript": "file:./view.js",
 	"style": "file:./style-index.css",
 	"editorStyle": "file:./index.css"
 }

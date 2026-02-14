@@ -252,6 +252,15 @@ export const BookingConfirmApp = ({
 	const [currencySymbol, setCurrencySymbol] = useState('');
 
 	const isLoggedIn = useLoginState();
+    
+    // Debug logging
+    useEffect(() => {
+        console.log('[DEBUG] BookingConfirmApp mounted');
+        console.log('[DEBUG] isLoggedIn:', isLoggedIn);
+        console.log('[DEBUG] userBootstrap:', userBootstrap);
+        console.log('[DEBUG] document body class:', typeof document !== 'undefined' ? document.body.className : 'no document');
+    }, [isLoggedIn, userBootstrap]);
+
 
 	const queryDefaults = useMemo(() => parseQueryParams(), []);
 	const [authMode, setAuthMode] = useState(queryDefaults.auth || '');
@@ -411,6 +420,14 @@ export const BookingConfirmApp = ({
 				setCurrencySymbol(typeof response?.currency_symbol === 'string' ? response.currency_symbol : '');
 				if (!reservationPageUrl && typeof response?.reservation_page_url === 'string') {
 					setResolvedReservationPageUrl(response.reservation_page_url);
+				}
+				
+				// Debug logging
+				if (process.env.NODE_ENV === 'development') {
+					console.log('=== Provider Settings API Response ===');
+					console.log('cancellation_policy:', response?.cancellation_policy);
+					console.log('terms_of_service:', response?.terms_of_service);
+					console.log('Full response:', response);
 				}
 			})
 			.catch(() => {
@@ -971,6 +988,16 @@ useEffect(() => {
 	};
 
 	const renderAgreements = () => {
+		// Debug logging to investigate checkbox visibility
+		if (process.env.NODE_ENV === 'development') {
+			console.log('=== renderAgreements Debug ===');
+			console.log('showSuccessMessage:', showSuccessMessage);
+			console.log('canManageReservations:', canManageReservations);
+			console.log('providerCancellationPolicy length:', providerCancellationPolicy?.length || 0);
+			console.log('providerTermsOfService length:', providerTermsOfService?.length || 0);
+			console.log('isLoggedIn:', isLoggedIn);
+		}
+		
 		if (showSuccessMessage || canManageReservations) {
 			return null;
 		}
@@ -1562,6 +1589,7 @@ useEffect(() => {
 
 			{!isLoggedIn && (
 				<div className="vkbm-confirm__auth">
+
 					<p className="vkbm-confirm__auth-label">
 						{__('You must log in to confirm your reservation.', 'vk-booking-manager')}
 					</p>

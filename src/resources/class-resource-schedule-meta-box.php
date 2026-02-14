@@ -326,19 +326,16 @@ class Resource_Schedule_Meta_Box {
 			return;
 		}
 
-		$payload = isset( $_POST['vkbm_resource_schedule'] ) && is_array( $_POST['vkbm_resource_schedule'] ) ? wp_unslash( $_POST['vkbm_resource_schedule'] ) : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Individual fields are sanitized below.
-
-		if ( ! is_array( $payload ) ) {
+		if ( ! isset( $_POST['vkbm_resource_schedule'] ) || ! is_array( $_POST['vkbm_resource_schedule'] ) ) {
 			$this->repository->delete_template( $post_id );
 			return;
 		}
 
+		$template = $this->sanitize_template( wp_unslash( $_POST['vkbm_resource_schedule'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized inside sanitize_template().
+
 		$existing_template = get_post_meta( $post_id, Resource_Schedule_Template_Repository::META_KEY, true );
 		$had_template      = is_array( $existing_template );
 		$had_provider_mode = $had_template && ! empty( $existing_template['use_provider_hours'] );
-
-		$payload  = wp_unslash( $payload );
-		$template = $this->sanitize_template( $payload );
 
 		if ( empty( $template['use_provider_hours'] ) && empty( $template['days'] ) && ( ! $had_template || $had_provider_mode ) ) {
 			$default_days = $this->get_provider_default_days();

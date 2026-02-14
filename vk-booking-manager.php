@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://github.com/vektor-inc/vk-booking-manager/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     0.0.27
+ * Version:     0.1.1
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -179,6 +179,9 @@ require_once __DIR__ . '/src/admin/class-email-log-repository.php';
 require_once __DIR__ . '/src/admin/class-email-log-page.php';
 require_once __DIR__ . '/src/oembed/class-oembed-override.php';
 require_once __DIR__ . '/src/resources/resource-labels.php';
+require_once __DIR__ . '/src/provider-settings/class-settings-repository.php';
+require_once __DIR__ . '/src/provider-settings/class-settings-sanitizer.php';
+require_once __DIR__ . '/src/provider-settings/class-settings-service.php';
 
 use VKBookingManager\Admin\Email_Log_Page;
 use VKBookingManager\Admin\Provider_Settings_Page;
