@@ -1245,8 +1245,9 @@ class Menu_Loop_Block {
 			return compact( 'staff', 'category', 'keyword' );
 		}
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Search/filter parameters do not require nonce.
-		$request_data = isset( $_GET[ self::REQUEST_KEY ] ) ? wp_unslash( $_GET[ self::REQUEST_KEY ] ) : null;
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Search params are public.
+		$request_data = isset( $_GET[ self::REQUEST_KEY ] ) ? map_deep( wp_unslash( $_GET[ self::REQUEST_KEY ] ), 'sanitize_text_field' ) : null;
 
 		if ( ! is_array( $request_data ) || ! isset( $request_data[ $loop_id ] ) || ! is_array( $request_data[ $loop_id ] ) ) {
 			return compact( 'staff', 'category', 'keyword' );
