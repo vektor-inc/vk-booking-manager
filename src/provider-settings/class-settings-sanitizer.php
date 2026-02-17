@@ -111,8 +111,8 @@ class Settings_Sanitizer {
 		$currency_symbol_raw                            = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
 		$data['currency_symbol']                        = sanitize_text_field( $currency_symbol_raw );
 		$tax_label_raw                                  = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
-		// English: Allow leading/trailing spaces, while stripping tags.
-		// 日本語: 先頭・末尾の空白は維持しつつ、タグは除去します.
+		// Allow leading/trailing spaces, while stripping tags.
+		// 先頭・末尾の空白は維持しつつ、タグは除去します.
 		$data['tax_label_text'] = wp_kses( $tax_label_raw, array() );
 		$data['provider_email'] = $this->sanitize_email( $data['provider_email'] );
 		if ( '' === $data['provider_email'] ) {

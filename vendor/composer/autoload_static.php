@@ -672,7 +672,6 @@ class ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199
         'TheSeer\\Tokenizer\\Tokenizer' => __DIR__ . '/..' . '/theseer/tokenizer/src/Tokenizer.php',
         'TheSeer\\Tokenizer\\XMLSerializer' => __DIR__ . '/..' . '/theseer/tokenizer/src/XMLSerializer.php',
         'VKBM_Sample_Test' => __DIR__ . '/../..' . '/tests/phpunit/test-sample.php',
-        'VKBookingManager\\Admin\\Edition_Plugin_Deactivator' => __DIR__ . '/../..' . '/src/admin/class-edition-plugin-deactivator.php',
         'VKBookingManager\\Admin\\Email_Log_Page' => __DIR__ . '/../..' . '/src/admin/class-email-log-page.php',
         'VKBookingManager\\Admin\\Email_Log_Repository' => __DIR__ . '/../..' . '/src/admin/class-email-log-repository.php',
         'VKBookingManager\\Admin\\Owner_Admin_Menu_Filter' => __DIR__ . '/../..' . '/src/admin/class-owner-admin-menu-filter.php',

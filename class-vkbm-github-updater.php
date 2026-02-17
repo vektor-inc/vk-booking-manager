@@ -236,8 +236,8 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		public function post_install( $true, $hook_extra, $result ) {
 			global $wp_filesystem;
 
-			// English: Avoid deprecated dirname(null) error and only process if plugin_slug is set.
-			// 日本語: dirname(null) の非推奨警告を避けるため plugin_slug がある時のみ処理する。
+			// Avoid deprecated dirname(null) error and only process if plugin_slug is set.
+			// dirname(null) の非推奨警告を避けるため plugin_slug がある時のみ処理する。
 			if ( ! empty( $this->plugin_slug ) ) {
 				$plugin_folder       = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
 				$result_destination  = $result['destination'] ?? '';

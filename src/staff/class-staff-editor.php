@@ -3,7 +3,7 @@
 /**
  * Free edition: staff editor is disabled.
  *
- * 日本語: Free版ではスタッフ編集UIを無効化する。
+ * Free版ではスタッフ編集UIを無効化する。
  *
  * @package VKBookingManager
  */
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Free edition: staff editor is disabled.
- * 日本語: Free版ではスタッフ編集UIを無効化する。
+ * Free版ではスタッフ編集UIを無効化する。
  */
 class Staff_Editor {
 	public const META_NOMINATION_FEE = '_vkbm_nomination_fee';
@@ -26,7 +26,7 @@ class Staff_Editor {
 	/**
 	 * Whether the staff editor is enabled.
 	 *
-	 * 日本語: スタッフ編集機能が有効かどうかを返します。
+	 * スタッフ編集機能が有効かどうかを返します。
 	 *
 	 * @return bool
 	 */

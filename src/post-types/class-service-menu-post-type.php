@@ -580,7 +580,7 @@ class Service_Menu_Post_Type {
 
 		wp_enqueue_script(
 			'vkbm-service-menu-quick-edit',
-			plugins_url( 'assets/js/service-menu-quick-edit.js', dirname( __DIR__ ) ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/service-menu-quick-edit.js',
 			array( 'jquery', 'inline-edit-post' ),
 			VKBM_VERSION,
 			true

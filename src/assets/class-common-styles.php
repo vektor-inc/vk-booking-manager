@@ -71,7 +71,7 @@ class Common_Styles {
 	 */
 	public function register_styles(): void {
 		$default_version = defined( 'VKBM_VERSION' ) ? VKBM_VERSION : null;
-		$base            = plugin_dir_path( VKBM_PLUGIN_FILE ) . 'build/assets/css/';
+		$base            = VKBM_PLUGIN_DIR_PATH . 'build/assets/css/';
 		$map             = array(
 			self::FRONTEND_HANDLE => 'vkbm-frontend.min.css',
 			self::AUTH_HANDLE     => 'vkbm-auth.min.css',
@@ -89,7 +89,7 @@ class Common_Styles {
 
 			wp_register_style(
 				$handle,
-				plugins_url( 'build/assets/css/' . $file, VKBM_PLUGIN_FILE ),
+				VKBM_PLUGIN_DIR_URL . 'build/assets/css/' . $file,
 				array(),
 				$version
 			);

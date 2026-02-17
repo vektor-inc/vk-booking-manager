@@ -218,8 +218,8 @@ class Provider_Settings_Page {
 			return;
 		}
 
-		$plugin_root         = dirname( __DIR__, 2 );
-		$settings_js         = $plugin_root . '/assets/js/provider-settings.js';
+		// ファイルの更新日時を取得するためなので PATH で正しい
+		$settings_js         = VKBM_PLUGIN_DIR_PATH . 'assets/js/provider-settings.js';
 		$settings_js_version = defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0';
 		if ( is_string( $settings_js ) && file_exists( $settings_js ) ) {
 			$settings_js_version = (string) filemtime( $settings_js );
@@ -230,7 +230,7 @@ class Provider_Settings_Page {
 		wp_enqueue_style( 'wp-color-picker' );
 		wp_enqueue_script(
 			'vkbm-provider-settings',
-			plugins_url( 'assets/js/provider-settings.js', dirname( __DIR__ ) ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/provider-settings.js',
 			array( 'jquery', 'media-editor', 'wp-color-picker' ),
 			$settings_js_version,
 			true

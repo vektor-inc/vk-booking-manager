@@ -110,7 +110,7 @@ class Term_Order_Manager {
 
 		wp_enqueue_script(
 			'vkbm-term-order-admin',
-			plugins_url( 'assets/js/term-order.js', VKBM_PLUGIN_FILE ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/term-order.js',
 			array( 'jquery', 'jquery-ui-sortable' ),
 			VKBM_VERSION,
 			true

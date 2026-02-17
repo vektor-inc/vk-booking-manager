@@ -86,7 +86,7 @@ class Menu_Loop_Block {
 			return;
 		}
 
-		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
+		$metadata_path = VKBM_PLUGIN_DIR_PATH . self::METADATA_PATH;
 
 		register_block_type_from_metadata(
 			$metadata_path,
@@ -162,7 +162,7 @@ class Menu_Loop_Block {
 			return;
 		}
 
-		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
+		$translation_path = VKBM_PLUGIN_DIR_PATH . 'languages';
 
 		foreach ( $fields as $field ) {
 			$handle = $this->resolve_script_handle( $block_name, $field );
@@ -1130,8 +1130,8 @@ class Menu_Loop_Block {
 	/**
 	 * Get resource label for staff-related UI.
 	 *
-	 * English: Returns the singular label used across staff-related UI.
-	 * 日本語: スタッフ関連UIで使用する単数ラベルを返します。
+	 * Returns the singular label used across staff-related UI.
+	 * スタッフ関連UIで使用する単数ラベルを返します。
 	 *
 	 * @return string
 	 */
@@ -1145,8 +1145,8 @@ class Menu_Loop_Block {
 	/**
 	 * Get menu-loop label for staff availability.
 	 *
-	 * English: Returns the menu card label for staff availability.
-	 * 日本語: メニューループの担当可能スタッフ用ラベルを返します。
+	 * Returns the menu card label for staff availability.
+	 * メニューループの担当可能スタッフ用ラベルを返します。
 	 *
 	 * @return string
 	 */

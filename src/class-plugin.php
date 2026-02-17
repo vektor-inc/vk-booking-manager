@@ -432,12 +432,12 @@ class Plugin {
 		}
 
 		// プラグインの languages ディレクトリのパスを取得.
-		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
+		$translation_path = VKBM_PLUGIN_DIR_PATH . 'languages/';
 
 		// ステップ1: WordPressが期待するファイル名（ハッシュ値付き）で完全一致するファイルを探す.
 		// 例: vk-booking-manager-ja-5a65dc19bd83bf90afeedaaf518e966b.json.
 		if ( $file ) {
-			$candidate = trailingslashit( $translation_path ) . basename( $file );
+			$candidate = $translation_path . basename( $file );
 			if ( file_exists( $candidate ) ) {
 				return $candidate;
 			}
@@ -454,7 +454,7 @@ class Plugin {
 		// 例: vk-booking-manager-ja-*.json.
 		$locale     = get_locale();
 		$pattern    = sprintf( '%s-%s-*.json', $domain, $locale );
-		$json_files = glob( trailingslashit( $translation_path ) . $pattern );
+		$json_files = glob( $translation_path . $pattern );
 
 		// JSONファイルが見つからない場合は、元のファイルパスをそのまま返す.
 		if ( empty( $json_files ) ) {
@@ -596,7 +596,7 @@ class Plugin {
 	/**
 	 * Ensure a single default staff record exists for the Free edition.
 	 *
-	 * 日本語: Free版ではスタッフが1名固定のため、未登録なら自動生成します。
+	 * Free版ではスタッフが1名固定のため、未登録なら自動生成します。
 	 */
 	public function maybe_create_default_staff(): void {
 		if ( Staff_Editor::is_enabled() ) {
@@ -669,7 +669,7 @@ class Plugin {
 	/**
 	 * Migrate shifts flagged as Default Staff shifts to the current Default Staff.
 	 *
-	 * 日本語: デフォルトスタッフ用フラグ付きシフトを現行の Default Staff に付け替えます。
+	 * デフォルトスタッフ用フラグ付きシフトを現行の Default Staff に付け替えます。
 	 *
 	 * @param int $default_staff_id Default staff ID.
 	 */

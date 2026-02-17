@@ -131,7 +131,7 @@ class Shift_Dashboard_Page {
 
 		wp_enqueue_script(
 			'vkbm-shift-dashboard-view-toggle',
-			plugins_url( 'assets/js/shift-dashboard.js', dirname( __DIR__ ) ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/shift-dashboard.js',
 			array(),
 			VKBM_VERSION,
 			true

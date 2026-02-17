@@ -62,7 +62,7 @@ class Reservation_Block {
 			return;
 		}
 
-		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
+		$metadata_path = VKBM_PLUGIN_DIR_PATH . self::METADATA_PATH;
 		register_block_type_from_metadata( $metadata_path );
 		$this->register_menu_loop_style();
 		$this->register_script_translations( 'vk-booking-manager/reservation', array( 'script', 'viewScript', 'editorScript' ) );
@@ -181,7 +181,7 @@ class Reservation_Block {
 
 		wp_register_style(
 			self::MENU_CARD_STYLE_HANDLE,
-			plugins_url( 'build/blocks/menu-loop/style-index.css', VKBM_PLUGIN_FILE ),
+			VKBM_PLUGIN_DIR_URL . 'build/blocks/menu-loop/style-index.css',
 			array(),
 			defined( 'VKBM_VERSION' ) ? VKBM_VERSION : null
 		);
@@ -201,7 +201,7 @@ class Reservation_Block {
 			return;
 		}
 
-		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
+		$translation_path = VKBM_PLUGIN_DIR_PATH . 'languages';
 
 		foreach ( $fields as $field ) {
 			$handle = $this->resolve_script_handle( $block_name, $field );

@@ -226,6 +226,11 @@ export const createBookingPage = () => {
         const flatPhpCode = phpCode.replace(/\s+/g, ' ').trim();
 
         execSync( `npx wp-env run cli wp eval '${flatPhpCode}'` );
+        
+        // Flush permalinks to ensure the booking page is accessible
+        // パーマリンクをフラッシュして予約ページがアクセス可能であることを保証
+        execSync( 'npx wp-env run cli wp rewrite flush --hard' );
+        console.log( 'Flushed permalinks after creating booking page' );
     } catch ( error: any ) {
         console.error( 'Failed to setup booking data:', error.message );
         throw error;

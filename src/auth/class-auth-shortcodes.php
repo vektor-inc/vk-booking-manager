@@ -1366,8 +1366,7 @@ class Auth_Shortcodes {
 	public function enqueue_assets(): void {
 		wp_enqueue_style( Common_Styles::AUTH_HANDLE );
 
-		$plugin_root  = dirname( __DIR__, 2 );
-		$auth_js      = $plugin_root . '/assets/js/auth-forms.js';
+		$auth_js      = VKBM_PLUGIN_DIR_PATH . 'assets/js/auth-forms.js';
 		$auth_version = defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0';
 		if ( file_exists( $auth_js ) ) {
 			$auth_version = (string) filemtime( $auth_js );
@@ -1375,7 +1374,7 @@ class Auth_Shortcodes {
 
 		wp_enqueue_script(
 			'vkbm-auth-forms',
-			plugins_url( 'assets/js/auth-forms.js', dirname( __DIR__ ) ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/auth-forms.js',
 			array(),
 			$auth_version,
 			true

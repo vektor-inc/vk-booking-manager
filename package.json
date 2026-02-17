@@ -4,7 +4,7 @@
 	"description": "Booking and scheduling manager tailored for multi-staff service providers.",
 	"private": true,
 	"scripts": {
-		"build": "npm-run-all -s build:js build:css",
+		"build": "npm-run-all -s build:js build:css skills:sync",
 		"build:js": "wp-scripts build",
 		"build:free": "node bin/switch-resource-config-dev.js free && npm run build",
 		"build:pro": "node bin/switch-resource-config-dev.js pro && npm run build",
@@ -33,8 +33,6 @@
 		"zip:free": "npm run dist:free && npm run zip:free:from-dist",
 		"zip:pro": "npm run dist:pro && npm run zip:pro:from-dist",
 		"zip:free:from-dist": "cd dist && rm -f vk-booking-manager.zip && zip -qr vk-booking-manager.zip vk-booking-manager",
-		"zip:free:release:from-dist": "cd dist && rm -f vk-booking-manager.zip && zip -qr vk-booking-manager.zip vk-booking-manager -x \"vk-booking-manager/.wp-env.json\" \"vk-booking-manager/phpunit.xml.dist\" \"vk-booking-manager/tests/*\" \"vk-booking-manager/tests/*/*\" \"vk-booking-manager/tests/*/*/*\" \"vk-booking-manager/test/*\" \"vk-booking-manager/test/*/*\" \"vk-booking-manager/test/*/*/*\" \"vk-booking-manager/composer.lock\" \"vk-booking-manager/package.json\" \"vk-booking-manager/package-lock.json\" \"vk-booking-manager/docs/*\" \"vk-booking-manager/docs/*/*\" \"vk-booking-manager/docs/*/*/*\" \"vk-booking-manager/.github/*\" \"vk-booking-manager/.github/*/*\" \"vk-booking-manager/.github/*/*/*\" \"vk-booking-manager/.gitignore\"",
-		"zip:free:org:from-dist": "node bin/zip-free-org.js",
 		"zip:pro:from-dist": "cd dist && rm -f vk-booking-manager-pro.zip && zip -qr vk-booking-manager-pro.zip vk-booking-manager-pro -x \"vk-booking-manager-pro/.gitignore\"",
 		"zip:all": "npm run dist:all && npm-run-all -s zip:free:from-dist zip:pro:from-dist"
 	},

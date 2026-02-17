@@ -88,10 +88,22 @@ if (edition === 'free') {
 			.replace(
 				/^(\s*\*\s*Plugin URI:\s*https:\/\/github\.com\/vektor-inc\/vk-booking-manager)-pro(\/?)/im,
 				'$1$2'
+			)
+			// Remove @free-version-remove markers and content between them
+			.replace(
+				/^\/\/ @free-version-remove-start$[\s\S]*?^\/\/ @free-version-remove-end$\n?/gm,
+				''
 			);
 		if (updated !== contents) {
 			fs.writeFileSync(pluginFilePath, updated);
 		}
+	}
+
+	// Remove class-free-version-deactivator.php
+	const deactivatorPath = path.join(distRoot, 'class-free-version-deactivator.php');
+	if (fs.existsSync(deactivatorPath)) {
+		fs.unlinkSync(deactivatorPath);
+		console.log('Removed class-free-version-deactivator.php from free edition');
 	}
 
 	const freeReadmePath = path.join(distRoot, 'README-FREE.md');

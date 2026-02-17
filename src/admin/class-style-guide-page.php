@@ -121,13 +121,14 @@ class Style_Guide_Page {
 	 */
 	private function enqueue_reservation_block_style(): void {
 		$style_handle = 'vkbm-style-guide-reservation';
-		$style_path   = plugin_dir_path( VKBM_PLUGIN_FILE ) . 'build/blocks/reservation/style-index.css';
+		// ファイルの更新日時を取得するためなので PATH で正しい
+		$style_path   = VKBM_PLUGIN_DIR_PATH . 'build/blocks/reservation/style-index.css';
 
 		if ( ! file_exists( $style_path ) ) {
 			return;
 		}
 
-		$style_url = plugins_url( 'build/blocks/reservation/style-index.css', VKBM_PLUGIN_FILE );
+		$style_url = VKBM_PLUGIN_DIR_URL . 'build/blocks/reservation/style-index.css';
 		$version   = (string) filemtime( $style_path );
 
 		wp_enqueue_style( $style_handle, $style_url, array(), $version );
@@ -214,12 +215,10 @@ class Style_Guide_Page {
 		$filename = ltrim( $filename, '/\\' );
 
 		// Primary: relative to the main plugin file.
-		if ( defined( 'VKBM_PLUGIN_FILE' ) ) {
-			$paths[] = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'docs/ui/' . $filename;
+		// Primary: relative to the main plugin file.
+		if ( defined( 'VKBM_PLUGIN_DIR_PATH' ) ) {
+			$paths[] = VKBM_PLUGIN_DIR_PATH . 'docs/ui/' . $filename;
 		}
-
-		// Fallback: relative to this class file (src/admin/ -> plugin root).
-		$paths[] = trailingslashit( dirname( __DIR__, 2 ) ) . 'docs/ui/' . $filename;
 
 		return array_values( array_unique( array_filter( $paths ) ) );
 	}

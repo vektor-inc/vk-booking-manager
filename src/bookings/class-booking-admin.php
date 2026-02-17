@@ -176,7 +176,7 @@ class Booking_Admin {
 		wp_enqueue_media();
 		wp_enqueue_script(
 			'vkbm-booking-admin',
-			plugins_url( 'assets/js/booking-admin.js', VKBM_PLUGIN_FILE ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/booking-admin.js',
 			array(),
 			VKBM_VERSION,
 			true
@@ -200,7 +200,7 @@ class Booking_Admin {
 
 		wp_enqueue_script(
 			'vkbm-booking-quick-edit',
-			plugins_url( 'assets/js/booking-quick-edit.js', VKBM_PLUGIN_FILE ),
+			VKBM_PLUGIN_DIR_URL . 'assets/js/booking-quick-edit.js',
 			array( 'jquery', 'inline-edit-post' ),
 			VKBM_VERSION,
 			true

@@ -84,7 +84,7 @@ class Menu_Search_Block {
 			return;
 		}
 
-		$metadata_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . self::METADATA_PATH;
+		$metadata_path = VKBM_PLUGIN_DIR_PATH . self::METADATA_PATH;
 
 		register_block_type_from_metadata(
 			$metadata_path,
@@ -95,7 +95,7 @@ class Menu_Search_Block {
 		$this->register_script_translations( 'vk-booking-manager/menu-search', array( 'editorScript' ) );
 
 		foreach ( self::FIELD_BLOCKS as $relative_path ) {
-			$path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . $relative_path;
+			$path = VKBM_PLUGIN_DIR_PATH . $relative_path;
 			register_block_type_from_metadata( $path );
 		}
 
@@ -166,7 +166,7 @@ class Menu_Search_Block {
 			return;
 		}
 
-		$translation_path = trailingslashit( plugin_dir_path( VKBM_PLUGIN_FILE ) ) . 'languages';
+		$translation_path = VKBM_PLUGIN_DIR_PATH . 'languages';
 
 		foreach ( $fields as $field ) {
 			$handle = $this->resolve_script_handle( $block_name, $field );

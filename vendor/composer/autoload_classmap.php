@@ -637,7 +637,6 @@ return array(
     'TheSeer\\Tokenizer\\Tokenizer' => $vendorDir . '/theseer/tokenizer/src/Tokenizer.php',
     'TheSeer\\Tokenizer\\XMLSerializer' => $vendorDir . '/theseer/tokenizer/src/XMLSerializer.php',
     'VKBM_Sample_Test' => $baseDir . '/tests/phpunit/test-sample.php',
-    'VKBookingManager\\Admin\\Edition_Plugin_Deactivator' => $baseDir . '/src/admin/class-edition-plugin-deactivator.php',
     'VKBookingManager\\Admin\\Email_Log_Page' => $baseDir . '/src/admin/class-email-log-page.php',
     'VKBookingManager\\Admin\\Email_Log_Repository' => $baseDir . '/src/admin/class-email-log-repository.php',
     'VKBookingManager\\Admin\\Owner_Admin_Menu_Filter' => $baseDir . '/src/admin/class-owner-admin-menu-filter.php',

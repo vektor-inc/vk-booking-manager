@@ -24,7 +24,7 @@ class VKBM_Helper {
 	/**
 	 * Format a currency amount with a translatable symbol.
 	 *
-	 * 日本語: 通貨記号を翻訳可能な形式で付与します。
+	 * 通貨記号を翻訳可能な形式で付与します。
 	 *
 	 * @param int $amount Amount in base currency.
 	 * @return string
@@ -40,7 +40,7 @@ class VKBM_Helper {
 	/**
 	 * Resolve currency symbol from settings or locale.
 	 *
-	 * 日本語: 設定値またはロケールから通貨記号を取得します。
+	 * 設定値またはロケールから通貨記号を取得します。
 	 *
 	 * @return string
 	 */
@@ -63,7 +63,7 @@ class VKBM_Helper {
 	/**
 	 * Get the tax-included label from provider settings.
 	 *
-	 * 日本語: 税込み表示のラベルを取得します。
+	 * 税込み表示のラベルを取得します。
 	 *
 	 * @return string
 	 */
