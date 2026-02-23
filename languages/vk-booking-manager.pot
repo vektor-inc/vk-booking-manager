@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-02-23T12:04:32+00:00\n"
+"POT-Creation-Date: 2026-02-23T15:02:40+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -21,7 +21,7 @@ msgstr ""
 
 #. Plugin URI of the plugin
 #: vk-booking-manager.php
-msgid "https://github.com/vektor-inc/vk-booking-manager/"
+msgid "https://vk-booking-manager.com/"
 msgstr ""
 
 #. Description of the plugin

@@ -1,5 +1,5 @@
 {
-	"translation-revision-date": "2026-01-26 14:55+0900",
+	"translation-revision-date": "2026-02-23 23:58+0900",
 	"generator": "WP-CLI/2.10.0",
 	"source": "src/blocks/reservation/app.js",
 	"domain": "messages",
@@ -92,7 +92,7 @@
 				"予約が完了しました。"
 			],
 			"Loading…": [
-				""
+				"読み込み中…"
 			],
 			"There are no reservations to display.": [
 				"表示する予約はありません。"
@@ -101,10 +101,10 @@
 				""
 			],
 			"Loading form…": [
-				""
+				"フォームを読み込み中…"
 			],
 			"Loading service menu…": [
-				""
+				"サービスメニューを読み込み中"
 			],
 			"There are no service menus to display.": [
 				"表示するサービスメニューはありません。"
@@ -236,7 +236,7 @@
 				"予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
 			],
 			"Loading temporary reservation data…": [
-				""
+				"一時予約データを読み込み中…"
 			],
 			"Your tentative reservation has been completed.": [
 				"仮予約が完了しました。"

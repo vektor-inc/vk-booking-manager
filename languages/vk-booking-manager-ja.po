@@ -3,8 +3,8 @@ msgstr ""
 "Project-Id-Version: vk-booking-manager 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-"
 "manager-pro\n"
-"POT-Creation-Date: 2026-02-23T12:04:32+00:00\n"
-"PO-Revision-Date: 2026-01-26 14:55+0900\n"
+"POT-Creation-Date: 2026-02-23T15:02:40+00:00\n"
+"PO-Revision-Date: 2026-02-23 23:58+0900\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "Language: ja\n"
@@ -17,11 +17,11 @@ msgstr ""
 #. Plugin Name of the plugin
 #: vk-booking-manager.php
 msgid "VK Booking Manager Pro (Beta)"
-msgstr ""
+msgstr "VK Booking Manager Pro (Beta)"
 
 #. Plugin URI of the plugin
 #: vk-booking-manager.php
-msgid "https://github.com/vektor-inc/vk-booking-manager/"
+msgid "https://vk-booking-manager.com/"
 msgstr ""
 
 #. Description of the plugin
@@ -3489,7 +3489,7 @@ msgstr "予約が完了しました。"
 #: src/blocks/reservation/booking-confirm-app.js:1329
 #: src/blocks/reservation/booking-ui/calendar-grid.js:144
 msgid "Loading…"
-msgstr ""
+msgstr "読み込み中…"
 
 #: src/blocks/reservation/app.js:1507
 #: src/blocks/reservation/booking-confirm-app.js:1347
@@ -3506,11 +3506,11 @@ msgstr ""
 #: src/blocks/reservation/booking-confirm-app.js:1301
 #: src/blocks/reservation/booking-confirm-app.js:1597
 msgid "Loading form…"
-msgstr ""
+msgstr "フォームを読み込み中…"
 
 #: src/blocks/reservation/app.js:1690
 msgid "Loading service menu…"
-msgstr ""
+msgstr "サービスメニューを読み込み中"
 
 #: src/blocks/reservation/app.js:1712
 msgid "There are no service menus to display."
@@ -3549,7 +3549,7 @@ msgstr "予約の確認に失敗しました。しばらくしてからもう一
 
 #: src/blocks/reservation/booking-confirm-app.js:1024
 msgid "Loading temporary reservation data…"
-msgstr ""
+msgstr "一時予約データを読み込み中…"
 
 #: src/blocks/reservation/booking-confirm-app.js:1049
 msgid "Your tentative reservation has been completed."
