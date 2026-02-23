@@ -4,12 +4,7 @@ import {
 	InspectorControls,
 	InnerBlocks,
 } from '@wordpress/block-editor';
-import {
-	PanelBody,
-	TextControl,
-	Notice,
-	Button,
-} from '@wordpress/components';
+import { PanelBody, TextControl, Notice, Button } from '@wordpress/components';
 import { useMemo } from '@wordpress/element';
 import { useSelect } from '@wordpress/data';
 import metadata from './block.json';
@@ -20,9 +15,9 @@ import {
 } from '../shared/utils';
 
 const FIELD_TEMPLATE = [
-	['vk-booking-manager/menu-search-field-staff'],
-	['vk-booking-manager/menu-search-field-category'],
-	['vk-booking-manager/menu-search-field-keyword'],
+	[ 'vk-booking-manager/menu-search-field-staff' ],
+	[ 'vk-booking-manager/menu-search-field-category' ],
+	[ 'vk-booking-manager/menu-search-field-keyword' ],
 ];
 const ALLOWED_BLOCKS = [
 	'vk-booking-manager/menu-search-field-staff',
@@ -37,33 +32,34 @@ const ALLOWED_BLOCKS = [
 	'core/heading',
 ];
 
-const EditComponent = ({ attributes, setAttributes }) => {
-	const blockProps = useBlockProps({ className: 'vkbm-menu-search' });
+const EditComponent = ( { attributes, setAttributes } ) => {
+	const blockProps = useBlockProps( { className: 'vkbm-menu-search' } );
 
-	const { loopBlocks, searchBlocks } = useSelect(
-		(select) => {
-			const blocks = flattenBlocks(select('core/block-editor').getBlocks());
-			return {
-				loopBlocks: blocks.filter(
-					(block) => block?.name === 'vk-booking-manager/menu-loop'
-				),
-				searchBlocks: blocks.filter((block) => block?.name === metadata.name),
-			};
-		},
-		[]
-	);
+	const { loopBlocks, searchBlocks } = useSelect( ( select ) => {
+		const blocks = flattenBlocks(
+			select( 'core/block-editor' ).getBlocks()
+		);
+		return {
+			loopBlocks: blocks.filter(
+				( block ) => block?.name === 'vk-booking-manager/menu-loop'
+			),
+			searchBlocks: blocks.filter(
+				( block ) => block?.name === metadata.name
+			),
+		};
+	}, [] );
 
 	const loopIds = useMemo(
 		() =>
 			loopBlocks
-				.map((block) => block?.attributes?.loopId)
-				.filter(Boolean),
-		[loopBlocks]
+				.map( ( block ) => block?.attributes?.loopId )
+				.filter( Boolean ),
+		[ loopBlocks ]
 	);
 
 	const hasInvalidTarget =
-		!attributes.targetId ||
-		(loopIds.length > 0 && !loopIds.includes(attributes.targetId));
+		! attributes.targetId ||
+		( loopIds.length > 0 && ! loopIds.includes( attributes.targetId ) );
 
 	const multipleSearchBlocks = searchBlocks.length > 1;
 
@@ -79,71 +75,86 @@ const EditComponent = ({ attributes, setAttributes }) => {
 	return (
 		<>
 			<InspectorControls>
-				<PanelBody title={__('Cooperation settings', 'vk-booking-manager')}>
+				<PanelBody
+					title={ __( 'Cooperation settings', 'vk-booking-manager' ) }
+				>
 					<TextControl
-						label={__('target ID', 'vk-booking-manager')}
-						value={attributes.targetId}
-						onChange={(value) =>
-							setAttributes({ targetId: sanitizeIdentifier(value) })
+						label={ __( 'target ID', 'vk-booking-manager' ) }
+						value={ attributes.targetId }
+						onChange={ ( value ) =>
+							setAttributes( {
+								targetId: sanitizeIdentifier( value ),
+							} )
 						}
 					/>
-					{hasInvalidTarget && (
-						<Notice status="warning" isDismissible={false}>
-							{__(
+					{ hasInvalidTarget && (
+						<Notice status="warning" isDismissible={ false }>
+							{ __(
 								'There are no menu loop blocks to display.',
 								'vk-booking-manager'
-							)}
-							{loopIds.length > 0 && (
-								<div style={{ marginTop: '0.75rem' }}>
+							) }
+							{ loopIds.length > 0 && (
+								<div style={ { marginTop: '0.75rem' } }>
 									<Button
 										variant="secondary"
-										onClick={() => {
-											if (loopIds.length) {
-												setAttributes({ targetId: loopIds[0] });
+										onClick={ () => {
+											if ( loopIds.length ) {
+												setAttributes( {
+													targetId: loopIds[ 0 ],
+												} );
 											}
-										}}
+										} }
 									>
-										{__(
+										{ __(
 											'Automatically obtain menu loop ID',
 											'vk-booking-manager'
-										)}
+										) }
 									</Button>
 								</div>
-							)}
+							) }
 						</Notice>
-					)}
+					) }
 					<TextControl
-						label={__('send button label', 'vk-booking-manager')}
-						value={attributes.submitLabel}
-						onChange={(value) => setAttributes({ submitLabel: value })}
+						label={ __(
+							'send button label',
+							'vk-booking-manager'
+						) }
+						value={ attributes.submitLabel }
+						onChange={ ( value ) =>
+							setAttributes( { submitLabel: value } )
+						}
 					/>
 				</PanelBody>
-				{multipleSearchBlocks && (
+				{ multipleSearchBlocks && (
 					<PanelBody
-						title={__('caveat', 'vk-booking-manager')}
-						initialOpen={true}
+						title={ __( 'caveat', 'vk-booking-manager' ) }
+						initialOpen={ true }
 					>
-						<Notice status="error" isDismissible={false}>
-							{__(
+						<Notice status="error" isDismissible={ false }>
+							{ __(
 								'Only one scheduled search block can be used per page. Delete extra blocks.',
 								'vk-booking-manager'
-							)}
+							) }
 						</Notice>
 					</PanelBody>
-				)}
+				) }
 			</InspectorControls>
-			<div {...blockProps}>
+			<div { ...blockProps }>
 				<div className="vkbm-menu-search__fields">
 					<InnerBlocks
-						allowedBlocks={ALLOWED_BLOCKS}
-						template={FIELD_TEMPLATE}
-						templateLock={false}
-						renderAppender={InnerBlocks.ButtonBlockAppender}
+						allowedBlocks={ ALLOWED_BLOCKS }
+						template={ FIELD_TEMPLATE }
+						templateLock={ false }
+						renderAppender={ InnerBlocks.ButtonBlockAppender }
 					/>
 				</div>
 				<div className="vkbm-menu-search__actions vkbm-buttons vkbm-buttons__center">
-					<button type="button" className="vkbm-button vkbm-button__primary">
-						{attributes.submitLabel || metadata.attributes.submitLabel.default}
+					<button
+						type="button"
+						className="vkbm-button vkbm-button__primary"
+					>
+						{ attributes.submitLabel ||
+							metadata.attributes.submitLabel.default }
 					</button>
 				</div>
 			</div>

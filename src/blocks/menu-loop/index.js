@@ -7,11 +7,11 @@ import './editor.scss';
 
 // ダミーの翻訳文字列を追加して、wp i18n make-jsonがindex.jsのJSONファイルを生成するようにする
 // 実際の翻訳はedit.jsに含まれているため、この文字列は使用されない
-__('Menu Loop Block', 'vk-booking-manager');
+__( 'Menu Loop Block', 'vk-booking-manager' );
 
-registerBlockType(metadata, {
+registerBlockType( metadata, {
 	edit,
 	save() {
 		return null;
 	},
-});
+} );

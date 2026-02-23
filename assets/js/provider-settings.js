@@ -1,51 +1,54 @@
-(function( $ ) {
+( function ( $ ) {
 	'use strict';
 
-	var frame;
-	var settings = window.vkbmProviderSettings || {
+	let frame;
+	const settings = window.vkbmProviderSettings || {
 		logoFrameTitle: '',
-		logoFrameButton: ''
+		logoFrameButton: '',
 	};
-	var holidayTemplate = '';
-		var $holidayTable;
-		var $holidayIndex;
-		var basicTemplate = '';
-		var $basicSlots;
-		var $basicNextIndex;
-		var reminderTemplate = '';
-		var $reminderList;
-		var $reminderIndex;
+	let holidayTemplate = '';
+	let $holidayTable;
+	let $holidayIndex;
+	let basicTemplate = '';
+	let $basicSlots;
+	let $basicNextIndex;
+	let reminderTemplate = '';
+	let $reminderList;
+	let $reminderIndex;
 
-		/**
-		 * Get HTML string from a template or script element (for HTML5 <template> or legacy script type="text/template").
-		 * @param {string|Element|jQuery} selectorOrElement - CSS selector, DOM element, or jQuery object.
-		 * @return {string}
-		 */
-		function getTemplateHtml( selectorOrElement ) {
-			var el = typeof selectorOrElement === 'string' ?
-				document.querySelector( selectorOrElement ) :
-				( selectorOrElement && selectorOrElement[ 0 ] !== undefined ? selectorOrElement[ 0 ] : selectorOrElement );
-			if ( ! el ) {
-				return '';
-			}
-			if ( el.tagName === 'TEMPLATE' && el.content ) {
-				var div = document.createElement( 'div' );
-				div.appendChild( el.content.cloneNode( true ) );
-				return div.innerHTML;
-			}
-			return el.innerHTML || '';
+	/**
+	 * Get HTML string from a template or script element (for HTML5 <template> or legacy script type="text/template").
+	 * @param {string|Element|jQuery} selectorOrElement - CSS selector, DOM element, or jQuery object.
+	 * @return {string}
+	 */
+	function getTemplateHtml( selectorOrElement ) {
+		const el =
+			typeof selectorOrElement === 'string'
+				? document.querySelector( selectorOrElement )
+				: selectorOrElement && selectorOrElement[ 0 ] !== undefined
+				? selectorOrElement[ 0 ]
+				: selectorOrElement;
+		if ( ! el ) {
+			return '';
 		}
+		if ( el.tagName === 'TEMPLATE' && el.content ) {
+			const div = document.createElement( 'div' );
+			div.appendChild( el.content.cloneNode( true ) );
+			return div.innerHTML;
+		}
+		return el.innerHTML || '';
+	}
 
-		function updateBookingCancelModeState() {
-			var $mode = $( '#vkbm-provider-booking-cancel-mode' );
-			var $hoursField = $( '#vkbm-provider-booking-cancel-hours-field' );
-		var $hoursInput = $( '#vkbm-provider-booking-cancel-hours' );
+	function updateBookingCancelModeState() {
+		const $mode = $( '#vkbm-provider-booking-cancel-mode' );
+		const $hoursField = $( '#vkbm-provider-booking-cancel-hours-field' );
+		const $hoursInput = $( '#vkbm-provider-booking-cancel-hours' );
 
 		if ( ! $mode.length || ! $hoursField.length ) {
 			return;
 		}
 
-		var isHours = 'hours' === $mode.val();
+		const isHours = 'hours' === $mode.val();
 
 		$hoursField.toggle( isHours );
 		if ( $hoursInput.length ) {
@@ -54,34 +57,35 @@
 	}
 
 	function updateReservationMenuListModeState() {
-		var $checkbox = $( '#vkbm-reservation-show-menu-list' );
-		var $row = $( '#vkbm-reservation-menu-list-display-mode-row' );
-		var $select = $( '#vkbm-reservation-menu-list-display-mode' );
+		const $checkbox = $( '#vkbm-reservation-show-menu-list' );
+		const $row = $( '#vkbm-reservation-menu-list-display-mode-row' );
+		const $select = $( '#vkbm-reservation-menu-list-display-mode' );
 		if ( ! $checkbox.length || ! $row.length ) {
 			return;
 		}
 
-		var enabled = $checkbox.is( ':checked' );
+		const enabled = $checkbox.is( ':checked' );
 
 		$row.toggle( enabled );
 		if ( $select.length ) {
 			$select.prop( 'disabled', ! enabled );
 		}
-
 	}
 
 	function updatePrivacyPolicyModeState() {
-		var $select = $( '#vkbm-provider-privacy-policy-mode' );
-		var $urlField = $( '#vkbm-provider-privacy-policy-url-field' );
-		var $contentField = $( '#vkbm-provider-privacy-policy-content-field' );
+		const $select = $( '#vkbm-provider-privacy-policy-mode' );
+		const $urlField = $( '#vkbm-provider-privacy-policy-url-field' );
+		const $contentField = $(
+			'#vkbm-provider-privacy-policy-content-field'
+		);
 
 		if ( ! $select.length ) {
 			return;
 		}
 
-		var mode = $select.val();
-		var isUrl = 'url' === mode;
-		var isContent = 'content' === mode;
+		const mode = $select.val();
+		const isUrl = 'url' === mode;
+		const isContent = 'content' === mode;
 
 		if ( $urlField.length ) {
 			$urlField.toggle( isUrl );
@@ -98,35 +102,36 @@
 		}
 
 		$( '.vkbm-color-picker' ).wpColorPicker( {
-			defaultColor: false
+			defaultColor: false,
 		} );
 	}
 
 	function setLogo( attachment ) {
-		var $input   = $( '#vkbm-provider-logo-id' );
-		var $preview = $( '#vkbm-provider-logo-preview-container' );
-		var $remove  = $( '#vkbm-provider-logo-remove' );
-		var imageUrl = attachment.sizes && attachment.sizes.medium ? attachment.sizes.medium.url : attachment.url;
+		const $input = $( '#vkbm-provider-logo-id' );
+		const $preview = $( '#vkbm-provider-logo-preview-container' );
+		const $remove = $( '#vkbm-provider-logo-remove' );
+		const imageUrl =
+			attachment.sizes && attachment.sizes.medium
+				? attachment.sizes.medium.url
+				: attachment.url;
 
 		$input.val( attachment.id );
 
-		$preview
-			.empty()
-			.append(
-				$( '<img />', {
-					src: imageUrl,
-					class: 'vkbm-provider-logo-image',
-					alt: ''
-				} )
-			);
+		$preview.empty().append(
+			$( '<img />', {
+				src: imageUrl,
+				class: 'vkbm-provider-logo-image',
+				alt: '',
+			} )
+		);
 
 		$remove.show();
 	}
 
 	function clearLogo() {
-		var $input   = $( '#vkbm-provider-logo-id' );
-		var $preview = $( '#vkbm-provider-logo-preview-container' );
-		var $remove  = $( '#vkbm-provider-logo-remove' );
+		const $input = $( '#vkbm-provider-logo-id' );
+		const $preview = $( '#vkbm-provider-logo-preview-container' );
+		const $remove = $( '#vkbm-provider-logo-remove' );
 
 		$input.val( '' );
 		$preview.empty();
@@ -142,16 +147,20 @@
 		frame = wp.media( {
 			title: settings.logoFrameTitle,
 			button: {
-				text: settings.logoFrameButton
+				text: settings.logoFrameButton,
 			},
 			library: {
-				type: [ 'image' ]
+				type: [ 'image' ],
 			},
-			multiple: false
+			multiple: false,
 		} );
 
-		frame.on( 'select', function() {
-			var attachment = frame.state().get( 'selection' ).first().toJSON();
+		frame.on( 'select', function () {
+			const attachment = frame
+				.state()
+				.get( 'selection' )
+				.first()
+				.toJSON();
 			setLogo( attachment );
 		} );
 
@@ -159,7 +168,7 @@
 	}
 
 	function getNextHolidayIndex() {
-		var current = parseInt( $holidayIndex.val(), 10 );
+		let current = parseInt( $holidayIndex.val(), 10 );
 
 		if ( isNaN( current ) ) {
 			current = $holidayTable.children().length;
@@ -175,13 +184,13 @@
 			return;
 		}
 
-		var index = getNextHolidayIndex();
-		var html  = holidayTemplate.replace( /__INDEX__/g, index );
+		const index = getNextHolidayIndex();
+		const html = holidayTemplate.replace( /__INDEX__/g, index );
 		$holidayTable.append( html );
 	}
 
 	function getNextIndex( $field, $items ) {
-		var current = parseInt( $field.val(), 10 );
+		let current = parseInt( $field.val(), 10 );
 
 		if ( isNaN( current ) ) {
 			current = $items.length;
@@ -197,14 +206,14 @@
 			return;
 		}
 
-		var index = getNextIndex( $basicNextIndex, $basicSlots.children() );
-		var html  = basicTemplate.replace( /__INDEX__/g, index );
+		const index = getNextIndex( $basicNextIndex, $basicSlots.children() );
+		const html = basicTemplate.replace( /__INDEX__/g, index );
 
 		$basicSlots.append( html );
 	}
 
 	function removeBasicSlot( $button ) {
-		var $slot = $button.closest( '.vkbm-business-hours-slot' );
+		const $slot = $button.closest( '.vkbm-business-hours-slot' );
 
 		$slot.remove();
 
@@ -218,19 +227,22 @@
 			return;
 		}
 
-		var index = getNextIndex( $reminderIndex, $reminderList.children() );
-		var html = reminderTemplate.replace( /__INDEX__/g, index );
+		const index = getNextIndex( $reminderIndex, $reminderList.children() );
+		const html = reminderTemplate.replace( /__INDEX__/g, index );
 
 		$reminderList.append( html );
 	}
 
 	function removeReminderRow( $button ) {
-		var $row = $button.closest( '.vkbm-reminder-hours__row' );
+		const $row = $button.closest( '.vkbm-reminder-hours__row' );
 		$row.remove();
 	}
 
 	function getWeeklySlotTemplate( $row ) {
-		var template = getTemplateHtml( $row.find( '.vkbm-business-hours-slot-template' ) ) || '';
+		let template =
+			getTemplateHtml(
+				$row.find( '.vkbm-business-hours-slot-template' )
+			) || '';
 
 		if ( template ) {
 			template = template.trim();
@@ -240,192 +252,261 @@
 	}
 
 	function addWeeklySlot( $row ) {
-		var template = getWeeklySlotTemplate( $row );
+		const template = getWeeklySlotTemplate( $row );
 
 		if ( ! template ) {
 			return;
 		}
 
-		var $list      = $row.find( '.vkbm-business-hours-slot-list' );
-		var $nextField = $row.find( '.vkbm-business-hours-next-slot-index' );
-		var index      = getNextIndex( $nextField, $list.children() );
-		var html       = template.replace( /__INDEX__/g, index );
-		var $slot      = $( html );
+		const $list = $row.find( '.vkbm-business-hours-slot-list' );
+		const $nextField = $row.find( '.vkbm-business-hours-next-slot-index' );
+		const index = getNextIndex( $nextField, $list.children() );
+		const html = template.replace( /__INDEX__/g, index );
+		const $slot = $( html );
 
 		$list.append( $slot );
 		toggleWeeklyRowState( $row );
 	}
 
 	function addWeeklySlotFromData( $row, slotData ) {
-		var $list = $row.find( '.vkbm-business-hours-slot-list' );
-		var $nextField = $row.find( '.vkbm-business-hours-next-slot-index' );
-		var template = getWeeklySlotTemplate( $row );
+		const $list = $row.find( '.vkbm-business-hours-slot-list' );
+		const $nextField = $row.find( '.vkbm-business-hours-next-slot-index' );
+		const template = getWeeklySlotTemplate( $row );
 
 		if ( ! template ) {
 			return;
 		}
 
-		var index = getNextIndex( $nextField, $list.children() );
-		var html  = template.replace( /__INDEX__/g, index );
-		var $slot = $( html );
+		const index = getNextIndex( $nextField, $list.children() );
+		const html = template.replace( /__INDEX__/g, index );
+		const $slot = $( html );
 
 		if ( slotData ) {
-			$slot.find( 'select[name$="[start_hour]" ]' ).val( slotData.start_hour || '' );
-			$slot.find( 'select[name$="[start_minute]" ]' ).val( slotData.start_minute || '' );
-			$slot.find( 'select[name$="[end_hour]" ]' ).val( slotData.end_hour || '' );
-			$slot.find( 'select[name$="[end_minute]" ]' ).val( slotData.end_minute || '' );
+			$slot
+				.find( 'select[name$="[start_hour]" ]' )
+				.val( slotData.start_hour || '' );
+			$slot
+				.find( 'select[name$="[start_minute]" ]' )
+				.val( slotData.start_minute || '' );
+			$slot
+				.find( 'select[name$="[end_hour]" ]' )
+				.val( slotData.end_hour || '' );
+			$slot
+				.find( 'select[name$="[end_minute]" ]' )
+				.val( slotData.end_minute || '' );
 		}
 
 		$list.append( $slot );
 	}
 
 	function removeWeeklySlot( $button ) {
-		var $slot = $button.closest( '.vkbm-business-hours-slot' );
-		var $row  = $slot.closest( '.vkbm-business-hours-row' );
-		var $list = $row.find( '.vkbm-business-hours-slot-list' );
+		const $slot = $button.closest( '.vkbm-business-hours-slot' );
+		const $row = $slot.closest( '.vkbm-business-hours-row' );
+		const $list = $row.find( '.vkbm-business-hours-slot-list' );
 
 		$slot.remove();
 
-	if ( 0 === $list.children().length ) {
-		if ( $row.find( '.vkbm-business-hours-use-custom' ).is( ':checked' ) && ! $row.hasClass( 'is-regular-holiday' ) ) {
-			addWeeklySlot( $row );
+		if ( 0 === $list.children().length ) {
+			if (
+				$row
+					.find( '.vkbm-business-hours-use-custom' )
+					.is( ':checked' ) &&
+				! $row.hasClass( 'is-regular-holiday' )
+			) {
+				addWeeklySlot( $row );
+			}
+			return;
 		}
-		return;
-	}
 
 		toggleWeeklyRowState( $row );
 	}
 
 	function toggleWeeklyRowState( $row ) {
-		var isRegularHoliday = $row.hasClass( 'is-regular-holiday' );
-	var useCustomCheckbox = $row.find( '.vkbm-business-hours-use-custom' );
-	var useCustom         = useCustomCheckbox.is( ':checked' );
-	var $list            = $row.find( '.vkbm-business-hours-slot-list' );
-	var basicSlotsData   = $list.data( 'basicSlots' );
-	var parsedBasicSlots = [];
+		const isRegularHoliday = $row.hasClass( 'is-regular-holiday' );
+		const useCustomCheckbox = $row.find(
+			'.vkbm-business-hours-use-custom'
+		);
+		const useCustom = useCustomCheckbox.is( ':checked' );
+		const $list = $row.find( '.vkbm-business-hours-slot-list' );
+		const basicSlotsData = $list.data( 'basicSlots' );
+		let parsedBasicSlots = [];
 
-	if ( basicSlotsData ) {
-		if ( typeof basicSlotsData === 'string' ) {
-			try {
-				parsedBasicSlots = JSON.parse( basicSlotsData ) || [];
-			} catch ( error ) {
-				parsedBasicSlots = [];
+		if ( basicSlotsData ) {
+			if ( typeof basicSlotsData === 'string' ) {
+				try {
+					parsedBasicSlots = JSON.parse( basicSlotsData ) || [];
+				} catch ( error ) {
+					parsedBasicSlots = [];
+				}
+			} else if ( Array.isArray( basicSlotsData ) ) {
+				parsedBasicSlots = basicSlotsData;
 			}
-		} else if ( Array.isArray( basicSlotsData ) ) {
-			parsedBasicSlots = basicSlotsData;
+
+			$list.data( 'basicSlots', parsedBasicSlots );
 		}
 
-		$list.data( 'basicSlots', parsedBasicSlots );
-	}
-
-	if ( useCustom && ! isRegularHoliday && 0 === $list.children().length ) {
-		if ( parsedBasicSlots.length ) {
-			parsedBasicSlots.forEach( function( slot ) {
-				addWeeklySlotFromData( $row, slot );
-			} );
-		} else {
-			addWeeklySlot( $row );
+		if (
+			useCustom &&
+			! isRegularHoliday &&
+			0 === $list.children().length
+		) {
+			if ( parsedBasicSlots.length ) {
+				parsedBasicSlots.forEach( function ( slot ) {
+					addWeeklySlotFromData( $row, slot );
+				} );
+			} else {
+				addWeeklySlot( $row );
+			}
 		}
+
+		$row.toggleClass( 'is-using-basic', ! useCustom );
+
+		const shouldDisableControls = ! useCustom || isRegularHoliday;
+
+		$row.find(
+			'.vkbm-business-hours-hour, .vkbm-business-hours-minute, .vkbm-business-hours-remove-slot'
+		).prop( 'disabled', shouldDisableControls );
+		$row.find( '.vkbm-business-hours-add-slot' ).prop(
+			'disabled',
+			shouldDisableControls
+		);
 	}
 
-	$row.toggleClass( 'is-using-basic', ! useCustom );
+	$( document ).on(
+		'click',
+		'#vkbm-provider-logo-select',
+		function ( event ) {
+			event.preventDefault();
+			openMediaFrame();
+		}
+	);
 
-	var shouldDisableControls = ! useCustom || isRegularHoliday;
+	$( document ).on(
+		'click',
+		'#vkbm-provider-logo-remove',
+		function ( event ) {
+			event.preventDefault();
+			clearLogo();
+		}
+	);
 
-	$row
-		.find( '.vkbm-business-hours-hour, .vkbm-business-hours-minute, .vkbm-business-hours-remove-slot' )
-		.prop( 'disabled', shouldDisableControls );
-	$row.find( '.vkbm-business-hours-add-slot' ).prop( 'disabled', shouldDisableControls );
-	}
-
-	$( document ).on( 'click', '#vkbm-provider-logo-select', function( event ) {
-		event.preventDefault();
-		openMediaFrame();
-	} );
-
-	$( document ).on( 'click', '#vkbm-provider-logo-remove', function( event ) {
-		event.preventDefault();
-		clearLogo();
-	} );
-
-	$( document ).on( 'click', '#vkbm-regular-holiday-add', function( event ) {
+	$( document ).on( 'click', '#vkbm-regular-holiday-add', function ( event ) {
 		event.preventDefault();
 		addHolidayRow();
 	} );
 
-	$( document ).on( 'click', '.vkbm-regular-holiday-remove', function( event ) {
-		event.preventDefault();
-		var $row = $( this ).closest( 'tr' );
-		$row.remove();
+	$( document ).on(
+		'click',
+		'.vkbm-regular-holiday-remove',
+		function ( event ) {
+			event.preventDefault();
+			const $row = $( this ).closest( 'tr' );
+			$row.remove();
 
-		if ( 0 === $holidayTable.children().length ) {
-			addHolidayRow();
+			if ( 0 === $holidayTable.children().length ) {
+				addHolidayRow();
+			}
 		}
-	} );
+	);
 
-	$( document ).on( 'click', '.vkbm-business-hours-basic-add-slot', function( event ) {
-		event.preventDefault();
-		addBasicSlot();
-	} );
+	$( document ).on(
+		'click',
+		'.vkbm-business-hours-basic-add-slot',
+		function ( event ) {
+			event.preventDefault();
+			addBasicSlot();
+		}
+	);
 
-	$( document ).on( 'click', '.vkbm-business-hours-basic-remove-slot', function( event ) {
-		event.preventDefault();
-		removeBasicSlot( $( this ) );
-	} );
+	$( document ).on(
+		'click',
+		'.vkbm-business-hours-basic-remove-slot',
+		function ( event ) {
+			event.preventDefault();
+			removeBasicSlot( $( this ) );
+		}
+	);
 
-	$( document ).on( 'click', '.vkbm-reminder-hours-add', function( event ) {
+	$( document ).on( 'click', '.vkbm-reminder-hours-add', function ( event ) {
 		event.preventDefault();
 		addReminderRow();
 	} );
 
-	$( document ).on( 'click', '.vkbm-reminder-hours-remove', function( event ) {
-		event.preventDefault();
-		removeReminderRow( $( this ) );
-	} );
+	$( document ).on(
+		'click',
+		'.vkbm-reminder-hours-remove',
+		function ( event ) {
+			event.preventDefault();
+			removeReminderRow( $( this ) );
+		}
+	);
 
-	$( document ).on( 'change', '.vkbm-business-hours-use-custom', function() {
-		var $row = $( this ).closest( '.vkbm-business-hours-row' );
+	$( document ).on( 'change', '.vkbm-business-hours-use-custom', function () {
+		const $row = $( this ).closest( '.vkbm-business-hours-row' );
 
 		toggleWeeklyRowState( $row );
 	} );
 
-	$( document ).on( 'click', '.vkbm-business-hours-add-slot', function( event ) {
-		event.preventDefault();
-		addWeeklySlot( $( this ).closest( '.vkbm-business-hours-row' ) );
-	} );
+	$( document ).on(
+		'click',
+		'.vkbm-business-hours-add-slot',
+		function ( event ) {
+			event.preventDefault();
+			addWeeklySlot( $( this ).closest( '.vkbm-business-hours-row' ) );
+		}
+	);
 
-		$( document ).on( 'click', '.vkbm-business-hours-remove-slot', function( event ) {
+	$( document ).on(
+		'click',
+		'.vkbm-business-hours-remove-slot',
+		function ( event ) {
 			event.preventDefault();
 			removeWeeklySlot( $( this ) );
-		} );
+		}
+	);
 
-		$( document ).on( 'change', '#vkbm-provider-booking-cancel-mode', function() {
+	$( document ).on(
+		'change',
+		'#vkbm-provider-booking-cancel-mode',
+		function () {
 			updateBookingCancelModeState();
-		} );
+		}
+	);
 
-		$( document ).on( 'change', '#vkbm-reservation-show-menu-list', function() {
+	$( document ).on(
+		'change',
+		'#vkbm-reservation-show-menu-list',
+		function () {
 			updateReservationMenuListModeState();
-		} );
+		}
+	);
 
-		$( document ).on( 'change', '#vkbm-provider-privacy-policy-mode', function() {
+	$( document ).on(
+		'change',
+		'#vkbm-provider-privacy-policy-mode',
+		function () {
 			updatePrivacyPolicyModeState();
-		} );
+		}
+	);
 
-	$( function() {
-		holidayTemplate = getTemplateHtml( '#vkbm-regular-holiday-row-template' ) || '';
-			$holidayTable   = $( '#vkbm-regular-holiday-rows' );
-			$holidayIndex   = $( '#vkbm-regular-holiday-next-index' );
-			$basicSlots     = $( '#vkbm-business-hours-basic-slots' );
-			$basicNextIndex = $( '#vkbm-business-hours-basic-next-index' );
+	$( function () {
+		holidayTemplate =
+			getTemplateHtml( '#vkbm-regular-holiday-row-template' ) || '';
+		$holidayTable = $( '#vkbm-regular-holiday-rows' );
+		$holidayIndex = $( '#vkbm-regular-holiday-next-index' );
+		$basicSlots = $( '#vkbm-business-hours-basic-slots' );
+		$basicNextIndex = $( '#vkbm-business-hours-basic-next-index' );
 
-			if ( holidayTemplate ) {
-				holidayTemplate = holidayTemplate.trim();
-			}
+		if ( holidayTemplate ) {
+			holidayTemplate = holidayTemplate.trim();
+		}
 
-		basicTemplate = getTemplateHtml( '#vkbm-business-hours-basic-slot-template' ) || '';
-		reminderTemplate = getTemplateHtml( '#vkbm-booking-reminder-template' ) || '';
-		$reminderList    = $( '#vkbm-booking-reminder-hours-list' );
-		$reminderIndex   = $( '#vkbm-booking-reminder-next-index' );
+		basicTemplate =
+			getTemplateHtml( '#vkbm-business-hours-basic-slot-template' ) || '';
+		reminderTemplate =
+			getTemplateHtml( '#vkbm-booking-reminder-template' ) || '';
+		$reminderList = $( '#vkbm-booking-reminder-hours-list' );
+		$reminderIndex = $( '#vkbm-booking-reminder-next-index' );
 
 		if ( basicTemplate ) {
 			basicTemplate = basicTemplate.trim();
@@ -435,13 +516,13 @@
 			reminderTemplate = reminderTemplate.trim();
 		}
 
-			$( '.vkbm-business-hours-row' ).each( function() {
-				toggleWeeklyRowState( $( this ) );
-			} );
-
-			updateBookingCancelModeState();
-			updateReservationMenuListModeState();
-			updatePrivacyPolicyModeState();
-			initColorPicker();
+		$( '.vkbm-business-hours-row' ).each( function () {
+			toggleWeeklyRowState( $( this ) );
 		} );
-	})( jQuery );
+
+		updateBookingCancelModeState();
+		updateReservationMenuListModeState();
+		updatePrivacyPolicyModeState();
+		initColorPicker();
+	} );
+} )( jQuery );

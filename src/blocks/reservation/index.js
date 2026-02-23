@@ -38,10 +38,10 @@ const deprecated = [
 				default: '1',
 			},
 		},
-		save: ({ attributes }) => {
-			const blockProps = useBlockProps.save({
+		save: ( { attributes } ) => {
+			const blockProps = useBlockProps.save( {
 				className: 'vkbm-reservation-block',
-			});
+			} );
 			const defaultMenuId =
 				typeof attributes?.defaultMenuId === 'string'
 					? attributes.defaultMenuId
@@ -51,25 +51,29 @@ const deprecated = [
 					? attributes.defaultResourceId
 					: '';
 			const allowMenuSelection =
-				String(attributes?.allowMenuSelection ?? '1') === '0' ? '0' : '1';
+				String( attributes?.allowMenuSelection ?? '1' ) === '0'
+					? '0'
+					: '1';
 			const allowStaffSelection =
-				String(attributes?.allowStaffSelection ?? '1') === '0' ? '0' : '1';
+				String( attributes?.allowStaffSelection ?? '1' ) === '0'
+					? '0'
+					: '1';
 
 			return (
 				<div
-					{...blockProps}
-					data-default-menu-id={defaultMenuId}
-					data-default-resource-id={defaultResourceId}
-					data-allow-menu-selection={allowMenuSelection}
-					data-allow-staff-selection={allowStaffSelection}
+					{ ...blockProps }
+					data-default-menu-id={ defaultMenuId }
+					data-default-resource-id={ defaultResourceId }
+					data-allow-menu-selection={ allowMenuSelection }
+					data-allow-staff-selection={ allowStaffSelection }
 				/>
 			);
 		},
 	},
 ];
 
-registerBlockType(metadata, {
+registerBlockType( metadata, {
 	edit,
 	save,
 	deprecated,
-});
+} );

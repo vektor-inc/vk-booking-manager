@@ -1618,7 +1618,7 @@ class Auth_Shortcodes {
 		$verification_url = add_query_arg( 'vkbm_verify_email', $token, $target_url );
 		$site_name        = get_bloginfo( 'name' );
 		/* translators: %s: site name */
-		$subject = sprintf( __( '[%s] Confirm email address', 'vk-booking-manager' ), $site_name );
+		$subject = sprintf( __( '[ %s ] Confirm email address', 'vk-booking-manager' ), $site_name );
 
 		// Build email message by translating each sentence separately.
 		$message  = __( 'Thank you for registering.', 'vk-booking-manager' ) . "\n\n";
@@ -2142,9 +2142,11 @@ class Auth_Shortcodes {
 		}
 
 		if ( $password !== $confirm ) {
-			$message = $is_register
-				? __( 'Please enter the same password twice.', 'vk-booking-manager' )
-				: __( 'New passwords do not match.', 'vk-booking-manager' );
+			if ( $is_register ) {
+				$message = __( 'Please enter the same password twice.', 'vk-booking-manager' );
+			} else {
+				$message = __( 'New passwords do not match.', 'vk-booking-manager' );
+			}
 			$errors->add( 'password_mismatch', $message );
 			return;
 		}

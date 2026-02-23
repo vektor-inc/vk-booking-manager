@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-export default defineConfig({
+export default defineConfig( {
 	testDir: './tests/e2e/specs',
 	fullyParallel: false,
-	forbidOnly: !!process.env.CI,
+	forbidOnly: !! process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	workers: 1,
 	reporter: 'html',
@@ -15,8 +15,8 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'] },
+			use: { ...devices[ 'Desktop Chrome' ] },
 		},
 	],
-	timeout: 120000,
-});
+	timeout: 45000,
+} );

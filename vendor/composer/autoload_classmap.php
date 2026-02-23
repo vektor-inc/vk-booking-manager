@@ -694,7 +694,9 @@ return array(
     'VKBookingManager\\Tests\\Common\\Helper_Currency_Symbol_Test' => $baseDir . '/tests/phpunit/common/test-helper-currency-symbol.php',
     'VKBookingManager\\Tests\\Common\\Helper_Phone_Normalization_Test' => $baseDir . '/tests/phpunit/common/test-helper-phone-normalization.php',
     'VKBookingManager\\Tests\\Frontend\\Reservation_Block_Rendering_Test' => $baseDir . '/tests/phpunit/rendering/class-reservation-block-rendering-test.php',
+    'VKBookingManager\\Tests\\Notifications\\Booking_Notification_Service_Test' => $baseDir . '/tests/phpunit/notifications/test-booking-notification-service.php',
     'VKBookingManager\\Tests\\PostTypes\\Service_Menu_Group_Sort_Test' => $baseDir . '/tests/phpunit/post-types/test-service-menu-group-sort.php',
+    'VKBookingManager\\Tests\\ProviderSettings\\Settings_Repository_Test' => $baseDir . '/tests/phpunit/provider-settings/test-settings-repository.php',
     'VKBookingManager\\Tests\\ProviderSettings\\Settings_Sanitizer_Test' => $baseDir . '/tests/phpunit/provider-settings/test-settings-sanitizer.php',
     'VKBookingManager\\Tests\\REST\\Auth_Form_Controller_Test' => $baseDir . '/tests/phpunit/rest/test-auth-form-controller.php',
 );

@@ -225,31 +225,25 @@ Contact us: Please contact our store.",
 	 * Returns the default cancellation policy in Japanese.
 	 *
 	 * These are default values that users can edit in the admin panel.
-	 * Using translation functions for WordPress.org plugin review compliance.
 	 *
 	 * @return string
 	 */
 	private function get_default_cancellation_policy_ja(): string {
-		return __(
-			'キャンセル・変更の場合は、予約日の前日までに営業時間内にご連絡ください。
+		return 'キャンセル・変更の場合は、予約日の前日までに営業時間内にご連絡ください。
 当日キャンセルの場合、施術料金の100%をキャンセル料として頂戴いたします。
 無断キャンセルの場合、施術料金の100%をキャンセル料として頂戴いたします。
-予約時間に遅れる場合は必ずご連絡ください。遅刻された場合、施術時間が短縮となる場合がございます（料金の変更はございません）。',
-			'vk-booking-manager'
-		);
+予約時間に遅れる場合は必ずご連絡ください。遅刻された場合、施術時間が短縮となる場合がございます（料金の変更はございません）。';
 	}
 
 	/**
 	 * Returns the default terms of service in Japanese.
 	 *
 	 * These are default values that users can edit in the admin panel.
-	 * Using translation functions for WordPress.org plugin review compliance.
 	 *
 	 * @return string
 	 */
 	private function get_default_terms_of_service_ja(): string {
-		return __(
-			'[システム利用規約]
+		return '[システム利用規約]
 
 本規約は、当店が提供する予約システム（以下「本サービス」といいます）の利用条件を定めるものです。本サービスをご利用のお客様（以下「ユーザー」といいます）は、本サービスを利用する前に、本規約に同意していただく必要があります。
 
@@ -283,22 +277,18 @@ Contact us: Please contact our store.",
 当店は、必要に応じて本規約の内容を変更することがあります。変更後の規約は、本サービス上への掲示その他当店が適切と判断する方法により通知し、ユーザーが通知後に本サービスを利用した場合、変更後の規約に同意したものとみなします。
 
 第9条（準拠法・管轄裁判所）
-本規約の解釈にあたっては、日本法を準拠法とし、本サービスに関する紛争については、当店所在地を管轄する裁判所を専属的合意管轄裁判所とします。',
-			'vk-booking-manager'
-		);
+本規約の解釈にあたっては、日本法を準拠法とし、本サービスに関する紛争については、当店所在地を管轄する裁判所を専属的合意管轄裁判所とします。';
 	}
 
 	/**
 	 * Returns the default privacy policy in Japanese.
 	 *
 	 * These are default values that users can edit in the admin panel.
-	 * Using translation functions for WordPress.org plugin review compliance.
 	 *
 	 * @return string
 	 */
 	private function get_default_privacy_policy_ja(): string {
-		return __(
-			'[プライバシーポリシー]
+		return '[プライバシーポリシー]
 
 当店は、お客様の個人情報を以下の目的で利用いたします。
 1. 予約の管理および連絡
@@ -313,9 +303,7 @@ Contact us: Please contact our store.",
 
 開示・訂正・削除：本人からの請求があった場合、所定の方法に従い対応いたします。
 
-お問い合わせ：当店までご連絡ください。',
-			'vk-booking-manager'
-		);
+お問い合わせ：当店までご連絡ください。';
 	}
 
 	/**

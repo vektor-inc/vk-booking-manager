@@ -2,30 +2,44 @@
 	'use strict';
 
 	document.addEventListener( 'DOMContentLoaded', function () {
-		var serviceToggle = document.getElementById( 'vkbm-booking-allow-service-change' );
-		var serviceSelect = document.getElementById( 'vkbm-booking-service' );
+		const serviceToggle = document.getElementById(
+			'vkbm-booking-allow-service-change'
+		);
+		const serviceSelect = document.getElementById( 'vkbm-booking-service' );
 
 		if ( serviceToggle && serviceSelect ) {
-			var updateServiceSelect = function () {
+			const updateServiceSelect = function () {
 				serviceSelect.disabled = ! serviceToggle.checked;
 			};
 			serviceToggle.addEventListener( 'change', updateServiceSelect );
 			updateServiceSelect();
 		}
 
-		var attachmentWrap = document.querySelector( '.vkbm-booking-attachments' );
+		const attachmentWrap = document.querySelector(
+			'.vkbm-booking-attachments'
+		);
 		if ( attachmentWrap ) {
-			var addButton = attachmentWrap.querySelector( '.vkbm-booking-attachments__add' );
-			var input = attachmentWrap.querySelector( 'input[type="hidden"]' );
-			var list = attachmentWrap.querySelector( '.vkbm-booking-attachments__list' );
-			var lightbox = attachmentWrap.querySelector( '.vkbm-booking-attachments__lightbox' );
-			var lightboxImage = attachmentWrap.querySelector( '.vkbm-booking-attachments__lightbox-image' );
+			const addButton = attachmentWrap.querySelector(
+				'.vkbm-booking-attachments__add'
+			);
+			const input = attachmentWrap.querySelector(
+				'input[type="hidden"]'
+			);
+			const list = attachmentWrap.querySelector(
+				'.vkbm-booking-attachments__list'
+			);
+			const lightbox = attachmentWrap.querySelector(
+				'.vkbm-booking-attachments__lightbox'
+			);
+			const lightboxImage = attachmentWrap.querySelector(
+				'.vkbm-booking-attachments__lightbox-image'
+			);
 
 			if ( addButton && input && list ) {
 				if ( lightbox ) {
 					lightbox.hidden = true;
 				}
-				var buildIdList = function () {
+				const buildIdList = function () {
 					if ( ! input.value ) {
 						return [];
 					}
@@ -39,12 +53,12 @@
 						} );
 				};
 
-				var syncInput = function ( ids ) {
+				const syncInput = function ( ids ) {
 					input.value = ids.join( ',' );
 				};
 
-				var appendItem = function ( attachment ) {
-					var ids = buildIdList();
+				const appendItem = function ( attachment ) {
+					const ids = buildIdList();
 					if ( ids.indexOf( attachment.id ) !== -1 ) {
 						return;
 					}
@@ -52,30 +66,33 @@
 					ids.push( attachment.id );
 					syncInput( ids );
 
-					var imageUrl = attachment.sizes && attachment.sizes.thumbnail
-						? attachment.sizes.thumbnail.url
-						: attachment.url;
-					var listItem = document.createElement( 'li' );
+					const imageUrl =
+						attachment.sizes && attachment.sizes.thumbnail
+							? attachment.sizes.thumbnail.url
+							: attachment.url;
+					const listItem = document.createElement( 'li' );
 					listItem.className = 'vkbm-booking-attachments__item';
 					listItem.dataset.id = String( attachment.id );
 
-					var image = document.createElement( 'img' );
+					const image = document.createElement( 'img' );
 					image.className = 'vkbm-booking-attachments__image';
 					image.src = imageUrl;
 					image.alt = '';
 					image.dataset.fullUrl = attachment.url || '';
 
-					var removeButton = document.createElement( 'button' );
+					const removeButton = document.createElement( 'button' );
 					removeButton.type = 'button';
-					removeButton.className = 'vkbm-button vkbm-button__xs vkbm-button__danger vkbm-booking-attachments__remove';
-					removeButton.textContent = list.dataset.removeLabel || 'delete';
+					removeButton.className =
+						'vkbm-button vkbm-button__xs vkbm-button__danger vkbm-booking-attachments__remove';
+					removeButton.textContent =
+						list.dataset.removeLabel || 'delete';
 
 					listItem.appendChild( image );
 					listItem.appendChild( removeButton );
 					list.appendChild( listItem );
 				};
 
-				var frame = null;
+				let frame = null;
 				if ( window.wp && window.wp.media ) {
 					addButton.addEventListener( 'click', function ( event ) {
 						event.preventDefault();
@@ -96,9 +113,12 @@
 						} );
 
 						frame.on( 'select', function () {
-							frame.state().get( 'selection' ).each( function ( attachment ) {
-								appendItem( attachment.toJSON() );
-							} );
+							frame
+								.state()
+								.get( 'selection' )
+								.each( function ( attachment ) {
+									appendItem( attachment.toJSON() );
+								} );
 						} );
 
 						frame.open();
@@ -106,20 +126,27 @@
 				}
 
 				list.addEventListener( 'click', function ( event ) {
-					var target = event.target;
-					if ( ! target || ! target.classList.contains( 'vkbm-booking-attachments__remove' ) ) {
+					const target = event.target;
+					if (
+						! target ||
+						! target.classList.contains(
+							'vkbm-booking-attachments__remove'
+						)
+					) {
 						return;
 					}
 
 					event.preventDefault();
 
-					var listItem = target.closest( '.vkbm-booking-attachments__item' );
+					const listItem = target.closest(
+						'.vkbm-booking-attachments__item'
+					);
 					if ( ! listItem ) {
 						return;
 					}
 
-					var removeId = parseInt( listItem.dataset.id || '', 10 );
-					var ids = buildIdList().filter( function ( id ) {
+					const removeId = parseInt( listItem.dataset.id || '', 10 );
+					const ids = buildIdList().filter( function ( id ) {
 						return id !== removeId;
 					} );
 					syncInput( ids );
@@ -127,20 +154,34 @@
 				} );
 
 				if ( lightbox && lightboxImage ) {
-					var prevButton = lightbox.querySelector( '[data-lightbox-prev]' );
-					var nextButton = lightbox.querySelector( '[data-lightbox-next]' );
-					var currentIndex = -1;
-					var gallery = [];
+					const prevButton = lightbox.querySelector(
+						'[data-lightbox-prev]'
+					);
+					const nextButton = lightbox.querySelector(
+						'[data-lightbox-next]'
+					);
+					let currentIndex = -1;
+					let gallery = [];
 
-					var buildGallery = function () {
+					const buildGallery = function () {
 						gallery = Array.prototype.slice
-							.call( list.querySelectorAll( '.vkbm-booking-attachments__item' ) )
+							.call(
+								list.querySelectorAll(
+									'.vkbm-booking-attachments__item'
+								)
+							)
 							.map( function ( item ) {
-								var image = item.querySelector( '.vkbm-booking-attachments__image' );
-								var fullUrl = image ? image.dataset.fullUrl || image.getAttribute( 'src' ) || '' : '';
+								const image = item.querySelector(
+									'.vkbm-booking-attachments__image'
+								);
+								const fullUrl = image
+									? image.dataset.fullUrl ||
+									  image.getAttribute( 'src' ) ||
+									  ''
+									: '';
 								return {
 									id: item.dataset.id || '',
-									fullUrl: fullUrl,
+									fullUrl,
 								};
 							} )
 							.filter( function ( entry ) {
@@ -148,8 +189,8 @@
 							} );
 					};
 
-					var updateNavState = function () {
-						var hasMultiple = gallery.length > 1;
+					const updateNavState = function () {
+						const hasMultiple = gallery.length > 1;
 						if ( prevButton ) {
 							prevButton.disabled = ! hasMultiple;
 						}
@@ -158,7 +199,7 @@
 						}
 					};
 
-					var openAtIndex = function ( index ) {
+					const openAtIndex = function ( index ) {
 						if ( ! gallery.length ) {
 							return;
 						}
@@ -174,51 +215,65 @@
 						updateNavState();
 					};
 
-					var closeLightbox = function () {
+					const closeLightbox = function () {
 						lightbox.hidden = true;
 						lightboxImage.removeAttribute( 'src' );
 					};
 
 					list.addEventListener( 'click', function ( event ) {
-						var target = event.target;
-						if ( ! target || ! target.classList.contains( 'vkbm-booking-attachments__image' ) ) {
+						const target = event.target;
+						if (
+							! target ||
+							! target.classList.contains(
+								'vkbm-booking-attachments__image'
+							)
+						) {
 							return;
 						}
 
 						event.preventDefault();
 
 						buildGallery();
-						var listItem = target.closest( '.vkbm-booking-attachments__item' );
-						var clickedId = listItem ? listItem.dataset.id || '' : '';
-						var startIndex = gallery.findIndex( function ( entry ) {
-							return entry.id === clickedId;
-						} );
+						const listItem = target.closest(
+							'.vkbm-booking-attachments__item'
+						);
+						const clickedId = listItem
+							? listItem.dataset.id || ''
+							: '';
+						const startIndex = gallery.findIndex(
+							function ( entry ) {
+								return entry.id === clickedId;
+							}
+						);
 						openAtIndex( startIndex >= 0 ? startIndex : 0 );
 					} );
 
 					lightbox.addEventListener( 'click', function ( event ) {
-						var target = event.target;
-						var closeTarget = target && target.closest
-							? target.closest( '[data-lightbox-close]' )
-							: null;
+						const target = event.target;
+						const closeTarget =
+							target && target.closest
+								? target.closest( '[data-lightbox-close]' )
+								: null;
 						if ( closeTarget ) {
 							event.preventDefault();
 							closeLightbox();
 							return;
 						}
 
-						var prevTarget = target && target.closest
-							? target.closest( '[data-lightbox-prev]' )
-							: null;
+						const prevTarget =
+							target && target.closest
+								? target.closest( '[data-lightbox-prev]' )
+								: null;
 						if ( prevTarget ) {
 							event.preventDefault();
 							openAtIndex( currentIndex - 1 );
 							return;
 						}
 
-						var nextTarget = target && target.closest
-							? target.closest( '[data-lightbox-next]' )
-							: null;
+						const nextTarget =
+							target && target.closest
+								? target.closest( '[data-lightbox-next]' )
+								: null;
 						if ( nextTarget ) {
 							event.preventDefault();
 							openAtIndex( currentIndex + 1 );

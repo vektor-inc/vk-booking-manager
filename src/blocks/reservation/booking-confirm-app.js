@@ -3,47 +3,49 @@ import { useCallback, useEffect, useMemo, useState } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
 import { formatCurrency, normalizePriceValue } from '../shared/pricing';
+import { resolveLoginState } from '../shared/auth';
 import { sanitizeDraftToken } from '../shared/draft-token';
 import { BookingSummaryItems } from './components/booking-summary-items';
+import { ReservationHeader } from './components/reservation-header';
 
-const getQueryParam = (key) => {
-	if (typeof window === 'undefined') {
+const getQueryParam = ( key ) => {
+	if ( typeof window === 'undefined' ) {
 		return '';
 	}
-	const params = new URLSearchParams(window.location.search);
-	const value = params.get(key) || '';
-	return key === 'draft' ? sanitizeDraftToken(value) : value;
+	const params = new URLSearchParams( window.location.search );
+	const value = params.get( key ) || '';
+	return key === 'draft' ? sanitizeDraftToken( value ) : value;
 };
 
-const formatDateTime = (iso, timezone) => {
-	return formatDate(iso, timezone, {
+const formatDateTime = ( iso, timezone ) => {
+	return formatDate( iso, timezone, {
 		includeTime: true,
 		includeDate: true,
-	});
+	} );
 };
 
-const formatBookingDateTimeParts = (startAt, endAt, timezone) => {
-	if (!startAt) {
+const formatBookingDateTimeParts = ( startAt, endAt, timezone ) => {
+	if ( ! startAt ) {
 		return { date: '', time: '' };
 	}
 
-	const dateLabel = formatDate(startAt, timezone, {
+	const dateLabel = formatDate( startAt, timezone, {
 		includeTime: false,
 		includeDate: true,
 		includeWeekday: true,
-	});
-	const startTimeLabel = formatDate(startAt, timezone, {
+	} );
+	const startTimeLabel = formatDate( startAt, timezone, {
 		includeTime: true,
 		includeDate: false,
-	});
+	} );
 	const endTimeLabel = endAt
-		? formatDate(endAt, timezone, {
+		? formatDate( endAt, timezone, {
 				includeTime: true,
 				includeDate: false,
-		  })
+		  } )
 		: '';
 	const timeLabel = endTimeLabel
-		? `${startTimeLabel} - ${endTimeLabel}`.trim()
+		? `${ startTimeLabel } - ${ endTimeLabel }`.trim()
 		: startTimeLabel;
 
 	return {
@@ -57,12 +59,12 @@ const formatDate = (
 	timezone,
 	{ includeTime = true, includeDate = true, includeWeekday = false } = {}
 ) => {
-	if (!iso) {
+	if ( ! iso ) {
 		return '';
 	}
 	try {
-		const date = new Date(iso);
-		if (Number.isNaN(date.getTime())) {
+		const date = new Date( iso );
+		if ( Number.isNaN( date.getTime() ) ) {
 			return iso;
 		}
 
@@ -72,7 +74,7 @@ const formatDate = (
 				typeof __experimentalGetSettings === 'function'
 					? __experimentalGetSettings()
 					: undefined;
-		} catch (error) {
+		} catch ( error ) {
 			settings = undefined;
 		}
 
@@ -80,211 +82,205 @@ const formatDate = (
 		const timeFormat = settings?.formats?.time || 'H:i';
 		const wpTimezone = timezone || settings?.timezone?.string;
 
-		const datePart = includeDate ? dateI18n(dateFormat, date, wpTimezone) : '';
-		const timePart = includeTime ? dateI18n(timeFormat, date, wpTimezone) : '';
-		const weekdayPart = includeWeekday ? dateI18n('D', date, wpTimezone) : '';
+		const datePart = includeDate
+			? dateI18n( dateFormat, date, wpTimezone )
+			: '';
+		const timePart = includeTime
+			? dateI18n( timeFormat, date, wpTimezone )
+			: '';
+		const weekdayPart = includeWeekday
+			? dateI18n( 'D', date, wpTimezone )
+			: '';
 
-		if (includeDate && includeTime) {
-			if (includeWeekday && weekdayPart) {
-				return `${datePart}(${weekdayPart}) ${timePart}`.trim();
+		if ( includeDate && includeTime ) {
+			if ( includeWeekday && weekdayPart ) {
+				return `${ datePart }(${ weekdayPart }) ${ timePart }`.trim();
 			}
-			return `${datePart} ${timePart}`.trim();
+			return `${ datePart } ${ timePart }`.trim();
 		}
 
-		if (includeDate) {
-			if (includeWeekday && weekdayPart) {
-				return `${datePart}(${weekdayPart})`.trim();
+		if ( includeDate ) {
+			if ( includeWeekday && weekdayPart ) {
+				return `${ datePart }(${ weekdayPart })`.trim();
 			}
 			return datePart;
 		}
 
 		return timePart;
-	} catch (error) {
+	} catch ( error ) {
 		return iso;
 	}
 };
 
-const useLoginState = () => {
-	if (typeof document === 'undefined') {
-		return false;
-	}
-	return document.body.classList.contains('logged-in');
-};
-
 const parseQueryParams = () => {
-	if (typeof window === 'undefined') {
+	if ( typeof window === 'undefined' ) {
 		return {};
 	}
 
 	try {
-		const params = new URLSearchParams(window.location.search);
+		const params = new URLSearchParams( window.location.search );
 		return {
-			auth: params.get('vkbm_auth') || '',
-			draft: sanitizeDraftToken(params.get('draft') || ''),
+			auth: params.get( 'vkbm_auth' ) || '',
+			draft: sanitizeDraftToken( params.get( 'draft' ) || '' ),
 		};
-	} catch (error) {
+	} catch ( error ) {
 		return {};
 	}
 };
 
-const buildApiPath = (base, query = {}) => {
+const buildApiPath = ( base, query = {} ) => {
 	const params = new URLSearchParams();
-	Object.entries(query).forEach(([key, value]) => {
-		if (value !== undefined && value !== null && value !== '') {
-			params.append(key, value);
+	Object.entries( query ).forEach( ( [ key, value ] ) => {
+		if ( value !== undefined && value !== null && value !== '' ) {
+			params.append( key, value );
 		}
-	});
-	return `${base}?${params.toString()}`;
+	} );
+	return `${ base }?${ params.toString() }`;
 };
 
-const buildLogoutFallbackUrl = (reservationPageUrl = '') => {
-	if (typeof window === 'undefined') {
+const buildLogoutFallbackUrl = ( reservationPageUrl = '' ) => {
+	if ( typeof window === 'undefined' ) {
 		return '/wp-login.php?action=logout';
 	}
 	const target =
-		typeof reservationPageUrl === 'string' && reservationPageUrl.trim() !== ''
+		typeof reservationPageUrl === 'string' &&
+		reservationPageUrl.trim() !== ''
 			? reservationPageUrl
 			: window.location.href;
-	const redirect = encodeURIComponent(target);
-	return `/wp-login.php?action=logout&redirect_to=${redirect}`;
+	const redirect = encodeURIComponent( target );
+	return `/wp-login.php?action=logout&redirect_to=${ redirect }`;
 };
 
-const parseJsonWithFallback = (raw) => {
+const parseJsonWithFallback = ( raw ) => {
 	const fallbackError = new Error(
-		__('The response is not a valid JSON response.', 'vk-booking-manager')
+		__( 'The response is not a valid JSON response.', 'vk-booking-manager' )
 	);
 
-	if (typeof raw !== 'string') {
+	if ( typeof raw !== 'string' ) {
 		throw fallbackError;
 	}
 
 	const trimmed = raw.trim();
-	if (!trimmed) {
+	if ( ! trimmed ) {
 		throw fallbackError;
 	}
 
 	try {
-		return JSON.parse(trimmed);
-	} catch (error) {
-		let start = trimmed.indexOf('{');
-		let end = trimmed.lastIndexOf('}');
+		return JSON.parse( trimmed );
+	} catch ( error ) {
+		let start = trimmed.indexOf( '{' );
+		let end = trimmed.lastIndexOf( '}' );
 
-		if (start === -1 || end === -1 || end < start) {
-			start = trimmed.indexOf('[');
-			end = trimmed.lastIndexOf(']');
+		if ( start === -1 || end === -1 || end < start ) {
+			start = trimmed.indexOf( '[' );
+			end = trimmed.lastIndexOf( ']' );
 		}
 
-		if (start === -1 || end === -1 || end < start) {
+		if ( start === -1 || end === -1 || end < start ) {
 			throw fallbackError;
 		}
 
 		try {
-			return JSON.parse(trimmed.slice(start, end + 1));
-		} catch (innerError) {
+			return JSON.parse( trimmed.slice( start, end + 1 ) );
+		} catch ( innerError ) {
 			throw fallbackError;
 		}
 	}
 };
 
-const SummaryRow = ({ label, value, valueClassName }) => (
+const SummaryRow = ( { label, value, valueClassName } ) => (
 	<dl className="vkbm-confirm__summary-item">
-		<dt className="vkbm-confirm__summary-item-title">{label}</dt>
+		<dt className="vkbm-confirm__summary-item-title">{ label }</dt>
 		<dd
-			className={[
-				'vkbm-confirm__summary-item-value',
-				valueClassName,
-			]
-				.filter(Boolean)
-				.join(' ')}
+			className={ [ 'vkbm-confirm__summary-item-value', valueClassName ]
+				.filter( Boolean )
+				.join( ' ' ) }
 		>
-			{value || '—'}
+			{ value || '—' }
 		</dd>
 	</dl>
 );
 
-export const BookingConfirmApp = ({
+export const BookingConfirmApp = ( {
 	redirectUrl,
 	termsLabel,
 	policyText,
 	successMessage,
 	reservationPageUrl = '',
-}) => {
-	const userBootstrap = useMemo(() => {
-		if (typeof window === 'undefined') {
+	isEditor = false,
+} ) => {
+	const userBootstrap = useMemo( () => {
+		if ( typeof window === 'undefined' ) {
 			return null;
 		}
 		return window.vkbmCurrentUserBootstrap || null;
-	}, []);
-	const draftToken = useMemo(() => getQueryParam('draft'), []);
-	const [draft, setDraft] = useState(null);
-	const [menu, setMenu] = useState(null);
-	const [staff, setStaff] = useState(null);
-	const [loading, setLoading] = useState(true);
-	const [loadError, setLoadError] = useState('');
-	const [memo, setMemo] = useState('');
-	const [agreeCancellationPolicy, setAgreeCancellationPolicy] = useState(false);
-	const [agreeTermsOfService, setAgreeTermsOfService] = useState(false);
-	const [submitting, setSubmitting] = useState(false);
-	const [submitError, setSubmitError] = useState('');
-	const [success, setSuccess] = useState(false);
-	const [createdStatus, setCreatedStatus] = useState('');
-	const [customerName, setCustomerName] = useState('');
-	const [customerPhone, setCustomerPhone] = useState('');
-	const [providerNote, setProviderNote] = useState('');
-	const [canManageReservations, setCanManageReservations] = useState(
-		Boolean(userBootstrap?.canManageReservations)
+	}, [] );
+	const draftToken = useMemo( () => getQueryParam( 'draft' ), [] );
+	const [ draft, setDraft ] = useState( null );
+	const [ menu, setMenu ] = useState( null );
+	const [ staff, setStaff ] = useState( null );
+	const [ loading, setLoading ] = useState( true );
+	const [ loadError, setLoadError ] = useState( '' );
+	const [ memo, setMemo ] = useState( '' );
+	const [ agreeCancellationPolicy, setAgreeCancellationPolicy ] =
+		useState( false );
+	const [ agreeTermsOfService, setAgreeTermsOfService ] = useState( false );
+	const [ submitting, setSubmitting ] = useState( false );
+	const [ submitError, setSubmitError ] = useState( '' );
+	const [ success, setSuccess ] = useState( false );
+	const [ createdStatus, setCreatedStatus ] = useState( '' );
+	const [ customerName, setCustomerName ] = useState( '' );
+	const [ customerPhone, setCustomerPhone ] = useState( '' );
+	const [ providerNote, setProviderNote ] = useState( '' );
+	const [ canManageReservations, setCanManageReservations ] = useState(
+		Boolean( userBootstrap?.canManageReservations )
 	);
-	const [logoutUrl, setLogoutUrl] = useState(userBootstrap?.logoutUrl || '');
-	const [shiftDashboardUrl, setShiftDashboardUrl] = useState(
+	const [ logoutUrl, setLogoutUrl ] = useState(
+		userBootstrap?.logoutUrl || ''
+	);
+	const [ shiftDashboardUrl, setShiftDashboardUrl ] = useState(
 		userBootstrap?.shiftDashboardUrl || ''
 	);
-	const [providerCancellationPolicy, setProviderCancellationPolicy] = useState('');
-	const [providerTermsOfService, setProviderTermsOfService] = useState('');
-	const [providerPaymentMethod, setProviderPaymentMethod] = useState('');
-	const [providerName, setProviderName] = useState('');
-	const [providerLogoUrl, setProviderLogoUrl] = useState('');
-	const [showProviderLogo, setShowProviderLogo] = useState(false);
-	const [showProviderName, setShowProviderName] = useState(false);
-	const [staffEnabled, setStaffEnabled] = useState(true);
-	const [resourceLabelSingular, setResourceLabelSingular] = useState(__('Staff', 'vk-booking-manager'));
-	const [resolvedReservationPageUrl, setResolvedReservationPageUrl] = useState(reservationPageUrl || '');
-	const [taxLabelText, setTaxLabelText] = useState('');
-	const [currencySymbol, setCurrencySymbol] = useState('');
+	const [ providerCancellationPolicy, setProviderCancellationPolicy ] =
+		useState( '' );
+	const [ providerTermsOfService, setProviderTermsOfService ] =
+		useState( '' );
+	const [ providerPaymentMethod, setProviderPaymentMethod ] = useState( '' );
+	const [ providerName, setProviderName ] = useState( '' );
+	const [ providerLogoUrl, setProviderLogoUrl ] = useState( '' );
+	const [ showProviderLogo, setShowProviderLogo ] = useState( false );
+	const [ showProviderName, setShowProviderName ] = useState( false );
+	const [ staffEnabled, setStaffEnabled ] = useState( true );
+	const [ resourceLabelSingular, setResourceLabelSingular ] = useState(
+		__( 'Staff', 'vk-booking-manager' )
+	);
+	const [ resolvedReservationPageUrl, setResolvedReservationPageUrl ] =
+		useState( reservationPageUrl || '' );
+	const [ taxLabelText, setTaxLabelText ] = useState( '' );
+	const [ currencySymbol, setCurrencySymbol ] = useState( '' );
 
-	const isLoggedIn = useLoginState();
-    
-    // Debug logging
-    useEffect(() => {
-        console.log('[DEBUG] BookingConfirmApp mounted');
-        console.log('[DEBUG] isLoggedIn:', isLoggedIn);
-        console.log('[DEBUG] userBootstrap:', userBootstrap);
-        console.log('[DEBUG] document body class:', typeof document !== 'undefined' ? document.body.className : 'no document');
-    }, [isLoggedIn, userBootstrap]);
+	const isLoggedIn = resolveLoginState( { userBootstrap, isEditor } );
 
-
-	const queryDefaults = useMemo(() => parseQueryParams(), []);
-	const [authMode, setAuthMode] = useState(queryDefaults.auth || '');
-	const [authFormHtml, setAuthFormHtml] = useState('');
-	const [authLoading, setAuthLoading] = useState(false);
-	const [authError, setAuthError] = useState('');
-	const [bookingsLoading, setBookingsLoading] = useState(false);
-	const [bookingsError, setBookingsError] = useState('');
-	const [bookings, setBookings] = useState([]);
-	const [cancellingBookingId, setCancellingBookingId] = useState(0);
+	const queryDefaults = useMemo( () => parseQueryParams(), [] );
+	const [ authMode, setAuthMode ] = useState( queryDefaults.auth || '' );
+	const [ authFormHtml, setAuthFormHtml ] = useState( '' );
+	const [ authLoading, setAuthLoading ] = useState( false );
+	const [ authError, setAuthError ] = useState( '' );
+	const [ bookingsLoading, setBookingsLoading ] = useState( false );
+	const [ bookingsError, setBookingsError ] = useState( '' );
+	const [ bookings, setBookings ] = useState( [] );
+	const [ cancellingBookingId, setCancellingBookingId ] = useState( 0 );
 	const timezone = draft?.meta?.timezone || '';
 
-	const pricingSummary = useMemo(() => {
-		const taxIncluded = Boolean(draft?.menu_price_tax_included);
-		const taxLabel =
-			taxLabelText.trim() !== ''
-				? taxLabelText
-				: '';
-		const ensureTaxLabel = (label) =>
-			taxIncluded && taxLabel ? `${label}${taxLabel}` : label;
+	const pricingSummary = useMemo( () => {
+		const taxIncluded = Boolean( draft?.menu_price_tax_included );
+		const taxLabel = taxLabelText.trim() !== '' ? taxLabelText : '';
+		const ensureTaxLabel = ( label ) =>
+			taxIncluded && taxLabel ? `${ label }${ taxLabel }` : label;
 
 		const basePrice =
-			normalizePriceValue(draft?.menu_price) ??
-			normalizePriceValue(draft?.menu_price_base) ??
+			normalizePriceValue( draft?.menu_price ) ??
+			normalizePriceValue( draft?.menu_price_base ) ??
 			normalizePriceValue(
 				menu?.meta?.vkbm_base_price ??
 					menu?.meta?._vkbm_base_price ??
@@ -292,33 +288,40 @@ export const BookingConfirmApp = ({
 					menu?.price
 			);
 
-		const currencySymbolValue = currencySymbol.trim() !== '' ? currencySymbol : null;
+		const currencySymbolValue =
+			currencySymbol.trim() !== '' ? currencySymbol : null;
 		const formattedBase =
 			typeof draft?.menu_price_formatted === 'string' &&
 			draft.menu_price_formatted.trim() !== ''
 				? draft.menu_price_formatted
 				: basePrice !== null
-				? ensureTaxLabel(formatCurrency(basePrice, currencySymbolValue))
+				? ensureTaxLabel(
+						formatCurrency( basePrice, currencySymbolValue )
+				  )
 				: '';
 
 		const nominationFee = staffEnabled
-			? normalizePriceValue(draft?.nomination_fee) ?? 0
+			? normalizePriceValue( draft?.nomination_fee ) ?? 0
 			: 0;
 		const formattedNomination =
 			typeof draft?.nomination_fee_formatted === 'string' &&
 			draft.nomination_fee_formatted.trim() !== ''
 				? draft.nomination_fee_formatted
-				: ensureTaxLabel(formatCurrency(nominationFee, currencySymbolValue));
+				: ensureTaxLabel(
+						formatCurrency( nominationFee, currencySymbolValue )
+				  );
 
 		const totalPrice =
-			normalizePriceValue(draft?.total_price) ??
-			(basePrice !== null ? basePrice + nominationFee : null);
+			normalizePriceValue( draft?.total_price ) ??
+			( basePrice !== null ? basePrice + nominationFee : null );
 		const formattedTotal =
 			typeof draft?.total_price_formatted === 'string' &&
 			draft.total_price_formatted.trim() !== ''
 				? draft.total_price_formatted
 				: totalPrice !== null
-				? ensureTaxLabel(formatCurrency(totalPrice, currencySymbolValue))
+				? ensureTaxLabel(
+						formatCurrency( totalPrice, currencySymbolValue )
+				  )
 				: '';
 
 		return {
@@ -326,56 +329,56 @@ export const BookingConfirmApp = ({
 			nominationLabel: formattedNomination,
 			totalLabel: formattedTotal,
 		};
-	}, [draft, menu, staffEnabled, taxLabelText, currencySymbol]);
+	}, [ draft, menu, staffEnabled, taxLabelText, currencySymbol ] );
 
-	useEffect(() => {
-		if (!draftToken) {
+	useEffect( () => {
+		if ( ! draftToken ) {
 			setLoadError(
 				__(
 					'The URL does not include a temporary reservation data parameter. Please try again from the reservation page.',
 					'vk-booking-manager'
 				)
 			);
-			setLoading(false);
+			setLoading( false );
 			return;
 		}
 
-		setLoading(true);
-		setLoadError('');
-		apiFetch({ path: `/vkbm/v1/drafts/${draftToken}` })
-			.then((data) => {
-				setDraft(data);
-				setMemo(data?.memo || '');
-				const agreedAll = Boolean(data?.agree_terms);
+		setLoading( true );
+		setLoadError( '' );
+		apiFetch( { path: `/vkbm/v1/drafts/${ draftToken }` } )
+			.then( ( data ) => {
+				setDraft( data );
+				setMemo( data?.memo || '' );
+				const agreedAll = Boolean( data?.agree_terms );
 				setAgreeCancellationPolicy(
 					data?.agree_cancellation_policy !== undefined
-						? Boolean(data?.agree_cancellation_policy)
+						? Boolean( data?.agree_cancellation_policy )
 						: agreedAll
 				);
 				setAgreeTermsOfService(
 					data?.agree_terms_of_service !== undefined
-						? Boolean(data?.agree_terms_of_service)
+						? Boolean( data?.agree_terms_of_service )
 						: agreedAll
 				);
-			})
-			.catch((error) => {
+			} )
+			.catch( ( error ) => {
 				setLoadError(
 					error?.message ||
-									__(
-										"Couldn't load temporary reservation data. Please try again from the reservation page.",
-										'vk-booking-manager'
-									)
+						__(
+							"Couldn't load temporary reservation data. Please try again from the reservation page.",
+							'vk-booking-manager'
+						)
 				);
-			})
-			.finally(() => setLoading(false));
-	}, [draftToken]);
+			} )
+			.finally( () => setLoading( false ) );
+	}, [ draftToken ] );
 
-	useEffect(() => {
+	useEffect( () => {
 		let isMounted = true;
 
-		apiFetch({ path: '/vkbm/v1/provider-settings' })
-			.then((response) => {
-				if (!isMounted) {
+		apiFetch( { path: '/vkbm/v1/provider-settings' } )
+			.then( ( response ) => {
+				if ( ! isMounted ) {
 					return;
 				}
 
@@ -383,9 +386,13 @@ export const BookingConfirmApp = ({
 					typeof response?.resource_label_singular === 'string' &&
 					response.resource_label_singular.trim() !== ''
 				) {
-					setResourceLabelSingular(response.resource_label_singular);
+					setResourceLabelSingular(
+						response.resource_label_singular
+					);
 				} else {
-					setResourceLabelSingular(__('Staff', 'vk-booking-manager'));
+					setResourceLabelSingular(
+						__( 'Staff', 'vk-booking-manager' )
+					);
 				}
 
 				setProviderCancellationPolicy(
@@ -413,534 +420,636 @@ export const BookingConfirmApp = ({
 						? response.provider_logo_url
 						: ''
 				);
-				setShowProviderLogo(Boolean(response?.reservation_show_provider_logo));
-				setShowProviderName(Boolean(response?.reservation_show_provider_name));
-				setStaffEnabled(response?.staff_enabled !== false);
-				setTaxLabelText(typeof response?.tax_label_text === 'string' ? response.tax_label_text : '');
-				setCurrencySymbol(typeof response?.currency_symbol === 'string' ? response.currency_symbol : '');
-				if (!reservationPageUrl && typeof response?.reservation_page_url === 'string') {
-					setResolvedReservationPageUrl(response.reservation_page_url);
+				setShowProviderLogo(
+					Boolean( response?.reservation_show_provider_logo )
+				);
+				setShowProviderName(
+					Boolean( response?.reservation_show_provider_name )
+				);
+				setStaffEnabled( response?.staff_enabled !== false );
+				setTaxLabelText(
+					typeof response?.tax_label_text === 'string'
+						? response.tax_label_text
+						: ''
+				);
+				setCurrencySymbol(
+					typeof response?.currency_symbol === 'string'
+						? response.currency_symbol
+						: ''
+				);
+				if (
+					! reservationPageUrl &&
+					typeof response?.reservation_page_url === 'string'
+				) {
+					setResolvedReservationPageUrl(
+						response.reservation_page_url
+					);
 				}
-				
+
 				// Debug logging
-				if (process.env.NODE_ENV === 'development') {
-					console.log('=== Provider Settings API Response ===');
-					console.log('cancellation_policy:', response?.cancellation_policy);
-					console.log('terms_of_service:', response?.terms_of_service);
-					console.log('Full response:', response);
+				if ( process.env.NODE_ENV === 'development' ) {
+					console.log( '=== Provider Settings API Response ===' );
+					console.log(
+						'cancellation_policy:',
+						response?.cancellation_policy
+					);
+					console.log(
+						'terms_of_service:',
+						response?.terms_of_service
+					);
+					console.log( 'Full response:', response );
 				}
-			})
-			.catch(() => {
+			} )
+			.catch( () => {
 				// Ignore provider settings fetch errors (fallback to defaults).
-			});
+			} );
 
 		return () => {
 			isMounted = false;
 		};
-	}, [reservationPageUrl]);
+	}, [ reservationPageUrl ] );
 
-	useEffect(() => {
-		if (!draft?.menu_id) {
-			setMenu(null);
+	useEffect( () => {
+		if ( ! draft?.menu_id ) {
+			setMenu( null );
 			return;
 		}
-		apiFetch({ path: `/wp/v2/vkbm_service_menu/${draft.menu_id}?_fields=id,title,meta` })
-			.then((response) => setMenu(response))
-			.catch(() => setMenu(null));
-	}, [draft?.menu_id]);
+		apiFetch( {
+			path: `/wp/v2/vkbm_service_menu/${ draft.menu_id }?_fields=id,title,meta`,
+		} )
+			.then( ( response ) => setMenu( response ) )
+			.catch( () => setMenu( null ) );
+	}, [ draft?.menu_id ] );
 
-	useEffect(() => {
-		if (!draft?.resource_id || !staffEnabled) {
-			setStaff(null);
+	useEffect( () => {
+		if ( ! draft?.resource_id || ! staffEnabled ) {
+			setStaff( null );
 			return;
 		}
-		apiFetch({ path: `/wp/v2/vkbm_resource/${draft.resource_id}?_fields=id,title,meta` })
-			.then((response) => setStaff(response))
-			.catch(() => setStaff(null));
-	}, [draft?.resource_id, staffEnabled]);
+		apiFetch( {
+			path: `/wp/v2/vkbm_resource/${ draft.resource_id }?_fields=id,title,meta`,
+		} )
+			.then( ( response ) => setStaff( response ) )
+			.catch( () => setStaff( null ) );
+	}, [ draft?.resource_id, staffEnabled ] );
 
-useEffect(() => {
-	let isMounted = true;
+	useEffect( () => {
+		let isMounted = true;
 
-	if (!isLoggedIn) {
-		setCanManageReservations(false);
-		setLogoutUrl('');
-		setShiftDashboardUrl('');
+		if ( ! isLoggedIn ) {
+			setCanManageReservations( false );
+			setLogoutUrl( '' );
+			setShiftDashboardUrl( '' );
+			return () => {
+				isMounted = false;
+			};
+		}
+
+		if (
+			userBootstrap &&
+			typeof userBootstrap === 'object' &&
+			typeof userBootstrap.logoutUrl === 'string' &&
+			typeof userBootstrap.shiftDashboardUrl === 'string'
+		) {
+			setCanManageReservations(
+				Boolean( userBootstrap.canManageReservations )
+			);
+			setLogoutUrl( userBootstrap.logoutUrl || '' );
+			setShiftDashboardUrl( userBootstrap.shiftDashboardUrl || '' );
+			return () => {
+				isMounted = false;
+			};
+		}
+
+		const currentUrl = getCurrentUrl();
+		const path = buildApiPath( '/vkbm/v1/current-user', {
+			redirect: currentUrl || undefined,
+		} );
+
+		apiFetch( { path } )
+			.then( ( response ) => {
+				if ( ! isMounted ) {
+					return;
+				}
+
+				setCanManageReservations(
+					Boolean( response?.can_manage_reservations )
+				);
+				setLogoutUrl( response?.logout_url || '' );
+				setShiftDashboardUrl( response?.shift_dashboard_url || '' );
+			} )
+			.catch( () => {
+				if ( isMounted ) {
+					setCanManageReservations( false );
+					setLogoutUrl( '' );
+					setShiftDashboardUrl( '' );
+				}
+			} );
+
 		return () => {
 			isMounted = false;
 		};
-	}
+	}, [ isLoggedIn ] );
 
-	if (
-		userBootstrap &&
-		typeof userBootstrap === 'object' &&
-		typeof userBootstrap.logoutUrl === 'string' &&
-		typeof userBootstrap.shiftDashboardUrl === 'string'
-	) {
-		setCanManageReservations(Boolean(userBootstrap.canManageReservations));
-		setLogoutUrl(userBootstrap.logoutUrl || '');
-		setShiftDashboardUrl(userBootstrap.shiftDashboardUrl || '');
-		return () => {
-			isMounted = false;
-		};
-	}
-
-	const currentUrl = getCurrentUrl();
-	const path = buildApiPath('/vkbm/v1/current-user', {
-		redirect: currentUrl || undefined,
-	});
-
-	apiFetch({ path })
-		.then((response) => {
-			if (!isMounted) {
-				return;
-			}
-
-			setCanManageReservations(Boolean(response?.can_manage_reservations));
-			setLogoutUrl(response?.logout_url || '');
-			setShiftDashboardUrl(response?.shift_dashboard_url || '');
-		})
-		.catch(() => {
-			if (isMounted) {
-				setCanManageReservations(false);
-				setLogoutUrl('');
-				setShiftDashboardUrl('');
-			}
-		});
-
-	return () => {
-		isMounted = false;
-	};
-}, [isLoggedIn]);
-
-	useEffect(() => {
-		if (!canManageReservations) {
+	useEffect( () => {
+		if ( ! canManageReservations ) {
 			return;
 		}
 
-		if (authMode === 'profile' || authMode === 'bookings') {
-			setAuthMode('');
+		if ( authMode === 'profile' || authMode === 'bookings' ) {
+			setAuthMode( '' );
 		}
-	}, [canManageReservations, authMode]);
+	}, [ canManageReservations, authMode ] );
 
-	useEffect(() => {
-		if (!canManageReservations) {
-			setCustomerName('');
-			setCustomerPhone('');
-			setProviderNote('');
+	useEffect( () => {
+		if ( ! canManageReservations ) {
+			setCustomerName( '' );
+			setCustomerPhone( '' );
+			setProviderNote( '' );
 		}
-	}, [canManageReservations]);
+	}, [ canManageReservations ] );
 
 	const getCurrentUrl = () => {
-		if (typeof window === 'undefined') {
+		if ( typeof window === 'undefined' ) {
 			return '';
 		}
 		return window.location.href;
 	};
 
-	const buildModeUrl = (mode) => {
-		if (typeof window === 'undefined') {
+	const buildModeUrl = ( mode ) => {
+		if ( typeof window === 'undefined' ) {
 			return '';
 		}
 
-		const url = new URL(window.location.href);
-		if (mode) {
-			url.searchParams.set('vkbm_auth', mode);
+		const url = new URL( window.location.href );
+		if ( mode ) {
+			url.searchParams.set( 'vkbm_auth', mode );
 		} else {
-			url.searchParams.delete('vkbm_auth');
+			url.searchParams.delete( 'vkbm_auth' );
 		}
 		return url.toString();
 	};
 
 	const buildReservationModeUrl = useCallback(
-		(mode) => {
-			if (typeof window === 'undefined') {
+		( mode ) => {
+			if ( typeof window === 'undefined' ) {
 				return '';
 			}
 
-			const baseUrl = resolvedReservationPageUrl || reservationPageUrl || '';
+			const baseUrl =
+				resolvedReservationPageUrl || reservationPageUrl || '';
 			const url = baseUrl
-				? new URL(baseUrl, window.location.origin)
-				: new URL(window.location.href);
+				? new URL( baseUrl, window.location.origin )
+				: new URL( window.location.href );
 
-			if (mode) {
-				url.searchParams.set('vkbm_auth', mode);
+			if ( mode ) {
+				url.searchParams.set( 'vkbm_auth', mode );
 			} else {
-				url.searchParams.delete('vkbm_auth');
+				url.searchParams.delete( 'vkbm_auth' );
 			}
 
-			url.searchParams.delete('draft');
+			url.searchParams.delete( 'draft' );
 
 			return url.toString();
 		},
-		[resolvedReservationPageUrl, reservationPageUrl]
+		[ resolvedReservationPageUrl, reservationPageUrl ]
 	);
 
 	const toggleAuthMode = useCallback(
-		(mode) => {
+		( mode ) => {
 			const nextMode = mode === authMode ? '' : mode;
-			setAuthMode(nextMode);
-			if (typeof window === 'undefined') {
+			setAuthMode( nextMode );
+			if ( typeof window === 'undefined' ) {
 				return;
 			}
 
-			const url = new URL(window.location.href);
-			if (nextMode) {
-				url.searchParams.set('vkbm_auth', nextMode);
+			const url = new URL( window.location.href );
+			if ( nextMode ) {
+				url.searchParams.set( 'vkbm_auth', nextMode );
 			} else {
-				url.searchParams.delete('vkbm_auth');
+				url.searchParams.delete( 'vkbm_auth' );
 			}
-			window.history.replaceState(null, '', url.toString());
+			window.history.replaceState( null, '', url.toString() );
 		},
-		[authMode]
+		[ authMode ]
 	);
 
-	const handleBookingsClick = useCallback(() => {
-		const target = buildReservationModeUrl('bookings');
-		if (target) {
+	const handleBookingsClick = useCallback( () => {
+		const target = buildReservationModeUrl( 'bookings' );
+		if ( target ) {
 			window.location.href = target;
 			return;
 		}
-		toggleAuthMode('bookings');
-	}, [buildReservationModeUrl, toggleAuthMode]);
+		toggleAuthMode( 'bookings' );
+	}, [ buildReservationModeUrl, toggleAuthMode ] );
 
-	const handleProfileClick = useCallback(() => {
-		const target = buildReservationModeUrl('profile');
-		if (target) {
+	const handleProfileClick = useCallback( () => {
+		const target = buildReservationModeUrl( 'profile' );
+		if ( target ) {
 			window.location.href = target;
 			return;
 		}
-		toggleAuthMode('profile');
-	}, [buildReservationModeUrl, toggleAuthMode]);
+		toggleAuthMode( 'profile' );
+	}, [ buildReservationModeUrl, toggleAuthMode ] );
 
-	const handleBackClick = useCallback(() => {
-		const target = buildReservationModeUrl('');
-		if (target) {
+	const handleBackClick = useCallback( () => {
+		const target = buildReservationModeUrl( '' );
+		if ( target ) {
 			window.location.href = target;
 			return;
 		}
-		toggleAuthMode('');
-	}, [buildReservationModeUrl, toggleAuthMode]);
+		toggleAuthMode( '' );
+	}, [ buildReservationModeUrl, toggleAuthMode ] );
 
-useEffect(() => {
-	if (!authMode) {
-		setAuthFormHtml('');
-		return;
-	}
+	useEffect( () => {
+		if ( ! authMode ) {
+			setAuthFormHtml( '' );
+			return;
+		}
 
-	if (authMode === 'bookings') {
-		setAuthFormHtml('');
-		return;
-	}
+		if ( authMode === 'bookings' ) {
+			setAuthFormHtml( '' );
+			return;
+		}
 
-	const requiresLogin = authMode === 'profile' || authMode === 'bookings';
-	if (requiresLogin && !isLoggedIn) {
-		setAuthFormHtml('');
-		return;
-	}
+		const requiresLogin = authMode === 'profile' || authMode === 'bookings';
+		if ( requiresLogin && ! isLoggedIn ) {
+			setAuthFormHtml( '' );
+			return;
+		}
 
-	if (!requiresLogin && isLoggedIn) {
-		setAuthFormHtml('');
-		return;
-	}
+		if ( ! requiresLogin && isLoggedIn ) {
+			setAuthFormHtml( '' );
+			return;
+		}
 
-	setAuthLoading(true);
-	setAuthError('');
-	setAuthFormHtml('');
+		setAuthLoading( true );
+		setAuthError( '' );
+		setAuthFormHtml( '' );
 
-	const params = new URLSearchParams();
-	params.set('type', authMode);
-	const redirectUrl = getCurrentUrl();
-	if (redirectUrl) {
-		params.set('redirect', redirectUrl);
-	}
-			if (authMode === 'login') {
-				params.set('register_url', buildModeUrl('register'));
-			} else if (authMode === 'register') {
-				params.set('login_url', buildModeUrl('login'));
-			}
+		const params = new URLSearchParams();
+		params.set( 'type', authMode );
+		const redirectUrl = getCurrentUrl();
+		if ( redirectUrl ) {
+			params.set( 'redirect', redirectUrl );
+		}
+		if ( authMode === 'login' ) {
+			params.set( 'register_url', buildModeUrl( 'register' ) );
+		} else if ( authMode === 'register' ) {
+			params.set( 'login_url', buildModeUrl( 'login' ) );
+		}
 
-	apiFetch({
-		path: `/vkbm/v1/auth-form?${params.toString()}`,
-		cache: 'no-store',
-		credentials: 'same-origin',
-	})
-		.then((response) => {
-			const html = response?.html || '';
-			const message = response?.message || '';
+		apiFetch( {
+			path: `/vkbm/v1/auth-form?${ params.toString() }`,
+			cache: 'no-store',
+			credentials: 'same-origin',
+		} )
+			.then( ( response ) => {
+				const html = response?.html || '';
+				const message = response?.message || '';
 
-			setAuthFormHtml(html);
+				setAuthFormHtml( html );
 
-			if (!html && authMode === 'register' && message) {
-				setAuthError(message);
-			}
-		})
-		.catch((error) => {
-			setAuthError(
-				error?.message ||
-					__('The form could not be displayed.', 'vk-booking-manager')
-			);
-		})
-		.finally(() => setAuthLoading(false));
-}, [authMode, isLoggedIn]);
+				if ( ! html && authMode === 'register' && message ) {
+					setAuthError( message );
+				}
+			} )
+			.catch( ( error ) => {
+				setAuthError(
+					error?.message ||
+						__(
+							'The form could not be displayed.',
+							'vk-booking-manager'
+						)
+				);
+			} )
+			.finally( () => setAuthLoading( false ) );
+	}, [ authMode, isLoggedIn ] );
 
 	const handleCancelBooking = useCallback(
-		(bookingId) => {
-			const id = Number(bookingId) || 0;
-			if (!id || cancellingBookingId) {
+		( bookingId ) => {
+			const id = Number( bookingId ) || 0;
+			if ( ! id || cancellingBookingId ) {
 				return;
 			}
 
 			if (
 				typeof window !== 'undefined' &&
-				!window.confirm(__('Do you want to cancel this reservation?', 'vk-booking-manager'))
+				! window.confirm(
+					__(
+						'Do you want to cancel this reservation?',
+						'vk-booking-manager'
+					)
+				)
 			) {
 				return;
 			}
 
-			setCancellingBookingId(id);
-			setBookingsError('');
+			setCancellingBookingId( id );
+			setBookingsError( '' );
 
-			apiFetch({
-				path: `/vkbm/v1/my-bookings/${id}/cancel`,
+			apiFetch( {
+				path: `/vkbm/v1/my-bookings/${ id }/cancel`,
 				method: 'POST',
-			})
-				.then(() => {
-					setBookings((current) =>
-						Array.isArray(current)
-							? current.filter((booking) => Number(booking?.id) !== id)
+			} )
+				.then( () => {
+					setBookings( ( current ) =>
+						Array.isArray( current )
+							? current.filter(
+									( booking ) => Number( booking?.id ) !== id
+							  )
 							: []
 					);
-				})
-				.catch((error) => {
+				} )
+				.catch( ( error ) => {
 					setBookingsError(
 						error?.message ||
-							__('I was unable to cancel my reservation.', 'vk-booking-manager')
+							__(
+								'I was unable to cancel my reservation.',
+								'vk-booking-manager'
+							)
 					);
-				})
-				.finally(() => {
-					setCancellingBookingId(0);
-				});
+				} )
+				.finally( () => {
+					setCancellingBookingId( 0 );
+				} );
 		},
-		[cancellingBookingId]
+		[ cancellingBookingId ]
 	);
 
-useEffect(() => {
-	if (isLoggedIn && authMode && authMode !== 'profile' && authMode !== 'bookings') {
-		setAuthMode('');
-	}
+	useEffect( () => {
+		if (
+			isLoggedIn &&
+			authMode &&
+			authMode !== 'profile' &&
+			authMode !== 'bookings'
+		) {
+			setAuthMode( '' );
+		}
 
-	if (!isLoggedIn && (authMode === 'profile' || authMode === 'bookings')) {
-		setAuthMode('');
-	}
-}, [isLoggedIn, authMode]);
+		if (
+			! isLoggedIn &&
+			( authMode === 'profile' || authMode === 'bookings' )
+		) {
+			setAuthMode( '' );
+		}
+	}, [ isLoggedIn, authMode ] );
 
-useEffect(() => {
-	let isMounted = true;
+	useEffect( () => {
+		let isMounted = true;
 
-	if (!isLoggedIn || authMode !== 'bookings') {
+		if ( ! isLoggedIn || authMode !== 'bookings' ) {
+			return () => {
+				isMounted = false;
+			};
+		}
+
+		setBookingsLoading( true );
+		setBookingsError( '' );
+
+		apiFetch( { path: '/vkbm/v1/my-bookings' } )
+			.then( ( response ) => {
+				if ( ! isMounted ) {
+					return;
+				}
+
+				setBookings( Array.isArray( response ) ? response : [] );
+			} )
+			.catch( () => {
+				if ( ! isMounted ) {
+					return;
+				}
+
+				setBookings( [] );
+				setBookingsError(
+					__(
+						'The reservation list could not be loaded.',
+						'vk-booking-manager'
+					)
+				);
+			} )
+			.finally( () => {
+				if ( isMounted ) {
+					setBookingsLoading( false );
+				}
+			} );
+
 		return () => {
 			isMounted = false;
 		};
-	}
-
-	setBookingsLoading(true);
-	setBookingsError('');
-
-	apiFetch({ path: '/vkbm/v1/my-bookings' })
-		.then((response) => {
-			if (!isMounted) {
-				return;
-			}
-
-			setBookings(Array.isArray(response) ? response : []);
-		})
-		.catch(() => {
-			if (!isMounted) {
-				return;
-			}
-
-			setBookings([]);
-			setBookingsError(__('The reservation list could not be loaded.', 'vk-booking-manager'));
-		})
-		.finally(() => {
-			if (isMounted) {
-				setBookingsLoading(false);
-			}
-		});
-
-	return () => {
-		isMounted = false;
-	};
-}, [authMode, isLoggedIn]);
+	}, [ authMode, isLoggedIn ] );
 
 	const handleConfirm = () => {
-		if (!draftToken) {
+		if ( ! draftToken ) {
 			return;
 		}
 
 		const cancellationText =
-			typeof providerCancellationPolicy === 'string' && providerCancellationPolicy.trim() !== ''
+			typeof providerCancellationPolicy === 'string' &&
+			providerCancellationPolicy.trim() !== ''
 				? providerCancellationPolicy
 				: '';
 		const termsText =
-			typeof providerTermsOfService === 'string' && providerTermsOfService.trim() !== ''
+			typeof providerTermsOfService === 'string' &&
+			providerTermsOfService.trim() !== ''
 				? providerTermsOfService
 				: '';
-		const requiresAgreements = !canManageReservations;
+		const requiresAgreements = ! canManageReservations;
 
-		if (requiresAgreements && cancellationText && !agreeCancellationPolicy) {
-			setSubmitError(__('You must agree to the cancellation policy.', 'vk-booking-manager'));
+		if (
+			requiresAgreements &&
+			cancellationText &&
+			! agreeCancellationPolicy
+		) {
+			setSubmitError(
+				__(
+					'You must agree to the cancellation policy.',
+					'vk-booking-manager'
+				)
+			);
 			return;
 		}
 
-		if (requiresAgreements && termsText && !agreeTermsOfService) {
-			setSubmitError(__('You must agree to the terms of use.', 'vk-booking-manager'));
+		if ( requiresAgreements && termsText && ! agreeTermsOfService ) {
+			setSubmitError(
+				__(
+					'You must agree to the terms of use.',
+					'vk-booking-manager'
+				)
+			);
 			return;
 		}
 
 		const agreedAll = requiresAgreements
-			? (!cancellationText || agreeCancellationPolicy) &&
-			  (!termsText || agreeTermsOfService)
+			? ( ! cancellationText || agreeCancellationPolicy ) &&
+			  ( ! termsText || agreeTermsOfService )
 			: true;
 
-		setSubmitting(true);
-		setSubmitError('');
+		setSubmitting( true );
+		setSubmitError( '' );
 		const payload = {
 			token: draftToken,
 			memo,
 			agree_terms: agreedAll,
-			agree_cancellation_policy: requiresAgreements ? agreeCancellationPolicy : true,
-			agree_terms_of_service: requiresAgreements ? agreeTermsOfService : true,
+			agree_cancellation_policy: requiresAgreements
+				? agreeCancellationPolicy
+				: true,
+			agree_terms_of_service: requiresAgreements
+				? agreeTermsOfService
+				: true,
 		};
 
-		if (canManageReservations) {
+		if ( canManageReservations ) {
 			payload.customer_name = customerName;
 			payload.customer_phone = customerPhone;
 			payload.internal_note = providerNote;
 		}
 
-		apiFetch({
+		apiFetch( {
 			path: '/vkbm/v1/bookings',
 			method: 'POST',
 			data: payload,
 			parse: false,
-		})
-			.then(async (response) => {
+		} )
+			.then( async ( response ) => {
 				const raw = await response.text();
 				let parsed;
 				try {
-					parsed = parseJsonWithFallback(raw);
-				} catch (parseError) {
+					parsed = parseJsonWithFallback( raw );
+				} catch ( parseError ) {
 					parsed = null;
 				}
 
-				if (!response.ok) {
+				if ( ! response.ok ) {
 					const conflictMessage = __(
 						'A reservation for the same date and time already exists. Please change the date and time.',
 						'vk-booking-manager'
 					);
 					const rawConflict =
 						typeof raw === 'string' &&
-						(raw.includes('booking_time_conflict') ||
-							raw.includes('A reservation for the same date and time already exists.'));
+						( raw.includes( 'booking_time_conflict' ) ||
+							raw.includes(
+								'A reservation for the same date and time already exists.'
+							) );
 					const isConflict =
 						response?.status === 409 ||
 						parsed?.code === 'booking_time_conflict' ||
 						rawConflict;
 					const message =
-						(isConflict ? conflictMessage : parsed?.message) ||
-						(parsed?.code ? `${parsed.code} (HTTP ${response.status})` : `HTTP ${response.status}`) ||
-						__('Confirmation of reservation failed. Please try again later.', 'vk-booking-manager');
+						( isConflict ? conflictMessage : parsed?.message ) ||
+						( parsed?.code
+							? `${ parsed.code } (HTTP ${ response.status })`
+							: `HTTP ${ response.status }` ) ||
+						__(
+							'Confirmation of reservation failed. Please try again later.',
+							'vk-booking-manager'
+						);
 					// Log error only in development mode
-					if (process.env.NODE_ENV === 'development') {
+					if ( process.env.NODE_ENV === 'development' ) {
 						// eslint-disable-next-line no-console
-						console.error('vkbm booking confirm: request failed', {
+						console.error( 'vkbm booking confirm: request failed', {
 							status: response?.status,
 							parsed,
 							raw,
-						});
+						} );
 					}
-					throw new Error(message);
+					throw new Error( message );
 				}
 
-				setCreatedStatus(parsed?.status || '');
-				setSuccess(true);
-				if (redirectUrl) {
+				setCreatedStatus( parsed?.status || '' );
+				setSuccess( true );
+				if ( redirectUrl ) {
 					const target = new URL(
 						redirectUrl,
-						typeof window !== 'undefined' ? window.location.origin : undefined
+						typeof window !== 'undefined'
+							? window.location.origin
+							: undefined
 					);
-					if (parsed?.booking_id) {
-						target.searchParams.set('booking_id', String(parsed.booking_id));
+					if ( parsed?.booking_id ) {
+						target.searchParams.set(
+							'booking_id',
+							String( parsed.booking_id )
+						);
 					}
 					window.location.href = target.toString();
 				}
-			})
-			.catch((error) => {
+			} )
+			.catch( ( error ) => {
 				const conflictMessage = __(
 					'A reservation for the same date and time already exists. Please change the date and time.',
 					'vk-booking-manager'
 				);
-				const errorMessage = typeof error?.message === 'string' ? error.message : '';
+				const errorMessage =
+					typeof error?.message === 'string' ? error.message : '';
 				const errorStatus = error?.data?.status || error?.status;
 				const isConflict =
 					error?.code === 'booking_time_conflict' ||
 					errorStatus === 409 ||
-					errorMessage.includes('A reservation for the same date and time already exists.');
+					errorMessage.includes(
+						'A reservation for the same date and time already exists.'
+					);
 				setSubmitError(
-					(isConflict ? conflictMessage : errorMessage) ||
-						__('Confirmation of reservation failed. Please try again later.', 'vk-booking-manager')
+					( isConflict ? conflictMessage : errorMessage ) ||
+						__(
+							'Confirmation of reservation failed. Please try again later.',
+							'vk-booking-manager'
+						)
 				);
-			})
-			.finally(() => setSubmitting(false));
+			} )
+			.finally( () => setSubmitting( false ) );
 	};
 
-	useEffect(() => {
-		if (!success || redirectUrl) {
+	useEffect( () => {
+		if ( ! success || redirectUrl ) {
 			return;
 		}
 
-		if (typeof window === 'undefined') {
+		if ( typeof window === 'undefined' ) {
 			return;
 		}
 
-		const url = new URL(window.location.href);
-		if (!url.searchParams.has('draft')) {
+		const url = new URL( window.location.href );
+		if ( ! url.searchParams.has( 'draft' ) ) {
 			return;
 		}
 
-		url.searchParams.delete('draft');
-		window.history.replaceState(null, '', url.toString());
-	}, [success, redirectUrl]);
+		url.searchParams.delete( 'draft' );
+		window.history.replaceState( null, '', url.toString() );
+	}, [ success, redirectUrl ] );
 
-	if (loading) {
+	if ( loading ) {
 		return (
 			<div className="vkbm-confirm">
 				<div className="vkbm-alert vkbm-alert__info" role="status">
-					{__('Loading temporary reservation data...', 'vk-booking-manager')}
+					{ __(
+						'Loading temporary reservation data…',
+						'vk-booking-manager'
+					) }
 				</div>
 			</div>
 		);
 	}
 
-	if (loadError) {
+	if ( loadError ) {
 		return (
 			<div className="vkbm-confirm">
 				<div className="vkbm-alert vkbm-alert__danger" role="alert">
-					{loadError}
+					{ loadError }
 				</div>
 			</div>
 		);
 	}
 
-	if (!draft) {
+	if ( ! draft ) {
 		return null;
 	}
 
 	const finalSuccessMessage =
 		createdStatus === 'pending'
-			? __('Your tentative reservation has been completed.', 'vk-booking-manager')
+			? __(
+					'Your tentative reservation has been completed.',
+					'vk-booking-manager'
+			  )
 			: successMessage;
 
 	const menuName =
@@ -948,7 +1057,7 @@ useEffect(() => {
 		menu?.title?.rendered ||
 		menu?.title ||
 		menu?.name ||
-		String(draft.menu_id);
+		String( draft.menu_id );
 
 	const staffName =
 		draft.staff_label ||
@@ -957,139 +1066,169 @@ useEffect(() => {
 		staff?.title?.rendered ||
 		staff?.title ||
 		staff?.name ||
-		__('No preference', 'vk-booking-manager');
+		__( 'No preference', 'vk-booking-manager' );
 
 	const logoutHref =
-		logoutUrl || buildLogoutFallbackUrl(resolvedReservationPageUrl || reservationPageUrl);
-	const showSuccessMessage = success && !redirectUrl;
+		logoutUrl ||
+		buildLogoutFallbackUrl(
+			resolvedReservationPageUrl || reservationPageUrl
+		);
+	const showSuccessMessage = success && ! redirectUrl;
 
 	const renderMemoField = () => {
 		const commonTextarea = (
 			<textarea
 				id="vkbm-confirm-memo"
-				value={memo}
-				onChange={(event) => setMemo(event.target.value)}
-				placeholder={__('Please enter any contact information', 'vk-booking-manager')}
+				value={ memo }
+				onChange={ ( event ) => setMemo( event.target.value ) }
+				placeholder={ __(
+					'Please enter any contact information',
+					'vk-booking-manager'
+				) }
 			/>
 		);
 
-		if (!showSuccessMessage) {
+		if ( ! showSuccessMessage ) {
 			return commonTextarea;
 		}
 
 		return (
 			<textarea
 				id="vkbm-confirm-memo"
-				value={memo}
+				value={ memo }
 				readOnly
-				placeholder={__('No entry', 'vk-booking-manager')}
+				placeholder={ __( 'No entry', 'vk-booking-manager' ) }
 			/>
 		);
 	};
 
 	const renderAgreements = () => {
-		// Debug logging to investigate checkbox visibility
-		if (process.env.NODE_ENV === 'development') {
-			console.log('=== renderAgreements Debug ===');
-			console.log('showSuccessMessage:', showSuccessMessage);
-			console.log('canManageReservations:', canManageReservations);
-			console.log('providerCancellationPolicy length:', providerCancellationPolicy?.length || 0);
-			console.log('providerTermsOfService length:', providerTermsOfService?.length || 0);
-			console.log('isLoggedIn:', isLoggedIn);
-		}
-		
-		if (showSuccessMessage || canManageReservations) {
+		if ( showSuccessMessage || canManageReservations ) {
 			return null;
 		}
 
 		const cancellationPolicyText =
-			typeof providerCancellationPolicy === 'string' && providerCancellationPolicy.trim() !== ''
+			typeof providerCancellationPolicy === 'string' &&
+			providerCancellationPolicy.trim() !== ''
 				? providerCancellationPolicy
 				: '';
 		const termsOfServiceText =
-			typeof providerTermsOfService === 'string' && providerTermsOfService.trim() !== ''
+			typeof providerTermsOfService === 'string' &&
+			providerTermsOfService.trim() !== ''
 				? providerTermsOfService
 				: '';
 
-		const hasAgreements = Boolean(cancellationPolicyText || termsOfServiceText || paymentMethodText);
+		const hasAgreements = Boolean(
+			cancellationPolicyText || termsOfServiceText || paymentMethodText
+		);
 
 		return (
 			<>
-				{hasAgreements && (
+				{ hasAgreements && (
 					<div className="vkbm-agreements">
-						{cancellationPolicyText && (
+						{ cancellationPolicyText && (
 							<div className="vkbm-agreement">
 								<h3 className="vkbm-agreement__title">
-									{__('Cancellation policy', 'vk-booking-manager')}
+									{ __(
+										'Cancellation policy',
+										'vk-booking-manager'
+									) }
 								</h3>
 								<div className="vkbm-agreement__body vkbm-agreement__body--full">
-									{cancellationPolicyText}
+									{ cancellationPolicyText }
 								</div>
 								<div className="vkbm-agreement__check">
 									<input
 										type="checkbox"
-										checked={agreeCancellationPolicy}
-										onChange={(event) => setAgreeCancellationPolicy(event.target.checked)}
+										checked={ agreeCancellationPolicy }
+										onChange={ ( event ) =>
+											setAgreeCancellationPolicy(
+												event.target.checked
+											)
+										}
 										id="vkbm-confirm-cancellation-policy"
 									/>
 									<label htmlFor="vkbm-confirm-cancellation-policy">
-										{__('I agree to the cancellation policy', 'vk-booking-manager')}
+										{ __(
+											'I agree to the cancellation policy',
+											'vk-booking-manager'
+										) }
 									</label>
 								</div>
 							</div>
-						)}
+						) }
 
-						{termsOfServiceText && (
+						{ termsOfServiceText && (
 							<div className="vkbm-agreement">
 								<h3 className="vkbm-agreement__title">
-									{__('System Terms of Use', 'vk-booking-manager')}
+									{ __(
+										'System Terms of Use',
+										'vk-booking-manager'
+									) }
 								</h3>
 								<div className="vkbm-agreement__body vkbm-agreement__body--scroll">
-									{termsOfServiceText}
+									{ termsOfServiceText }
 								</div>
 								<div className="vkbm-agreement__check">
 									<input
 										type="checkbox"
-										checked={agreeTermsOfService}
-										onChange={(event) => setAgreeTermsOfService(event.target.checked)}
+										checked={ agreeTermsOfService }
+										onChange={ ( event ) =>
+											setAgreeTermsOfService(
+												event.target.checked
+											)
+										}
 										id="vkbm-confirm-terms"
 									/>
-									<label htmlFor="vkbm-confirm-terms">{termsLabel}</label>
+									<label htmlFor="vkbm-confirm-terms">
+										{ termsLabel }
+									</label>
 								</div>
 							</div>
-						)}
-						{paymentMethodText && (
+						) }
+						{ paymentMethodText && (
 							<div className="vkbm-agreement">
 								<h3 className="vkbm-agreement__title">
-									{__('Payment method', 'vk-booking-manager')}
+									{ __(
+										'Payment method',
+										'vk-booking-manager'
+									) }
 								</h3>
-								<div className="vkbm-agreement__body">{paymentMethodText}</div>
+								<div className="vkbm-agreement__body">
+									{ paymentMethodText }
+								</div>
 							</div>
-						)}
+						) }
 					</div>
-				)}
+				) }
 
-				{!termsOfServiceText && policyText && (
-					<p className="vkbm-confirm__policy">{policyText}</p>
-				)}
+				{ ! termsOfServiceText && policyText && (
+					<p className="vkbm-confirm__policy">{ policyText }</p>
+				) }
 			</>
 		);
 	};
 
 	const cancellationPolicyRequired =
-		typeof providerCancellationPolicy === 'string' && providerCancellationPolicy.trim() !== '';
+		typeof providerCancellationPolicy === 'string' &&
+		providerCancellationPolicy.trim() !== '';
 	const termsOfServiceRequired =
-		typeof providerTermsOfService === 'string' && providerTermsOfService.trim() !== '';
+		typeof providerTermsOfService === 'string' &&
+		providerTermsOfService.trim() !== '';
 	const paymentMethodText =
-		typeof providerPaymentMethod === 'string' && providerPaymentMethod.trim() !== ''
+		typeof providerPaymentMethod === 'string' &&
+		providerPaymentMethod.trim() !== ''
 			? providerPaymentMethod
 			: '';
 	const canSubmit =
 		isLoggedIn &&
-		!submitting &&
+		! submitting &&
 		( canManageReservations ||
-			( !cancellationPolicyRequired || agreeCancellationPolicy ) ) &&
-		( canManageReservations || ( !termsOfServiceRequired || agreeTermsOfService ) );
+			! cancellationPolicyRequired ||
+			agreeCancellationPolicy ) &&
+		( canManageReservations ||
+			! termsOfServiceRequired ||
+			agreeTermsOfService );
 
 	const datetimeParts = formatBookingDateTimeParts(
 		draft?.slot?.start_at || '',
@@ -1106,622 +1245,490 @@ useEffect(() => {
 		typeof providerName === 'string' &&
 		providerName.trim() !== '';
 	const shouldShowBrand = shouldShowLogo || shouldShowName;
-	const brandLinkHref = typeof resolvedReservationPageUrl === 'string'
-		? resolvedReservationPageUrl.trim()
-		: '';
+	const brandLinkHref =
+		typeof resolvedReservationPageUrl === 'string'
+			? resolvedReservationPageUrl.trim()
+			: '';
 	const brandLogoAlt = shouldShowName
 		? providerName
-		: __('Logo image', 'vk-booking-manager');
+		: __( 'Logo image', 'vk-booking-manager' );
+	const navAriaLabel = __(
+		'Reservation block navigation',
+		'vk-booking-manager'
+	);
+	const navVariant =
+		isLoggedIn && canManageReservations
+			? 'staff'
+			: isLoggedIn && ! canManageReservations && showSuccessMessage
+			? 'return'
+			: isLoggedIn && ! canManageReservations
+			? 'member'
+			: '';
+	const navProps = navVariant
+		? {
+				screen: 'booking-confirm',
+				variant: navVariant,
+				ariaLabel: navAriaLabel,
+				staffDashboardHref: shiftDashboardUrl || '',
+				logoutHref,
+				onReturn: handleBackClick,
+				onBookings: handleBookingsClick,
+				isBookingsActive: authMode === 'bookings',
+				onProfile: handleProfileClick,
+				isProfileActive: authMode === 'profile',
+		  }
+		: null;
 
 	return (
 		<div className="vkbm-confirm">
-			{shouldShowBrand ? (
-				<div className="vkbm-reservation-layout__header">
-					{brandLinkHref ? (
-						<a
-							className="vkbm-reservation-layout__brand vkbm-reservation-layout__brand-link"
-							href={brandLinkHref}
-						>
-							{shouldShowLogo && (
-								<img
-									className="vkbm-reservation-layout__brand-logo"
-									src={providerLogoUrl}
-									alt={brandLogoAlt}
-									loading="lazy"
-								/>
-							)}
-							{shouldShowName && (
-								<span className="vkbm-reservation-layout__brand-name">
-									{providerName}
-								</span>
-							)}
-						</a>
-					) : (
-						<div className="vkbm-reservation-layout__brand">
-							{shouldShowLogo && (
-								<img
-									className="vkbm-reservation-layout__brand-logo"
-									src={providerLogoUrl}
-									alt={brandLogoAlt}
-									loading="lazy"
-								/>
-							)}
-							{shouldShowName && (
-								<span className="vkbm-reservation-layout__brand-name">
-									{providerName}
-								</span>
-							)}
-						</div>
-					)}
-					{isLoggedIn && canManageReservations && (
-						<div
-							className="vkbm-user-actions vkbm-reservation-layout__nav"
-							role="navigation"
-							aria-label={__('Reservation block navigation', 'vk-booking-manager')}
-						>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								[
-							</span>
-							<a
-								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-								href={shiftDashboardUrl || ''}
-							>
-								{__('Shift/reservation table', 'vk-booking-manager')}
-							</a>
-							<span
-								className="vkbm-reservation-layout__nav-divider"
-								aria-hidden="true"
-							>
-								|
-							</span>
-							<a
-								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-								href={logoutHref}
-							>
-								{__('Log out', 'vk-booking-manager')}
-							</a>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								]
-							</span>
-						</div>
-					)}
-					{isLoggedIn && !canManageReservations && showSuccessMessage && (
-						<div
-							className="vkbm-user-actions vkbm-reservation-layout__nav"
-							role="navigation"
-							aria-label={__('Reservation block navigation', 'vk-booking-manager')}
-						>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								[
-							</span>
-							<button
-								type="button"
-								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-								onClick={handleBackClick}
-							>
-								{__('Return', 'vk-booking-manager')}
-							</button>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								]
-							</span>
-						</div>
-					)}
-					{isLoggedIn && !canManageReservations && !showSuccessMessage && (
-						<div
-							className="vkbm-user-actions vkbm-reservation-layout__nav"
-							role="navigation"
-							aria-label={__('Reservation block navigation', 'vk-booking-manager')}
-						>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								[
-							</span>
-								<button
-									type="button"
-									className={[
-										'vkbm-user-actions__link',
-										'vkbm-button',
-										'vkbm-button__sm',
-										'vkbm-button__link',
-										'vkbm-reservation-layout__nav-link',
-										authMode === 'bookings' && 'is-active',
-									]
-										.filter(Boolean)
-										.join(' ')}
-									onClick={handleBookingsClick}
-									aria-pressed={authMode === 'bookings'}
-								>
-									{__('Confirm reservation', 'vk-booking-manager')}
-								</button>
-							<span
-								className="vkbm-reservation-layout__nav-divider"
-								aria-hidden="true"
-							>
-								|
-							</span>
-								<button
-									type="button"
-									className={[
-										'vkbm-user-actions__link',
-										'vkbm-button',
-										'vkbm-button__sm',
-										'vkbm-button__link',
-										'vkbm-reservation-layout__nav-link',
-										authMode === 'profile' && 'is-active',
-									]
-										.filter(Boolean)
-										.join(' ')}
-									onClick={handleProfileClick}
-									aria-pressed={authMode === 'profile'}
-								>
-									{__('Edit user information', 'vk-booking-manager')}
-								</button>
-							<span
-								className="vkbm-reservation-layout__nav-divider"
-								aria-hidden="true"
-							>
-								|
-							</span>
-								<a
-									className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-									href={logoutHref}
-								>
-									{__('Log out', 'vk-booking-manager')}
-								</a>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								]
-							</span>
-						</div>
-					)}
-				</div>
-			) : (
-				<>
-					{isLoggedIn && canManageReservations && (
-						<div
-							className="vkbm-user-actions vkbm-reservation-layout__nav"
-							role="navigation"
-							aria-label={__('Reservation block navigation', 'vk-booking-manager')}
-						>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								[
-							</span>
-							<a
-								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-								href={shiftDashboardUrl || ''}
-							>
-								{__('Shift/reservation table', 'vk-booking-manager')}
-							</a>
-							<span
-								className="vkbm-reservation-layout__nav-divider"
-								aria-hidden="true"
-							>
-								|
-							</span>
-							<a
-								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-								href={logoutHref}
-							>
-								{__('Log out', 'vk-booking-manager')}
-							</a>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								]
-							</span>
-						</div>
-					)}
-					{isLoggedIn && !canManageReservations && showSuccessMessage && (
-						<div
-							className="vkbm-user-actions vkbm-reservation-layout__nav"
-							role="navigation"
-							aria-label={__('Reservation block navigation', 'vk-booking-manager')}
-						>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								[
-							</span>
-							<button
-								type="button"
-								className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-								onClick={handleBackClick}
-							>
-								{__('Return', 'vk-booking-manager')}
-							</button>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								]
-							</span>
-						</div>
-					)}
-					{isLoggedIn && !canManageReservations && !showSuccessMessage && (
-						<div
-							className="vkbm-user-actions vkbm-reservation-layout__nav"
-							role="navigation"
-							aria-label={__('Reservation block navigation', 'vk-booking-manager')}
-						>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								[
-							</span>
-								<button
-									type="button"
-									className={[
-										'vkbm-user-actions__link',
-										'vkbm-button',
-										'vkbm-button__sm',
-										'vkbm-button__link',
-										'vkbm-reservation-layout__nav-link',
-										authMode === 'bookings' && 'is-active',
-									]
-										.filter(Boolean)
-										.join(' ')}
-									onClick={handleBookingsClick}
-									aria-pressed={authMode === 'bookings'}
-								>
-									{__('Confirm reservation', 'vk-booking-manager')}
-								</button>
-							<span
-								className="vkbm-reservation-layout__nav-divider"
-								aria-hidden="true"
-							>
-								|
-							</span>
-								<button
-									type="button"
-									className={[
-										'vkbm-user-actions__link',
-										'vkbm-button',
-										'vkbm-button__sm',
-										'vkbm-button__link',
-										'vkbm-reservation-layout__nav-link',
-										authMode === 'profile' && 'is-active',
-									]
-										.filter(Boolean)
-										.join(' ')}
-									onClick={handleProfileClick}
-									aria-pressed={authMode === 'profile'}
-								>
-									{__('Edit user information', 'vk-booking-manager')}
-								</button>
-							<span
-								className="vkbm-reservation-layout__nav-divider"
-								aria-hidden="true"
-							>
-								|
-							</span>
-								<a
-									className="vkbm-user-actions__link vkbm-button vkbm-button__sm vkbm-button__link vkbm-reservation-layout__nav-link"
-									href={logoutHref}
-								>
-									{__('Log out', 'vk-booking-manager')}
-								</a>
-							<span
-								className="vkbm-reservation-layout__nav-bracket"
-								aria-hidden="true"
-							>
-								]
-							</span>
-						</div>
-					)}
-				</>
-			)}
-			{isLoggedIn && authMode === 'profile' && (
+			<ReservationHeader
+				showBrand={ shouldShowBrand }
+				brandLinkHref={ brandLinkHref }
+				showLogo={ shouldShowLogo }
+				logoUrl={ providerLogoUrl }
+				logoAlt={ brandLogoAlt }
+				showName={ shouldShowName }
+				brandName={ providerName }
+				nav={ navProps }
+			/>
+			{ isLoggedIn && authMode === 'profile' && (
 				<div className="vkbm-confirm__auth-panel">
-					{authLoading && (
-						<p className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading" role="status">
-							{__('Loading form...', 'vk-booking-manager')}
+					{ authLoading && (
+						<p
+							className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading"
+							role="status"
+						>
+							{ __( 'Loading form…', 'vk-booking-manager' ) }
 						</p>
-					)}
-					{authError && (
-						<p className="vkbm-alert vkbm-alert__danger vkbm-confirm__auth-error" role="alert">
-							{authError}
+					) }
+					{ authError && (
+						<p
+							className="vkbm-alert vkbm-alert__danger vkbm-confirm__auth-error"
+							role="alert"
+						>
+							{ authError }
 						</p>
-					)}
-					{authFormHtml && (
+					) }
+					{ authFormHtml && (
 						<div
 							className="vkbm-confirm__auth-form"
-							dangerouslySetInnerHTML={{
+							dangerouslySetInnerHTML={ {
 								__html: authFormHtml,
-							}}
+							} }
 						/>
-					)}
+					) }
 				</div>
-			)}
-			{isLoggedIn && authMode === 'bookings' && (
+			) }
+			{ isLoggedIn && authMode === 'bookings' && (
 				<div className="vkbm-confirm__auth-panel">
-					{bookingsLoading && (
-						<p className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading" role="status">
-							{__('Loading...', 'vk-booking-manager')}
+					{ bookingsLoading && (
+						<p
+							className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading"
+							role="status"
+						>
+							{ __( 'Loading…', 'vk-booking-manager' ) }
 						</p>
-					)}
-					{bookingsError && (
-						<p className="vkbm-alert vkbm-alert__danger vkbm-confirm__auth-error" role="alert">
-							{bookingsError}
+					) }
+					{ bookingsError && (
+						<p
+							className="vkbm-alert vkbm-alert__danger vkbm-confirm__auth-error"
+							role="alert"
+						>
+							{ bookingsError }
 						</p>
-					)}
-					{!bookingsLoading && !bookingsError && bookings.length === 0 && (
-						<p className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading" role="status">
-							{__('There are no reservations to display.', 'vk-booking-manager')}
-						</p>
-					)}
-					{bookings.length > 0 && (
+					) }
+					{ ! bookingsLoading &&
+						! bookingsError &&
+						bookings.length === 0 && (
+							<p
+								className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading"
+								role="status"
+							>
+								{ __(
+									'There are no reservations to display.',
+									'vk-booking-manager'
+								) }
+							</p>
+						) }
+					{ bookings.length > 0 && (
 						<div className="vkbm-confirm">
-							{bookings.map((booking) => {
-								const bookingDatetimeParts = formatBookingDateTimeParts(
-									booking?.start_at || '',
-									booking?.end_at || '',
-									timezone
-								);
-								const statusKey = String(booking?.status || '').trim();
-								const isCancelled = statusKey.toLowerCase() === 'cancelled';
+							{ bookings.map( ( booking ) => {
+								const bookingDatetimeParts =
+									formatBookingDateTimeParts(
+										booking?.start_at || '',
+										booking?.end_at || '',
+										timezone
+									);
+								const statusKey = String(
+									booking?.status || ''
+								).trim();
+								const isCancelled =
+									statusKey.toLowerCase() === 'cancelled';
 								return (
 									<div
-										className={[
+										className={ [
 											'vkbm-confirm__summary',
-											isCancelled && 'vkbm-confirm__summary--cancelled',
+											isCancelled &&
+												'vkbm-confirm__summary--cancelled',
 										]
-											.filter(Boolean)
-											.join(' ')}
-										key={booking?.id || bookingDatetimeParts.date}
+											.filter( Boolean )
+											.join( ' ' ) }
+										key={
+											booking?.id ||
+											bookingDatetimeParts.date
+										}
 									>
-										{(bookingDatetimeParts.date || bookingDatetimeParts.time) && (
+										{ ( bookingDatetimeParts.date ||
+											bookingDatetimeParts.time ) && (
 											<div className="vkbm-confirm__summary-title">
-												<div className="vkbm-confirm__datetime" aria-label={__('Reservation date and time', 'vk-booking-manager')}>
-													{isCancelled && (
+												<div
+													className="vkbm-confirm__datetime"
+													aria-label={ __(
+														'Reservation date and time',
+														'vk-booking-manager'
+													) }
+												>
+													{ isCancelled && (
 														<span className="vkbm-confirm__status vkbm-confirm__status--cancelled">
-															{__('Cancelled', 'vk-booking-manager')}
+															{ __(
+																'Cancelled',
+																'vk-booking-manager'
+															) }
 														</span>
-													)}
-													{bookingDatetimeParts.date && (
+													) }
+													{ bookingDatetimeParts.date && (
 														<span className="vkbm-confirm__date">
-															{bookingDatetimeParts.date}
+															{
+																bookingDatetimeParts.date
+															}
 														</span>
-													)}
-													{bookingDatetimeParts.time && (
+													) }
+													{ bookingDatetimeParts.time && (
 														<span className="vkbm-confirm__time">
-															{bookingDatetimeParts.date ? ' ' : ''}
-															{bookingDatetimeParts.time}
+															{ bookingDatetimeParts.date
+																? ' '
+																: '' }
+															{
+																bookingDatetimeParts.time
+															}
 														</span>
-													)}
+													) }
 												</div>
-												{booking?.can_cancel && (
+												{ booking?.can_cancel && (
 													<button
 														type="button"
 														className="vkbm-button vkbm-button__sm vkbm-button__secondary vkbm-confirm__cancel-button"
-														onClick={() => handleCancelBooking(booking?.id)}
-														disabled={cancellingBookingId === Number(booking?.id)}
+														onClick={ () =>
+															handleCancelBooking(
+																booking?.id
+															)
+														}
+														disabled={
+															cancellingBookingId ===
+															Number(
+																booking?.id
+															)
+														}
 													>
-														{cancellingBookingId === Number(booking?.id)
-															? __('Processing...', 'vk-booking-manager')
-															: __('Cancelled', 'vk-booking-manager')}
+														{ cancellingBookingId ===
+														Number( booking?.id )
+															? __(
+																	'Processing…',
+																	'vk-booking-manager'
+															  )
+															: __(
+																	'Cancelled',
+																	'vk-booking-manager'
+															  ) }
 													</button>
-												)}
+												) }
 											</div>
-										)}
+										) }
 										<BookingSummaryItems
-											booking={booking}
-											resourceLabel={resourceLabelSingular}
+											booking={ booking }
+											resourceLabel={
+												resourceLabelSingular
+											}
 											emptyValue="—"
-											currencySymbol={currencySymbol.trim() !== '' ? currencySymbol : null}
+											currencySymbol={
+												currencySymbol.trim() !== ''
+													? currencySymbol
+													: null
+											}
 										/>
 									</div>
 								);
-							})}
+							} ) }
 						</div>
-					)}
+					) }
 				</div>
-			)}
+			) }
 
-			{authMode !== 'bookings' && (
-			<>
-			<div className="vkbm-confirm__summary">
-				{(datetimeParts.date || datetimeParts.time) && (
-					<div className="vkbm-confirm__summary-title">
-						<div className="vkbm-confirm__datetime" aria-label={__('Reservation date and time', 'vk-booking-manager')}>
-							{datetimeParts.date && (
-								<span className="vkbm-confirm__date">
-									{datetimeParts.date}
-								</span>
-							)}
-							{datetimeParts.time && (
-								<span className="vkbm-confirm__time">
-									{datetimeParts.date ? ' ' : ''}
-									{datetimeParts.time}
-								</span>
-							)}
+			{ authMode !== 'bookings' && (
+				<>
+					<div className="vkbm-confirm__summary">
+						{ ( datetimeParts.date || datetimeParts.time ) && (
+							<div className="vkbm-confirm__summary-title">
+								<div
+									className="vkbm-confirm__datetime"
+									aria-label={ __(
+										'Reservation date and time',
+										'vk-booking-manager'
+									) }
+								>
+									{ datetimeParts.date && (
+										<span className="vkbm-confirm__date">
+											{ datetimeParts.date }
+										</span>
+									) }
+									{ datetimeParts.time && (
+										<span className="vkbm-confirm__time">
+											{ datetimeParts.date ? ' ' : '' }
+											{ datetimeParts.time }
+										</span>
+									) }
+								</div>
+							</div>
+						) }
+						<SummaryRow
+							label={ __( 'Menu', 'vk-booking-manager' ) }
+							value={ menuName }
+						/>
+						{ staffEnabled && (
+							<SummaryRow
+								label={ resourceLabelSingular }
+								value={ staffName }
+							/>
+						) }
+						<SummaryRow
+							label={ __(
+								'Service basic fee',
+								'vk-booking-manager'
+							) }
+							value={ pricingSummary.baseLabel }
+						/>
+						{ staffEnabled && (
+							<SummaryRow
+								label={ __(
+									'Nomination fee',
+									'vk-booking-manager'
+								) }
+								value={
+									pricingSummary.nominationLabel ||
+									formatCurrency(
+										0,
+										currencySymbol.trim() !== ''
+											? currencySymbol
+											: null
+									)
+								}
+							/>
+						) }
+						<SummaryRow
+							label={ __(
+								'Total basic fee',
+								'vk-booking-manager'
+							) }
+							value={
+								pricingSummary.totalLabel ||
+								pricingSummary.baseLabel
+							}
+							valueClassName="vkbm-confirm__summary-item-value--price"
+						/>
+					</div>
+
+					{ ! canManageReservations &&
+						! providerCancellationPolicy &&
+						! providerTermsOfService &&
+						policyText && (
+							<p className="vkbm-confirm__policy">
+								{ policyText }
+							</p>
+						) }
+
+					{ ! isLoggedIn && (
+						<div className="vkbm-confirm__auth">
+							<p className="vkbm-confirm__auth-label">
+								{ __(
+									'You must log in to confirm your reservation.',
+									'vk-booking-manager'
+								) }
+							</p>
+							<div className="vkbm-buttons vkbm-buttons__center">
+								<button
+									type="button"
+									className={ [
+										'vkbm-button',
+										'vkbm-button__sm',
+										'vkbm-button__primary',
+										authMode === 'login' && 'is-active',
+									]
+										.filter( Boolean )
+										.join( ' ' ) }
+									onClick={ () => toggleAuthMode( 'login' ) }
+								>
+									{ __( 'Log in', 'vk-booking-manager' ) }
+								</button>
+								<button
+									type="button"
+									className={ [
+										'vkbm-button',
+										'vkbm-button__sm',
+										'vkbm-button-outline',
+										'vkbm-button-outline__primary',
+										authMode === 'register' && 'is-active',
+									]
+										.filter( Boolean )
+										.join( ' ' ) }
+									onClick={ () =>
+										toggleAuthMode( 'register' )
+									}
+								>
+									{ __( 'Sign up', 'vk-booking-manager' ) }
+								</button>
+							</div>
+							{ authMode && (
+								<div className="vkbm-confirm__auth-panel">
+									{ authLoading && (
+										<p
+											className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading"
+											role="status"
+										>
+											{ __(
+												'Loading form…',
+												'vk-booking-manager'
+											) }
+										</p>
+									) }
+									{ authError && (
+										<p
+											className="vkbm-alert vkbm-alert__danger vkbm-confirm__auth-error"
+											role="alert"
+										>
+											{ authError }
+										</p>
+									) }
+									{ authFormHtml && (
+										<div
+											className="vkbm-confirm__auth-form"
+											dangerouslySetInnerHTML={ {
+												__html: authFormHtml,
+											} }
+										/>
+									) }
+								</div>
+							) }
 						</div>
+					) }
+
+					<div className="vkbm-confirm__form">
+						<label htmlFor="vkbm-confirm-memo">
+							{ __( 'Requests/Notes', 'vk-booking-manager' ) }
+						</label>
+						{ renderMemoField() }
 					</div>
-				)}
- 				<SummaryRow label={__('Menu', 'vk-booking-manager')} value={menuName} />
-				{staffEnabled && (
-					<SummaryRow label={resourceLabelSingular} value={staffName} />
-				)}
-				<SummaryRow
-					label={__('Service basic fee', 'vk-booking-manager')}
-					value={pricingSummary.baseLabel}
-				/>
-				{staffEnabled && (
-					<SummaryRow
-						label={__('Nomination fee', 'vk-booking-manager')}
-						value={
-							pricingSummary.nominationLabel ||
-							formatCurrency(0, currencySymbol.trim() !== '' ? currencySymbol : null)
-						}
-					/>
-				)}
-				<SummaryRow
-					label={__('Total basic fee', 'vk-booking-manager')}
-					value={pricingSummary.totalLabel || pricingSummary.baseLabel}
-					valueClassName="vkbm-confirm__summary-item-value--price"
-				/>
-			</div>
 
-			{!canManageReservations && !providerCancellationPolicy && !providerTermsOfService && policyText && (
-				<p className="vkbm-confirm__policy">{policyText}</p>
-			)}
-
-			{!isLoggedIn && (
-				<div className="vkbm-confirm__auth">
-
-					<p className="vkbm-confirm__auth-label">
-						{__('You must log in to confirm your reservation.', 'vk-booking-manager')}
-					</p>
-					<div className="vkbm-buttons vkbm-buttons__center">
-						<button
-							type="button"
-							className={[
-								'vkbm-button',
-								'vkbm-button__sm',
-								'vkbm-button__primary',
-								authMode === 'login' && 'is-active',
-							]
-								.filter(Boolean)
-								.join(' ')}
-							onClick={() => toggleAuthMode('login')}
-						>
-							{__('Log in', 'vk-booking-manager')}
-						</button>
-						<button
-							type="button"
-							className={[
-								'vkbm-button',
-								'vkbm-button__sm',
-								'vkbm-button-outline',
-								'vkbm-button-outline__primary',
-								authMode === 'register' && 'is-active',
-							]
-								.filter(Boolean)
-								.join(' ')}
-							onClick={() => toggleAuthMode('register')}
-						>
-							{__('Sign up', 'vk-booking-manager')}
-						</button>
-					</div>
-					{authMode && (
-						<div className="vkbm-confirm__auth-panel">
-							{authLoading && (
-								<p className="vkbm-alert vkbm-alert__info vkbm-confirm__auth-loading" role="status">
-									{__('Loading form...', 'vk-booking-manager')}
-								</p>
-							)}
-							{authError && (
-								<p className="vkbm-alert vkbm-alert__danger vkbm-confirm__auth-error" role="alert">
-									{authError}
-								</p>
-							)}
-						{authFormHtml && (
-							<div
-								className="vkbm-confirm__auth-form"
-									dangerouslySetInnerHTML={{
-										__html: authFormHtml,
-									}}
+					{ canManageReservations && (
+						<div className="vkbm-confirm__admin-fields">
+							<div className="vkbm-confirm__admin-field">
+								<label htmlFor="vkbm-confirm-customer-name">
+									{ __(
+										'Reserved name',
+										'vk-booking-manager'
+									) }
+								</label>
+								<input
+									type="text"
+									id="vkbm-confirm-customer-name"
+									value={ customerName }
+									onChange={ ( event ) =>
+										setCustomerName( event.target.value )
+									}
+									placeholder={ __(
+										'Please enter customer name.',
+										'vk-booking-manager'
+									) }
 								/>
-							)}
+							</div>
+							<div className="vkbm-confirm__admin-field">
+								<label htmlFor="vkbm-confirm-customer-phone">
+									{ __(
+										'Telephone number',
+										'vk-booking-manager'
+									) }
+								</label>
+								<input
+									type="tel"
+									id="vkbm-confirm-customer-phone"
+									value={ customerPhone }
+									onChange={ ( event ) =>
+										setCustomerPhone( event.target.value )
+									}
+									placeholder={ __(
+										'Please enter your contact phone number.',
+										'vk-booking-manager'
+									) }
+								/>
+							</div>
+							<div className="vkbm-confirm__admin-field">
+								<label htmlFor="vkbm-confirm-provider-note">
+									{ __(
+										'Management memo',
+										'vk-booking-manager'
+									) }
+								</label>
+								<textarea
+									id="vkbm-confirm-provider-note"
+									value={ providerNote }
+									onChange={ ( event ) =>
+										setProviderNote( event.target.value )
+									}
+									placeholder={ __(
+										'Please enter any internal notes.',
+										'vk-booking-manager'
+									) }
+								/>
+							</div>
 						</div>
-					)}
-				</div>
-			)}
+					) }
 
-			<div className="vkbm-confirm__form">
-				<label htmlFor="vkbm-confirm-memo">
-					{__('Requests/Notes', 'vk-booking-manager')}
-				</label>
-				{renderMemoField()}
-			</div>
+					{ renderAgreements() }
 
-			{canManageReservations && (
-				<div className="vkbm-confirm__admin-fields">
-					<div className="vkbm-confirm__admin-field">
-						<label htmlFor="vkbm-confirm-customer-name">
-							{__('Reserved name', 'vk-booking-manager')}
-						</label>
-						<input
-							type="text"
-							id="vkbm-confirm-customer-name"
-							value={customerName}
-							onChange={(event) => setCustomerName(event.target.value)}
-							placeholder={__('Please enter customer name.', 'vk-booking-manager')}
-						/>
+					<div className="vkbm-confirm__actions">
+						{ ! success && (
+							<button
+								type="button"
+								className="vkbm-confirm__button vkbm-button vkbm-button__md vkbm-button__primary"
+								onClick={ handleConfirm }
+								disabled={ ! canSubmit }
+							>
+								{ submitting
+									? __( 'Processing…', 'vk-booking-manager' )
+									: __(
+											'Reserve with this content',
+											'vk-booking-manager'
+									  ) }
+							</button>
+						) }
+						{ showSuccessMessage && (
+							<p
+								className="vkbm-alert vkbm-alert__success text-center"
+								role="status"
+							>
+								{ finalSuccessMessage }
+							</p>
+						) }
+						{ submitError && (
+							<p
+								className="vkbm-alert vkbm-alert__danger"
+								role="alert"
+							>
+								{ submitError }
+							</p>
+						) }
 					</div>
-					<div className="vkbm-confirm__admin-field">
-						<label htmlFor="vkbm-confirm-customer-phone">
-							{__('Telephone number', 'vk-booking-manager')}
-						</label>
-						<input
-							type="tel"
-							id="vkbm-confirm-customer-phone"
-							value={customerPhone}
-							onChange={(event) => setCustomerPhone(event.target.value)}
-							placeholder={__('Please enter your contact phone number.', 'vk-booking-manager')}
-						/>
-					</div>
-					<div className="vkbm-confirm__admin-field">
-						<label htmlFor="vkbm-confirm-provider-note">
-							{__('Management memo', 'vk-booking-manager')}
-						</label>
-						<textarea
-							id="vkbm-confirm-provider-note"
-							value={providerNote}
-							onChange={(event) => setProviderNote(event.target.value)}
-							placeholder={__('Please enter any internal notes.', 'vk-booking-manager')}
-						/>
-					</div>
-				</div>
-			)}
-
-			{renderAgreements()}
-
-			<div className="vkbm-confirm__actions">
-				{!success && (
-						<button
-							type="button"
-							className="vkbm-confirm__button vkbm-button vkbm-button__md vkbm-button__primary"
-							onClick={handleConfirm}
-							disabled={!canSubmit}
-						>
-						{submitting ? __('Processing...', 'vk-booking-manager') : __('Reserve with this content', 'vk-booking-manager')}
-					</button>
-				)}
-				{showSuccessMessage && (
-					<p className="vkbm-alert vkbm-alert__success text-center" role="status">
-						{finalSuccessMessage}
-					</p>
-				)}
-				{submitError && (
-					<p className="vkbm-alert vkbm-alert__danger" role="alert">
-						{submitError}
-					</p>
-				)}
-			</div>
-			</>
-			)}
+				</>
+			) }
 		</div>
 	);
 };

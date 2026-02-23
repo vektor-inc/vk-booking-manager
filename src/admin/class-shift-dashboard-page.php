@@ -1146,19 +1146,19 @@ class Shift_Dashboard_Page {
 					$edit_url = admin_url( sprintf( 'post.php?post=%d&action=edit', $post_id ) );
 				}
 
-				$date_format     = get_option( 'date_format' );
-				$time_format     = get_option( 'time_format' );
-				$notifications[] = array(
-					'id'         => (string) $post_id,
-					'time_label' => sprintf(
-						'%s - %s',
-						wp_date( sprintf( '%s %s', $date_format, $time_format ), $start_dt->getTimestamp() ),
-						wp_date( $time_format, $block_end_dt->getTimestamp() )
-					),
-					'customer'   => $customer_name,
-					'staff'      => $resource_name,
-					'url'        => $edit_url,
-				);
+					$date_format     = get_option( 'date_format' );
+					$time_format     = get_option( 'time_format' );
+					$notifications[] = array(
+						'id'         => (string) $post_id,
+						'time_label' => sprintf(
+							'%s - %s',
+							wp_date( sprintf( '%s %s', $date_format, $time_format ), $start_dt->getTimestamp() ),
+							wp_date( $time_format, $block_end_dt->getTimestamp() )
+						),
+						'customer'   => $customer_name,
+						'staff'      => $resource_name,
+						'url'        => $edit_url,
+					);
 			}
 
 			wp_reset_postdata();
@@ -1289,7 +1289,7 @@ class Shift_Dashboard_Page {
 			$time_label   = sprintf( '%s ～ %s', $start_label, $end_label );
 
 			if ( '' !== $status_badge ) {
-				$time_label .= sprintf( ' [%s]', $status_badge );
+				$time_label .= sprintf( ' [ %s ]', $status_badge );
 			}
 
 			$customer_line = sprintf(

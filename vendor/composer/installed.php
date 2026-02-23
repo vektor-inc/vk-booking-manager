@@ -280,6 +280,15 @@
             'aliases' => array(),
             'dev_requirement' => true,
         ),
+        'yahnis-elsts/plugin-update-checker' => array(
+            'pretty_version' => 'v5.6',
+            'version' => '5.6.0.0',
+            'reference' => 'a2db6871deec989a74e1f90fafc6d58ae526a879',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../yahnis-elsts/plugin-update-checker',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
         'yoast/phpunit-polyfills' => array(
             'pretty_version' => '2.0.5',
             'version' => '2.0.5.0',

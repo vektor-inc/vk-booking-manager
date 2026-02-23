@@ -1,24 +1,24 @@
 import { __, sprintf } from '@wordpress/i18n';
 
-export const normalizePriceValue = (value) => {
-	if (value === null || value === undefined) {
+export const normalizePriceValue = ( value ) => {
+	if ( value === null || value === undefined ) {
 		return null;
 	}
 
-	if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+	if ( typeof value === 'number' && Number.isFinite( value ) && value >= 0 ) {
 		return value;
 	}
 
-	if (typeof value === 'string') {
+	if ( typeof value === 'string' ) {
 		const trimmed = value.trim();
 
-		if (trimmed === '') {
+		if ( trimmed === '' ) {
 			return null;
 		}
 
-		const parsed = Number(trimmed);
+		const parsed = Number( trimmed );
 
-		if (Number.isFinite(parsed) && parsed >= 0) {
+		if ( Number.isFinite( parsed ) && parsed >= 0 ) {
 			return parsed;
 		}
 	}
@@ -27,62 +27,68 @@ export const normalizePriceValue = (value) => {
 };
 
 const resolveDefaultCurrencySymbol = () => {
-	if (typeof window === 'undefined') {
+	if ( typeof window === 'undefined' ) {
 		return '$';
 	}
 
 	const locale = window?.vkbmCurrentUserBootstrap?.locale;
-	if (typeof locale === 'string' && locale.trim() !== '' && locale.toLowerCase().startsWith('ja')) {
+	if (
+		typeof locale === 'string' &&
+		locale.trim() !== '' &&
+		locale.toLowerCase().startsWith( 'ja' )
+	) {
 		return '¥';
 	}
 
 	return '$';
 };
 
-export const formatCurrency = (value, currencySymbol = null) => {
-	const normalized = normalizePriceValue(value);
+export const formatCurrency = ( value, currencySymbol = null ) => {
+	const normalized = normalizePriceValue( value );
 
-	if (normalized === null) {
+	if ( normalized === null ) {
 		return '';
 	}
 
 	let formatter;
 	try {
-		formatter = new Intl.NumberFormat(resolveNumberFormatLocale());
-	} catch (error) {
-		formatter = new Intl.NumberFormat('ja-JP');
+		formatter = new Intl.NumberFormat( resolveNumberFormatLocale() );
+	} catch ( error ) {
+		formatter = new Intl.NumberFormat( 'ja-JP' );
 	}
-	const formattedAmount = formatter.format(normalized);
+	const formattedAmount = formatter.format( normalized );
 
-	const trimmedSymbol = typeof currencySymbol === 'string' ? currencySymbol.trim() : '';
-	const resolvedSymbol = trimmedSymbol !== '' ? trimmedSymbol : resolveDefaultCurrencySymbol();
+	const trimmedSymbol =
+		typeof currencySymbol === 'string' ? currencySymbol.trim() : '';
+	const resolvedSymbol =
+		trimmedSymbol !== '' ? trimmedSymbol : resolveDefaultCurrencySymbol();
 
-	if (resolvedSymbol !== '') {
-		return `${resolvedSymbol}${formattedAmount}`;
+	if ( resolvedSymbol !== '' ) {
+		return `${ resolvedSymbol }${ formattedAmount }`;
 	}
 
 	return sprintf(
 		/* translators: %s: price amount */
-		__('$%s', 'vk-booking-manager'),
+		__( '$%s', 'vk-booking-manager' ),
 		formattedAmount
 	);
 };
 
 const resolveNumberFormatLocale = () => {
-	if (typeof window === 'undefined') {
+	if ( typeof window === 'undefined' ) {
 		return 'ja-JP';
 	}
 
 	const locale = window?.vkbmCurrentUserBootstrap?.locale;
-	if (typeof locale === 'string' && locale.trim() !== '') {
+	if ( typeof locale === 'string' && locale.trim() !== '' ) {
 		return locale.trim();
 	}
 
 	return 'ja-JP';
 };
 
-export const extractMenuBasePrice = (menu) => {
-	if (!menu) {
+export const extractMenuBasePrice = ( menu ) => {
+	if ( ! menu ) {
 		return null;
 	}
 
@@ -93,9 +99,9 @@ export const extractMenuBasePrice = (menu) => {
 		menu?.price,
 	];
 
-	for (const candidate of candidates) {
-		const normalized = normalizePriceValue(candidate);
-		if (normalized !== null) {
+	for ( const candidate of candidates ) {
+		const normalized = normalizePriceValue( candidate );
+		if ( normalized !== null ) {
 			return normalized;
 		}
 	}

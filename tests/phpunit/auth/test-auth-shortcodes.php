@@ -19,9 +19,9 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		if ( function_exists( 'switch_to_locale' ) ) {
 			switch_to_locale( 'ja' );
 		}
-		if ( function_exists( 'unload_textdomain' ) ) {
-			unload_textdomain( 'vk-booking-manager' );
-		}
+		// Load the .mo file directly without calling unload_textdomain first.
+		// unload_textdomain( $domain, true ) sets $l10n_unloaded which prevents
+		// subsequent load_textdomain calls from working in WordPress 6.5+.
 		$mo_path = dirname( __DIR__, 3 ) . '/languages/vk-booking-manager-ja.mo';
 		if ( file_exists( $mo_path ) && function_exists( 'load_textdomain' ) ) {
 			load_textdomain( 'vk-booking-manager', $mo_path );
@@ -29,9 +29,6 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 	}
 
 	protected function tearDown(): void {
-		if ( function_exists( 'unload_textdomain' ) ) {
-			unload_textdomain( 'vk-booking-manager' );
-		}
 		if ( function_exists( 'restore_previous_locale' ) ) {
 			restore_previous_locale();
 		}
@@ -43,15 +40,31 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			$this->markTestSkipped( 'Skipping i18n tests for free distribution.' );
 		}
 
-		$mo_path = dirname( __DIR__, 3 ) . '/languages/vk-booking-manager-ja.mo';
-		$this->assertFileExists( $mo_path );
+		$original = 'Please enter the same password twice.';
+		$expected = '同じパスワードを2回入力してください。';
 
-		$mo = new \MO();
-		$this->assertTrue( $mo->import_from_file( $mo_path ) );
+		$mo_path  = dirname( __DIR__, 3 ) . '/languages/vk-booking-manager-ja.mo';
+		$php_path = dirname( __DIR__, 3 ) . '/languages/vk-booking-manager-ja.l10n.php';
 
-		$translated = $mo->translate( 'Please enter the same password twice.' );
+		$debug = [
+			'locale'           => get_locale(),
+			'.mo exists'       => file_exists( $mo_path ) ? 'yes' : 'no',
+			'.l10n.php exists' => file_exists( $php_path ) ? 'yes' : 'no',
+		];
+		if ( file_exists( $php_path ) ) {
+			$l10n              = include $php_path;
+			$debug['l10n key'] = isset( $l10n['messages'][ $original ] ) ? $l10n['messages'][ $original ] : '(not found)';
+		}
 
-		$this->assertSame( '同じパスワードを2回入力してください。', $translated );
+		// setUp() already switches to locale 'ja' and loads the .mo file directly.
+		$translated           = __( $original, 'vk-booking-manager' );
+		$debug['__() result'] = $translated;
+
+		$this->assertSame(
+			$expected,
+			$translated,
+			'Debug: ' . wp_json_encode( $debug )
+		);
 	}
 
 	public function test_registration_password_mismatch_sets_error(): void {

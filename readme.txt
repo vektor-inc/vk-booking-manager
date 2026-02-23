@@ -1,10 +1,10 @@
 === VK Booking Manager ===
 Contributors: vektor-inc,kurudrive
 Tags: booking, reservations, appointment, salon, beauty
-Requires at least: 6.7
+Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.1.3
+Stable tag: 0.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,11 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.2.0 =
+* [ 機能追加 ] アップデーターを追加
+* [ 不具合修正 ] 初期インストール時にキャンセルポリシーと利用規約の初期文章が反映されない不具合を修正
+* [ 不具合修正 ] 通知メールの翻訳や時間表記不具合修正
 
 = 0.1.3 =
 * Define the plugin directory path and URL as constants

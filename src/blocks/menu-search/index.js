@@ -4,9 +4,9 @@ import edit from './edit';
 import './style.scss';
 import './editor.scss';
 
-registerBlockType(metadata, {
+registerBlockType( metadata, {
 	edit,
 	save() {
 		return null;
 	},
-});
+} );

@@ -516,6 +516,10 @@ class Booking_Notification_Service {
 		}
 		$duration    = $this->get_menu_duration( $menu_id );
 		$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $settings );
+		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? trim( (string) $settings['resource_label_singular'] ) : '';
+		if ( '' === $resource_label_singular ) {
+			$resource_label_singular = __( 'Staff', 'vk-booking-manager' );
+		}
 
 		if ( '' === trim( $customer_name ) ) {
 			$customer_name = $this->resolve_booking_author_name( $booking );
@@ -530,8 +534,7 @@ class Booking_Notification_Service {
 			'booking_id'                   => $booking_id,
 			'menu_title'                   => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
 			'staff_title'                  => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
-			'start_label'                  => $this->format_datetime( $start ),
-			'end_label'                    => $this->format_time( $end ),
+			'reservation_datetime'         => $this->format_reservation_datetime_range( $start, $end ),
 			'duration_label'               => $duration,
 			'price_label'                  => $price_label,
 			'customer_name'                => '' !== $customer_name ? $customer_name : __( 'Customer', 'vk-booking-manager' ),
@@ -545,6 +548,7 @@ class Booking_Notification_Service {
 			'provider_address'             => $settings['provider_address'] ?? '',
 			'provider_site'                => isset( $settings['provider_website_url'] ) && '' !== $settings['provider_website_url'] ? $settings['provider_website_url'] : home_url(),
 			'provider_cancellation_policy' => isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '',
+			'resource_label_singular'      => $resource_label_singular,
 			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'edit_url'                     => $edit_url,
 		);
@@ -582,35 +586,40 @@ class Booking_Notification_Service {
 			case self::TYPE_PENDING_PROVIDER:
 				return array(
 					'to'      => $payload['provider_email'],
-					'subject' => sprintf( '[%s][%s] A new reservation has been made.', $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
+					/* translators: %1$s: Provider name, %2$s: Booking status label. */
+					'subject' => sprintf( __( '[ %1$s ][ %2$s ] A new reservation has been made.', 'vk-booking-manager' ), $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
 					'body'    => $this->render_provider_body( $payload, __( 'Pending', 'vk-booking-manager' ) ),
 				);
 
 			case self::TYPE_CONFIRMED_PROVIDER:
 				return array(
 					'to'      => $payload['provider_email'],
-					'subject' => sprintf( '[%s] Reservation confirmed', $payload['provider_name'] ),
+					/* translators: %s: Provider name. */
+					'subject' => sprintf( __( '[ %s ] Reservation confirmed', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_provider_body( $payload, __( 'Confirmed', 'vk-booking-manager' ) ),
 				);
 
 			case self::TYPE_CONFIRMED_CUSTOMER:
 				return array(
 					'to'      => $payload['customer_email'],
-					'subject' => sprintf( '[%s] Your reservation has been confirmed', $payload['provider_name'] ),
+					/* translators: %s: Provider name. */
+					'subject' => sprintf( __( '[ %s ] Your reservation has been confirmed', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_customer_body( $payload, __( 'Your reservation has been confirmed.', 'vk-booking-manager' ) ),
 				);
 
 			case self::TYPE_CANCELLED_CUSTOMER:
 				return array(
 					'to'      => $payload['customer_email'],
-					'subject' => sprintf( '[%s] Your reservation has been canceled', $payload['provider_name'] ),
+					/* translators: %s: Provider name. */
+					'subject' => sprintf( __( '[ %s ] Your reservation has been canceled', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_customer_body( $payload, __( 'Your reservation has been cancelled.', 'vk-booking-manager' ) ),
 				);
 
 			case self::TYPE_CANCELLED_PROVIDER:
 				return array(
 					'to'      => $payload['provider_email'],
-					'subject' => sprintf( '[%s] Reservation canceled', $payload['provider_name'] ),
+					/* translators: %s: Provider name. */
+					'subject' => sprintf( __( '[ %s ] Reservation canceled', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_provider_body( $payload, __( 'Cancelled', 'vk-booking-manager' ) ),
 				);
 
@@ -618,10 +627,45 @@ class Booking_Notification_Service {
 			default:
 				return array(
 					'to'      => $payload['customer_email'],
-					'subject' => sprintf( '[%s][%s] Your reservation has been accepted.', $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
+					/* translators: %1$s: Provider name, %2$s: Booking status label. */
+					'subject' => sprintf( __( '[ %1$s ][ %2$s ] Your reservation has been accepted.', 'vk-booking-manager' ), $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
 					'body'    => $this->render_customer_body( $payload, __( 'We have tentatively accepted your reservation.', 'vk-booking-manager' ) ),
 				);
 		}
+	}
+
+	/**
+	 * Build shared reservation information lines.
+	 *
+	 * @param array<string,mixed> $payload Booking payload.
+	 * @param string              $status_label Status label.
+	 * @return array<int,string>
+	 */
+	private function get_reservation_information_lines( array $payload, string $status_label = '' ): array {
+		$lines   = array();
+		$lines[] = __( '--- Reservation information ---', 'vk-booking-manager' );
+		/* translators: %d: Booking ID. */
+		$lines[] = sprintf( __( 'Reservation number: #%d', 'vk-booking-manager' ), $payload['booking_id'] );
+		if ( '' !== $status_label ) {
+			/* translators: %s: Booking status label. */
+			$lines[] = sprintf( __( 'Status: %s', 'vk-booking-manager' ), $status_label );
+		}
+		/* translators: %s: Menu title. */
+		$lines[] = sprintf( __( 'Menu: %s', 'vk-booking-manager' ), $payload['menu_title'] );
+		/* translators: 1: Resource label, 2: Staff name. */
+		$lines[] = sprintf( __( '%1$s: %2$s', 'vk-booking-manager' ), $payload['resource_label_singular'], $payload['staff_title'] );
+		/* translators: %s: Reservation datetime range. */
+		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
+		if ( $payload['duration_label'] ) {
+			/* translators: %s: Duration label. */
+			$lines[] = sprintf( __( 'Time required: %s', 'vk-booking-manager' ), $payload['duration_label'] );
+		}
+		if ( $payload['price_label'] ) {
+			/* translators: %s: Price label. */
+			$lines[] = sprintf( __( 'Price guide: %s', 'vk-booking-manager' ), $payload['price_label'] );
+		}
+
+		return $lines;
 	}
 
 	/**
@@ -635,48 +679,41 @@ class Booking_Notification_Service {
 		$lines               = array();
 		$cancellation_policy = trim( (string) ( $payload['provider_cancellation_policy'] ?? '' ) );
 
-		$lines[] = sprintf( 'Dear %s', $payload['customer_name'] );
+		/* translators: %s: Customer name. */
+		$lines[] = sprintf( __( 'Dear %s', 'vk-booking-manager' ), $payload['customer_name'] );
 		$lines[] = '';
 		$lines[] = $lead;
 		if ( 'pending' === (string) ( $payload['status'] ?? '' ) ) {
 			$lines[] = __( 'This reservation is a provisional reservation. The administrator will confirm and confirm.', 'vk-booking-manager' );
 		}
-		$lines[] = 'Please check the following information.';
+		$lines[] = __( 'Please check the following information.', 'vk-booking-manager' );
 		$lines[] = '';
-		$lines[] = '--- Reservation information ---';
-		$lines[] = sprintf( 'Reservation number: #%d', $payload['booking_id'] );
-		$lines[] = sprintf( 'Menu: %s', $payload['menu_title'] );
-		$lines[] = sprintf( 'Staff in charge: %s', $payload['staff_title'] );
-		$lines[] = sprintf( 'Reservation date and time: %s %s', $payload['start_label'], $payload['end_label'] ? '〜 ' . $payload['end_label'] : '' );
-		if ( $payload['duration_label'] ) {
-			$lines[] = sprintf( 'Time required: %s', $payload['duration_label'] );
-		}
-		if ( $payload['price_label'] ) {
-			$lines[] = sprintf( 'Price guide: %s', $payload['price_label'] );
-		}
+		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload ) );
 		$customer_tel = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
-		$lines[]      = sprintf( 'Contact: %s', $customer_tel );
-		$lines[]      = 'Request contents/memo:';
+		/* translators: %s: Customer contact value. */
+		$lines[]      = sprintf( __( 'Contact: %s', 'vk-booking-manager' ), $customer_tel );
+		$lines[]      = __( 'Request contents/memo:', 'vk-booking-manager' );
 		$lines[]      = $payload['memo'];
 		$lines[]      = '';
 		if ( '' !== $cancellation_policy ) {
 			$lines[] = '';
-			$lines[] = '--- Cancellation Policy ---';
+			$lines[] = __( '--- Cancellation Policy ---', 'vk-booking-manager' );
 			$lines[] = $cancellation_policy;
 			$lines[] = '';
 		}
 		$lines[] = '===========';
 		$lines[] = $payload['provider_name'];
 		if ( $payload['provider_phone'] ) {
-			$lines[] = sprintf( 'TEL: %s', $payload['provider_phone'] );
+			/* translators: %s: Provider phone number. */
+			$lines[] = sprintf( __( 'TEL: %s', 'vk-booking-manager' ), $payload['provider_phone'] );
 		}
 		if ( $payload['provider_address'] ) {
 			$lines[] = $payload['provider_address'];
 		}
 		if ( $payload['provider_site'] ) {
-			$lines[] = sprintf( 'Web: %s', $payload['provider_site'] );
+			$lines[] = $payload['provider_site'];
 		}
-		$lines[] = 'If you do not recognize this email, please discard it.';
+		$lines[] = __( 'If you do not recognize this email, please discard it.', 'vk-booking-manager' );
 
 		return implode( "\n", $lines );
 	}
@@ -697,33 +734,26 @@ class Booking_Notification_Service {
 			// キャンセル通知では自然な表現に置き換える.
 			$lines[] = __( 'Your reservation has been cancelled.', 'vk-booking-manager' );
 		} else {
-			$lines[] = sprintf( 'A new %s has been registered.', $status_label );
+			/* translators: %s: Booking status label. */
+			$lines[] = sprintf( __( 'A new %s has been registered.', 'vk-booking-manager' ), $status_label );
 		}
 		$lines[] = '';
-		$lines[] = '--- Reservation information ---';
-		$lines[] = sprintf( 'Reservation number: #%d', $payload['booking_id'] );
-		$lines[] = sprintf( 'Status: %s', $status_label );
-		$lines[] = sprintf( 'Menu: %s', $payload['menu_title'] );
-		$lines[] = sprintf( 'Staff in charge: %s', $payload['staff_title'] );
-		$lines[] = sprintf( 'Reservation date and time: %s %s', $payload['start_label'], $payload['end_label'] ? '〜 ' . $payload['end_label'] : '' );
-		if ( $payload['duration_label'] ) {
-			$lines[] = sprintf( 'Time required: %s', $payload['duration_label'] );
-		}
-		if ( $payload['price_label'] ) {
-			$lines[] = sprintf( 'Price guide: %s', $payload['price_label'] );
-		}
+		$lines = array_merge( $lines, $this->get_reservation_information_lines( $payload, $status_label ) );
 		$lines[]        = '';
-		$lines[]        = '--- Customer information ---';
-		$lines[]        = sprintf( 'Name: %s', $payload['customer_name'] );
+		$lines[]        = __( '--- Customer information ---', 'vk-booking-manager' );
+		/* translators: %s: Customer name. */
+		$lines[]        = sprintf( __( 'Name: %s', 'vk-booking-manager' ), $payload['customer_name'] );
 		$customer_email = isset( $payload['customer_email'] ) && '' !== $payload['customer_email'] ? $payload['customer_email'] : __( 'Not provided', 'vk-booking-manager' );
 		$customer_tel   = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
-		$lines[]        = sprintf( 'Email: %s', $customer_email );
-		$lines[]        = sprintf( 'Phone number: %s', $customer_tel );
-		$lines[]        = 'Note:';
+		/* translators: %s: Customer email address. */
+		$lines[]        = sprintf( __( 'Email: %s', 'vk-booking-manager' ), $customer_email );
+		/* translators: %s: Customer phone number. */
+		$lines[]        = sprintf( __( 'Phone number: %s', 'vk-booking-manager' ), $customer_tel );
+		$lines[]        = __( 'Note:', 'vk-booking-manager' );
 		$lines[]        = $payload['memo'];
 		if ( '' !== $cancellation_policy ) {
 			$lines[] = '';
-			$lines[] = '--- Cancellation Policy ---';
+			$lines[] = __( '--- Cancellation Policy ---', 'vk-booking-manager' );
 			$lines[] = $cancellation_policy;
 		}
 		if ( ! empty( $payload['edit_url'] ) ) {
@@ -736,9 +766,9 @@ class Booking_Notification_Service {
 	}
 
 	/**
-	 * Format datetime for display.
+	 * WordPress の日付・時刻設定を使って日時を整形します。
 	 *
-	 * @param string $value Database datetime.
+	 * @param string $value DB 保存形式の日時文字列.
 	 * @return string
 	 */
 	private function format_datetime( string $value ): string {
@@ -753,28 +783,122 @@ class Booking_Notification_Service {
 			return $value;
 		}
 
-		return wp_date( 'Y year n month j day H:i', $datetime->getTimestamp() );
+		$date_format = (string) get_option( 'date_format' );
+		$time_format = (string) get_option( 'time_format' );
+
+		if ( '' === trim( $date_format ) ) {
+			$date_format = 'Y-m-d';
+		}
+		if ( '' === trim( $time_format ) ) {
+			$time_format = 'H:i';
+		}
+
+		return wp_date( $date_format . ' ' . $time_format, $datetime->getTimestamp(), $timezone );
 	}
 
 	/**
-	 * Format only the time portion.
+	 * WordPress の日付・時刻設定を使って、曜日付きの日時を整形します。
 	 *
-	 * @param string $value Datetime string.
+	 * @param string $value DB 保存形式の日時文字列.
 	 * @return string
 	 */
-	private function format_time( string $value ): string {
+	private function format_datetime_with_weekday( string $value ): string {
 		if ( '' === $value ) {
-			return '';
+			return __( 'Not set', 'vk-booking-manager' );
 		}
 
 		$timezone = wp_timezone();
 		$datetime = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $value, $timezone );
 
 		if ( ! $datetime ) {
-			return '';
+			return $value;
 		}
 
-		return $datetime->format( 'H:i' );
+		$date_format = (string) get_option( 'date_format' );
+		$time_format = (string) get_option( 'time_format' );
+
+		if ( '' === trim( $date_format ) ) {
+			$date_format = 'Y-m-d';
+		}
+		if ( '' === trim( $time_format ) ) {
+			$time_format = 'H:i';
+		}
+
+		$timestamp = $datetime->getTimestamp();
+		$date_text = wp_date( $date_format, $timestamp, $timezone );
+		$day_text  = $this->get_localized_weekday_abbrev( $timestamp, $timezone );
+		$time_text = wp_date( $time_format, $timestamp, $timezone );
+
+		/* translators: 1: Date text, 2: Day of week, 3: Time text. */
+		return sprintf( __( '%1$s (%2$s) %3$s', 'vk-booking-manager' ), $date_text, $day_text, $time_text );
+	}
+
+	/**
+	 * 指定タイムスタンプの曜日略称を、WordPress ロケール情報から取得します。
+	 *
+	 * @param int          $timestamp Unix timestamp.
+	 * @param \DateTimeZone $timezone タイムゾーン.
+	 * @return string
+	 */
+	private function get_localized_weekday_abbrev( int $timestamp, \DateTimeZone $timezone ): string {
+		$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+		$weekday_number = (int) wp_date( 'w', $timestamp, $timezone );
+
+		if ( 0 === strpos( (string) $locale, 'ja' ) ) {
+			$ja_weekdays = array( '日', '月', '火', '水', '木', '金', '土' );
+			if ( isset( $ja_weekdays[ $weekday_number ] ) ) {
+				return $ja_weekdays[ $weekday_number ];
+			}
+		}
+
+		global $wp_locale;
+
+		if ( isset( $wp_locale ) && method_exists( $wp_locale, 'get_weekday' ) && method_exists( $wp_locale, 'get_weekday_abbrev' ) ) {
+			$weekday_name   = (string) $wp_locale->get_weekday( $weekday_number );
+
+			if ( '' !== $weekday_name ) {
+				return (string) $wp_locale->get_weekday_abbrev( $weekday_name );
+			}
+		}
+
+		return wp_date( 'D', $timestamp, $timezone );
+	}
+
+	/**
+	 * 予約の日時範囲を整形します。
+	 * 同日の予約は終了時刻のみを表示し、日付をまたぐ予約は終了日時をフル表示します。
+	 *
+	 * @param string $start DB 保存形式の開始日時文字列.
+	 * @param string $end   DB 保存形式の終了日時文字列.
+	 * @return string
+	 */
+	private function format_reservation_datetime_range( string $start, string $end ): string {
+		if ( '' === $start || '' === $end ) {
+			return __( 'Not set', 'vk-booking-manager' );
+		}
+
+		$timezone       = wp_timezone();
+		$start_datetime = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $start, $timezone );
+		$end_datetime   = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $end, $timezone );
+
+		if ( ! $start_datetime || ! $end_datetime ) {
+			return $this->format_datetime_with_weekday( $start ) . ' - ' . $this->format_datetime_with_weekday( $end );
+		}
+
+		$start_timestamp = $start_datetime->getTimestamp();
+		$end_timestamp   = $end_datetime->getTimestamp();
+		$start_full      = $this->format_datetime_with_weekday( $start );
+
+		if ( wp_date( 'Y-m-d', $start_timestamp, $timezone ) === wp_date( 'Y-m-d', $end_timestamp, $timezone ) ) {
+			$time_format = (string) get_option( 'time_format' );
+			if ( '' === trim( $time_format ) ) {
+				$time_format = 'H:i';
+			}
+
+			return $start_full . ' - ' . wp_date( $time_format, $end_timestamp, $timezone );
+		}
+
+		return $start_full . ' - ' . $this->format_datetime_with_weekday( $end );
 	}
 
 	/**

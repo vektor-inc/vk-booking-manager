@@ -1,18 +1,18 @@
-( function() {
+( function () {
 	'use strict';
 
 	function movePanel() {
-		var panel = document.querySelector( '.vkbm-shift-bulk-create' );
+		const panel = document.querySelector( '.vkbm-shift-bulk-create' );
 		if ( ! panel ) {
 			return;
 		}
 
-		var wrap = document.querySelector( '.wrap' );
+		const wrap = document.querySelector( '.wrap' );
 		if ( ! wrap ) {
 			return;
 		}
 
-		var headerEnd = wrap.querySelector( '.wp-header-end' );
+		const headerEnd = wrap.querySelector( '.wp-header-end' );
 		if ( headerEnd ) {
 			wrap.insertBefore( panel, headerEnd );
 			return;
@@ -26,5 +26,4 @@
 	} else {
 		movePanel();
 	}
-}() );
-
+} )();

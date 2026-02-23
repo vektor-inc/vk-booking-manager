@@ -10,12 +10,6 @@
 				"lang": "ja",
 				"plural-forms": "nplurals=1; plural=0;"
 			},
-			"Log in": [
-				"ログイン"
-			],
-			"Shift/reservation table": [
-				"シフト・予約表"
-			],
 			"Staff": [
 				"スタッフ"
 			],
@@ -27,12 +21,6 @@
 			],
 			"I agree to the terms of use": [
 				"利用規約に同意します"
-			],
-			"Edit user information": [
-				"ユーザー情報編集"
-			],
-			"Log out": [
-				"ログアウト"
 			],
 			"No preference": [
 				"指名なし"
@@ -88,41 +76,35 @@
 			"Logo image": [
 				"ロゴ画像"
 			],
-			"Please check our cancellation policy before booking.": [
-				"予約前にキャンセルポリシーをご確認ください。"
-			],
-			"Your reservation has been completed.": [
-				"予約が完了しました。"
-			],
 			"Reservation block navigation": [
 				"予約ブロックナビゲーション"
 			],
 			"Return": [
 				"戻る"
 			],
-			"Confirm reservation": [
-				"予約内容を確認する"
-			],
-			"Sign up": [
-				"新規登録"
-			],
 			"return": [
 				"戻る"
 			],
-			"Loading...": [
-				"読み込み中..."
+			"Please check our cancellation policy before booking.": [
+				"予約前にキャンセルポリシーをご確認ください。"
+			],
+			"Your reservation has been completed.": [
+				"予約が完了しました。"
+			],
+			"Loading…": [
+				""
 			],
 			"There are no reservations to display.": [
 				"表示する予約はありません。"
 			],
-			"Processing...": [
-				"処理中..."
+			"Processing…": [
+				""
 			],
-			"Loading form...": [
-				"フォームを読み込み中..."
+			"Loading form…": [
+				""
 			],
-			"Loading service menu...": [
-				"サービスメニューを読み込み中..."
+			"Loading service menu…": [
+				""
 			],
 			"There are no service menus to display.": [
 				"表示するサービスメニューはありません。"
@@ -175,8 +157,8 @@
 			"When you select a date from the calendar, reservation candidates will be displayed.": [
 				"カレンダーから日付を選択すると、予約候補が表示されます。"
 			],
-			"Loading empty slots...": [
-				"予約可能なスロットを読み込んでいます..."
+			"Loading empty slots…": [
+				"空きスロット読み込み中..."
 			],
 			"There are no available reservation times for the selected criteria.": [
 				"選択した条件に該当する予約可能な時間がありません。"
@@ -190,8 +172,29 @@
 			"Please select a menu.": [
 				"メニューを選択してください。"
 			],
-			"Loading menu information...": [
-				"メニュー情報を読み込んでいます..."
+			"Loading menu information…": [
+				"メニューの情報読み込み中..."
+			],
+			"Other conditions": [
+				"その他条件"
+			],
+			"Log in": [
+				"ログイン"
+			],
+			"Shift/reservation table": [
+				"シフト・予約表"
+			],
+			"Edit user information": [
+				"ユーザー情報編集"
+			],
+			"Log out": [
+				"ログアウト"
+			],
+			"Sign up": [
+				"新規登録"
+			],
+			"Confirm reservation": [
+				"予約内容を確認する"
 			],
 			"Payment method": [
 				"決済方法"
@@ -232,8 +235,8 @@
 			"Confirmation of reservation failed. Please try again later.": [
 				"予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
 			],
-			"Loading temporary reservation data...": [
-				"一時予約データを読み込んでいます..."
+			"Loading temporary reservation data…": [
+				""
 			],
 			"Your tentative reservation has been completed.": [
 				"仮予約が完了しました。"
@@ -267,9 +270,6 @@
 			],
 			"Reserve with this content": [
 				"この内容で予約する"
-			],
-			"Other conditions": [
-				"その他条件"
 			]
 		}
 	}

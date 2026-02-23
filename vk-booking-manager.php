@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: VK Booking Manager
+ * Plugin Name: VK Booking Manager (Beta)
  * Plugin URI:  https://github.com/vektor-inc/vk-booking-manager/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     0.1.3
+ * Version:     0.2.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -259,15 +259,25 @@ if ( ! function_exists( 'vkbm_init_plugin' ) ) {
 			require_once $textdomain_file;
 		}
 
-		// Load GitHub updater for free edition (excluded from .org package).
-		$updater_file = __DIR__ . '/class-vkbm-github-updater.php';
-		$is_pro       = class_exists( 'Free_Version_Deactivator' )
+		// Load updater per edition.
+		$is_pro = class_exists( 'Free_Version_Deactivator' )
 			&& Free_Version_Deactivator::is_pro_edition( __FILE__ );
 
-		if ( ! $is_pro && file_exists( $updater_file ) ) {
-			require_once $updater_file;
-			if ( class_exists( 'VKBM_GitHub_Updater' ) ) {
-				new VKBM_GitHub_Updater( __FILE__ );
+		if ( $is_pro ) {
+			$pro_updater_file = __DIR__ . '/class-vkbm-pro-updater.php';
+			if ( file_exists( $pro_updater_file ) ) {
+				require_once $pro_updater_file;
+				if ( class_exists( 'VKBM_Pro_Updater' ) ) {
+					VKBM_Pro_Updater::register( __FILE__ );
+				}
+			}
+		} else {
+			$free_updater_file = __DIR__ . '/class-vkbm-github-updater.php';
+			if ( file_exists( $free_updater_file ) ) {
+				require_once $free_updater_file;
+				if ( class_exists( 'VKBM_GitHub_Updater' ) ) {
+					new VKBM_GitHub_Updater( __FILE__ );
+				}
 			}
 		}
 

@@ -1,13 +1,13 @@
 import { __ } from '@wordpress/i18n';
 
-const formatDisplayTime = (isoString) => {
-	if (!isoString) {
+const formatDisplayTime = ( isoString ) => {
+	if ( ! isoString ) {
 		return '';
 	}
-	return isoString.slice(11, 16);
+	return isoString.slice( 11, 16 );
 };
 
-export const DailySlotList = ({
+export const DailySlotList = ( {
 	slots,
 	selectedDate,
 	onSelectSlot,
@@ -16,12 +16,15 @@ export const DailySlotList = ({
 	error,
 	selectedStaffLabel = '',
 	showStaffLabel = true,
-}) => {
+} ) => {
 	if ( error ) {
 		return (
 			<div className="vkbm-slot-list vkbm-slot-list--alert">
-				<p className="vkbm-alert vkbm-alert__danger vkbm-alert--compact" role="alert">
-					{error}
+				<p
+					className="vkbm-alert vkbm-alert__danger vkbm-alert--compact"
+					role="alert"
+				>
+					{ error }
 				</p>
 			</div>
 		);
@@ -30,11 +33,14 @@ export const DailySlotList = ({
 	if ( ! selectedDate ) {
 		return (
 			<div className="vkbm-slot-list vkbm-slot-list--alert">
-				<p className="vkbm-alert vkbm-alert__info vkbm-alert--compact" role="status">
-					{__(
+				<p
+					className="vkbm-alert vkbm-alert__info vkbm-alert--compact"
+					role="status"
+				>
+					{ __(
 						'When you select a date from the calendar, reservation candidates will be displayed.',
 						'vk-booking-manager'
-					)}
+					) }
 				</p>
 			</div>
 		);
@@ -43,7 +49,7 @@ export const DailySlotList = ({
 	if ( isLoading ) {
 		return (
 			<div className="vkbm-slot-list vkbm-slot-list--placeholder">
-				{__('Loading empty slots...', 'vk-booking-manager')}
+				{ __( 'Loading empty slots…', 'vk-booking-manager' ) }
 			</div>
 		);
 	}
@@ -51,42 +57,44 @@ export const DailySlotList = ({
 	if ( ! slots?.length ) {
 		return (
 			<div className="vkbm-slot-list vkbm-slot-list--placeholder">
-				{__(
+				{ __(
 					'There are no available reservation times for the selected criteria.',
 					'vk-booking-manager'
-				)}
+				) }
 			</div>
 		);
 	}
 
 	return (
 		<div className="vkbm-slot-list">
-			{slots.map((slot) => (
+			{ slots.map( ( slot ) => (
 				<button
 					type="button"
-					key={slot.slot_id}
-					className={[
+					key={ slot.slot_id }
+					className={ [
 						'vkbm-slot-list__item',
 						selectedSlotId === slot.slot_id && 'is-selected',
 					]
-						.filter(Boolean)
-						.join(' ')}
-					onClick={() => onSelectSlot(slot)}
+						.filter( Boolean )
+						.join( ' ' ) }
+					onClick={ () => onSelectSlot( slot ) }
 				>
 					<div className="vkbm-slot-list__time">
-						{formatDisplayTime(slot.start_at)} -{' '}
-						{formatDisplayTime(slot.service_end_at || slot.end_at)}
+						{ formatDisplayTime( slot.start_at ) } -{ ' ' }
+						{ formatDisplayTime(
+							slot.service_end_at || slot.end_at
+						) }
 					</div>
-					{showStaffLabel && (
+					{ showStaffLabel && (
 						<div className="vkbm-slot-list__staff">
-							{slot.staff_label ||
+							{ slot.staff_label ||
 								slot.staff?.name ||
 								selectedStaffLabel ||
-								__('No preference', 'vk-booking-manager')}
+								__( 'No preference', 'vk-booking-manager' ) }
 						</div>
-					)}
+					) }
 				</button>
-			))}
+			) ) }
 		</div>
 	);
 };

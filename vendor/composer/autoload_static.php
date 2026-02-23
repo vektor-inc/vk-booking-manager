@@ -4,12 +4,13 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199
+class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
 {
     public static $files = array (
         '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
         'ec07570ca5a812141189b1fa81503674' => __DIR__ . '/..' . '/phpunit/phpunit/src/Framework/Assert/Functions.php',
         '38fbb71d514eee25044aa9d94851ee76' => __DIR__ . '/..' . '/wp-phpunit/wp-phpunit/__loaded.php',
+        'f6d4f6bcee7247df6b777884c3e22f98' => __DIR__ . '/..' . '/yahnis-elsts/plugin-update-checker/load-v5p6.php',
         '7d3b315c4f303f2fc14aca642a738e50' => __DIR__ . '/..' . '/yoast/phpunit-polyfills/phpunitpolyfills-autoload.php',
     );
 
@@ -729,7 +730,9 @@ class ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199
         'VKBookingManager\\Tests\\Common\\Helper_Currency_Symbol_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-helper-currency-symbol.php',
         'VKBookingManager\\Tests\\Common\\Helper_Phone_Normalization_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-helper-phone-normalization.php',
         'VKBookingManager\\Tests\\Frontend\\Reservation_Block_Rendering_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/class-reservation-block-rendering-test.php',
+        'VKBookingManager\\Tests\\Notifications\\Booking_Notification_Service_Test' => __DIR__ . '/../..' . '/tests/phpunit/notifications/test-booking-notification-service.php',
         'VKBookingManager\\Tests\\PostTypes\\Service_Menu_Group_Sort_Test' => __DIR__ . '/../..' . '/tests/phpunit/post-types/test-service-menu-group-sort.php',
+        'VKBookingManager\\Tests\\ProviderSettings\\Settings_Repository_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-repository.php',
         'VKBookingManager\\Tests\\ProviderSettings\\Settings_Sanitizer_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-sanitizer.php',
         'VKBookingManager\\Tests\\REST\\Auth_Form_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/rest/test-auth-form-controller.php',
     );
@@ -737,9 +740,9 @@ class ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit2ddeaeca3a51f4089f89096e5d245199::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInite905510a6fa7436d18ff998d5d9548d3::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInite905510a6fa7436d18ff998d5d9548d3::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInite905510a6fa7436d18ff998d5d9548d3::$classMap;
 
         }, null, ClassLoader::class);
     }

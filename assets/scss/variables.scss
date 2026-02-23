@@ -8,6 +8,7 @@
 	--vkbm--color--bg-primary: #ffffff;
 	--vkbm--color--bg-secondary: #f9fafb;
 	--vkbm--color--link: var(--vkbm--color--accent, #1d8fcb);
+	--vkbm--color--text-primary: var(--wp--preset--color--text-normal, #333);
 	--vkbm--color--text-secondary: #666666;
 
 	--vkbm--color--info-bg: #cff4fc;
@@ -37,5 +38,12 @@
 	--vkbm--spacing--md: 1.5rem;
 	--vkbm--spacing--sm: 1rem;
 	--vkbm--spacing--xs: 0.5rem;
+
+	--vkbm--font-size--xs: 0.75rem;
+	--vkbm--font-size--sm: 0.875rem;
+	--vkbm--font-size--md: 1rem;
+	--vkbm--font-size--lg: 1.25rem;
+	--vkbm--font-size--xl: 1.5rem;
+	--vkbm--font-size--xxl: 2rem;
 
 }

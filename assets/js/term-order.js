@@ -24,7 +24,9 @@
 		pendingSave: false,
 	};
 
-	const $status = $( '<span class="vkbm-term-order-status" aria-live="polite"></span>' );
+	const $status = $(
+		'<span class="vkbm-term-order-status" aria-live="polite"></span>'
+	);
 	const $tablenav = $( '.tablenav.top .actions.bulkactions' ).first();
 
 	if ( $tablenav.length ) {
@@ -72,7 +74,10 @@
 			.not( '.inline-edit-row, .no-items' )
 			.each( function ( index, row ) {
 				const $row = $( row );
-				const originalIndex = parseInt( $row.attr( 'data-original-index' ), 10 );
+				const originalIndex = parseInt(
+					$row.attr( 'data-original-index' ),
+					10
+				);
 				if ( originalIndex !== index ) {
 					$row.addClass( 'vkbm-term-order-row--dirty' );
 					dirtyRows += 1;
@@ -171,7 +176,7 @@
 			axis: 'y',
 			helper: fixHelper,
 			distance: 5,
-			update: function () {
+			update() {
 				const hasChanges = markDirtyRows();
 				if ( hasChanges ) {
 					queueSave();
@@ -183,4 +188,3 @@
 	captureInitialState();
 	initSortable();
 } )( window, document, jQuery );
-

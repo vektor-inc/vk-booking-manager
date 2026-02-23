@@ -42,7 +42,10 @@
 	};
 	const statusOptions = Array.isArray( config.statusOptions )
 		? config.statusOptions
-				.filter( ( option ) => option && 'object' === typeof option && option.value )
+				.filter(
+					( option ) =>
+						option && 'object' === typeof option && option.value
+				)
 				.map( ( option ) => ( {
 					value: String( option.value ),
 					label: option.label || option.value,
@@ -58,16 +61,26 @@
 		);
 	}
 	const statusLabelText = config.strings?.statusLabel || 'operational status';
-	const closedMessage = config.strings?.closedMessage || 'You cannot set the time zone in this status.';
-	const holidayRules = Array.isArray( config.holidayRules ) ? config.holidayRules : [];
+	const closedMessage =
+		config.strings?.closedMessage ||
+		'You cannot set the time zone in this status.';
+	const holidayRules = Array.isArray( config.holidayRules )
+		? config.holidayRules
+		: [];
 
 	let workingDays = normalizeDays( config.daysData || {} );
 	let defaultDays = normalizeDays( config.defaultDays || {} );
-	const initialYear = parseInt( config.initialYear, 10 ) || new Date().getFullYear();
+	const initialYear =
+		parseInt( config.initialYear, 10 ) || new Date().getFullYear();
 	const initialMonth = parseInt( config.initialMonth, 10 ) || 1;
-	let weekdayDefaults = ( config.weekdayDefaults && 'object' === typeof config.weekdayDefaults )
-		? config.weekdayDefaults
-		: buildWeekdayDefaultsFromDays( defaultDays, initialYear, initialMonth );
+	let weekdayDefaults =
+		config.weekdayDefaults && 'object' === typeof config.weekdayDefaults
+			? config.weekdayDefaults
+			: buildWeekdayDefaultsFromDays(
+					defaultDays,
+					initialYear,
+					initialMonth
+			  );
 
 	const weekdayLabels = {
 		sun: config.strings?.weekdayShort?.sun || 'Sun',
@@ -102,7 +115,10 @@
 			if ( Array.isArray( entry ) ) {
 				slotsCandidate = entry;
 			} else if ( entry && 'object' === typeof entry ) {
-				if ( 'string' === typeof entry.status && STATUS_KEYS.indexOf( entry.status ) !== -1 ) {
+				if (
+					'string' === typeof entry.status &&
+					STATUS_KEYS.indexOf( entry.status ) !== -1
+				) {
 					status = entry.status;
 				}
 
@@ -130,7 +146,9 @@
 		}
 
 		const trimmed = time.trim();
-		return /^([01][0-9]|2[0-3]):([0-5][0-9])$/.test( trimmed ) ? trimmed : '';
+		return /^([01][0-9]|2[0-3]):([0-5][0-9])$/.test( trimmed )
+			? trimmed
+			: '';
 	}
 
 	function normalizeSlotList( slots ) {
@@ -191,93 +209,109 @@
 			return [];
 		}
 
-	return slots.map( ( slot ) => ( {
-		start: sanitizeTime( slot.start || '' ),
-		end: sanitizeTime( slot.end || '' ),
-	} ) ).filter( ( slot ) => slot.start && slot.end && slot.end > slot.start );
-}
+		return slots
+			.map( ( slot ) => ( {
+				start: sanitizeTime( slot.start || '' ),
+				end: sanitizeTime( slot.end || '' ),
+			} ) )
+			.filter(
+				( slot ) => slot.start && slot.end && slot.end > slot.start
+			);
+	}
 
-function buildWeekdayDefaultsFromDays( days, year, month ) {
-	const map = {};
+	function buildWeekdayDefaultsFromDays( days, year, month ) {
+		const map = {};
 
-	if ( ! days || 'object' !== typeof days ) {
+		if ( ! days || 'object' !== typeof days ) {
+			return map;
+		}
+
+		Object.keys( days ).forEach( ( key ) => {
+			const day = parseInt( key, 10 );
+
+			if ( Number.isNaN( day ) ) {
+				return;
+			}
+
+			const entry = days[ key ] || {};
+			const weekdayKey = getWeekdayKey( year, month, day );
+
+			if ( ! weekdayKey || map[ weekdayKey ] ) {
+				return;
+			}
+
+			const status =
+				STATUS_KEYS.indexOf( entry.status ) !== -1
+					? entry.status
+					: STATUS.OPEN;
+			const slots = cloneSlots( entry.slots || [] );
+
+			map[ weekdayKey ] = {
+				status,
+				slots,
+			};
+		} );
+
 		return map;
 	}
 
-	Object.keys( days ).forEach( ( key ) => {
-		const day = parseInt( key, 10 );
+	function getDayData( dayKey ) {
+		const existing = workingDays[ dayKey ];
 
-		if ( Number.isNaN( day ) ) {
-			return;
+		if ( existing && 'object' === typeof existing ) {
+			return {
+				status: isValidStatus( existing.status )
+					? existing.status
+					: STATUS.OPEN,
+				slots: Array.isArray( existing.slots )
+					? existing.slots.slice( 0 )
+					: [],
+			};
 		}
 
-		const entry = days[ key ] || {};
-		const weekdayKey = getWeekdayKey( year, month, day );
-
-		if ( ! weekdayKey || map[ weekdayKey ] ) {
-			return;
-		}
-
-		const status = STATUS_KEYS.indexOf( entry.status ) !== -1 ? entry.status : STATUS.OPEN;
-		const slots = cloneSlots( entry.slots || [] );
-
-		map[ weekdayKey ] = {
-			status,
-			slots,
-		};
-	} );
-
-	return map;
-}
-
-function getDayData( dayKey ) {
-	const existing = workingDays[ dayKey ];
-
-	if ( existing && 'object' === typeof existing ) {
 		return {
-			status: isValidStatus( existing.status ) ? existing.status : STATUS.OPEN,
-			slots: Array.isArray( existing.slots ) ? existing.slots.slice( 0 ) : [],
-		};
-	}
-
-	return {
-		status: STATUS.OPEN,
-		slots: [],
-	};
-}
-
-function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
-	const weekdayKey = getWeekdayKey( year, month, day );
-	const base = weekdayDefaults[ weekdayKey ]
-		? {
-			status: STATUS_KEYS.indexOf( weekdayDefaults[ weekdayKey ].status ) !== -1
-				? weekdayDefaults[ weekdayKey ].status
-				: STATUS.OPEN,
-			slots: cloneSlots( weekdayDefaults[ weekdayKey ].slots || [] ),
-		}
-		: {
 			status: STATUS.OPEN,
 			slots: [],
 		};
-
-	const dayKey = ensureDayKey( day );
-
-	if ( holidayFlags[ dayKey ] ) {
-		return {
-			status: STATUS.REGULAR_HOLIDAY,
-			slots: [],
-		};
 	}
 
-	if ( base.status === STATUS.UNAVAILABLE ) {
-		return {
-			status: STATUS.UNAVAILABLE,
-			slots: [],
-		};
-	}
+	function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
+		const weekdayKey = getWeekdayKey( year, month, day );
+		const base = weekdayDefaults[ weekdayKey ]
+			? {
+					status:
+						STATUS_KEYS.indexOf(
+							weekdayDefaults[ weekdayKey ].status
+						) !== -1
+							? weekdayDefaults[ weekdayKey ].status
+							: STATUS.OPEN,
+					slots: cloneSlots(
+						weekdayDefaults[ weekdayKey ].slots || []
+					),
+			  }
+			: {
+					status: STATUS.OPEN,
+					slots: [],
+			  };
 
-	return base;
-}
+		const dayKey = ensureDayKey( day );
+
+		if ( holidayFlags[ dayKey ] ) {
+			return {
+				status: STATUS.REGULAR_HOLIDAY,
+				slots: [],
+			};
+		}
+
+		if ( base.status === STATUS.UNAVAILABLE ) {
+			return {
+				status: STATUS.UNAVAILABLE,
+				slots: [],
+			};
+		}
+
+		return base;
+	}
 
 	function renderStatusOptions( $select, selected ) {
 		$select.empty();
@@ -297,8 +331,8 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 			$select.append( $option );
 		} );
 
-		var matched = false;
-		for ( var i = 0; i < statusOptions.length; i++ ) {
+		let matched = false;
+		for ( let i = 0; i < statusOptions.length; i++ ) {
 			if ( statusOptions[ i ].value === selected ) {
 				matched = true;
 				break;
@@ -385,7 +419,10 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 
 			const nthList = nthRules[ weekdayKey ];
 
-			if ( Array.isArray( nthList ) && nthList.indexOf( occurrences[ weekdayKey ] ) !== -1 ) {
+			if (
+				Array.isArray( nthList ) &&
+				nthList.indexOf( occurrences[ weekdayKey ] ) !== -1
+			) {
 				holidays[ ensureDayKey( day ) ] = true;
 			}
 		}
@@ -410,32 +447,49 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 			const rowHtml = dayRowTemplate.replace( /__DAY__/g, dayKey );
 			const $row = $( rowHtml );
 			const weekday = getWeekdayLabel( year, month, day );
-			const dayLabel = `${ day }${ config.strings?.daySuffix || '' }${ weekday ? ' (' + weekday + ')' : '' }`;
-		const defaultTemplate = getDefaultTemplateForDay( year, month, day, holidayFlags );
-		const hasExisting = Object.prototype.hasOwnProperty.call( workingDays, dayKey );
-		let dayData = getDayData( dayKey );
-		let slots = Array.isArray( dayData.slots ) ? dayData.slots : [];
+			const dayLabel = `${ day }${ config.strings?.daySuffix || '' }${
+				weekday ? ' (' + weekday + ')' : ''
+			}`;
+			const defaultTemplate = getDefaultTemplateForDay(
+				year,
+				month,
+				day,
+				holidayFlags
+			);
+			const hasExisting = Object.prototype.hasOwnProperty.call(
+				workingDays,
+				dayKey
+			);
+			let dayData = getDayData( dayKey );
+			let slots = Array.isArray( dayData.slots ) ? dayData.slots : [];
 
-		if ( holidayFlags[ dayKey ] && dayData.status === STATUS.TEMPORARY_CLOSED ) {
-			dayData.status = STATUS.REGULAR_HOLIDAY;
-			slots = [];
-			workingDays[ dayKey ] = {
-				status: dayData.status,
-				slots: [],
-			};
-		}
+			if (
+				holidayFlags[ dayKey ] &&
+				dayData.status === STATUS.TEMPORARY_CLOSED
+			) {
+				dayData.status = STATUS.REGULAR_HOLIDAY;
+				slots = [];
+				workingDays[ dayKey ] = {
+					status: dayData.status,
+					slots: [],
+				};
+			}
 
-		if ( ! hasExisting ) {
-			dayData = {
-				status: defaultTemplate.status,
-				slots: cloneSlots( defaultTemplate.slots ),
+			if ( ! hasExisting ) {
+				dayData = {
+					status: defaultTemplate.status,
+					slots: cloneSlots( defaultTemplate.slots ),
 				};
 				workingDays[ dayKey ] = {
 					status: dayData.status,
 					slots: cloneSlots( dayData.slots ),
 				};
 				slots = dayData.slots;
-			} else if ( dayData.status === STATUS.OPEN && slots.length === 0 && defaultTemplate.slots.length ) {
+			} else if (
+				dayData.status === STATUS.OPEN &&
+				slots.length === 0 &&
+				defaultTemplate.slots.length
+			) {
 				dayData.slots = cloneSlots( defaultTemplate.slots );
 				slots = dayData.slots;
 				workingDays[ dayKey ] = {
@@ -458,7 +512,6 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 			const $message = $row.find( '.vkbm-shift-day-message' );
 			const $addButton = $row.find( '.vkbm-shift-add-slot' );
 
-
 			renderStatusOptions( $statusSelect, dayData.status );
 			$statusSelect.val( dayData.status );
 
@@ -473,7 +526,9 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 			} else {
 				$row.removeClass( 'is-status-closed' );
 				$message.text( '' );
-				$addButton.prop( 'disabled', false ).removeClass( 'is-disabled' );
+				$addButton
+					.prop( 'disabled', false )
+					.removeClass( 'is-disabled' );
 				$slotsContainer.empty();
 
 				let slotsToRender = cloneSlots( slots );
@@ -509,7 +564,9 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 	}
 
 	function addSlotElement( $container, dayKey, slot, index ) {
-		const slotIndex = Number.isInteger( index ) ? index : $container.children().length;
+		const slotIndex = Number.isInteger( index )
+			? index
+			: $container.children().length;
 		let html = slotTemplate.replace( /__INDEX__/g, String( slotIndex ) );
 		html = html.replace( /__DAY__/g, dayKey );
 
@@ -518,10 +575,18 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 
 		const $slot = $( html );
 
-		$slot.find( 'select[data-field="start_hour"]' ).val( slotStart.substring( 0, 2 ) );
-		$slot.find( 'select[data-field="start_minute"]' ).val( slotStart.substring( 3, 5 ) );
-		$slot.find( 'select[data-field="end_hour"]' ).val( slotEnd.substring( 0, 2 ) );
-		$slot.find( 'select[data-field="end_minute"]' ).val( slotEnd.substring( 3, 5 ) );
+		$slot
+			.find( 'select[data-field="start_hour"]' )
+			.val( slotStart.substring( 0, 2 ) );
+		$slot
+			.find( 'select[data-field="start_minute"]' )
+			.val( slotStart.substring( 3, 5 ) );
+		$slot
+			.find( 'select[data-field="end_hour"]' )
+			.val( slotEnd.substring( 0, 2 ) );
+		$slot
+			.find( 'select[data-field="end_minute"]' )
+			.val( slotEnd.substring( 3, 5 ) );
 
 		$container.append( $slot );
 	}
@@ -548,20 +613,33 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 		$daysTableBody.find( '.vkbm-shift-day-row' ).each( function () {
 			const $row = $( this );
 			const dayKey = ensureDayKey( $row.data( 'day' ) );
-			const statusValue = String( $row.find( '.vkbm-shift-day-status' ).val() || STATUS.OPEN );
-			const status = isValidStatus( statusValue ) ? statusValue : STATUS.OPEN;
+			const statusValue = String(
+				$row.find( '.vkbm-shift-day-status' ).val() || STATUS.OPEN
+			);
+			const status = isValidStatus( statusValue )
+				? statusValue
+				: STATUS.OPEN;
 			const slots = [];
 
 			if ( ! isClosedStatus( status ) ) {
 				$row.find( '.vkbm-shift-slot' ).each( function () {
 					const $slot = $( this );
-					const startHour = $slot.find( 'select[data-field="start_hour"]' ).val() || '';
-					const startMinute = $slot.find( 'select[data-field="start_minute"]' ).val() || '';
-					const endHour = $slot.find( 'select[data-field="end_hour"]' ).val() || '';
-					const endMinute = $slot.find( 'select[data-field="end_minute"]' ).val() || '';
+					const startHour =
+						$slot.find( 'select[data-field="start_hour"]' ).val() ||
+						'';
+					const startMinute =
+						$slot
+							.find( 'select[data-field="start_minute"]' )
+							.val() || '';
+					const endHour =
+						$slot.find( 'select[data-field="end_hour"]' ).val() ||
+						'';
+					const endMinute =
+						$slot.find( 'select[data-field="end_minute"]' ).val() ||
+						'';
 
-					const start = sanitizeTime( `${ startHour}:${ startMinute}` );
-					const end = sanitizeTime( `${ endHour}:${ endMinute}` );
+					const start = sanitizeTime( `${startHour}:${startMinute}` );
+					const end = sanitizeTime( `${endHour}:${endMinute}` );
 
 					if ( start && end && end > start ) {
 						slots.push( { start, end } );
@@ -592,7 +670,9 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 			return;
 		}
 
-		const $slotsContainer = $daysTableBody.find( `.vkbm-shift-day-row[data-day="${ dayKey }"] .vkbm-shift-day-slots` );
+		const $slotsContainer = $daysTableBody.find(
+			`.vkbm-shift-day-row[data-day="${ dayKey }"] .vkbm-shift-day-slots`
+		);
 		addSlotElement( $slotsContainer, dayKey, createEmptySlot() );
 		reindexSlots( $slotsContainer );
 		syncHiddenField();
@@ -602,13 +682,20 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 		const $slot = $button.closest( '.vkbm-shift-slot' );
 		const $row = $slot.closest( '.vkbm-shift-day-row' );
 		const dayKey = ensureDayKey( $row.data( 'day' ) );
-		const statusValue = String( $row.find( '.vkbm-shift-day-status' ).val() || STATUS.OPEN );
+		const statusValue = String(
+			$row.find( '.vkbm-shift-day-status' ).val() || STATUS.OPEN
+		);
 		const status = isValidStatus( statusValue ) ? statusValue : STATUS.OPEN;
 
 		$slot.remove();
 
-		const $slotsContainer = $daysTableBody.find( `.vkbm-shift-day-row[data-day="${ dayKey }"] .vkbm-shift-day-slots` );
-		if ( ! isClosedStatus( status ) && 0 === $slotsContainer.children().length ) {
+		const $slotsContainer = $daysTableBody.find(
+			`.vkbm-shift-day-row[data-day="${ dayKey }"] .vkbm-shift-day-slots`
+		);
+		if (
+			! isClosedStatus( status ) &&
+			0 === $slotsContainer.children().length
+		) {
 			addSlotElement( $slotsContainer, dayKey, createEmptySlot() );
 		}
 
@@ -634,17 +721,23 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 	}
 
 	// Event bindings.
-	$( document ).on( 'change', `${ selectors.yearSelector }, ${ selectors.monthSelector }`, () => {
-		workingDays = {};
-		renderDays();
-		syncHiddenField();
-	} );
+	$( document ).on(
+		'change',
+		`${ selectors.yearSelector }, ${ selectors.monthSelector }`,
+		() => {
+			workingDays = {};
+			renderDays();
+			syncHiddenField();
+		}
+	);
 
 	$( document ).on( 'click', '.vkbm-shift-add-slot', function ( event ) {
 		event.preventDefault();
 		const dayKey = ensureDayKey( $( this ).data( 'day' ) );
 		handleAddSlot( dayKey );
-		const $slotsContainer = $daysContainer.find( `.vkbm-shift-day-row[data-day="${ dayKey }"] .vkbm-shift-day-slots` );
+		const $slotsContainer = $daysContainer.find(
+			`.vkbm-shift-day-row[data-day="${ dayKey }"] .vkbm-shift-day-slots`
+		);
 		reindexSlots( $slotsContainer );
 		syncHiddenField();
 	} );
@@ -671,7 +764,10 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 
 		if ( isClosedStatus( status ) ) {
 			dayData.slots = [];
-		} else if ( ! Array.isArray( dayData.slots ) || 0 === dayData.slots.length ) {
+		} else if (
+			! Array.isArray( dayData.slots ) ||
+			0 === dayData.slots.length
+		) {
 			const defaultSlots = getDefaultSlots( dayKey );
 
 			if ( defaultSlots.length ) {
@@ -685,9 +781,13 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 		syncHiddenField();
 	} );
 
-	$( document ).on( 'change', '.vkbm-schedule-hour, .vkbm-schedule-minute', () => {
-		syncHiddenField();
-	} );
+	$( document ).on(
+		'change',
+		'.vkbm-schedule-hour, .vkbm-schedule-minute',
+		() => {
+			syncHiddenField();
+		}
+	);
 
 	$( '#post' ).on( 'submit', () => {
 		syncHiddenField();
@@ -718,28 +818,28 @@ function getDefaultTemplateForDay( year, month, day, holidayFlags ) {
 			_ajax_nonce: config.ajax.nonce,
 		};
 
-	$.post( config.ajax.url, payload )
-		.done( ( response ) => {
-			if ( ! response || ! response.success || ! response.data ) {
-				return;
-			}
+		$.post( config.ajax.url, payload )
+			.done( ( response ) => {
+				if ( ! response || ! response.success || ! response.data ) {
+					return;
+				}
 
-			const normalized = normalizeDays( response.data.days || {} );
-			workingDays = normalized;
-			defaultDays = normalized;
-			weekdayDefaults = buildWeekdayDefaultsFromDays(
-				normalized,
-				parseInt( $yearSelect.val(), 10 ) || initialYear,
-				parseInt( $monthSelect.val(), 10 ) || initialMonth
-			);
-			rebuildWorkingDays();
-			renderDays();
-			syncHiddenField();
-		} )
-		.fail( () => {
-			// noop
-		} );
+				const normalized = normalizeDays( response.data.days || {} );
+				workingDays = normalized;
+				defaultDays = normalized;
+				weekdayDefaults = buildWeekdayDefaultsFromDays(
+					normalized,
+					parseInt( $yearSelect.val(), 10 ) || initialYear,
+					parseInt( $monthSelect.val(), 10 ) || initialMonth
+				);
+				rebuildWorkingDays();
+				renderDays();
+				syncHiddenField();
+			} )
+			.fail( () => {
+				// noop
+			} );
 	}
 
 	$( init );
-}( jQuery ) );
+} )( jQuery );
