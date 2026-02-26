@@ -16,7 +16,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Assets\Common_Styles;
-use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -1518,7 +1517,7 @@ class Shift_Dashboard_Page {
 			);
 		}
 
-		$notification_service = new Booking_Notification_Service( new Settings_Repository(), new Customer_Name_Resolver() );
+		$notification_service = new Booking_Notification_Service( new Settings_Repository() );
 		$notification_service->handle_status_transition( $booking_id, $current_status, self::BOOKING_STATUS_CONFIRMED );
 
 		wp_send_json_success( array( 'status' => self::BOOKING_STATUS_CONFIRMED ) );

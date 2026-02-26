@@ -1587,7 +1587,6 @@ class Provider_Settings_Page {
 										</p>
 										<p><?php esc_html_e( 'Please check the following with the site administrator.', 'vk-booking-manager' ); ?></p>
 										<ul class="ul-disc">
-											<li><?php esc_html_e( "Is the domain where this system is running and the domain of the site administrator's email address the same?", 'vk-booking-manager' ); ?></li>
 											<li><?php esc_html_e( 'Is DKIM configured on the server side for the domain where this system is running?', 'vk-booking-manager' ); ?></li>
 										</ul>
 									</dd>

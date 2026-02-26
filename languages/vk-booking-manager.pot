@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: VK Booking Manager Pro (Beta) 0.2.0\n"
+"Project-Id-Version: VK Booking Manager Pro (Beta) 0.2.0.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-manager-pro\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-02-23T15:02:40+00:00\n"
+"POT-Creation-Date: 2026-02-25T16:26:26+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -52,7 +52,7 @@ msgstr ""
 
 #: src/admin/class-email-log-page.php:155
 #: src/admin/class-provider-settings-page.php:269
-#: src/admin/class-shift-dashboard-page.php:160
+#: src/admin/class-shift-dashboard-page.php:159
 #: src/shifts/class-shift-editor.php:483
 msgid "You do not have permission to access this page."
 msgstr ""
@@ -211,7 +211,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:543
 #: src/admin/class-setup-notices.php:198
-#: src/admin/class-shift-dashboard-page.php:1782
+#: src/admin/class-shift-dashboard-page.php:1781
 #: src/shifts/class-shift-editor.php:789
 msgid "Regular holiday"
 msgstr ""
@@ -404,9 +404,9 @@ msgid "hours ago"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:978
-#: src/bookings/class-booking-admin.php:317
-#: src/bookings/class-booking-admin.php:721
-#: src/bookings/class-booking-admin.php:860
+#: src/bookings/class-booking-admin.php:316
+#: src/bookings/class-booking-admin.php:720
+#: src/bookings/class-booking-admin.php:859
 msgid "Reservation status"
 msgstr ""
 
@@ -757,114 +757,110 @@ msgid "Please check the following with the site administrator."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1590
-msgid "Is the domain where this system is running and the domain of the site administrator's email address the same?"
-msgstr ""
-
-#: src/admin/class-provider-settings-page.php:1591
 msgid "Is DKIM configured on the server side for the domain where this system is running?"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1600
+#: src/admin/class-provider-settings-page.php:1599
 msgid "Save changes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1612
+#: src/admin/class-provider-settings-page.php:1611
 msgid "Weekly"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1613
+#: src/admin/class-provider-settings-page.php:1612
 msgid "1st"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1614
+#: src/admin/class-provider-settings-page.php:1613
 msgid "2nd"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1615
+#: src/admin/class-provider-settings-page.php:1614
 msgid "3rd"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1616
+#: src/admin/class-provider-settings-page.php:1615
 msgid "4th"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1617
+#: src/admin/class-provider-settings-page.php:1616
 msgid "Fifth"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1628
-#: src/admin/class-provider-settings-page.php:1645
+#: src/admin/class-provider-settings-page.php:1627
+#: src/admin/class-provider-settings-page.php:1644
 #: src/provider-settings/class-settings-sanitizer.php:657
 #: src/resources/class-resource-schedule-meta-box.php:62
 msgid "Monday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1629
-#: src/admin/class-provider-settings-page.php:1646
+#: src/admin/class-provider-settings-page.php:1628
+#: src/admin/class-provider-settings-page.php:1645
 #: src/provider-settings/class-settings-sanitizer.php:658
 #: src/resources/class-resource-schedule-meta-box.php:63
 msgid "Tuesday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1630
-#: src/admin/class-provider-settings-page.php:1647
+#: src/admin/class-provider-settings-page.php:1629
+#: src/admin/class-provider-settings-page.php:1646
 #: src/provider-settings/class-settings-sanitizer.php:659
 #: src/resources/class-resource-schedule-meta-box.php:64
 msgid "Wednesday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1631
-#: src/admin/class-provider-settings-page.php:1648
+#: src/admin/class-provider-settings-page.php:1630
+#: src/admin/class-provider-settings-page.php:1647
 #: src/provider-settings/class-settings-sanitizer.php:660
 #: src/resources/class-resource-schedule-meta-box.php:65
 msgid "Thursday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1632
-#: src/admin/class-provider-settings-page.php:1649
+#: src/admin/class-provider-settings-page.php:1631
+#: src/admin/class-provider-settings-page.php:1648
 #: src/provider-settings/class-settings-sanitizer.php:661
 #: src/resources/class-resource-schedule-meta-box.php:66
 msgid "Friday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1633
-#: src/admin/class-provider-settings-page.php:1650
+#: src/admin/class-provider-settings-page.php:1632
+#: src/admin/class-provider-settings-page.php:1649
 #: src/provider-settings/class-settings-sanitizer.php:662
 #: src/resources/class-resource-schedule-meta-box.php:67
 msgid "Saturday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1634
-#: src/admin/class-provider-settings-page.php:1651
+#: src/admin/class-provider-settings-page.php:1633
+#: src/admin/class-provider-settings-page.php:1650
 #: src/provider-settings/class-settings-sanitizer.php:663
 #: src/resources/class-resource-schedule-meta-box.php:68
 msgid "Sunday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1652
+#: src/admin/class-provider-settings-page.php:1651
 #: src/provider-settings/class-settings-sanitizer.php:664
 #: src/resources/class-resource-schedule-meta-box.php:69
 msgid "Holiday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1653
+#: src/admin/class-provider-settings-page.php:1652
 #: src/provider-settings/class-settings-sanitizer.php:665
 #: src/resources/class-resource-schedule-meta-box.php:70
 msgid "The day before a public holiday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2079
+#: src/admin/class-provider-settings-page.php:2078
 msgid "Start time (hour) of basic business hours"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2086
-#: src/admin/class-provider-settings-page.php:2106
-#: src/admin/class-provider-settings-page.php:2128
-#: src/admin/class-provider-settings-page.php:2148
-#: src/admin/class-provider-settings-page.php:2229
-#: src/admin/class-provider-settings-page.php:2256
-#: src/admin/class-provider-settings-page.php:2285
-#: src/admin/class-provider-settings-page.php:2312
+#: src/admin/class-provider-settings-page.php:2085
+#: src/admin/class-provider-settings-page.php:2105
+#: src/admin/class-provider-settings-page.php:2127
+#: src/admin/class-provider-settings-page.php:2147
+#: src/admin/class-provider-settings-page.php:2228
+#: src/admin/class-provider-settings-page.php:2255
+#: src/admin/class-provider-settings-page.php:2284
+#: src/admin/class-provider-settings-page.php:2311
 #: src/resources/class-resource-schedule-meta-box.php:221
 #: src/resources/class-resource-schedule-meta-box.php:242
 #: src/resources/class-resource-schedule-meta-box.php:265
@@ -872,50 +868,50 @@ msgstr ""
 msgid "00"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2099
+#: src/admin/class-provider-settings-page.php:2098
 msgid "Start time of basic business hours (minutes)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2121
+#: src/admin/class-provider-settings-page.php:2120
 msgid "End time (hour) of basic business hours"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2141
+#: src/admin/class-provider-settings-page.php:2140
 msgid "End time of basic business hours (minutes)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2161
-#: src/admin/class-provider-settings-page.php:2340
-#: src/admin/class-provider-settings-page.php:2463
-#: src/bookings/class-booking-admin.php:527
-#: src/bookings/class-booking-admin.php:542
+#: src/admin/class-provider-settings-page.php:2160
+#: src/admin/class-provider-settings-page.php:2339
+#: src/admin/class-provider-settings-page.php:2462
+#: src/bookings/class-booking-admin.php:526
+#: src/bookings/class-booking-admin.php:541
 #: src/resources/class-resource-schedule-meta-box.php:299
 #: src/shifts/class-shift-editor.php:231
 msgid "delete"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2218
+#: src/admin/class-provider-settings-page.php:2217
 msgid "Start time (hour) of %s"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2245
+#: src/admin/class-provider-settings-page.php:2244
 msgid "Start time of %s (minutes)"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2274
+#: src/admin/class-provider-settings-page.php:2273
 msgid "End time (hour) of %s"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2301
+#: src/admin/class-provider-settings-page.php:2300
 msgid "End time of %s (minutes)"
 msgstr ""
 
 #. translators: %s: day label
-#: src/admin/class-provider-settings-page.php:2333
+#: src/admin/class-provider-settings-page.php:2332
 msgid "Remove time slot for %s"
 msgstr ""
 
@@ -963,7 +959,7 @@ msgstr ""
 
 #: src/admin/class-service-menu-editor.php:216
 #: src/blocks/class-menu-loop-block.php:897
-#: src/bookings/class-booking-admin.php:329
+#: src/bookings/class-booking-admin.php:328
 #: src/post-types/class-service-menu-post-type.php:158
 #: src/post-types/class-service-menu-post-type.php:549
 msgid "Reservation date"
@@ -1089,35 +1085,35 @@ msgstr ""
 msgid "Register shift"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:110
-#: src/admin/class-shift-dashboard-page.php:240
+#: src/admin/class-shift-dashboard-page.php:109
+#: src/admin/class-shift-dashboard-page.php:239
 #: src/blocks/reservation/components/reservation-header-nav.js:27
 msgid "Shift/reservation table"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:111
+#: src/admin/class-shift-dashboard-page.php:110
 msgid "BM shift/reservation"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:147
-#: src/admin/class-shift-dashboard-page.php:1371
-#: src/admin/class-shift-dashboard-page.php:1747
-#: src/bookings/class-booking-admin.php:1535
-#: src/notifications/class-booking-notification-service.php:599
+#: src/admin/class-shift-dashboard-page.php:146
+#: src/admin/class-shift-dashboard-page.php:1370
+#: src/admin/class-shift-dashboard-page.php:1746
+#: src/bookings/class-booking-admin.php:1534
+#: src/notifications/class-booking-notification-service.php:715
 msgid "Confirmed"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:148
+#: src/admin/class-shift-dashboard-page.php:147
 msgid "Confirmation processing in progress..."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:149
+#: src/admin/class-shift-dashboard-page.php:148
 msgid "Confirmation failed. Please try again later."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:228
-#: src/admin/class-shift-dashboard-page.php:281
-#: src/admin/class-shift-dashboard-page.php:467
+#: src/admin/class-shift-dashboard-page.php:227
+#: src/admin/class-shift-dashboard-page.php:280
+#: src/admin/class-shift-dashboard-page.php:466
 #: src/admin/class-user-profile-fields.php:99
 #: src/auth/class-auth-shortcodes.php:1862
 #: src/shifts/class-shift-editor.php:146
@@ -1127,39 +1123,39 @@ msgstr ""
 msgid "Mon"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:229
+#: src/admin/class-shift-dashboard-page.php:228
 #: src/shifts/class-shift-editor.php:376
 #: src/blocks/reservation/booking-ui/calendar-grid.js:7
 msgid "Tue"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:230
+#: src/admin/class-shift-dashboard-page.php:229
 #: src/shifts/class-shift-editor.php:377
 #: src/blocks/reservation/booking-ui/calendar-grid.js:8
 msgid "Wed"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:231
+#: src/admin/class-shift-dashboard-page.php:230
 #: src/shifts/class-shift-editor.php:378
 #: src/blocks/reservation/booking-ui/calendar-grid.js:9
 msgid "Thu"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:232
+#: src/admin/class-shift-dashboard-page.php:231
 #: src/shifts/class-shift-editor.php:379
 #: src/blocks/reservation/booking-ui/calendar-grid.js:10
 msgid "Fri"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:233
+#: src/admin/class-shift-dashboard-page.php:232
 #: src/shifts/class-shift-editor.php:380
 #: src/blocks/reservation/booking-ui/calendar-grid.js:11
 msgid "Sat"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:234
-#: src/admin/class-shift-dashboard-page.php:273
-#: src/admin/class-shift-dashboard-page.php:459
+#: src/admin/class-shift-dashboard-page.php:233
+#: src/admin/class-shift-dashboard-page.php:272
+#: src/admin/class-shift-dashboard-page.php:458
 #: src/admin/class-user-profile-fields.php:110
 #: src/auth/class-auth-shortcodes.php:1872
 #: src/shifts/class-shift-editor.php:369
@@ -1168,100 +1164,100 @@ msgstr ""
 msgid "Sun"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:243
+#: src/admin/class-shift-dashboard-page.php:242
+#: src/bookings/class-booking-admin.php:125
 #: src/bookings/class-booking-admin.php:126
-#: src/bookings/class-booking-admin.php:127
 msgid "Reservation Page"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:259
+#: src/admin/class-shift-dashboard-page.php:258
 msgid "Previous day"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:262
+#: src/admin/class-shift-dashboard-page.php:261
 msgid "Next day"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:294
-#: src/bookings/class-booking-admin.php:335
+#: src/admin/class-shift-dashboard-page.php:293
+#: src/bookings/class-booking-admin.php:334
 #: src/shifts/class-shift-editor.php:164
 msgid "time"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:333
+#: src/admin/class-shift-dashboard-page.php:332
 msgid "Shift not set."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:431
+#: src/admin/class-shift-dashboard-page.php:430
 #: src/blocks/reservation/booking-ui/calendar-grid.js:133
 msgid "previous month"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:442
+#: src/admin/class-shift-dashboard-page.php:441
 #: src/blocks/reservation/booking-ui/calendar-grid.js:152
 msgid "next month"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:806
-#: src/bookings/class-booking-confirmation-controller.php:712
+#: src/admin/class-shift-dashboard-page.php:805
+#: src/bookings/class-booking-confirmation-controller.php:702
 #: src/post-types/class-booking-post-type.php:44
 #: src/post-types/class-booking-post-type.php:45
 #: src/post-types/class-booking-post-type.php:47
 msgid "Reservation"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1138
+#: src/admin/class-shift-dashboard-page.php:1137
 msgid "Person in charge undecided"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1141
-#: src/admin/class-shift-dashboard-page.php:1285
+#: src/admin/class-shift-dashboard-page.php:1140
+#: src/admin/class-shift-dashboard-page.php:1284
 msgid "Name not entered"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1286
+#: src/admin/class-shift-dashboard-page.php:1285
 msgid "Person in charge not set"
 msgstr ""
 
 #. translators: 1: Customer name, 2: Staff name
-#: src/admin/class-shift-dashboard-page.php:1297
-#: src/admin/class-shift-dashboard-page.php:1345
+#: src/admin/class-shift-dashboard-page.php:1296
+#: src/admin/class-shift-dashboard-page.php:1344
 msgid "%1$s / %2$s"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1322
+#: src/admin/class-shift-dashboard-page.php:1321
 msgid "Pending booking notifications"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1324
+#: src/admin/class-shift-dashboard-page.php:1323
 msgid "Notice"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1328
+#: src/admin/class-shift-dashboard-page.php:1327
 msgid "I have an unconfirmed \"tentative reservation\". Please check and confirm the contents."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1330
+#: src/admin/class-shift-dashboard-page.php:1329
 msgid "There are currently no pending reservations."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1362
+#: src/admin/class-shift-dashboard-page.php:1361
 msgid "Detail"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1429
+#: src/admin/class-shift-dashboard-page.php:1428
 msgid "Certain"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1431
+#: src/admin/class-shift-dashboard-page.php:1430
 msgid "Tentative"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1476
+#: src/admin/class-shift-dashboard-page.php:1475
 #: src/blocks/class-menu-loop-block.php:1142
 #: src/blocks/class-menu-search-block.php:514
 #: src/blocks/class-menu-search-block.php:547
-#: src/notifications/class-booking-notification-service.php:521
+#: src/notifications/class-booking-notification-service.php:634
 #: src/blocks/reservation/app.js:226
 #: src/blocks/reservation/app.js:227
 #: src/blocks/reservation/app.js:331
@@ -1273,73 +1269,73 @@ msgstr ""
 msgid "Staff"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1487
+#: src/admin/class-shift-dashboard-page.php:1486
 #: src/shifts/class-shift-editor.php:417
 msgid "You don't have permission."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1495
+#: src/admin/class-shift-dashboard-page.php:1494
 #: src/bookings/class-my-bookings-controller.php:266
 #: src/post-types/class-booking-post-type.php:54
 msgid "No reservations found."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1503
+#: src/admin/class-shift-dashboard-page.php:1502
 msgid "The target reservation could not be retrieved."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1516
+#: src/admin/class-shift-dashboard-page.php:1515
 msgid "Your reservation could not be updated."
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1611
-#: src/admin/class-shift-dashboard-page.php:1648
+#: src/admin/class-shift-dashboard-page.php:1610
+#: src/admin/class-shift-dashboard-page.php:1647
 msgid "Temporary work"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1613
+#: src/admin/class-shift-dashboard-page.php:1612
 msgid "Fixed holidays available"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1615
-#: src/admin/class-shift-dashboard-page.php:1784
+#: src/admin/class-shift-dashboard-page.php:1614
+#: src/admin/class-shift-dashboard-page.php:1783
 #: src/shifts/class-shift-editor.php:797
 #: src/blocks/reservation/booking-ui/calendar-grid.js:113
 msgid "Temporary closure"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1617
-#: src/admin/class-shift-dashboard-page.php:1786
+#: src/admin/class-shift-dashboard-page.php:1616
+#: src/admin/class-shift-dashboard-page.php:1785
 #: src/shifts/class-shift-editor.php:785
 msgid "Off"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1619
+#: src/admin/class-shift-dashboard-page.php:1618
 msgid "Work"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1641
+#: src/admin/class-shift-dashboard-page.php:1640
 msgid "Shift not set"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1654
+#: src/admin/class-shift-dashboard-page.php:1653
 msgid "Work schedule"
 msgstr ""
 
 #. translators: %1$s: Provider name, %2$s: Booking status label.
-#: src/admin/class-shift-dashboard-page.php:1748
-#: src/bookings/class-booking-admin.php:1536
-#: src/notifications/class-booking-notification-service.php:590
-#: src/notifications/class-booking-notification-service.php:591
-#: src/notifications/class-booking-notification-service.php:631
+#: src/admin/class-shift-dashboard-page.php:1747
+#: src/bookings/class-booking-admin.php:1535
+#: src/notifications/class-booking-notification-service.php:706
+#: src/notifications/class-booking-notification-service.php:707
+#: src/notifications/class-booking-notification-service.php:747
 #: src/blocks/reservation/app.js:1546
 msgid "Pending"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1749
-#: src/bookings/class-booking-admin.php:1537
-#: src/notifications/class-booking-notification-service.php:623
-#: src/notifications/class-booking-notification-service.php:732
+#: src/admin/class-shift-dashboard-page.php:1748
+#: src/bookings/class-booking-admin.php:1536
+#: src/notifications/class-booking-notification-service.php:739
+#: src/notifications/class-booking-notification-service.php:848
 #: src/blocks/reservation/app.js:1554
 #: src/blocks/reservation/app.js:1602
 #: src/blocks/reservation/booking-confirm-app.js:1393
@@ -1347,12 +1343,12 @@ msgstr ""
 msgid "Cancelled"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1750
-#: src/bookings/class-booking-admin.php:1538
+#: src/admin/class-shift-dashboard-page.php:1749
+#: src/bookings/class-booking-admin.php:1537
 msgid "No-show"
 msgstr ""
 
-#: src/admin/class-shift-dashboard-page.php:1788
+#: src/admin/class-shift-dashboard-page.php:1787
 msgid "Closed"
 msgstr ""
 
@@ -1384,7 +1380,7 @@ msgstr ""
 
 #: src/admin/class-user-profile-fields.php:69
 #: src/auth/class-auth-shortcodes.php:763
-#: src/bookings/class-booking-admin.php:512
+#: src/bookings/class-booking-admin.php:511
 msgid "telephone number"
 msgstr ""
 
@@ -1536,7 +1532,7 @@ msgid "Save"
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:741
-#: src/bookings/class-booking-admin.php:518
+#: src/bookings/class-booking-admin.php:517
 msgid "email address"
 msgstr ""
 
@@ -1553,7 +1549,7 @@ msgid "New password (confirm)"
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:838
-#: src/bookings/class-booking-confirmation-controller.php:158
+#: src/bookings/class-booking-confirmation-controller.php:148
 #: src/bookings/class-my-bookings-controller.php:256
 #: src/rest/class-current-user-controller.php:86
 msgid "Login required."
@@ -1609,7 +1605,7 @@ msgid "Please enter your username."
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:1139
-#: src/bookings/class-booking-confirmation-controller.php:331
+#: src/bookings/class-booking-confirmation-controller.php:321
 #: src/blocks/reservation/booking-confirm-app.js:875
 msgid "You must agree to the terms of use."
 msgstr ""
@@ -1776,7 +1772,7 @@ msgstr ""
 #: src/availability/class-availability-service.php:522
 #: src/bookings/class-booking-draft-controller.php:170
 #: src/bookings/class-my-bookings-controller.php:187
-#: src/notifications/class-booking-notification-service.php:515
+#: src/notifications/class-booking-notification-service.php:628
 #: src/blocks/reservation/app.js:1091
 #: src/blocks/reservation/app.js:1297
 #: src/blocks/reservation/app.js:1314
@@ -1801,7 +1797,7 @@ msgstr ""
 
 #. translators: %d: duration in minutes
 #: src/blocks/class-menu-loop-block.php:832
-#: src/notifications/class-booking-notification-service.php:922
+#: src/notifications/class-booking-notification-service.php:1038
 msgid "%d minutes"
 msgstr ""
 
@@ -1854,55 +1850,55 @@ msgstr ""
 msgid "all"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:216
+#: src/bookings/class-booking-admin.php:215
 msgid "Reservation details"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:289
+#: src/bookings/class-booking-admin.php:288
 msgid "Reserver"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:310
+#: src/bookings/class-booking-admin.php:309
 msgid "List of reservations made by this person"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:338
+#: src/bookings/class-booking-admin.php:337
 msgid "start"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:343
+#: src/bookings/class-booking-admin.php:342
 msgid "end"
 msgstr ""
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:355
+#: src/bookings/class-booking-admin.php:354
 msgid "Person in charge%s"
 msgstr ""
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:368
+#: src/bookings/class-booking-admin.php:367
 msgid "Select %s"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:382
+#: src/bookings/class-booking-admin.php:381
 msgid "Nomination category"
 msgstr ""
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:390
+#: src/bookings/class-booking-admin.php:389
 msgid "Reservation of %s nomination by customer"
 msgstr ""
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:400
+#: src/bookings/class-booking-admin.php:399
 msgid "Checked when a customer makes a reservation by naming %s."
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:405
+#: src/bookings/class-booking-admin.php:404
 msgid "Prices are based on the \"basic service fee\", \"Nomination fee\", and \"total basic fee\" saved at the time of reservation. Please enter the \"total billing amount\" if necessary."
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:410
+#: src/bookings/class-booking-admin.php:409
 #: src/staff/class-staff-editor-pro.php:69
 #: src/staff/class-staff-editor-pro.php:162
 #: src/staff/class-staff-editor.php:69
@@ -1912,8 +1908,8 @@ msgstr ""
 msgid "Nomination fee"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:425
-#: src/bookings/class-booking-admin.php:719
+#: src/bookings/class-booking-admin.php:424
+#: src/bookings/class-booking-admin.php:718
 #: src/blocks/reservation/booking-confirm-app.js:1494
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:56
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:116
@@ -1921,203 +1917,203 @@ msgstr ""
 msgid "Menu"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:430
+#: src/bookings/class-booking-admin.php:429
 msgid "Change menu (exception)"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:433
+#: src/bookings/class-booking-admin.php:432
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:122
 msgid "Select menu"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:441
+#: src/bookings/class-booking-admin.php:440
 msgid "In principle, the menu selected at the time of reservation will not be changed. Please check and select only if you need to make changes (the price saved at the time of booking will not be changed)."
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:446
+#: src/bookings/class-booking-admin.php:445
 #: src/blocks/reservation/app.js:898
 #: src/blocks/reservation/booking-confirm-app.js:1504
 msgid "Service basic fee"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:455
+#: src/bookings/class-booking-admin.php:454
 msgid "This is the basic service charge at the time of reservation. (Cannot be edited)"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:460
+#: src/bookings/class-booking-admin.php:459
 #: src/blocks/reservation/app.js:907
 #: src/blocks/reservation/booking-confirm-app.js:1528
 #: src/blocks/reservation/components/booking-summary-items.js:47
 msgid "Total basic fee"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:469
+#: src/bookings/class-booking-admin.php:468
 msgid "This is the total of the basic service fee + nomination fee at the time of reservation. (Cannot be edited)"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:474
-#: src/bookings/class-booking-admin.php:722
+#: src/bookings/class-booking-admin.php:473
+#: src/bookings/class-booking-admin.php:721
 msgid "Total billing amount"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:492
+#: src/bookings/class-booking-admin.php:491
 msgid "If there are any service changes or additional charges, please enter the final amount charged, including the nomination fee. If not entered, the total basic fee will be applied."
 msgstr ""
 
 #. translators: %s: price amount
-#: src/bookings/class-booking-admin.php:498
+#: src/bookings/class-booking-admin.php:497
 msgid "Current applicable amount (reference): %s"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:506
+#: src/bookings/class-booking-admin.php:505
 msgid "customer name"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:524
+#: src/bookings/class-booking-admin.php:523
 msgid "Treatment image"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:549
+#: src/bookings/class-booking-admin.php:548
 msgid "enlarge image"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:553
+#: src/bookings/class-booking-admin.php:552
 msgid "Previous"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:556
+#: src/bookings/class-booking-admin.php:555
 msgid "to the next"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:559
+#: src/bookings/class-booking-admin.php:558
 msgid "close"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:566
+#: src/bookings/class-booking-admin.php:565
 msgid "addition"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:568
+#: src/bookings/class-booking-admin.php:567
 msgid "You can register multiple images."
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:568
+#: src/bookings/class-booking-admin.php:567
 msgid "Images uploaded from here will be automatically converted and resized to jpg format."
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:573
+#: src/bookings/class-booking-admin.php:572
 msgid "memo"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:579
+#: src/bookings/class-booking-admin.php:578
 #: src/blocks/reservation/booking-confirm-app.js:1675
 msgid "Management memo"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:717
+#: src/bookings/class-booking-admin.php:716
 msgid "Reservation title"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:718
+#: src/bookings/class-booking-admin.php:717
 #: src/blocks/reservation/booking-confirm-app.js:1386
 #: src/blocks/reservation/booking-confirm-app.js:1474
 msgid "Reservation date and time"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:720
+#: src/bookings/class-booking-admin.php:719
 msgid "In charge"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:745
-#: src/bookings/class-booking-admin.php:755
-#: src/bookings/class-booking-admin.php:764
-#: src/notifications/class-booking-notification-service.php:535
-#: src/notifications/class-booking-notification-service.php:776
-#: src/notifications/class-booking-notification-service.php:807
-#: src/notifications/class-booking-notification-service.php:877
+#: src/bookings/class-booking-admin.php:744
+#: src/bookings/class-booking-admin.php:754
+#: src/bookings/class-booking-admin.php:763
+#: src/notifications/class-booking-notification-service.php:650
+#: src/notifications/class-booking-notification-service.php:892
+#: src/notifications/class-booking-notification-service.php:923
+#: src/notifications/class-booking-notification-service.php:993
 msgid "Not set"
 msgstr ""
 
-#: src/bookings/class-booking-admin.php:753
-#: src/bookings/class-booking-admin.php:762
-#: src/bookings/class-booking-admin.php:771
+#: src/bookings/class-booking-admin.php:752
+#: src/bookings/class-booking-admin.php:761
+#: src/bookings/class-booking-admin.php:770
 msgid "Not clear"
 msgstr ""
 
 #. translators: 1: resource label, 2: resource name
-#: src/bookings/class-booking-admin.php:1285
+#: src/bookings/class-booking-admin.php:1284
 msgid "The selected %1$s (%2$s) cannot be specified because there is another reservation in the same time slot."
 msgstr ""
 
 #. translators: %s: resource label
-#: src/bookings/class-booking-admin.php:1292
+#: src/bookings/class-booking-admin.php:1291
 msgid "The selected %1$s cannot be specified because there is another reservation in the same time slot."
 msgstr ""
 
 #. translators: 1: resource label, 2: resource name
-#: src/bookings/class-booking-admin.php:1301
+#: src/bookings/class-booking-admin.php:1300
 msgid "This %1$s (%2$s) has another reservation for the same time slot."
 msgstr ""
 
 #. translators: %s: resource label
-#: src/bookings/class-booking-admin.php:1308
+#: src/bookings/class-booking-admin.php:1307
 msgid "This %1$s has other reservations for the same time slot."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:165
+#: src/bookings/class-booking-confirmation-controller.php:155
 msgid "Temporary reservation data token not found."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:172
+#: src/bookings/class-booking-confirmation-controller.php:162
 #: src/bookings/class-booking-draft-controller.php:238
 #: src/bookings/class-booking-draft-controller.php:301
 msgid "Temporary reservation data not found."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:178
-#: src/bookings/class-booking-confirmation-controller.php:201
+#: src/bookings/class-booking-confirmation-controller.php:168
+#: src/bookings/class-booking-confirmation-controller.php:191
 msgid "Temporary reservation data contents are incomplete."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:187
+#: src/bookings/class-booking-confirmation-controller.php:177
 #: src/bookings/class-booking-draft-controller.php:246
 #: src/bookings/class-booking-draft-controller.php:309
 msgid "You do not have permission to access this temporary reservation data."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:210
+#: src/bookings/class-booking-confirmation-controller.php:200
 msgid "The selected date cannot be reserved. Please choose another date."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:248
-#: src/bookings/class-booking-confirmation-controller.php:901
+#: src/bookings/class-booking-confirmation-controller.php:238
+#: src/bookings/class-booking-confirmation-controller.php:891
 msgid "The selected staff member is no longer available."
 msgstr ""
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-confirmation-controller.php:259
+#: src/bookings/class-booking-confirmation-controller.php:249
 msgid "Could not assign person %s. Please try a different frame."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:323
+#: src/bookings/class-booking-confirmation-controller.php:313
 #: src/blocks/reservation/booking-confirm-app.js:865
 msgid "You must agree to the cancellation policy."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:339
-#: src/bookings/class-booking-confirmation-controller.php:346
+#: src/bookings/class-booking-confirmation-controller.php:329
+#: src/bookings/class-booking-confirmation-controller.php:336
 #: src/blocks/reservation/booking-confirm-app.js:924
 #: src/blocks/reservation/booking-confirm-app.js:978
 msgid "A reservation for the same date and time already exists. Please change the date and time."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:849
-#: src/bookings/class-booking-confirmation-controller.php:864
+#: src/bookings/class-booking-confirmation-controller.php:839
+#: src/bookings/class-booking-confirmation-controller.php:854
 #: src/bookings/class-booking-draft-controller.php:158
 msgid "Reservation slot information is incorrect."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:891
+#: src/bookings/class-booking-confirmation-controller.php:881
 msgid "The selected slot is no longer available. Please choose another slot."
 msgstr ""
 
@@ -2159,200 +2155,200 @@ msgstr ""
 msgid "Salon Owner"
 msgstr ""
 
-#: src/class-plugin.php:590
+#: src/class-plugin.php:687
 #: src/rest/class-provider-settings-controller.php:154
 msgid "Default Staff"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:274
+#: src/notifications/class-booking-notification-service.php:266
 msgid "Every 15 Minutes"
 msgstr ""
 
 #. translators: %1$s: Provider name, %2$d: Hours before reservation.
-#: src/notifications/class-booking-notification-service.php:439
+#: src/notifications/class-booking-notification-service.php:436
 msgid "[%1$s] Reservation reminder (%2$d hours before)"
 msgstr ""
 
 #. translators: %d: Hours before reservation.
-#: src/notifications/class-booking-notification-service.php:445
+#: src/notifications/class-booking-notification-service.php:442
 msgid "This is a reminder for your reservation in %d hours."
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:536
+#: src/notifications/class-booking-notification-service.php:651
 msgid "TBD"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:540
+#: src/notifications/class-booking-notification-service.php:655
 msgid "Customer"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:543
+#: src/notifications/class-booking-notification-service.php:659
 msgid "(none)"
 msgstr ""
 
 #. translators: %1$s: Provider name, %2$s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:590
+#: src/notifications/class-booking-notification-service.php:706
 msgid "[ %1$s ][ %2$s ] A new reservation has been made."
 msgstr ""
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:598
+#: src/notifications/class-booking-notification-service.php:714
 msgid "[ %s ] Reservation confirmed"
 msgstr ""
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:606
+#: src/notifications/class-booking-notification-service.php:722
 msgid "[ %s ] Your reservation has been confirmed"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:607
+#: src/notifications/class-booking-notification-service.php:723
 msgid "Your reservation has been confirmed."
 msgstr ""
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:614
+#: src/notifications/class-booking-notification-service.php:730
 msgid "[ %s ] Your reservation has been canceled"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:615
-#: src/notifications/class-booking-notification-service.php:735
+#: src/notifications/class-booking-notification-service.php:731
+#: src/notifications/class-booking-notification-service.php:851
 msgid "Your reservation has been cancelled."
 msgstr ""
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:622
+#: src/notifications/class-booking-notification-service.php:738
 msgid "[ %s ] Reservation canceled"
 msgstr ""
 
 #. translators: %1$s: Provider name, %2$s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:631
+#: src/notifications/class-booking-notification-service.php:747
 msgid "[ %1$s ][ %2$s ] Your reservation has been accepted."
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:632
+#: src/notifications/class-booking-notification-service.php:748
 msgid "We have tentatively accepted your reservation."
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:646
+#: src/notifications/class-booking-notification-service.php:762
 msgid "--- Reservation information ---"
 msgstr ""
 
 #. translators: %d: Booking ID.
-#: src/notifications/class-booking-notification-service.php:648
+#: src/notifications/class-booking-notification-service.php:764
 msgid "Reservation number: #%d"
 msgstr ""
 
 #. translators: %s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:651
+#: src/notifications/class-booking-notification-service.php:767
 msgid "Status: %s"
 msgstr ""
 
 #. translators: %s: Menu title.
-#: src/notifications/class-booking-notification-service.php:654
+#: src/notifications/class-booking-notification-service.php:770
 msgid "Menu: %s"
 msgstr ""
 
 #. translators: 1: Resource label, 2: Staff name.
-#: src/notifications/class-booking-notification-service.php:656
+#: src/notifications/class-booking-notification-service.php:772
 msgid "%1$s: %2$s"
 msgstr ""
 
 #. translators: %s: Reservation datetime range.
-#: src/notifications/class-booking-notification-service.php:658
+#: src/notifications/class-booking-notification-service.php:774
 msgid "Reservation date and time: %s"
 msgstr ""
 
 #. translators: %s: Duration label.
-#: src/notifications/class-booking-notification-service.php:661
+#: src/notifications/class-booking-notification-service.php:777
 msgid "Time required: %s"
 msgstr ""
 
 #. translators: %s: Price label.
-#: src/notifications/class-booking-notification-service.php:665
+#: src/notifications/class-booking-notification-service.php:781
 msgid "Price guide: %s"
 msgstr ""
 
 #. translators: %s: Customer name.
-#: src/notifications/class-booking-notification-service.php:683
+#: src/notifications/class-booking-notification-service.php:799
 msgid "Dear %s"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:687
+#: src/notifications/class-booking-notification-service.php:803
 msgid "This reservation is a provisional reservation. The administrator will confirm and confirm."
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:689
+#: src/notifications/class-booking-notification-service.php:805
 msgid "Please check the following information."
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:692
-#: src/notifications/class-booking-notification-service.php:746
-#: src/notifications/class-booking-notification-service.php:747
+#: src/notifications/class-booking-notification-service.php:808
+#: src/notifications/class-booking-notification-service.php:862
+#: src/notifications/class-booking-notification-service.php:863
 msgid "Not provided"
 msgstr ""
 
 #. translators: %s: Customer contact value.
-#: src/notifications/class-booking-notification-service.php:694
+#: src/notifications/class-booking-notification-service.php:810
 msgid "Contact: %s"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:695
+#: src/notifications/class-booking-notification-service.php:811
 msgid "Request contents/memo:"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:700
-#: src/notifications/class-booking-notification-service.php:756
+#: src/notifications/class-booking-notification-service.php:816
+#: src/notifications/class-booking-notification-service.php:872
 msgid "--- Cancellation Policy ---"
 msgstr ""
 
 #. translators: %s: Provider phone number.
-#: src/notifications/class-booking-notification-service.php:708
+#: src/notifications/class-booking-notification-service.php:824
 msgid "TEL: %s"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:716
+#: src/notifications/class-booking-notification-service.php:832
 msgid "If you do not recognize this email, please discard it."
 msgstr ""
 
 #. translators: %s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:738
+#: src/notifications/class-booking-notification-service.php:854
 msgid "A new %s has been registered."
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:743
+#: src/notifications/class-booking-notification-service.php:859
 msgid "--- Customer information ---"
 msgstr ""
 
 #. translators: %s: Customer name.
-#: src/notifications/class-booking-notification-service.php:745
+#: src/notifications/class-booking-notification-service.php:861
 msgid "Name: %s"
 msgstr ""
 
 #. translators: %s: Customer email address.
-#: src/notifications/class-booking-notification-service.php:749
+#: src/notifications/class-booking-notification-service.php:865
 msgid "Email: %s"
 msgstr ""
 
 #. translators: %s: Customer phone number.
-#: src/notifications/class-booking-notification-service.php:751
+#: src/notifications/class-booking-notification-service.php:867
 msgid "Phone number: %s"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:752
+#: src/notifications/class-booking-notification-service.php:868
 msgid "Note:"
 msgstr ""
 
-#: src/notifications/class-booking-notification-service.php:761
+#: src/notifications/class-booking-notification-service.php:877
 msgid "Manage this reservation"
 msgstr ""
 
 #. translators: 1: Date text, 2: Day of week, 3: Time text.
-#: src/notifications/class-booking-notification-service.php:833
+#: src/notifications/class-booking-notification-service.php:949
 msgid "%1$s (%2$s) %3$s"
 msgstr ""
 
 #. translators: %s: nomination fee amount
-#: src/notifications/class-booking-notification-service.php:948
+#: src/notifications/class-booking-notification-service.php:1064
 msgid "+ Nomination fee %s"
 msgstr ""
 

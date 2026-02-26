@@ -22,6 +22,9 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 	/** @var string */
 	private $original_timezone_string = '';
 
+	/** @var string */
+	private $original_admin_email = '';
+
 	protected function setUp(): void {
 		parent::setUp();
 
@@ -29,6 +32,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 		$this->original_date_format     = (string) get_option( 'date_format' );
 		$this->original_time_format     = (string) get_option( 'time_format' );
 		$this->original_timezone_string = (string) get_option( 'timezone_string' );
+		$this->original_admin_email     = (string) get_option( 'admin_email' );
 
 		update_option( 'timezone_string', 'Asia/Tokyo' );
 	}
@@ -37,6 +41,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 		update_option( 'date_format', $this->original_date_format );
 		update_option( 'time_format', $this->original_time_format );
 		update_option( 'timezone_string', $this->original_timezone_string );
+		update_option( 'admin_email', $this->original_admin_email );
 
 		parent::tearDown();
 	}
@@ -172,6 +177,141 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				}
 			}
 		}
+	}
+
+	/**
+	 * 通知タイプごとの送信者ヘッダー情報が期待どおりに返ることを検証します。
+	 */
+	public function test_get_mail_header(): void {
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$method  = new ReflectionMethod( Booking_Notification_Service::class, 'get_mail_header' );
+		$method->setAccessible( true );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'ユーザー向けメールは provider_name を優先し Reply-To に provider_email を設定する',
+				'admin_email'         => 'admin@example.com',
+				'type'                => 'pending_customer',
+				'payload'             => array(
+					'provider_name'       => 'Sample Provider',
+					'provider_email'      => 'provider@example.com',
+					'site_name'           => 'Sample Site',
+					'booking_author_name' => '予約 太郎',
+					'customer_email'      => 'customer@example.com',
+				),
+				'expected'            => array(
+					'name'     => 'Sample Provider',
+					'mail'     => 'admin@example.com',
+					'reply_to' => 'provider@example.com',
+				),
+			),
+			array(
+				'test_condition_name' => 'ユーザー向けメールで provider_name が空の場合はサイト名にフォールバックし provider_email が空なら Reply-To は空',
+				'admin_email'         => 'admin@example.com',
+				'type'                => 'pending_customer',
+				'payload'             => array(
+					'provider_name'       => '',
+					'provider_email'      => '',
+					'site_name'           => 'Sample Site',
+					'booking_author_name' => '予約 太郎',
+					'customer_email'      => 'customer@example.com',
+				),
+				'expected'            => array(
+					'name'     => 'Sample Site',
+					'mail'     => 'admin@example.com',
+					'reply_to' => '',
+				),
+			),
+			array(
+				'test_condition_name' => '施設向けメールは予約者名を From 名にし Reply-To に顧客メールを設定',
+				'admin_email'         => 'admin@example.com',
+				'type'                => 'pending_provider',
+				'payload'             => array(
+					'provider_name'       => 'Sample Provider',
+					'provider_email'      => 'provider@example.com',
+					'site_name'           => 'Sample Site',
+					'booking_author_name' => '予約 太郎',
+					'customer_email'      => 'customer@example.com',
+				),
+				'expected'            => array(
+					'name'     => '予約 太郎',
+					'mail'     => 'admin@example.com',
+					'reply_to' => 'customer@example.com',
+				),
+			),
+			array(
+				'test_condition_name' => '施設向けメールで予約者名が空の場合は provider_name を From 名にフォールバック',
+				'admin_email'         => 'admin@example.com',
+				'type'                => 'confirmed_provider',
+				'payload'             => array(
+					'provider_name'       => 'Sample Provider',
+					'provider_email'      => 'provider@example.com',
+					'site_name'           => 'Sample Site',
+					'booking_author_name' => '',
+					'customer_email'      => 'customer@example.com',
+				),
+				'expected'            => array(
+					'name'     => 'Sample Provider',
+					'mail'     => 'admin@example.com',
+					'reply_to' => 'customer@example.com',
+				),
+			),
+			array(
+				'test_condition_name' => '施設向けメールで顧客メールが不正な場合は Reply-To を空にする',
+				'admin_email'         => 'admin@example.com',
+				'type'                => 'cancelled_provider',
+				'payload'             => array(
+					'provider_name'       => 'Sample Provider',
+					'provider_email'      => 'provider@example.com',
+					'site_name'           => 'Sample Site',
+					'booking_author_name' => '予約 太郎',
+					'customer_email'      => 'not-an-email',
+				),
+				'expected'            => array(
+					'name'     => '予約 太郎',
+					'mail'     => 'admin@example.com',
+					'reply_to' => '',
+				),
+			),
+			array(
+				'test_condition_name' => 'reminder_customer もユーザー向け経路として扱われ Reply-To に provider_email を設定する',
+				'admin_email'         => 'admin@example.com',
+				'type'                => 'reminder_customer',
+				'payload'             => array(
+					'provider_name'       => 'Sample Provider',
+					'provider_email'      => 'provider@example.com',
+					'site_name'           => 'Sample Site',
+					'booking_author_name' => '予約 太郎',
+					'customer_email'      => 'customer@example.com',
+				),
+				'expected'            => array(
+					'name'     => 'Sample Provider',
+					'mail'     => 'admin@example.com',
+					'reply_to' => 'provider@example.com',
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			update_option( 'admin_email', $case['admin_email'] );
+			$actual = $method->invoke( $service, $case['type'], $case['payload'] );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * メールヘッダー表示名の CR/LF が除去されることを検証します。
+	 */
+	public function test_sanitize_mail_header_name(): void {
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$method  = new ReflectionMethod( Booking_Notification_Service::class, 'sanitize_mail_header_name' );
+		$method->setAccessible( true );
+
+		$actual = (string) $method->invoke( $service, "Sample Name\r\nBcc: attacker@example.com" );
+		$this->assertSame( 'Sample Name Bcc: attacker@example.com', $actual );
+
+		$actual_with_tags = (string) $method->invoke( $service, "<b>店舗名</b>\t" );
+		$this->assertSame( '店舗名', $actual_with_tags );
 	}
 
 }

@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
+use WP_User;
 
 /**
  * Common helper utilities for VK Booking Manager.
@@ -180,6 +181,31 @@ class VKBM_Helper {
 		}
 
 		return (string) wp_get_attachment_image( $thumbnail_id, $size, false, $attr );
+	}
+
+	/**
+	 * Resolve the display name for a WordPress user.
+	 *
+	 * Priority: 姓 + 名 > ふりがな (vkbm_kana_name) > user_login.
+	 *
+	 * @param WP_User $user User instance.
+	 * @return string
+	 */
+	public static function get_user_display_name( WP_User $user ): string {
+		$first_name = trim( (string) get_user_meta( $user->ID, 'first_name', true ) );
+		$last_name  = trim( (string) get_user_meta( $user->ID, 'last_name', true ) );
+
+		$full_name = trim( sprintf( '%s %s', $last_name, $first_name ) );
+		if ( '' !== $full_name ) {
+			return $full_name;
+		}
+
+		$kana_name = trim( (string) get_user_meta( $user->ID, 'vkbm_kana_name', true ) );
+		if ( '' !== $kana_name ) {
+			return $kana_name;
+		}
+
+		return $user->user_login;
 	}
 
 	/**

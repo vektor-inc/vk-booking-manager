@@ -15,7 +15,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
-use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -37,11 +36,12 @@ use function home_url;
 use function is_email;
 use function number_format_i18n;
 use function sanitize_email;
+use function sanitize_text_field;
 use function sprintf;
 use function strtotime;
+use function remove_filter;
 use function wp_date;
 use function wp_next_scheduled;
-use function wp_parse_url;
 use function wp_schedule_event;
 use function wp_schedule_single_event;
 use function wp_timezone;
@@ -70,6 +70,7 @@ class Booking_Notification_Service {
 	private const TYPE_CONFIRMED_PROVIDER = 'confirmed_provider';
 	private const TYPE_CANCELLED_CUSTOMER = 'cancelled_customer';
 	private const TYPE_CANCELLED_PROVIDER = 'cancelled_provider';
+	private const TYPE_REMINDER_CUSTOMER  = 'reminder_customer';
 
 	/**
 	 * Settings store.
@@ -79,21 +80,12 @@ class Booking_Notification_Service {
 	private $settings_repository;
 
 	/**
-	 * Customer name resolver.
-	 *
-	 * @var Customer_Name_Resolver
-	 */
-	private $customer_name_resolver;
-
-	/**
 	 * Constructor.
 	 *
-	 * @param Settings_Repository         $settings_repository Settings store.
-	 * @param Customer_Name_Resolver|null $customer_name_resolver Customer name resolver.
+	 * @param Settings_Repository $settings_repository Settings store.
 	 */
-	public function __construct( Settings_Repository $settings_repository, ?Customer_Name_Resolver $customer_name_resolver = null ) {
-		$this->settings_repository    = $settings_repository;
-		$this->customer_name_resolver = null !== $customer_name_resolver ? $customer_name_resolver : new Customer_Name_Resolver();
+	public function __construct( Settings_Repository $settings_repository ) {
+		$this->settings_repository = $settings_repository;
 	}
 
 	/**
@@ -303,8 +295,13 @@ class Booking_Notification_Service {
 			return;
 		}
 
-		$headers = $this->build_headers( $payload['site_name'] );
-		$sent    = wp_mail( $message['to'], $message['subject'], $message['body'], $headers );
+		$sent = $this->send_mail(
+			(string) $message['to'],
+			(string) $message['subject'],
+			(string) $message['body'],
+			$type,
+			$payload
+		);
 
 		if ( $sent ) {
 			return;
@@ -446,29 +443,145 @@ class Booking_Notification_Service {
 			$hours_before
 		);
 
-		$body    = $this->render_customer_body( $payload, $lead );
-		$headers = $this->build_headers( $payload['site_name'] );
+		$body = $this->render_customer_body( $payload, $lead );
 
-		return (bool) wp_mail( $to, $subject, $body, $headers );
+		return $this->send_mail(
+			(string) $to,
+			(string) $subject,
+			(string) $body,
+			self::TYPE_REMINDER_CUSTOMER,
+			$payload
+		);
 	}
 
 	/**
-	 * Compose email headers.
+	 * 通知タイプに応じた送信者情報を適用してメールを送信します。
 	 *
-	 * @param string $site_name Site name used as From name.
+	 * @param string               $to      送信先メールアドレス。
+	 * @param string               $subject 件名。
+	 * @param string               $body    本文。
+	 * @param string               $type    通知タイプ。
+	 * @param array<string, mixed> $payload 通知本文・送信先の生成に使う予約データ。
+	 * @return bool
+	 */
+	private function send_mail( string $to, string $subject, string $body, string $type, array $payload ): bool {
+		$mail_header = $this->get_mail_header( $type, $payload );
+		$from_name   = $this->sanitize_mail_header_name( (string) $mail_header['name'] );
+		$headers     = $this->build_headers( (string) $mail_header['reply_to'] );
+
+		// WordPress 標準の from / from_name フィルターで送信者情報を設定する。
+		$from_mail_filter = static function () use ( $mail_header ) {
+			return (string) $mail_header['mail'];
+		};
+		$from_name_filter = static function () use ( $from_name ) {
+			return $from_name;
+		};
+
+		add_filter( 'wp_mail_from', $from_mail_filter );
+		add_filter( 'wp_mail_from_name', $from_name_filter );
+
+		try {
+			return (bool) wp_mail( $to, $subject, $body, $headers );
+		} finally {
+			remove_filter( 'wp_mail_from', $from_mail_filter );
+			remove_filter( 'wp_mail_from_name', $from_name_filter );
+		}
+	}
+
+	/**
+	 * メールヘッダー用の表示名を安全な文字列に整形します。
+	 *
+	 * @param string $name 表示名。
+	 * @return string
+	 */
+	private function sanitize_mail_header_name( string $name ): string {
+		// 一般的なテキスト入力として正規化し、危険な文字列を除去する。
+		$sanitized_name = sanitize_text_field( $name );
+
+		// ヘッダーインジェクション対策として CR/LF を除去する。
+		$sanitized_name = str_replace( array( "\r", "\n" ), '', $sanitized_name );
+
+		return trim( $sanitized_name );
+	}
+
+	/**
+	 * 送信ヘッダー文字列を組み立てます。
+	 *
+	 * @param string $reply_to Reply-To に設定するメールアドレス。
 	 * @return array<int,string>
 	 */
-	private function build_headers( string $site_name ): array {
-		$from_email = get_option( 'admin_email' );
+	private function build_headers( string $reply_to ): array {
+		$headers = array(
+			'Content-Type: text/plain; charset=UTF-8',
+		);
 
-		if ( ! is_email( $from_email ) ) {
-			$host       = wp_parse_url( home_url(), PHP_URL_HOST );
-			$from_email = $host ? 'wordpress@' . $host : 'wordpress@localhost';
+		// 施設向け通知など Reply-To が必要なケースのみ付与する。
+		if ( '' !== $reply_to ) {
+			$headers[] = sprintf( 'Reply-To: %s', $reply_to );
 		}
 
-		return array(
-			sprintf( 'From: %s <%s>', $site_name, $from_email ),
-			'Content-Type: text/plain; charset=UTF-8',
+		return $headers;
+	}
+
+	/**
+	 * 通知タイプに応じた送信者情報を返します。
+	 *
+	 * @param string               $type    通知タイプ。
+	 * @param array<string, mixed> $payload 通知本文・送信先の生成に使う予約データ。
+	 * @return array{name:string,mail:string,reply_to:string}
+	 */
+	private function get_mail_header( string $type, array $payload ): array {
+		$from_mail = sanitize_email( (string) get_option( 'admin_email' ) );
+
+		$provider_name = trim( (string) ( $payload['provider_name'] ?? '' ) );
+		$site_name     = trim( (string) ( $payload['site_name'] ?? '' ) );
+		$default_name  = '' !== $provider_name ? $provider_name : $site_name;
+
+		$header = array(
+			'name'     => $default_name,
+			'mail'     => $from_mail,
+			'reply_to' => '',
+		);
+
+		if ( ! $this->is_provider_notification_type( $type ) ) {
+			// ユーザー向け通知は店舗メールアドレスを Reply-To に設定する。
+			$provider_mail = sanitize_email( (string) ( $payload['provider_email'] ?? '' ) );
+			if ( is_email( $provider_mail ) ) {
+				$header['reply_to'] = $provider_mail;
+			}
+			return $header;
+		}
+
+		// 施設向け通知は予約投稿者名を優先して From 名に利用する。
+		$author_name = trim( (string) ( $payload['booking_author_name'] ?? '' ) );
+		if ( '' !== $author_name ) {
+			$header['name'] = $author_name;
+		}
+
+		// 施設側が返信しやすいように Reply-To に予約者メールを設定する。
+		$customer_mail = sanitize_email( (string) ( $payload['customer_email'] ?? '' ) );
+		if ( is_email( $customer_mail ) ) {
+			$header['reply_to'] = $customer_mail;
+		}
+
+		return $header;
+	}
+
+	/**
+	 * 通知タイプが施設向け通知かどうかを判定します。
+	 *
+	 * @param string $type 通知タイプ。
+	 * @return bool
+	 */
+	private function is_provider_notification_type( string $type ): bool {
+		return in_array(
+			$type,
+			array(
+				self::TYPE_PENDING_PROVIDER,
+				self::TYPE_CONFIRMED_PROVIDER,
+				self::TYPE_CANCELLED_PROVIDER,
+			),
+			true
 		);
 	}
 
@@ -521,8 +634,10 @@ class Booking_Notification_Service {
 			$resource_label_singular = __( 'Staff', 'vk-booking-manager' );
 		}
 
+		$booking_author_name = $this->resolve_booking_author_name( $booking );
+
 		if ( '' === trim( $customer_name ) ) {
-			$customer_name = $this->resolve_booking_author_name( $booking );
+			$customer_name = $booking_author_name;
 		}
 
 		$edit_url = get_edit_post_link( $booking_id, '', true );
@@ -538,6 +653,7 @@ class Booking_Notification_Service {
 			'duration_label'               => $duration,
 			'price_label'                  => $price_label,
 			'customer_name'                => '' !== $customer_name ? $customer_name : __( 'Customer', 'vk-booking-manager' ),
+			'booking_author_name'          => $booking_author_name,
 			'customer_email'               => $customer_email,
 			'customer_tel'                 => $customer_tel,
 			'memo'                         => '' !== $memo ? $memo : __( '(none)', 'vk-booking-manager' ),
@@ -571,7 +687,7 @@ class Booking_Notification_Service {
 			return '';
 		}
 
-		return $this->customer_name_resolver->resolve_for_user( $user );
+		return VKBM_Helper::get_user_display_name( $user );
 	}
 
 	/**

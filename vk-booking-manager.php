@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager (Beta)
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     0.2.0.1
+ * Version:     0.2.1.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -69,7 +69,6 @@ require_once __DIR__ . '/src/rest/class-menu-preview-controller.php';
 require_once __DIR__ . '/src/rest/class-auth-form-controller.php';
 require_once __DIR__ . '/src/rest/class-provider-settings-controller.php';
 require_once __DIR__ . '/src/rest/class-current-user-controller.php';
-require_once __DIR__ . '/src/bookings/class-customer-name-resolver.php';
 require_once __DIR__ . '/src/bookings/class-booking-confirmation-controller.php';
 require_once __DIR__ . '/src/staff/class-staff-editor.php';
 require_once __DIR__ . '/src/notifications/class-booking-notification-service.php';
@@ -103,7 +102,6 @@ use VKBookingManager\REST\Current_User_Controller;
 use VKBookingManager\Bookings\Booking_Admin;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
-use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Bookings\My_Bookings_Controller;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Blocks\Menu_Search_Block;
@@ -170,13 +168,12 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 	$shift_post_type                 = new Shift_Post_Type();
 	$service_menu_post_type          = new Service_Menu_Post_Type();
 	$booking_post_type               = new Booking_Post_Type();
-	$customer_name_resolver          = new Customer_Name_Resolver();
-	$booking_notification_service    = new Booking_Notification_Service( $settings_repository, $customer_name_resolver );
+	$booking_notification_service    = new Booking_Notification_Service( $settings_repository );
 	$oembed_override                 = new OEmbed_Override();
 	$booking_admin                   = new Booking_Admin( $booking_notification_service );
 	$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository );
 	$availability_service            = new Availability_Service( $settings_repository );
-	$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $customer_name_resolver, $availability_service );
+	$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service );
 	$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
 	$menu_search_block               = new Menu_Search_Block();
 	$menu_loop_block                 = new Menu_Loop_Block();

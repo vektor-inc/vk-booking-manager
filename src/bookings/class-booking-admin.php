@@ -15,7 +15,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
-use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
@@ -1600,8 +1599,6 @@ class Booking_Admin {
 		$roles      = wp_roles();
 		$role_names = $roles ? array_keys( $roles->roles ) : array();
 		$options    = array();
-		$resolver   = new Customer_Name_Resolver();
-
 		$users = get_users(
 			array(
 				'role__in'    => $role_names,
@@ -1616,14 +1613,14 @@ class Booking_Admin {
 				continue;
 			}
 
-			$options[ (int) $user->ID ] = $this->resolve_author_label( $user, $resolver );
+			$options[ (int) $user->ID ] = $this->resolve_author_label( $user );
 		}
 
 		$selected_author_id = (int) $post->post_author;
 		if ( $selected_author_id > 0 && ! isset( $options[ $selected_author_id ] ) ) {
 			$selected_user = get_userdata( $selected_author_id );
 			if ( $selected_user instanceof WP_User ) {
-				$options[ (int) $selected_user->ID ] = $this->resolve_author_label( $selected_user, $resolver );
+				$options[ (int) $selected_user->ID ] = $this->resolve_author_label( $selected_user );
 			}
 		}
 
@@ -1633,14 +1630,13 @@ class Booking_Admin {
 	/**
 	 * Resolve the author label with name priority.
 	 *
-	 * @param WP_User                $user     User instance.
-	 * @param Customer_Name_Resolver $resolver Name resolver.
+	 * @param WP_User $user User instance.
 	 * @return string
 	 */
-	private function resolve_author_label( WP_User $user, Customer_Name_Resolver $resolver ): string {
+	private function resolve_author_label( WP_User $user ): string {
 		// Prefer full name > kana > display name, and fall back to user ID.
 		// 姓名 > ふりがな > 表示名 を優先し、なければユーザーIDにする.
-		$label = trim( $resolver->resolve_for_user( $user ) );
+		$label = trim( VKBM_Helper::get_user_display_name( $user ) );
 		if ( '' !== $label ) {
 			return $label;
 		}

@@ -14,8 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-use VKBookingManager\Bookings\Customer_Name_Resolver;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\VKBM_Helper;
 use WP_User;
 
 /**
@@ -123,7 +123,6 @@ class Booking_Post_Type {
 
 		$selected_author_id = (int) $post->post_author;
 		$has_selected       = false;
-		$name_resolver      = new Customer_Name_Resolver();
 
 		echo '<select name="post_author_override" id="post_author_override">';
 
@@ -132,7 +131,7 @@ class Booking_Post_Type {
 				continue;
 			}
 
-			$label = $this->resolve_author_label( $user, $name_resolver );
+			$label = $this->resolve_author_label( $user );
 			$value = (int) $user->ID;
 			if ( $value === $selected_author_id ) {
 				$has_selected = true;
@@ -149,7 +148,7 @@ class Booking_Post_Type {
 		if ( $selected_author_id > 0 && ! $has_selected ) {
 			$selected_user = get_user_by( 'id', $selected_author_id );
 			if ( $selected_user instanceof WP_User ) {
-				$label = $this->resolve_author_label( $selected_user, $name_resolver );
+				$label = $this->resolve_author_label( $selected_user );
 				printf(
 					'<option value="%1$s" selected="selected">%2$s</option>',
 					esc_attr( (string) $selected_author_id ),
@@ -164,14 +163,13 @@ class Booking_Post_Type {
 	/**
 	 * Resolve the author label with name priority.
 	 *
-	 * @param WP_User                $user          User instance.
-	 * @param Customer_Name_Resolver $name_resolver Name resolver.
+	 * @param WP_User $user User instance.
 	 * @return string
 	 */
-	private function resolve_author_label( WP_User $user, Customer_Name_Resolver $name_resolver ): string {
+	private function resolve_author_label( WP_User $user ): string {
 		// Prefer full name > kana > display name, and fall back to user ID.
 		// 姓名 > ふりがな > 表示名 を優先し、なければユーザーIDにする.
-		$label = trim( $name_resolver->resolve_for_user( $user ) );
+		$label = trim( VKBM_Helper::get_user_display_name( $user ) );
 		if ( '' !== $label ) {
 			return $label;
 		}

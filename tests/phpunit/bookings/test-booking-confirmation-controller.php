@@ -249,7 +249,6 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		return new Booking_Confirmation_Controller(
 			$notification_service,
 			$settings_repository,
-			null,
 			$availability_service
 		);
 	}

@@ -377,6 +377,7 @@ class Plugin {
 		$this->booking_notification_service->register();
 		$this->oembed_override->register();
 		$this->roles_manager->register();
+		add_filter( 'retrieve_password_notification_email', array( $this, 'filter_retrieve_password_notification_email' ), 10, 4 );
 		add_filter( 'load_script_translation_file', array( $this, 'filter_script_translation_file' ), 10, 3 );
 		add_action( 'init', array( $this, 'maybe_create_default_staff' ), 11 );
 		$this->shift_dashboard_page->register();
@@ -406,6 +407,102 @@ class Plugin {
 		$this->post_order_manager->register();
 		$this->term_order_manager->register();
 		$this->user_profile_fields->register();
+	}
+
+	/**
+	 * wp_mail() の送信者名をサイト名に統一する.
+	 *
+	 * パスワードリセットメールなど、WordPressコアが送信するメールで
+	 * 送信者名が "WordPress" になるケースを防ぎます。
+	 *
+	 * @param string $from_name 既存の送信者名.
+	 * @return string
+	 */
+	public function filter_mail_from_name( string $from_name ): string {
+		$site_name = wp_specialchars_decode( (string) get_bloginfo( 'name' ), ENT_QUOTES );
+
+		if ( '' === $site_name ) {
+			return $from_name;
+		}
+
+		return $site_name;
+	}
+
+	/**
+	 * wp_mail() の送信元メールアドレスを no-reply@サイトドメインに統一する.
+	 *
+	 * パスワードリセットメールなど、WordPressコアが送信するメールの送信元を
+	 * 管理者アドレスではなく no-reply 形式に固定します。
+	 *
+	 * @param string $from_email 既存の送信元メールアドレス.
+	 * @return string
+	 */
+	public function filter_mail_from( string $from_email ): string {
+		$host = (string) wp_parse_url( network_home_url(), PHP_URL_HOST );
+		$host = trim( $host );
+
+		if ( '' === $host ) {
+			return $from_email;
+		}
+
+		$no_reply_email = sanitize_email( sprintf( 'no-reply@%s', $host ) );
+		if ( '' === $no_reply_email || ! is_email( $no_reply_email ) ) {
+			return $from_email;
+		}
+
+		return $no_reply_email;
+	}
+
+	/**
+	 * パスワードリセットメール送信時のみ送信元情報を上書きする.
+	 *
+	 * @param array<string,mixed> $email Password reset email arguments.
+	 * @param string              $key Password reset key.
+	 * @param string              $user_login User login.
+	 * @param \WP_User            $user_data User object.
+	 * @return array<string,mixed>
+	 */
+	public function filter_retrieve_password_notification_email( array $email, string $key, string $user_login, \WP_User $user_data ): array {
+		$from_name  = $this->filter_mail_from_name( 'WordPress' );
+		$from_email = $this->filter_mail_from( '' );
+
+		if ( '' === $from_email || ! is_email( $from_email ) ) {
+			return $email;
+		}
+
+		$new_from_header = sprintf( 'From: %s <%s>', $from_name, $from_email );
+		$headers         = $email['headers'] ?? array();
+
+		if ( is_string( $headers ) ) {
+			$headers = preg_split( "/\r\n|\n|\r/", $headers );
+		}
+
+		if ( ! is_array( $headers ) ) {
+			$headers = array();
+		}
+
+		$normalized_headers = array();
+		foreach ( $headers as $header ) {
+			if ( ! is_string( $header ) ) {
+				continue;
+			}
+
+			$header = trim( $header );
+			if ( '' === $header ) {
+				continue;
+			}
+
+			if ( 0 === stripos( $header, 'From:' ) ) {
+				continue;
+			}
+
+			$normalized_headers[] = $header;
+		}
+
+		$normalized_headers[] = $new_from_header;
+		$email['headers']     = $normalized_headers;
+
+		return $email;
 	}
 
 	/**

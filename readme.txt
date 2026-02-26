@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.2.0.1
+Stable tag: 0.2.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,12 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.2.1 =
+* [ 仕様変更 ] パスワード変更メールの From が WordPress<wordpress@サイトドメイン> ではなく、施設名<no-reply@サイトドメイン> になるように変更
+* [ 仕様変更 ] ユーザー名表示処理のリファクタリング
+* [ 仕様変更 ] 施設向けの予約関連メールのfromがユーザー名になるように変更
+* [ 仕様変更 ] ユーザー向けの予約関連メールのfromがサイト名ではなく施設名になるように変更
 
 = 0.2.0 =
 * [ 機能追加 ] アップデーターを追加

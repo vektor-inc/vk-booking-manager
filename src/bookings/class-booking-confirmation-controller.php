@@ -99,30 +99,20 @@ class Booking_Confirmation_Controller {
 	private $settings_repository;
 
 	/**
-	 * Customer name resolver.
-	 *
-	 * @var Customer_Name_Resolver
-	 */
-	private $customer_name_resolver;
-
-	/**
 	 * Constructor.
 	 *
 	 * @param Booking_Notification_Service $notification_service Notification handler.
 	 * @param Settings_Repository          $settings_repository  Provider settings repository.
-	 * @param Customer_Name_Resolver|null  $customer_name_resolver Customer name resolver.
 	 * @param Availability_Service|null    $availability_service Availability service.
 	 */
 	public function __construct(
 		Booking_Notification_Service $notification_service,
 		Settings_Repository $settings_repository,
-		?Customer_Name_Resolver $customer_name_resolver = null,
 		?Availability_Service $availability_service = null
 	) {
-		$this->notification_service   = $notification_service;
-		$this->settings_repository    = $settings_repository;
-		$this->customer_name_resolver = null !== $customer_name_resolver ? $customer_name_resolver : new Customer_Name_Resolver();
-		$this->availability_service   = null !== $availability_service ? $availability_service : new Availability_Service( $settings_repository );
+		$this->notification_service = $notification_service;
+		$this->settings_repository  = $settings_repository;
+		$this->availability_service = null !== $availability_service ? $availability_service : new Availability_Service( $settings_repository );
 	}
 
 	/**
@@ -282,7 +272,7 @@ class Booking_Confirmation_Controller {
 		$internal_note          = $can_override_contact
 			? sanitize_textarea_field( (string) ( $request['internal_note'] ?? '' ) )
 			: '';
-		$customer_name_value    = '' !== $customer_name_override ? $customer_name_override : $this->customer_name_resolver->resolve_for_user( $user );
+		$customer_name_value    = '' !== $customer_name_override ? $customer_name_override : VKBM_Helper::get_user_display_name( $user );
 		$booking_author_id      = (int) $user->ID;
 		$customer_email         = (string) $user->user_email;
 		$matched_user_id        = 0;
