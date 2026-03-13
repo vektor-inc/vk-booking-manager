@@ -112,7 +112,7 @@ export const CalendarGrid = ( {
 			case 'special_close':
 				return __( 'Temporary closure', 'vk-booking-manager' );
 			case 'off':
-				return __( 'private', 'vk-booking-manager' );
+				return '';
 			default:
 				return status;
 		}

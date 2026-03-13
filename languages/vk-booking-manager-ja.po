@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: vk-booking-manager 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-"
 "manager-pro\n"
-"POT-Creation-Date: 2026-02-25T16:26:26+00:00\n"
+"POT-Creation-Date: 2026-03-12T09:30:45+00:00\n"
 "PO-Revision-Date: 2026-02-23 23:58+0900\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -1432,7 +1432,7 @@ msgstr "勤務予定"
 #: src/notifications/class-booking-notification-service.php:706
 #: src/notifications/class-booking-notification-service.php:707
 #: src/notifications/class-booking-notification-service.php:747
-#: src/blocks/reservation/app.js:1546
+#: src/blocks/reservation/app.js:1549
 msgid "Pending"
 msgstr "仮予約"
 
@@ -1440,7 +1440,7 @@ msgstr "仮予約"
 #: src/bookings/class-booking-admin.php:1536
 #: src/notifications/class-booking-notification-service.php:739
 #: src/notifications/class-booking-notification-service.php:848
-#: src/blocks/reservation/app.js:1554 src/blocks/reservation/app.js:1602
+#: src/blocks/reservation/app.js:1557 src/blocks/reservation/app.js:1605
 #: src/blocks/reservation/booking-confirm-app.js:1393
 #: src/blocks/reservation/booking-confirm-app.js:1439
 msgid "Cancelled"
@@ -1594,7 +1594,7 @@ msgstr "パスワード（確認）"
 msgid "Telephone number"
 msgstr "電話番号"
 
-#: src/auth/class-auth-shortcodes.php:567 src/blocks/reservation/app.js:1449
+#: src/auth/class-auth-shortcodes.php:567 src/blocks/reservation/app.js:1452
 msgid "I agree to the terms of use"
 msgstr "利用規約に同意します"
 
@@ -1895,8 +1895,8 @@ msgstr "担当可能なスタッフが設定されていません。"
 #: src/bookings/class-booking-draft-controller.php:170
 #: src/bookings/class-my-bookings-controller.php:187
 #: src/notifications/class-booking-notification-service.php:628
-#: src/blocks/reservation/app.js:1091 src/blocks/reservation/app.js:1297
-#: src/blocks/reservation/app.js:1314
+#: src/blocks/reservation/app.js:1094 src/blocks/reservation/app.js:1300
+#: src/blocks/reservation/app.js:1317
 #: src/blocks/reservation/booking-confirm-app.js:1069
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:93
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:134
@@ -1932,7 +1932,7 @@ msgstr "所要時間"
 msgid "View details"
 msgstr "詳細を見る"
 
-#: src/blocks/class-menu-loop-block.php:977 src/blocks/reservation/app.js:1832
+#: src/blocks/class-menu-loop-block.php:977 src/blocks/reservation/app.js:1835
 msgid "Proceed to Reservation"
 msgstr "予約に進む"
 
@@ -3422,97 +3422,97 @@ msgstr "予約をキャンセルできませんでした。"
 msgid "The reservation list could not be loaded."
 msgstr "予約一覧を読み込めませんでした。"
 
-#: src/blocks/reservation/app.js:994
+#: src/blocks/reservation/app.js:997
 msgid "Failed to retrieve menu information."
 msgstr "メニュー情報の取得に失敗しました。"
 
-#: src/blocks/reservation/app.js:1047
+#: src/blocks/reservation/app.js:1050
 msgid "Failed to load calendar."
 msgstr "カレンダーの読み込みに失敗しました。"
 
-#: src/blocks/reservation/app.js:1109
+#: src/blocks/reservation/app.js:1112
 msgid "Failed to read free space."
 msgstr "空き状況の読み込みに失敗しました。"
 
-#: src/blocks/reservation/app.js:1262
+#: src/blocks/reservation/app.js:1265
 msgid "The editor does not transition to the confirmation page."
 msgstr "エディターが確認ページに遷移しません。"
 
-#: src/blocks/reservation/app.js:1272
+#: src/blocks/reservation/app.js:1275
 msgid "Please select your menu and reservation slot before proceeding."
 msgstr "進む前にメニューと予約枠を選択してください。"
 
-#: src/blocks/reservation/app.js:1354
+#: src/blocks/reservation/app.js:1357
 msgid "Temporary reservation data save failed."
 msgstr "仮予約データの保存に失敗しました。"
 
-#: src/blocks/reservation/app.js:1373
+#: src/blocks/reservation/app.js:1376
 msgid "Failed to save reservation details. Please try again later."
 msgstr "予約詳細の保存に失敗しました。後でもう一度お試しください。"
 
-#: src/blocks/reservation/app.js:1409
+#: src/blocks/reservation/app.js:1412
 #: src/blocks/reservation/booking-confirm-app.js:1254
 msgid "Logo image"
 msgstr "ロゴ画像"
 
-#: src/blocks/reservation/app.js:1410
+#: src/blocks/reservation/app.js:1413
 #: src/blocks/reservation/booking-confirm-app.js:1255
 msgid "Reservation block navigation"
 msgstr "予約ブロックナビゲーション"
 
-#: src/blocks/reservation/app.js:1415
+#: src/blocks/reservation/app.js:1418
 #: src/blocks/reservation/components/reservation-header-nav.js:69
 msgid "Return"
 msgstr "戻る"
 
-#: src/blocks/reservation/app.js:1416
+#: src/blocks/reservation/app.js:1419
 msgid "return"
 msgstr "戻る"
 
-#: src/blocks/reservation/app.js:1453
+#: src/blocks/reservation/app.js:1456
 msgid "Please check our cancellation policy before booking."
 msgstr "予約前にキャンセルポリシーをご確認ください。"
 
-#: src/blocks/reservation/app.js:1457
+#: src/blocks/reservation/app.js:1460
 msgid "Your reservation has been completed."
 msgstr "予約が完了しました。"
 
-#: src/blocks/reservation/app.js:1488 src/blocks/reservation/app.js:1668
+#: src/blocks/reservation/app.js:1491 src/blocks/reservation/app.js:1671
 #: src/blocks/reservation/booking-confirm-app.js:1329
 #: src/blocks/reservation/booking-ui/calendar-grid.js:144
 msgid "Loading…"
 msgstr "読み込み中…"
 
-#: src/blocks/reservation/app.js:1507
+#: src/blocks/reservation/app.js:1510
 #: src/blocks/reservation/booking-confirm-app.js:1347
 msgid "There are no reservations to display."
 msgstr "表示する予約はありません。"
 
-#: src/blocks/reservation/app.js:1598 src/blocks/reservation/app.js:1828
+#: src/blocks/reservation/app.js:1601 src/blocks/reservation/app.js:1831
 #: src/blocks/reservation/booking-confirm-app.js:1435
 #: src/blocks/reservation/booking-confirm-app.js:1706
 msgid "Processing…"
 msgstr ""
 
-#: src/blocks/reservation/app.js:1631
+#: src/blocks/reservation/app.js:1634
 #: src/blocks/reservation/booking-confirm-app.js:1301
 #: src/blocks/reservation/booking-confirm-app.js:1597
 msgid "Loading form…"
 msgstr "フォームを読み込み中…"
 
-#: src/blocks/reservation/app.js:1690
+#: src/blocks/reservation/app.js:1693
 msgid "Loading service menu…"
 msgstr "サービスメニューを読み込み中"
 
-#: src/blocks/reservation/app.js:1712
+#: src/blocks/reservation/app.js:1715
 msgid "There are no service menus to display."
 msgstr "表示するサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:1787
+#: src/blocks/reservation/app.js:1790
 msgid "Selected frame"
 msgstr "選択枠"
 
-#: src/blocks/reservation/app.js:1813
+#: src/blocks/reservation/app.js:1816
 msgid "Not selected"
 msgstr "未選択"
 
@@ -3599,10 +3599,6 @@ msgstr "休業日"
 #: src/blocks/reservation/booking-ui/calendar-grid.js:111
 msgid "Special Opening"
 msgstr "臨時営業"
-
-#: src/blocks/reservation/booking-ui/calendar-grid.js:115
-msgid "private"
-msgstr "プライベート"
 
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:40
 msgid ""
@@ -3719,6 +3715,9 @@ msgid ""
 "This is a reservation UI that allows you to select menus and search for "
 "available slots."
 msgstr "メニュー選択と空き枠検索を行う予約UIです。"
+
+#~ msgid "private"
+#~ msgstr "プライベート"
 
 #~ msgid ""
 #~ "Is the domain where this system is running and the domain of the site "

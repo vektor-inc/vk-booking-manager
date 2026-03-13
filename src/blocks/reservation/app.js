@@ -924,7 +924,10 @@ export const ReservationApp = ( {
 							? formatCurrency( applyTax( 0 ), currencySymbol )
 							: '—'
 						: formatCurrency( staffNominationFee, currencySymbol ),
-				taxLabel: '', // Nomination fee should not have tax label
+				// staffNominationFee !== null : 指名料が設定されている場合は金額を表示するのでラベルを付ける
+			// || staffId               : 指名料未設定（null）でもスタッフ選択済みなら ¥0 表示になるのでラベルを付ける
+			// 両方 false = スタッフ未選択 = '—' 表示 のときはラベル不要
+			taxLabel: ( staffNominationFee !== null || staffId ) ? taxSuffix : '',
 			} );
 		}
 

@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.2.1.0
+Stable tag: 0.2.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,11 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.2.2 =
+* [ 不具合修正 ] 指名料の表示に税込ラベルが表示されない問題を修正
+* [ 不具合修正 ] 新規ユーザー登録時の確認項目の文字が中央揃えになってしまうので左揃えに変更
+* [ 仕様変更 ] 予約カレンダーでスタッフ休み日のステータスが「プライベート」と表示されないように変更
 
 = 0.2.1 =
 * [ 仕様変更 ] パスワード変更メールの From が WordPress<wordpress@サイトドメイン> ではなく、施設名<no-reply@サイトドメイン> になるように変更

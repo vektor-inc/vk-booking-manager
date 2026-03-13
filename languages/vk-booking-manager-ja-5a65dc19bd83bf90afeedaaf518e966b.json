@@ -151,9 +151,6 @@
 			"Special Opening": [
 				"臨時営業"
 			],
-			"private": [
-				"プライベート"
-			],
 			"When you select a date from the calendar, reservation candidates will be displayed.": [
 				"カレンダーから日付を選択すると、予約候補が表示されます。"
 			],
