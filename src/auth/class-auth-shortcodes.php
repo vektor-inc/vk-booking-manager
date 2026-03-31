@@ -16,10 +16,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_Error;
 use WP_Post;
+use WP_User;
 use function apply_filters;
 
 /**
@@ -110,6 +112,7 @@ class Auth_Shortcodes {
 		add_action( 'login_form_register', array( $this, 'redirect_wp_register_to_vkbm' ) );
 		add_action( 'login_form_login', array( $this, 'redirect_wp_login_to_vkbm' ) );
 		add_action( 'login_enqueue_scripts', array( $this, 'enqueue_login_branding' ) );
+		add_action( 'admin_init', array( $this, 'redirect_free_user_from_admin' ) );
 		add_shortcode( 'vkbm_login_form', array( $this, 'render_login_form' ) );
 		add_shortcode( 'vkbm_register_form', array( $this, 'render_registration_form' ) );
 	}
@@ -181,6 +184,79 @@ class Auth_Shortcodes {
 		$redirect_url = add_query_arg( 'vkbm_auth', 'login', $reservation_url );
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * 予約顧客が /wp-admin にアクセスした際、予約ページURLにリダイレクトします。
+	 *
+	 * 予約ページURLが設定されている場合、管理権限を持たない予約顧客（subscriberロール相当）を
+	 * 予約ページへ転送します。
+	 * AJAXリクエストや未ログインユーザーの場合は何もしません。
+	 *
+	 * @return void
+	 */
+	public function redirect_free_user_from_admin(): void {
+		// AJAXリクエストはリダイレクト対象外.
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+
+		// ログインしていない場合は対象外.
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		$current_user = wp_get_current_user();
+
+		// 予約顧客（管理権限・VKBM権限を持たないユーザー）でない場合は対象外.
+		if ( ! $this->is_booking_customer( $current_user ) ) {
+			return;
+		}
+
+		// 予約ページURLが設定されていない場合は対象外.
+		$settings        = $this->settings_service->get_settings();
+		$reservation_url = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
+		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
+			$reservation_url = vkbm_normalize_reservation_page_url( $reservation_url );
+		}
+
+		if ( '' === $reservation_url ) {
+			return;
+		}
+
+		// 予約ページURLへリダイレクト.
+		wp_safe_redirect( $reservation_url );
+		exit;
+	}
+
+	/**
+	 * 指定したユーザーが予約顧客（管理権限・VKBM権限を持たないユーザー）かどうかを判定します。
+	 *
+	 * 以下のすべての条件を満たす場合に予約顧客と判断します。
+	 * - edit_posts 権限がない（管理者・エディター・著者・投稿者ではない）
+	 * - vkbm_view_reservations 権限がない（VKBM オーナー・スタッフではない）
+	 * - vkbm_manage_own_reservations 権限がない（VKBM スタッフではない）
+	 *
+	 * @param WP_User $user 判定対象のユーザー.
+	 * @return bool 予約顧客の場合 true.
+	 */
+	public function is_booking_customer( WP_User $user ): bool {
+		// 投稿編集権限があれば管理者・エディター相当のため予約顧客ではない.
+		if ( $user->has_cap( 'edit_posts' ) ) {
+			return false;
+		}
+
+		// VKBM の予約閲覧権限があればオーナー・スタッフのため予約顧客ではない.
+		if ( $user->has_cap( Capabilities::VIEW_RESERVATIONS ) ) {
+			return false;
+		}
+
+		// VKBM の自分の予約管理権限があればスタッフのため予約顧客ではない.
+		if ( $user->has_cap( Capabilities::MANAGE_OWN_RESERVATIONS ) ) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

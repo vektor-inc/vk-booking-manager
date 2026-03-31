@@ -485,4 +485,119 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		// Restore settings. / 設定を復元。
 		update_option( 'users_can_register', $original_registration );
 	}
+
+	/**
+	 * is_booking_customer() のテスト。
+	 * 予約顧客判定が正しく動作することを確認します。
+	 */
+	public function test_is_booking_customer(): void {
+		$repository = new Settings_Repository();
+		$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		// テスト用のユーザーを作成する。
+		$subscriber_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		$editor_id     = $this->factory()->user->create( array( 'role' => 'editor' ) );
+		$admin_id      = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+
+		// VKBM スタッフ権限を持つユーザーを作成する。
+		$vkbm_staff_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		$vkbm_staff    = get_user_by( 'id', $vkbm_staff_id );
+		$vkbm_staff->add_cap( \VKBookingManager\Capabilities\Capabilities::VIEW_RESERVATIONS );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'subscriber ロールのユーザー => 予約顧客',
+				'user_id'             => $subscriber_id,
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'editor ロールのユーザー（edit_posts あり） => 予約顧客ではない',
+				'user_id'             => $editor_id,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'administrator ロールのユーザー（edit_posts あり） => 予約顧客ではない',
+				'user_id'             => $admin_id,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'VKBM 予約閲覧権限を持つユーザー => 予約顧客ではない',
+				'user_id'             => $vkbm_staff_id,
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$user   = get_user_by( 'id', $case['user_id'] );
+			$actual = $shortcodes->is_booking_customer( $user );
+			$this->assertEquals( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * redirect_free_user_from_admin() のテスト。
+	 * リダイレクトが行われない（早期リターンする）ケースを確認します。
+	 * ※リダイレクトが実行されるケースは exit() が呼ばれるためテスト不可。
+	 */
+	public function test_redirect_free_user_from_admin(): void {
+		// テスト前のカレントユーザーを記録する。
+		$original_user_id = get_current_user_id();
+
+		// テスト用のページを作成する。
+		$page_id = $this->factory()->post->create(
+			array(
+				'post_type'    => 'page',
+				'post_title'   => 'Reservation Page',
+				'post_content' => '<!-- wp:vk-booking-manager/reservation /-->',
+				'post_status'  => 'publish',
+			)
+		);
+
+		// テスト用のユーザーを作成する。
+		$subscriber_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		$admin_id      = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'ログインなし => リダイレクトしない',
+				'current_user_id'     => 0,
+				'reservation_url'     => get_permalink( $page_id ),
+			),
+			array(
+				'test_condition_name' => '管理者ログイン => リダイレクトしない',
+				'current_user_id'     => $admin_id,
+				'reservation_url'     => get_permalink( $page_id ),
+			),
+			array(
+				'test_condition_name' => 'subscriber ログイン・予約ページURLが空 => リダイレクトしない',
+				'current_user_id'     => $subscriber_id,
+				'reservation_url'     => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// カレントユーザーを設定する。
+			wp_set_current_user( $case['current_user_id'] );
+
+			// 設定をセットアップする。
+			$repository = new Settings_Repository();
+			$settings   = $repository->get_settings();
+			$settings['reservation_page_url'] = $case['reservation_url'];
+			$repository->update_settings( $settings );
+
+			$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+			$shortcodes = new Auth_Shortcodes( $service );
+
+			// リダイレクトが呼ばれないことを確認するため出力をキャプチャする。
+			ob_start();
+			$shortcodes->redirect_free_user_from_admin();
+			$output = ob_get_clean();
+
+			$this->assertEmpty( $output, $case['test_condition_name'] );
+		}
+
+		// カレントユーザーを復元する。
+		wp_set_current_user( $original_user_id );
+	}
 }

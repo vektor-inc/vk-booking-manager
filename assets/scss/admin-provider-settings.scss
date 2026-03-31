@@ -5,7 +5,8 @@
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-design,
 		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq {
+		.vkbm-provider-settings__tab-faq,
+		.vkbm-provider-settings__tab-license {
 			display: none;
 		}
 		.vkbm-regular-holidays-table {
@@ -104,6 +105,19 @@
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-design,
 		.vkbm-provider-settings__tab-advanced,
+		.vkbm-provider-settings__tab-faq,
+		.vkbm-provider-settings__tab-license {
+			display: none;
+		}
+	}
+
+	&[data-active-tab="license"] {
+		.vkbm-provider-settings__tab-store,
+		.vkbm-provider-settings__tab-system,
+		.vkbm-provider-settings__tab-registration,
+		.vkbm-provider-settings__tab-consent,
+		.vkbm-provider-settings__tab-design,
+		.vkbm-provider-settings__tab-advanced,
 		.vkbm-provider-settings__tab-faq {
 			display: none;
 		}
@@ -115,7 +129,8 @@
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-design,
 		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq {
+		.vkbm-provider-settings__tab-faq,
+		.vkbm-provider-settings__tab-license {
 			display: none;
 		}
 	}
@@ -126,7 +141,8 @@
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq {
+		.vkbm-provider-settings__tab-faq,
+		.vkbm-provider-settings__tab-license {
 			display: none;
 		}
 	}
@@ -137,7 +153,8 @@
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-faq {
+		.vkbm-provider-settings__tab-faq,
+		.vkbm-provider-settings__tab-license {
 			display: none;
 		}
 	}
@@ -148,7 +165,8 @@
 		.vkbm-provider-settings__tab-consent,
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced {
+		.vkbm-provider-settings__tab-advanced,
+		.vkbm-provider-settings__tab-license {
 			display: none;
 		}
 		.vkbm-provider-settings__faq {
@@ -185,7 +203,8 @@
 		.vkbm-provider-settings__tab-registration,
 		.vkbm-provider-settings__tab-design,
 		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq {
+		.vkbm-provider-settings__tab-faq,
+		.vkbm-provider-settings__tab-license {
 			display: none;
 		}
 	}
@@ -209,7 +228,16 @@
 	}
 
 	.vkbm-reminder-hours__list {
-		margin-bottom:6px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin-bottom: 6px;
+	}
+
+	.vkbm-reminder-hours__row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
 	}
 
 	.vkbm-field-errors {

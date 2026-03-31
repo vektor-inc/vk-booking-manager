@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.2.2.0
+Stable tag: 0.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,15 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.3.0 =
+* [ 機能追加 ] 予約可能期間の設定機能を追加（共通設定およびサービス個別設定で、何日先まで予約可能かを制限可能）
+* [ 機能追加 ] サービスメニューに固定開始時刻を複数登録できる機能を追加。設定すると指定した時刻のみ予約可能になる
+* [ 機能追加 ] サービス後バッファの説明テキストを追加
+* [ 機能追加 ] 管理画面の設定にライセンスキーを入力・保存できる「ライセンス」タブを追加（Pro版のみ表示）
+* [ 不具合修正 ] サロンオーナーが予約する際、顧客の電話番号にハイフンや全角数字が含まれていても、半角数字のみで保存されるように修正
+* [ 不具合修正 ] 予約リマインダーメール設定の項目追加時の表示にスペースがない問題を修正
+* [ 不具合修正 ] 予約顧客がダッシュボードにアクセスできてしまう不具合を修正
 
 = 0.2.2 =
 * [ 不具合修正 ] 指名料の表示に税込ラベルが表示されない問題を修正

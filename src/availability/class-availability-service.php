@@ -51,10 +51,12 @@ class Availability_Service {
 	private const MENU_META_DURATION             = '_vkbm_duration_minutes';
 	private const MENU_META_BUFFER_AFTER         = '_vkbm_buffer_after_minutes';
 	private const MENU_META_DEADLINE_HOURS       = '_vkbm_reservation_deadline_hours';
+	private const MENU_META_MAX_ADVANCE_DAYS    = '_vkbm_max_advance_booking_days';
 	private const MENU_META_STAFF_IDS            = '_vkbm_staff_ids';
 	private const MENU_META_ARCHIVED             = '_vkbm_is_archived';
 	private const MENU_META_ONLINE_DISABLED      = '_vkbm_online_unavailable';
 	private const MENU_META_RESERVATION_DAY_TYPE = '_vkbm_reservation_day_type';
+	private const MENU_META_FIXED_START_TIMES    = '_vkbm_fixed_start_times';
 
 	private const DAY_STATUS_OPEN            = 'open';
 	private const DAY_STATUS_REGULAR_HOLIDAY = 'regular_holiday';
@@ -413,10 +415,25 @@ class Availability_Service {
 		if ( ! $this->is_date_allowed_for_menu( (string) ( $menu_settings['reservation_day_type'] ?? '' ), $date, $timezone ) ) {
 			return array();
 		}
-		$slot_step_minutes = $this->get_slot_step_minutes();
-		$total_block_min   = max( $slot_step_minutes, $menu_settings['total_duration'] );
-		$service_minutes   = $menu_settings['duration'];
-		$deadline_cutoff   = null;
+
+		// 予約可能期間を超える日付はスロットを返さない。
+		// Return no slots for dates beyond the max advance booking period.
+		if ( $menu_settings['max_advance_days'] > 0 ) {
+			$now = current_datetime();
+			if ( $now instanceof DateTimeImmutable ) {
+				$max_date = $now->setTimezone( $timezone )->modify( sprintf( '+%d days', $menu_settings['max_advance_days'] ) );
+				$target   = DateTimeImmutable::createFromFormat( 'Y-m-d', $date, $timezone );
+				if ( $target instanceof DateTimeImmutable && $target->format( 'Y-m-d' ) > $max_date->format( 'Y-m-d' ) ) {
+					return array();
+				}
+			}
+		}
+
+		$slot_step_minutes  = $this->get_slot_step_minutes();
+		$total_block_min    = max( $slot_step_minutes, $menu_settings['total_duration'] );
+		$service_minutes    = $menu_settings['duration'];
+		$fixed_start_times  = $menu_settings['fixed_start_times'] ?? array();
+		$deadline_cutoff    = null;
 
 		if ( $menu_settings['deadline_hours'] > 0 ) {
 			// Use the site clock to avoid user-provided timezone drift, but compare in requested timezone.
@@ -453,7 +470,8 @@ class Availability_Service {
 				$service_minutes,
 				$deadline_cutoff,
 				$bookings,
-				$slot_step_minutes
+				$slot_step_minutes,
+				$fixed_start_times
 			);
 
 			if ( empty( $staff_slots ) ) {
@@ -615,6 +633,18 @@ class Availability_Service {
 	 * @param int                                          $slot_step_minutes Slot step in minutes.
 	 * @return array<int, array<string, DateTimeImmutable>>
 	 */
+	/**
+	 * @param array<int, array<string, string>>            $slots             Shift slots (start/end pairs).
+	 * @param string                                       $date              Date (Y-m-d).
+	 * @param DateTimeZone                                 $timezone          Timezone.
+	 * @param int                                          $block_minutes     Slot length including buffers.
+	 * @param int                                          $service_minutes   Pure service minutes.
+	 * @param DateTimeImmutable|null                       $deadline_cutoff   Deadline cutoff.
+	 * @param array<int, array<string, DateTimeImmutable>> $bookings          Existing bookings.
+	 * @param int                                          $slot_step_minutes Slot step in minutes.
+	 * @param array<string>                                $fixed_start_times Fixed start times (HH:MM). If set, only these times are offered.
+	 * @return array<int, array<string, DateTimeImmutable>>
+	 */
 	private function build_slots_from_entry(
 		array $slots,
 		string $date,
@@ -623,7 +653,8 @@ class Availability_Service {
 		int $service_minutes,
 		?DateTimeImmutable $deadline_cutoff,
 		array $bookings,
-		int $slot_step_minutes
+		int $slot_step_minutes,
+		array $fixed_start_times = array()
 	): array {
 		$result = array();
 
@@ -639,34 +670,68 @@ class Availability_Service {
 				continue;
 			}
 
-			$cursor = $range_start;
-			while ( true ) {
-				$end = $cursor->modify( sprintf( '+%d minutes', $block_minutes ) );
+			if ( ! empty( $fixed_start_times ) ) {
+				foreach ( $fixed_start_times as $time ) {
+					$cursor = $this->create_datetime_from_time( $date, $time, $timezone, false );
+					if ( ! $cursor ) {
+						continue;
+					}
 
-				if ( $end > $range_end || $cursor >= $range_end ) {
-					break;
+					if ( $cursor < $range_start || $cursor >= $range_end ) {
+						continue;
+					}
+
+					$end = $cursor->modify( sprintf( '+%d minutes', $block_minutes ) );
+					if ( $end > $range_end ) {
+						continue;
+					}
+
+					if ( $deadline_cutoff && $cursor < $deadline_cutoff ) {
+						continue;
+					}
+
+					if ( $this->has_booking_conflict( $cursor, $end, $bookings ) ) {
+						continue;
+					}
+
+					$service_end = $cursor->modify( sprintf( '+%d minutes', $service_minutes ) );
+					$result[]    = array(
+						'start'            => $cursor,
+						'end'              => $end,
+						'service_end'      => $service_end,
+						'service_duration' => $service_minutes,
+					);
 				}
+			} else {
+				$cursor = $range_start;
+				while ( true ) {
+					$end = $cursor->modify( sprintf( '+%d minutes', $block_minutes ) );
 
-				if ( $deadline_cutoff && $cursor < $deadline_cutoff ) {
+					if ( $end > $range_end || $cursor >= $range_end ) {
+						break;
+					}
+
+					if ( $deadline_cutoff && $cursor < $deadline_cutoff ) {
+						$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
+						continue;
+					}
+
+					if ( $this->has_booking_conflict( $cursor, $end, $bookings ) ) {
+						$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
+						continue;
+					}
+
+					$service_end = $cursor->modify( sprintf( '+%d minutes', $service_minutes ) );
+
+					$result[] = array(
+						'start'            => $cursor,
+						'end'              => $end,
+						'service_end'      => $service_end,
+						'service_duration' => $service_minutes,
+					);
+
 					$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
-					continue;
 				}
-
-				if ( $this->has_booking_conflict( $cursor, $end, $bookings ) ) {
-					$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
-					continue;
-				}
-
-				$service_end = $cursor->modify( sprintf( '+%d minutes', $service_minutes ) );
-
-				$result[] = array(
-					'start'            => $cursor,
-					'end'              => $end,
-					'service_end'      => $service_end,
-					'service_duration' => $service_minutes,
-				);
-
-				$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
 			}
 		}
 
@@ -1057,6 +1122,12 @@ class Availability_Service {
 		$deadline_meta         = get_post_meta( $menu_post->ID, self::MENU_META_DEADLINE_HOURS, true );
 		$deadline              = '' === $deadline_meta ? $provider_deadline : (int) $deadline_meta;
 
+		// 予約可能期間（日数）の設定を取得。サービス個別設定があればそちらを優先。
+		// Retrieve max advance booking days. Per-service override takes priority.
+		$provider_max_advance  = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
+		$max_advance_meta      = get_post_meta( $menu_post->ID, self::MENU_META_MAX_ADVANCE_DAYS, true );
+		$max_advance_days      = '' === $max_advance_meta ? $provider_max_advance : (int) $max_advance_meta;
+
 		$duration          = $duration > 0 ? $duration : 60;
 		$slot_step_minutes = $this->get_slot_step_minutes();
 		$total_block       = max( $duration + $buffer_after, $slot_step_minutes );
@@ -1067,11 +1138,30 @@ class Availability_Service {
 			$reservation_day_type = '';
 		}
 
+		$fixed_start_times_raw = get_post_meta( $menu_post->ID, self::MENU_META_FIXED_START_TIMES, true );
+		$fixed_start_times     = is_array( $fixed_start_times_raw ) ? $fixed_start_times_raw : array();
+		// Normalize: filter to valid HH:MM with allowed minutes (10-minute intervals), deduplicate, and sort.
+		// / 有効な HH:MM（分は10分刻みのみ）に絞り込み、重複排除・ソートを行う.
+		$fixed_start_times = array_values(
+			array_unique(
+				array_filter(
+					$fixed_start_times,
+					static function ( $time ) {
+						return is_string( $time )
+							&& 1 === preg_match( '/^(?:[01]\d|2[0-3]):(?:00|10|20|30|40|50)$/', $time );
+					}
+				)
+			)
+		);
+		sort( $fixed_start_times, SORT_STRING );
+
 		return array(
 			'duration'             => $duration,
 			'total_duration'       => $total_block,
 			'deadline_hours'       => max( 0, $deadline ),
+			'max_advance_days'     => max( 0, $max_advance_days ),
 			'reservation_day_type' => $reservation_day_type,
+			'fixed_start_times'    => $fixed_start_times,
 		);
 	}
 

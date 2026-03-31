@@ -137,6 +137,13 @@ class Provider_Settings_Page {
 		if ( ! is_array( $payload ) ) {
 			$payload = array();
 		}
+		$license_key_raw = null;
+		if ( class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) && current_user_can( 'manage_options' ) ) {
+			$license_key_raw = ( array_key_exists( 'license_key', $payload ) && is_scalar( $payload['license_key'] ) )
+					? sanitize_text_field( (string) $payload['license_key'] )
+					: null;
+		}
+		unset( $payload['license_key'] );
 		$result       = $this->settings_service->save_settings( $payload );
 		$saved        = true;
 		$field_errors = array();
@@ -172,6 +179,9 @@ class Provider_Settings_Page {
 			$old_input = $this->sanitize_old_input( $payload );
 			set_transient( 'vkbm_provider_settings_previous_input', $old_input, 30 );
 		} else {
+			if ( null !== $license_key_raw ) {
+				update_option( 'vk-booking-manager-pro-license-key', $license_key_raw );
+			}
 			add_settings_error(
 				self::MENU_SLUG,
 				'vkbm_provider_settings_save',
@@ -190,7 +200,11 @@ class Provider_Settings_Page {
 		}
 
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
-		if ( ! in_array( $active_tab, array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' ), true ) ) {
+		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		if ( class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) && current_user_can( 'manage_options' ) ) {
+			$allowed_tabs[] = 'license';
+		}
+		if ( ! in_array( $active_tab, $allowed_tabs, true ) ) {
 			$active_tab = '';
 		}
 
@@ -351,6 +365,7 @@ class Provider_Settings_Page {
 			}
 		}
 		$reservation_deadline_hours        = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
+		$max_advance_booking_days          = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
 		$slot_step_minutes                 = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : 15;
 		$service_menu_buffer_after_minutes = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
 		$booking_status_mode               = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : 'confirmed';
@@ -394,11 +409,18 @@ class Provider_Settings_Page {
 		$currency_symbol                 = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
 		$tax_label_text                  = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
 		$currency_placeholder            = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
+		$license_key                     = (string) get_option( 'vk-booking-manager-pro-license-key', '' );
+		$is_pro_edition                  = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		$show_license_tab                = $is_pro_edition && current_user_can( 'manage_options' );
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$reservation_menu_list_display_mode = 'card';
 		}
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
-		if ( ! in_array( $active_tab, array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' ), true ) ) {
+		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		if ( $show_license_tab ) {
+			$allowed_tabs[] = 'license';
+		}
+		if ( ! in_array( $active_tab, $allowed_tabs, true ) ) {
 			$active_tab = 'store';
 		}
 
@@ -424,6 +446,14 @@ class Provider_Settings_Page {
 				>
 					<?php esc_html_e( 'System settings', 'vk-booking-manager' ); ?>
 				</a>
+				<?php if ( $show_license_tab ) : ?>
+				<a
+					href="<?php echo esc_url( add_query_arg( 'tab', 'license', $base_url ) ); ?>"
+					class="nav-tab<?php echo 'license' === $active_tab ? ' nav-tab-active' : ''; ?>"
+				>
+					<?php esc_html_e( 'License', 'vk-booking-manager' ); ?>
+				</a>
+				<?php endif; ?>
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'registration', $base_url ) ); ?>"
 					class="nav-tab<?php echo 'registration' === $active_tab ? ' nav-tab-active' : ''; ?>"
@@ -949,6 +979,7 @@ class Provider_Settings_Page {
 											step="1"
 											value="<?php echo esc_attr( (string) $service_menu_buffer_after_minutes ); ?>"
 										/> <?php esc_html_e( 'minutes', 'vk-booking-manager' ); ?>
+										<p class="description"><?php esc_html_e( 'During the service time plus the buffer time, new reservations will not be accepted.', 'vk-booking-manager' ); ?></p>
 										<p class="description"><?php esc_html_e( 'If there is an input for each service menu, that will take priority.', 'vk-booking-manager' ); ?></p>
 									</td>
 								</tr>
@@ -967,6 +998,29 @@ class Provider_Settings_Page {
 									step="1"
 									value="<?php echo esc_attr( (string) $reservation_deadline_hours ); ?>"
 								/> <?php esc_html_e( 'hours ago', 'vk-booking-manager' ); ?>
+								<p class="description">
+									<?php esc_html_e( 'If there is an input for each service menu, that will take priority.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-provider-max-advance-booking-days"><?php esc_html_e( 'Max advance booking period', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="number"
+									class="small-text"
+									id="vkbm-provider-max-advance-booking-days"
+									name="vkbm_provider_settings[provider_max_advance_booking_days]"
+									min="0"
+									step="1"
+									value="<?php echo esc_attr( (string) $max_advance_booking_days ); ?>"
+								/> <?php esc_html_e( 'days', 'vk-booking-manager' ); ?>
+								<p class="description">
+									<?php esc_html_e( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ); ?>
+								</p>
 								<p class="description">
 									<?php esc_html_e( 'If there is an input for each service menu, that will take priority.', 'vk-booking-manager' ); ?>
 								</p>
@@ -1201,7 +1255,6 @@ class Provider_Settings_Page {
 								</p>
 							</td>
 						</tr>
-
 						<tr class="vkbm-provider-settings__tab-store">
 							<th scope="row"><?php esc_html_e( 'Store logo image', 'vk-booking-manager' ); ?></th>
 							<td>
@@ -1593,6 +1646,51 @@ class Provider_Settings_Page {
 								</dl>
 							</td>
 						</tr>
+					<?php if ( $show_license_tab ) : ?>
+						<?php if ( 'license' === $active_tab ) : ?>
+    					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
+    					<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
+    					<input type="hidden" name="vkbm_provider_settings[tax_label_text]" value="<?php echo esc_attr( $tax_label_text ); ?>" />
+						<?php endif; ?>
+						<tr class="vkbm-provider-settings__tab-license">
+							<th scope="row">
+								<label for="vkbm-license-key"><?php esc_html_e( 'License key', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									id="vkbm-license-key"
+									name="vkbm_provider_settings[license_key]"
+									value="<?php echo esc_attr( $license_key ); ?>"
+									class="regular-text"
+								/>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-license">
+							<th scope="row">
+								<label for="vkbm-license-url"><?php esc_html_e( 'License URL', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									id="vkbm-license-url"
+									value="<?php echo esc_attr( home_url() ); ?>"
+									class="regular-text"
+									readonly
+								/>
+								<p class="description"><?php
+									printf(
+										wp_kses(
+											/* translators: %s: URL of VWS license registration page */
+											__( 'Please <a href="%s" target="_blank" rel="noopener noreferrer">register with VWS</a> the license URL.', 'vk-booking-manager' ),
+											array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) )
+										),
+										esc_url( 'https://vws.vektor-inc.co.jp/my-account/license' )
+									);
+								?></p>
+							</td>
+						</tr>
+					<?php endif; ?>
 					</tbody>
 				</table>
 
@@ -1829,6 +1927,7 @@ class Provider_Settings_Page {
 		$output['resource_label_menu']                            = sanitize_text_field( $input['resource_label_menu'] ?? 'Staff available' );
 			$output['provider_business_hours']                    = sanitize_textarea_field( $input['provider_business_hours'] ?? '' );
 			$output['provider_reservation_deadline_hours']        = absint( $input['provider_reservation_deadline_hours'] ?? 0 );
+			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? 0 );
 			$output['provider_service_menu_buffer_after_minutes'] = absint( $input['provider_service_menu_buffer_after_minutes'] ?? 0 );
 			$output['provider_booking_status_mode']               = sanitize_key( (string) ( $input['provider_booking_status_mode'] ?? 'confirmed' ) );
 		$output['provider_booking_cancel_mode']                   = sanitize_key( (string) ( $input['provider_booking_cancel_mode'] ?? 'hours' ) );

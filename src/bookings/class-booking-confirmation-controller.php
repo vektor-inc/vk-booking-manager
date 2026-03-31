@@ -266,9 +266,10 @@ class Booking_Confirmation_Controller {
 		$customer_name_override = $can_override_contact
 			? sanitize_text_field( (string) ( $request['customer_name'] ?? '' ) )
 			: '';
+		// 電話番号を正規化する：全角数字を半角に変換し、数字以外の文字（ハイフン・スペース・括弧など）を除去する.
 		$customer_phone         = $can_override_contact
-			? sanitize_text_field( (string) ( $request['customer_phone'] ?? '' ) )
-			: $this->get_user_phone_number( $user->ID );
+			? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) ( $request['customer_phone'] ?? '' ) ) )
+			: VKBM_Helper::normalize_phone_number( $this->get_user_phone_number( $user->ID ) );
 		$internal_note          = $can_override_contact
 			? sanitize_textarea_field( (string) ( $request['internal_note'] ?? '' ) )
 			: '';
@@ -278,11 +279,11 @@ class Booking_Confirmation_Controller {
 		$matched_user_id        = 0;
 
 		if ( $can_override_contact ) {
-			$normalized_phone = VKBM_Helper::normalize_phone_number( $customer_phone );
-			if ( '' !== $normalized_phone ) {
+			// $customer_phone は既に正規化済みのためそのままユーザー検索に使用する.
+			if ( '' !== $customer_phone ) {
 				// Assign booking author by matching phone number when possible.
 				// 電話番号が一致するユーザーがいれば予約投稿者を割り当てる.
-				$matched_user = $this->get_user_by_phone_number( $normalized_phone );
+				$matched_user = $this->get_user_by_phone_number( $customer_phone );
 				if ( $matched_user instanceof WP_User ) {
 					$booking_author_id = (int) $matched_user->ID;
 					$customer_email    = (string) $matched_user->user_email;

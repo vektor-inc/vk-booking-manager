@@ -113,6 +113,16 @@
 		display: block;
 		margin-bottom:5px;
 	}
+	input:is( [type="number"],[type="text"] ){
+		margin-bottom:var(--vkbm--spacing--xs);
+	}
+}
+
+.vkbm-fixed-start-time-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
 }
 
 .vkbm-booking-quick-edit {

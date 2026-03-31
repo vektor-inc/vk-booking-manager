@@ -31,6 +31,7 @@ class Service_Menu_Editor {
 	private const META_RESERVATION_DAY_TYPE   = '_vkbm_reservation_day_type';
 	private const META_OTHER_CONDITIONS       = '_vkbm_other_conditions';
 	private const META_DISABLE_NOMINATION_FEE = '_vkbm_disable_nomination_fee';
+	private const META_FIXED_START_TIMES      = '_vkbm_fixed_start_times';
 
 	/**
 	 * Register hooks.
@@ -39,6 +40,44 @@ class Service_Menu_Editor {
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ), 1 );
 		add_action( 'do_meta_boxes', array( $this, 'promote_vkbm_meta_box' ), 10, 3 );
 		add_action( 'save_post_' . Service_Menu_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * Enqueue admin assets for service menu editor.
+	 *
+	 * @param string $hook Current admin page hook.
+	 */
+	public function enqueue_assets( string $hook ): void {
+		$screen = get_current_screen();
+
+		if ( ! $screen || Service_Menu_Post_Type::POST_TYPE !== $screen->post_type ) {
+			return;
+		}
+
+		if ( 'post.php' !== $hook && 'post-new.php' !== $hook ) {
+			return;
+		}
+
+		$base_url = plugin_dir_url( VKBM_PLUGIN_FILE );
+		wp_enqueue_script(
+			'vkbm-service-menu-editor',
+			$base_url . 'assets/js/service-menu-editor.js',
+			array( 'jquery' ),
+			VKBM_VERSION,
+			true
+		);
+
+		wp_localize_script(
+			'vkbm-service-menu-editor',
+			'vkbmServiceMenuEditor',
+			array(
+				'i18n' => array(
+					// Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
+					'delete' => __( 'Delete', 'vk-booking-manager' ),
+				),
+			)
+		);
 	}
 
 	/**
@@ -210,7 +249,8 @@ class Service_Menu_Editor {
 		<div class="vkbm-service-menu-field">
 			<label for="vkbm_service_menu_buffer_after"><?php esc_html_e( 'Post-service buffer (min)', 'vk-booking-manager' ); ?></label>
 			<input type="number" id="vkbm_service_menu_buffer_after" name="vkbm_service_menu[buffer_after_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $buffer_after_minutes ); ?>" />
-			<p class="description"><?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
+			<p class="description"><?php esc_html_e( 'During the service time plus the buffer time, new reservations will not be accepted.', 'vk-booking-manager' ); ?><br />
+			<?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
 		</div>
 		<div class="vkbm-service-menu-field">
 			<label for="vkbm_service_menu_reservation_day_type"><?php esc_html_e( 'Reservation date', 'vk-booking-manager' ); ?></label>
@@ -229,16 +269,62 @@ class Service_Menu_Editor {
 			<input type="number" id="vkbm_service_menu_reservation_deadline" name="vkbm_service_menu[reservation_deadline_hours]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $reservation_deadline ); ?>" /> <?php esc_html_e( 'hours ago', 'vk-booking-manager' ); ?>
 			<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
 		</div>
-					<div class="vkbm-service-menu-field" style="margin: 12px 0;">
-						<strong><?php esc_html_e( 'Use the details page', 'vk-booking-manager' ); ?></strong>
-						<p style="margin: 6px 0 0;">
-							<label>
-								<input type="checkbox" name="vkbm_service_menu[use_detail_page]" value="1" <?php checked( '1', $use_detail_page ); ?> />
-								<?php esc_html_e( 'Use the details page', 'vk-booking-manager' ); ?>
-							</label>
-						</p>
+		<?php
+		$max_advance_days = get_post_meta( $post->ID, '_vkbm_max_advance_booking_days', true );
+		?>
+		<div class="vkbm-service-menu-field">
+			<label for="vkbm_service_menu_max_advance_booking_days"><?php esc_html_e( 'Max advance booking period', 'vk-booking-manager' ); ?></label>
+			<input type="number" id="vkbm_service_menu_max_advance_booking_days" name="vkbm_service_menu[max_advance_booking_days]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $max_advance_days ); ?>" /> <?php esc_html_e( 'days', 'vk-booking-manager' ); ?>
+			<p class="description"><?php esc_html_e( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ); ?></p>
+			<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
+		</div>
+		<div class="vkbm-service-menu-field">
+			<label>
+				<input type="checkbox" name="vkbm_service_menu[use_detail_page]" value="1" <?php checked( '1', $use_detail_page ); ?> />
+				<?php esc_html_e( 'Use the details page', 'vk-booking-manager' ); ?>
+			</label>
+		</div>
+		<?php $this->render_fixed_start_times_field( $post ); ?>
+		<?php
+	}
+
+	/**
+	 * Render the fixed start times field.
+	 *
+	 * @param WP_Post $post Current post object.
+	 */
+	private function render_fixed_start_times_field( WP_Post $post ): void {
+		$fixed_start_times = get_post_meta( $post->ID, self::META_FIXED_START_TIMES, true );
+		$fixed_start_times = is_array( $fixed_start_times ) ? $fixed_start_times : array();
+		?>
+		<div class="vkbm-service-menu-field">
+			<strong><?php esc_html_e( 'Fixed start times', 'vk-booking-manager' ); ?></strong>
+			<p class="description"><?php esc_html_e( 'If set, only the specified times are available for booking. Leave empty to use the default slot step.', 'vk-booking-manager' ); ?></p>
+			<div id="vkbm-fixed-start-times-list">
+				<?php foreach ( $fixed_start_times as $time ) : ?>
+					<div class="vkbm-fixed-start-time-row">
+						<select name="vkbm_service_menu[fixed_start_times][]" class="vkbm-fixed-start-hour">
+							<?php for ( $h = 0; $h <= 23; $h++ ) : ?>
+								<option value="<?php echo esc_attr( sprintf( '%02d', $h ) ); ?>" <?php selected( sprintf( '%02d', $h ), substr( (string) $time, 0, 2 ) ); ?>>
+									<?php echo esc_html( sprintf( '%02d', $h ) ); ?>
+								</option>
+							<?php endfor; ?>
+						</select>
+						<span>:</span>
+						<select name="vkbm_service_menu[fixed_start_minutes][]" class="vkbm-fixed-start-minute">
+							<?php foreach ( array( '00', '10', '20', '30', '40', '50' ) as $min ) : ?>
+								<option value="<?php echo esc_attr( $min ); ?>" <?php selected( $min, substr( (string) $time, 3, 2 ) ); ?>>
+									<?php echo esc_html( $min ); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+						<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-fixed-start-time-remove"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button>
 					</div>
-					<?php
+				<?php endforeach; ?>
+			</div>
+			<button type="button" id="vkbm-fixed-start-time-add" class="button"><?php esc_html_e( '+ Add time', 'vk-booking-manager' ); ?></button>
+		</div>
+		<?php
 	}
 
 	/**
@@ -356,28 +442,39 @@ class Service_Menu_Editor {
 		$duration                       = $this->sanitize_numeric_value( $data, 'duration_minutes' );
 		$buffer_after                   = $this->sanitize_numeric_value( $data, 'buffer_after_minutes' );
 		$deadline                       = $this->sanitize_numeric_value( $data, 'reservation_deadline_hours' );
+		$max_advance_days               = $this->sanitize_integer_value( $data, 'max_advance_booking_days' );
 		$reservation_day_type           = $this->sanitize_reservation_day_type( $data['reservation_day_type'] ?? '' );
 		$online_unavailable             = isset( $data['online_unavailable'] ) ? '1' : '';
 		$archive                        = isset( $data['is_archived'] ) ? '1' : '';
 		$use_detail_page                = isset( $data['use_detail_page'] ) ? '1' : '';
 		$disable_nomination_fee         = isset( $data['disable_nomination_fee'] ) ? '1' : '';
 		$staff_ids                      = $this->sanitize_staff_ids( $data['staff_ids'] ?? array() );
+		$fixed_start_times              = $this->sanitize_fixed_start_times(
+			$data['fixed_start_times'] ?? array(),
+			$data['fixed_start_minutes'] ?? array()
+		);
 
 			$this->update_meta_value( $post_id, '_vkbm_catch_copy', $catch_copy );
-			$this->update_meta_value( $post_id, '_vkbm_internal_memo', $internal_memo );
-			$this->update_meta_value( $post_id, self::META_OTHER_CONDITIONS, $other_conditions );
-			$this->update_meta_value( $post_id, '_vkbm_base_price', $base_price );
-			$this->update_meta_value( $post_id, '_vkbm_duration_minutes', $duration );
-			$this->update_meta_value( $post_id, '_vkbm_buffer_after_minutes', $buffer_after );
-				$this->update_meta_value( $post_id, '_vkbm_reservation_deadline_hours', $deadline );
-				$this->update_meta_value( $post_id, self::META_RESERVATION_DAY_TYPE, $reservation_day_type );
-				$this->update_meta_value( $post_id, '_vkbm_online_unavailable', $online_unavailable );
-				delete_post_meta( $post_id, '_vkbm_online_available' );
-				$this->update_meta_value( $post_id, '_vkbm_is_archived', $archive );
-				$this->update_meta_value( $post_id, self::META_USE_DETAIL_PAGE, $use_detail_page );
-				$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
+		$this->update_meta_value( $post_id, '_vkbm_internal_memo', $internal_memo );
+		$this->update_meta_value( $post_id, self::META_OTHER_CONDITIONS, $other_conditions );
+		$this->update_meta_value( $post_id, '_vkbm_base_price', $base_price );
+		$this->update_meta_value( $post_id, '_vkbm_duration_minutes', $duration );
+		$this->update_meta_value( $post_id, '_vkbm_buffer_after_minutes', $buffer_after );
+		$this->update_meta_value( $post_id, '_vkbm_reservation_deadline_hours', $deadline );
+		$this->update_meta_value( $post_id, '_vkbm_max_advance_booking_days', $max_advance_days );
+		$this->update_meta_value( $post_id, self::META_RESERVATION_DAY_TYPE, $reservation_day_type );
+		$this->update_meta_value( $post_id, '_vkbm_online_unavailable', $online_unavailable );
+		delete_post_meta( $post_id, '_vkbm_online_available' );
+		$this->update_meta_value( $post_id, '_vkbm_is_archived', $archive );
+		$this->update_meta_value( $post_id, self::META_USE_DETAIL_PAGE, $use_detail_page );
+		$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
 		if ( Staff_Editor::is_enabled() ) {
 			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
+		}
+		if ( empty( $fixed_start_times ) ) {
+			delete_post_meta( $post_id, self::META_FIXED_START_TIMES );
+		} else {
+			update_post_meta( $post_id, self::META_FIXED_START_TIMES, $fixed_start_times );
 		}
 	}
 
@@ -434,6 +531,29 @@ class Service_Menu_Editor {
 		return (string) $value;
 	}
 
+	/**
+	 * Sanitize integer values. Returns empty string if non-integer or blank.
+	 *
+	 * @param array  $data Submitted data.
+	 * @param string $key  Array key.
+	 * @return string
+	 */
+	private function sanitize_integer_value( array $data, string $key ): string {
+		if ( ! isset( $data[ $key ] ) ) {
+			return '';
+		}
+
+		$raw = trim( (string) wp_unslash( $data[ $key ] ) );
+
+		if ( '' === $raw || false === filter_var( $raw, FILTER_VALIDATE_INT ) ) {
+			return '';
+		}
+
+		$value = max( 0, intval( $raw ) );
+
+		return (string) $value;
+	}
+
 		/**
 		 * Sanitize reservation day type.
 		 *
@@ -457,6 +577,42 @@ class Service_Menu_Editor {
 	 * @param string $key  Array key.
 	 * @return string
 	 */
+	/**
+	 * Sanitize fixed start times from parallel hour/minute arrays.
+	 *
+	 * @param mixed $hours   Array of hour values (HH).
+	 * @param mixed $minutes Array of minute values (MM).
+	 * @return array<string> Sorted unique HH:MM strings.
+	 */
+	private function sanitize_fixed_start_times( $hours, $minutes ): array {
+		if ( ! is_array( $hours ) || ! is_array( $minutes ) ) {
+			return array();
+		}
+
+		$result = array();
+
+		foreach ( $hours as $index => $hour ) {
+			$h = (int) sanitize_text_field( wp_unslash( (string) $hour ) );
+			$m = (int) sanitize_text_field( wp_unslash( (string) ( $minutes[ $index ] ?? '0' ) ) );
+
+			if ( $h < 0 || $h > 23 ) {
+				continue;
+			}
+
+			$allowed_minutes = array( 0, 10, 20, 30, 40, 50 );
+			if ( ! in_array( $m, $allowed_minutes, true ) ) {
+				continue;
+			}
+
+			$result[] = sprintf( '%02d:%02d', $h, $m );
+		}
+
+		$result = array_unique( $result );
+		sort( $result );
+
+		return array_values( $result );
+	}
+
 	/**
 	 * Sanitize staff ID array.
 	 *

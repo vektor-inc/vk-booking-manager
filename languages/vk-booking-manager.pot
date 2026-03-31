@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: VK Booking Manager Pro (Beta) 0.2.1.0\n"
+"Project-Id-Version: VK Booking Manager Pro (Beta) 0.2.2.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-manager-pro\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-03-12T09:30:45+00:00\n"
+"POT-Creation-Date: 2026-03-31T05:30:39+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -51,7 +51,7 @@ msgid "Email log is currently disabled."
 msgstr ""
 
 #: src/admin/class-email-log-page.php:155
-#: src/admin/class-provider-settings-page.php:269
+#: src/admin/class-provider-settings-page.php:283
 #: src/admin/class-shift-dashboard-page.php:159
 #: src/shifts/class-shift-editor.php:483
 msgid "You do not have permission to access this page."
@@ -106,7 +106,7 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:95
 #: src/admin/class-provider-settings-page.php:108
 #: src/admin/class-provider-settings-page.php:109
-#: src/admin/class-provider-settings-page.php:413
+#: src/admin/class-provider-settings-page.php:434
 msgid "Basic settings"
 msgstr ""
 
@@ -114,753 +114,775 @@ msgstr ""
 msgid "BM settings"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:167
+#: src/admin/class-provider-settings-page.php:174
 msgid "Failed to save settings."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:178
+#: src/admin/class-provider-settings-page.php:188
 msgid "Basic settings saved."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:242
+#: src/admin/class-provider-settings-page.php:256
 msgid "Select logo image"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:243
-#: src/auth/class-auth-shortcodes.php:1887
-#: src/auth/class-auth-shortcodes.php:1906
-#: src/auth/class-auth-shortcodes.php:1927
+#: src/admin/class-provider-settings-page.php:257
+#: src/auth/class-auth-shortcodes.php:1963
+#: src/auth/class-auth-shortcodes.php:1982
+#: src/auth/class-auth-shortcodes.php:2003
 msgid "Select"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:414
+#: src/admin/class-provider-settings-page.php:435
 msgid "Settings tab"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:419
+#: src/admin/class-provider-settings-page.php:440
 msgid "Store basic information"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:425
+#: src/admin/class-provider-settings-page.php:446
 msgid "System settings"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:431
+#: src/admin/class-provider-settings-page.php:453
+msgid "License"
+msgstr ""
+
+#: src/admin/class-provider-settings-page.php:460
 msgid "User registration settings"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:437
+#: src/admin/class-provider-settings-page.php:466
 msgid "User consent items"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:443
+#: src/admin/class-provider-settings-page.php:472
 msgid "design settings"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:449
-#: src/admin/class-provider-settings-page.php:1578
+#: src/admin/class-provider-settings-page.php:478
+#: src/admin/class-provider-settings-page.php:1607
 msgid "FAQ"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:455
+#: src/admin/class-provider-settings-page.php:484
 msgid "Advanced settings"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:466
-#: src/admin/class-provider-settings-page.php:846
+#: src/admin/class-provider-settings-page.php:495
+#: src/admin/class-provider-settings-page.php:875
 #: src/admin/class-setup-notices.php:186
 msgid "Business name"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:476
+#: src/admin/class-provider-settings-page.php:505
 msgid "This is the name used in notification emails and screen displays."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:482
+#: src/admin/class-provider-settings-page.php:511
 msgid "Address"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:491
+#: src/admin/class-provider-settings-page.php:520
 msgid "Please enter the prefecture, city, town, street address, building name, etc. all at once."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:497
+#: src/admin/class-provider-settings-page.php:526
 msgid "Main phone number"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:507
+#: src/admin/class-provider-settings-page.php:536
 msgid "It will be displayed in the signature of the notification email and the contact information."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:513
+#: src/admin/class-provider-settings-page.php:542
 msgid "Business hours text"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:522
+#: src/admin/class-provider-settings-page.php:551
 msgid "This will be displayed in the signature of notification emails, etc."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:528
+#: src/admin/class-provider-settings-page.php:557
 #: src/blocks/reservation/booking-confirm-app.js:1192
 msgid "Payment method"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:537
+#: src/admin/class-provider-settings-page.php:566
 msgid "Enter payment instructions and supported payment methods (cash, credit card, IC, etc.) when visiting the store."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:543
+#: src/admin/class-provider-settings-page.php:572
 #: src/admin/class-setup-notices.php:198
 #: src/admin/class-shift-dashboard-page.php:1781
 #: src/shifts/class-shift-editor.php:789
 msgid "Regular holiday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:554
+#: src/admin/class-provider-settings-page.php:583
 msgid "No regular holidays"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:560
+#: src/admin/class-provider-settings-page.php:589
 msgid "period"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:561
+#: src/admin/class-provider-settings-page.php:590
 msgid "day of week"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:562
+#: src/admin/class-provider-settings-page.php:591
 msgid "operation"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:587
+#: src/admin/class-provider-settings-page.php:616
 msgid "Add regular holidays"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:589
+#: src/admin/class-provider-settings-page.php:618
 msgid "Register regular holidays by combining \"every week\", \"1st to 5th\", and days of the week."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:611
-#: src/admin/class-provider-settings-page.php:673
+#: src/admin/class-provider-settings-page.php:640
+#: src/admin/class-provider-settings-page.php:702
 #: src/admin/class-setup-notices.php:210
 #: src/provider-settings/class-settings-sanitizer.php:363
 msgid "Basic business hours"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:637
-#: src/admin/class-provider-settings-page.php:754
+#: src/admin/class-provider-settings-page.php:666
+#: src/admin/class-provider-settings-page.php:783
 #: src/resources/class-resource-schedule-meta-box.php:162
 #: src/shifts/class-shift-editor.php:187
 msgid "Add time zone"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:659
+#: src/admin/class-provider-settings-page.php:688
 msgid "Register the business hours that are common to the entire facility."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:666
+#: src/admin/class-provider-settings-page.php:695
 msgid "Business hours by day of the week"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:672
+#: src/admin/class-provider-settings-page.php:701
 msgid "subject"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:674
+#: src/admin/class-provider-settings-page.php:703
 msgid "Individual time period"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:703
+#: src/admin/class-provider-settings-page.php:732
 msgid "Regular holidays (every week)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:718
+#: src/admin/class-provider-settings-page.php:747
 msgid "Specify individual business hours"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:721
+#: src/admin/class-provider-settings-page.php:750
 msgid "Since it is registered as a weekly regular holiday, it will be treated as closed."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:784
+#: src/admin/class-provider-settings-page.php:813
 msgid "On holidays and days before holidays, shifts are generated based on basic business hours or individual settings."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:790
+#: src/admin/class-provider-settings-page.php:819
 msgid "Website URL"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:801
+#: src/admin/class-provider-settings-page.php:830
 msgid "Use it as a link in notification emails and on the reservation completion screen."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:807
+#: src/admin/class-provider-settings-page.php:836
 #: src/admin/class-setup-notices.php:222
 msgid "Reservation page URL"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:819
+#: src/admin/class-provider-settings-page.php:848
 msgid "Place a \"reservation block\" on the fixed page you want to use as a reservation page, and then enter the public URL of that fixed page."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:825
+#: src/admin/class-provider-settings-page.php:854
 msgid "Reservation page display elements"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:836
+#: src/admin/class-provider-settings-page.php:865
 msgid "logo image"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:856
+#: src/admin/class-provider-settings-page.php:885
 msgid "Service menu list"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:865
+#: src/admin/class-provider-settings-page.php:894
 msgid "Service menu display mode"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:873
+#: src/admin/class-provider-settings-page.php:902
 #: src/post-types/class-service-menu-post-type.php:834
 #: src/post-types/class-service-menu-post-type.php:862
 #: src/blocks/menu-loop/edit.js:32
 msgid "card"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:876
+#: src/admin/class-provider-settings-page.php:905
 #: src/post-types/class-service-menu-post-type.php:833
 #: src/post-types/class-service-menu-post-type.php:861
 #: src/blocks/menu-loop/edit.js:33
 msgid "text"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:886
+#: src/admin/class-provider-settings-page.php:915
 msgid "Currency symbol"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:897
+#: src/admin/class-provider-settings-page.php:926
 msgid "Enter the currency symbol to display with prices (e.g., $, ¥, €). If left empty, the default symbol based on the site language will be used."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:905
+#: src/admin/class-provider-settings-page.php:934
 msgid "Tax label text"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:915
+#: src/admin/class-provider-settings-page.php:944
 msgid "Shown to the right of prices only when this field is filled (e.g., \"(tax included)\")."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:922
+#: src/admin/class-provider-settings-page.php:951
 msgid "Reservation slot time"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:929
+#: src/admin/class-provider-settings-page.php:958
 msgid "10 minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:930
+#: src/admin/class-provider-settings-page.php:959
 msgid "15 minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:931
+#: src/admin/class-provider-settings-page.php:960
 msgid "20 minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:932
+#: src/admin/class-provider-settings-page.php:961
 msgid "30 minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:933
+#: src/admin/class-provider-settings-page.php:962
 msgid "60 minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:940
+#: src/admin/class-provider-settings-page.php:969
 #: src/post-types/class-service-menu-post-type.php:152
 #: src/post-types/class-service-menu-post-type.php:514
 msgid "Post-service buffer"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:951
+#: src/admin/class-provider-settings-page.php:980
 #: src/post-types/class-service-menu-post-type.php:504
 #: src/post-types/class-service-menu-post-type.php:516
 msgid "minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:952
-#: src/admin/class-provider-settings-page.php:971
+#: src/admin/class-provider-settings-page.php:981
+#: src/admin/class-service-menu-editor.php:252
+msgid "During the service time plus the buffer time, new reservations will not be accepted."
+msgstr ""
+
+#: src/admin/class-provider-settings-page.php:982
+#: src/admin/class-provider-settings-page.php:1001
 msgid "If there is an input for each service menu, that will take priority."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:958
-#: src/admin/class-service-menu-editor.php:228
+#: src/admin/class-provider-settings-page.php:988
+#: src/admin/class-service-menu-editor.php:268
 #: src/post-types/class-service-menu-post-type.php:151
 #: src/post-types/class-service-menu-post-type.php:508
 msgid "Reservation deadline"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:969
-#: src/admin/class-service-menu-editor.php:229
+#: src/admin/class-provider-settings-page.php:999
+#: src/admin/class-service-menu-editor.php:269
 #: src/post-types/class-service-menu-post-type.php:510
 msgid "hours ago"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:978
+#: src/admin/class-provider-settings-page.php:1008
 #: src/bookings/class-booking-admin.php:316
 #: src/bookings/class-booking-admin.php:720
 #: src/bookings/class-booking-admin.php:859
 msgid "Reservation status"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:986
+#: src/admin/class-provider-settings-page.php:1016
 msgid "Instant confirmation"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:989
+#: src/admin/class-provider-settings-page.php:1019
 msgid "Make a tentative reservation"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:993
+#: src/admin/class-provider-settings-page.php:1023
 msgid "For tentative reservations, a reservation confirmation email will be sent to the user even when the reservation is changed to confirmed."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:994
+#: src/admin/class-provider-settings-page.php:1024
 msgid "*Reservations made by users with administrator privileges and salon privileges will be confirmed immediately."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1001
+#: src/admin/class-provider-settings-page.php:1031
 msgid "Reservation cancellation"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1005
+#: src/admin/class-provider-settings-page.php:1035
 msgid "Cancellation of reservations via the web by users"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1012
+#: src/admin/class-provider-settings-page.php:1042
 msgid "time specification"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1015
+#: src/admin/class-provider-settings-page.php:1045
 msgid "Cannot be canceled"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1032
+#: src/admin/class-provider-settings-page.php:1062
 msgid "until the hour"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1038
+#: src/admin/class-provider-settings-page.php:1068
 msgid "Duplicate reservations for the same staff"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1048
+#: src/admin/class-provider-settings-page.php:1078
 msgid "Permitted only if specified from the management screen"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1051
+#: src/admin/class-provider-settings-page.php:1081
 msgid "Duplicate reservations for the same staff member in the same time slot will only be permitted if manually specified by the staff member from the management screen."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1060
+#: src/admin/class-provider-settings-page.php:1090
 #: src/admin/class-setup-notices.php:234
 msgid "Representative email address"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1070
+#: src/admin/class-provider-settings-page.php:1100
 msgid "This is used as the reply address when sending notification emails."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1075
+#: src/admin/class-provider-settings-page.php:1105
 msgid "membership"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1084
+#: src/admin/class-provider-settings-page.php:1114
 msgid "Allow anyone to register as a user"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1087
+#: src/admin/class-provider-settings-page.php:1117
 msgid "*This is the same as the standard WordPress “Membership” settings."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1094
+#: src/admin/class-provider-settings-page.php:1124
 msgid "Email authentication during user registration"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1105
-#: src/admin/class-provider-settings-page.php:1123
+#: src/admin/class-provider-settings-page.php:1135
+#: src/admin/class-provider-settings-page.php:1153
 msgid "enable"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1108
+#: src/admin/class-provider-settings-page.php:1138
 msgid "Uncheck to skip email authentication and enable the user upon registration (mainly for local or test environments)."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1114
+#: src/admin/class-provider-settings-page.php:1144
 msgid "Registration/Login Attempt Limit"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1127
+#: src/admin/class-provider-settings-page.php:1157
 msgid "User registration"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1138
+#: src/admin/class-provider-settings-page.php:1168
 msgid "times / 30 minutes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1142
-#: src/auth/class-auth-shortcodes.php:302
-#: src/auth/class-auth-shortcodes.php:304
+#: src/admin/class-provider-settings-page.php:1172
+#: src/auth/class-auth-shortcodes.php:378
+#: src/auth/class-auth-shortcodes.php:380
 #: src/blocks/reservation/booking-confirm-app.js:1570
 #: src/blocks/reservation/components/reservation-header-nav.js:79
 msgid "Log in"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1153
+#: src/admin/class-provider-settings-page.php:1183
 msgid "times / 10 minutes"
 msgstr ""
 
 #. translators: 1: login rate limit, 2: registration rate limit
-#: src/admin/class-provider-settings-page.php:1160
+#: src/admin/class-provider-settings-page.php:1190
 msgid "Login by IP is limited to %1$d times/10 minutes, and user registration is limited to %2$d times/30 minutes."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1171
+#: src/admin/class-provider-settings-page.php:1201
 msgid "Registration screen redirection"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1180
+#: src/admin/class-provider-settings-page.php:1210
 msgid "Disable the WordPress new user registration screen and redirect to this system's user registration screen"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1183
+#: src/admin/class-provider-settings-page.php:1213
 msgid "Even if WordPress's \"Membership (which allows anyone to register as a user)\" is enabled, wp-login.php?action=register will direct you to the registration screen of this system."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1188
+#: src/admin/class-provider-settings-page.php:1218
 msgid "Login screen redirection"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1197
+#: src/admin/class-provider-settings-page.php:1227
 msgid "Disable the WordPress login screen and redirect to this system's login screen"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1200
+#: src/admin/class-provider-settings-page.php:1230
 msgid "If you access wp-login.php, you will be directed to the login screen of the reservation page."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1206
+#: src/admin/class-provider-settings-page.php:1235
 msgid "Store logo image"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1222
+#: src/admin/class-provider-settings-page.php:1251
 msgid "select image"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1230
+#: src/admin/class-provider-settings-page.php:1259
 msgid "delete image"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1232
+#: src/admin/class-provider-settings-page.php:1261
 msgid "Select a logo image from your Media Library (optional)."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1238
+#: src/admin/class-provider-settings-page.php:1267
 #: src/blocks/reservation/booking-confirm-app.js:1132
 msgid "Cancellation policy"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1247
+#: src/admin/class-provider-settings-page.php:1276
 msgid "Enter the cancellation policy to be displayed on the reservation page, notification email, etc."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1253
-#: src/auth/class-auth-shortcodes.php:553
+#: src/admin/class-provider-settings-page.php:1282
+#: src/auth/class-auth-shortcodes.php:629
 #: src/blocks/reservation/booking-confirm-app.js:1164
 msgid "System Terms of Use"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1262
+#: src/admin/class-provider-settings-page.php:1291
 msgid "Enter the terms of use for the entire service, including membership registration, prohibitions, and disclaimers."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1267
-#: src/admin/class-provider-settings-page.php:1307
+#: src/admin/class-provider-settings-page.php:1296
+#: src/admin/class-provider-settings-page.php:1336
 #: src/admin/class-setup-notices.php:246
-#: src/auth/class-auth-shortcodes.php:575
-#: src/auth/class-auth-shortcodes.php:597
-#: src/auth/class-auth-shortcodes.php:613
+#: src/auth/class-auth-shortcodes.php:651
+#: src/auth/class-auth-shortcodes.php:673
+#: src/auth/class-auth-shortcodes.php:689
 msgid "Privacy policy"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1275
-#: src/auth/class-auth-shortcodes.php:2046
+#: src/admin/class-provider-settings-page.php:1304
+#: src/auth/class-auth-shortcodes.php:2122
 msgid "please select"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1278
+#: src/admin/class-provider-settings-page.php:1307
 msgid "Specify the URL of the privacy policy page"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1281
+#: src/admin/class-provider-settings-page.php:1310
 msgid "Specify from this page"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1285
+#: src/admin/class-provider-settings-page.php:1314
 msgid "Select how to display the privacy policy that requires consent during user registration."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1292
+#: src/admin/class-provider-settings-page.php:1321
 msgid "Privacy policy page URL"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1320
+#: src/admin/class-provider-settings-page.php:1349
 msgid "Alert when shift is not registered"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1333
+#: src/admin/class-provider-settings-page.php:1362
 msgid "Display an alert if a shift for the next month is not registered."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1334
+#: src/admin/class-provider-settings-page.php:1363
 msgid "Displayed if there is an unregistered month within the specified number of months including the current month."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1339
+#: src/admin/class-provider-settings-page.php:1368
 msgid "Reservation reminder email"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1360
-#: src/admin/class-provider-settings-page.php:1385
+#: src/admin/class-provider-settings-page.php:1389
+#: src/admin/class-provider-settings-page.php:1414
 msgid "hours before"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1362
-#: src/admin/class-provider-settings-page.php:1387
+#: src/admin/class-provider-settings-page.php:1391
+#: src/admin/class-provider-settings-page.php:1416
 msgid "Remove"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1368
+#: src/admin/class-provider-settings-page.php:1397
 msgid "Add time"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1371
+#: src/admin/class-provider-settings-page.php:1400
 msgid "Sends reminder emails to customers before their reservation time."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1396
+#: src/admin/class-provider-settings-page.php:1425
 msgid "Resource name (singular)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1407
+#: src/admin/class-provider-settings-page.php:1436
 msgid "Replaces the \"staff\" notation on the screen (does not change the post type name vkbm_resource)."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1414
+#: src/admin/class-provider-settings-page.php:1443
 msgid "resource label"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1425
+#: src/admin/class-provider-settings-page.php:1454
 msgid "Replaces the \"available staff\" notation in the menu card."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1433
+#: src/admin/class-provider-settings-page.php:1462
 msgid "Resource name (multiple)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1444
+#: src/admin/class-provider-settings-page.php:1473
 msgid "Used for plural notation in lists, menu names, etc."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1452
+#: src/admin/class-provider-settings-page.php:1481
 msgid "Reservation button text"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1463
+#: src/admin/class-provider-settings-page.php:1492
 msgid "Display text for the button that proceeds to the reservation page from the menu loop."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1469
+#: src/admin/class-provider-settings-page.php:1498
 msgid "Detail button text"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1480
+#: src/admin/class-provider-settings-page.php:1509
 msgid "Display text for the button that proceeds to the service detail page from the menu loop."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1486
+#: src/admin/class-provider-settings-page.php:1515
 msgid "primary color"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1497
+#: src/admin/class-provider-settings-page.php:1526
 msgid "Use as the UI primary color (--vkbm--color--primary)."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1499
+#: src/admin/class-provider-settings-page.php:1528
 msgid "If not specified, the theme's primary color will be used if the theme's primary color (--wp--preset--color--primary) exists."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1505
+#: src/admin/class-provider-settings-page.php:1534
 msgid "Proceed to reservation button color"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1516
+#: src/admin/class-provider-settings-page.php:1545
 msgid "Use as the background color for the Proceed to Booking button."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1518
+#: src/admin/class-provider-settings-page.php:1547
 msgid "If not specified, the primary color will be applied."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1524
+#: src/admin/class-provider-settings-page.php:1553
 msgid "Basic size of rounded corners"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1536
+#: src/admin/class-provider-settings-page.php:1565
 msgid "Applies to rounded corners (--vkbm--radius--md) in the main component."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1540
+#: src/admin/class-provider-settings-page.php:1569
 msgid "Email debug"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1549
+#: src/admin/class-provider-settings-page.php:1578
 msgid "Enable email log"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1552
+#: src/admin/class-provider-settings-page.php:1581
 msgid "When enabled, the Email Log page becomes available and email send attempts are recorded."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1558
+#: src/admin/class-provider-settings-page.php:1587
 msgid "Email log retention period"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1570
+#: src/admin/class-provider-settings-page.php:1599
 msgid "days"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1572
+#: src/admin/class-provider-settings-page.php:1601
 msgid "Logs older than this will be automatically deleted."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1582
+#: src/admin/class-provider-settings-page.php:1611
 msgid "Even after registering as a new user, the user does not receive a confirmation email."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1585
+#: src/admin/class-provider-settings-page.php:1614
 msgid "To authenticate the email sender and prevent tampering, emails that do not have DKIM settings on the server may not even reach the spam folder."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1586
+#: src/admin/class-provider-settings-page.php:1615
 msgid "Especially if the user's email address is gmail, it will not arrive."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1588
+#: src/admin/class-provider-settings-page.php:1617
 msgid "Please check the following with the site administrator."
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1590
+#: src/admin/class-provider-settings-page.php:1619
 msgid "Is DKIM configured on the server side for the domain where this system is running?"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1599
+#: src/admin/class-provider-settings-page.php:1633
+msgid "License key"
+msgstr ""
+
+#: src/admin/class-provider-settings-page.php:1647
+msgid "License URL"
+msgstr ""
+
+#. translators: %s: URL of VWS license registration page
+#: src/admin/class-provider-settings-page.php:1661
+msgid "Please <a href=\"%s\" target=\"_blank\" rel=\"noopener noreferrer\">register with VWS</a> the license URL."
+msgstr ""
+
+#: src/admin/class-provider-settings-page.php:1673
 msgid "Save changes"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1611
+#: src/admin/class-provider-settings-page.php:1685
 msgid "Weekly"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1612
+#: src/admin/class-provider-settings-page.php:1686
 msgid "1st"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1613
+#: src/admin/class-provider-settings-page.php:1687
 msgid "2nd"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1614
+#: src/admin/class-provider-settings-page.php:1688
 msgid "3rd"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1615
+#: src/admin/class-provider-settings-page.php:1689
 msgid "4th"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1616
+#: src/admin/class-provider-settings-page.php:1690
 msgid "Fifth"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1627
-#: src/admin/class-provider-settings-page.php:1644
+#: src/admin/class-provider-settings-page.php:1701
+#: src/admin/class-provider-settings-page.php:1718
 #: src/provider-settings/class-settings-sanitizer.php:657
 #: src/resources/class-resource-schedule-meta-box.php:62
 msgid "Monday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1628
-#: src/admin/class-provider-settings-page.php:1645
+#: src/admin/class-provider-settings-page.php:1702
+#: src/admin/class-provider-settings-page.php:1719
 #: src/provider-settings/class-settings-sanitizer.php:658
 #: src/resources/class-resource-schedule-meta-box.php:63
 msgid "Tuesday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1629
-#: src/admin/class-provider-settings-page.php:1646
+#: src/admin/class-provider-settings-page.php:1703
+#: src/admin/class-provider-settings-page.php:1720
 #: src/provider-settings/class-settings-sanitizer.php:659
 #: src/resources/class-resource-schedule-meta-box.php:64
 msgid "Wednesday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1630
-#: src/admin/class-provider-settings-page.php:1647
+#: src/admin/class-provider-settings-page.php:1704
+#: src/admin/class-provider-settings-page.php:1721
 #: src/provider-settings/class-settings-sanitizer.php:660
 #: src/resources/class-resource-schedule-meta-box.php:65
 msgid "Thursday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1631
-#: src/admin/class-provider-settings-page.php:1648
+#: src/admin/class-provider-settings-page.php:1705
+#: src/admin/class-provider-settings-page.php:1722
 #: src/provider-settings/class-settings-sanitizer.php:661
 #: src/resources/class-resource-schedule-meta-box.php:66
 msgid "Friday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1632
-#: src/admin/class-provider-settings-page.php:1649
+#: src/admin/class-provider-settings-page.php:1706
+#: src/admin/class-provider-settings-page.php:1723
 #: src/provider-settings/class-settings-sanitizer.php:662
 #: src/resources/class-resource-schedule-meta-box.php:67
 msgid "Saturday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1633
-#: src/admin/class-provider-settings-page.php:1650
+#: src/admin/class-provider-settings-page.php:1707
+#: src/admin/class-provider-settings-page.php:1724
 #: src/provider-settings/class-settings-sanitizer.php:663
 #: src/resources/class-resource-schedule-meta-box.php:68
 msgid "Sunday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1651
+#: src/admin/class-provider-settings-page.php:1725
 #: src/provider-settings/class-settings-sanitizer.php:664
 #: src/resources/class-resource-schedule-meta-box.php:69
 msgid "Holiday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:1652
+#: src/admin/class-provider-settings-page.php:1726
 #: src/provider-settings/class-settings-sanitizer.php:665
 #: src/resources/class-resource-schedule-meta-box.php:70
 msgid "The day before a public holiday"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2078
+#: src/admin/class-provider-settings-page.php:2152
 msgid "Start time (hour) of basic business hours"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2085
-#: src/admin/class-provider-settings-page.php:2105
-#: src/admin/class-provider-settings-page.php:2127
-#: src/admin/class-provider-settings-page.php:2147
-#: src/admin/class-provider-settings-page.php:2228
-#: src/admin/class-provider-settings-page.php:2255
-#: src/admin/class-provider-settings-page.php:2284
-#: src/admin/class-provider-settings-page.php:2311
+#: src/admin/class-provider-settings-page.php:2159
+#: src/admin/class-provider-settings-page.php:2179
+#: src/admin/class-provider-settings-page.php:2201
+#: src/admin/class-provider-settings-page.php:2221
+#: src/admin/class-provider-settings-page.php:2302
+#: src/admin/class-provider-settings-page.php:2329
+#: src/admin/class-provider-settings-page.php:2358
+#: src/admin/class-provider-settings-page.php:2385
 #: src/resources/class-resource-schedule-meta-box.php:221
 #: src/resources/class-resource-schedule-meta-box.php:242
 #: src/resources/class-resource-schedule-meta-box.php:265
@@ -868,21 +890,21 @@ msgstr ""
 msgid "00"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2098
+#: src/admin/class-provider-settings-page.php:2172
 msgid "Start time of basic business hours (minutes)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2120
+#: src/admin/class-provider-settings-page.php:2194
 msgid "End time (hour) of basic business hours"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2140
+#: src/admin/class-provider-settings-page.php:2214
 msgid "End time of basic business hours (minutes)"
 msgstr ""
 
-#: src/admin/class-provider-settings-page.php:2160
-#: src/admin/class-provider-settings-page.php:2339
-#: src/admin/class-provider-settings-page.php:2462
+#: src/admin/class-provider-settings-page.php:2234
+#: src/admin/class-provider-settings-page.php:2413
+#: src/admin/class-provider-settings-page.php:2536
 #: src/bookings/class-booking-admin.php:526
 #: src/bookings/class-booking-admin.php:541
 #: src/resources/class-resource-schedule-meta-box.php:299
@@ -891,73 +913,79 @@ msgid "delete"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2217
+#: src/admin/class-provider-settings-page.php:2291
 msgid "Start time (hour) of %s"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2244
+#: src/admin/class-provider-settings-page.php:2318
 msgid "Start time of %s (minutes)"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2273
+#: src/admin/class-provider-settings-page.php:2347
 msgid "End time (hour) of %s"
 msgstr ""
 
 #. translators: %s: Day label.
-#: src/admin/class-provider-settings-page.php:2300
+#: src/admin/class-provider-settings-page.php:2374
 msgid "End time of %s (minutes)"
 msgstr ""
 
 #. translators: %s: day label
-#: src/admin/class-provider-settings-page.php:2332
+#: src/admin/class-provider-settings-page.php:2406
 msgid "Remove time slot for %s"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:56
+#. Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
+#: src/admin/class-service-menu-editor.php:77
+#: src/admin/class-service-menu-editor.php:312
+msgid "Delete"
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:95
 msgid "VK Booking Manager"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:67
+#: src/admin/class-service-menu-editor.php:106
 msgid "Staff collaboration"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:77
+#: src/admin/class-service-menu-editor.php:116
 msgid "Public settings"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:152
+#: src/admin/class-service-menu-editor.php:191
 msgid "Internal memo (customer hidden)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:170
+#: src/admin/class-service-menu-editor.php:209
 msgid "Catchphrase"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:176
+#: src/admin/class-service-menu-editor.php:215
 msgid "Basic price"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:187
+#: src/admin/class-service-menu-editor.php:226
 #: src/post-types/class-service-menu-post-type.php:497
 msgid "This menu invalidates the nomination fee"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:207
+#: src/admin/class-service-menu-editor.php:246
 msgid "Time required (minutes)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:211
+#: src/admin/class-service-menu-editor.php:250
 msgid "Post-service buffer (min)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:213
+#: src/admin/class-service-menu-editor.php:253
 #: src/post-types/class-service-menu-post-type.php:519
 msgid "If it is left blank, the information entered on the basic settings screen will be reflected."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:216
+#: src/admin/class-service-menu-editor.php:256
 #: src/blocks/class-menu-loop-block.php:897
 #: src/bookings/class-booking-admin.php:328
 #: src/post-types/class-service-menu-post-type.php:158
@@ -965,26 +993,26 @@ msgstr ""
 msgid "Reservation date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:218
+#: src/admin/class-service-menu-editor.php:258
 #: src/post-types/class-service-menu-post-type.php:552
 msgid "Not specified"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:219
+#: src/admin/class-service-menu-editor.php:259
 #: src/blocks/class-menu-loop-block.php:887
 #: src/post-types/class-service-menu-post-type.php:359
 #: src/post-types/class-service-menu-post-type.php:553
 msgid "Saturdays and Sundays only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:220
+#: src/admin/class-service-menu-editor.php:260
 #: src/blocks/class-menu-loop-block.php:889
 #: src/post-types/class-service-menu-post-type.php:361
 #: src/post-types/class-service-menu-post-type.php:554
 msgid "Weekdays only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:224
+#: src/admin/class-service-menu-editor.php:264
 #: src/blocks/class-menu-loop-block.php:906
 #: src/post-types/class-service-menu-post-type.php:157
 #: src/post-types/class-service-menu-post-type.php:543
@@ -992,31 +1020,42 @@ msgstr ""
 msgid "Other conditions"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:230
+#: src/admin/class-service-menu-editor.php:270
 msgid "If not filled in, the information entered on the basic settings screen will be reflected."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:233
-#: src/admin/class-service-menu-editor.php:237
+#: src/admin/class-service-menu-editor.php:275
 msgid "Use the details page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:267
+#: src/admin/class-service-menu-editor.php:292
+msgid "Fixed start times"
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:293
+msgid "If set, only the specified times are available for booking. Leave empty to use the default slot step."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:316
+msgid "+ Add time"
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:344
 #: src/blocks/class-menu-loop-block.php:1157
 #: src/post-types/class-service-menu-post-type.php:155
 #: src/post-types/class-service-menu-post-type.php:524
 msgid "Staff available"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:270
+#: src/admin/class-service-menu-editor.php:347
 msgid "No staff members are registered."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:312
+#: src/admin/class-service-menu-editor.php:389
 msgid "Disable online reservations"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:318
+#: src/admin/class-service-menu-editor.php:395
 msgid "Mark as archived"
 msgstr ""
 
@@ -1072,7 +1111,7 @@ msgid "Service list"
 msgstr ""
 
 #: src/admin/class-setup-notices.php:524
-#: src/availability/class-availability-service.php:1176
+#: src/availability/class-availability-service.php:1244
 msgid "Shift not registered"
 msgstr ""
 
@@ -1098,7 +1137,7 @@ msgstr ""
 #: src/admin/class-shift-dashboard-page.php:146
 #: src/admin/class-shift-dashboard-page.php:1370
 #: src/admin/class-shift-dashboard-page.php:1746
-#: src/bookings/class-booking-admin.php:1534
+#: src/bookings/class-booking-admin.php:1535
 #: src/notifications/class-booking-notification-service.php:715
 msgid "Confirmed"
 msgstr ""
@@ -1115,7 +1154,7 @@ msgstr ""
 #: src/admin/class-shift-dashboard-page.php:280
 #: src/admin/class-shift-dashboard-page.php:466
 #: src/admin/class-user-profile-fields.php:99
-#: src/auth/class-auth-shortcodes.php:1862
+#: src/auth/class-auth-shortcodes.php:1938
 #: src/shifts/class-shift-editor.php:146
 #: src/shifts/class-shift-editor.php:154
 #: src/shifts/class-shift-editor.php:375
@@ -1157,7 +1196,7 @@ msgstr ""
 #: src/admin/class-shift-dashboard-page.php:272
 #: src/admin/class-shift-dashboard-page.php:458
 #: src/admin/class-user-profile-fields.php:110
-#: src/auth/class-auth-shortcodes.php:1872
+#: src/auth/class-auth-shortcodes.php:1948
 #: src/shifts/class-shift-editor.php:369
 #: src/shifts/class-shift-editor.php:374
 #: src/blocks/reservation/booking-ui/calendar-grid.js:5
@@ -1199,7 +1238,7 @@ msgid "next month"
 msgstr ""
 
 #: src/admin/class-shift-dashboard-page.php:805
-#: src/bookings/class-booking-confirmation-controller.php:702
+#: src/bookings/class-booking-confirmation-controller.php:703
 #: src/post-types/class-booking-post-type.php:44
 #: src/post-types/class-booking-post-type.php:45
 #: src/post-types/class-booking-post-type.php:47
@@ -1324,7 +1363,7 @@ msgstr ""
 
 #. translators: %1$s: Provider name, %2$s: Booking status label.
 #: src/admin/class-shift-dashboard-page.php:1747
-#: src/bookings/class-booking-admin.php:1535
+#: src/bookings/class-booking-admin.php:1536
 #: src/notifications/class-booking-notification-service.php:706
 #: src/notifications/class-booking-notification-service.php:707
 #: src/notifications/class-booking-notification-service.php:747
@@ -1333,7 +1372,7 @@ msgid "Pending"
 msgstr ""
 
 #: src/admin/class-shift-dashboard-page.php:1748
-#: src/bookings/class-booking-admin.php:1536
+#: src/bookings/class-booking-admin.php:1537
 #: src/notifications/class-booking-notification-service.php:739
 #: src/notifications/class-booking-notification-service.php:848
 #: src/blocks/reservation/app.js:1557
@@ -1344,7 +1383,7 @@ msgid "Cancelled"
 msgstr ""
 
 #: src/admin/class-shift-dashboard-page.php:1749
-#: src/bookings/class-booking-admin.php:1537
+#: src/bookings/class-booking-admin.php:1538
 msgid "No-show"
 msgstr ""
 
@@ -1373,403 +1412,403 @@ msgid "Reservation system information"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:63
-#: src/auth/class-auth-shortcodes.php:519
-#: src/auth/class-auth-shortcodes.php:753
+#: src/auth/class-auth-shortcodes.php:595
+#: src/auth/class-auth-shortcodes.php:829
 msgid "Furigana"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:69
-#: src/auth/class-auth-shortcodes.php:763
+#: src/auth/class-auth-shortcodes.php:839
 #: src/bookings/class-booking-admin.php:511
 msgid "telephone number"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:75
-#: src/auth/class-auth-shortcodes.php:1841
+#: src/auth/class-auth-shortcodes.php:1917
 msgid "date of birth"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:86
-#: src/auth/class-auth-shortcodes.php:1848
+#: src/auth/class-auth-shortcodes.php:1924
 msgid "Date of birth (year)"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:88
-#: src/auth/class-auth-shortcodes.php:1852
+#: src/auth/class-auth-shortcodes.php:1928
 #: src/shifts/class-shift-editor.php:137
 #: src/shifts/class-shift-editor.php:145
 msgid "year"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:97
-#: src/auth/class-auth-shortcodes.php:1858
+#: src/auth/class-auth-shortcodes.php:1934
 msgid "date of birth (month)"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:108
-#: src/auth/class-auth-shortcodes.php:1868
+#: src/auth/class-auth-shortcodes.php:1944
 msgid "date of birth (day)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:264
+#: src/auth/class-auth-shortcodes.php:340
 msgid "Invalid verification link."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:272
+#: src/auth/class-auth-shortcodes.php:348
 msgid "The confirmation link has expired."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:279
+#: src/auth/class-auth-shortcodes.php:355
 msgid "Email verification has been completed. Please log in."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:355
+#: src/auth/class-auth-shortcodes.php:431
 msgid "Username or email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:359
-#: src/auth/class-auth-shortcodes.php:501
+#: src/auth/class-auth-shortcodes.php:435
+#: src/auth/class-auth-shortcodes.php:577
 msgid "password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:367
-#: src/auth/class-auth-shortcodes.php:790
-#: src/auth/class-auth-shortcodes.php:810
+#: src/auth/class-auth-shortcodes.php:443
+#: src/auth/class-auth-shortcodes.php:866
+#: src/auth/class-auth-shortcodes.php:886
 msgid "Show password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:368
-#: src/auth/class-auth-shortcodes.php:791
-#: src/auth/class-auth-shortcodes.php:811
+#: src/auth/class-auth-shortcodes.php:444
+#: src/auth/class-auth-shortcodes.php:867
+#: src/auth/class-auth-shortcodes.php:887
 msgid "hide password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:370
-#: src/auth/class-auth-shortcodes.php:793
-#: src/auth/class-auth-shortcodes.php:813
+#: src/auth/class-auth-shortcodes.php:446
+#: src/auth/class-auth-shortcodes.php:869
+#: src/auth/class-auth-shortcodes.php:889
 msgid "show password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:380
+#: src/auth/class-auth-shortcodes.php:456
 msgid "Stay logged in"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:383
+#: src/auth/class-auth-shortcodes.php:459
 msgid "Forgot your password?"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:397
+#: src/auth/class-auth-shortcodes.php:473
 msgid "Click here for new registration"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:422
+#: src/auth/class-auth-shortcodes.php:498
 msgid "Create an account"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:424
+#: src/auth/class-auth-shortcodes.php:500
 msgid "Register"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:480
-#: src/auth/class-auth-shortcodes.php:733
+#: src/auth/class-auth-shortcodes.php:556
+#: src/auth/class-auth-shortcodes.php:809
 msgid "username"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:484
+#: src/auth/class-auth-shortcodes.php:560
 msgid "Only half-width alphanumeric characters・_・@・.・- can be used."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:491
+#: src/auth/class-auth-shortcodes.php:567
 msgid "Email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:508
+#: src/auth/class-auth-shortcodes.php:584
 msgid "Password (confirm)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:529
+#: src/auth/class-auth-shortcodes.php:605
 #: src/blocks/reservation/booking-confirm-app.js:1655
 msgid "Telephone number"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:567
+#: src/auth/class-auth-shortcodes.php:643
 #: src/blocks/reservation/app.js:1452
 msgid "I agree to the terms of use"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:589
+#: src/auth/class-auth-shortcodes.php:665
 msgid "I agree to the privacy policy"
 msgstr ""
 
 #. translators: %s: privacy policy link
-#: src/auth/class-auth-shortcodes.php:618
+#: src/auth/class-auth-shortcodes.php:694
 msgid "I agree with %s"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:637
+#: src/auth/class-auth-shortcodes.php:713
 msgid "Email address (for confirmation)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:642
+#: src/auth/class-auth-shortcodes.php:718
 msgid "When you click the Register button, a confirmation email will be sent, so please check your email. If you have not received the email, please also check your spam folder."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:661
+#: src/auth/class-auth-shortcodes.php:737
 msgid "Log in here"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:680
+#: src/auth/class-auth-shortcodes.php:756
 msgid "Please log in to edit your profile."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:690
+#: src/auth/class-auth-shortcodes.php:766
 #: src/blocks/reservation/components/reservation-header-nav.js:51
 msgid "Edit user information"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:692
+#: src/auth/class-auth-shortcodes.php:768
 msgid "Save"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:741
+#: src/auth/class-auth-shortcodes.php:817
 #: src/bookings/class-booking-admin.php:517
 msgid "email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:782
+#: src/auth/class-auth-shortcodes.php:858
 msgid "New Password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:799
+#: src/auth/class-auth-shortcodes.php:875
 msgid "Leave empty if you do not want to change it."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:802
+#: src/auth/class-auth-shortcodes.php:878
 msgid "New password (confirm)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:838
+#: src/auth/class-auth-shortcodes.php:914
 #: src/bookings/class-booking-confirmation-controller.php:148
 #: src/bookings/class-my-bookings-controller.php:256
 #: src/rest/class-current-user-controller.php:86
 msgid "Login required."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:933
+#: src/auth/class-auth-shortcodes.php:1009
 msgid "User information has been updated."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:951
-#: src/auth/class-auth-shortcodes.php:1037
+#: src/auth/class-auth-shortcodes.php:1027
+#: src/auth/class-auth-shortcodes.php:1113
 msgid "Security check failed. Please reload the page and try again."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:959
-#: src/auth/class-auth-shortcodes.php:1046
+#: src/auth/class-auth-shortcodes.php:1035
+#: src/auth/class-auth-shortcodes.php:1122
 msgid "Too many attempts in a short period of time. Please try again later."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:974
+#: src/auth/class-auth-shortcodes.php:1050
 msgid "Please enter your username (or email address)."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:978
-#: src/auth/class-auth-shortcodes.php:1115
+#: src/auth/class-auth-shortcodes.php:1054
+#: src/auth/class-auth-shortcodes.php:1191
 msgid "Please enter your password."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1010
+#: src/auth/class-auth-shortcodes.php:1086
 msgid "Email verification has not been completed. Please click the link in the registered email to confirm."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1013
+#: src/auth/class-auth-shortcodes.php:1089
 msgid "Email verification has not been completed."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1053
+#: src/auth/class-auth-shortcodes.php:1129
 msgid "An invalid request was detected."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1059
-#: src/auth/class-auth-shortcodes.php:1357
+#: src/auth/class-auth-shortcodes.php:1135
+#: src/auth/class-auth-shortcodes.php:1433
 #: src/rest/class-auth-form-controller.php:96
 msgid "We are currently not accepting user registration."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1105
+#: src/auth/class-auth-shortcodes.php:1181
 msgid "Please enter your user name in half-width alphanumeric characters (letters, numbers, underscores)."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1108
+#: src/auth/class-auth-shortcodes.php:1184
 msgid "Please enter your username."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1139
-#: src/bookings/class-booking-confirmation-controller.php:321
+#: src/auth/class-auth-shortcodes.php:1215
+#: src/bookings/class-booking-confirmation-controller.php:322
 #: src/blocks/reservation/booking-confirm-app.js:875
 msgid "You must agree to the terms of use."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1153
+#: src/auth/class-auth-shortcodes.php:1229
 msgid "You must agree to the privacy policy."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1157
+#: src/auth/class-auth-shortcodes.php:1233
 msgid "This username is already in use."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1198
+#: src/auth/class-auth-shortcodes.php:1274
 msgid "Failed to send confirmation email. Please try again later."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1205
+#: src/auth/class-auth-shortcodes.php:1281
 msgid "A confirmation email has been sent. Click the link in the email to authenticate and log in."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1215
+#: src/auth/class-auth-shortcodes.php:1291
 msgid "Thank you for registering. Please log in to continue booking."
 msgstr ""
 
 #. translators: %s: user display name
-#: src/auth/class-auth-shortcodes.php:1334
+#: src/auth/class-auth-shortcodes.php:1410
 msgid "You are logged in as %s."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1340
+#: src/auth/class-auth-shortcodes.php:1416
 #: src/blocks/reservation/components/reservation-header-nav.js:33
 #: src/blocks/reservation/components/reservation-header-nav.js:59
 msgid "Log out"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1390
+#: src/auth/class-auth-shortcodes.php:1466
 msgid "Please enter the username using only half-width alphanumeric characters, _, @, ., and -."
 msgstr ""
 
 #. translators: %s: site name
-#: src/auth/class-auth-shortcodes.php:1621
+#: src/auth/class-auth-shortcodes.php:1697
 msgid "[ %s ] Confirm email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1624
+#: src/auth/class-auth-shortcodes.php:1700
 msgid "Thank you for registering."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1625
+#: src/auth/class-auth-shortcodes.php:1701
 msgid "Click the link below to complete email address verification."
 msgstr ""
 
 #. translators: %d: number of hours
-#: src/auth/class-auth-shortcodes.php:1628
+#: src/auth/class-auth-shortcodes.php:1704
 msgid "Link expires in %d hours."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1998
+#: src/auth/class-auth-shortcodes.php:2074
 msgid "Last name"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2017
+#: src/auth/class-auth-shortcodes.php:2093
 msgid "given name"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2043
+#: src/auth/class-auth-shortcodes.php:2119
 msgid "sex"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2047
+#: src/auth/class-auth-shortcodes.php:2123
 msgid "male"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2048
+#: src/auth/class-auth-shortcodes.php:2124
 msgid "woman"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2049
+#: src/auth/class-auth-shortcodes.php:2125
 msgid "others"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2088
+#: src/auth/class-auth-shortcodes.php:2164
 msgid "Please enter furigana."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2090
+#: src/auth/class-auth-shortcodes.php:2166
 msgid "Please enter your phone number."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2092
+#: src/auth/class-auth-shortcodes.php:2168
 msgid "Please fill in the required fields."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2110
+#: src/auth/class-auth-shortcodes.php:2186
 msgid "Please enter a valid email address."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2117
+#: src/auth/class-auth-shortcodes.php:2193
 msgid "This email address is already in use."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2123
+#: src/auth/class-auth-shortcodes.php:2199
 msgid "This email address is already registered."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2146
+#: src/auth/class-auth-shortcodes.php:2222
 msgid "Please enter the same password twice."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2148
+#: src/auth/class-auth-shortcodes.php:2224
 msgid "New passwords do not match."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2155
+#: src/auth/class-auth-shortcodes.php:2231
 msgid "Please enter a password of 8 characters or more."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2355
+#: src/auth/class-auth-shortcodes.php:2431
 msgid "Entered username"
 msgstr ""
 
 #. translators: %s: user name
-#: src/auth/class-auth-shortcodes.php:2359
+#: src/auth/class-auth-shortcodes.php:2435
 msgid "%s is a non-existent user."
 msgstr ""
 
-#: src/availability/class-availability-service.php:137
+#: src/availability/class-availability-service.php:138
 msgid "The year specification is invalid."
 msgstr ""
 
-#: src/availability/class-availability-service.php:140
+#: src/availability/class-availability-service.php:141
 msgid "The month specification is invalid."
 msgstr ""
 
-#: src/availability/class-availability-service.php:213
+#: src/availability/class-availability-service.php:214
 msgid "Date format is incorrect."
 msgstr ""
 
-#: src/availability/class-availability-service.php:299
+#: src/availability/class-availability-service.php:300
 #: src/rest/class-menu-preview-controller.php:113
 msgid "The specified menu was not found."
 msgstr ""
 
-#: src/availability/class-availability-service.php:303
+#: src/availability/class-availability-service.php:304
 msgid "Menu has not been published."
 msgstr ""
 
-#: src/availability/class-availability-service.php:307
+#: src/availability/class-availability-service.php:308
 msgid "Archived menus cannot be reserved."
 msgstr ""
 
-#: src/availability/class-availability-service.php:311
+#: src/availability/class-availability-service.php:312
 msgid "This menu is not available for online reservation."
 msgstr ""
 
-#: src/availability/class-availability-service.php:352
+#: src/availability/class-availability-service.php:353
 msgid "The specified staff member cannot be in charge of this menu."
 msgstr ""
 
-#: src/availability/class-availability-service.php:362
+#: src/availability/class-availability-service.php:363
 msgid "No staff members have been set up to be in charge."
 msgstr ""
 
-#: src/availability/class-availability-service.php:522
+#: src/availability/class-availability-service.php:525
 #: src/bookings/class-booking-draft-controller.php:170
 #: src/bookings/class-my-bookings-controller.php:187
 #: src/notifications/class-booking-notification-service.php:628
@@ -2041,22 +2080,22 @@ msgid "Not clear"
 msgstr ""
 
 #. translators: 1: resource label, 2: resource name
-#: src/bookings/class-booking-admin.php:1284
+#: src/bookings/class-booking-admin.php:1285
 msgid "The selected %1$s (%2$s) cannot be specified because there is another reservation in the same time slot."
 msgstr ""
 
 #. translators: %s: resource label
-#: src/bookings/class-booking-admin.php:1291
+#: src/bookings/class-booking-admin.php:1292
 msgid "The selected %1$s cannot be specified because there is another reservation in the same time slot."
 msgstr ""
 
 #. translators: 1: resource label, 2: resource name
-#: src/bookings/class-booking-admin.php:1300
+#: src/bookings/class-booking-admin.php:1301
 msgid "This %1$s (%2$s) has another reservation for the same time slot."
 msgstr ""
 
 #. translators: %s: resource label
-#: src/bookings/class-booking-admin.php:1307
+#: src/bookings/class-booking-admin.php:1308
 msgid "This %1$s has other reservations for the same time slot."
 msgstr ""
 
@@ -2086,7 +2125,7 @@ msgid "The selected date cannot be reserved. Please choose another date."
 msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:238
-#: src/bookings/class-booking-confirmation-controller.php:891
+#: src/bookings/class-booking-confirmation-controller.php:892
 msgid "The selected staff member is no longer available."
 msgstr ""
 
@@ -2095,25 +2134,25 @@ msgstr ""
 msgid "Could not assign person %s. Please try a different frame."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:313
+#: src/bookings/class-booking-confirmation-controller.php:314
 #: src/blocks/reservation/booking-confirm-app.js:865
 msgid "You must agree to the cancellation policy."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:329
-#: src/bookings/class-booking-confirmation-controller.php:336
+#: src/bookings/class-booking-confirmation-controller.php:330
+#: src/bookings/class-booking-confirmation-controller.php:337
 #: src/blocks/reservation/booking-confirm-app.js:924
 #: src/blocks/reservation/booking-confirm-app.js:978
 msgid "A reservation for the same date and time already exists. Please change the date and time."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:839
-#: src/bookings/class-booking-confirmation-controller.php:854
+#: src/bookings/class-booking-confirmation-controller.php:840
+#: src/bookings/class-booking-confirmation-controller.php:855
 #: src/bookings/class-booking-draft-controller.php:158
 msgid "Reservation slot information is incorrect."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:881
+#: src/bookings/class-booking-confirmation-controller.php:882
 msgid "The selected slot is no longer available. Please choose another slot."
 msgstr ""
 

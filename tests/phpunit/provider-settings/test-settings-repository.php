@@ -78,4 +78,55 @@ class Settings_Repository_Test extends WP_UnitTestCase {
 			);
 		}
 	}
+
+	/**
+	 * provider_max_advance_booking_days のデフォルト値と保存値の取得テスト。
+	 */
+	public function test_get_settings_max_advance_booking_days(): void {
+		$repository = new Settings_Repository();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '保存値がない場合はデフォルトの 0（無制限）を返す',
+				'conditions'          => [
+					'stored_settings' => null,
+				],
+				'expected'            => 0,
+			],
+			[
+				'test_condition_name' => '保存値が 14 の場合は 14 を返す',
+				'conditions'          => [
+					'stored_settings' => [
+						'provider_max_advance_booking_days' => 14,
+					],
+				],
+				'expected'            => 14,
+			],
+			[
+				'test_condition_name' => '保存値が 0 の場合は 0（無制限）を返す',
+				'conditions'          => [
+					'stored_settings' => [
+						'provider_max_advance_booking_days' => 0,
+					],
+				],
+				'expected'            => 0,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			if ( null === $case['conditions']['stored_settings'] ) {
+				delete_option( Settings_Repository::OPTION_KEY );
+			} else {
+				update_option( Settings_Repository::OPTION_KEY, $case['conditions']['stored_settings'] );
+			}
+
+			$settings = $repository->get_settings();
+
+			$this->assertSame(
+				$case['expected'],
+				$settings['provider_max_advance_booking_days'],
+				$case['test_condition_name']
+			);
+		}
+	}
 }

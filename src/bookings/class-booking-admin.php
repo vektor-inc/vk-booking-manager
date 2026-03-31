@@ -933,7 +933,8 @@ class Booking_Admin {
 		$service_id_select    = isset( $raw['service_id_select'] ) ? $this->sanitize_service_id( (int) $raw['service_id_select'] ) : 0;
 		$allow_service_change = isset( $raw['allow_service_change'] );
 		$customer             = isset( $raw['customer'] ) ? sanitize_text_field( (string) $raw['customer'] ) : '';
-		$customer_tel         = isset( $raw['customer_tel'] ) ? sanitize_text_field( (string) $raw['customer_tel'] ) : '';
+		// 電話番号を正規化する：全角数字を半角に変換し、数字以外の文字（ハイフン・スペース・括弧など）を除去する.
+		$customer_tel         = isset( $raw['customer_tel'] ) ? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) $raw['customer_tel'] ) ) : '';
 		$customer_email       = isset( $raw['customer_email'] ) ? sanitize_email( (string) $raw['customer_email'] ) : '';
 		$billed_total_price   = array_key_exists( 'billed_total_price', $raw ) ? $this->sanitize_base_price( $raw['billed_total_price'] ) : '';
 		$status               = isset( $raw['status'] ) ? $this->sanitize_status( (string) $raw['status'] ) : self::STATUS_CONFIRMED;
