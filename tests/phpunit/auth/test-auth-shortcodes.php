@@ -11,6 +11,30 @@ use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_UnitTestCase;
 
 /**
+ * Test subclass that prevents redirect_and_exit from calling exit().
+ * テスト用サブクラス。redirect_and_exit で exit() を呼ばないようにする。
+ */
+class Testable_Auth_Shortcodes extends Auth_Shortcodes {
+	/**
+	 * Last redirect URL captured during tests.
+	 * テスト中にキャプチャされた最後のリダイレクト URL。
+	 *
+	 * @var string|null
+	 */
+	public $last_redirect_url = null;
+
+	/**
+	 * Override redirect_and_exit to capture the URL without exiting.
+	 * リダイレクトURLをキャプチャし、exit を呼ばないようにオーバーライドする。
+	 *
+	 * @param string $url Redirect URL.
+	 */
+	protected function redirect_and_exit( string $url ): void {
+		$this->last_redirect_url = $url;
+	}
+}
+
+/**
  * @group auth
  */
 class Auth_Shortcodes_Test extends WP_UnitTestCase {
@@ -137,19 +161,24 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		];
 
 		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
-		$shortcodes = new Auth_Shortcodes( $service );
+		// Use testable subclass to prevent exit() on redirect.
+		// テスト用サブクラスを使い、リダイレクト時の exit() を回避する。
+		$shortcodes = new Testable_Auth_Shortcodes( $service );
 
 		// Run the handler to populate profile errors. / 送信処理でエラーを発生させる。
 		$shortcodes->handle_form_submission();
 
 		// Access the internal error bag to confirm the message. / 反射で内部エラーを検証。
-		$property = new \ReflectionProperty( $shortcodes, 'profile_errors' );
+		$property = new \ReflectionProperty( Auth_Shortcodes::class, 'profile_errors' );
 		$property->setAccessible( true );
 		$errors = $property->getValue( $shortcodes );
 
 		$this->assertInstanceOf( \WP_Error::class, $errors );
 		$expected = __( 'New passwords do not match.', 'vk-booking-manager' );
 		$this->assertContains( $expected, $errors->get_error_messages() );
+
+		// Verify that a redirect was attempted. / リダイレクトが試行されたことを確認。
+		$this->assertNotNull( $shortcodes->last_redirect_url, 'Redirect should have been triggered on profile validation error.' );
 
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
@@ -183,13 +212,15 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		];
 
 		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
-		$shortcodes = new Auth_Shortcodes( $service );
+		// Use testable subclass to prevent exit() on redirect.
+		// テスト用サブクラスを使い、リダイレクト時の exit() を回避する。
+		$shortcodes = new Testable_Auth_Shortcodes( $service );
 
 		// Run the handler to populate profile errors. / 送信処理でエラーを発生させる。
 		$shortcodes->handle_form_submission();
 
 		// Access the internal error bag to confirm the message. / 反射で内部エラーを検証。
-		$property = new \ReflectionProperty( $shortcodes, 'profile_errors' );
+		$property = new \ReflectionProperty( Auth_Shortcodes::class, 'profile_errors' );
 		$property->setAccessible( true );
 		$errors = $property->getValue( $shortcodes );
 
@@ -197,10 +228,14 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$expected = __( 'Please enter a password of 8 characters or more.', 'vk-booking-manager' );
 		$this->assertContains( $expected, $errors->get_error_messages() );
 
+		// Verify that a redirect was attempted. / リダイレクトが試行されたことを確認。
+		$this->assertNotNull( $shortcodes->last_redirect_url, 'Redirect should have been triggered on profile validation error.' );
+
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
 		$_SERVER = $previous_server;
 	}
+
 	public function test_registration_errors_persist_after_post_for_existing_email(): void {
 		// Ensure registration is enabled for this test. / テスト用にユーザー登録を有効化。
 		$original_registration = get_option( 'users_can_register' );
@@ -599,5 +634,127 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 
 		// カレントユーザーを復元する。
 		wp_set_current_user( $original_user_id );
+	}
+
+	/**
+	 * Test that profile errors stored in a cookie are displayed in the profile form.
+	 * Cookie に保存されたプロフィールエラーがフォーム表示時に復元されることを確認する。
+	 */
+	public function test_profile_errors_are_rendered_from_cookie(): void {
+		// Prepare a logged-in user. / ログイン済みユーザーを用意。
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'cookie_error_user',
+				'user_email' => 'cookie_error_user@example.com',
+			]
+		);
+		wp_set_current_user( $user_id );
+
+		// Seed a profile error cookie to emulate a previous failed submission.
+		// 失敗後の Cookie 状態を再現する。
+		$error_messages = [ 'New passwords do not match.' ];
+		$_COOKIE['vkbm_profile_errors'] = rawurlencode( wp_json_encode( $error_messages ) );
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		// Rendering should include the error message from the cookie.
+		// Cookie の内容が HTML に出力されることを確認する。
+		$html = $shortcodes->render_profile_form();
+
+		$this->assertStringContainsString( 'New passwords do not match.', $html );
+		$this->assertStringContainsString( 'vkbm-alert vkbm-alert__danger', $html );
+
+		// Cleanup to keep global state isolated. / グローバル状態の後始末。
+		unset( $_COOKIE['vkbm_profile_errors'] );
+	}
+
+	/**
+	 * Test that profile form renders without errors when no cookie is set.
+	 * Cookie がない場合にプロフィールフォームがエラーなしで描画されることを確認する。
+	 */
+	public function test_profile_form_renders_without_errors_when_no_cookie(): void {
+		// Prepare a logged-in user. / ログイン済みユーザーを用意。
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'no_error_user',
+				'user_email' => 'no_error_user@example.com',
+			]
+		);
+		wp_set_current_user( $user_id );
+
+		// Make sure there is no error cookie. / エラー Cookie がないことを確認。
+		unset( $_COOKIE['vkbm_profile_errors'] );
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$html = $shortcodes->render_profile_form();
+
+		// The form should render but without the danger alert.
+		// フォームは描画されるがエラーアラートは含まない。
+		$this->assertStringContainsString( 'vkbm-auth-card--profile', $html );
+		$this->assertStringNotContainsString( 'vkbm-alert__danger', $html );
+	}
+
+	/**
+	 * Test that set_profile_errors_cookie stores errors and consume_profile_errors_cookie restores them.
+	 * set_profile_errors_cookie でエラーを保存し consume_profile_errors_cookie で復元できることを確認する。
+	 */
+	public function test_profile_errors_cookie_round_trip(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		// Use reflection to access private methods.
+		// リフレクションでプライベートメソッドにアクセスする。
+		$set_method = new \ReflectionMethod( $shortcodes, 'set_profile_errors_cookie' );
+		$set_method->setAccessible( true );
+
+		$consume_method = new \ReflectionMethod( $shortcodes, 'consume_profile_errors_cookie' );
+		$consume_method->setAccessible( true );
+
+		// Create an error and store it. / エラーを作成して保存する。
+		$errors = new \WP_Error();
+		$errors->add( 'password_mismatch', 'New passwords do not match.' );
+		$errors->add( 'password_short', 'Please enter a password of 8 characters or more.' );
+
+		// In PHPUnit, setcookie does not actually set $_COOKIE, so we simulate
+		// the cookie read by setting $_COOKIE manually after calling the setter.
+		// PHPUnit では setcookie が $_COOKIE を設定しないため、手動でシミュレートする。
+		$set_method->invoke( $shortcodes, $errors );
+
+		// Simulate the browser sending the cookie back.
+		// ブラウザが Cookie を送り返す状態をシミュレートする。
+		$messages = [ 'New passwords do not match.', 'Please enter a password of 8 characters or more.' ];
+		$_COOKIE['vkbm_profile_errors'] = rawurlencode( wp_json_encode( $messages ) );
+
+		// Consume the cookie and verify. / Cookie を消費して検証する。
+		$restored = $consume_method->invoke( $shortcodes );
+
+		$this->assertInstanceOf( \WP_Error::class, $restored );
+		$restored_messages = $restored->get_error_messages();
+		$this->assertContains( 'New passwords do not match.', $restored_messages );
+		$this->assertContains( 'Please enter a password of 8 characters or more.', $restored_messages );
+
+		// Cleanup. / 後始末。
+		unset( $_COOKIE['vkbm_profile_errors'] );
+	}
+
+	/**
+	 * Test that consume_profile_errors_cookie returns null when no cookie is present.
+	 * Cookie がない場合に consume_profile_errors_cookie が null を返すことを確認する。
+	 */
+	public function test_consume_profile_errors_cookie_returns_null_when_empty(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$consume_method = new \ReflectionMethod( $shortcodes, 'consume_profile_errors_cookie' );
+		$consume_method->setAccessible( true );
+
+		// Ensure no cookie exists. / Cookie が存在しないことを確認。
+		unset( $_COOKIE['vkbm_profile_errors'] );
+
+		$result = $consume_method->invoke( $shortcodes );
+		$this->assertNull( $result );
 	}
 }

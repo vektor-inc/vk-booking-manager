@@ -183,7 +183,7 @@ class Shift_Dashboard_Page {
 
 		$resource_names = array();
 		foreach ( $resources as $resource ) {
-			$resource_names[ $resource->ID ] = get_the_title( $resource );
+			$resource_names[ $resource->ID ] = vkbm_get_resource_display_name( (int) $resource->ID );
 		}
 
 		$bookings_map          = $this->get_bookings_for_day( $selected_date );
@@ -788,7 +788,7 @@ class Shift_Dashboard_Page {
 
 			$resource_cards[] = array(
 				'id'          => $resource_id,
-				'name'        => get_the_title( $resource ),
+				'name'        => vkbm_get_resource_display_name( (int) $resource->ID ),
 				'role'        => $this->derive_resource_role( $resource ),
 				'status'      => $status_info['label'],
 				'status_type' => $status_info['type'],
@@ -1133,7 +1133,7 @@ class Shift_Dashboard_Page {
 				}
 
 				$resource_id   = (int) get_post_meta( $post_id, self::META_BOOKING_RESOURCE, true );
-				$resource_name = $resource_id > 0 ? get_the_title( $resource_id ) : '';
+				$resource_name = $resource_id > 0 ? vkbm_get_resource_display_name( $resource_id ) : '';
 				$resource_name = '' !== $resource_name ? $resource_name : __( 'Person in charge undecided', 'vk-booking-manager' );
 
 				$customer_name = (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true );

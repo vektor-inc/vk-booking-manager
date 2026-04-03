@@ -622,7 +622,7 @@ class Booking_Notification_Service {
 		$menu_title  = $menu_id > 0 ? get_the_title( $menu_id ) : '';
 		$staff_title = '';
 		if ( $is_staff_preferred && $staff_id > 0 ) {
-			$staff_title = get_the_title( $staff_id );
+			$staff_title = vkbm_get_resource_display_name( $staff_id );
 		}
 		if ( '' === $staff_title ) {
 			$staff_title = __( 'No preference', 'vk-booking-manager' );

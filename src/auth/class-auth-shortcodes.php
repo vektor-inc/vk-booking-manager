@@ -789,6 +789,13 @@ class Auth_Shortcodes {
 
 		$message = $this->consume_profile_notice();
 
+		// Restore errors from cookie if available (after redirect).
+		// リダイレクト後にCookieからエラーを復元する。
+		$cookie_errors = $this->consume_profile_errors_cookie();
+		if ( null !== $cookie_errors ) {
+			$this->profile_errors = $cookie_errors;
+		}
+
 		ob_start();
 		?>
 		<div class="vkbm-auth-card vkbm-auth-card--profile">
@@ -973,7 +980,15 @@ class Auth_Shortcodes {
 		}
 
 		if ( $errors->has_errors() ) {
+			// Save errors to cookie and redirect so the SPA can display them.
+			// エラーを Cookie に保存してリダイレクトし、SPA 側でエラーを表示できるようにする。
+			$this->set_profile_errors_cookie( $errors );
 			$this->profile_errors = $errors;
+
+			$redirect_to = isset( $raw['redirect_to'] ) ? $this->normalize_redirect( $raw['redirect_to'] ) : $this->get_current_url();
+			$redirect_to = add_query_arg( 'vkbm_auth', 'profile', $redirect_to );
+
+			$this->redirect_and_exit( $redirect_to );
 			return;
 		}
 
@@ -989,7 +1004,15 @@ class Auth_Shortcodes {
 		$update = wp_update_user( $userdata );
 
 		if ( is_wp_error( $update ) ) {
+			// Save wp_update_user errors to cookie and redirect.
+			// wp_update_user のエラーを Cookie に保存してリダイレクトする。
+			$this->set_profile_errors_cookie( $update );
 			$this->profile_errors = $update;
+
+			$redirect_to = isset( $raw['redirect_to'] ) ? $this->normalize_redirect( $raw['redirect_to'] ) : $this->get_current_url();
+			$redirect_to = add_query_arg( 'vkbm_auth', 'profile', $redirect_to );
+
+			$this->redirect_and_exit( $redirect_to );
 			return;
 		}
 
@@ -1011,8 +1034,7 @@ class Auth_Shortcodes {
 		$redirect_to = isset( $raw['redirect_to'] ) ? $this->normalize_redirect( $raw['redirect_to'] ) : $this->get_current_url();
 		$redirect_to = add_query_arg( 'vkbm_auth', 'profile', $redirect_to );
 
-		wp_safe_redirect( $redirect_to );
-		exit;
+		$this->redirect_and_exit( $redirect_to );
 	}
 
 	/**
@@ -1755,6 +1777,93 @@ class Auth_Shortcodes {
 	 */
 	private function set_profile_notice( string $message ): void {
 		$this->set_notice_cookie( 'vkbm_profile_notice', $message );
+	}
+
+	/**
+	 * Perform a safe redirect and exit.
+	 * This method is protected so it can be overridden in tests.
+	 *
+	 * 安全なリダイレクトを実行して終了する。
+	 * テストでオーバーライドできるように protected にする。
+	 *
+	 * @param string $url Redirect URL.
+	 * @return void
+	 */
+	protected function redirect_and_exit( string $url ): void {
+		wp_safe_redirect( $url );
+		exit;
+	}
+
+	/**
+	 * Store profile validation errors in a cookie for display after redirect.
+	 * プロフィールバリデーションエラーをリダイレクト後に表示するため Cookie に保存する。
+	 *
+	 * @param WP_Error $errors Validation errors.
+	 */
+	private function set_profile_errors_cookie( WP_Error $errors ): void {
+		$messages = $errors->get_error_messages();
+		if ( empty( $messages ) ) {
+			return;
+		}
+
+		// Store as JSON array of error messages.
+		// エラーメッセージを JSON 配列として保存する。
+		$json = wp_json_encode( $messages );
+		if ( false === $json ) {
+			return;
+		}
+
+		$this->set_notice_cookie( 'vkbm_profile_errors', $json );
+	}
+
+	/**
+	 * Consume profile errors stored in a cookie and return as WP_Error.
+	 * Cookie に保存されたプロフィールエラーを取得し WP_Error として返す。
+	 *
+	 * @return WP_Error|null WP_Error if errors were stored, null otherwise.
+	 */
+	private function consume_profile_errors_cookie(): ?WP_Error {
+		if ( empty( $_COOKIE['vkbm_profile_errors'] ) ) {
+			return null;
+		}
+
+		// Read and decode the cookie value.
+		// Cookie 値を読み取りデコードする。
+		$raw = isset( $_COOKIE['vkbm_profile_errors'] )
+			? rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_profile_errors'] ) ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized per-message below after JSON decode.
+			: '';
+
+		// Clear the cookie immediately.
+		// Cookie を即座にクリアする。
+		if ( ! headers_sent() ) {
+			$primary_path  = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
+			$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
+			setcookie( 'vkbm_profile_errors', '', time() - 3600, $primary_path, $cookie_domain );
+			if ( '/' !== $primary_path ) {
+				setcookie( 'vkbm_profile_errors', '', time() - 3600, '/', $cookie_domain );
+			}
+		}
+
+		if ( '' === $raw ) {
+			return null;
+		}
+
+		$messages = json_decode( $raw, true );
+		if ( ! is_array( $messages ) || empty( $messages ) ) {
+			return null;
+		}
+
+		$errors = new WP_Error();
+		foreach ( $messages as $index => $message ) {
+			// Sanitize each message before adding to WP_Error.
+			// 各メッセージをサニタイズしてから WP_Error に追加する。
+			$sanitized = sanitize_text_field( (string) $message );
+			if ( '' !== $sanitized ) {
+				$errors->add( 'profile_error_' . $index, $sanitized );
+			}
+		}
+
+		return $errors->has_errors() ? $errors : null;
 	}
 
 

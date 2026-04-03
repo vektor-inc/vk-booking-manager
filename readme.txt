@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.3.0
+Stable tag: 0.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,13 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.4.0 =
+* [ 不具合修正 ] ユーザー情報変更画面でパスワード変更に失敗してもエラーメッセージが表示されない不具合を修正
+* [ 不具合修正 ] staffOptions が未定義の場合に予約画面がクラッシュする不具合を修正
+* [ 仕様変更 ] 基本設定画面のライセンスタブを最後に移動
+* [ 不具合修正 ] オンライン予約を無効にしたサービスメニューで「予約に進む」ボタンをグレーアウト（非活性）表示するよう修正
+* [ 機能追加 ] リソースタグ機能を追加（Pro版のみ）
 
 = 0.3.0 =
 * [ 機能追加 ] 予約可能期間の設定機能を追加（共通設定およびサービス個別設定で、何日先まで予約可能かを制限可能）

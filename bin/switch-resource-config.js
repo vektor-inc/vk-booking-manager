@@ -23,6 +23,12 @@ const staffSourcePath = path.join(
 	`class-staff-editor-${ edition }.php`
 );
 const staffTargetPath = path.join( staffDir, 'class-staff-editor.php' );
+const resourcesDir = path.join( distRoot, 'src', 'resources' );
+const resourceTagSourcePath = path.join(
+	resourcesDir,
+	`class-resource-tag-taxonomy-${ edition }.php`
+);
+const resourceTagTargetPath = path.join( resourcesDir, 'class-resource-tag-taxonomy.php' );
 
 if ( ! fs.existsSync( sourcePath ) ) {
 	console.error( `Config source not found: ${ sourcePath }` );
@@ -39,6 +45,10 @@ const otherPath = path.join(
 const otherStaffPath = path.join(
 	staffDir,
 	`class-staff-editor-${ otherEdition }.php`
+);
+const otherResourceTagPath = path.join(
+	resourcesDir,
+	`class-resource-tag-taxonomy-${ otherEdition }.php`
 );
 
 if ( fs.existsSync( otherPath ) ) {
@@ -62,6 +72,21 @@ if ( fs.existsSync( otherStaffPath ) ) {
 
 if ( fs.existsSync( staffSourcePath ) ) {
 	fs.unlinkSync( staffSourcePath );
+}
+
+if ( ! fs.existsSync( resourceTagSourcePath ) ) {
+	console.error( `Resource tag taxonomy source not found: ${ resourceTagSourcePath }` );
+	process.exit( 1 );
+}
+
+fs.copyFileSync( resourceTagSourcePath, resourceTagTargetPath );
+
+if ( fs.existsSync( otherResourceTagPath ) ) {
+	fs.unlinkSync( otherResourceTagPath );
+}
+
+if ( fs.existsSync( resourceTagSourcePath ) ) {
+	fs.unlinkSync( resourceTagSourcePath );
 }
 
 if ( edition === 'pro' ) {

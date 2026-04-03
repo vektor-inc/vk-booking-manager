@@ -365,7 +365,7 @@ class Service_Menu_Editor {
 								value="<?php echo esc_attr( (string) $resource->ID ); ?>"
 								<?php checked( in_array( (int) $resource->ID, $selected_staff, true ) ); ?>
 							/>
-							<?php echo esc_html( get_the_title( $resource ) ); ?>
+							<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
 						</label>
 					</li>
 				<?php endforeach; ?>

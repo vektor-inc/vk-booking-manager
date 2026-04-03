@@ -171,6 +171,7 @@ Contact us: Please contact our store.",
 			'auth_rate_limit_enabled'                    => true,
 			'auth_rate_limit_register_max'               => 5,
 			'auth_rate_limit_login_max'                  => 10,
+			'resource_tag_display_enabled'                => false,
 			'email_log_enabled'                          => false,
 			'email_log_retention_days'                   => 1,
 		);

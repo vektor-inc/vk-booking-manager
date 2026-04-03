@@ -977,17 +977,29 @@ class Menu_Loop_Block {
 				$label = __( 'Proceed to Reservation', 'vk-booking-manager' );
 			}
 
-			$reserve_url = $this->build_reservation_link( $post );
-			if ( '' === $reserve_url ) {
-				$reserve_url = get_permalink( $post );
-			}
+			// オンライン予約が無効の場合はグレーアウトした非活性ボタンを表示する.
+			// Show a disabled (greyed-out) button when online booking is disabled.
+			$online_disabled = '1' === (string) get_post_meta( $post->ID, '_vkbm_online_unavailable', true );
 
-			if ( '' !== $reserve_url ) {
+			if ( $online_disabled ) {
+				// オンライン予約が無効の場合、理由を title 属性で表示する.
 				$buttons[] = sprintf(
-					'<a class="vkbm-menu-loop__button vkbm-menu-loop__button--reserve vkbm-button vkbm-button__sm" href="%1$s">%2$s</a>',
-					esc_url( $reserve_url ),
+					'<span class="vkbm-menu-loop__button vkbm-menu-loop__button--reserve vkbm-button vkbm-button__sm is-disabled" role="link" aria-disabled="true" title="%s">%s</span>',
+					esc_attr( __( 'This menu does not accept online reservations.', 'vk-booking-manager' ) ),
 					esc_html( $label )
 				);
+			} else {
+				$reserve_url = $this->build_reservation_link( $post );
+				if ( '' === $reserve_url ) {
+					$reserve_url = get_permalink( $post );
+				}
+				if ( '' !== $reserve_url ) {
+					$buttons[] = sprintf(
+						'<a class="vkbm-menu-loop__button vkbm-menu-loop__button--reserve vkbm-button vkbm-button__sm" href="%1$s">%2$s</a>',
+						esc_url( $reserve_url ),
+						esc_html( $label )
+					);
+				}
 			}
 		}
 

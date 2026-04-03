@@ -184,7 +184,7 @@ class My_Bookings_Controller {
 			$resource_id = (int) get_post_meta( $booking_id, self::META_RESOURCE_ID, true );
 
 			$menu_name     = $menu_id > 0 ? (string) get_the_title( $menu_id ) : '';
-			$resource_name = $resource_id > 0 ? (string) get_the_title( $resource_id ) : __( 'No preference', 'vk-booking-manager' );
+			$resource_name = $resource_id > 0 ? vkbm_get_resource_display_name( $resource_id ) : __( 'No preference', 'vk-booking-manager' );
 
 			$other_conditions = '';
 			if ( $menu_id > 0 ) {

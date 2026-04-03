@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager (Beta)
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     0.3.0
+ * Version:     0.4.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -71,6 +71,8 @@ require_once __DIR__ . '/src/rest/class-provider-settings-controller.php';
 require_once __DIR__ . '/src/rest/class-current-user-controller.php';
 require_once __DIR__ . '/src/bookings/class-booking-confirmation-controller.php';
 require_once __DIR__ . '/src/staff/class-staff-editor.php';
+require_once __DIR__ . '/src/post-types/class-resource-post-type.php';
+require_once __DIR__ . '/src/resources/class-resource-tag-taxonomy.php';
 require_once __DIR__ . '/src/notifications/class-booking-notification-service.php';
 require_once __DIR__ . '/src/auth/class-auth-shortcodes.php';
 require_once __DIR__ . '/src/post-order/class-post-order-manager.php';
@@ -127,6 +129,7 @@ use VKBookingManager\Resources\Resource_Schedule_Meta_Box;
 use VKBookingManager\Resources\Resource_Schedule_Template_Repository;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
+use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 
 /**
  * Builds the plugin instance.
@@ -162,6 +165,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 	$resource_schedule_meta_box      = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
 	$shift_editor                    = new Shift_Editor();
 	$staff_editor                    = new Staff_Editor();
+	$resource_tag_taxonomy           = new Resource_Tag_Taxonomy();
 	$service_menu_editor             = new Service_Menu_Editor();
 	$resource_post_type              = new Resource_Post_Type();
 	$owner_admin_menu_filter         = new Owner_Admin_Menu_Filter();
@@ -194,8 +198,13 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		array(
 			Service_Menu_Post_Type::TAXONOMY,
 			Service_Menu_Post_Type::TAXONOMY_GROUP,
+			Resource_Tag_Taxonomy::TAXONOMY,
 		)
 	);
+
+	// リソースタグタクソノミーを登録（Pro版のみの機能）
+	// Register the resource tag taxonomy (Pro edition only).
+	$resource_tag_taxonomy->register();
 
 	// Register development-only style guide page (menu appears only when docs/ui/style-guide.html exists).
 	$style_guide_page->register();
@@ -315,6 +324,7 @@ if ( ! function_exists( 'vkbm_activate_plugin' ) ) {
 }
 
 register_activation_hook( __FILE__, 'vkbm_activate_plugin' );
+
 
 /**
  * Normalize reservation page URL against the current site.

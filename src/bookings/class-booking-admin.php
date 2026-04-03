@@ -371,7 +371,7 @@ class Booking_Admin {
 								</option>
 								<?php foreach ( $resources as $resource ) : ?>
 									<option value="<?php echo esc_attr( (string) $resource->ID ); ?>" <?php selected( $resource_id, $resource->ID ); ?>>
-										<?php echo esc_html( get_the_title( $resource ) ); ?>
+										<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
 									</option>
 								<?php endforeach; ?>
 							</select>

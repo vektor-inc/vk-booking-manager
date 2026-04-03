@@ -137,6 +137,99 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 'matched@example.com', (string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ) );
 	}
 
+	/**
+	 * 管理者予約時に様々なフォーマットの電話番号を入力しても、
+	 * 正規化済み番号で保存されたユーザーに正しく紐づくことを検証する。
+	 */
+	public function test_admin_booking_phone_format_variations_match_user(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+
+		// ユーザーの電話番号は正規化済み（数字のみ）でDBに保存されている.
+		$matched_user_id = $this->factory()->user->create(
+			[ 'user_email' => 'phone-match@example.com' ]
+		);
+		update_user_meta( $matched_user_id, 'phone_number', '09012345678' );
+
+		$admin_id = $this->create_admin_user();
+		wp_set_current_user( $admin_id );
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'ユーザーの電話番号が数字のみで登録 + オーナー入力が数字のみの場合 => ユーザーに紐づく',
+				'input_phone'         => '09012345678',
+				'expected_author'     => $matched_user_id,
+			],
+			[
+				'test_condition_name' => 'ユーザーの電話番号が数字のみで登録 + オーナー入力が全角数字の場合 => ユーザーに紐づく',
+				'input_phone'         => '０９０１２３４５６７８',
+				'expected_author'     => $matched_user_id,
+			],
+			[
+				'test_condition_name' => 'ユーザーの電話番号が数字のみで登録 + オーナー入力がハイフン付き半角の場合 => ユーザーに紐づく',
+				'input_phone'         => '090-1234-5678',
+				'expected_author'     => $matched_user_id,
+			],
+			[
+				'test_condition_name' => 'ユーザーの電話番号が数字のみで登録 + オーナー入力がハイフン付き全角の場合 => ユーザーに紐づく',
+				'input_phone'         => '０９０−１２３４−５６７８',
+				'expected_author'     => $matched_user_id,
+			],
+			[
+				'test_condition_name' => 'ユーザーの電話番号が数字のみで登録 + オーナー入力が括弧付き全角の場合 => ユーザーに紐づく',
+				'input_phone'         => '（０９０）１２３４−５６７８',
+				'expected_author'     => $matched_user_id,
+			],
+		];
+
+		foreach ( $test_cases as $index => $case ) {
+			// テストケース毎に異なる時間帯を使用して予約の重複を避ける.
+			$hour     = 10 + $index;
+			$start_at = sprintf( '2024-03-01T%02d:00:00+09:00', $hour );
+			$end_at   = sprintf( '2024-03-01T%02d:30:00+09:00', $hour );
+
+			$token = $this->store_temporary_reservation_data(
+				$menu_id,
+				$staff_id,
+				$start_at,
+				$end_at
+			);
+
+			$controller = $this->build_controller(
+				$staff_id,
+				$start_at,
+				$end_at
+			);
+
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'customer_phone', $case['input_phone'] );
+
+			$response = $controller->create_booking( $request );
+			$this->assertInstanceOf(
+				WP_REST_Response::class,
+				$response,
+				$case['test_condition_name'] . ' - レスポンスが WP_REST_Response であること'
+			);
+
+			$data       = $response->get_data();
+			$booking_id = isset( $data['booking_id'] ) ? (int) $data['booking_id'] : 0;
+			$this->assertGreaterThan( 0, $booking_id, $case['test_condition_name'] . ' - booking_id が 0 より大きいこと' );
+
+			$booking = get_post( $booking_id );
+			$this->assertSame(
+				$case['expected_author'],
+				(int) $booking->post_author,
+				$case['test_condition_name'] . ' - 予約の投稿者がユーザーに紐づいていること'
+			);
+			$this->assertSame(
+				'phone-match@example.com',
+				(string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ),
+				$case['test_condition_name'] . ' - 顧客メールが紐づいたユーザーのメールであること'
+			);
+		}
+	}
+
 	public function test_admin_booking_author_is_admin_when_phone_missing_or_unmatched(): void {
 		$menu_id  = $this->create_menu();
 		$staff_id = $this->create_staff();

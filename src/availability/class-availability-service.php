@@ -610,10 +610,13 @@ class Availability_Service {
 
 			$avatar = get_the_post_thumbnail_url( $staff_id, 'thumbnail' );
 
+			$resource_tags = \VKBookingManager\Resources\Resource_Tag_Taxonomy::get_tag_labels( $staff_id );
+
 			$info[ $staff_id ] = array(
-				'id'     => $staff_id,
-				'name'   => get_the_title( $staff_id ),
-				'avatar' => $avatar ? esc_url_raw( $avatar ) : '',
+				'id'            => $staff_id,
+				'name'          => vkbm_get_resource_display_name( $staff_id ),
+				'resource_tags' => $resource_tags,
+				'avatar'        => $avatar ? esc_url_raw( $avatar ) : '',
 			);
 		}
 

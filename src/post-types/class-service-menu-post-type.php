@@ -423,7 +423,7 @@ class Service_Menu_Post_Type {
 			return '';
 		}
 
-		$this->staff_title_cache[ $staff_id ] = (string) get_the_title( $post );
+		$this->staff_title_cache[ $staff_id ] = vkbm_get_resource_display_name( $staff_id );
 
 		return $this->staff_title_cache[ $staff_id ];
 	}

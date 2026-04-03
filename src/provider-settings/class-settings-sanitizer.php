@@ -172,6 +172,8 @@ class Settings_Sanitizer {
 		$data['menu_loop_reserve_button_label']          = sanitize_text_field( (string) ( $input['menu_loop_reserve_button_label'] ?? ( $data['menu_loop_reserve_button_label'] ?? '' ) ) );
 		$data['menu_loop_detail_button_label']           = sanitize_text_field( (string) ( $input['menu_loop_detail_button_label'] ?? ( $data['menu_loop_detail_button_label'] ?? '' ) ) );
 
+		$data['resource_tag_display_enabled'] = ! empty( $input['resource_tag_display_enabled'] );
+
 		$data['email_log_enabled'] = ! empty( $input['email_log_enabled'] );
 
 		$retention_raw = $input['email_log_retention_days'] ?? ( $data['email_log_retention_days'] ?? 1 );

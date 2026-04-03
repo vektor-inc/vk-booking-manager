@@ -124,7 +124,7 @@ class Shift_Editor {
 					<option value="0"><?php esc_html_e( 'Select staff', 'vk-booking-manager' ); ?></option>
 					<?php foreach ( $resource_posts as $resource ) : ?>
 						<option value="<?php echo esc_attr( (string) $resource->ID ); ?>" <?php selected( $resource_id, $resource->ID ); ?>>
-							<?php echo esc_html( get_the_title( $resource ) ); ?>
+							<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
 						</option>
 					<?php endforeach; ?>
 				</select>

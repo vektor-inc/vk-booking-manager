@@ -446,14 +446,6 @@ class Provider_Settings_Page {
 				>
 					<?php esc_html_e( 'System settings', 'vk-booking-manager' ); ?>
 				</a>
-				<?php if ( $show_license_tab ) : ?>
-				<a
-					href="<?php echo esc_url( add_query_arg( 'tab', 'license', $base_url ) ); ?>"
-					class="nav-tab<?php echo 'license' === $active_tab ? ' nav-tab-active' : ''; ?>"
-				>
-					<?php esc_html_e( 'License', 'vk-booking-manager' ); ?>
-				</a>
-				<?php endif; ?>
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'registration', $base_url ) ); ?>"
 					class="nav-tab<?php echo 'registration' === $active_tab ? ' nav-tab-active' : ''; ?>"
@@ -484,6 +476,14 @@ class Provider_Settings_Page {
 				>
 					<?php esc_html_e( 'Advanced settings', 'vk-booking-manager' ); ?>
 				</a>
+				<?php if ( $show_license_tab ) : ?>
+				<a
+					href="<?php echo esc_url( add_query_arg( 'tab', 'license', $base_url ) ); ?>"
+					class="nav-tab<?php echo 'license' === $active_tab ? ' nav-tab-active' : ''; ?>"
+				>
+					<?php esc_html_e( 'License', 'vk-booking-manager' ); ?>
+				</a>
+				<?php endif; ?>
 			</h2>
 			<?php settings_errors( self::MENU_SLUG ); ?>
 
@@ -1499,6 +1499,35 @@ class Provider_Settings_Page {
 									</td>
 								</tr>
 							<?php endif; ?>
+
+								<tr class="vkbm-provider-settings__tab-system">
+									<th scope="row">
+										<?php esc_html_e( 'Resource tag display', 'vk-booking-manager' ); ?>
+									</th>
+									<td>
+										<label class="vkbm-inline-checkbox">
+											<input
+												type="checkbox"
+												id="vkbm-resource-tag-display-enabled"
+												name="vkbm_provider_settings[resource_tag_display_enabled]"
+												value="1"
+												<?php checked( ! empty( $settings['resource_tag_display_enabled'] ) ); ?>
+											/>
+											<?php esc_html_e( 'Show resource tags', 'vk-booking-manager' ); ?>
+										</label>
+										<p class="description">
+											<?php esc_html_e( 'When enabled, resource tags are displayed in parentheses after the resource name in the reservation form pulldown.', 'vk-booking-manager' ); ?>
+											<br />
+											<?php
+											printf(
+												/* translators: %s: display example */
+												esc_html__( 'Example: %s', 'vk-booking-manager' ),
+												'<code>' . esc_html__( 'Hanako Yamada ( Female, Veteran )', 'vk-booking-manager' ) . '</code>'
+											);
+											?>
+										</p>
+									</td>
+								</tr>
 						<?php endif; ?>
 						<tr class="vkbm-provider-settings__tab-system">
 							<th scope="row">

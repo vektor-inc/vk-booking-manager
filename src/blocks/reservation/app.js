@@ -1009,7 +1009,7 @@ export const ReservationApp = ( {
 		if ( ! providerSettingsLoaded || ! providerSettings.staffEnabled ) {
 			return '';
 		}
-		return '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee';
+		return '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee,resource_tags';
 	}, [ providerSettingsLoaded, providerSettings.staffEnabled ] );
 	useCollection( staffCollectionPath, setStaffOptions );
 

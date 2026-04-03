@@ -247,3 +247,12 @@
 	flex: 0 0 auto;
 	white-space: nowrap;
 }
+
+/***********************************
+ * Disabled reserve button
+ ***********************************/
+
+.vkbm-menu-loop__button.is-disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}

@@ -38,7 +38,7 @@ export const SelectedPlanSummary = ( {
 	menuId,
 	staffId,
 	menus,
-	staffOptions,
+	staffOptions = [],
 	onMenuChange,
 	onStaffChange,
 	allowStaffSelection,
@@ -104,10 +104,18 @@ export const SelectedPlanSummary = ( {
 			name: menu.title?.rendered ?? menu.title,
 		} ) );
 
-	const staffItems = staffOptions.map( ( staff ) => ( {
-		id: staff.id,
-		name: staff.title?.rendered ?? staff.name ?? staff.title,
-	} ) );
+	const staffItems = staffOptions.map( ( staff ) => {
+		const staffName =
+			staff.title?.rendered ?? staff.name ?? staff.title;
+		const tags = staff.resource_tags;
+		return {
+			id: staff.id,
+			name:
+				Array.isArray( tags ) && tags.length > 0
+					? `${ staffName } ( ${ tags.join( ', ' ) } )`
+					: staffName,
+		};
+	} );
 
 	return (
 		<div className="vkbm-plan-summary">
