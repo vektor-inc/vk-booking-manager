@@ -32,6 +32,7 @@ class Service_Menu_Editor {
 	private const META_OTHER_CONDITIONS       = '_vkbm_other_conditions';
 	private const META_DISABLE_NOMINATION_FEE = '_vkbm_disable_nomination_fee';
 	private const META_FIXED_START_TIMES      = '_vkbm_fixed_start_times';
+	private const META_MAX_CAPACITY           = '_vkbm_max_capacity';
 
 	/**
 	 * Register hooks.
@@ -100,7 +101,6 @@ class Service_Menu_Editor {
 		);
 
 		if ( Staff_Editor::is_enabled() ) {
-			// Only show staff linkage UI when staff editor is enabled. / スタッフ編集が有効な場合のみ連携UIを表示します.
 			add_meta_box(
 				'vkbm_service_menu_staff',
 				__( 'Staff collaboration', 'vk-booking-manager' ),
@@ -220,12 +220,15 @@ class Service_Menu_Editor {
 			</label>
 			<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
 		</div>
+		<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
 		<div class="vkbm-service-menu-field">
+			<strong><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></strong><br />
 			<label>
 				<input type="checkbox" name="vkbm_service_menu[disable_nomination_fee]" value="1" <?php checked( '1', $disable_nomination_fee ); ?> />
-				<?php esc_html_e( 'This menu invalidates the nomination fee', 'vk-booking-manager' ); ?>
+				<?php esc_html_e( 'Disable for this service menu', 'vk-booking-manager' ); ?>
 			</label>
 		</div>
+		<?php endif; ?>
 		<?php
 	}
 
@@ -278,6 +281,19 @@ class Service_Menu_Editor {
 			<p class="description"><?php esc_html_e( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ); ?></p>
 			<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
 		</div>
+		<?php
+		// 最大予約人数フィールド（Pro版のみ表示）
+		// Display max capacity field only in Pro edition.
+		$is_pro_edition = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		if ( $is_pro_edition ) :
+			$max_capacity = get_post_meta( $post->ID, self::META_MAX_CAPACITY, true );
+			?>
+			<div class="vkbm-service-menu-field">
+				<label for="vkbm_service_menu_max_capacity"><?php esc_html_e( 'Maximum bookings per time slot', 'vk-booking-manager' ); ?></label>
+				<input type="number" id="vkbm_service_menu_max_capacity" name="vkbm_service_menu[max_capacity]" class="small-text" min="1" step="1" value="<?php echo esc_attr( $max_capacity ); ?>" />
+				<p class="description"><?php esc_html_e( 'Maximum number of bookings that can be accepted per time slot when staff auto-assignment is used.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Default is 1.', 'vk-booking-manager' ); ?></p>
+			</div>
+		<?php endif; ?>
 		<div class="vkbm-service-menu-field">
 			<label>
 				<input type="checkbox" name="vkbm_service_menu[use_detail_page]" value="1" <?php checked( '1', $use_detail_page ); ?> />
@@ -448,6 +464,7 @@ class Service_Menu_Editor {
 		$archive                        = isset( $data['is_archived'] ) ? '1' : '';
 		$use_detail_page                = isset( $data['use_detail_page'] ) ? '1' : '';
 		$disable_nomination_fee         = isset( $data['disable_nomination_fee'] ) ? '1' : '';
+		$max_capacity                   = max( 1, $this->sanitize_integer_value( $data, 'max_capacity' ) );
 		$staff_ids                      = $this->sanitize_staff_ids( $data['staff_ids'] ?? array() );
 		$fixed_start_times              = $this->sanitize_fixed_start_times(
 			$data['fixed_start_times'] ?? array(),
@@ -468,6 +485,14 @@ class Service_Menu_Editor {
 		$this->update_meta_value( $post_id, '_vkbm_is_archived', $archive );
 		$this->update_meta_value( $post_id, self::META_USE_DETAIL_PAGE, $use_detail_page );
 		$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
+		// 最大予約人数はPro版のみ保存。Pro版でない場合はメタを削除してデフォルト1を維持する。
+		// Save max capacity only in Pro edition. In free edition, delete the meta to maintain default of 1.
+		$is_pro_edition = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		if ( $is_pro_edition ) {
+			$this->update_meta_value( $post_id, self::META_MAX_CAPACITY, $max_capacity );
+		} else {
+			delete_post_meta( $post_id, self::META_MAX_CAPACITY );
+		}
 		if ( Staff_Editor::is_enabled() ) {
 			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
 		}

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { disableEmailVerification } from '../utils/setup';
 
-const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:1900';
+const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
 const E2E_DEBUG =
 	process.env.E2E_DEBUG === 'true' || process.env.E2E_DEBUG === '1';
 

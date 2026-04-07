@@ -64,6 +64,8 @@ You can use cash, credit cards, and transportation ICs.',
 			'resource_label_singular'                    => 'Staff',
 			'resource_label_plural'                      => 'Staff',
 			'resource_label_menu'                        => 'Staff available',
+			'no_nomination_label'                        => 'No preference',
+			'nomination_fee_label'                       => 'Nomination fee',
 			'provider_business_hours'                    => '',
 			'provider_reservation_deadline_hours'        => 3,
 			'provider_max_advance_booking_days'          => 0,
@@ -174,6 +176,7 @@ Contact us: Please contact our store.",
 			'resource_tag_display_enabled'                => false,
 			'email_log_enabled'                          => false,
 			'email_log_retention_days'                   => 1,
+			'staff_enabled'                              => true,
 		);
 	}
 

@@ -2,7 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 import { execSync } from 'child_process';
 import { disableEmailVerification } from '../utils/setup';
 
-const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:1900';
+const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
 const ADMIN_USER = 'admin';
 const ADMIN_PASSWORD = 'password';
 const MEMBER_USER = 'e2e-member';

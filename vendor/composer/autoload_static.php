@@ -723,6 +723,7 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
         'VKBookingManager\\Tests\\Auth\\Auth_Shortcodes_Test' => __DIR__ . '/../..' . '/tests/phpunit/auth/test-auth-shortcodes.php',
         'VKBookingManager\\Tests\\Auth\\Testable_Auth_Shortcodes' => __DIR__ . '/../..' . '/tests/phpunit/auth/test-auth-shortcodes.php',
         'VKBookingManager\\Tests\\Availability\\Build_Slots_Fixed_Start_Times_Test' => __DIR__ . '/../..' . '/tests/phpunit/availability/test-build-slots-fixed-start-times.php',
+        'VKBookingManager\\Tests\\Availability\\Capacity_Test' => __DIR__ . '/../..' . '/tests/phpunit/availability/test-capacity.php',
         'VKBookingManager\\Tests\\Bookings\\Availability_Service_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Staff_Conflict_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-admin-staff-conflict.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-admin-staff-conflict.php',

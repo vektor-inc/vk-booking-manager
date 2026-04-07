@@ -687,6 +687,7 @@ return array(
     'VKBookingManager\\Tests\\Auth\\Auth_Shortcodes_Test' => $baseDir . '/tests/phpunit/auth/test-auth-shortcodes.php',
     'VKBookingManager\\Tests\\Auth\\Testable_Auth_Shortcodes' => $baseDir . '/tests/phpunit/auth/test-auth-shortcodes.php',
     'VKBookingManager\\Tests\\Availability\\Build_Slots_Fixed_Start_Times_Test' => $baseDir . '/tests/phpunit/availability/test-build-slots-fixed-start-times.php',
+    'VKBookingManager\\Tests\\Availability\\Capacity_Test' => $baseDir . '/tests/phpunit/availability/test-capacity.php',
     'VKBookingManager\\Tests\\Bookings\\Availability_Service_Test_Double' => $baseDir . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
     'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Staff_Conflict_Test' => $baseDir . '/tests/phpunit/bookings/test-booking-admin-staff-conflict.php',
     'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Test_Double' => $baseDir . '/tests/phpunit/bookings/test-booking-admin-staff-conflict.php',

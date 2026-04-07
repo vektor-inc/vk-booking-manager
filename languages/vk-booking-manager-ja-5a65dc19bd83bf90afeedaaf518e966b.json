@@ -22,20 +22,20 @@
 			"I agree to the terms of use": [
 				"利用規約に同意します"
 			],
-			"No preference": [
-				"指名なし"
-			],
 			"Proceed to Reservation": [
 				"予約に進む"
-			],
-			"Nomination fee": [
-				"指名料"
 			],
 			"Service basic fee": [
 				"サービス基本料金"
 			],
 			"Total basic fee": [
 				"基本料金合計"
+			],
+			"No preference": [
+				"指名なし"
+			],
+			"Nomination fee": [
+				"指名料"
 			],
 			"Could not get menu list.": [
 				"メニュー一覧を取得できませんでした。"
@@ -159,6 +159,12 @@
 			],
 			"There are no available reservation times for the selected criteria.": [
 				"選択した条件に該当する予約可能な時間がありません。"
+			],
+			"%d slots left": [
+				"残り%d枠"
+			],
+			"Fully booked": [
+				"満枠"
 			],
 			"Menu": [
 				"メニュー"

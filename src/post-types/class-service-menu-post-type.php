@@ -45,6 +45,7 @@ class Service_Menu_Post_Type {
 	private const META_STAFF_IDS                   = '_vkbm_staff_ids';
 	private const META_RESERVATION_DAY_TYPE        = '_vkbm_reservation_day_type';
 	private const META_DISABLE_NOMINATION_FEE      = '_vkbm_disable_nomination_fee';
+	private const META_MAX_CAPACITY                = '_vkbm_max_capacity';
 
 	/**
 	 * Staff title cache.
@@ -489,15 +490,17 @@ class Service_Menu_Post_Type {
 								<input type="number" name="vkbm_service_menu_quick[base_price]" class="vkbm-qe-base-price" min="0" step="1" value="" />
 							</span>
 						</label>
+						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
 						<label>
-							<span class="title"><?php esc_html_e( 'Nomination fee setting', 'vk-booking-manager' ); ?></span>
+							<span class="title"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></span>
 							<span class="input-text-wrap">
 								<label>
 									<input type="checkbox" name="vkbm_service_menu_quick[disable_nomination_fee]" class="vkbm-qe-disable-nomination-fee" value="1" />
-									<?php esc_html_e( 'This menu invalidates the nomination fee', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'Disable for this service menu', 'vk-booking-manager' ); ?>
 								</label>
 							</span>
 						</label>
+						<?php endif; ?>
 						<label>
 							<span class="title"><?php esc_html_e( 'Time required', 'vk-booking-manager' ); ?></span>
 							<span class="input-text-wrap">
@@ -913,7 +916,9 @@ class Service_Menu_Post_Type {
 				'default'           => 0,
 				'show_in_rest'      => true,
 				'sanitize_callback' => array( $this, 'sanitize_price_meta' ),
-				'auth_callback'     => '__return_true',
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
 			)
 		);
 
@@ -928,7 +933,29 @@ class Service_Menu_Post_Type {
 				'sanitize_callback' => static function ( $value ): bool {
 					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
 				},
-				'auth_callback'     => '__return_true',
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
+			)
+		);
+
+		// 最大同時予約人数（デフォルト1。Pro版で2以上に設定可能）。
+		// Maximum simultaneous bookings per slot (default 1, configurable in Pro edition).
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_MAX_CAPACITY,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'default'           => 1,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): int {
+					$int = (int) $value;
+					return max( 1, $int );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
 			)
 		);
 
@@ -949,7 +976,9 @@ class Service_Menu_Post_Type {
 					),
 				),
 				'sanitize_callback' => array( $this, 'sanitize_staff_ids' ),
-				'auth_callback'     => '__return_true',
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
 			)
 		);
 	}

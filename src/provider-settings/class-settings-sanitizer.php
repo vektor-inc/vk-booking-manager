@@ -83,6 +83,8 @@ class Settings_Sanitizer {
 		$data['resource_label_singular']                        = sanitize_text_field( (string) ( $data['resource_label_singular'] ?? '' ) );
 		$data['resource_label_plural']                          = sanitize_text_field( (string) ( $data['resource_label_plural'] ?? '' ) );
 		$data['resource_label_menu']                            = sanitize_text_field( (string) ( $data['resource_label_menu'] ?? '' ) );
+		$data['no_nomination_label']                            = sanitize_text_field( (string) ( $data['no_nomination_label'] ?? '' ) );
+		$data['nomination_fee_label']                           = sanitize_text_field( (string) ( $data['nomination_fee_label'] ?? '' ) );
 			$data['provider_business_hours']                    = sanitize_textarea_field( $data['provider_business_hours'] );
 			$data['provider_reservation_deadline_hours']        = $this->sanitize_non_negative_int(
 				$input['provider_reservation_deadline_hours'] ?? ( $data['provider_reservation_deadline_hours'] ?? 0 )
@@ -173,6 +175,8 @@ class Settings_Sanitizer {
 		$data['menu_loop_detail_button_label']           = sanitize_text_field( (string) ( $input['menu_loop_detail_button_label'] ?? ( $data['menu_loop_detail_button_label'] ?? '' ) ) );
 
 		$data['resource_tag_display_enabled'] = ! empty( $input['resource_tag_display_enabled'] );
+		// 指名機能の有効・無効を保存する。
+		$data['staff_enabled'] = ! empty( $input['staff_enabled'] );
 
 		$data['email_log_enabled'] = ! empty( $input['email_log_enabled'] );
 

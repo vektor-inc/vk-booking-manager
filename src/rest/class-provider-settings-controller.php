@@ -84,6 +84,10 @@ class Provider_Settings_Controller {
 		$settings                = $this->settings_repository->get_settings();
 		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
 		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
+
+		// 指名関連ラベルを取得する（ヘルパー関数がフォールバックを処理）。
+		$no_nomination_label  = vkbm_get_no_nomination_label();
+		$nomination_fee_label = vkbm_get_nomination_fee_label();
 		$provider_name           = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
 		$provider_logo_id        = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
 		$reservation             = $this->normalize_reservation_page_url(
@@ -107,11 +111,11 @@ class Provider_Settings_Controller {
 		$cancellation_policy = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
 		$terms_of_service    = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
 		$payment_method      = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
-		$staff_enabled       = Staff_Editor::is_enabled();
+		$nomination_enabled  = Staff_Editor::is_nomination_enabled();
 
 		// 無料版ではデフォルトスタッフのIDを取得する.
 		$default_staff_id = 0;
-		if ( ! $staff_enabled ) {
+		if ( ! Staff_Editor::is_enabled() ) {
 			$default_staff_id = $this->get_default_staff_id();
 		}
 
@@ -119,7 +123,7 @@ class Provider_Settings_Controller {
 			array(
 				'tax_enabled'                        => true,
 				'tax_rate'                           => 0.0,
-				'staff_enabled'                      => $staff_enabled,
+				'staff_enabled'                      => $nomination_enabled,
 				'default_staff_id'                   => $default_staff_id,
 				'resource_label_singular'            => $resource_label_singular,
 				'resource_label_plural'              => $resource_label_plural,
@@ -135,6 +139,8 @@ class Provider_Settings_Controller {
 				'cancellation_policy'                => $cancellation_policy,
 				'terms_of_service'                   => $terms_of_service,
 				'payment_method'                     => $payment_method,
+				'no_nomination_label'                => $no_nomination_label,
+				'nomination_fee_label'               => $nomination_fee_label,
 			)
 		);
 	}

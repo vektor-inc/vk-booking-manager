@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.4.0
+Stable tag: 0.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,13 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.5.0 =
+* [ 機能追加 ] サービスメニュー単位で1枠あたりの最大予約受付数を設定できる複数予約機能を追加（Pro版のみ）
+* [ 機能追加 ] 基本設定画面に「指名機能の使用」設定を追加し、指名機能を無効化できるように対応
+* [ 機能追加 ] 「指名」関連ラベルのカスタマイズ機能を追加
+* [ 不具合修正 ] 予約確認メールで指名料の通貨記号が二重表示される不具合を修正
+* [ 不具合修正 ] 予約確認メールで（税込）表記が基本料金のみに付与され指名料を含む合計に対する表記になっていない不具合を修正
 
 = 0.4.0 =
 * [ 不具合修正 ] ユーザー情報変更画面でパスワード変更に失敗してもエラーメッセージが表示されない不具合を修正

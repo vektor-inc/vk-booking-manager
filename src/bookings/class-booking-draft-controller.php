@@ -127,6 +127,12 @@ class Booking_Draft_Controller {
 		$menu_label          = isset( $params['menu_label'] ) ? sanitize_text_field( (string) $params['menu_label'] ) : '';
 		$staff_label         = isset( $params['staff_label'] ) ? sanitize_text_field( (string) $params['staff_label'] ) : '';
 		$is_staff_preferred  = ! empty( $params['is_staff_preferred'] );
+
+		// 指名機能が無効の場合、指名フラグを強制的に false にする。
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
+			$is_staff_preferred = false;
+		}
+
 		$slot                = isset( $params['slot'] ) && is_array( $params['slot'] ) ? $params['slot'] : array();
 		$slot_id             = isset( $slot['slot_id'] ) ? sanitize_text_field( (string) $slot['slot_id'] ) : '';
 		$start_at            = isset( $slot['start_at'] ) ? sanitize_text_field( (string) $slot['start_at'] ) : '';
@@ -167,7 +173,7 @@ class Booking_Draft_Controller {
 		}
 
 		if ( '' === $staff_label && $resource_id <= 0 ) {
-			$staff_label = __( 'No preference', 'vk-booking-manager' );
+			$staff_label = vkbm_get_no_nomination_label();
 		}
 
 		$effective_slot_staff_label = '' !== $slot_staff_label ? $slot_staff_label : $staff_label;
@@ -266,7 +272,7 @@ class Booking_Draft_Controller {
 			$payload['menu_price_currency']     = $price_snapshot['currency'];
 		}
 
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$payload['nomination_fee'] = 0;
 		}
 
@@ -370,7 +376,7 @@ class Booking_Draft_Controller {
 			return 0;
 		}
 
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			return 0;
 		}
 

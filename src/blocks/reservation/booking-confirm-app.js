@@ -254,6 +254,12 @@ export const BookingConfirmApp = ( {
 	const [ resourceLabelSingular, setResourceLabelSingular ] = useState(
 		__( 'Staff', 'vk-booking-manager' )
 	);
+	const [ noNominationLabel, setNoNominationLabel ] = useState(
+		__( 'No preference', 'vk-booking-manager' )
+	);
+	const [ nominationFeeLabel, setNominationFeeLabel ] = useState(
+		__( 'Nomination fee', 'vk-booking-manager' )
+	);
 	const [ resolvedReservationPageUrl, setResolvedReservationPageUrl ] =
 		useState( reservationPageUrl || '' );
 	const [ taxLabelText, setTaxLabelText ] = useState( '' );
@@ -427,6 +433,21 @@ export const BookingConfirmApp = ( {
 					Boolean( response?.reservation_show_provider_name )
 				);
 				setStaffEnabled( response?.staff_enabled !== false );
+
+				// 指名関連ラベルを設定値から取得する。空の場合は翻訳デフォルト値を使用する。
+				if (
+					typeof response?.no_nomination_label === 'string' &&
+					response.no_nomination_label.trim() !== ''
+				) {
+					setNoNominationLabel( response.no_nomination_label );
+				}
+				if (
+					typeof response?.nomination_fee_label === 'string' &&
+					response.nomination_fee_label.trim() !== ''
+				) {
+					setNominationFeeLabel( response.nomination_fee_label );
+				}
+
 				setTaxLabelText(
 					typeof response?.tax_label_text === 'string'
 						? response.tax_label_text
@@ -1066,7 +1087,7 @@ export const BookingConfirmApp = ( {
 		staff?.title?.rendered ||
 		staff?.title ||
 		staff?.name ||
-		__( 'No preference', 'vk-booking-manager' );
+		noNominationLabel;
 
 	const logoutHref =
 		logoutUrl ||
@@ -1500,41 +1521,40 @@ export const BookingConfirmApp = ( {
 								value={ staffName }
 							/>
 						) }
-						<SummaryRow
-							label={ __(
-								'Service basic fee',
-								'vk-booking-manager'
-							) }
-							value={ pricingSummary.baseLabel }
-						/>
 						{ staffEnabled && (
-							<SummaryRow
-								label={ __(
-									'Nomination fee',
-									'vk-booking-manager'
-								) }
-								value={
-									pricingSummary.nominationLabel ||
-									formatCurrency(
-										0,
-										currencySymbol.trim() !== ''
-											? currencySymbol
-											: null
-									)
-								}
-							/>
+							<>
+								<SummaryRow
+									label={ __(
+										'Service basic fee',
+										'vk-booking-manager'
+									) }
+									value={ pricingSummary.baseLabel }
+								/>
+								<SummaryRow
+									label={ nominationFeeLabel }
+									value={
+										pricingSummary.nominationLabel ||
+										formatCurrency(
+											0,
+											currencySymbol.trim() !== ''
+												? currencySymbol
+												: null
+										)
+									}
+								/>
+								<SummaryRow
+									label={ __(
+										'Total basic fee',
+										'vk-booking-manager'
+									) }
+									value={
+										pricingSummary.totalLabel ||
+										pricingSummary.baseLabel
+									}
+									valueClassName="vkbm-confirm__summary-item-value--price"
+								/>
+							</>
 						) }
-						<SummaryRow
-							label={ __(
-								'Total basic fee',
-								'vk-booking-manager'
-							) }
-							value={
-								pricingSummary.totalLabel ||
-								pricingSummary.baseLabel
-							}
-							valueClassName="vkbm-confirm__summary-item-value--price"
-						/>
 					</div>
 
 					{ ! canManageReservations &&

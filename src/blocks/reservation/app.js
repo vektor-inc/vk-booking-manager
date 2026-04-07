@@ -225,6 +225,8 @@ export const ReservationApp = ( {
 		defaultStaffId: 0,
 		resourceLabelSingular: __( 'Staff', 'vk-booking-manager' ),
 		resourceLabelPlural: __( 'Staff', 'vk-booking-manager' ),
+		noNominationLabel: __( 'No preference', 'vk-booking-manager' ),
+		nominationFeeLabel: __( 'Nomination fee', 'vk-booking-manager' ),
 		showProviderLogo: false,
 		showProviderName: false,
 		providerName: '',
@@ -338,6 +340,16 @@ export const ReservationApp = ( {
 							  settings.resource_label_singular.trim() !== ''
 							? settings.resource_label_singular
 							: __( 'Staff', 'vk-booking-manager' ),
+					noNominationLabel:
+						typeof settings?.no_nomination_label === 'string' &&
+						settings.no_nomination_label.trim() !== ''
+							? settings.no_nomination_label
+							: __( 'No preference', 'vk-booking-manager' ),
+					nominationFeeLabel:
+						typeof settings?.nomination_fee_label === 'string' &&
+						settings.nomination_fee_label.trim() !== ''
+							? settings.nomination_fee_label
+							: __( 'Nomination fee', 'vk-booking-manager' ),
 					providerName:
 						typeof settings?.provider_name === 'string'
 							? settings.provider_name
@@ -880,6 +892,12 @@ export const ReservationApp = ( {
 			return [];
 		}
 
+		// 指名機能が無効の場合は料金サマリーを表示しない
+		// （指名料行がなく基本料金＝合計となり冗長なため）。
+		if ( ! providerSettings.staffEnabled ) {
+			return [];
+		}
+
 		const taxSuffix = providerSettings.taxEnabled
 			? providerSettings.taxLabelText &&
 			  providerSettings.taxLabelText.trim() !== ''
@@ -903,21 +921,8 @@ export const ReservationApp = ( {
 				),
 			},
 			{
-				key: 'total',
-				label: __( 'Total basic fee', 'vk-booking-manager' ),
-				...withTaxLabel(
-					totalPrice !== null
-						? formatCurrency( totalPrice, currencySymbol )
-						: '—'
-				),
-				highlight: true,
-			},
-		];
-
-		if ( providerSettings.staffEnabled ) {
-			rows.splice( 1, 0, {
 				key: 'nomination',
-				label: __( 'Nomination fee', 'vk-booking-manager' ),
+				label: providerSettings.nominationFeeLabel,
 				value:
 					staffNominationFee === null
 						? staffId
@@ -928,8 +933,18 @@ export const ReservationApp = ( {
 			// || staffId               : 指名料未設定（null）でもスタッフ選択済みなら ¥0 表示になるのでラベルを付ける
 			// 両方 false = スタッフ未選択 = '—' 表示 のときはラベル不要
 			taxLabel: ( staffNominationFee !== null || staffId ) ? taxSuffix : '',
-			} );
-		}
+			},
+			{
+				key: 'total',
+				label: __( 'Total basic fee', 'vk-booking-manager' ),
+				...withTaxLabel(
+					totalPrice !== null
+						? formatCurrency( totalPrice, currencySymbol )
+						: '—'
+				),
+				highlight: true,
+			},
+		];
 
 		return rows;
 	}, [
@@ -1091,7 +1106,7 @@ export const ReservationApp = ( {
 						slot.staff_label ||
 						slot.staff?.name ||
 						preferredStaffLabel ||
-						__( 'No preference', 'vk-booking-manager' );
+						providerSettings.noNominationLabel;
 
 					return {
 						...slot,
@@ -1297,7 +1312,7 @@ export const ReservationApp = ( {
 				  currentStaff?.title ??
 				  currentStaff?.name ??
 				  ''
-				: __( 'No preference', 'vk-booking-manager' ),
+				: providerSettings.noNominationLabel,
 			is_staff_preferred: Boolean( staffId ),
 			date: selectedDate,
 			slot: {
@@ -1314,7 +1329,7 @@ export const ReservationApp = ( {
 						  currentStaff?.title ??
 						  currentStaff?.name ??
 						  ''
-						: __( 'No preference', 'vk-booking-manager' ) ),
+						: providerSettings.noNominationLabel ),
 				staff: selectedSlot.staff
 					? {
 							id: selectedSlot.staff.id,
@@ -1388,6 +1403,7 @@ export const ReservationApp = ( {
 		currentStaff,
 		isEditor,
 		menuId,
+		providerSettings,
 		selectedDate,
 		selectedSlot,
 		staffId,
@@ -1738,6 +1754,9 @@ export const ReservationApp = ( {
 							resourceLabelSingular={
 								providerSettings.resourceLabelSingular
 							}
+							noNominationLabel={
+								providerSettings.noNominationLabel
+							}
 						/>
 					) }
 
@@ -1774,6 +1793,9 @@ export const ReservationApp = ( {
 											  currentStaff?.name ??
 											  ''
 											: ''
+									}
+									noNominationLabel={
+										providerSettings.noNominationLabel
 									}
 								/>
 							</div>

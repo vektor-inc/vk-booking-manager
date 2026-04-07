@@ -236,4 +236,36 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$this->assertTrue( $result['provider_business_hours_weekly']['mon']['use_custom'] );
 		$this->assertSame( [], $result['provider_business_hours_weekly']['mon']['time_slots'] );
 	}
+
+	/**
+	 * staff_enabled の有効・無効がサニタイズで正しく処理されることを確認するテスト。
+	 */
+	public function test_sanitize_staff_enabled(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		// デフォルト設定で staff_enabled が true であることを確認する。
+		$this->assertTrue( $defaults['staff_enabled'] );
+
+		// staff_enabled を有効（truthy）で送信した場合。
+		$result_enabled = $sanitizer->sanitize(
+			[ 'staff_enabled' => '1' ],
+			$defaults
+		);
+		$this->assertTrue( $result_enabled['staff_enabled'] );
+
+		// staff_enabled を無効（空文字）で送信した場合。
+		$result_disabled = $sanitizer->sanitize(
+			[ 'staff_enabled' => '' ],
+			$defaults
+		);
+		$this->assertFalse( $result_disabled['staff_enabled'] );
+
+		// staff_enabled が送信されない場合（チェックボックス未チェック相当）。
+		$result_missing = $sanitizer->sanitize(
+			[],
+			$defaults
+		);
+		$this->assertFalse( $result_missing['staff_enabled'] );
+	}
 }

@@ -243,14 +243,14 @@ class Booking_Admin {
 		$note                    = (string) get_post_meta( $post->ID, self::META_NOTE, true );
 		$internal_note           = (string) get_post_meta( $post->ID, self::META_INTERNAL_NOTE, true );
 		$nomination_fee          = (int) get_post_meta( $post->ID, self::META_NOMINATION_FEE, true );
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$nomination_fee = 0;
 		}
 		$has_base_total_price = metadata_exists( 'post', $post->ID, self::META_BASE_TOTAL_PRICE );
 		$base_total_price     = $has_base_total_price
 			? (int) get_post_meta( $post->ID, self::META_BASE_TOTAL_PRICE, true )
 			: max( 0, (int) $service_base_price ) + max( 0, (int) $nomination_fee );
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$base_total_price = max( 0, (int) $service_base_price );
 		}
 		$has_billed_total_price = metadata_exists( 'post', $post->ID, self::META_BILLED_TOTAL_PRICE );
@@ -401,12 +401,18 @@ class Booking_Admin {
 								);
 								?>
 								<br />
-								<?php esc_html_e( 'Prices are based on the "basic service fee", "Nomination fee", and "total basic fee" saved at the time of reservation. Please enter the "total billing amount" if necessary.', 'vk-booking-manager' ); ?>
+								<?php
+								printf(
+									/* translators: %s: nomination fee label */
+									esc_html__( 'Prices are based on the "basic service fee", "%s", and "total basic fee" saved at the time of reservation. Please enter the "total billing amount" if necessary.', 'vk-booking-manager' ),
+									esc_html( vkbm_get_nomination_fee_label() )
+								);
+								?>
 							</p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Nomination fee', 'vk-booking-manager' ); ?></th>
+						<th scope="row"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></th>
 						<td>
 							<span class="vkbm-booking-meta__value">
 								<?php
@@ -465,7 +471,13 @@ class Booking_Admin {
 							}
 							?>
 							<p class="description">
-								<?php esc_html_e( 'This is the total of the basic service fee + nomination fee at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ); ?>
+								<?php
+								printf(
+									/* translators: %s: nomination fee label */
+									esc_html__( 'This is the total of the basic service fee + %s at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ),
+									esc_html( vkbm_get_nomination_fee_label() )
+								);
+								?>
 							</p>
 						</td>
 					</tr>
@@ -488,7 +500,13 @@ class Booking_Admin {
 							}
 							?>
 							<p class="description">
-								<?php esc_html_e( 'If there are any service changes or additional charges, please enter the final amount charged, including the nomination fee. If not entered, the total basic fee will be applied.', 'vk-booking-manager' ); ?>
+								<?php
+								printf(
+									/* translators: %s: nomination fee label */
+									esc_html__( 'If there are any service changes or additional charges, please enter the final amount charged, including the %s. If not entered, the total basic fee will be applied.', 'vk-booking-manager' ),
+									esc_html( vkbm_get_nomination_fee_label() )
+								);
+								?>
 							</p>
 							<p class="description">
 								<?php
@@ -680,7 +698,7 @@ class Booking_Admin {
 				? (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true )
 				: ( '' === $service_base_price ? 0 : (int) $service_base_price );
 			$nomination_fee_for_total = (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true );
-			if ( ! Staff_Editor::is_enabled() ) {
+			if ( ! Staff_Editor::is_nomination_enabled() ) {
 				$nomination_fee_for_total = 0;
 			}
 			$base_total_price = max( 0, $base_price_for_total + max( 0, $nomination_fee_for_total ) );
@@ -778,7 +796,7 @@ class Booking_Admin {
 				$base_total     = $has_base_total
 					? (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true )
 					: ( (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true ) + (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
-				if ( ! Staff_Editor::is_enabled() ) {
+				if ( ! Staff_Editor::is_nomination_enabled() ) {
 					$base_total = (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true );
 				}
 

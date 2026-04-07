@@ -24,13 +24,24 @@ class Staff_Editor {
 	public const META_NOMINATION_FEE = '_vkbm_nomination_fee';
 
 	/**
-	 * Whether the staff editor is enabled.
+	 * Whether the staff/resource system is available.
 	 *
-	 * スタッフ編集機能が有効かどうかを返します。
+	 * Free版ではリソース機能は無効です。
 	 *
 	 * @return bool
 	 */
 	public static function is_enabled(): bool {
+		return false;
+	}
+
+	/**
+	 * Whether the nomination feature is enabled.
+	 *
+	 * Free版では指名機能は無効です。
+	 *
+	 * @return bool
+	 */
+	public static function is_nomination_enabled(): bool {
 		return false;
 	}
 

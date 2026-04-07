@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 const formatDisplayTime = ( isoString ) => {
 	if ( ! isoString ) {
@@ -16,6 +16,7 @@ export const DailySlotList = ( {
 	error,
 	selectedStaffLabel = '',
 	showStaffLabel = true,
+	noNominationLabel = '',
 } ) => {
 	if ( error ) {
 		return (
@@ -67,34 +68,72 @@ export const DailySlotList = ( {
 
 	return (
 		<div className="vkbm-slot-list">
-			{ slots.map( ( slot ) => (
-				<button
-					type="button"
-					key={ slot.slot_id }
-					className={ [
-						'vkbm-slot-list__item',
-						selectedSlotId === slot.slot_id && 'is-selected',
-					]
-						.filter( Boolean )
-						.join( ' ' ) }
-					onClick={ () => onSelectSlot( slot ) }
-				>
-					<div className="vkbm-slot-list__time">
-						{ formatDisplayTime( slot.start_at ) } -{ ' ' }
-						{ formatDisplayTime(
-							slot.service_end_at || slot.end_at
-						) }
-					</div>
-					{ showStaffLabel && (
-						<div className="vkbm-slot-list__staff">
-							{ slot.staff_label ||
-								slot.staff?.name ||
-								selectedStaffLabel ||
-								__( 'No preference', 'vk-booking-manager' ) }
+			{ slots.map( ( slot ) => {
+				// capacity > 1 の場合のみ残り枠数を表示する。
+				// Show remaining count only when capacity is greater than 1.
+				const showRemaining =
+					slot.capacity > 1 && slot.remaining > 0;
+				const isFull =
+					slot.capacity > 1 && slot.remaining <= 0;
+
+				return (
+					<button
+						type="button"
+						key={ slot.slot_id }
+						disabled={ isFull }
+						className={ [
+							'vkbm-slot-list__item',
+							selectedSlotId === slot.slot_id &&
+								'is-selected',
+							isFull && 'is-full',
+						]
+							.filter( Boolean )
+							.join( ' ' ) }
+						onClick={ () =>
+							! isFull && onSelectSlot( slot )
+						}
+					>
+						<div className="vkbm-slot-list__time">
+							{ formatDisplayTime( slot.start_at ) } -{ ' ' }
+							{ formatDisplayTime(
+								slot.service_end_at || slot.end_at
+							) }
 						</div>
-					) }
-				</button>
-			) ) }
+						{ showStaffLabel && (
+							<div className="vkbm-slot-list__staff">
+								{ slot.staff_label ||
+									slot.staff?.name ||
+									selectedStaffLabel ||
+									noNominationLabel ||
+									__(
+										'No preference',
+										'vk-booking-manager'
+									) }
+							</div>
+						) }
+						{ showRemaining && (
+							<div className="vkbm-slot-list__remaining">
+								{ sprintf(
+									/* translators: %d: number of remaining slots */
+									__(
+										'%d slots left',
+										'vk-booking-manager'
+									),
+									slot.remaining
+								) }
+							</div>
+						) }
+						{ isFull && (
+							<div className="vkbm-slot-list__remaining vkbm-slot-list__remaining--full">
+								{ __(
+									'Fully booked',
+									'vk-booking-manager'
+								) }
+							</div>
+						) }
+					</button>
+				);
+			} ) }
 		</div>
 	);
 };

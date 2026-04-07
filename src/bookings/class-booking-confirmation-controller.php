@@ -31,8 +31,10 @@ use WP_REST_Server;
 use WP_Query;
 use WP_User;
 use function __;
+use function delete_option;
 use function delete_post_meta;
 use function delete_transient;
+use function get_post;
 use function get_post_meta;
 use function get_transient;
 use function get_users;
@@ -73,9 +75,17 @@ class Booking_Confirmation_Controller {
 	private const META_SERVICE_BASE_PRICE        = '_vkbm_booking_service_base_price';
 	private const META_BASE_TOTAL_PRICE          = '_vkbm_booking_base_total_price';
 	private const MENU_META_RESERVATION_DAY_TYPE = '_vkbm_reservation_day_type';
+	private const MENU_META_MAX_CAPACITY         = '_vkbm_max_capacity';
 	private const BOOKING_STATUS_CONFIRMED       = 'confirmed';
 	private const BOOKING_STATUS_PENDING         = 'pending';
 	private const OWNER_COOKIE                   = 'vkbm_draft_owner';
+
+	/**
+	 * Transient-based mutex lock timeout in seconds.
+	 *
+	 * @var int
+	 */
+	private const MUTEX_TIMEOUT = 10;
 
 	/**
 	 * Availability service.
@@ -339,6 +349,13 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
+		// 予約確定直前に capacity 上限を再チェック（簡易排他制御付き）。
+		// Re-check capacity limit just before confirming, with transient-based mutex.
+		$capacity_check = $this->check_capacity_with_mutex( $menu_id, $staff_id, $start_at, $end_at );
+		if ( is_wp_error( $capacity_check ) ) {
+			return $capacity_check;
+		}
+
 		$booking_id = wp_insert_post(
 			array(
 				'post_type'   => Booking_Post_Type::POST_TYPE,
@@ -387,7 +404,7 @@ class Booking_Confirmation_Controller {
 		update_post_meta( $booking_id, '_vkbm_booking_agreed_cancellation_policy', $agree_cancellation ? '1' : '' );
 		update_post_meta( $booking_id, '_vkbm_booking_agreed_terms_of_service', $agree_tos ? '1' : '' );
 		$nomination_fee = isset( $draft['nomination_fee'] ) ? (int) $draft['nomination_fee'] : 0;
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$nomination_fee = 0;
 		}
 		$disable_nomination_fee = (string) get_post_meta( $menu_id, '_vkbm_disable_nomination_fee', true );
@@ -434,12 +451,25 @@ class Booking_Confirmation_Controller {
 	/**
 	 * Select an available staff member from assignable candidates.
 	 *
+	 * 空きスタッフ（予約なし）を優先して返す。
+	 * 全スタッフに予約がある場合でも、max_capacity の範囲内であれば
+	 * 最も予約数が少ないスタッフを返す（負荷分散）。
+	 *
+	 * Prefers free staff (no bookings). When all staff have bookings,
+	 * returns the one with the fewest bookings for load balancing,
+	 * as long as capacity allows it.
+	 *
 	 * @param array<int> $staff_ids Candidate staff IDs.
 	 * @param string     $start_at  Slot start (ISO8601).
 	 * @param string     $end_at    Slot end (ISO8601).
 	 * @return int
 	 */
 	private function select_auto_assigned_staff( array $staff_ids, string $start_at, string $end_at ): int {
+		// まず空きスタッフを探す。
+		// First, look for a free staff member.
+		$fallback_id    = 0;
+		$min_bookings   = PHP_INT_MAX;
+
 		foreach ( $staff_ids as $staff_id ) {
 			if ( $staff_id <= 0 ) {
 				continue;
@@ -448,9 +478,21 @@ class Booking_Confirmation_Controller {
 			if ( ! $this->has_staff_conflict( $staff_id, $start_at, $end_at ) ) {
 				return (int) $staff_id;
 			}
+
+			// 予約済みスタッフの中で最も予約数が少ないスタッフを記録する。
+			// Track the booked staff member with the fewest bookings.
+			$count = $this->count_staff_bookings_for_slot( $staff_id, $start_at, $end_at );
+			if ( $count < $min_bookings ) {
+				$min_bookings = $count;
+				$fallback_id  = (int) $staff_id;
+			}
 		}
 
-		return 0;
+		// 空きスタッフがいない場合は予約数が最も少ないスタッフを返す。
+		// capacity チェックは check_capacity_with_mutex で行うため、ここでは候補を返すのみ。
+		// If no free staff, return the one with fewest bookings.
+		// Capacity check is done in check_capacity_with_mutex, so we just return a candidate here.
+		return $fallback_id;
 	}
 
 	/**
@@ -517,6 +559,75 @@ class Booking_Confirmation_Controller {
 		);
 
 		return $query->have_posts();
+	}
+
+	/**
+	 * Count the number of bookings a staff member has in the given slot.
+	 *
+	 * 指定スタッフの指定時間帯における予約数を返す。
+	 * 自動割り当て時の負荷分散（最も予約数が少ないスタッフを選ぶ）に使用する。
+	 *
+	 * @param int    $staff_id Staff ID.
+	 * @param string $start_at Slot start (ISO8601).
+	 * @param string $end_at   Slot end (ISO8601).
+	 * @return int
+	 */
+	private function count_staff_bookings_for_slot( int $staff_id, string $start_at, string $end_at ): int {
+		if ( $staff_id <= 0 ) {
+			return 0;
+		}
+
+		$start_for_storage = $this->format_datetime_for_storage( $start_at );
+		$end_for_storage   = $this->format_datetime_for_storage( $end_at );
+
+		if ( '' === $start_for_storage ) {
+			return 0;
+		}
+
+		if ( '' === $end_for_storage ) {
+			$end_for_storage = $start_for_storage;
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				'post_status'    => array( 'publish', 'pending' ),
+				'posts_per_page' => -1,
+				'no_found_rows'  => true,
+				'fields'         => 'ids',
+				'meta_query'     => array(
+					'relation' => 'AND',
+					array(
+						'key'     => self::META_RESOURCE_ID,
+						'value'   => $staff_id,
+						'compare' => '=',
+					),
+					array(
+						'key'     => self::META_DATE_START,
+						'value'   => $end_for_storage,
+						'compare' => '<',
+						'type'    => 'DATETIME',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => self::META_DATE_TOTAL_END,
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+						array(
+							'key'     => self::META_DATE_END,
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+					),
+				),
+			)
+		);
+
+		return count( $query->posts );
 	}
 
 	/**
@@ -592,7 +703,7 @@ class Booking_Confirmation_Controller {
 			return 0;
 		}
 
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			return 0;
 		}
 
@@ -1005,5 +1116,187 @@ class Booking_Confirmation_Controller {
 		}
 
 		return null;
+	}
+
+	/**
+	 * Check capacity limit with transient-based mutex to prevent race conditions.
+	 *
+	 * 予約確定直前に capacity 上限をチェックします。
+	 * transient を使った簡易排他制御で同時リクエストによる超過予約を防止します。
+	 * ロック取得後にスタッフの競合も再チェックして二重割り当てを防ぎます。
+	 *
+	 * @param int    $menu_id  Service menu ID.
+	 * @param int    $staff_id Assigned staff ID.
+	 * @param string $start_at Slot start (ISO8601).
+	 * @param string $end_at   Slot end (ISO8601).
+	 * @return true|WP_Error
+	 */
+	private function check_capacity_with_mutex( int $menu_id, int $staff_id, string $start_at, string $end_at ) {
+		$max_capacity = $this->get_menu_max_capacity( $menu_id );
+
+		// ミューテックスキーを生成。メニューIDとスロット開始時刻で一意にする。
+		// Generate mutex key unique to menu ID and slot start time.
+		$mutex_key = sprintf( 'vkbm_booking_mutex_%d_%s', $menu_id, md5( $start_at . '|' . $end_at ) );
+
+		// DBレベルの排他制御: INSERT IGNORE でアトミックにロックを取得する。
+		// Atomic lock acquisition via INSERT IGNORE at the DB level.
+		global $wpdb;
+		$option_name   = '_transient_' . $mutex_key;
+		$lock_acquired = false;
+		for ( $i = 0; $i < 3; $i++ ) {
+			$result = $wpdb->query(
+				$wpdb->prepare(
+					"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+					$option_name,
+					time()
+				)
+			);
+			if ( 1 === $result ) {
+				$lock_acquired = true;
+				break;
+			}
+
+			// タイムアウトしたロックを検出して上書きする。
+			// Detect and overwrite stale locks that exceeded MUTEX_TIMEOUT.
+			$existing = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $option_name ) );
+			if ( null !== $existing && ( time() - (int) $existing ) > self::MUTEX_TIMEOUT ) {
+				$wpdb->update(
+					$wpdb->options,
+					array( 'option_value' => (string) time() ),
+					array( 'option_name' => $option_name )
+				);
+				$lock_acquired = true;
+				break;
+			}
+
+			// 短時間待機してリトライする。
+			// Wait briefly and retry.
+			usleep( 200000 ); // 200ms.
+		}
+
+		if ( ! $lock_acquired ) {
+			return new WP_Error(
+				'booking_busy',
+				__( 'The system is currently processing another booking. Please try again in a few seconds.', 'vk-booking-manager' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		// ロック取得後にスタッフの競合を再チェックして二重割り当てを防止する。
+		// max_capacity > 1 の場合は同じスタッフが複数予約を担当できるためスキップする。
+		// Re-check staff conflict after acquiring the lock to prevent double assignment.
+		// Skip when max_capacity > 1 as the same staff can handle multiple bookings.
+		if ( 1 === $max_capacity && $staff_id > 0 && $this->has_staff_conflict( $staff_id, $start_at, $end_at ) ) {
+			delete_option( $option_name );
+			return new WP_Error(
+				'staff_unavailable',
+				__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		// 現在の予約数をカウントする。
+		// Count current bookings for this menu and time slot.
+		$current_count = $this->count_menu_bookings_for_slot( $menu_id, $start_at, $end_at );
+
+		if ( $current_count >= $max_capacity ) {
+			delete_option( $option_name );
+			return new WP_Error(
+				'capacity_exceeded',
+				__( 'This time slot is fully booked. Please choose another time.', 'vk-booking-manager' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		// 成功パスでもロックを解放する。
+		// Release the lock on the success path as well.
+		delete_option( $option_name );
+		return true;
+	}
+
+	/**
+	 * Get the max capacity for a service menu.
+	 *
+	 * Availability_Service 側の公開メソッドに委譲します。
+	 *
+	 * @param int $menu_id Service menu ID.
+	 * @return int
+	 */
+	private function get_menu_max_capacity( int $menu_id ): int {
+		$menu_post = get_post( $menu_id );
+		if ( ! $menu_post instanceof \WP_Post ) {
+			return 1;
+		}
+		return $this->availability_service->get_menu_max_capacity( $menu_post );
+	}
+
+	/**
+	 * Count confirmed/pending bookings for a specific menu and time slot.
+	 *
+	 * 指定メニュー・時間帯の確定済み/保留中予約数をカウントします。
+	 *
+	 * @param int    $menu_id  Service menu ID.
+	 * @param string $start_at Slot start (ISO8601).
+	 * @param string $end_at   Slot end (ISO8601).
+	 * @return int
+	 */
+	private function count_menu_bookings_for_slot( int $menu_id, string $start_at, string $end_at ): int {
+		$start_for_storage = $this->format_datetime_for_storage( $start_at );
+		$end_for_storage   = $this->format_datetime_for_storage( $end_at );
+
+		if ( '' === $start_for_storage ) {
+			return 0;
+		}
+
+		if ( '' === $end_for_storage ) {
+			$end_for_storage = $start_for_storage;
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				// pending ステータスも含めて予約枠を正確にカウントする。
+				'post_status'    => array( 'publish', 'pending' ),
+				'posts_per_page' => -1,
+				'no_found_rows'  => true,
+				'fields'         => 'ids',
+				'meta_query'     => array(
+					'relation' => 'AND',
+					// 同一メニューの予約のみをカウントする。
+					// Count only bookings for the same menu.
+					array(
+						'key'     => self::META_SERVICE_ID,
+						'value'   => $menu_id,
+						'compare' => '=',
+					),
+					// 時間帯が重複する予約のみをカウントする。
+					// Count only bookings that overlap the time slot.
+					array(
+						'key'     => self::META_DATE_START,
+						'value'   => $end_for_storage,
+						'compare' => '<',
+						'type'    => 'DATETIME',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => self::META_DATE_TOTAL_END,
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+						array(
+							'key'     => self::META_DATE_END,
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+					),
+				),
+			)
+		);
+
+		// no_found_rows => true の場合 found_posts は常に 0 なので posts の件数を返す。
+		return count( $query->posts );
 	}
 }

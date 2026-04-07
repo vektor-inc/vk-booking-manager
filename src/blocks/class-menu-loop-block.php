@@ -19,6 +19,7 @@ use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Block;
 use WP_Post;
 use WP_Query;
@@ -839,7 +840,9 @@ class Menu_Loop_Block {
 			);
 		}
 
-		if ( ! empty( $staff_ids ) ) {
+		// 指名機能が無効の場合、担当可能スタッフの表示をスキップする。
+		// Skip staff display when nomination feature is disabled.
+		if ( ! empty( $staff_ids ) && Staff_Editor::is_nomination_enabled() ) {
 			$staff_posts = get_posts(
 				array(
 					'post_type'      => Resource_Post_Type::POST_TYPE,

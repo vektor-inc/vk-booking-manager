@@ -53,6 +53,32 @@ function vkbm_get_resource_label_plural(): string {
 }
 
 /**
+ * 指名なしラベルを取得する（デフォルト: No preference）。
+ *
+ * @return string
+ */
+function vkbm_get_no_nomination_label(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$label      = isset( $settings['no_nomination_label'] ) ? trim( (string) $settings['no_nomination_label'] ) : '';
+
+	return '' !== $label ? $label : __( 'No preference', 'vk-booking-manager' );
+}
+
+/**
+ * 指名料ラベルを取得する（デフォルト: Nomination fee）。
+ *
+ * @return string
+ */
+function vkbm_get_nomination_fee_label(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$label      = isset( $settings['nomination_fee_label'] ) ? trim( (string) $settings['nomination_fee_label'] ) : '';
+
+	return '' !== $label ? $label : __( 'Nomination fee', 'vk-booking-manager' );
+}
+
+/**
  * リソースの表示名を取得する。
  * Get the display name for a resource.
  *

@@ -105,10 +105,12 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
 		await page.waitForLoadState( 'domcontentloaded' );
 
-		// 「Resource tag display」ラベルが表示されていることを確認
-		// （旧ラベル「Resource pulldown」ではないこと）
+		// 「Resource tag display」または日本語翻訳「リソースタグ表示」ラベルが表示されていることを確認
+		// （CI環境では wp site switch-language ja により日本語ロケールで動作するため両方を許容する）
 		const pageContent = await page.textContent( 'body' );
-		expect( pageContent ).toContain( 'Resource tag display' );
+		const hasEnglishLabel = pageContent?.includes( 'Resource tag display' );
+		const hasJapaneseLabel = pageContent?.includes( 'リソースタグ表示' );
+		expect( hasEnglishLabel || hasJapaneseLabel ).toBeTruthy();
 
 		// 旧ラベル「Resource pulldown」が残っていないことを確認
 		expect( pageContent ).not.toContain( 'Resource pulldown' );
@@ -124,8 +126,13 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 説明文にプレビュー例が表示されていることを確認
-		const exampleCode = page.locator( 'code' ).filter( { hasText: /Hanako Yamada/ } );
-		await expect( exampleCode ).toBeVisible( { timeout: 10000 } );
+		// 英語: "Hanako Yamada ( Female, Veteran )" / 日本語: "山田花子 ( 女性, ベテラン )"
+		// CI環境では日本語ロケールで動作するため両方を許容する
+		const exampleCodeEn = page.locator( 'code' ).filter( { hasText: /Hanako Yamada/ } );
+		const exampleCodeJa = page.locator( 'code' ).filter( { hasText: /山田花子/ } );
+		const enCount = await exampleCodeEn.count();
+		const jaCount = await exampleCodeJa.count();
+		expect( enCount + jaCount ).toBeGreaterThan( 0 );
 	} );
 
 	test( '10. 複数タグが設定されたスタッフの表示名にカンマ区切りで表示される', async () => {

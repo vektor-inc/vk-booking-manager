@@ -389,6 +389,26 @@
 		border-color: var(--vkbm--color--accent);
 		box-shadow: 0 0 0 1px rgba(29, 143, 203, 0.3);
 	}
+
+	// 満枠スロットのスタイル / Fully booked slot styles.
+	&.is-full {
+		background: #f0f0f0;
+		color: #767676;
+		border-color: #d0d0d0;
+		cursor: not-allowed;
+	}
+}
+
+// 残り枠数表示 / Remaining capacity display.
+.vkbm-slot-list__remaining {
+	font-size: var(--vkbm--font-size--xs, 0.75rem);
+	color: var(--vkbm--color--accent, #1d8fcb);
+	margin-top: 2px;
+
+	// 満枠時の表示 / Display when fully booked.
+	&--full {
+		color: #999;
+	}
 }
 
 	.vkbm-slot-list--placeholder {

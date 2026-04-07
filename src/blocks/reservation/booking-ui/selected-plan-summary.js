@@ -49,6 +49,7 @@ export const SelectedPlanSummary = ( {
 	menuPreviewHtml = '',
 	resourceLabelSingular = __( 'Staff', 'vk-booking-manager' ),
 	lockStaffSelection = false,
+	noNominationLabel = '',
 } ) => {
 	const menuSelectionMessage = ( () => {
 		const message = __( 'Please select a menu.', 'vk-booking-manager' );
@@ -139,10 +140,13 @@ export const SelectedPlanSummary = ( {
 							onChange={ ( value ) =>
 								onStaffChange( Number( value ) || 0 )
 							}
-							placeholder={ __(
-								'No preference',
-								'vk-booking-manager'
-							) }
+							placeholder={
+								noNominationLabel ||
+								__(
+									'No preference',
+									'vk-booking-manager'
+								)
+							}
 							disabled={
 								! staffItems.length || lockStaffSelection
 							}
@@ -155,10 +159,13 @@ export const SelectedPlanSummary = ( {
 									( staff ) => staff.id === staffId
 								)?.name
 							}
-							placeholder={ __(
-								'No preference',
-								'vk-booking-manager'
-							) }
+							placeholder={
+								noNominationLabel ||
+								__(
+									'No preference',
+									'vk-booking-manager'
+								)
+							}
 						/>
 					) ) }
 			</div>

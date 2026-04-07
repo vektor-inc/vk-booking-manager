@@ -610,7 +610,7 @@ class Booking_Notification_Service {
 		$memo               = wp_strip_all_tags( (string) get_post_meta( $booking_id, '_vkbm_booking_note', true ) );
 		$status             = (string) get_post_meta( $booking_id, '_vkbm_booking_status', true );
 		$nomination_fee     = (int) get_post_meta( $booking_id, '_vkbm_booking_nomination_fee', true );
-		if ( ! Staff_Editor::is_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$nomination_fee = 0;
 		}
 		$has_price_snapshot = metadata_exists( 'post', $booking_id, '_vkbm_booking_service_base_price' );
@@ -619,13 +619,14 @@ class Booking_Notification_Service {
 			: (int) get_post_meta( $menu_id, '_vkbm_base_price', true );
 		$base_price         = max( 0, $base_price );
 
-		$menu_title  = $menu_id > 0 ? get_the_title( $menu_id ) : '';
-		$staff_title = '';
-		if ( $is_staff_preferred && $staff_id > 0 ) {
+		$menu_title          = $menu_id > 0 ? get_the_title( $menu_id ) : '';
+		$staff_title         = '';
+		$nomination_enabled  = Staff_Editor::is_nomination_enabled();
+		if ( $nomination_enabled && $is_staff_preferred && $staff_id > 0 ) {
 			$staff_title = vkbm_get_resource_display_name( $staff_id );
 		}
-		if ( '' === $staff_title ) {
-			$staff_title = __( 'No preference', 'vk-booking-manager' );
+		if ( $nomination_enabled && '' === $staff_title ) {
+			$staff_title = vkbm_get_no_nomination_label();
 		}
 		$duration    = $this->get_menu_duration( $menu_id );
 		$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $settings );
@@ -665,6 +666,7 @@ class Booking_Notification_Service {
 			'provider_site'                => isset( $settings['provider_website_url'] ) && '' !== $settings['provider_website_url'] ? $settings['provider_website_url'] : home_url(),
 			'provider_cancellation_policy' => isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '',
 			'resource_label_singular'      => $resource_label_singular,
+			'staff_enabled'                => $nomination_enabled,
 			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'edit_url'                     => $edit_url,
 		);
@@ -768,8 +770,11 @@ class Booking_Notification_Service {
 		}
 		/* translators: %s: Menu title. */
 		$lines[] = sprintf( __( 'Menu: %s', 'vk-booking-manager' ), $payload['menu_title'] );
-		/* translators: 1: Resource label, 2: Staff name. */
-		$lines[] = sprintf( __( '%1$s: %2$s', 'vk-booking-manager' ), $payload['resource_label_singular'], $payload['staff_title'] );
+		// 指名機能が有効な場合のみスタッフ行を出力する。
+		if ( ! empty( $payload['staff_enabled'] ) ) {
+			/* translators: 1: Resource label, 2: Staff name. */
+			$lines[] = sprintf( __( '%1$s: %2$s', 'vk-booking-manager' ), $payload['resource_label_singular'], $payload['staff_title'] );
+		}
 		/* translators: %s: Reservation datetime range. */
 		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
 		if ( $payload['duration_label'] ) {
@@ -1051,19 +1056,26 @@ class Booking_Notification_Service {
 
 		$display = $base_price;
 
+		// Build the base price portion.
+		// 基本料金部分を組み立てる。
 		$label = VKBM_Helper::format_currency( (int) $display );
 
+		// Append nomination fee if present.
+		// 指名料がある場合は追加する。
+		if ( $nomination_fee > 0 ) {
+			$label .= sprintf(
+				/* translators: 1: nomination fee label, 2: nomination fee amount. */
+				__( '+ %1$s %2$s', 'vk-booking-manager' ),
+				vkbm_get_nomination_fee_label(),
+				VKBM_Helper::format_currency( absint( $nomination_fee ) )
+			);
+		}
+
+		// Append tax-included label at the end of the entire price string.
+		// （税込）ラベルを料金文字列全体の末尾に追加する。
 		$tax_label = VKBM_Helper::get_tax_included_label();
 		if ( '' !== $tax_label ) {
 			$label .= $tax_label;
-		}
-
-		if ( $nomination_fee > 0 ) {
-			$label .= sprintf(
-				/* translators: %s: nomination fee amount */
-				__( '+ Nomination fee %s', 'vk-booking-manager' ),
-				VKBM_Helper::format_currency( absint( $nomination_fee ) )
-			);
 		}
 
 		return $label;

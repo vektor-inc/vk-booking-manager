@@ -352,9 +352,12 @@ class Provider_Settings_Page {
 		$auth_rate_limit_register_max = isset( $settings['auth_rate_limit_register_max'] ) ? (int) $settings['auth_rate_limit_register_max'] : 5;
 		$auth_rate_limit_login_max    = isset( $settings['auth_rate_limit_login_max'] ) ? (int) $settings['auth_rate_limit_login_max'] : 10;
 		$wp_users_can_register        = (bool) get_option( 'users_can_register' );
+		$staff_enabled                = ! empty( $settings['staff_enabled'] );
 		$resource_label_singular      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
 		$resource_label_plural        = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
 		$resource_label_menu          = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : 'Staff available';
+		$no_nomination_label          = isset( $settings['no_nomination_label'] ) ? (string) $settings['no_nomination_label'] : 'No preference';
+		$nomination_fee_label         = isset( $settings['nomination_fee_label'] ) ? (string) $settings['nomination_fee_label'] : 'Nomination fee';
 		$locale                       = function_exists( 'get_locale' ) ? (string) get_locale() : '';
 		$no_plural_locales            = array( 'ja', 'zh', 'ko' );
 		$has_plural_forms_in_locale   = true;
@@ -1443,6 +1446,24 @@ class Provider_Settings_Page {
 								</template>
 							</td>
 						</tr>
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-staff-enabled"><?php esc_html_e( 'Nomination feature', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<select
+									id="vkbm-staff-enabled"
+									name="vkbm_provider_settings[staff_enabled]"
+								>
+									<option value="1" <?php selected( $staff_enabled, true ); ?>><?php esc_html_e( 'Enabled', 'vk-booking-manager' ); ?></option>
+									<option value="0" <?php selected( $staff_enabled, false ); ?>><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'When disabled, the staff nomination selection and nomination fee will be hidden from the booking form. Staff assignment and shift management features remain available.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
 						<?php if ( Staff_Editor::is_enabled() ) : ?>
 							<tr class="vkbm-provider-settings__tab-system">
 								<th scope="row">
@@ -1499,6 +1520,44 @@ class Provider_Settings_Page {
 									</td>
 								</tr>
 							<?php endif; ?>
+						<?php endif; ?>
+
+						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
+							<tr class="vkbm-provider-settings__tab-system">
+									<th scope="row">
+										<label for="vkbm-no-nomination-label"><?php esc_html_e( 'No nomination label', 'vk-booking-manager' ); ?></label>
+									</th>
+									<td>
+										<input
+											type="text"
+											class="regular-text"
+											id="vkbm-no-nomination-label"
+											name="vkbm_provider_settings[no_nomination_label]"
+											value="<?php echo esc_attr( $no_nomination_label ); ?>"
+										/>
+										<p class="description">
+											<?php esc_html_e( 'Replaces the "No preference" notation in the pulldown (when no specific resource is selected).', 'vk-booking-manager' ); ?>
+										</p>
+									</td>
+								</tr>
+
+								<tr class="vkbm-provider-settings__tab-system">
+									<th scope="row">
+										<label for="vkbm-nomination-fee-label"><?php esc_html_e( 'Nomination fee label', 'vk-booking-manager' ); ?></label>
+									</th>
+									<td>
+										<input
+											type="text"
+											class="regular-text"
+											id="vkbm-nomination-fee-label"
+											name="vkbm_provider_settings[nomination_fee_label]"
+											value="<?php echo esc_attr( $nomination_fee_label ); ?>"
+										/>
+										<p class="description">
+											<?php esc_html_e( 'Replaces the "Nomination fee" notation in the pricing display and service menu settings.', 'vk-booking-manager' ); ?>
+										</p>
+									</td>
+								</tr>
 
 								<tr class="vkbm-provider-settings__tab-system">
 									<th scope="row">
@@ -1951,9 +2010,12 @@ class Provider_Settings_Page {
 		$output['provider_address']                               = sanitize_textarea_field( $input['provider_address'] ?? '' );
 		$output['provider_phone']                                 = sanitize_text_field( $input['provider_phone'] ?? '' );
 		$output['provider_payment_method']                        = sanitize_textarea_field( $input['provider_payment_method'] ?? '' );
+		$output['staff_enabled']                                  = ! empty( $input['staff_enabled'] );
 		$output['resource_label_singular']                        = sanitize_text_field( $input['resource_label_singular'] ?? 'Staff' );
 		$output['resource_label_plural']                          = sanitize_text_field( $input['resource_label_plural'] ?? 'Staff' );
 		$output['resource_label_menu']                            = sanitize_text_field( $input['resource_label_menu'] ?? 'Staff available' );
+		$output['no_nomination_label']                            = sanitize_text_field( $input['no_nomination_label'] ?? 'No preference' );
+		$output['nomination_fee_label']                           = sanitize_text_field( $input['nomination_fee_label'] ?? 'Nomination fee' );
 			$output['provider_business_hours']                    = sanitize_textarea_field( $input['provider_business_hours'] ?? '' );
 			$output['provider_reservation_deadline_hours']        = absint( $input['provider_reservation_deadline_hours'] ?? 0 );
 			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? 0 );
