@@ -369,9 +369,11 @@ class Shift_Dashboard_Page {
 																		}
 
 																		$booking_style = sprintf(
-																			'--booking-start:%s; --booking-end:%s;',
+																			'--booking-start:%s; --booking-end:%s; --overlap-index:%d; --overlap-total:%d;',
 																			esc_attr( (string) $booking['start_decimal'] ),
-																			esc_attr( (string) $booking['end_decimal'] )
+																			esc_attr( (string) $booking['end_decimal'] ),
+																			(int) ( $booking['overlap_index'] ?? 0 ),
+																			max( 1, (int) ( $booking['overlap_total'] ?? 1 ) )
 																		);
 																		?>
 																		<?php if ( ! empty( $booking['url'] ) ) : ?>
@@ -753,6 +755,15 @@ class Shift_Dashboard_Page {
 				$last_end = $end;
 
 				$slot_bookings = $this->collect_bookings_for_slot( $unassigned_bookings, $start, $end );
+
+				// 同一スロット内の予約重なり情報を付与（横分割レイアウト用）.
+				$overlap_total = count( $slot_bookings );
+				foreach ( $slot_bookings as $i => &$sb ) {
+					$sb['overlap_index'] = $i;
+					$sb['overlap_total'] = $overlap_total;
+				}
+				unset( $sb );
+
 				foreach ( $slot_bookings as $booking_slot ) {
 					$timeline_start = min( $timeline_start, $booking_slot['start_decimal'] );
 					$timeline_end   = max( $timeline_end, $booking_slot['end_decimal'] );
@@ -1733,6 +1744,8 @@ class Shift_Dashboard_Page {
 			'start_decimal' => $booking['start_decimal'] ?? 0,
 			'end_decimal'   => $booking['end_decimal'] ?? 0,
 			'url'           => $edit_url,
+			'overlap_index' => $booking['overlap_index'] ?? 0,
+			'overlap_total' => $booking['overlap_total'] ?? 1,
 		);
 	}
 

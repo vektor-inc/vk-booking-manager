@@ -1372,7 +1372,13 @@ class Shift_Editor {
 			return;
 		}
 
-		$new_title = sprintf( '%d year %02d month %s', $year, $month, $resource_title );
+		$new_title = sprintf(
+			/* translators: 1: year, 2: month, 3: staff name */
+			__( '%1$d year %2$02d month %3$s', 'vk-booking-manager' ),
+			$year,
+			$month,
+			$resource_title
+		);
 
 		remove_action( 'save_post_' . Shift_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10 );
 		wp_update_post(

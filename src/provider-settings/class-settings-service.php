@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 
 /**
@@ -127,8 +128,15 @@ class Settings_Service {
 			);
 		}
 
-		$this->repository->update_settings( $sanitized );
+		$result = $this->repository->update_settings( $sanitized );
 
-		return true;
+		if ( $result ) {
+			// 設定保存後にキャッシュをクリアし、同一リクエスト内で最新値を返すようにする。
+			// Clear the nomination-enabled cache so the updated value is used
+			// within the same request.
+			Staff_Editor::clear_nomination_enabled_cache();
+		}
+
+		return $result;
 	}
 }

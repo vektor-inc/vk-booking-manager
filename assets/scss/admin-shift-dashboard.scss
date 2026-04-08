@@ -426,8 +426,8 @@
 
 .vkbm-booking-card {
 	position: absolute;
-	left: 0;
-	right: 0;
+	left: calc(100% / var(--overlap-total, 1) * var(--overlap-index, 0));
+	width: calc(100% / var(--overlap-total, 1));
 	top: max(
 		0px,
 		calc(
