@@ -277,6 +277,18 @@
 	color: #1d2327;
 }
 
+.vkbm-resource-card__shifts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	font-size: 12px;
+	color: #50575e;
+}
+
+.vkbm-resource-card__shift-time {
+	white-space: nowrap;
+}
+
 .vkbm-timeline-grid {
 	grid-column: 1 / -1;
 	display: grid;
@@ -357,9 +369,8 @@
 	--vkbm-shift-bg: #e8f4ff;
 	--vkbm-shift-border: #bfdbfe;
 	--vkbm-shift-padding-x: 12px;
-	--vkbm-shift-padding-y: 20px;
+	--vkbm-shift-padding-y: 12px;
 	--vkbm-shift-bookings-gap: 8px;
-	--vkbm-shift-label-height: 40px;
 	position: absolute;
 	left: 16px;
 	right: 16px;
@@ -400,23 +411,6 @@
 	--vkbm-shift-border: #d3d4ff;
 }
 
-.vkbm-shift-block__label {
-	position: absolute;
-	top:0;
-	display: flex;
-	padding: 4px;
-	gap: 1em;
-	min-height:var(--vkbm-shift-padding-y);
-}
-
-.vkbm-shift-block__time {
-	font-size: 12px;
-}
-
-.vkbm-shift-block__status {
-	font-size: 12px;
-}
-
 .vkbm-bookings {
 	position: relative;
 	flex: 1 1 auto;
@@ -425,9 +419,10 @@
 }
 
 .vkbm-booking-card {
+	--overlap-gap: var(--vkbm--spacing--xs, 0.5rem);
 	position: absolute;
-	left: calc(100% / var(--overlap-total, 1) * var(--overlap-index, 0));
-	width: calc(100% / var(--overlap-total, 1));
+	left: calc(100% / var(--overlap-total, 1) * var(--overlap-index, 0) + var(--overlap-gap) / 2);
+	width: calc(100% / var(--overlap-total, 1) - var(--overlap-gap));
 	top: max(
 		0px,
 		calc(

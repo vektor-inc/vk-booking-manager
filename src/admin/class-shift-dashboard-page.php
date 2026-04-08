@@ -299,6 +299,13 @@ class Shift_Dashboard_Page {
 														<span class="vkbm-resource-card__status"><?php echo esc_html( $resource_card['status'] ); ?></span>
 													</div>
 													<div class="vkbm-resource-card__name"><?php echo esc_html( $resource_card['name'] ); ?></div>
+													<?php if ( ! empty( $resource_card['shift_summaries'] ) ) : ?>
+														<div class="vkbm-resource-card__shifts">
+															<?php foreach ( $resource_card['shift_summaries'] as $shift_summary ) : ?>
+																<span class="vkbm-resource-card__shift-time"><?php echo esc_html( $shift_summary['time'] ); ?> <?php echo esc_html( $shift_summary['status'] ); ?></span>
+															<?php endforeach; ?>
+														</div>
+													<?php endif; ?>
 												</div>
 											</div>
 										<?php endforeach; ?>
@@ -354,11 +361,6 @@ class Shift_Dashboard_Page {
 														);
 														?>
 														<div class="<?php echo esc_attr( implode( ' ', $shift_classes ) ); ?>" style="<?php echo esc_attr( $shift_style ); ?>">
-															<div class="vkbm-shift-block__label">
-																<span class="vkbm-shift-block__time"><?php echo esc_html( $shift['time'] ); ?></span>
-																<span class="vkbm-shift-block__status"><?php echo esc_html( $shift['status'] ); ?></span>
-															</div>
-
 															<?php if ( ! empty( $shift['bookings'] ) ) : ?>
 																<div class="vkbm-bookings">
 																	<?php foreach ( $shift['bookings'] as $booking ) : ?>
@@ -797,12 +799,22 @@ class Shift_Dashboard_Page {
 
 			$status_info = $this->resolve_resource_status( $status_key, $slot_counter, $total_hours );
 
+			// シフトスロットの時間・ステータスをヘッダー表示用に収集する / Collect shift slot time & status for header display.
+			$shift_summaries = array();
+			foreach ( $shifts as $shift_item ) {
+				$shift_summaries[] = array(
+					'time'   => $shift_item['time'],
+					'status' => $shift_item['status'],
+				);
+			}
+
 			$resource_cards[] = array(
-				'id'          => $resource_id,
-				'name'        => vkbm_get_resource_display_name( (int) $resource->ID ),
-				'role'        => $this->derive_resource_role( $resource ),
-				'status'      => $status_info['label'],
-				'status_type' => $status_info['type'],
+				'id'              => $resource_id,
+				'name'            => vkbm_get_resource_display_name( (int) $resource->ID ),
+				'role'            => $this->derive_resource_role( $resource ),
+				'status'          => $status_info['label'],
+				'status_type'     => $status_info['type'],
+				'shift_summaries' => $shift_summaries,
 			);
 
 			$unassigned_bookings = array_values( $unassigned_bookings );

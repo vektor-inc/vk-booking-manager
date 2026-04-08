@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.5.1
+Stable tag: 0.5.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,9 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.5.2 =
+* [ 仕様変更 ] シフト・予約表画面の勤務時間ラベルをシフトブロック内からヘッダーのスタッフ名の下に移動し、予約カードの表示位置のズレを解消
 
 = 0.5.1 =
 * [ 仕様変更 ] メニューカードの金額表示の後ろに基本設定の税込表示文字列を表示するよう追加
