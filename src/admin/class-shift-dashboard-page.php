@@ -406,6 +406,81 @@ class Shift_Dashboard_Page {
 																			</div>
 																		<?php endif; ?>
 																	<?php endforeach; ?>
+
+																	<?php
+																	// 4件以上の場合は「+N件」バッジを表示 / Show "+N" badge when 4 or more bookings exist.
+																	if ( ! empty( $shift['hidden_count'] ) ) :
+																		$modal_id = 'vkbm-modal-' . esc_attr( (string) ( $lane['resource_id'] ?? '0' ) ) . '-' . esc_attr( (string) $shift_index );
+																		?>
+																		<button
+																			type="button"
+																			class="vkbm-bookings__more-badge js-vkbm-more-badge"
+																			data-vkbm-modal-target="<?php echo esc_attr( $modal_id ); ?>"
+																			aria-label="<?php echo esc_attr( sprintf(
+																				/* translators: 1: number of hidden bookings, 2: time range */
+																				__( 'Show %1\$d more bookings for %2\$s', 'vk-booking-manager' ),
+																				(int) $shift['hidden_count'],
+																				$shift['time']
+																			) ); ?>"
+																		>
+																			<?php
+																			printf(
+																				/* translators: %d: number of hidden bookings */
+																				'+%d',
+																				(int) $shift['hidden_count']
+																			);
+																			?>
+																		</button>
+																	<?php endif; ?>
+																</div>
+															<?php endif; ?>
+
+															<?php
+															// モーダル: 全予約一覧（4件以上の場合のみ） / Modal: full booking list when 4+ bookings.
+															if ( ! empty( $shift['hidden_count'] ) ) :
+																?>
+																<div id="<?php echo esc_attr( $modal_id ); ?>" class="vkbm-booking-modal" role="dialog" aria-modal="true" aria-labelledby="<?php echo esc_attr( $modal_id . '-title' ); ?>" hidden>
+																	<div class="vkbm-booking-modal__overlay js-vkbm-modal-close"></div>
+																	<div class="vkbm-booking-modal__content">
+																		<div class="vkbm-booking-modal__header">
+																			<h3 id="<?php echo esc_attr( $modal_id . '-title' ); ?>" class="vkbm-booking-modal__title">
+																				<?php
+																				printf(
+																					/* translators: %s: time range of the shift */
+																					esc_html__( 'Bookings — %s', 'vk-booking-manager' ),
+																					esc_html( $shift['time'] )
+																				);
+																				?>
+																				<span class="vkbm-booking-modal__count"><?php echo esc_html( (string) count( $shift['all_bookings'] ) ); ?></span>
+																			</h3>
+																			<button type="button" class="vkbm-booking-modal__close js-vkbm-modal-close" aria-label="<?php esc_attr_e( 'Close', 'vk-booking-manager' ); ?>">&times;</button>
+																		</div>
+																		<ul class="vkbm-booking-modal__list">
+																			<?php foreach ( $shift['all_bookings'] as $modal_booking ) : ?>
+																				<li class="vkbm-booking-modal__item">
+																					<?php if ( ! empty( $modal_booking['url'] ) ) : ?>
+																						<a class="vkbm-booking-modal__link" href="<?php echo esc_url( $modal_booking['url'] ); ?>">
+																					<?php else : ?>
+																						<span class="vkbm-booking-modal__link">
+																					<?php endif; ?>
+																						<?php if ( ! empty( $modal_booking['time'] ) ) : ?>
+																							<span class="vkbm-booking-modal__time"><?php echo esc_html( $modal_booking['time'] ); ?></span>
+																						<?php endif; ?>
+																						<?php if ( ! empty( $modal_booking['customer'] ) ) : ?>
+																							<span class="vkbm-booking-modal__customer"><?php echo esc_html( $modal_booking['customer'] ); ?></span>
+																						<?php endif; ?>
+																						<?php if ( ! empty( $modal_booking['service'] ) ) : ?>
+																							<span class="vkbm-booking-modal__service"><?php echo esc_html( $modal_booking['service'] ); ?></span>
+																						<?php endif; ?>
+																					<?php if ( ! empty( $modal_booking['url'] ) ) : ?>
+																						</a>
+																					<?php else : ?>
+																						</span>
+																					<?php endif; ?>
+																				</li>
+																			<?php endforeach; ?>
+																		</ul>
+																	</div>
 																</div>
 															<?php endif; ?>
 														</div>
@@ -758,32 +833,119 @@ class Shift_Dashboard_Page {
 
 				$slot_bookings = $this->collect_bookings_for_slot( $unassigned_bookings, $start, $end );
 
-				// 同一スロット内の予約重なり情報を付与（横分割レイアウト用）.
-				$overlap_total = count( $slot_bookings );
-				foreach ( $slot_bookings as $i => &$sb ) {
-					$sb['overlap_index'] = $i;
-					$sb['overlap_total'] = $overlap_total;
+				// 時間が実際に重なる予約をクラスタリングし、クラスタ単位で重なり情報を付与.
+				// 4件以上重なるクラスタのみ表示を3件に制限し、残りはモーダルで表示する.
+				$max_visible = 3;
+
+				// start_decimal でソートしてクラスタを構築.
+				usort(
+					$slot_bookings,
+					function ( array $a, array $b ) {
+						return $a['start_decimal'] <=> $b['start_decimal'];
+					}
+				);
+
+				$clusters = array();
+				foreach ( $slot_bookings as $sb ) {
+					$last = count( $clusters ) - 1;
+					if ( $last >= 0 && $sb['start_decimal'] < $clusters[ $last ]['end'] ) {
+						$clusters[ $last ]['bookings'][] = $sb;
+						$clusters[ $last ]['end']        = max( $clusters[ $last ]['end'], $sb['end_decimal'] );
+					} else {
+						$clusters[] = array(
+							'end'      => $sb['end_decimal'],
+							'bookings' => array( $sb ),
+						);
+					}
 				}
-				unset( $sb );
+
+				// クラスタ単位でスイープラインを実行し、同時重なり数に基づいて表示・非表示を決定.
+				// Sweep-line per cluster: assign column indices based on actual concurrent overlap.
+				$visible_slot = array();
+				$hidden_slot  = array();
+
+				foreach ( $clusters as $cluster ) {
+					// スイープラインでカラムインデックスを割り当て / Assign column indices via sweep-line.
+					$columns       = array(); // 各カラムの終了時刻を保持 / Holds end time of each column.
+					$max_concurrent = 0;
+					$assignments   = array(); // booking index => column index.
+
+					foreach ( $cluster['bookings'] as $ci => $cb ) {
+						// 空きカラムを探す / Find a free column whose end <= this booking start.
+						$assigned_col = null;
+						foreach ( $columns as $col_idx => $col_end ) {
+							if ( $col_end <= $cb['start_decimal'] ) {
+								$assigned_col = $col_idx;
+								break;
+							}
+						}
+
+						if ( null === $assigned_col ) {
+							// 空きカラムがないので新しいカラムを追加 / No free column; add a new one.
+							$assigned_col            = count( $columns );
+							$columns[ $assigned_col ] = $cb['end_decimal'];
+						} else {
+							$columns[ $assigned_col ] = $cb['end_decimal'];
+						}
+
+						$assignments[ $ci ] = $assigned_col;
+						$max_concurrent     = max( $max_concurrent, count( $columns ) );
+					}
+
+					// 最大同時重なり数でカラム幅と表示・非表示を判定 / Determine visibility by peak concurrent count.
+					$visible_total = min( $max_visible, $max_concurrent );
+
+					foreach ( $cluster['bookings'] as $ci => $cb ) {
+						$col_index           = $assignments[ $ci ];
+						$cb['overlap_index'] = $col_index;
+						$cb['overlap_total'] = $visible_total;
+
+						if ( $col_index < $max_visible ) {
+							$visible_slot[] = $cb;
+						} else {
+							$hidden_slot[] = $cb;
+						}
+					}
+				}
+
+				$hidden_count = count( $hidden_slot );
 
 				foreach ( $slot_bookings as $booking_slot ) {
 					$timeline_start = min( $timeline_start, $booking_slot['start_decimal'] );
 					$timeline_end   = max( $timeline_end, $booking_slot['end_decimal'] );
 				}
 
-				$booking_cards = array_map(
+				// 表示用カードとモーダル用カード（非表示分がある場合は全件）を構築.
+				$visible_booking_cards = array_map(
 					function ( array $booking ) {
 						return $this->map_booking_to_card( $booking );
 					},
-					$slot_bookings
+					$visible_slot
+				);
+
+				// モーダル用は start_decimal 順にソートして時系列を維持 / Sort by start_decimal for chronological modal list.
+				$all_slot = array_merge( $visible_slot, $hidden_slot );
+				usort(
+					$all_slot,
+					function ( array $a, array $b ) {
+						return $a['start_decimal'] <=> $b['start_decimal'];
+					}
+				);
+				$all_booking_cards = array_map(
+					function ( array $booking ) {
+						return $this->map_booking_to_card( $booking );
+					},
+					$all_slot
 				);
 
 				$shifts[] = array(
-					'start'    => $start,
-					'end'      => $end,
-					'time'     => $this->format_time_range( $slot['start'], $slot['end'] ),
-					'status'   => $this->get_slot_status_label( $status_key ),
-					'bookings' => $booking_cards,
+					'start'        => $start,
+					'end'          => $end,
+					'time'         => $this->format_time_range( $slot['start'], $slot['end'] ),
+					'status'       => $this->get_slot_status_label( $status_key ),
+					'bookings'     => $visible_booking_cards,
+					'all_bookings' => $all_booking_cards,
+					'hidden_count' => $hidden_count,
 				);
 			}
 

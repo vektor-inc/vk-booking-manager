@@ -107,6 +107,120 @@
 		window.history.pushState( {}, '', url.toString() );
 	}
 
+	/**
+	 * モーダル開閉処理を登録する / Attach modal open/close handlers for "+N" badges.
+	 *
+	 * @param {Element} root - ダッシュボードのルート要素 / Dashboard root element.
+	 */
+	function attachModalHandlers( root ) {
+		var badges = toArray(
+			root.querySelectorAll( '.js-vkbm-more-badge' )
+		);
+
+		if ( ! badges.length ) {
+			return;
+		}
+
+		var lastFocusedElement = null;
+
+		/**
+		 * モーダルを閉じる / Close the given modal.
+		 *
+		 * @param {Element} modal - モーダル要素 / Modal element.
+		 */
+		function closeModal( modal ) {
+			if ( ! modal ) {
+				return;
+			}
+			modal.setAttribute( 'hidden', '' );
+			document.body.style.overflow = '';
+
+			// トリガー要素にフォーカスを戻す / Restore focus to trigger element.
+			if ( lastFocusedElement ) {
+				lastFocusedElement.focus();
+				lastFocusedElement = null;
+			}
+		}
+
+		/**
+		 * モーダルを開く / Open the given modal.
+		 *
+		 * @param {Element} modal - モーダル要素 / Modal element.
+		 * @param {Element} trigger - トリガー要素 / Trigger element.
+		 */
+		function openModal( modal, trigger ) {
+			if ( ! modal ) {
+				return;
+			}
+			lastFocusedElement = trigger || document.activeElement;
+
+			// 親要素のスタッキングコンテキストから脱出するため body 直下に移動する.
+			// Move modal to body so it escapes any parent stacking context.
+			if ( modal.parentNode !== document.body ) {
+				document.body.appendChild( modal );
+			}
+
+			modal.removeAttribute( 'hidden' );
+			document.body.style.overflow = 'hidden';
+
+			// 閉じるボタンにフォーカスを移す / Focus the close button.
+			var closeBtn = modal.querySelector( '.vkbm-booking-modal__close' );
+			if ( closeBtn ) {
+				closeBtn.focus();
+			}
+		}
+
+		// 「+N件」バッジのクリックでモーダルを開く / Open modal on badge click.
+		badges.forEach( function ( badge ) {
+			badge.addEventListener( 'click', function ( event ) {
+				event.preventDefault();
+				event.stopPropagation();
+
+				var targetId = badge.getAttribute( 'data-vkbm-modal-target' );
+				if ( ! targetId ) {
+					return;
+				}
+
+				var modal = document.getElementById( targetId );
+				openModal( modal, badge );
+			} );
+		} );
+
+		// オーバーレイ・閉じるボタンでモーダルを閉じる / Close modal on overlay/close button click.
+		var closeButtons = toArray(
+			root.querySelectorAll( '.js-vkbm-modal-close' )
+		);
+
+		closeButtons.forEach( function ( btn ) {
+			btn.addEventListener( 'click', function () {
+				var modal = btn.closest( '.vkbm-booking-modal' );
+				closeModal( modal );
+			} );
+		} );
+
+		// Escキーでモーダルを閉じる（重複登録防止） / Close modal on Escape key (prevent duplicate).
+		if ( ! root._vkbmEscapeListenerAttached ) {
+			document.addEventListener( 'keydown', function ( event ) {
+				if ( event.key !== 'Escape' && event.key !== 'Esc' ) {
+					return;
+				}
+
+				// body 直下に移動済みのモーダルも検索するため document から取得する.
+				// Search from document since modals are moved to body when opened.
+				var openModals = toArray(
+					document.querySelectorAll(
+						'.vkbm-booking-modal:not([hidden])'
+					)
+				);
+
+				openModals.forEach( function ( modal ) {
+					closeModal( modal );
+				} );
+			} );
+			root._vkbmEscapeListenerAttached = true;
+		}
+	}
+
 	function attachConfirmHandlers( root ) {
 		if ( ! window.fetch || typeof window.FormData === 'undefined' ) {
 			return;
@@ -259,6 +373,7 @@
 		} );
 
 		attachConfirmHandlers( root );
+		attachModalHandlers( root );
 	}
 
 	if ( document.readyState === 'loading' ) {

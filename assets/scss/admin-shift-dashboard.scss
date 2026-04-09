@@ -748,6 +748,174 @@
 	gap: 6px;
 }
 
+// 「+N件」バッジ / "+N" badge for hidden bookings.
+.vkbm-bookings__more-badge {
+	position: absolute;
+	right: 0;
+	bottom: 4px;
+	z-index: 2;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 32px;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid #2271b1;
+	border-radius: 999px;
+	background: #2271b1;
+	color: #fff;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color 0.2s ease, box-shadow 0.2s ease;
+
+	&:hover,
+	&:focus {
+		background: #135e96;
+		border-color: #135e96;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+	}
+}
+
+// モーダル / Modal for all bookings list.
+.vkbm-booking-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	&[hidden] {
+		display: none;
+	}
+}
+
+.vkbm-booking-modal__overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+}
+
+.vkbm-booking-modal__content {
+	position: relative;
+	width: 480px;
+	max-width: calc(100vw - 48px);
+	max-height: calc(100vh - 96px);
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.vkbm-booking-modal__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 16px 20px;
+	border-bottom: 1px solid #dcdcde;
+	background: #f6f7f7;
+}
+
+.vkbm-booking-modal__title {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	color: #1d2327;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.vkbm-booking-modal__count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: #2271b1;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1;
+}
+
+.vkbm-booking-modal__close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	font-size: 20px;
+	color: #50575e;
+	cursor: pointer;
+	transition: background-color 0.15s ease, color 0.15s ease;
+
+	&:hover,
+	&:focus {
+		background: #dcdcde;
+		color: #1d2327;
+	}
+}
+
+.vkbm-booking-modal__list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	overflow-y: auto;
+}
+
+.vkbm-booking-modal__item {
+	border-bottom: 1px solid #f0f0f1;
+
+	&:last-child {
+		border-bottom: none;
+	}
+}
+
+.vkbm-booking-modal__link {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 4px 12px;
+	padding: 12px 20px;
+	color: #1d2327;
+	text-decoration: none;
+	transition: background-color 0.15s ease;
+
+	&:hover,
+	&:focus {
+		background: #f0f6fc;
+		color: #1d2327;
+	}
+}
+
+.vkbm-booking-modal__time {
+	font-size: 13px;
+	font-weight: 600;
+	grid-column: 1;
+}
+
+.vkbm-booking-modal__customer {
+	font-size: 13px;
+	color: #2271b1;
+	grid-column: 2;
+}
+
+.vkbm-booking-modal__service {
+	font-size: 12px;
+	color: #50575e;
+	grid-column: 1 / -1;
+}
+
 @media screen and (max-width: 1280px) {
 	.vkbm-shift-dashboard__layout {
 		grid-template-columns: minmax(0, 1fr);
