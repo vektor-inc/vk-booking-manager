@@ -260,6 +260,9 @@ export const BookingConfirmApp = ( {
 	const [ nominationFeeLabel, setNominationFeeLabel ] = useState(
 		__( 'Nomination fee', 'vk-booking-manager' )
 	);
+	const [ otherConditionsLabel, setOtherConditionsLabel ] = useState(
+		__( 'Other conditions', 'vk-booking-manager' )
+	);
 	const [ resolvedReservationPageUrl, setResolvedReservationPageUrl ] =
 		useState( reservationPageUrl || '' );
 	const [ taxLabelText, setTaxLabelText ] = useState( '' );
@@ -446,6 +449,17 @@ export const BookingConfirmApp = ( {
 					response.nomination_fee_label.trim() !== ''
 				) {
 					setNominationFeeLabel( response.nomination_fee_label );
+				}
+
+				// Set the other conditions label from provider settings.
+				// 基本設定のその他条件ラベルを設定する。
+				if (
+					typeof response?.other_conditions_label === 'string' &&
+					response.other_conditions_label.trim() !== ''
+				) {
+					setOtherConditionsLabel(
+						response.other_conditions_label
+					);
 				}
 
 				setTaxLabelText(
@@ -1469,6 +1483,9 @@ export const BookingConfirmApp = ( {
 											booking={ booking }
 											resourceLabel={
 												resourceLabelSingular
+											}
+											otherConditionsLabel={
+												otherConditionsLabel
 											}
 											emptyValue="—"
 											currencySymbol={

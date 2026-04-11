@@ -21,7 +21,7 @@ if ( ! class_exists( 'VKBM_Pro_Updater', false ) ) {
 		 *
 		 * @var string
 		 */
-		private const METADATA_URL = 'https://license.vektor-inc.co.jp/check/?action=get_metadata&slug=vk-booking-manager-pro';
+		private const METADATA_URL = 'https://license.vektor-inc.co.jp/check/';
 
 		/**
 		 * プラグインスラッグ。
@@ -41,8 +41,21 @@ if ( ! class_exists( 'VKBM_Pro_Updater', false ) ) {
 				return;
 			}
 
+			// METADATA_URL に引数を追加
+			$license_raw  = get_option( 'vk-booking-manager-pro-license-key', '' );
+			$license      = is_scalar( $license_raw ) ? sanitize_text_field( (string) $license_raw ) : '';
+			$metadata_url = add_query_arg(
+				array(
+					'action' => 'get_metadata',
+					'slug'   => self::PLUGIN_SLUG,
+					'vk-booking-manager-pro-license-key' => $license,
+					'url'    => home_url(),
+				),
+				self::METADATA_URL
+			);
+
 			YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-				self::METADATA_URL,
+				$metadata_url,
 				$plugin_file,
 				self::PLUGIN_SLUG
 			);

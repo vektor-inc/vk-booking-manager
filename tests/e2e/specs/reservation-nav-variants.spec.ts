@@ -1,6 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
 import { execSync } from 'child_process';
-import { disableEmailVerification } from '../utils/setup';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
 const ADMIN_USER = 'admin';
@@ -266,11 +265,9 @@ test.describe( 'Reservation header nav variants', () => {
 		await resetAuthState( page );
 	} );
 
-	// テストに必要なページ・ユーザーを事前準備する
+	// テストに必要なユーザーを事前準備する（テストデータはグローバルセットアップで作成済み）
+	// Prepare users needed for tests (test data already created by global setup)
 	test.beforeAll( async () => {
-		// 予約ブロックの表示に必要な初期データを作成する。
-		await disableEmailVerification();
-
 		// 管理者ログイン用のパスワードを明示的に固定して、環境差分で失敗しないようにする。
 		execSync(
 			`npx wp-env run cli wp user update ${ ADMIN_USER } --user_pass='${ ADMIN_PASSWORD }'`

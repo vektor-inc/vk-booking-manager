@@ -1,67 +1,10 @@
-import { test, expect, type Page } from '@playwright/test';
-import { execSync } from 'child_process';
-
-// wp-env はプラグインルートの .wp-env.json で起動されている。
-const PLUGIN_ROOT = process.cwd();
-
-/**
- * WP-CLIコマンドを実行するヘルパー。
- */
-const wpCli = ( command: string ): string => {
-	return execSync( `npx wp-env run cli wp ${ command }`, {
-		encoding: 'utf-8',
-		cwd: PLUGIN_ROOT,
-	} ).trim();
-};
-
-/**
- * wp_set_object_terms() でスタッフにリソースタグを設定する。
- */
-const setResourceTags = ( postId: string, slugs: string[] ): void => {
-	const slugArray = slugs.map( ( s ) => `'${ s }'` ).join( ', ' );
-	wpCli(
-		`eval "wp_set_object_terms( ${ postId }, array( ${ slugArray } ), 'vkbm_resource_tag' );"`
-	);
-};
-
-/**
- * スタッフのリソースタグをクリアする。
- */
-const clearResourceTags = ( postId: string ): void => {
-	wpCli(
-		`eval "wp_set_object_terms( ${ postId }, array(), 'vkbm_resource_tag' );"`
-	);
-};
-
-/**
- * プロバイダー設定で resource_tag_display_enabled を切り替える。
- */
-const setTagDisplayEnabled = ( enabled: boolean ): void => {
-	const val = enabled ? 'true' : 'false';
-	wpCli(
-		`eval "
-			\\\$s = get_option( 'vkbm_provider_settings', array() );
-			\\\$s['resource_tag_display_enabled'] = ${ val };
-			update_option( 'vkbm_provider_settings', \\\$s );
-		"`
-	);
-};
-
-/**
- * WP管理画面にログインする。
- */
-const loginAsAdmin = async ( page: Page ) => {
-	await page.goto( '/wp-login.php' );
-	await page.waitForLoadState( 'domcontentloaded' );
-	const userLogin = page.locator( '#user_login' );
-	await userLogin.click();
-	await userLogin.fill( 'admin' );
-	const userPass = page.locator( '#user_pass' );
-	await userPass.click();
-	await userPass.fill( 'password' );
-	await page.locator( '#wp-submit' ).click();
-	await page.waitForURL( /wp-admin/, { timeout: 30000 } );
-};
+import { test, expect } from '@playwright/test';
+import { wpCli, loginAsAdmin, getStaffId, setStaffEnabled } from '../utils/helpers';
+import {
+	setResourceTags,
+	clearResourceTags,
+	setTagDisplayEnabled,
+} from '../utils/resource-tag-helpers';
 
 test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目）', () => {
 	let staffId: string;
@@ -69,22 +12,26 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 	test.beforeAll( () => {
 		// プラグインが有効であることを確認
+		// Ensure the plugin is active.
 		try {
 			wpCli( 'plugin is-active vk-booking-manager-pro' );
 		} catch {
 			wpCli( 'plugin activate vk-booking-manager-pro' );
 		}
 
+		// 前のテスト（staff-nomination-toggle 等）で staff_enabled が無効にされている可能性があるため、
+		// 明示的に有効化する（リソースタグ表示設定は Staff_Editor::is_enabled() が true の場合のみ表示）
+		// Ensure staff_enabled is true — the resource tag settings section requires Staff_Editor::is_enabled()
+		setStaffEnabled( true );
+
 		// スタッフIDと名前を取得
-		const staffIdResult = wpCli(
-			'post list --post_type=vkbm_resource --post_status=publish --field=ID --format=csv'
-		).split( '\n' )[ 0 ];
-		if ( ! staffIdResult ) {
+		// Retrieve staff ID and name.
+		staffId = getStaffId();
+		if ( ! staffId ) {
 			throw new Error(
 				'テスト用スタッフが存在しません。wp-env 上にスタッフ投稿を作成してください。'
 			);
 		}
-		staffId = staffIdResult;
 		staffName = wpCli( `post get ${ staffId } --field=post_title` );
 	} );
 
@@ -103,7 +50,12 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// プロバイダー設定画面のSystemタブへ直接遷移（URLパラメータで tab=system を指定）
 		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
-		await page.waitForLoadState( 'domcontentloaded' );
+		await page.waitForLoadState( 'networkidle' );
+
+		// ロケール非依存: チェックボックスの ID セレクタでリソースタグ表示設定が存在することを確認
+		// Locale-independent: verify by checkbox ID that the resource tag display setting exists
+		const resourceTagCheckbox = page.locator( '#vkbm-resource-tag-display-enabled' );
+		await expect( resourceTagCheckbox ).toBeVisible( { timeout: 10000 } );
 
 		// 「Resource tag display」または日本語翻訳「リソースタグ表示」ラベルが表示されていることを確認
 		// （CI環境では wp site switch-language ja により日本語ロケールで動作するため両方を許容する）
@@ -123,7 +75,11 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// Systemタブへ直接遷移
 		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
-		await page.waitForLoadState( 'domcontentloaded' );
+		await page.waitForLoadState( 'networkidle' );
+
+		// リソースタグ表示設定のチェックボックスが読み込まれていることを確認
+		// Wait for the resource tag checkbox to ensure the section is loaded
+		await expect( page.locator( '#vkbm-resource-tag-display-enabled' ) ).toBeVisible( { timeout: 10000 } );
 
 		// 説明文にプレビュー例が表示されていることを確認
 		// 英語: "Hanako Yamada ( Female, Veteran )" / 日本語: "山田花子 ( 女性, ベテラン )"
@@ -137,6 +93,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 	test( '10. 複数タグが設定されたスタッフの表示名にカンマ区切りで表示される', async () => {
 		// ベテランタームがなければ作成（既に存在する場合はスキップ）
+		// Create "Veteran" term if it doesn't exist
 		try {
 			wpCli( "term create vkbm_resource_tag Veteran --slug=veteran" );
 		} catch {
@@ -144,6 +101,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		}
 
 		// 複数タグを設定
+		// Set multiple tags
 		setResourceTags( staffId, [ 'female', 'veteran' ] );
 		setTagDisplayEnabled( true );
 
@@ -186,10 +144,8 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		await page.goto( '/wp-admin/edit.php?post_type=vkbm_resource' );
 		await page.waitForLoadState( 'domcontentloaded' );
 
-		// カラムヘッダーに「Resource Tag」または「リソースタグ」が表示されていることを確認
-		const headerRow = page.locator( 'thead tr' );
-		const headerText = await headerRow.textContent();
 		// タクソノミーカラムは taxonomy-vkbm_resource_tag というIDで追加される
+		// The taxonomy column has ID taxonomy-vkbm_resource_tag
 		const tagColumn = page.locator( 'th#taxonomy-vkbm_resource_tag, td.taxonomy-vkbm_resource_tag' );
 		const tagColumnCount = await tagColumn.count();
 		expect( tagColumnCount ).toBeGreaterThan( 0 );

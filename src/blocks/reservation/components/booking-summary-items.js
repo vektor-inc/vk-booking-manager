@@ -4,6 +4,7 @@ import { formatCurrency } from '../../shared/pricing';
 export const BookingSummaryItems = ( {
 	booking,
 	resourceLabel,
+	otherConditionsLabel,
 	emptyValue = '',
 	currencySymbol = null,
 } ) => {
@@ -57,7 +58,10 @@ export const BookingSummaryItems = ( {
 				booking.other_conditions.trim() !== '' && (
 					<dl className="vkbm-confirm__summary-item vkbm-confirm__summary-item--other-conditions">
 						<dt className="vkbm-confirm__summary-item-title">
-							{ __( 'Other conditions', 'vk-booking-manager' ) }
+							{ typeof otherConditionsLabel === 'string' &&
+						otherConditionsLabel.trim() !== ''
+							? otherConditionsLabel
+							: __( 'Other conditions', 'vk-booking-manager' ) }
 						</dt>
 						<dd className="vkbm-confirm__summary-value--multiline">
 							{ booking.other_conditions }

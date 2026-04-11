@@ -1,73 +1,10 @@
-import { test, expect, type Page } from '@playwright/test';
-import { execSync } from 'child_process';
-
-// wp-env はプラグインルートの .wp-env.json で起動されている。
-// cwd はそのままプラグインルートを使う。
-const PLUGIN_ROOT = process.cwd();
-
-/**
- * WP-CLIコマンドを実行するヘルパー。
- * Helper to run WP-CLI commands.
- */
-const wpCli = ( command: string ): string => {
-	return execSync( `npx wp-env run cli wp ${ command }`, {
-		encoding: 'utf-8',
-		cwd: PLUGIN_ROOT,
-	} ).trim();
-};
-
-/**
- * wp_set_object_terms() でスタッフにリソースタグを設定する。
- * Set resource tags on a staff post via wp_set_object_terms().
- */
-const setResourceTags = ( postId: string, slugs: string[] ): void => {
-	const slugArray = slugs.map( ( s ) => `'${ s }'` ).join( ', ' );
-	wpCli(
-		`eval "wp_set_object_terms( ${ postId }, array( ${ slugArray } ), 'vkbm_resource_tag' );"`
-	);
-};
-
-/**
- * スタッフのリソースタグをクリアする。
- * Clear resource tags from a staff post.
- */
-const clearResourceTags = ( postId: string ): void => {
-	wpCli(
-		`eval "wp_set_object_terms( ${ postId }, array(), 'vkbm_resource_tag' );"`
-	);
-};
-
-/**
- * プロバイダー設定で resource_tag_display_enabled を切り替える。
- * Toggle the resource_tag_display_enabled provider setting.
- */
-const setTagDisplayEnabled = ( enabled: boolean ): void => {
-	const val = enabled ? 'true' : 'false';
-	wpCli(
-		`eval "
-			\\\$s = get_option( 'vkbm_provider_settings', array() );
-			\\\$s['resource_tag_display_enabled'] = ${ val };
-			update_option( 'vkbm_provider_settings', \\\$s );
-		"`
-	);
-};
-
-/**
- * WP管理画面にログインする。
- * Log in to the WP admin.
- */
-const loginAsAdmin = async ( page: Page ) => {
-	await page.goto( '/wp-login.php' );
-	await page.waitForLoadState( 'domcontentloaded' );
-	const userLogin = page.locator( '#user_login' );
-	await userLogin.click();
-	await userLogin.fill( 'admin' );
-	const userPass = page.locator( '#user_pass' );
-	await userPass.click();
-	await userPass.fill( 'password' );
-	await page.locator( '#wp-submit' ).click();
-	await page.waitForURL( /wp-admin/, { timeout: 30000 } );
-};
+import { test, expect } from '@playwright/test';
+import { wpCli, loginAsAdmin, getStaffId } from '../utils/helpers';
+import {
+	setResourceTags,
+	clearResourceTags,
+	setTagDisplayEnabled,
+} from '../utils/resource-tag-helpers';
 
 test.describe( 'リソースタグタクソノミー機能', () => {
 	let staffId: string;
@@ -92,15 +29,12 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 
 		// スタッフIDと名前を取得
 		// Retrieve staff ID and name.
-		const staffIdResult = wpCli(
-			'post list --post_type=vkbm_resource --post_status=publish --field=ID --format=csv'
-		).split( '\n' )[ 0 ];
-		if ( ! staffIdResult ) {
+		staffId = getStaffId();
+		if ( ! staffId ) {
 			throw new Error(
 				'テスト用スタッフが存在しません。wp-env 上にスタッフ投稿を作成してください。'
 			);
 		}
-		staffId = staffIdResult;
 		staffName = wpCli( `post get ${ staffId } --field=post_title` );
 		if ( ! staffName ) {
 			throw new Error(

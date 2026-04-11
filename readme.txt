@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.5.3
+Stable tag: 0.6.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,16 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 0.6.0 =
+* [ 機能追加 ] 基本設定画面で「その他条件」「所要時間」「カレンダーの休業日に表示されるラベルテキスト」のラベルを変更できる設定を追加
+* [ 仕様変更 ] 予約通知メールの「料金目安」表記を「料金」に変更
+* [ 不具合修正 ] 指名機能を無効にして保存すると「指名なしラベル」「指名料ラベル」がリセットされて英語表記になる不具合を修正
+* [ 仕様変更 ] 指名機能が有効な場合、メニュー詳細の「1枠あたりの最大予約受付数」を非表示にし案内メッセージを表示するよう変更
+* [ 仕様変更 ] サービスメニュー固定開始時刻の説明文を修正し、基本設定画面の予約スロット時間へのリンクを追加
+* [ 仕様変更 ] サービスメニュー編集画面のメタボックスレイアウトを WordPress 標準の Form table 形式に変更
+* [ 仕様変更 ] シフト・予約表画面のハードコードされた色・フォントサイズをCSSカスタムプロパティ（デザイントークン）に置き換え
+* [ 仕様変更 ] シフト・予約表画面の背景色 #fff を CSS カスタムプロパティ（--vkbm--admin--color--surface）に置き換え
 
 = 0.5.3 =
 * [ 仕様変更 ] シフト・予約表画面で同一時間帯に4件以上の予約がある場合、3件まで表示し残りは「+N件」バッジとモーダルで一覧表示するよう変更

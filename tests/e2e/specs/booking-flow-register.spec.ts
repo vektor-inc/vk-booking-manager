@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { disableEmailVerification } from '../utils/setup';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
 const E2E_DEBUG =
@@ -107,48 +106,34 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Deleted transients' );
 	} );
 
-	// すべてのテスト実行前にメール認証を無効化し、予約ページとテストデータを作成
+	// テストデータの存在を確認（グローバルセットアップで作成済み）
+	// Verify test data exists (created by global setup)
 	test.beforeAll( async () => {
-		console.log( '=== beforeAll: Starting test data setup ===' );
 		const { execSync } = await import( 'child_process' );
 
-		try {
-			// disableEmailVerificationを使用して、予約ページとテストデータも作成
-			await disableEmailVerification();
-			console.log(
-				'=== beforeAll: disableEmailVerification completed ==='
+		// サービスメニューが存在するか確認
+		const serviceMenus = execSync(
+			'npx wp-env run cli wp post list --post_type=vkbm_service_menu --format=count',
+			{ encoding: 'utf-8' }
+		).trim();
+
+		if ( serviceMenus === '0' ) {
+			throw new Error(
+				'No service menus found. Global setup may have failed.'
 			);
+		}
 
-			// サービスメニューが作成されたか確認
-			const serviceMenus = execSync(
-				'npx wp-env run cli wp post list --post_type=vkbm_service_menu --format=count',
-				{ encoding: 'utf-8' }
-			).trim();
-			console.log(
-				`=== beforeAll: Service menus created: ${ serviceMenus } ===`
+		// 予約ページが存在するか確認（slug ベースで安定的に検索）
+		// Verify booking page exists (slug-based search for stability)
+		const bookingPageId = execSync(
+			'npx wp-env run cli wp post list --post_type=page --name=booking --field=ID --format=ids',
+			{ encoding: 'utf-8' }
+		).trim();
+
+		if ( ! bookingPageId ) {
+			throw new Error(
+				'No booking page found. Global setup may have failed.'
 			);
-
-			// 予約ページが作成されたか確認（タイトルで検索）
-			const bookingPages = execSync(
-				'npx wp-env run cli wp post list --post_type=page --s="Booking" --format=count',
-				{ encoding: 'utf-8' }
-			).trim();
-			console.log(
-				`=== beforeAll: Booking pages created: ${ bookingPages } ===`
-			);
-
-			if ( serviceMenus === '0' ) {
-				throw new Error(
-					'No service menus were created in beforeAll!'
-				);
-			}
-
-			if ( bookingPages === '0' ) {
-				throw new Error( 'No booking page was created in beforeAll!' );
-			}
-		} catch ( error ) {
-			console.error( '=== beforeAll: Setup failed ===', error );
-			throw error;
 		}
 	} );
 

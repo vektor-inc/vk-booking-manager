@@ -634,6 +634,9 @@ class Booking_Notification_Service {
 		if ( '' === $resource_label_singular ) {
 			$resource_label_singular = __( 'Staff', 'vk-booking-manager' );
 		}
+		// Use the shared helper to get the duration label with fallback.
+		// 共通ヘルパーを使用して所要時間ラベルを取得する（フォールバック付き）。
+		$duration_label_heading = vkbm_get_duration_label();
 
 		$booking_author_name = $this->resolve_booking_author_name( $booking );
 
@@ -666,6 +669,7 @@ class Booking_Notification_Service {
 			'provider_site'                => isset( $settings['provider_website_url'] ) && '' !== $settings['provider_website_url'] ? $settings['provider_website_url'] : home_url(),
 			'provider_cancellation_policy' => isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '',
 			'resource_label_singular'      => $resource_label_singular,
+			'duration_label_heading'       => $duration_label_heading,
 			'staff_enabled'                => $nomination_enabled,
 			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'edit_url'                     => $edit_url,
@@ -778,12 +782,18 @@ class Booking_Notification_Service {
 		/* translators: %s: Reservation datetime range. */
 		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
 		if ( $payload['duration_label'] ) {
-			/* translators: %s: Duration label. */
-			$lines[] = sprintf( __( 'Time required: %s', 'vk-booking-manager' ), $payload['duration_label'] );
+			// Use the configurable duration label heading from provider settings.
+			// 基本設定の所要時間ラベル見出しを使用する。
+			$lines[] = sprintf(
+				/* translators: 1: Duration label heading, 2: Duration value. */
+				__( '%1$s: %2$s', 'vk-booking-manager' ),
+				$payload['duration_label_heading'],
+				$payload['duration_label']
+			);
 		}
 		if ( $payload['price_label'] ) {
 			/* translators: %s: Price label. */
-			$lines[] = sprintf( __( 'Price guide: %s', 'vk-booking-manager' ), $payload['price_label'] );
+			$lines[] = sprintf( __( 'Price: %s', 'vk-booking-manager' ), $payload['price_label'] );
 		}
 
 		return $lines;

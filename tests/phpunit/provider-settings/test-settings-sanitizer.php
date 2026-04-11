@@ -238,6 +238,38 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * closed_day_label がサニタイズされて保存されることを確認するテスト。
+	 */
+	public function test_sanitize_closed_day_label(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		// デフォルト値が空文字であることを確認する。
+		$this->assertSame( '', $defaults['closed_day_label'] );
+
+		// カスタムラベルが正しくサニタイズされることを確認する。
+		$result = $sanitizer->sanitize(
+			[ 'closed_day_label' => '  定休日 <script>alert(1)</script> ' ],
+			$defaults
+		);
+		$this->assertSame( sanitize_text_field( '  定休日 <script>alert(1)</script> ' ), $result['closed_day_label'] );
+
+		// 空文字のまま保存できることを確認する。
+		$result_empty = $sanitizer->sanitize(
+			[ 'closed_day_label' => '' ],
+			$defaults
+		);
+		$this->assertSame( '', $result_empty['closed_day_label'] );
+
+		// 未送信の場合はデフォルト値（空文字）になることを確認する。
+		$result_missing = $sanitizer->sanitize(
+			[],
+			$defaults
+		);
+		$this->assertSame( '', $result_missing['closed_day_label'] );
+	}
+
+	/**
 	 * staff_enabled の有効・無効がサニタイズで正しく処理されることを確認するテスト。
 	 */
 	public function test_sanitize_staff_enabled(): void {
@@ -267,5 +299,68 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 			$defaults
 		);
 		$this->assertFalse( $result_missing['staff_enabled'] );
+	}
+
+	/**
+	 * 指名機能を無効にして保存する際に、ラベルの保存値が維持されることを確認するテスト。
+	 * Issue #174: 指名機能を無効にすると「指名なしラベル」「指名料ラベル」がリセットされる不具合の修正検証。
+	 */
+	public function test_sanitize_nomination_labels_preserved_when_disabled(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '指名無効時にラベルが hidden フィールドで送信された場合 => カスタムラベルが保持される',
+				'conditions'          => [
+					'input' => [
+						'staff_enabled'       => '',
+						'no_nomination_label'  => '指名なし',
+						'nomination_fee_label' => '指名料',
+					],
+				],
+				'expected'            => [
+					'no_nomination_label'  => '指名なし',
+					'nomination_fee_label' => '指名料',
+					'staff_enabled'        => false,
+				],
+			],
+			[
+				'test_condition_name' => '指名有効時にラベルがテキストフィールドで送信された場合 => カスタムラベルが保持される',
+				'conditions'          => [
+					'input' => [
+						'staff_enabled'       => '1',
+						'no_nomination_label'  => 'お任せ',
+						'nomination_fee_label' => '指名手数料',
+					],
+				],
+				'expected'            => [
+					'no_nomination_label'  => 'お任せ',
+					'nomination_fee_label' => '指名手数料',
+					'staff_enabled'        => true,
+				],
+			],
+			[
+				'test_condition_name' => '指名無効時にラベルが送信されない場合 => デフォルト値になる（フォールバック）',
+				'conditions'          => [
+					'input' => [
+						'staff_enabled' => '',
+					],
+				],
+				'expected'            => [
+					'no_nomination_label'  => $defaults['no_nomination_label'],
+					'nomination_fee_label' => $defaults['nomination_fee_label'],
+					'staff_enabled'        => false,
+				],
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['conditions']['input'], $defaults );
+
+			foreach ( $case['expected'] as $key => $value ) {
+				$this->assertSame( $value, $result[ $key ], $case['test_condition_name'] . " (key: {$key})" );
+			}
+		}
 	}
 }

@@ -828,15 +828,18 @@ class Menu_Loop_Block {
 		$resource_label = $this->get_resource_label_menu();
 
 		if ( is_numeric( $duration ) && (int) $duration > 0 ) {
-			$duration_label = sprintf(
+			$duration_value = sprintf(
 				/* translators: %d: duration in minutes */
 				__( '%d minutes', 'vk-booking-manager' ),
 				(int) $duration
 			);
-			$items[] = sprintf(
+			// Use the shared helper for the configurable duration label.
+			// 共通ヘルパーを使用して所要時間ラベルを取得します。
+			$duration_heading = vkbm_get_duration_label();
+			$items[]          = sprintf(
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
-				esc_html__( 'Time required', 'vk-booking-manager' ),
-				esc_html( $duration_label )
+				esc_html( $duration_heading ),
+				esc_html( $duration_value )
 			);
 		}
 
@@ -906,7 +909,7 @@ class Menu_Loop_Block {
 		if ( '' !== $other_conditions ) {
 			$items[] = sprintf(
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
-				esc_html__( 'Other conditions', 'vk-booking-manager' ),
+				esc_html( vkbm_get_other_conditions_label() ),
 				wp_kses_post( nl2br( esc_html( $other_conditions ) ) )
 			);
 		}
@@ -1171,6 +1174,8 @@ class Menu_Loop_Block {
 
 		return '' !== trim( $label ) ? $label : __( 'Staff available', 'vk-booking-manager' );
 	}
+
+
 
 	/**
 	 * Retrieve configured reservation page URL.

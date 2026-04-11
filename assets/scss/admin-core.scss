@@ -122,7 +122,7 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-bottom: 4px;
+	margin-bottom: var(--vkbm--spacing--xs);
 }
 
 .vkbm-booking-quick-edit {

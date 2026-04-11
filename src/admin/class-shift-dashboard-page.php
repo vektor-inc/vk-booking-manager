@@ -418,7 +418,7 @@ class Shift_Dashboard_Page {
 																			data-vkbm-modal-target="<?php echo esc_attr( $modal_id ); ?>"
 																			aria-label="<?php echo esc_attr( sprintf(
 																				/* translators: 1: number of hidden bookings, 2: time range */
-																				__( 'Show %1\$d more bookings for %2\$s', 'vk-booking-manager' ),
+																				__( 'Show %1$d more bookings for %2$s', 'vk-booking-manager' ),
 																				(int) $shift['hidden_count'],
 																				$shift['time']
 																			) ); ?>"

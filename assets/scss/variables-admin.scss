@@ -1,0 +1,28 @@
+// WordPress admin palette tokens.
+// Shared across all admin-* SCSS files via the vkbm-admin bundle.
+:root {
+	// Color tokens
+	--vkbm--admin--color--text: #1d2327;
+	--vkbm--admin--color--text-secondary: #50575e;
+	--vkbm--admin--color--text-tertiary: #646970;
+	--vkbm--admin--color--text-body: #3c434a;
+	--vkbm--admin--color--text-placeholder: #6c6f73;
+	--vkbm--admin--color--text-disabled: #8c8f94;
+	--vkbm--admin--color--border: #dcdcde;
+	--vkbm--admin--color--border-light: #f0f0f1;
+	--vkbm--admin--color--border-medium: #e0e4e8;
+	--vkbm--admin--color--border-strong: #d0d7de;
+	--vkbm--admin--color--surface: #fff;
+	--vkbm--admin--color--surface-secondary: #f6f7f7;
+	--vkbm--admin--color--accent: #2271b1;
+	--vkbm--admin--color--accent-hover: #135e96;
+
+	// Font-size tokens
+	--vkbm--admin--font-size--xs: 11px;
+	--vkbm--admin--font-size--sm: 12px;
+	--vkbm--admin--font-size--md: 13px;
+	--vkbm--admin--font-size--base: 14px;
+	--vkbm--admin--font-size--lg: 16px;
+	--vkbm--admin--font-size--xl: 18px;
+	--vkbm--admin--font-size--2xl: 20px;
+}

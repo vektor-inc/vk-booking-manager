@@ -23,10 +23,11 @@ use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 function vkbm_get_resource_label_singular(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
-	$label      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
+	$default    = __( 'Staff', 'vk-booking-manager' );
+	$label      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : $default;
 	$label      = trim( $label );
 
-	return '' !== $label ? $label : 'Staff';
+	return '' !== $label ? $label : $default;
 }
 
 /**
@@ -37,7 +38,8 @@ function vkbm_get_resource_label_singular(): string {
 function vkbm_get_resource_label_plural(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
-	$label      = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
+	$default    = __( 'Staff', 'vk-booking-manager' );
+	$label      = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : $default;
 	$label      = trim( $label );
 
 	if ( '' === $label ) {
@@ -45,7 +47,11 @@ function vkbm_get_resource_label_plural(): string {
 	}
 
 	$singular = vkbm_get_resource_label_singular();
-	if ( 'Staff' === $label && 'Staff' !== $singular ) {
+	// If the plural label is still the default and singular has been customized,
+	// use the singular label as the plural label.
+	// 複数形ラベルがデフォルトのままで単数形がカスタマイズされている場合、
+	// 単数形ラベルを複数形として使用する。
+	if ( $default === $label && $default !== $singular ) {
 		return $singular;
 	}
 
@@ -76,6 +82,34 @@ function vkbm_get_nomination_fee_label(): string {
 	$label      = isset( $settings['nomination_fee_label'] ) ? trim( (string) $settings['nomination_fee_label'] ) : '';
 
 	return '' !== $label ? $label : __( 'Nomination fee', 'vk-booking-manager' );
+}
+
+/**
+ * Get the configured duration label (default: Time).
+ * 所要時間ラベルを取得する（デフォルト: Time）。
+ *
+ * @return string
+ */
+function vkbm_get_duration_label(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$label      = isset( $settings['duration_label'] ) ? trim( (string) $settings['duration_label'] ) : '';
+
+	return '' !== $label ? $label : __( 'Time', 'vk-booking-manager' );
+}
+
+/**
+ * Get the configured other conditions label (default: Other conditions).
+ * その他条件ラベルを取得する（デフォルト: Other conditions）。
+ *
+ * @return string
+ */
+function vkbm_get_other_conditions_label(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$label      = isset( $settings['other_conditions_label'] ) ? trim( (string) $settings['other_conditions_label'] ) : '';
+
+	return '' !== $label ? $label : __( 'Other conditions', 'vk-booking-manager' );
 }
 
 /**

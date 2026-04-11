@@ -148,14 +148,18 @@ class Service_Menu_Post_Type {
 			}
 
 			$reordered['vkbm_price']                = __( 'Fee', 'vk-booking-manager' );
-			$reordered['vkbm_duration']             = __( 'Time required', 'vk-booking-manager' );
+			// Use the configurable duration label from provider settings.
+			// 基本設定の所要時間ラベルを使用する。
+			$reordered['vkbm_duration']             = vkbm_get_duration_label();
 			$reordered['vkbm_reservation_deadline'] = __( 'Reservation deadline', 'vk-booking-manager' );
 			$reordered['vkbm_buffer_after']         = __( 'Post-service buffer', 'vk-booking-manager' );
 			if ( Staff_Editor::is_enabled() ) {
 				// Only show the staff column when staff editor is enabled. / スタッフ編集が有効な場合のみスタッフ列を表示します.
 				$reordered['vkbm_staff'] = __( 'Staff available', 'vk-booking-manager' );
 			}
-			$reordered['vkbm_other_conditions']     = __( 'Other conditions', 'vk-booking-manager' );
+			// Use the configurable other conditions label from provider settings.
+			// 基本設定のその他条件ラベルを使用する。
+			$reordered['vkbm_other_conditions']     = vkbm_get_other_conditions_label();
 			$reordered['vkbm_reservation_day_type'] = __( 'Reservation date', 'vk-booking-manager' );
 		}
 
@@ -502,7 +506,7 @@ class Service_Menu_Post_Type {
 						</label>
 						<?php endif; ?>
 						<label>
-							<span class="title"><?php esc_html_e( 'Time required', 'vk-booking-manager' ); ?></span>
+							<span class="title"><?php echo esc_html( vkbm_get_duration_label() ); ?></span>
 							<span class="input-text-wrap">
 								<input type="number" name="vkbm_service_menu_quick[duration_minutes]" class="vkbm-qe-duration-minutes" min="0" step="1" value="" /> <?php esc_html_e( 'minutes', 'vk-booking-manager' ); ?>
 							</span>
@@ -543,7 +547,7 @@ class Service_Menu_Post_Type {
 							</label>
 						<?php endif; ?>
 						<label>
-							<span class="title"><?php esc_html_e( 'Other conditions', 'vk-booking-manager' ); ?></span>
+							<span class="title"><?php echo esc_html( vkbm_get_other_conditions_label() ); ?></span>
 							<span class="input-text-wrap">
 								<textarea name="vkbm_service_menu_quick[other_conditions]" class="vkbm-qe-other-conditions" rows="6"></textarea>
 							</span>

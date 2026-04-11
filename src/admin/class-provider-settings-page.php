@@ -353,11 +353,13 @@ class Provider_Settings_Page {
 		$auth_rate_limit_login_max    = isset( $settings['auth_rate_limit_login_max'] ) ? (int) $settings['auth_rate_limit_login_max'] : 10;
 		$wp_users_can_register        = (bool) get_option( 'users_can_register' );
 		$staff_enabled                = ! empty( $settings['staff_enabled'] );
-		$resource_label_singular      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
-		$resource_label_plural        = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
-		$resource_label_menu          = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : 'Staff available';
-		$no_nomination_label          = isset( $settings['no_nomination_label'] ) ? (string) $settings['no_nomination_label'] : 'No preference';
-		$nomination_fee_label         = isset( $settings['nomination_fee_label'] ) ? (string) $settings['nomination_fee_label'] : 'Nomination fee';
+		$resource_label_singular      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
+		$resource_label_plural        = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
+		$resource_label_menu          = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : __( 'Staff available', 'vk-booking-manager' );
+		$no_nomination_label          = isset( $settings['no_nomination_label'] ) ? (string) $settings['no_nomination_label'] : __( 'No preference', 'vk-booking-manager' );
+		$nomination_fee_label         = isset( $settings['nomination_fee_label'] ) ? (string) $settings['nomination_fee_label'] : __( 'Nomination fee', 'vk-booking-manager' );
+		$duration_label               = isset( $settings['duration_label'] ) ? (string) $settings['duration_label'] : __( 'Time', 'vk-booking-manager' );
+		$other_conditions_label       = isset( $settings['other_conditions_label'] ) ? (string) $settings['other_conditions_label'] : __( 'Other conditions', 'vk-booking-manager' );
 		$locale                       = function_exists( 'get_locale' ) ? (string) get_locale() : '';
 		$no_plural_locales            = array( 'ja', 'zh', 'ko' );
 		$has_plural_forms_in_locale   = true;
@@ -1522,6 +1524,42 @@ class Provider_Settings_Page {
 							<?php endif; ?>
 						<?php endif; ?>
 
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-duration-label"><?php esc_html_e( 'Duration label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-duration-label"
+									name="vkbm_provider_settings[duration_label]"
+									value="<?php echo esc_attr( $duration_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Replaces the "Time" notation for service duration in the menu card and notification emails.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-other-conditions-label"><?php esc_html_e( 'Other conditions label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-other-conditions-label"
+									name="vkbm_provider_settings[other_conditions_label]"
+									value="<?php echo esc_attr( $other_conditions_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Replaces the "Other conditions" notation in the menu card and notification emails.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
 						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
 							<tr class="vkbm-provider-settings__tab-system">
 									<th scope="row">
@@ -1588,6 +1626,24 @@ class Provider_Settings_Page {
 									</td>
 								</tr>
 						<?php endif; ?>
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-closed-day-label"><?php esc_html_e( 'Closed day label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-closed-day-label"
+									name="vkbm_provider_settings[closed_day_label]"
+									value="<?php echo esc_attr( $settings['closed_day_label'] ?? '' ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Label text displayed on closed days in the calendar.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'If left empty, the default label will be used.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
 						<tr class="vkbm-provider-settings__tab-system">
 							<th scope="row">
 								<label for="vkbm-menu-loop-reserve-button-label"><?php esc_html_e( 'Reservation button text', 'vk-booking-manager' ); ?></label>
@@ -1781,6 +1837,15 @@ class Provider_Settings_Page {
 					<?php endif; ?>
 					</tbody>
 				</table>
+
+				<?php if ( ! Staff_Editor::is_nomination_enabled() ) : ?>
+					<?php
+					// 指名機能が無効でも、ラベルの保存値を維持するために hidden フィールドで送信する。
+					// Preserve saved label values via hidden fields even when nomination is disabled.
+					?>
+					<input type="hidden" name="vkbm_provider_settings[no_nomination_label]" value="<?php echo esc_attr( $no_nomination_label ); ?>" />
+					<input type="hidden" name="vkbm_provider_settings[nomination_fee_label]" value="<?php echo esc_attr( $nomination_fee_label ); ?>" />
+				<?php endif; ?>
 
 				<?php submit_button( __( 'Save changes', 'vk-booking-manager' ) ); ?>
 			</form>
@@ -2011,11 +2076,13 @@ class Provider_Settings_Page {
 		$output['provider_phone']                                 = sanitize_text_field( $input['provider_phone'] ?? '' );
 		$output['provider_payment_method']                        = sanitize_textarea_field( $input['provider_payment_method'] ?? '' );
 		$output['staff_enabled']                                  = ! empty( $input['staff_enabled'] );
-		$output['resource_label_singular']                        = sanitize_text_field( $input['resource_label_singular'] ?? 'Staff' );
-		$output['resource_label_plural']                          = sanitize_text_field( $input['resource_label_plural'] ?? 'Staff' );
-		$output['resource_label_menu']                            = sanitize_text_field( $input['resource_label_menu'] ?? 'Staff available' );
-		$output['no_nomination_label']                            = sanitize_text_field( $input['no_nomination_label'] ?? 'No preference' );
-		$output['nomination_fee_label']                           = sanitize_text_field( $input['nomination_fee_label'] ?? 'Nomination fee' );
+		$output['resource_label_singular']                        = sanitize_text_field( $input['resource_label_singular'] ?? __( 'Staff', 'vk-booking-manager' ) );
+		$output['resource_label_plural']                          = sanitize_text_field( $input['resource_label_plural'] ?? __( 'Staff', 'vk-booking-manager' ) );
+		$output['resource_label_menu']                            = sanitize_text_field( $input['resource_label_menu'] ?? __( 'Staff available', 'vk-booking-manager' ) );
+		$output['no_nomination_label']                            = sanitize_text_field( $input['no_nomination_label'] ?? '' );
+		$output['nomination_fee_label']                           = sanitize_text_field( $input['nomination_fee_label'] ?? '' );
+		$output['duration_label']                                = sanitize_text_field( $input['duration_label'] ?? __( 'Time', 'vk-booking-manager' ) );
+		$output['other_conditions_label']                        = sanitize_text_field( $input['other_conditions_label'] ?? __( 'Other conditions', 'vk-booking-manager' ) );
 			$output['provider_business_hours']                    = sanitize_textarea_field( $input['provider_business_hours'] ?? '' );
 			$output['provider_reservation_deadline_hours']        = absint( $input['provider_reservation_deadline_hours'] ?? 0 );
 			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? 0 );
@@ -2046,6 +2113,7 @@ class Provider_Settings_Page {
 		$output['provider_business_hours_weekly']                 = $this->sanitize_weekly_posted_slots( $input['provider_business_hours_weekly'] ?? array() );
 		$output['menu_loop_reserve_button_label']                 = sanitize_text_field( $input['menu_loop_reserve_button_label'] ?? '' );
 		$output['menu_loop_detail_button_label']                  = sanitize_text_field( $input['menu_loop_detail_button_label'] ?? '' );
+		$output['closed_day_label']                               = sanitize_text_field( $input['closed_day_label'] ?? '' );
 
 		return $output;
 	}

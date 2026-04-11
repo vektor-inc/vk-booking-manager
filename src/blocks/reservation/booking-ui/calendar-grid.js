@@ -98,6 +98,7 @@ export const CalendarGrid = ( {
 	onMonthChange,
 	isLoading,
 	locale,
+	closedDayLabel = '',
 } ) => {
 	const renderStatusLabel = ( status ) => {
 		if ( ! status || status === 'normal' ) {
@@ -106,7 +107,9 @@ export const CalendarGrid = ( {
 
 		switch ( status ) {
 			case 'holiday':
-				return __( 'Closed days', 'vk-booking-manager' );
+				// Use custom closed day label if set, otherwise use default translation.
+				// カスタム休業日ラベルが設定されている場合はそれを使用し、未設定の場合はデフォルトの翻訳を使用する。
+				return closedDayLabel || __( 'Closed days', 'vk-booking-manager' );
 			case 'special_open':
 				return __( 'Special Opening', 'vk-booking-manager' );
 			case 'special_close':

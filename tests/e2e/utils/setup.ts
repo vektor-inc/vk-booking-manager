@@ -17,7 +17,7 @@ export const configureProviderSettings = async ( settings: any ) => {
 	try {
 		const result = execSync(
 			'npx wp-env run cli wp option get vkbm_provider_settings --format=json',
-			{ encoding: 'utf-8' }
+			{ encoding: 'utf-8', stdio: 'pipe' }
 		);
 		const parsed = JSON.parse( result.trim() );
 		// Ensure parsed result is a plain object before using it

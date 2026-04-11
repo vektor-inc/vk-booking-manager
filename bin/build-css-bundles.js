@@ -27,6 +27,7 @@ const BUNDLES = {
 	],
 	'vkbm-admin.min.css': [
 		'variables.scss',
+		'variables-admin.scss',
 		'utility.scss',
 		'buttons.scss',
 		'alert.scss',

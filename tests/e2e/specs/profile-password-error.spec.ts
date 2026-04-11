@@ -1,17 +1,11 @@
 import { test, expect, Page } from '@playwright/test';
-import {
-	configureProviderSettings,
-	disableEmailVerification,
-} from '../utils/setup';
 import { execSync } from 'child_process';
 
 // プロフィール画面でパスワード変更エラー表示のテスト（issue #74）
 test.describe( 'Profile password change error display (#74)', () => {
-	// テスト環境のセットアップ
+	// テスト環境のセットアップ（グローバルセットアップでテストデータは作成済み）
+	// Setup test environment (test data already created by global setup)
 	test.beforeAll( async () => {
-		// 予約ページとテストデータを作成
-		await disableEmailVerification();
-
 		// テスト用ユーザーを作成（既存の場合は削除して再作成）
 		try {
 			execSync(
@@ -60,7 +54,8 @@ test.describe( 'Profile password change error display (#74)', () => {
 		}
 	} );
 
-	// テスト完了後にテストユーザーを削除し、メール認証設定を復元してクリーンアップ
+	// テスト完了後にテストユーザーを削除してクリーンアップ
+	// Clean up test user after all tests
 	test.afterAll( async () => {
 		try {
 			execSync(
@@ -70,12 +65,6 @@ test.describe( 'Profile password change error display (#74)', () => {
 		} catch ( e ) {
 			// クリーンアップ失敗は無視
 		}
-
-		// disableEmailVerification() で変更した設定をデフォルト値に復元
-		await configureProviderSettings( {
-			registration_email_verification_enabled: 1,
-			registration_rate_limit_enabled: 1,
-		} );
 	} );
 
 	// 各テスト前にレート制限用トランジェントのみを削除してレート制限を回避

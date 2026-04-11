@@ -174,9 +174,18 @@ class Service_Menu_Editor {
 	 */
 	public function render_vkbm_meta_box( WP_Post $post ): void {
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
-		$this->render_basic_meta_box( $post );
-		$this->render_conditions_meta_box( $post );
-		$this->render_internal_memo_field( $post );
+		?>
+		<table class="form-table" role="presentation">
+			<tbody>
+				<?php
+				$this->render_basic_meta_box( $post );
+				$this->render_conditions_meta_box( $post );
+				$this->render_internal_memo_field( $post );
+				$this->render_detail_page_field( $post );
+				?>
+			</tbody>
+		</table>
+		<?php
 	}
 
 		/**
@@ -187,11 +196,36 @@ class Service_Menu_Editor {
 	private function render_internal_memo_field( WP_Post $post ): void {
 		$internal_memo = get_post_meta( $post->ID, '_vkbm_internal_memo', true );
 		?>
-			<div class="vkbm-service-menu-field">
-				<label for="vkbm_service_menu_internal_memo"><?php esc_html_e( 'Internal memo (customer hidden)', 'vk-booking-manager' ); ?></label><br />
-				<textarea id="vkbm_service_menu_internal_memo" name="vkbm_service_menu[internal_memo]" class="widefat" rows="4"><?php echo esc_textarea( $internal_memo ); ?></textarea>
-			</div>
-			<?php
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_internal_memo"><?php esc_html_e( 'Internal memo (customer hidden)', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<textarea id="vkbm_service_menu_internal_memo" name="vkbm_service_menu[internal_memo]" class="large-text" rows="4"><?php echo esc_textarea( $internal_memo ); ?></textarea>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * Render the details page checkbox field.
+	 * 詳細ページ使用チェックボックスを出力する。
+	 *
+	 * @param WP_Post $post Current post object.
+	 */
+	private function render_detail_page_field( WP_Post $post ): void {
+		$use_detail_page = get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
+		?>
+		<tr>
+			<th scope="row"><?php esc_html_e( 'Details page', 'vk-booking-manager' ); ?></th>
+			<td>
+				<label>
+					<input type="checkbox" name="vkbm_service_menu[use_detail_page]" value="1" <?php checked( '1', $use_detail_page ); ?> />
+					<?php esc_html_e( 'Use', 'vk-booking-manager' ); ?>
+				</label>
+			</td>
+		</tr>
+		<?php
 	}
 
 		/**
@@ -205,29 +239,39 @@ class Service_Menu_Editor {
 		$disable_nomination_fee = (string) get_post_meta( $post->ID, self::META_DISABLE_NOMINATION_FEE, true );
 		$tax_label              = VKBM_Helper::get_tax_included_label();
 		?>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_catch_copy"><?php esc_html_e( 'Catchphrase', 'vk-booking-manager' ); ?></label>
-			<input type="text" id="vkbm_service_menu_catch_copy" name="vkbm_service_menu[catch_copy]" class="widefat" value="<?php echo esc_attr( $catch_copy ); ?>" />
-		</div>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_base_price">
-				<?php
-				esc_html_e( 'Basic price', 'vk-booking-manager' );
-				if ( '' !== $tax_label ) {
-					echo ' ' . esc_html( $tax_label );
-				}
-				?>
-			</label>
-			<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
-		</div>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_catch_copy"><?php esc_html_e( 'Catchphrase', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<input type="text" id="vkbm_service_menu_catch_copy" name="vkbm_service_menu[catch_copy]" class="regular-text" value="<?php echo esc_attr( $catch_copy ); ?>" />
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_base_price">
+					<?php
+					esc_html_e( 'Basic price', 'vk-booking-manager' );
+					if ( '' !== $tax_label ) {
+						echo ' ' . esc_html( $tax_label );
+					}
+					?>
+				</label>
+			</th>
+			<td>
+				<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
+			</td>
+		</tr>
 		<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
-		<div class="vkbm-service-menu-field">
-			<strong><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></strong><br />
-			<label>
-				<input type="checkbox" name="vkbm_service_menu[disable_nomination_fee]" value="1" <?php checked( '1', $disable_nomination_fee ); ?> />
-				<?php esc_html_e( 'Disable for this service menu', 'vk-booking-manager' ); ?>
-			</label>
-		</div>
+		<tr>
+			<th scope="row"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></th>
+			<td>
+				<label>
+					<input type="checkbox" name="vkbm_service_menu[disable_nomination_fee]" value="1" <?php checked( '1', $disable_nomination_fee ); ?> />
+					<?php esc_html_e( 'Disable for this service menu', 'vk-booking-manager' ); ?>
+				</label>
+			</td>
+		</tr>
 		<?php endif; ?>
 		<?php
 	}
@@ -243,63 +287,122 @@ class Service_Menu_Editor {
 		$reservation_deadline = get_post_meta( $post->ID, '_vkbm_reservation_deadline_hours', true );
 		$reservation_day_type = (string) get_post_meta( $post->ID, self::META_RESERVATION_DAY_TYPE, true );
 		$other_conditions     = get_post_meta( $post->ID, self::META_OTHER_CONDITIONS, true );
-		$use_detail_page      = get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
+		$max_advance_days     = get_post_meta( $post->ID, '_vkbm_max_advance_booking_days', true );
 		?>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_duration_minutes"><?php esc_html_e( 'Time required (minutes)', 'vk-booking-manager' ); ?></label>
-			<input type="number" id="vkbm_service_menu_duration_minutes" name="vkbm_service_menu[duration_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $duration_minutes ); ?>" />
-		</div>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_buffer_after"><?php esc_html_e( 'Post-service buffer (min)', 'vk-booking-manager' ); ?></label>
-			<input type="number" id="vkbm_service_menu_buffer_after" name="vkbm_service_menu[buffer_after_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $buffer_after_minutes ); ?>" />
-			<p class="description"><?php esc_html_e( 'During the service time plus the buffer time, new reservations will not be accepted.', 'vk-booking-manager' ); ?><br />
-			<?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
-		</div>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_reservation_day_type"><?php esc_html_e( 'Reservation date', 'vk-booking-manager' ); ?></label>
-			<select id="vkbm_service_menu_reservation_day_type" name="vkbm_service_menu[reservation_day_type]">
-				<option value="" <?php selected( '', $reservation_day_type ); ?>><?php esc_html_e( 'Not specified', 'vk-booking-manager' ); ?></option>
-				<option value="weekend" <?php selected( 'weekend', $reservation_day_type ); ?>><?php esc_html_e( 'Saturdays and Sundays only', 'vk-booking-manager' ); ?></option>
-				<option value="weekday" <?php selected( 'weekday', $reservation_day_type ); ?>><?php esc_html_e( 'Weekdays only', 'vk-booking-manager' ); ?></option>
-			</select>
-		</div>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_other_conditions"><?php esc_html_e( 'Other conditions', 'vk-booking-manager' ); ?></label>
-			<textarea id="vkbm_service_menu_other_conditions" name="vkbm_service_menu[other_conditions]" class="widefat" rows="4"><?php echo esc_textarea( (string) $other_conditions ); ?></textarea>
-		</div>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_reservation_deadline"><?php esc_html_e( 'Reservation deadline', 'vk-booking-manager' ); ?></label>
-			<input type="number" id="vkbm_service_menu_reservation_deadline" name="vkbm_service_menu[reservation_deadline_hours]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $reservation_deadline ); ?>" /> <?php esc_html_e( 'hours ago', 'vk-booking-manager' ); ?>
-			<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
-		</div>
-		<?php
-		$max_advance_days = get_post_meta( $post->ID, '_vkbm_max_advance_booking_days', true );
-		?>
-		<div class="vkbm-service-menu-field">
-			<label for="vkbm_service_menu_max_advance_booking_days"><?php esc_html_e( 'Max advance booking period', 'vk-booking-manager' ); ?></label>
-			<input type="number" id="vkbm_service_menu_max_advance_booking_days" name="vkbm_service_menu[max_advance_booking_days]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $max_advance_days ); ?>" /> <?php esc_html_e( 'days', 'vk-booking-manager' ); ?>
-			<p class="description"><?php esc_html_e( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ); ?></p>
-			<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
-		</div>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_duration_minutes"><?php esc_html_e( 'Time required (minutes)', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<input type="number" id="vkbm_service_menu_duration_minutes" name="vkbm_service_menu[duration_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $duration_minutes ); ?>" />
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_buffer_after"><?php esc_html_e( 'Post-service buffer (min)', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<input type="number" id="vkbm_service_menu_buffer_after" name="vkbm_service_menu[buffer_after_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $buffer_after_minutes ); ?>" />
+				<p class="description">
+					<?php esc_html_e( 'During the service time plus the buffer time, new reservations will not be accepted.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?>
+				</p>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_reservation_day_type"><?php esc_html_e( 'Reservation date', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<select id="vkbm_service_menu_reservation_day_type" name="vkbm_service_menu[reservation_day_type]">
+					<option value="" <?php selected( '', $reservation_day_type ); ?>><?php esc_html_e( 'Not specified', 'vk-booking-manager' ); ?></option>
+					<option value="weekend" <?php selected( 'weekend', $reservation_day_type ); ?>><?php esc_html_e( 'Saturdays and Sundays only', 'vk-booking-manager' ); ?></option>
+					<option value="weekday" <?php selected( 'weekday', $reservation_day_type ); ?>><?php esc_html_e( 'Weekdays only', 'vk-booking-manager' ); ?></option>
+				</select>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_other_conditions"><?php echo esc_html( vkbm_get_other_conditions_label() ); ?></label>
+			</th>
+			<td>
+				<textarea id="vkbm_service_menu_other_conditions" name="vkbm_service_menu[other_conditions]" class="large-text" rows="4"><?php echo esc_textarea( (string) $other_conditions ); ?></textarea>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_reservation_deadline"><?php esc_html_e( 'Reservation deadline', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<input type="number" id="vkbm_service_menu_reservation_deadline" name="vkbm_service_menu[reservation_deadline_hours]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $reservation_deadline ); ?>" /> <?php esc_html_e( 'hours ago', 'vk-booking-manager' ); ?>
+				<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
+			</td>
+		</tr>
+		<tr>
+			<th scope="row">
+				<label for="vkbm_service_menu_max_advance_booking_days"><?php esc_html_e( 'Max advance booking period', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<input type="number" id="vkbm_service_menu_max_advance_booking_days" name="vkbm_service_menu[max_advance_booking_days]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $max_advance_days ); ?>" /> <?php esc_html_e( 'days', 'vk-booking-manager' ); ?>
+				<p class="description">
+					<?php esc_html_e( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?>
+				</p>
+			</td>
+		</tr>
 		<?php
 		// 最大予約人数フィールド（Pro版のみ表示）
 		// Display max capacity field only in Pro edition.
 		$is_pro_edition = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
 		if ( $is_pro_edition ) :
-			$max_capacity = get_post_meta( $post->ID, self::META_MAX_CAPACITY, true );
-			?>
-			<div class="vkbm-service-menu-field">
-				<label for="vkbm_service_menu_max_capacity"><?php esc_html_e( 'Maximum bookings per time slot', 'vk-booking-manager' ); ?></label>
-				<input type="number" id="vkbm_service_menu_max_capacity" name="vkbm_service_menu[max_capacity]" class="small-text" min="1" step="1" value="<?php echo esc_attr( $max_capacity ); ?>" />
-				<p class="description"><?php esc_html_e( 'Maximum number of bookings that can be accepted per time slot when staff auto-assignment is used.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Default is 1.', 'vk-booking-manager' ); ?></p>
-			</div>
+			// 指名機能が有効かどうかを判定する。
+			// Check whether the nomination feature is enabled.
+			$is_nomination_enabled = Staff_Editor::is_nomination_enabled();
+
+			if ( $is_nomination_enabled ) :
+				// 指名機能が有効な場合は最大予約人数フィールドを非表示にし、案内メッセージを表示する。
+				// When nomination is enabled, hide the max capacity field and show a guidance message instead.
+				$settings_url = admin_url( 'admin.php?page=vkbm-provider-settings&tab=system' ) . '#vkbm-staff-enabled';
+				?>
+				<tr>
+					<th scope="row">
+						<?php esc_html_e( 'Maximum bookings per time slot', 'vk-booking-manager' ); ?>
+					</th>
+					<td>
+						<p class="description">
+							<?php esc_html_e( 'Multiple bookings per time slot can be configured when the nomination feature is disabled.', 'vk-booking-manager' ); ?><br>
+							<?php
+							printf(
+								/* translators: %1$s: opening anchor tag, %2$s: closing anchor tag */
+								/* translators: 基本設定画面へのリンクを含むメッセージ */
+								esc_html__( 'The nomination feature can be enabled or disabled from the %1$sbasic settings page%2$s.', 'vk-booking-manager' ),
+								'<a href="' . esc_url( $settings_url ) . '" target="_blank" rel="noopener noreferrer">',
+								'</a>'
+							);
+							?>
+						</p>
+					</td>
+				</tr>
+			<?php else :
+				// 指名機能が無効の場合は従来通り最大予約人数フィールドを表示する。
+				// When nomination is disabled, show the max capacity input field as usual.
+				$max_capacity = get_post_meta( $post->ID, self::META_MAX_CAPACITY, true );
+				?>
+				<tr>
+					<th scope="row">
+						<label for="vkbm_service_menu_max_capacity"><?php esc_html_e( 'Maximum bookings per time slot', 'vk-booking-manager' ); ?></label>
+					</th>
+					<td>
+						<input type="number" id="vkbm_service_menu_max_capacity" name="vkbm_service_menu[max_capacity]" class="small-text" min="1" step="1" value="<?php echo esc_attr( $max_capacity ); ?>" />
+						<p class="description">
+							<?php esc_html_e( 'Maximum number of bookings that can be accepted per time slot when staff auto-assignment is used.', 'vk-booking-manager' ); ?><br>
+							<?php esc_html_e( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ); ?><br>
+							<?php esc_html_e( 'Default is 1.', 'vk-booking-manager' ); ?>
+						</p>
+					</td>
+				</tr>
+			<?php endif; ?>
 		<?php endif; ?>
-		<div class="vkbm-service-menu-field">
-			<label>
-				<input type="checkbox" name="vkbm_service_menu[use_detail_page]" value="1" <?php checked( '1', $use_detail_page ); ?> />
-				<?php esc_html_e( 'Use the details page', 'vk-booking-manager' ); ?>
-			</label>
-		</div>
 		<?php $this->render_fixed_start_times_field( $post ); ?>
 		<?php
 	}
@@ -313,33 +416,53 @@ class Service_Menu_Editor {
 		$fixed_start_times = get_post_meta( $post->ID, self::META_FIXED_START_TIMES, true );
 		$fixed_start_times = is_array( $fixed_start_times ) ? $fixed_start_times : array();
 		?>
-		<div class="vkbm-service-menu-field">
-			<strong><?php esc_html_e( 'Fixed start times', 'vk-booking-manager' ); ?></strong>
-			<p class="description"><?php esc_html_e( 'If set, only the specified times are available for booking. Leave empty to use the default slot step.', 'vk-booking-manager' ); ?></p>
-			<div id="vkbm-fixed-start-times-list">
-				<?php foreach ( $fixed_start_times as $time ) : ?>
-					<div class="vkbm-fixed-start-time-row">
-						<select name="vkbm_service_menu[fixed_start_times][]" class="vkbm-fixed-start-hour">
-							<?php for ( $h = 0; $h <= 23; $h++ ) : ?>
-								<option value="<?php echo esc_attr( sprintf( '%02d', $h ) ); ?>" <?php selected( sprintf( '%02d', $h ), substr( (string) $time, 0, 2 ) ); ?>>
-									<?php echo esc_html( sprintf( '%02d', $h ) ); ?>
-								</option>
-							<?php endfor; ?>
-						</select>
-						<span>:</span>
-						<select name="vkbm_service_menu[fixed_start_minutes][]" class="vkbm-fixed-start-minute">
-							<?php foreach ( array( '00', '10', '20', '30', '40', '50' ) as $min ) : ?>
-								<option value="<?php echo esc_attr( $min ); ?>" <?php selected( $min, substr( (string) $time, 3, 2 ) ); ?>>
-									<?php echo esc_html( $min ); ?>
-								</option>
-							<?php endforeach; ?>
-						</select>
-						<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-fixed-start-time-remove"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button>
-					</div>
-				<?php endforeach; ?>
-			</div>
-			<button type="button" id="vkbm-fixed-start-time-add" class="button"><?php esc_html_e( '+ Add time', 'vk-booking-manager' ); ?></button>
-		</div>
+		<tr>
+			<th scope="row"><?php esc_html_e( 'Fixed start times', 'vk-booking-manager' ); ?></th>
+			<td>
+				<div id="vkbm-fixed-start-times-list">
+					<?php foreach ( $fixed_start_times as $time ) : ?>
+						<div class="vkbm-fixed-start-time-row">
+							<select name="vkbm_service_menu[fixed_start_times][]" class="vkbm-fixed-start-hour">
+								<?php for ( $h = 0; $h <= 23; $h++ ) : ?>
+									<option value="<?php echo esc_attr( sprintf( '%02d', $h ) ); ?>" <?php selected( sprintf( '%02d', $h ), substr( (string) $time, 0, 2 ) ); ?>>
+										<?php echo esc_html( sprintf( '%02d', $h ) ); ?>
+									</option>
+								<?php endfor; ?>
+							</select>
+							<span>:</span>
+							<select name="vkbm_service_menu[fixed_start_minutes][]" class="vkbm-fixed-start-minute">
+								<?php foreach ( array( '00', '10', '20', '30', '40', '50' ) as $min ) : ?>
+									<option value="<?php echo esc_attr( $min ); ?>" <?php selected( $min, substr( (string) $time, 3, 2 ) ); ?>>
+										<?php echo esc_html( $min ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-fixed-start-time-remove"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button>
+						</div>
+					<?php endforeach; ?>
+				</div>
+				<button type="button" id="vkbm-fixed-start-time-add" class="button"><?php esc_html_e( '+ Add time', 'vk-booking-manager' ); ?></button>
+				<p class="description">
+					<?php
+					// 未設定の場合の説明（基本設定画面へのリンク付き） / Description when not set (with link to provider settings).
+					printf(
+						/* translators: %s: link to the reservation slot time setting on the provider settings page. */
+						esc_html__( 'If not set, reservation slots are based on the interval specified in %s.', 'vk-booking-manager' ),
+						sprintf(
+							'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+							esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-slot-step-minutes' ) ),
+							esc_html__( 'Reservation slot time on the General Settings page', 'vk-booking-manager' )
+						)
+					);
+					?>
+					<br>
+					<?php
+					// 設定した場合の説明 / Description when set.
+					esc_html_e( 'If set, only the specified times are available for booking.', 'vk-booking-manager' );
+					?>
+				</p>
+			</td>
+		</tr>
 		<?php
 	}
 
@@ -485,12 +608,12 @@ class Service_Menu_Editor {
 		$this->update_meta_value( $post_id, '_vkbm_is_archived', $archive );
 		$this->update_meta_value( $post_id, self::META_USE_DETAIL_PAGE, $use_detail_page );
 		$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
-		// 最大予約人数はPro版のみ保存。Pro版でない場合はメタを削除してデフォルト1を維持する。
-		// Save max capacity only in Pro edition. In free edition, delete the meta to maintain default of 1.
+		// 最大予約人数はPro版かつ指名機能無効時のみ保存。指名機能有効時はフォームにフィールドがないため既存値を保持する。
+		// Save max capacity only in Pro edition when nomination is disabled. When nomination is enabled, the field is not rendered so preserve existing value.
 		$is_pro_edition = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		if ( $is_pro_edition ) {
+		if ( $is_pro_edition && ! Staff_Editor::is_nomination_enabled() ) {
 			$this->update_meta_value( $post_id, self::META_MAX_CAPACITY, $max_capacity );
-		} else {
+		} elseif ( ! $is_pro_edition ) {
 			delete_post_meta( $post_id, self::META_MAX_CAPACITY );
 		}
 		if ( Staff_Editor::is_enabled() ) {

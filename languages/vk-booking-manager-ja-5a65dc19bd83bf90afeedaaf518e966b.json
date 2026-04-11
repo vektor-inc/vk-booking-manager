@@ -13,6 +13,15 @@
 			"Staff": [
 				"スタッフ"
 			],
+			"No preference": [
+				"指名なし"
+			],
+			"Nomination fee": [
+				"指名料"
+			],
+			"Other conditions": [
+				"その他条件"
+			],
 			"Pending": [
 				"仮予約"
 			],
@@ -30,12 +39,6 @@
 			],
 			"Total basic fee": [
 				"基本料金合計"
-			],
-			"No preference": [
-				"指名なし"
-			],
-			"Nomination fee": [
-				"指名料"
 			],
 			"Could not get menu list.": [
 				"メニュー一覧を取得できませんでした。"
@@ -98,7 +101,7 @@
 				"表示する予約はありません。"
 			],
 			"Processing…": [
-				""
+				"処理中…"
 			],
 			"Loading form…": [
 				"フォームを読み込み中…"
@@ -177,9 +180,6 @@
 			],
 			"Loading menu information…": [
 				"メニューの情報読み込み中..."
-			],
-			"Other conditions": [
-				"その他条件"
 			],
 			"Log in": [
 				"ログイン"

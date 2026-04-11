@@ -1,153 +1,20 @@
 import { test, expect } from '@playwright/test';
 import { execSync } from 'child_process';
+import { configureProviderSettings } from '../utils/setup';
 import {
-	configureProviderSettings,
-	disableEmailVerification,
-} from '../utils/setup';
+	loginAsAdmin,
+	getStaffId,
+	getServiceMenuId,
+	getTokyoDateParts,
+	formatDateTokyo,
+	createShiftForMonth,
+} from '../utils/helpers';
 
-const ADMIN_USER = 'admin';
-const ADMIN_PASSWORD = 'password';
-
-/**
- * 管理画面にログインするヘルパー関数。
- * WordPress のログイン画面を経由してログインし、ダッシュボードに到達する。
- */
-const loginAsAdmin = async ( page: any ) => {
-	// WordPress のログインページに直接遷移
-	await page.goto( '/wp-login.php' );
-	await page.waitForSelector( '#loginform', { timeout: 10000 } );
-
-	// ユーザー名フィールドをクリアしてから入力
-	await page.locator( '#user_login' ).fill( '' );
-	await page.locator( '#user_login' ).type( ADMIN_USER );
-
-	// パスワードフィールドをクリアしてから入力
-	await page.locator( '#user_pass' ).fill( '' );
-	await page.locator( '#user_pass' ).type( ADMIN_PASSWORD );
-
-	// Remember Me にチェックを入れてからログインボタンをクリック
-	await page.locator( '#rememberme' ).check();
-	await Promise.all( [
-		page.waitForNavigation( { timeout: 15000 } ),
-		page.locator( '#wp-submit' ).click(),
-	] );
-};
-
-/**
- * サービスメニューの post ID を取得するヘルパー。
- * wp-cli で最初のサービスメニューの ID を返す。
- */
-const getServiceMenuId = (): string => {
-	return execSync(
-		'npx wp-env run cli wp post list --post_type=vkbm_service_menu --post_status=publish --field=ID --format=ids',
-		{ encoding: 'utf-8' }
-	).trim().split( /\s+/ )[ 0 ];
-};
-
-/**
- * Asia/Tokyo タイムゾーンの年・月・日を formatToParts() で取得するヘルパー。
- * locale 文字列のフォーマットに依存せず、安定して YYYY/MM/DD を返す。
- *
- * @param date Date オブジェクト
- * @return year, month, day の各文字列（ゼロパディング済み）
- */
-const getTokyoDateParts = (
-	date: Date
-): { year: string; month: string; day: string } => {
-	const parts = new Intl.DateTimeFormat( 'en', {
-		timeZone: 'Asia/Tokyo',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-	} ).formatToParts( date );
-
-	return {
-		year: parts.find( ( part ) => part.type === 'year' )?.value ?? '',
-		month: parts.find( ( part ) => part.type === 'month' )?.value ?? '',
-		day: parts.find( ( part ) => part.type === 'day' )?.value ?? '',
-	};
-};
-
-/**
- * Asia/Tokyo タイムゾーンの YYYY-MM-DD 形式で日付文字列を返すヘルパー。
- * formatToParts() を使用し、locale 依存のフォーマット差異を回避する。
- *
- * @param date Date オブジェクト
- * @return YYYY-MM-DD 形式の文字列（Asia/Tokyo）
- */
-const formatDateTokyo = ( date: Date ): string => {
-	const { year, month, day } = getTokyoDateParts( date );
-	return `${ year }-${ month }-${ day }`;
-};
-
-/**
- * 指定月のシフトを作成するヘルパー。
- * スタッフID・年・月を指定して、毎日 09:00-18:00 の open シフトを作成する。
- *
- * @param staffId スタッフの post ID
- * @param year    シフト年
- * @param month   シフト月（1-12）
- */
-const createShiftForMonth = ( staffId: string, year: number, month: number ) => {
-	const createShiftCode = `
-		$resource_id = ${ staffId };
-		$year = ${ year };
-		$month = ${ month };
-		$days_in_month = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
-		$days = [];
-		for ($d = 1; $d <= $days_in_month; $d++) {
-			$days[$d] = [
-				'status' => 'open',
-				'slots' => [['start' => '09:00', 'end' => '18:00']]
-			];
-		}
-		$existing = get_posts([
-			'post_type' => 'vkbm_shift',
-			'post_status' => 'any',
-			'meta_query' => [
-				['key' => '_vkbm_shift_resource_id', 'value' => $resource_id],
-				['key' => '_vkbm_shift_year', 'value' => $year],
-				['key' => '_vkbm_shift_month', 'value' => $month],
-			],
-			'fields' => 'ids',
-		]);
-		if (!empty($existing)) {
-			$post_id = $existing[0];
-			update_post_meta($post_id, '_vkbm_shift_days', $days);
-		} else {
-			$post_id = wp_insert_post([
-				'post_type'   => 'vkbm_shift',
-				'post_status' => 'publish',
-				'post_title'  => sprintf('%d-%02d Staff %d', $year, $month, $resource_id),
-			]);
-			update_post_meta($post_id, '_vkbm_shift_resource_id', $resource_id);
-			update_post_meta($post_id, '_vkbm_shift_year', $year);
-			update_post_meta($post_id, '_vkbm_shift_month', $month);
-			update_post_meta($post_id, '_vkbm_shift_days', $days);
-		}
-		echo $post_id;
-	`;
-	const base64Code = Buffer.from( createShiftCode ).toString( 'base64' );
-	execSync(
-		`npx wp-env run cli wp eval 'eval(base64_decode("${ base64Code }"));'`
-	);
-};
-
-/**
- * スタッフIDを取得するヘルパー。
- */
-const getStaffId = (): string => {
-	return execSync(
-		'npx wp-env run cli wp post list --post_type=vkbm_resource --post_status=publish --field=ID --format=ids',
-		{ encoding: 'utf-8' }
-	).trim().split( /\s+/ )[ 0 ];
-};
-
-// テスト前にテスト環境をセットアップ（スタッフ・シフト・メニュー・予約ページを作成）
+// テスト前に将来月のシフトを作成（グローバルセットアップで今月分は作成済み）
+// Create shifts for future months before tests (current month already created by global setup)
 test.beforeAll( async () => {
-	await disableEmailVerification();
-
 	// 制限日数超過テスト用に、将来月のシフトも作成しておく
+	// Create shifts for future months for advance booking limit tests
 	const staffId = getStaffId();
 	const now = new Date();
 	// Asia/Tokyo の現在月を formatToParts で取得（locale 依存を排除）
@@ -156,6 +23,7 @@ test.beforeAll( async () => {
 	const currentMonth = Number( month );
 
 	// 今月・翌月・翌々月のシフトを作成（将来日テスト用）
+	// Create shifts for current, next, and month after next
 	createShiftForMonth( staffId, currentYear, currentMonth );
 	const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
 	const nextMonthYear = currentMonth === 12 ? currentYear + 1 : currentYear;
@@ -166,6 +34,7 @@ test.beforeAll( async () => {
 } );
 
 // 各テスト前後で予約可能期間の設定をリセット（テスト間の状態汚染を防止）
+// Reset max advance booking settings before/after each test to prevent state pollution
 test.beforeEach( async () => {
 	await configureProviderSettings( {
 		provider_max_advance_booking_days: 0,

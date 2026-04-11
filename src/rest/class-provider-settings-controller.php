@@ -20,6 +20,7 @@ use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_REST_Response;
 use WP_REST_Server;
+use function __;
 use function add_action;
 use function esc_url_raw;
 use function get_posts;
@@ -82,8 +83,8 @@ class Provider_Settings_Controller {
 	 */
 	public function get_settings(): WP_REST_Response {
 		$settings                = $this->settings_repository->get_settings();
-		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : 'Staff';
-		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : 'Staff';
+		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
+		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
 
 		// 指名関連ラベルを取得する（ヘルパー関数がフォールバックを処理）。
 		$no_nomination_label  = vkbm_get_no_nomination_label();
@@ -111,6 +112,10 @@ class Provider_Settings_Controller {
 		$cancellation_policy = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
 		$terms_of_service    = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
 		$payment_method      = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
+		$closed_day_label    = isset( $settings['closed_day_label'] ) ? (string) $settings['closed_day_label'] : '';
+		// Use the shared helper to apply fallback when the setting is empty.
+		// 設定が空の場合にデフォルト値を適用するため共通ヘルパーを使用する。
+		$duration_label      = vkbm_get_duration_label();
 		$nomination_enabled  = Staff_Editor::is_nomination_enabled();
 
 		// 無料版ではデフォルトスタッフのIDを取得する.
@@ -141,6 +146,9 @@ class Provider_Settings_Controller {
 				'payment_method'                     => $payment_method,
 				'no_nomination_label'                => $no_nomination_label,
 				'nomination_fee_label'               => $nomination_fee_label,
+				'closed_day_label'                   => $closed_day_label,
+				'duration_label'                     => $duration_label,
+				'other_conditions_label'             => vkbm_get_other_conditions_label(),
 			)
 		);
 	}

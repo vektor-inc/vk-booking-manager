@@ -231,6 +231,8 @@ export const ReservationApp = ( {
 		showProviderName: false,
 		providerName: '',
 		providerLogoUrl: '',
+		closedDayLabel: '',
+		otherConditionsLabel: __( 'Other conditions', 'vk-booking-manager' ),
 	} );
 	const [ menuList, setMenuList ] = useState( {
 		html: '',
@@ -358,6 +360,15 @@ export const ReservationApp = ( {
 						typeof settings?.provider_logo_url === 'string'
 							? settings.provider_logo_url
 							: '',
+					closedDayLabel:
+						typeof settings?.closed_day_label === 'string'
+							? settings.closed_day_label
+							: '',
+					otherConditionsLabel:
+						typeof settings?.other_conditions_label === 'string' &&
+						settings.other_conditions_label.trim() !== ''
+							? settings.other_conditions_label
+							: __( 'Other conditions', 'vk-booking-manager' ),
 				} );
 			} )
 			.catch( () => {
@@ -1631,6 +1642,9 @@ export const ReservationApp = ( {
 												resourceLabel={
 													providerSettings.resourceLabelSingular
 												}
+												otherConditionsLabel={
+													providerSettings.otherConditionsLabel
+												}
 												currencySymbol={
 													providerSettings.currencySymbol ||
 													null
@@ -1771,6 +1785,9 @@ export const ReservationApp = ( {
 								onMonthChange={ handleMonthChange }
 								isLoading={ calendarLoading }
 								locale={ userBootstrap?.locale }
+								closedDayLabel={
+									providerSettings.closedDayLabel
+								}
 							/>
 
 							<div className="vkbm-reservation-content__slots">

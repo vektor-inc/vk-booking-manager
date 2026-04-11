@@ -85,6 +85,8 @@ class Settings_Sanitizer {
 		$data['resource_label_menu']                            = sanitize_text_field( (string) ( $data['resource_label_menu'] ?? '' ) );
 		$data['no_nomination_label']                            = sanitize_text_field( (string) ( $data['no_nomination_label'] ?? '' ) );
 		$data['nomination_fee_label']                           = sanitize_text_field( (string) ( $data['nomination_fee_label'] ?? '' ) );
+		$data['duration_label']                                = sanitize_text_field( (string) ( $data['duration_label'] ?? '' ) );
+		$data['other_conditions_label']                        = sanitize_text_field( (string) ( $data['other_conditions_label'] ?? '' ) );
 			$data['provider_business_hours']                    = sanitize_textarea_field( $data['provider_business_hours'] );
 			$data['provider_reservation_deadline_hours']        = $this->sanitize_non_negative_int(
 				$input['provider_reservation_deadline_hours'] ?? ( $data['provider_reservation_deadline_hours'] ?? 0 )
@@ -171,6 +173,7 @@ class Settings_Sanitizer {
 			$input['auth_rate_limit_login_max'] ?? ( $data['auth_rate_limit_login_max'] ?? 10 )
 		);
 		$data['auth_rate_limit_login_max']               = max( 1, $login_limit );
+		$data['closed_day_label']                       = sanitize_text_field( (string) ( $input['closed_day_label'] ?? ( $data['closed_day_label'] ?? '' ) ) );
 		$data['menu_loop_reserve_button_label']          = sanitize_text_field( (string) ( $input['menu_loop_reserve_button_label'] ?? ( $data['menu_loop_reserve_button_label'] ?? '' ) ) );
 		$data['menu_loop_detail_button_label']           = sanitize_text_field( (string) ( $input['menu_loop_detail_button_label'] ?? ( $data['menu_loop_detail_button_label'] ?? '' ) ) );
 
