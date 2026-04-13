@@ -683,6 +683,8 @@ return array(
     'VKBookingManager\\TermOrder\\Term_Order_Manager' => $baseDir . '/src/term-order/class-term-order-manager.php',
     'VKBookingManager\\Tests\\Admin\\Admin_Page_Rendering_Test' => $baseDir . '/tests/phpunit/rendering/class-admin-page-rendering-test.php',
     'VKBookingManager\\Tests\\Admin\\Service_Menu_Editor_Sanitize_Test' => $baseDir . '/tests/phpunit/admin/test-service-menu-editor-sanitize.php',
+    'VKBookingManager\\Tests\\Admin\\Shift_Dashboard_Hidden_Count_Rendering_Test' => $baseDir . '/tests/phpunit/admin/test-shift-dashboard-hidden-count-rendering.php',
+    'VKBookingManager\\Tests\\Admin\\Shift_Dashboard_Sprintf_Test' => $baseDir . '/tests/phpunit/admin/test-shift-dashboard-sprintf.php',
     'VKBookingManager\\Tests\\Assets\\Common_Styles_Test' => $baseDir . '/tests/phpunit/assets/test-common-styles.php',
     'VKBookingManager\\Tests\\Auth\\Auth_Shortcodes_Test' => $baseDir . '/tests/phpunit/auth/test-auth-shortcodes.php',
     'VKBookingManager\\Tests\\Auth\\Testable_Auth_Shortcodes' => $baseDir . '/tests/phpunit/auth/test-auth-shortcodes.php',

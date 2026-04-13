@@ -60,6 +60,9 @@
 	background: #fff;
 	border: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
 	border-radius: var(--vkbm--radius--md);
+	p {
+		text-box: trim-both text; 
+	}
 }
 
 .vkbm-menu-loop__card-media {
@@ -123,17 +126,22 @@
 
 .vkbm-menu-loop__card-catch {
 	color: var(--wp--preset--color--contrast, #222);
-	font-size:0.88rem;
+	font-size:var(--vkbm--font-size--sm);
 	margin: 0 0 var(--vkbm--spacing--sm);
 }
 
 .vkbm-menu-loop__card-excerpt {
 	color: var(--wp--preset--color--contrast-2, #444);
+	font-size:var(--vkbm--font-size--sm);
+	margin: 0 0 var(--vkbm--spacing--sm);
+	p {
+		margin: 0;
+	}
+	p + p {
+		margin-top: var(--vkbm--spacing--xs);
+	}
 }
 
-.vkbm-menu-loop__card-excerpt p:last-child {
-	margin-bottom: 0;
-}
 .vkbm-menu-loop__card-meta-wrap {
 	display: flex;
 	flex-wrap: wrap;
@@ -156,7 +164,7 @@
 .vkbm-menu-loop__card-meta-side {
 	display: flex;
 	flex-direction: column;
-	gap: var(--vkbm--spacing--sm);
+	gap: var(--vkbm--spacing--xs);
 	margin-left: auto;
 	justify-content: flex-end;
 }
@@ -175,6 +183,7 @@
 		background-color: #e5e5e5;
 		text-align: center;
 		padding:3px 1em;
+		border-radius: var(--vkbm--radius--sm);
 	}
 	dd {
 		margin: 0;
@@ -186,10 +195,11 @@
 	font-size: 1.2rem;
 	font-weight: 700;
 	text-align: right;
+	text-box: trim-both text;
 }
 
 .vkbm-menu-loop__card-price-tax {
-	font-size: 0.75em;
+	font-size: var(--vkbm--font-size--xs);
 	font-weight: normal;
 	margin-left: 0.35em;
 }
