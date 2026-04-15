@@ -16,8 +16,8 @@ msgstr ""
 
 #. Plugin Name of the plugin
 #: vk-booking-manager.php
-msgid "VK Booking Manager Pro (Beta)"
-msgstr "VK Booking Manager Pro (Beta)"
+msgid "VK Booking Manager Pro"
+msgstr "VK Booking Manager Pro"
 
 #. Plugin URI of the plugin
 #: vk-booking-manager.php
@@ -4094,9 +4094,6 @@ msgstr "メニュー選択と空き枠検索を行う予約UIです。"
 #~ msgstr ""
 #~ "このシステムが動作しているドメインとサイト管理者のメールアドレスのドメイン"
 #~ "は同じですか？"
-
-#~ msgid "VK Booking Manager Pro"
-#~ msgstr "VK Booking Manager Pro"
 
 #~ msgid "Loading..."
 #~ msgstr "読み込み中..."

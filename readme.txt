@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 0.6.1
+Stable tag: 1.0.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,9 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 1.0.0 =
+* 正式リリース
 
 = 0.6.1 =
 * [ 仕様変更 ][ サービスメニュー一覧ブロック ] カード内のフォントサイズ・余白・角丸をCSSカスタムプロパティ（デザイントークン）に統一し、テキスト周りの行間を text-box: trim-both で調整

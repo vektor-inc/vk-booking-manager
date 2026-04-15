@@ -95,7 +95,7 @@ if ( edition === 'pro' ) {
 		const contents = fs.readFileSync( pluginFilePath, 'utf8' );
 		const updated = contents.replace(
 			/^\s*\*\s*Plugin Name:.*$/m,
-			' * Plugin Name: VK Booking Manager Pro (Beta)'
+			' * Plugin Name: VK Booking Manager Pro'
 		);
 		if ( updated !== contents ) {
 			fs.writeFileSync( pluginFilePath, updated );
@@ -110,7 +110,7 @@ if ( edition === 'free' ) {
 		const updated = contents
 			.replace(
 				/^\s*\*\s*Plugin Name:.*$/m,
-				' * Plugin Name: VK Booking Manager (Beta)'
+				' * Plugin Name: VK Booking Manager'
 			)
 			.replace(
 				/^(\s*\*\s*Plugin URI:\s*https:\/\/github\.com\/vektor-inc\/vk-booking-manager)-pro(\/?)/im,
