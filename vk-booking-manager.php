@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -53,6 +53,7 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 	require __DIR__ . '/vendor/autoload.php';
 }
 
+require_once __DIR__ . '/src/common/trait-rate-limit.php';
 require_once __DIR__ . '/src/post-types/class-booking-post-type.php';
 require_once __DIR__ . '/src/bookings/class-booking-admin.php';
 require_once __DIR__ . '/src/bookings/class-booking-draft-controller.php';
@@ -60,6 +61,7 @@ require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
 require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
 require_once __DIR__ . '/src/assets/class-common-styles.php';
 require_once __DIR__ . '/src/term-order/class-term-order-manager.php';
+require_once __DIR__ . '/src/blocks/class-block-category.php';
 require_once __DIR__ . '/src/blocks/class-menu-search-block.php';
 require_once __DIR__ . '/src/blocks/class-menu-loop-block.php';
 require_once __DIR__ . '/src/blocks/class-reservation-block.php';
@@ -105,6 +107,7 @@ use VKBookingManager\Bookings\Booking_Admin;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
+use VKBookingManager\Blocks\Block_Category;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Blocks\Menu_Search_Block;
 use VKBookingManager\Blocks\Reservation_Block;
@@ -210,6 +213,10 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 	$style_guide_page->register();
 	$setup_notices->register();
 	$email_log_page->register();
+
+	// ブロックインサーターに専用カテゴリーを追加（プラグインのブロックを見つけやすくするため）.
+	// Register the block inserter category (so plugin blocks are easy to find).
+	( new Block_Category() )->register();
 	$plugin = new Plugin(
 		$common_styles,
 		$provider_settings_page,

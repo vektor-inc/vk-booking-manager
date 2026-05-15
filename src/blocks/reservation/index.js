@@ -3,8 +3,11 @@ import { useBlockProps } from '@wordpress/block-editor';
 import edit from './edit';
 import save from './save';
 import metadata from './block.json';
+import { vkBookingManagerCategoryIcon } from '../../block-category';
 import './style.scss';
 import './editor.scss';
+
+vkBookingManagerCategoryIcon();
 
 const deprecated = [
 	{

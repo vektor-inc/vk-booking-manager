@@ -3,7 +3,7 @@
 	"name": "vk-booking-manager/menu-search",
 	"title": "Service menu search",
 	"description": "You can search by resource, service tag, etc. in conjunction with the menu loop.",
-	"category": "widgets",
+	"category": "vk-booking-manager",
 	"icon": "search",
 	"textdomain": "vk-booking-manager",
 	"keywords": [

@@ -757,4 +757,242 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$result = $consume_method->invoke( $shortcodes );
 		$this->assertNull( $result );
 	}
+
+	/**
+	 * Test that the registration flow stores the email verification token as a SHA-256 hash and never in plain text.
+	 * 登録フロー経由でメール認証トークンが SHA-256 ハッシュとして保存され、平文では保存されないことを確認する。
+	 */
+	public function test_registration_flow_stores_email_verify_token_as_sha256_hash(): void {
+		// Snapshot all mutable state up-front so the finally block can restore everything,
+		// even if an assertion fails mid-way. / 失敗しても finally で完全復元できるよう状態を先に退避する。
+		$original_registration = get_option( 'users_can_register' );
+		$repository            = new Settings_Repository();
+		$original_settings     = $repository->get_settings();
+		$previous_post         = $_POST;
+		$previous_server       = $_SERVER;
+
+		// Short-circuit wp_mail so send_verification_email() succeeds without an SMTP server.
+		// SMTP サーバなしでも send_verification_email() を成功させるため wp_mail をショートサーキットする。
+		$mail_filter = static function () {
+			return true;
+		};
+
+		try {
+			// Ensure registration is enabled for this test. / テスト用にユーザー登録を有効化。
+			update_option( 'users_can_register', 1 );
+
+			// Ensure email verification is required so the token is generated.
+			// メール認証を必須化し、トークン生成パスを通す。
+			$settings = $original_settings;
+			$settings['registration_email_verification_enabled'] = true;
+			$repository->update_settings( $settings );
+
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			// Simulate a POST registration request with valid data. / 正しい登録 POST を再現する。
+			$user_login                = 'verify_hash_flow_user';
+			$user_email                = 'verify_hash_flow_user@example.com';
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			$_POST                     = [
+				'vkbm_registration_form'  => '1',
+				'vkbm_registration_nonce' => wp_create_nonce( 'vkbm_registration_form' ),
+				'user_login'              => $user_login,
+				'user_email'              => $user_email,
+				'user_pass'               => 'password123',
+				'user_pass_confirm'       => 'password123',
+				'kana_name'               => 'たろう',
+				'phone_number'            => '090-0000-0000',
+			];
+
+			$service = new Settings_Service( $repository, new Settings_Sanitizer() );
+			// Use the testable subclass so the trailing redirect_and_exit() does not terminate the test.
+			// 末尾の redirect_and_exit() でテストプロセスを終了させないよう testable サブクラスを使う。
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			// Run the actual registration handler (handle_form_submission -> process_registration_request).
+			// 実際の登録ハンドラを走らせる。
+			$shortcodes->handle_form_submission();
+
+			// The user must have been created. / ユーザーが実際に作成されていることを確認する。
+			$user = get_user_by( 'email', $user_email );
+			$this->assertInstanceOf( \WP_User::class, $user, 'Registration flow should have created the user.' );
+
+			// A redirect to the login page should have been requested. / ログインページへのリダイレクトが要求されているはず。
+			$this->assertNotNull( $shortcodes->last_redirect_url );
+
+			// The hash meta must be a 64-char lowercase hex SHA-256 digest.
+			// ハッシュメタが 64 文字の小文字 hex で保存されていることを確認する。
+			$stored_hash = get_user_meta( $user->ID, 'vkbm_email_verify_token_hash', true );
+			$this->assertIsString( $stored_hash );
+			$this->assertSame(
+				1,
+				preg_match( '/^[0-9a-f]{64}$/', (string) $stored_hash ),
+				'Stored token meta must be a SHA-256 hex digest.'
+			);
+
+			// The legacy plain-text meta key must not be present after registration.
+			// 登録後、旧仕様の平文メタキーが残っていないことを確認する。
+			$this->assertSame( '', (string) get_user_meta( $user->ID, 'vkbm_email_verify_token', true ) );
+
+			// The email verification flag must be 0 (waiting for verification).
+			// メール認証フラグが 0（未認証）になっていることを確認する。
+			$this->assertSame( '0', (string) get_user_meta( $user->ID, 'vkbm_email_verified', true ) );
+		} finally {
+			// Restore every mutated piece of state regardless of assertion success or failure.
+			// アサート成功・失敗にかかわらず、変更した状態を全て元に戻す。
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			update_option( 'users_can_register', $original_registration );
+			$repository->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * Test that handle_email_verification cleans up the legacy plain-text token meta as well.
+	 * 認証完了時に旧仕様の平文トークンメタも一緒に掃除されることを確認する。
+	 */
+	public function test_handle_email_verification_purges_legacy_plain_token_meta(): void {
+		// Create a user with both the new hash meta and the legacy plain-text meta.
+		// 新ハッシュメタと旧平文メタの両方を持つユーザーを作成する。
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'verify_purge_user',
+				'user_email' => 'verify_purge_user@example.com',
+			]
+		);
+
+		$raw_token = 'purge-token-' . wp_generate_password( 16, false );
+		update_user_meta( $user_id, 'vkbm_email_verified', '0' );
+		update_user_meta( $user_id, 'vkbm_email_verify_token_hash', hash( 'sha256', $raw_token ) );
+		update_user_meta( $user_id, 'vkbm_email_verify_expires', time() + DAY_IN_SECONDS );
+		// Simulate a leftover plain-text token from before the migration.
+		// ハッシュ化前の旧仕様で残った平文トークンを再現する。
+		update_user_meta( $user_id, 'vkbm_email_verify_token', $raw_token );
+
+		// Snapshot globals so we can restore them after the test. / グローバルの状態を退避。
+		$previous_get    = $_GET;
+		$previous_server = $_SERVER;
+
+		// Simulate the email verification request carrying the raw token.
+		// 生トークンを持ったメール認証リクエストを再現する。
+		$_GET                   = [ 'vkbm_verify_email' => $raw_token ];
+		$_SERVER['REQUEST_URI'] = '/?vkbm_verify_email=' . rawurlencode( $raw_token );
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+		$shortcodes->handle_email_verification();
+
+		// Both meta keys must be removed after successful verification.
+		// 認証完了後、新旧両方のメタキーが削除されていること。
+		$this->assertSame( '1', (string) get_user_meta( $user_id, 'vkbm_email_verified', true ) );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'vkbm_email_verify_token_hash', true ) );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'vkbm_email_verify_token', true ) );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'vkbm_email_verify_expires', true ) );
+
+		// Restore globals. / グローバルを復元する。
+		$_GET    = $previous_get;
+		$_SERVER = $previous_server;
+	}
+
+	/**
+	 * Test that handle_email_verification accepts a raw token whose SHA-256 hash matches user meta.
+	 * 生トークンの SHA-256 ハッシュとユーザーメタが一致した場合に認証が成功することを確認する。
+	 */
+	public function test_handle_email_verification_succeeds_with_hashed_token_lookup(): void {
+		// Create a user that is awaiting email verification.
+		// メール認証待ちのユーザーを作成する。
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'verify_lookup_user',
+				'user_email' => 'verify_lookup_user@example.com',
+			]
+		);
+
+		// Seed verification metadata with a hash stored under the new key.
+		// 新キーにハッシュとして認証メタデータを保存する。
+		$raw_token = 'lookup-token-' . wp_generate_password( 16, false );
+		update_user_meta( $user_id, 'vkbm_email_verified', '0' );
+		update_user_meta( $user_id, 'vkbm_email_verify_token_hash', hash( 'sha256', $raw_token ) );
+		update_user_meta( $user_id, 'vkbm_email_verify_expires', time() + DAY_IN_SECONDS );
+
+		// Snapshot globals so we can restore them after the test.
+		// テスト後に復元できるようにグローバルを退避する。
+		$previous_get    = $_GET;
+		$previous_server = $_SERVER;
+
+		// Simulate the email verification request carrying the raw token.
+		// 生トークンを持ったメール認証リクエストを再現する。
+		$_GET                  = [ 'vkbm_verify_email' => $raw_token ];
+		$_SERVER['REQUEST_URI'] = '/?vkbm_verify_email=' . rawurlencode( $raw_token );
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+		// Run the verification handler. / 認証ハンドラを実行する。
+		$shortcodes->handle_email_verification();
+
+		// The user should now be marked as verified, and the hash meta should be removed.
+		// ユーザーが認証済みになり、ハッシュメタは削除される。
+		$this->assertSame( '1', (string) get_user_meta( $user_id, 'vkbm_email_verified', true ) );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'vkbm_email_verify_token_hash', true ) );
+		$this->assertSame( '', (string) get_user_meta( $user_id, 'vkbm_email_verify_expires', true ) );
+
+		// A redirect should have been triggered. / リダイレクトが試行されたことを確認する。
+		$this->assertNotNull( $shortcodes->last_redirect_url );
+
+		// Restore globals. / グローバルを復元する。
+		$_GET    = $previous_get;
+		$_SERVER = $previous_server;
+	}
+
+	/**
+	 * Test that handle_email_verification rejects a token whose hash is not stored anywhere.
+	 * ハッシュが保存されていないトークンでは認証が成立しないことを確認する。
+	 */
+	public function test_handle_email_verification_rejects_unknown_token(): void {
+		// Create a user that is awaiting email verification with a known hash.
+		// 既知のハッシュを持つメール認証待ちユーザーを作成する。
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'verify_reject_user',
+				'user_email' => 'verify_reject_user@example.com',
+			]
+		);
+
+		$stored_raw = 'stored-token-value';
+		update_user_meta( $user_id, 'vkbm_email_verified', '0' );
+		update_user_meta( $user_id, 'vkbm_email_verify_token_hash', hash( 'sha256', $stored_raw ) );
+		update_user_meta( $user_id, 'vkbm_email_verify_expires', time() + DAY_IN_SECONDS );
+
+		// Snapshot globals so we can restore them after the test.
+		// テスト後に復元できるようにグローバルを退避する。
+		$previous_get    = $_GET;
+		$previous_server = $_SERVER;
+
+		// Simulate the email verification request with an unrelated token value.
+		// 関係のないトークンでメール認証リクエストを再現する。
+		$bogus_token            = 'bogus-token-value';
+		$_GET                   = [ 'vkbm_verify_email' => $bogus_token ];
+		$_SERVER['REQUEST_URI'] = '/?vkbm_verify_email=' . rawurlencode( $bogus_token );
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+		// Run the verification handler. / 認証ハンドラを実行する。
+		$shortcodes->handle_email_verification();
+
+		// The user must remain unverified and the hash meta must be retained.
+		// ユーザーは未認証のままで、ハッシュメタも保持されているはず。
+		$this->assertSame( '0', (string) get_user_meta( $user_id, 'vkbm_email_verified', true ) );
+		$this->assertSame( hash( 'sha256', $stored_raw ), get_user_meta( $user_id, 'vkbm_email_verify_token_hash', true ) );
+
+		// No redirect should have been triggered. / リダイレクトは行われない。
+		$this->assertNull( $shortcodes->last_redirect_url );
+
+		// Restore globals. / グローバルを復元する。
+		$_GET    = $previous_get;
+		$_SERVER = $previous_server;
+	}
 }

@@ -3,7 +3,7 @@
   "name": "vk-booking-manager/menu-loop",
   "title": "menu loop",
   "description": "Narrow down and display service menu posts based on conditions.",
-  "category": "widgets",
+  "category": "vk-booking-manager",
   "icon": "index-card",
   "textdomain": "vk-booking-manager",
   "keywords": [

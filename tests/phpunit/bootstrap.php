@@ -29,6 +29,10 @@ require_once $tests_dir . '/includes/functions.php';
  */
 function vkbm_tests_load_plugin() {
 	require dirname( __DIR__, 2 ) . '/vk-booking-manager.php';
+
+	// テスト実行中はレート制限を無効化する（連続呼び出しテスト等の安定化）。
+	// Disable rate limiting during tests for stability across repeated invocations.
+	add_filter( 'vkbm_rate_limit_enabled', '__return_false' );
 }
 tests_add_filter( 'muplugins_loaded', 'vkbm_tests_load_plugin' );
 

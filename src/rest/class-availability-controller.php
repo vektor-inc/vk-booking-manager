@@ -54,6 +54,9 @@ class Availability_Controller {
 	 * Register REST routes.
 	 */
 	public function register_routes(): void {
+		// Publicly readable: the availability calendar must be visible to anonymous
+		// visitors before they log in to make a reservation.
+		// 公開情報のため誰でも参照可能。予約フォーム表示前の未ログインユーザーにも空き状況を返す必要がある。
 		register_rest_route(
 			self::NAMESPACE,
 			'/calendar-meta',

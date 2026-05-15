@@ -142,9 +142,30 @@ class Booking_Confirmation_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'create_booking' ),
-				'permission_callback' => '__return_true',
+				// Booking creation requires an authenticated user.
+				// 予約作成はログインユーザーのみ許可する。
+				'permission_callback' => array( $this, 'check_create_booking_permission' ),
 			)
 		);
+	}
+
+	/**
+	 * Permission callback for POST /bookings.
+	 *
+	 * 予約作成エンドポイントの認可コールバック。ログイン済みのユーザーのみ許可する。
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function check_create_booking_permission() {
+		if ( ! is_user_logged_in() ) {
+			return new WP_Error(
+				'not_logged_in',
+				__( 'Login required.', 'vk-booking-manager' ),
+				array( 'status' => 401 )
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -154,6 +175,10 @@ class Booking_Confirmation_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function create_booking( WP_REST_Request $request ) {
+		// Defense in depth: the permission_callback already enforces login,
+		// but we re-check here so direct callers (e.g. tests) still get a 401.
+		// 多重防御: permission_callback で既にチェック済みだが、
+		// 直接呼び出された場合（テスト等）にも 401 を返すため再チェックする。
 		if ( ! is_user_logged_in() ) {
 			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
 		}

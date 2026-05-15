@@ -1111,6 +1111,19 @@ export const BookingConfirmApp = ( {
 	const showSuccessMessage = success && ! redirectUrl;
 
 	const renderMemoField = () => {
+		// バックエンド (Booking_Draft_Controller::resolve_memo_max_length) と
+		// 揃えた上限値を `window.vkbmReservationConfig.memoMaxLength` から受け取る。
+		// フィルタ vkbm_draft_memo_max_length を反映した値が入っている。
+		// 設定が拾えない場面では maxLength を付けない（バックエンド側で確実に
+		// 切り詰めるため UX 上の影響は許容範囲）。
+		const memoMaxLength =
+			typeof window !== 'undefined' &&
+			window.vkbmReservationConfig &&
+			Number.isInteger( window.vkbmReservationConfig.memoMaxLength ) &&
+			window.vkbmReservationConfig.memoMaxLength > 0
+				? window.vkbmReservationConfig.memoMaxLength
+				: undefined;
+
 		const commonTextarea = (
 			<textarea
 				id="vkbm-confirm-memo"
@@ -1120,6 +1133,7 @@ export const BookingConfirmApp = ( {
 					'Please enter any contact information',
 					'vk-booking-manager'
 				) }
+				maxLength={ memoMaxLength }
 			/>
 		);
 

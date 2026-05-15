@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Capabilities\Capabilities;
 use WP_Post;
 use function admin_url;
@@ -36,6 +37,7 @@ class Reservation_Block {
 	private const METADATA_PATH                 = 'build/blocks/reservation';
 	private const MENU_CARD_STYLE_HANDLE        = 'vkbm-shared-menu-card';
 	private const CURRENT_USER_BOOTSTRAP_HANDLE = 'vkbm-current-user-bootstrap';
+	private const RESERVATION_CONFIG_HANDLE     = 'vkbm-reservation-config';
 
 	/**
 	 * Whether block is registered.
@@ -107,6 +109,7 @@ class Reservation_Block {
 		if ( $post instanceof WP_Post && function_exists( 'has_block' ) && has_block( 'vk-booking-manager/reservation', $post ) ) {
 			wp_enqueue_style( self::MENU_CARD_STYLE_HANDLE );
 			$this->maybe_enqueue_current_user_bootstrap( $post );
+			$this->maybe_enqueue_reservation_config();
 			return;
 		}
 	}
@@ -149,6 +152,40 @@ class Reservation_Block {
 		$inline = 'window.vkbmCurrentUserBootstrap = ' . wp_json_encode( $bootstrap ) . ';';
 		wp_add_inline_script( self::CURRENT_USER_BOOTSTRAP_HANDLE, $inline, 'before' );
 		wp_enqueue_script( self::CURRENT_USER_BOOTSTRAP_HANDLE );
+	}
+
+	/**
+	 * Expose draft-related limits (e.g. memo maxLength) to the reservation front-end.
+	 *
+	 * 予約ブロックのフロント（textarea の maxlength など）に、コントローラー側と
+	 * 同じ解決ロジックで算出した上限値を渡す。これにより
+	 * `vkbm_draft_memo_max_length` フィルタを当てているサイトでも、フロントと
+	 * バックの値が乖離しない。
+	 *
+	 * @return void
+	 */
+	private function maybe_enqueue_reservation_config(): void {
+		// 空のスクリプトハンドルを登録してインラインスクリプトの土台として使う。
+		// Register an empty script handle so we can attach the inline config to it.
+		if ( ! wp_script_is( self::RESERVATION_CONFIG_HANDLE, 'registered' ) ) {
+			wp_register_script(
+				self::RESERVATION_CONFIG_HANDLE,
+				'',
+				array(),
+				defined( 'VKBM_VERSION' ) ? VKBM_VERSION : null,
+				false
+			);
+		}
+
+		$config = array(
+			// memo textarea の maxlength。`vkbm_draft_memo_max_length` フィルタを反映する。
+			// memo textarea maxlength, reflecting the vkbm_draft_memo_max_length filter result.
+			'memoMaxLength' => Booking_Draft_Controller::resolve_memo_max_length(),
+		);
+
+		$inline = 'window.vkbmReservationConfig = ' . wp_json_encode( $config ) . ';';
+		wp_add_inline_script( self::RESERVATION_CONFIG_HANDLE, $inline, 'before' );
+		wp_enqueue_script( self::RESERVATION_CONFIG_HANDLE );
 	}
 
 	/**

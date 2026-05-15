@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_Error;
@@ -28,6 +29,8 @@ use function apply_filters;
  * Front-end login & registration shortcodes.
  */
 class Auth_Shortcodes {
+	use Rate_Limit_Trait;
+
 	private const EMAIL_TOKEN_TTL            = DAY_IN_SECONDS;
 	private const RATE_LIMIT_LOGIN_MAX       = 10;
 	private const RATE_LIMIT_LOGIN_WINDOW    = 600;
@@ -327,10 +330,14 @@ class Auth_Shortcodes {
 			return;
 		}
 
+		// Compare against the SHA-256 hash stored in user meta to avoid keeping the raw token in the database.
+		// 生トークンを DB に残さないため、ユーザーメタに保存された SHA-256 ハッシュと突き合わせる。
+		$token_hash = hash( 'sha256', $token );
+
 		$user = get_users(
 			array(
-				'meta_key'   => 'vkbm_email_verify_token',
-				'meta_value' => $token,
+				'meta_key'   => 'vkbm_email_verify_token_hash',
+				'meta_value' => $token_hash,
 				'number'     => 1,
 				'fields'     => 'all',
 			)
@@ -350,14 +357,16 @@ class Auth_Shortcodes {
 		}
 
 		update_user_meta( $user->ID, 'vkbm_email_verified', '1' );
+		delete_user_meta( $user->ID, 'vkbm_email_verify_token_hash' );
+		// Also purge the legacy plain-text meta in case it was left over before the hash migration.
+		// ハッシュ化前の旧仕様で平文保存された残骸を、ここで併せて削除する。
 		delete_user_meta( $user->ID, 'vkbm_email_verify_token' );
 		delete_user_meta( $user->ID, 'vkbm_email_verify_expires' );
 		$this->set_verification_notice( __( 'Email verification has been completed. Please log in.', 'vk-booking-manager' ) );
 
 		$redirect_url = remove_query_arg( 'vkbm_verify_email', $this->get_current_url() );
 		$redirect_url = add_query_arg( 'vkbm_auth', 'login', $redirect_url );
-		wp_safe_redirect( $redirect_url );
-		exit;
+		$this->redirect_and_exit( $redirect_url );
 	}
 
 	/**
@@ -1282,7 +1291,9 @@ class Auth_Shortcodes {
 
 			$token   = $this->generate_email_token();
 			$expires = time() + self::EMAIL_TOKEN_TTL;
-			update_user_meta( $user_id, 'vkbm_email_verify_token', $token );
+			// Store only the SHA-256 hash of the token so the database leak does not expose usable verification links.
+			// DB から流出しても認証リンクとして使われないよう、SHA-256 ハッシュのみを保存する。
+			update_user_meta( $user_id, 'vkbm_email_verify_token_hash', hash( 'sha256', $token ) );
 			update_user_meta( $user_id, 'vkbm_email_verify_expires', $expires );
 
 			if ( ! $this->send_verification_email( $email, $redirect_to, $token ) ) {
@@ -1306,6 +1317,9 @@ class Auth_Shortcodes {
 			$redirect_to = add_query_arg( 'vkbm_auth', 'login', $redirect_to );
 		} else {
 			update_user_meta( $user_id, 'vkbm_email_verified', '1' );
+			delete_user_meta( $user_id, 'vkbm_email_verify_token_hash' );
+			// Also purge the legacy plain-text meta in case it was left over before the hash migration.
+			// ハッシュ化前の旧仕様で平文保存された残骸を、ここで併せて削除する。
 			delete_user_meta( $user_id, 'vkbm_email_verify_token' );
 			delete_user_meta( $user_id, 'vkbm_email_verify_expires' );
 
@@ -1316,8 +1330,7 @@ class Auth_Shortcodes {
 			$redirect_to = add_query_arg( 'vkbm_auth', 'login', $redirect_to );
 		}
 
-		wp_safe_redirect( $redirect_to );
-		exit;
+		$this->redirect_and_exit( $redirect_to );
 	}
 
 	/**
@@ -2390,102 +2403,6 @@ class Auth_Shortcodes {
 	}
 
 	/**
-	 * Consume a rate limit token for the given action.
-	 *
-	 * @param string $action Action key (login/register).
-	 * @param int    $max    Max attempts per window.
-	 * @param int    $window Window seconds.
-	 * @return bool True if allowed.
-	 */
-	private function consume_rate_limit_token( string $action, int $max, int $window ): bool {
-		$ip = $this->get_client_ip();
-		if ( '' === $ip ) {
-			return true;
-		}
-
-		$hash = substr( sha1( $action . '|' . $ip ), 0, 20 );
-		$key  = 'vkbm_rl_' . $hash;
-		$now  = time();
-
-		$state = get_transient( $key );
-		if ( ! is_array( $state ) ) {
-			$state = array(
-				'count' => 0,
-				'reset' => $now + $window,
-			);
-		}
-
-		$reset = isset( $state['reset'] ) ? (int) $state['reset'] : 0;
-		$count = isset( $state['count'] ) ? (int) $state['count'] : 0;
-
-		if ( $reset <= $now ) {
-			$reset = $now + $window;
-			$count = 0;
-		}
-
-		if ( $count >= $max ) {
-			$ttl = max( 1, $reset - $now );
-			set_transient(
-				$key,
-				array(
-					'count' => $count,
-					'reset' => $reset,
-				),
-				$ttl
-			);
-			return false;
-		}
-
-		++$count;
-		$ttl = max( 1, $reset - $now );
-		set_transient(
-			$key,
-			array(
-				'count' => $count,
-				'reset' => $reset,
-			),
-			$ttl
-		);
-
-		return true;
-	}
-
-	/**
-	 * Get client IP address for basic rate limiting.
-	 *
-	 * @return string
-	 */
-	private function get_client_ip(): string {
-		$remote_addr = '';
-
-		if ( ! empty( $_SERVER['REMOTE_ADDR'] ) ) {
-			$remote_addr = trim( sanitize_text_field( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) );
-		}
-
-		$remote_addr     = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $remote_addr );
-		$trusted_proxies = apply_filters( 'vkbm_trusted_proxy_ips', array() );
-		if ( ! is_array( $trusted_proxies ) ) {
-			$trusted_proxies = array();
-		}
-
-		$forwarded_ip = '';
-		if (
-			'' !== $remote_addr
-			&& ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] )
-			&& in_array( $remote_addr, $trusted_proxies, true )
-		) {
-			// Respect XFF only for trusted proxies. / 信頼できるプロキシ経由のみXFFを採用します。
-			$candidates   = explode( ',', sanitize_text_field( (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
-			$forwarded_ip = trim( (string) ( $candidates[0] ?? '' ) );
-			$forwarded_ip = preg_replace( '/[^0-9a-fA-F:\\.]/', '', (string) $forwarded_ip );
-		}
-
-		$ip = '' !== $forwarded_ip ? $forwarded_ip : $remote_addr;
-
-		return is_string( $ip ) ? $ip : '';
-	}
-
-	/**
 	 * Stores the latest login error in a cookie so it survives reloads.
 	 *
 	 * @param string $message Error message.
@@ -2536,14 +2453,16 @@ class Auth_Shortcodes {
 	 * @return string
 	 */
 	private function format_login_error_message( WP_Error $error, string $username ): string {
-		if ( in_array( 'invalid_username', $error->get_error_codes(), true ) ) {
-			$display = '' !== $username ? $username : __( 'Entered username', 'vk-booking-manager' );
+		$codes = $error->get_error_codes();
 
-			return sprintf(
-				/* translators: %s: user name */
-				__( '%s is a non-existent user.', 'vk-booking-manager' ),
-				$display
-			);
+		// ユーザー列挙対策：認証情報の不一致は全て同じメッセージに統一する。
+		// Mitigate user enumeration: unify all auth-failure messages.
+		if (
+			in_array( 'invalid_username', $codes, true )
+			|| in_array( 'invalid_email', $codes, true )
+			|| in_array( 'incorrect_password', $codes, true )
+		) {
+			return __( 'Username or password is incorrect.', 'vk-booking-manager' );
 		}
 
 		return $error->get_error_message();

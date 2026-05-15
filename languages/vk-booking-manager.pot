@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-04-13T02:26:37+00:00\n"
+"POT-Creation-Date: 2026-05-14T12:48:39+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -127,9 +127,9 @@ msgid "Select logo image"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:257
-#: src/auth/class-auth-shortcodes.php:2072
-#: src/auth/class-auth-shortcodes.php:2091
-#: src/auth/class-auth-shortcodes.php:2112
+#: src/auth/class-auth-shortcodes.php:2075
+#: src/auth/class-auth-shortcodes.php:2094
+#: src/auth/class-auth-shortcodes.php:2115
 msgid "Select"
 msgstr ""
 
@@ -146,8 +146,8 @@ msgstr ""
 #: src/provider-settings/class-settings-repository.php:65
 #: src/resources/resource-labels.php:26
 #: src/resources/resource-labels.php:41
-#: src/rest/class-provider-settings-controller.php:86
-#: src/rest/class-provider-settings-controller.php:87
+#: src/rest/class-provider-settings-controller.php:89
+#: src/rest/class-provider-settings-controller.php:90
 #: src/blocks/reservation/app.js:226
 #: src/blocks/reservation/app.js:227
 #: src/blocks/reservation/app.js:335
@@ -282,7 +282,7 @@ msgid "This will be displayed in the signature of notification emails, etc."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:563
-#: src/blocks/reservation/booking-confirm-app.js:1227
+#: src/blocks/reservation/booking-confirm-app.js:1241
 msgid "Payment method"
 msgstr ""
 
@@ -608,9 +608,9 @@ msgid "times / 30 minutes"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1201
-#: src/auth/class-auth-shortcodes.php:378
-#: src/auth/class-auth-shortcodes.php:380
-#: src/blocks/reservation/booking-confirm-app.js:1607
+#: src/auth/class-auth-shortcodes.php:381
+#: src/auth/class-auth-shortcodes.php:383
+#: src/blocks/reservation/booking-confirm-app.js:1621
 #: src/blocks/reservation/components/reservation-header-nav.js:79
 msgid "Log in"
 msgstr ""
@@ -665,7 +665,7 @@ msgid "Select a logo image from your Media Library (optional)."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1296
-#: src/blocks/reservation/booking-confirm-app.js:1167
+#: src/blocks/reservation/booking-confirm-app.js:1181
 msgid "Cancellation policy"
 msgstr ""
 
@@ -674,8 +674,8 @@ msgid "Enter the cancellation policy to be displayed on the reservation page, no
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1311
-#: src/auth/class-auth-shortcodes.php:629
-#: src/blocks/reservation/booking-confirm-app.js:1199
+#: src/auth/class-auth-shortcodes.php:632
+#: src/blocks/reservation/booking-confirm-app.js:1213
 msgid "System Terms of Use"
 msgstr ""
 
@@ -686,14 +686,14 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:1325
 #: src/admin/class-provider-settings-page.php:1365
 #: src/admin/class-setup-notices.php:246
-#: src/auth/class-auth-shortcodes.php:651
-#: src/auth/class-auth-shortcodes.php:673
-#: src/auth/class-auth-shortcodes.php:689
+#: src/auth/class-auth-shortcodes.php:654
+#: src/auth/class-auth-shortcodes.php:676
+#: src/auth/class-auth-shortcodes.php:692
 msgid "Privacy policy"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1333
-#: src/auth/class-auth-shortcodes.php:2231
+#: src/auth/class-auth-shortcodes.php:2234
 msgid "please select"
 msgstr ""
 
@@ -1115,6 +1115,7 @@ msgid "Delete"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:96
+#: src/blocks/class-block-category.php:45
 msgid "VK Booking Manager"
 msgstr ""
 
@@ -1350,7 +1351,7 @@ msgstr ""
 #: src/admin/class-shift-dashboard-page.php:280
 #: src/admin/class-shift-dashboard-page.php:545
 #: src/admin/class-user-profile-fields.php:99
-#: src/auth/class-auth-shortcodes.php:2047
+#: src/auth/class-auth-shortcodes.php:2050
 #: src/shifts/class-shift-editor.php:146
 #: src/shifts/class-shift-editor.php:154
 #: src/shifts/class-shift-editor.php:375
@@ -1392,7 +1393,7 @@ msgstr ""
 #: src/admin/class-shift-dashboard-page.php:272
 #: src/admin/class-shift-dashboard-page.php:537
 #: src/admin/class-user-profile-fields.php:110
-#: src/auth/class-auth-shortcodes.php:2057
+#: src/auth/class-auth-shortcodes.php:2060
 #: src/shifts/class-shift-editor.php:369
 #: src/shifts/class-shift-editor.php:374
 #: src/blocks/reservation/booking-ui/calendar-grid.js:5
@@ -1448,7 +1449,7 @@ msgid "next month"
 msgstr ""
 
 #: src/admin/class-shift-dashboard-page.php:990
-#: src/bookings/class-booking-confirmation-controller.php:814
+#: src/bookings/class-booking-confirmation-controller.php:839
 #: src/post-types/class-booking-post-type.php:44
 #: src/post-types/class-booking-post-type.php:45
 #: src/post-types/class-booking-post-type.php:47
@@ -1571,8 +1572,8 @@ msgstr ""
 #: src/notifications/class-booking-notification-service.php:863
 #: src/blocks/reservation/app.js:1584
 #: src/blocks/reservation/app.js:1632
-#: src/blocks/reservation/booking-confirm-app.js:1428
-#: src/blocks/reservation/booking-confirm-app.js:1474
+#: src/blocks/reservation/booking-confirm-app.js:1442
+#: src/blocks/reservation/booking-confirm-app.js:1488
 msgid "Cancelled"
 msgstr ""
 
@@ -1606,363 +1607,360 @@ msgid "Reservation system information"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:63
-#: src/auth/class-auth-shortcodes.php:595
-#: src/auth/class-auth-shortcodes.php:836
+#: src/auth/class-auth-shortcodes.php:598
+#: src/auth/class-auth-shortcodes.php:839
 msgid "Furigana"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:69
-#: src/auth/class-auth-shortcodes.php:846
+#: src/auth/class-auth-shortcodes.php:849
 #: src/bookings/class-booking-admin.php:529
 msgid "telephone number"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:75
-#: src/auth/class-auth-shortcodes.php:2026
+#: src/auth/class-auth-shortcodes.php:2029
 msgid "date of birth"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:86
-#: src/auth/class-auth-shortcodes.php:2033
+#: src/auth/class-auth-shortcodes.php:2036
 msgid "Date of birth (year)"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:88
-#: src/auth/class-auth-shortcodes.php:2037
+#: src/auth/class-auth-shortcodes.php:2040
 #: src/shifts/class-shift-editor.php:137
 #: src/shifts/class-shift-editor.php:145
 msgid "year"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:97
-#: src/auth/class-auth-shortcodes.php:2043
+#: src/auth/class-auth-shortcodes.php:2046
 msgid "date of birth (month)"
 msgstr ""
 
 #: src/admin/class-user-profile-fields.php:108
-#: src/auth/class-auth-shortcodes.php:2053
+#: src/auth/class-auth-shortcodes.php:2056
 msgid "date of birth (day)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:340
+#: src/auth/class-auth-shortcodes.php:343
 msgid "Invalid verification link."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:348
+#: src/auth/class-auth-shortcodes.php:351
 msgid "The confirmation link has expired."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:355
+#: src/auth/class-auth-shortcodes.php:358
 msgid "Email verification has been completed. Please log in."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:431
+#: src/auth/class-auth-shortcodes.php:434
 msgid "Username or email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:435
-#: src/auth/class-auth-shortcodes.php:577
+#: src/auth/class-auth-shortcodes.php:438
+#: src/auth/class-auth-shortcodes.php:580
 msgid "password"
-msgstr ""
-
-#: src/auth/class-auth-shortcodes.php:443
-#: src/auth/class-auth-shortcodes.php:873
-#: src/auth/class-auth-shortcodes.php:893
-msgid "Show password"
-msgstr ""
-
-#: src/auth/class-auth-shortcodes.php:444
-#: src/auth/class-auth-shortcodes.php:874
-#: src/auth/class-auth-shortcodes.php:894
-msgid "hide password"
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:446
 #: src/auth/class-auth-shortcodes.php:876
 #: src/auth/class-auth-shortcodes.php:896
+msgid "Show password"
+msgstr ""
+
+#: src/auth/class-auth-shortcodes.php:447
+#: src/auth/class-auth-shortcodes.php:877
+#: src/auth/class-auth-shortcodes.php:897
+msgid "hide password"
+msgstr ""
+
+#: src/auth/class-auth-shortcodes.php:449
+#: src/auth/class-auth-shortcodes.php:879
+#: src/auth/class-auth-shortcodes.php:899
 msgid "show password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:456
+#: src/auth/class-auth-shortcodes.php:459
 msgid "Stay logged in"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:459
+#: src/auth/class-auth-shortcodes.php:462
 msgid "Forgot your password?"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:473
+#: src/auth/class-auth-shortcodes.php:476
 msgid "Click here for new registration"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:498
+#: src/auth/class-auth-shortcodes.php:501
 msgid "Create an account"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:500
+#: src/auth/class-auth-shortcodes.php:503
 msgid "Register"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:556
-#: src/auth/class-auth-shortcodes.php:816
+#: src/auth/class-auth-shortcodes.php:559
+#: src/auth/class-auth-shortcodes.php:819
 msgid "username"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:560
+#: src/auth/class-auth-shortcodes.php:563
 msgid "Only half-width alphanumeric characters・_・@・.・- can be used."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:567
+#: src/auth/class-auth-shortcodes.php:570
 msgid "Email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:584
+#: src/auth/class-auth-shortcodes.php:587
 msgid "Password (confirm)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:605
-#: src/blocks/reservation/booking-confirm-app.js:1692
+#: src/auth/class-auth-shortcodes.php:608
+#: src/blocks/reservation/booking-confirm-app.js:1706
 msgid "Telephone number"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:643
+#: src/auth/class-auth-shortcodes.php:646
 #: src/blocks/reservation/app.js:1479
 msgid "I agree to the terms of use"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:665
+#: src/auth/class-auth-shortcodes.php:668
 msgid "I agree to the privacy policy"
 msgstr ""
 
 #. translators: %s: privacy policy link
-#: src/auth/class-auth-shortcodes.php:694
+#: src/auth/class-auth-shortcodes.php:697
 msgid "I agree with %s"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:713
+#: src/auth/class-auth-shortcodes.php:716
 msgid "Email address (for confirmation)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:718
+#: src/auth/class-auth-shortcodes.php:721
 msgid "When you click the Register button, a confirmation email will be sent, so please check your email. If you have not received the email, please also check your spam folder."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:737
+#: src/auth/class-auth-shortcodes.php:740
 msgid "Log in here"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:756
+#: src/auth/class-auth-shortcodes.php:759
 msgid "Please log in to edit your profile."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:766
+#: src/auth/class-auth-shortcodes.php:769
 #: src/blocks/reservation/components/reservation-header-nav.js:51
 msgid "Edit user information"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:768
+#: src/auth/class-auth-shortcodes.php:771
 msgid "Save"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:824
+#: src/auth/class-auth-shortcodes.php:827
 #: src/bookings/class-booking-admin.php:535
 msgid "email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:865
+#: src/auth/class-auth-shortcodes.php:868
 msgid "New Password"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:882
+#: src/auth/class-auth-shortcodes.php:885
 msgid "Leave empty if you do not want to change it."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:885
+#: src/auth/class-auth-shortcodes.php:888
 msgid "New password (confirm)"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:921
-#: src/bookings/class-booking-confirmation-controller.php:158
+#: src/auth/class-auth-shortcodes.php:924
+#: src/bookings/class-booking-confirmation-controller.php:163
+#: src/bookings/class-booking-confirmation-controller.php:183
 #: src/bookings/class-my-bookings-controller.php:256
-#: src/rest/class-current-user-controller.php:86
+#: src/rest/class-current-user-controller.php:91
+#: src/rest/class-current-user-controller.php:109
 msgid "Login required."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1032
+#: src/auth/class-auth-shortcodes.php:1035
 msgid "User information has been updated."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1049
-#: src/auth/class-auth-shortcodes.php:1135
+#: src/auth/class-auth-shortcodes.php:1052
+#: src/auth/class-auth-shortcodes.php:1138
 msgid "Security check failed. Please reload the page and try again."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1057
-#: src/auth/class-auth-shortcodes.php:1144
+#: src/auth/class-auth-shortcodes.php:1060
+#: src/auth/class-auth-shortcodes.php:1147
 msgid "Too many attempts in a short period of time. Please try again later."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1072
+#: src/auth/class-auth-shortcodes.php:1075
 msgid "Please enter your username (or email address)."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1076
-#: src/auth/class-auth-shortcodes.php:1213
+#: src/auth/class-auth-shortcodes.php:1079
+#: src/auth/class-auth-shortcodes.php:1216
 msgid "Please enter your password."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1108
+#: src/auth/class-auth-shortcodes.php:1111
 msgid "Email verification has not been completed. Please click the link in the registered email to confirm."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1111
+#: src/auth/class-auth-shortcodes.php:1114
 msgid "Email verification has not been completed."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1151
+#: src/auth/class-auth-shortcodes.php:1154
 msgid "An invalid request was detected."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1157
-#: src/auth/class-auth-shortcodes.php:1455
-#: src/rest/class-auth-form-controller.php:96
+#: src/auth/class-auth-shortcodes.php:1160
+#: src/auth/class-auth-shortcodes.php:1458
+#: src/rest/class-auth-form-controller.php:102
 msgid "We are currently not accepting user registration."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1203
+#: src/auth/class-auth-shortcodes.php:1206
 msgid "Please enter your user name in half-width alphanumeric characters (letters, numbers, underscores)."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1206
+#: src/auth/class-auth-shortcodes.php:1209
 msgid "Please enter your username."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1237
-#: src/bookings/class-booking-confirmation-controller.php:332
+#: src/auth/class-auth-shortcodes.php:1240
+#: src/bookings/class-booking-confirmation-controller.php:357
 #: src/blocks/reservation/booking-confirm-app.js:910
 msgid "You must agree to the terms of use."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1251
+#: src/auth/class-auth-shortcodes.php:1254
 msgid "You must agree to the privacy policy."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1255
+#: src/auth/class-auth-shortcodes.php:1258
 msgid "This username is already in use."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1296
+#: src/auth/class-auth-shortcodes.php:1299
 msgid "Failed to send confirmation email. Please try again later."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1303
+#: src/auth/class-auth-shortcodes.php:1306
 msgid "A confirmation email has been sent. Click the link in the email to authenticate and log in."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1313
+#: src/auth/class-auth-shortcodes.php:1316
 msgid "Thank you for registering. Please log in to continue booking."
 msgstr ""
 
 #. translators: %s: user display name
-#: src/auth/class-auth-shortcodes.php:1432
+#: src/auth/class-auth-shortcodes.php:1435
 msgid "You are logged in as %s."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1438
+#: src/auth/class-auth-shortcodes.php:1441
 #: src/blocks/reservation/components/reservation-header-nav.js:33
 #: src/blocks/reservation/components/reservation-header-nav.js:59
 msgid "Log out"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1488
+#: src/auth/class-auth-shortcodes.php:1491
 msgid "Please enter the username using only half-width alphanumeric characters, _, @, ., and -."
 msgstr ""
 
 #. translators: %s: site name
-#: src/auth/class-auth-shortcodes.php:1719
+#: src/auth/class-auth-shortcodes.php:1722
 msgid "[ %s ] Confirm email address"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1722
+#: src/auth/class-auth-shortcodes.php:1725
 msgid "Thank you for registering."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:1723
+#: src/auth/class-auth-shortcodes.php:1726
 msgid "Click the link below to complete email address verification."
 msgstr ""
 
 #. translators: %d: number of hours
-#: src/auth/class-auth-shortcodes.php:1726
+#: src/auth/class-auth-shortcodes.php:1729
 msgid "Link expires in %d hours."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2183
+#: src/auth/class-auth-shortcodes.php:2186
 msgid "Last name"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2202
+#: src/auth/class-auth-shortcodes.php:2205
 msgid "given name"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2228
+#: src/auth/class-auth-shortcodes.php:2231
 msgid "sex"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2232
+#: src/auth/class-auth-shortcodes.php:2235
 msgid "male"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2233
+#: src/auth/class-auth-shortcodes.php:2236
 msgid "woman"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2234
+#: src/auth/class-auth-shortcodes.php:2237
 msgid "others"
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2273
+#: src/auth/class-auth-shortcodes.php:2276
 msgid "Please enter furigana."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2275
+#: src/auth/class-auth-shortcodes.php:2278
 msgid "Please enter your phone number."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2277
+#: src/auth/class-auth-shortcodes.php:2280
 msgid "Please fill in the required fields."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2295
+#: src/auth/class-auth-shortcodes.php:2298
 msgid "Please enter a valid email address."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2302
+#: src/auth/class-auth-shortcodes.php:2305
 msgid "This email address is already in use."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2308
+#: src/auth/class-auth-shortcodes.php:2311
 msgid "This email address is already registered."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2331
+#: src/auth/class-auth-shortcodes.php:2334
 msgid "Please enter the same password twice."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2333
+#: src/auth/class-auth-shortcodes.php:2336
 msgid "New passwords do not match."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2340
+#: src/auth/class-auth-shortcodes.php:2343
 msgid "Please enter a password of 8 characters or more."
 msgstr ""
 
-#: src/auth/class-auth-shortcodes.php:2540
-msgid "Entered username"
-msgstr ""
-
-#. translators: %s: user name
-#: src/auth/class-auth-shortcodes.php:2544
-msgid "%s is a non-existent user."
+#: src/auth/class-auth-shortcodes.php:2455
+msgid "Username or password is incorrect."
 msgstr ""
 
 #: src/availability/class-availability-service.php:140
@@ -1978,7 +1976,7 @@ msgid "Date format is incorrect."
 msgstr ""
 
 #: src/availability/class-availability-service.php:302
-#: src/rest/class-menu-preview-controller.php:113
+#: src/rest/class-menu-preview-controller.php:116
 msgid "The specified menu was not found."
 msgstr ""
 
@@ -2118,7 +2116,7 @@ msgstr ""
 
 #: src/bookings/class-booking-admin.php:430
 #: src/bookings/class-booking-admin.php:736
-#: src/blocks/reservation/booking-confirm-app.js:1532
+#: src/blocks/reservation/booking-confirm-app.js:1546
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:57
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:125
 #: src/blocks/reservation/components/booking-summary-items.js:30
@@ -2140,7 +2138,7 @@ msgstr ""
 
 #: src/bookings/class-booking-admin.php:451
 #: src/blocks/reservation/app.js:927
-#: src/blocks/reservation/booking-confirm-app.js:1544
+#: src/blocks/reservation/booking-confirm-app.js:1558
 msgid "Service basic fee"
 msgstr ""
 
@@ -2150,7 +2148,7 @@ msgstr ""
 
 #: src/bookings/class-booking-admin.php:465
 #: src/blocks/reservation/app.js:950
-#: src/blocks/reservation/booking-confirm-app.js:1563
+#: src/blocks/reservation/booking-confirm-app.js:1577
 #: src/blocks/reservation/components/booking-summary-items.js:48
 msgid "Total basic fee"
 msgstr ""
@@ -2216,7 +2214,7 @@ msgid "memo"
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:596
-#: src/blocks/reservation/booking-confirm-app.js:1712
+#: src/blocks/reservation/booking-confirm-app.js:1726
 msgid "Management memo"
 msgstr ""
 
@@ -2225,8 +2223,8 @@ msgid "Reservation title"
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:735
-#: src/blocks/reservation/booking-confirm-app.js:1421
-#: src/blocks/reservation/booking-confirm-app.js:1512
+#: src/blocks/reservation/booking-confirm-app.js:1435
+#: src/blocks/reservation/booking-confirm-app.js:1526
 msgid "Reservation date and time"
 msgstr ""
 
@@ -2270,79 +2268,85 @@ msgstr ""
 msgid "This %1$s has other reservations for the same time slot."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:165
+#: src/bookings/class-booking-confirmation-controller.php:190
 msgid "Temporary reservation data token not found."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:172
-#: src/bookings/class-booking-draft-controller.php:244
-#: src/bookings/class-booking-draft-controller.php:307
+#: src/bookings/class-booking-confirmation-controller.php:197
+#: src/bookings/class-booking-draft-controller.php:379
+#: src/bookings/class-booking-draft-controller.php:452
 msgid "Temporary reservation data not found."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:178
-#: src/bookings/class-booking-confirmation-controller.php:201
+#: src/bookings/class-booking-confirmation-controller.php:203
+#: src/bookings/class-booking-confirmation-controller.php:226
 msgid "Temporary reservation data contents are incomplete."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:187
-#: src/bookings/class-booking-draft-controller.php:252
-#: src/bookings/class-booking-draft-controller.php:315
+#: src/bookings/class-booking-confirmation-controller.php:212
+#: src/bookings/class-booking-draft-controller.php:387
+#: src/bookings/class-booking-draft-controller.php:460
 msgid "You do not have permission to access this temporary reservation data."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:210
+#: src/bookings/class-booking-confirmation-controller.php:235
 msgid "The selected date cannot be reserved. Please choose another date."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:248
-#: src/bookings/class-booking-confirmation-controller.php:1003
-#: src/bookings/class-booking-confirmation-controller.php:1193
+#: src/bookings/class-booking-confirmation-controller.php:273
+#: src/bookings/class-booking-confirmation-controller.php:1028
+#: src/bookings/class-booking-confirmation-controller.php:1218
 msgid "The selected staff member is no longer available."
 msgstr ""
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-confirmation-controller.php:259
+#: src/bookings/class-booking-confirmation-controller.php:284
 msgid "Could not assign person %s. Please try a different frame."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:324
+#: src/bookings/class-booking-confirmation-controller.php:349
 #: src/blocks/reservation/booking-confirm-app.js:900
 msgid "You must agree to the cancellation policy."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:340
-#: src/bookings/class-booking-confirmation-controller.php:347
+#: src/bookings/class-booking-confirmation-controller.php:365
+#: src/bookings/class-booking-confirmation-controller.php:372
 #: src/blocks/reservation/booking-confirm-app.js:959
 #: src/blocks/reservation/booking-confirm-app.js:1013
 msgid "A reservation for the same date and time already exists. Please change the date and time."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:951
-#: src/bookings/class-booking-confirmation-controller.php:966
-#: src/bookings/class-booking-draft-controller.php:164
+#: src/bookings/class-booking-confirmation-controller.php:976
+#: src/bookings/class-booking-confirmation-controller.php:991
+#: src/bookings/class-booking-draft-controller.php:260
 msgid "Reservation slot information is incorrect."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:993
+#: src/bookings/class-booking-confirmation-controller.php:1018
 msgid "The selected slot is no longer available. Please choose another slot."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:1180
+#: src/bookings/class-booking-confirmation-controller.php:1205
 msgid "The system is currently processing another booking. Please try again in a few seconds."
 msgstr ""
 
-#: src/bookings/class-booking-confirmation-controller.php:1206
+#: src/bookings/class-booking-confirmation-controller.php:1231
 msgid "This time slot is fully booked. Please choose another time."
 msgstr ""
 
-#: src/bookings/class-booking-draft-controller.php:113
-#: src/rest/class-menu-preview-controller.php:98
+#: src/bookings/class-booking-draft-controller.php:162
+#: src/bookings/class-booking-draft-controller.php:367
+#: src/bookings/class-booking-draft-controller.php:440
+msgid "Too many requests. Please try again later."
+msgstr ""
+
+#: src/bookings/class-booking-draft-controller.php:176
+#: src/rest/class-menu-preview-controller.php:101
 msgid "Menu ID is invalid."
 msgstr ""
 
-#: src/bookings/class-booking-draft-controller.php:239
-#: src/bookings/class-booking-draft-controller.php:302
+#: src/bookings/class-booking-draft-controller.php:374
+#: src/bookings/class-booking-draft-controller.php:447
 msgid "Token is invalid."
 msgstr ""
 
@@ -2375,7 +2379,7 @@ msgid "Salon Owner"
 msgstr ""
 
 #: src/class-plugin.php:687
-#: src/rest/class-provider-settings-controller.php:168
+#: src/rest/class-provider-settings-controller.php:171
 msgid "Default Staff"
 msgstr ""
 
@@ -3156,28 +3160,28 @@ msgstr ""
 msgid "Resource tag labels"
 msgstr ""
 
-#: src/rest/class-availability-controller.php:137
-#: src/rest/class-menu-preview-controller.php:68
+#: src/rest/class-availability-controller.php:140
+#: src/rest/class-menu-preview-controller.php:71
 msgid "Service menu post ID"
 msgstr ""
 
-#: src/rest/class-availability-controller.php:143
+#: src/rest/class-availability-controller.php:146
 msgid "Nominated resource ID (optional)"
 msgstr ""
 
-#: src/rest/class-availability-controller.php:149
+#: src/rest/class-availability-controller.php:152
 msgid "Target year (YYYY)"
 msgstr ""
 
-#: src/rest/class-availability-controller.php:156
+#: src/rest/class-availability-controller.php:159
 msgid "Target month (1-12)"
 msgstr ""
 
-#: src/rest/class-availability-controller.php:163
+#: src/rest/class-availability-controller.php:166
 msgid "Time zone name (Site setting if not specified)"
 msgstr ""
 
-#: src/rest/class-availability-controller.php:181
+#: src/rest/class-availability-controller.php:184
 msgid "Target date (YYYY-MM-DD)"
 msgstr ""
 
@@ -3414,7 +3418,7 @@ msgstr ""
 msgid "If the field is left blank, automatic text will be displayed."
 msgstr ""
 
-#: src/blocks/menu-loop/index.js:10
+#: src/blocks/menu-loop/index.js:13
 msgid "Menu Loop Block"
 msgstr ""
 
@@ -3531,12 +3535,12 @@ msgid "Failed to save reservation details. Please try again later."
 msgstr ""
 
 #: src/blocks/reservation/app.js:1439
-#: src/blocks/reservation/booking-confirm-app.js:1289
+#: src/blocks/reservation/booking-confirm-app.js:1303
 msgid "Logo image"
 msgstr ""
 
 #: src/blocks/reservation/app.js:1440
-#: src/blocks/reservation/booking-confirm-app.js:1290
+#: src/blocks/reservation/booking-confirm-app.js:1304
 msgid "Reservation block navigation"
 msgstr ""
 
@@ -3559,26 +3563,26 @@ msgstr ""
 
 #: src/blocks/reservation/app.js:1518
 #: src/blocks/reservation/app.js:1701
-#: src/blocks/reservation/booking-confirm-app.js:1364
+#: src/blocks/reservation/booking-confirm-app.js:1378
 #: src/blocks/reservation/booking-ui/calendar-grid.js:147
 msgid "Loading…"
 msgstr ""
 
 #: src/blocks/reservation/app.js:1537
-#: src/blocks/reservation/booking-confirm-app.js:1382
+#: src/blocks/reservation/booking-confirm-app.js:1396
 msgid "There are no reservations to display."
 msgstr ""
 
 #: src/blocks/reservation/app.js:1628
 #: src/blocks/reservation/app.js:1870
-#: src/blocks/reservation/booking-confirm-app.js:1470
-#: src/blocks/reservation/booking-confirm-app.js:1743
+#: src/blocks/reservation/booking-confirm-app.js:1484
+#: src/blocks/reservation/booking-confirm-app.js:1757
 msgid "Processing…"
 msgstr ""
 
 #: src/blocks/reservation/app.js:1664
-#: src/blocks/reservation/booking-confirm-app.js:1336
-#: src/blocks/reservation/booking-confirm-app.js:1634
+#: src/blocks/reservation/booking-confirm-app.js:1350
+#: src/blocks/reservation/booking-confirm-app.js:1648
 msgid "Loading form…"
 msgstr ""
 
@@ -3623,48 +3627,48 @@ msgstr ""
 msgid "Your tentative reservation has been completed."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1119
+#: src/blocks/reservation/booking-confirm-app.js:1132
 msgid "Please enter any contact information"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1135
+#: src/blocks/reservation/booking-confirm-app.js:1149
 msgid "No entry"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1187
+#: src/blocks/reservation/booking-confirm-app.js:1201
 msgid "I agree to the cancellation policy"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1589
+#: src/blocks/reservation/booking-confirm-app.js:1603
 msgid "You must log in to confirm your reservation."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1624
+#: src/blocks/reservation/booking-confirm-app.js:1638
 #: src/blocks/reservation/components/reservation-header-nav.js:87
 msgid "Sign up"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1663
+#: src/blocks/reservation/booking-confirm-app.js:1677
 msgid "Requests/Notes"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1672
+#: src/blocks/reservation/booking-confirm-app.js:1686
 msgid "Reserved name"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1684
+#: src/blocks/reservation/booking-confirm-app.js:1698
 msgid "Please enter customer name."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1704
+#: src/blocks/reservation/booking-confirm-app.js:1718
 msgid "Please enter your contact phone number."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1723
+#: src/blocks/reservation/booking-confirm-app.js:1737
 msgid "Please enter any internal notes."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1744
+#: src/blocks/reservation/booking-confirm-app.js:1758
 msgid "Reserve with this content"
 msgstr ""
 

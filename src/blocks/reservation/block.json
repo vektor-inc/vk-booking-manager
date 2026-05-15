@@ -3,7 +3,7 @@
 	"name": "vk-booking-manager/reservation",
 	"title": "reserved block",
 	"description": "This is a reservation UI that allows you to select menus and search for available slots.",
-	"category": "widgets",
+	"category": "vk-booking-manager",
 	"icon": "calendar-alt",
 	"textdomain": "vk-booking-manager",
 	"attributes": {},

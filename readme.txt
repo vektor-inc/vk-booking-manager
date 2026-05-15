@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,19 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 1.1.0 =
+* [ セキュリティ修正 ] IP 単位の簡易レート制限（ログイン・ユーザー登録・予約一時データ用 REST API）の内部実装をアトミック化し、高並列リクエスト時にカウンタが取りこぼされて実質的にレート制限が緩くなる問題を抑制。永続オブジェクトキャッシュが有効な環境では wp_cache_incr によるアトミックインクリメント、それ以外の環境では MySQL GET_LOCK で transient の read-modify-write を直列化するハイブリッド構成に変更。ロック競合時は誤検知防止優先で許可フォールバックする運用（vkbm_rate_limit_lock_contention アクションで監視可能）
+* [ セキュリティ修正 ] DB バックアップ流出時に未使用の認証リンクが悪用される可能性があった点を、SHA-256 ハッシュで保存・検証するよう変更
+* [ セキュリティ修正 ] 予約一時データの所有権チェックで、未ログインユーザーの Cookie 値と所有者キーの比較に hash_equals() を使用し、タイミング攻撃に対する耐性を強化
+* [ 不具合修正 ] 日本語翻訳ファイル（vk-booking-manager-ja.po）で、選択した予約枠が確保できなくなった際のエラーメッセージが「日付」と誤訳されており、ユーザーに別の日付を選択するよう促してしまう不具合を修正
+* [ 不具合修正 ] 日本語翻訳ファイル（vk-booking-manager-ja.po）で、予約一時データ用 REST API のレート制限超過時のメッセージ「Too many requests. Please try again later.」が未翻訳で英語のまま表示される不具合を修正
+* [ セキュリティ修正 ] ログイン失敗時のエラーメッセージを「ユーザー名またはパスワードが正しくありません」に統一し、ユーザー名・メールアドレスがそのサイトに存在するかどうかを推測できる User Enumeration の問題に対応
+* [ セキュリティ修正 ] 予約一時データ用 REST API エンドポイント（POST /vkbm/v1/drafts）の入力フィールドに静的な文字数・配列長上限を適用し、巨大なペイロードによる wp_options レコード肥大化を抑制
+* [ セキュリティ修正 ] 予約一時データ用 REST API エンドポイントで、同一利用者（ログインユーザーまたは Cookie ベースの所有者）あたりの予約一時データ保持件数を 10 件に制限し、上限超過時は最古のデータから自動削除する FIFO クォータを導入し、IP 単位のレート制限と併せて大量データ蓄積による負荷増大への耐性を強化
+* [ セキュリティ修正 ] REST API エンドポイントの認可制御を厳格化し、認証必須エンドポイント（予約作成・現在のユーザー情報取得）の `permission_callback` でログイン状態を検証するよう変更
+* [ セキュリティ修正 ] 予約一時データ用 REST API エンドポイントに IP 単位の簡易レート制限を追加し、大量リクエストによる負荷を抑制
+* [ 仕様変更 ] ブロックインサーターに「VK Booking Manager」カテゴリーを追加し、本プラグインのブロックを専用カテゴリーにまとめて表示するよう変更
 
 = 1.0.0 =
 * 正式リリース

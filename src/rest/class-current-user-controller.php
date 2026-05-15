@@ -70,9 +70,30 @@ class Current_User_Controller extends WP_REST_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_current_user_flags' ),
-				'permission_callback' => '__return_true',
+				// This endpoint returns capability flags for the signed-in user, so it must require authentication.
+				// 現在のユーザーの権限フラグを返すエンドポイントのためログイン必須にする。
+				'permission_callback' => array( $this, 'check_permission' ),
 			)
 		);
+	}
+
+	/**
+	 * Permission callback that requires the current request to be authenticated.
+	 *
+	 * 現在のユーザー情報を返すため、ログイン必須の認可コールバック。
+	 *
+	 * @return bool|WP_Error
+	 */
+	public function check_permission() {
+		if ( ! is_user_logged_in() ) {
+			return new WP_Error(
+				'not_logged_in',
+				__( 'Login required.', 'vk-booking-manager' ),
+				array( 'status' => 401 )
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -82,6 +103,8 @@ class Current_User_Controller extends WP_REST_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function get_current_user_flags( WP_REST_Request $request ) {
+		// Defense in depth: permission_callback already enforces login.
+		// 多重防御: permission_callback で既にチェック済みだが念のため再確認する。
 		if ( ! is_user_logged_in() ) {
 			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
 		}

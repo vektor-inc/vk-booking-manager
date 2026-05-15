@@ -71,6 +71,9 @@ class Provider_Settings_Controller {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_settings' ),
+				// Publicly readable: provider settings exposed here (labels, public URLs, currency, etc.)
+				// are intentionally available to anonymous visitors of the reservation form.
+				// 公開情報のため誰でも参照可能。予約フォーム表示に必要なラベル・通貨等のみを返す。
 				'permission_callback' => '__return_true',
 			)
 		);

@@ -54,6 +54,9 @@ class Menu_Preview_Controller {
 	 * Register REST routes.
 	 */
 	public function register_routes(): void {
+		// Publicly readable: rendered service menu markup is intended to be displayed
+		// in the public reservation flow, so anonymous access is required.
+		// 公開情報のため誰でも参照可能。予約フォームのメニュー一覧描画に使われる。
 		register_rest_route(
 			self::NAMESPACE,
 			'/menu-preview/(?P<id>\d+)',

@@ -58,6 +58,12 @@ class Auth_Form_Controller {
 	 * Register REST routes.
 	 */
 	public function register_routes(): void {
+		// Publicly readable: the login / registration form markup must be available
+		// to anonymous visitors. Mode-specific authorization (e.g. profile requires
+		// login, register requires registrations to be open) is handled inside the
+		// callback because it depends on the `type` parameter.
+		// 公開情報のため誰でも参照可能。login/register フォームHTMLは未ログインユーザーにも返す必要がある。
+		// type パラメータ次第で挙動が変わるため、login 必須等のチェックはコールバック内で個別に行う。
 		register_rest_route(
 			self::NAMESPACE,
 			'/auth-form',

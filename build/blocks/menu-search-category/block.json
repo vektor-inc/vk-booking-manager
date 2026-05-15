@@ -5,7 +5,7 @@
   "parent": [
     "vk-booking-manager/menu-search"
   ],
-  "category": "widgets",
+  "category": "vk-booking-manager",
   "icon": "category",
   "textdomain": "vk-booking-manager",
   "usesContext": [
