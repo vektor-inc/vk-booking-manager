@@ -95,6 +95,7 @@
 		],
 		"anchor": true,
 		"customClassName": true,
+		"contentRole": true,
 		"spacing": {
 			"margin": true,
 			"padding": true

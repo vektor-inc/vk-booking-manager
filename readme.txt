@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,9 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 1.1.1 =
+* [ その他 ][ 各種ブロック ] WordPress 7.0 で非同期パターン挿入時にメニューループ・サービスメニュー検索・サービスタグフィールド・キーワード検索フィールド・リソース検索フィールドの各ブロックを編集可能にする
 
 = 1.1.0 =
 * [ セキュリティ修正 ] IP 単位の簡易レート制限（ログイン・ユーザー登録・予約一時データ用 REST API）の内部実装をアトミック化し、高並列リクエスト時にカウンタが取りこぼされて実質的にレート制限が緩くなる問題を抑制。永続オブジェクトキャッシュが有効な環境では wp_cache_incr によるアトミックインクリメント、それ以外の環境では MySQL GET_LOCK で transient の read-modify-write を直列化するハイブリッド構成に変更。ロック競合時は誤検知防止優先で許可フォールバックする運用（vkbm_rate_limit_lock_contention アクションで監視可能）

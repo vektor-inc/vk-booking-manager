@@ -23,7 +23,8 @@
 	},
 	"supports": {
 		"customClassName": false,
-		"html": false
+		"html": false,
+		"contentRole": true
 	},
 	"editorScript": "file:./index.js"
 }
