@@ -710,4 +710,5 @@ return array(
     'VKBookingManager\\Tests\\ProviderSettings\\Settings_Repository_Test' => $baseDir . '/tests/phpunit/provider-settings/test-settings-repository.php',
     'VKBookingManager\\Tests\\ProviderSettings\\Settings_Sanitizer_Test' => $baseDir . '/tests/phpunit/provider-settings/test-settings-sanitizer.php',
     'VKBookingManager\\Tests\\REST\\Auth_Form_Controller_Test' => $baseDir . '/tests/phpunit/rest/test-auth-form-controller.php',
+    'VKBookingManager\\Tests\\Staff\\Staff_Editor_Free_Source_Test' => $baseDir . '/tests/phpunit/staff/test-staff-editor-free-source.php',
 );

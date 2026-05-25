@@ -746,6 +746,7 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
         'VKBookingManager\\Tests\\ProviderSettings\\Settings_Repository_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-repository.php',
         'VKBookingManager\\Tests\\ProviderSettings\\Settings_Sanitizer_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-sanitizer.php',
         'VKBookingManager\\Tests\\REST\\Auth_Form_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/rest/test-auth-form-controller.php',
+        'VKBookingManager\\Tests\\Staff\\Staff_Editor_Free_Source_Test' => __DIR__ . '/../..' . '/tests/phpunit/staff/test-staff-editor-free-source.php',
     );
 
     public static function getInitializer(ClassLoader $loader)

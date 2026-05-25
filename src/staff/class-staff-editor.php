@@ -46,13 +46,6 @@ class Staff_Editor {
 	}
 
 	/**
-	 * Register hooks.
-	 */
-	public function register(): void {
-		// No-op for Free edition. / Free版では登録処理を行わない.
-	}
-
-	/**
 	 * Clear the nomination-enabled cache (no-op for Free edition).
 	 *
 	 * 指名機能キャッシュをクリアする（Free版では no-op）。
@@ -67,5 +60,12 @@ class Staff_Editor {
 	 */
 	public static function clear_nomination_enabled_cache(): void {
 		// No-op for Free edition. / Free版では何もしない.
+	}
+
+	/**
+	 * Register hooks.
+	 */
+	public function register(): void {
+		// No-op for Free edition. / Free版では登録処理を行わない.
 	}
 }
