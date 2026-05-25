@@ -51,4 +51,21 @@ class Staff_Editor {
 	public function register(): void {
 		// No-op for Free edition. / Free版では登録処理を行わない.
 	}
+
+	/**
+	 * Clear the nomination-enabled cache (no-op for Free edition).
+	 *
+	 * 指名機能キャッシュをクリアする（Free版では no-op）。
+	 *
+	 * Defined for API compatibility with the Pro edition. The Free edition
+	 * disables the nomination feature itself, so there is no cache to clear.
+	 *
+	 * Pro版とのAPI互換性のために定義。Free版では指名機能自体が無効のため、
+	 * 実体としてクリアすべきキャッシュは存在しない。
+	 *
+	 * @return void
+	 */
+	public static function clear_nomination_enabled_cache(): void {
+		// No-op for Free edition. / Free版では何もしない.
+	}
 }

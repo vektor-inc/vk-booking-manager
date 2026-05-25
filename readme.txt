@@ -119,6 +119,8 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 
 == Changelog ==
 
+* [ 不具合修正 ] 無料版でスタッフ設定保存時に Fatal Error が発生する不具合を修正
+
 = 1.1.1 =
 * [ その他 ][ 各種ブロック ] WordPress 7.0 で非同期パターン挿入時にメニューループ・サービスメニュー検索・サービスタグフィールド・キーワード検索フィールド・リソース検索フィールドの各ブロックを編集可能にする
 
