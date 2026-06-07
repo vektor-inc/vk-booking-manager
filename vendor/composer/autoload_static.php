@@ -734,6 +734,7 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
         'VKBookingManager\\Tests\\Bookings\\Booking_Confirmation_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Draft_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-draft-controller.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Notification_Service_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
+        'VKBookingManager\\Tests\\Capabilities\\Roles_Manager_Numeric_Cap_Key_Test' => __DIR__ . '/../..' . '/tests/phpunit/capabilities/test-roles-manager-numeric-cap-key.php',
         'VKBookingManager\\Tests\\Common\\Get_Staff_Display_Name_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-get-staff-display-name.php',
         'VKBookingManager\\Tests\\Common\\Helper_Currency_Symbol_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-helper-currency-symbol.php',
         'VKBookingManager\\Tests\\Common\\Helper_Phone_Normalization_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-helper-phone-normalization.php',

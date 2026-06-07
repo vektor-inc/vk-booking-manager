@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { wpCliArgs } from '../utils/helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
 const E2E_DEBUG =
@@ -98,24 +99,27 @@ const maskPostData = ( postData: string | null, contentType: string = '' ) => {
 // 新規ユーザー登録を含む予約フローのテスト（メール認証なし）
 test.describe( 'Booking Flow with New User Registration (No Email Verification)', () => {
 	// 各テスト実行前にWordPressのトランジェントを削除してレート制限を回避
+	// Delete WordPress transients before each test to avoid rate limits
 	test.beforeEach( async ( { page } ) => {
-		const { execSync } = await import( 'child_process' );
-		execSync( 'npx wp-env run cli wp transient delete --all', {
-			stdio: 'ignore',
-		} );
+		// shell パース経由のリスクを避けるため execFileSync ベースの wpCliArgs を使用する
+		// Use execFileSync-based wpCliArgs to avoid shell-parse risks
+		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'ignore' } );
 		console.log( 'Deleted transients' );
 	} );
 
 	// テストデータの存在を確認（グローバルセットアップで作成済み）
 	// Verify test data exists (created by global setup)
 	test.beforeAll( async () => {
-		const { execSync } = await import( 'child_process' );
-
 		// サービスメニューが存在するか確認
-		const serviceMenus = execSync(
-			'npx wp-env run cli wp post list --post_type=vkbm_service_menu --format=count',
-			{ encoding: 'utf-8' }
-		).trim();
+		// Verify service menus exist
+		// execFileSync ベースの wpCliArgs に切り替え、shell パース経路を排除する
+		// Switch to execFileSync-based wpCliArgs to eliminate the shell parse path
+		const serviceMenus = wpCliArgs( [
+			'post',
+			'list',
+			'--post_type=vkbm_service_menu',
+			'--format=count',
+		] );
 
 		if ( serviceMenus === '0' ) {
 			throw new Error(
@@ -125,10 +129,14 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 予約ページが存在するか確認（slug ベースで安定的に検索）
 		// Verify booking page exists (slug-based search for stability)
-		const bookingPageId = execSync(
-			'npx wp-env run cli wp post list --post_type=page --name=booking --field=ID --format=ids',
-			{ encoding: 'utf-8' }
-		).trim();
+		const bookingPageId = wpCliArgs( [
+			'post',
+			'list',
+			'--post_type=page',
+			'--name=booking',
+			'--field=ID',
+			'--format=ids',
+		] );
 
 		if ( ! bookingPageId ) {
 			throw new Error(
@@ -200,11 +208,14 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			.evaluate( ( el ) => el.textContent?.includes( '404' ) || false );
 		if ( is404 ) {
 			console.error( 'ERROR: Booking page returned 404!' );
-			const { execSync } = await import( 'child_process' );
-			const pages = execSync(
-				'npx wp-env run cli wp post list --post_type=page --format=table',
-				{ encoding: 'utf-8' }
-			);
+			// デバッグ用にページ一覧を取得（execFileSync ベース）
+			// Fetch the page list for debugging (execFileSync-based)
+			const pages = wpCliArgs( [
+				'post',
+				'list',
+				'--post_type=page',
+				'--format=table',
+			] );
 			console.log( 'Available pages:', pages );
 		}
 
@@ -212,11 +223,14 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Waiting for service menu button...' );
 
 		// まずサービスメニューが実際に存在するか確認
-		const { execSync } = await import( 'child_process' );
-		const serviceMenuCount = execSync(
-			'npx wp-env run cli wp post list --post_type=vkbm_service_menu --post_status=publish --format=count',
-			{ encoding: 'utf-8' }
-		).trim();
+		// Verify the published service menus actually exist
+		const serviceMenuCount = wpCliArgs( [
+			'post',
+			'list',
+			'--post_type=vkbm_service_menu',
+			'--post_status=publish',
+			'--format=count',
+		] );
 		console.log(
 			`Published service menus in database: ${ serviceMenuCount }`
 		);
@@ -226,10 +240,14 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 				'CRITICAL: No published service menus found in database!'
 			);
 			// すべてのサービスメニューを確認（下書きなども含む）
-			const allMenus = execSync(
-				'npx wp-env run cli wp post list --post_type=vkbm_service_menu --post_status=any --format=table',
-				{ encoding: 'utf-8' }
-			);
+			// Inspect all service menus including drafts for debugging
+			const allMenus = wpCliArgs( [
+				'post',
+				'list',
+				'--post_type=vkbm_service_menu',
+				'--post_status=any',
+				'--format=table',
+			] );
 			console.log( 'All service menus (any status):', allMenus );
 		}
 

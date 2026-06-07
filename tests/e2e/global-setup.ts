@@ -1,5 +1,5 @@
-import { execSync } from 'child_process';
 import { configureProviderSettings } from './utils/setup';
+import { wpCliArgs, wpEvalPhp } from './utils/helpers';
 
 /**
  * Playwright グローバルセットアップ。
@@ -21,9 +21,7 @@ async function globalSetup() {
 	// プラグインを有効化（失敗時は後続処理が全て壊れるため即時停止）
 	// Activate the plugin (fail-fast: subsequent steps depend on the plugin)
 	try {
-		execSync(
-			'npx wp-env run cli wp plugin activate vk-booking-manager-pro'
-		);
+		wpCliArgs( [ 'plugin', 'activate', 'vk-booking-manager-pro' ] );
 		console.log( 'Plugin activated' );
 	} catch ( e: any ) {
 		throw new Error(
@@ -34,10 +32,10 @@ async function globalSetup() {
 	// 日本語のインストールと切り替え
 	// Install and switch to Japanese locale
 	try {
-		execSync( 'npx wp-env run cli wp language core install ja', {
+		wpCliArgs( [ 'language', 'core', 'install', 'ja' ], {
 			stdio: 'ignore',
 		} );
-		execSync( 'npx wp-env run cli wp site switch-language ja' );
+		wpCliArgs( [ 'site', 'switch-language', 'ja' ] );
 		console.log( 'Language set to ja' );
 	} catch ( e: any ) {
 		console.warn( 'Language setup:', e.message );
@@ -46,10 +44,9 @@ async function globalSetup() {
 	// テスト安定化のためテーマを Twenty Twenty-One に切り替え（失敗時は即時停止）
 	// Switch theme to Twenty Twenty-One for stable testing (fail-fast)
 	try {
-		execSync(
-			'npx wp-env run cli wp theme install twentytwentyone --activate',
-			{ stdio: 'ignore' }
-		);
+		wpCliArgs( [ 'theme', 'install', 'twentytwentyone', '--activate' ], {
+			stdio: 'ignore',
+		} );
 		console.log( 'Theme set to twentytwentyone' );
 	} catch ( e: any ) {
 		throw new Error(
@@ -59,9 +56,7 @@ async function globalSetup() {
 
 	// パーマリンクを設定
 	// Set permalink structure
-	execSync(
-		'npx wp-env run cli wp rewrite structure "/%postname%/" --hard'
-	);
+	wpCliArgs( [ 'rewrite', 'structure', '/%postname%/', '--hard' ] );
 	console.log( 'Permalinks set' );
 
 	// 既存テストデータのクリーンアップ（蓄積回避）
@@ -73,19 +68,21 @@ async function globalSetup() {
 			'vkbm_shift',
 		];
 		for ( const postType of cleanupPostTypes ) {
-			const ids = execSync(
-				`npx wp-env run cli wp post list --post_type=${ postType } --post_status=any --format=ids`,
+			const ids = wpCliArgs(
+				[
+					'post',
+					'list',
+					`--post_type=${ postType }`,
+					'--post_status=any',
+					'--format=ids',
+				],
 				{ stdio: 'pipe' }
-			)
-				.toString()
-				.trim();
+			);
 			if ( ids ) {
-				execSync(
-					`npx wp-env run cli wp post delete ${ ids.replace(
-						/\s+/g,
-						' '
-					) } --force`
-				);
+				// IDs are whitespace-separated; pass each as its own argument
+				// IDはスペース区切りで来るので配列に分解して渡す
+				const idList = ids.split( /\s+/ ).filter( Boolean );
+				wpCliArgs( [ 'post', 'delete', ...idList, '--force' ] );
 				console.log( `Cleaned up ${ postType }: ${ ids }` );
 			}
 		}
@@ -96,19 +93,13 @@ async function globalSetup() {
 	// テストユーザーの削除（user_* パターンに一致するユーザー）
 	// Clean up test users matching user_* pattern
 	try {
-		const userIds = execSync(
-			'npx wp-env run cli wp user list --search="user_*" --field=ID',
+		const userIds = wpCliArgs(
+			[ 'user', 'list', '--search=user_*', '--field=ID' ],
 			{ stdio: 'pipe' }
-		)
-			.toString()
-			.trim();
+		);
 		if ( userIds ) {
-			execSync(
-				`npx wp-env run cli wp user delete ${ userIds.replace(
-					/\s+/g,
-					' '
-				) } --yes`
-			);
+			const idList = userIds.split( /\s+/ ).filter( Boolean );
+			wpCliArgs( [ 'user', 'delete', ...idList, '--yes' ] );
 			console.log( `Cleaned up test users: ${ userIds }` );
 		}
 	} catch ( e: any ) {
@@ -119,11 +110,14 @@ async function globalSetup() {
 	// Create staff
 	let staffId = '';
 	try {
-		staffId = execSync(
-			'npx wp-env run cli wp post create --post_type=vkbm_resource --post_title="Staff 1" --post_status=publish --porcelain'
-		)
-			.toString()
-			.trim();
+		staffId = wpCliArgs( [
+			'post',
+			'create',
+			'--post_type=vkbm_resource',
+			'--post_title=Staff 1',
+			'--post_status=publish',
+			'--porcelain',
+		] );
 	} catch ( e: any ) {
 		throw new Error( `Failed to create staff post: ${ e.message }` );
 	}
@@ -164,13 +158,15 @@ async function globalSetup() {
 			echo 'Error: ' . $post_id->get_error_message();
 		}
 	`;
-	const base64ShiftCode =
-		Buffer.from( createShiftCode ).toString( 'base64' );
-	const shiftResult = execSync(
-		`npx wp-env run cli wp eval 'eval(base64_decode("${ base64ShiftCode }"));'`,
-		{ encoding: 'utf-8' }
-	).trim();
-	if ( ! shiftResult || shiftResult.startsWith( 'Error' ) || ! /^\d+$/.test( shiftResult ) || Number( shiftResult ) <= 0 ) {
+	// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
+	// Use wpEvalPhp to consolidate base64 wrap + execFileSync execution
+	const shiftResult = wpEvalPhp( createShiftCode );
+	if (
+		! shiftResult ||
+		shiftResult.startsWith( 'Error' ) ||
+		! /^\d+$/.test( shiftResult ) ||
+		Number( shiftResult ) <= 0
+	) {
 		throw new Error(
 			`Shift creation failed: ${ shiftResult || '(empty output)' }`
 		);
@@ -181,15 +177,16 @@ async function globalSetup() {
 	// Create service menu and assign staff
 	let menuId = '';
 	try {
-		menuId = execSync(
-			'npx wp-env run cli wp post create --post_type=vkbm_service_menu --post_title="Service Menu 1" --post_status=publish --porcelain'
-		)
-			.toString()
-			.trim();
+		menuId = wpCliArgs( [
+			'post',
+			'create',
+			'--post_type=vkbm_service_menu',
+			'--post_title=Service Menu 1',
+			'--post_status=publish',
+			'--porcelain',
+		] );
 	} catch ( e: any ) {
-		throw new Error(
-			`Failed to create service menu: ${ e.message }`
-		);
+		throw new Error( `Failed to create service menu: ${ e.message }` );
 	}
 	if ( ! menuId || ! /^\d+$/.test( menuId ) || Number( menuId ) <= 0 ) {
 		throw new Error(
@@ -198,7 +195,9 @@ async function globalSetup() {
 	}
 	try {
 		const assignStaffCode = `update_post_meta(${ menuId }, '_vkbm_staff_ids', array((int)${ staffId }));`;
-		execSync( `npx wp-env run cli wp eval "${ assignStaffCode }"` );
+		// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
+		// Use wpEvalPhp to consolidate base64 wrap + execFileSync execution
+		wpEvalPhp( assignStaffCode );
 	} catch ( e: any ) {
 		throw new Error(
 			`Failed to assign staff to menu ${ menuId }: ${ e.message }`
@@ -228,13 +227,14 @@ async function globalSetup() {
 			wp_insert_post($post_data);
 		}
 	`;
-	const flatPhpCode = phpCode.replace( /\s+/g, ' ' ).trim();
-	execSync( `npx wp-env run cli wp eval '${ flatPhpCode }'` );
+	// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
+	// Use wpEvalPhp to consolidate base64 wrap + execFileSync execution
+	wpEvalPhp( phpCode );
 	console.log( 'Booking page created' );
 
 	// パーマリンクをフラッシュ
 	// Flush permalinks
-	execSync( 'npx wp-env run cli wp rewrite flush --hard' );
+	wpCliArgs( [ 'rewrite', 'flush', '--hard' ] );
 
 	// プロバイダー設定: メール認証無効化、レート制限無効化、スタッフ機能有効化、利用規約・キャンセルポリシー設定
 	// Provider settings: disable email verification, disable rate limiting, enable staff, set terms/cancellation policy
@@ -250,7 +250,7 @@ async function globalSetup() {
 
 	// ユーザー登録を許可
 	// Allow user registration
-	execSync( 'npx wp-env run cli wp option update users_can_register 1' );
+	wpCliArgs( [ 'option', 'update', 'users_can_register', '1' ] );
 	console.log( 'User registration enabled' );
 
 	console.log( '=== Global Setup: Complete ===' );

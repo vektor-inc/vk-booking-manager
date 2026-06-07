@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { wpCli, loginAsAdmin, getStaffId } from '../utils/helpers';
+import {
+	wpCli,
+	wpCliArgs,
+	wpEvalPhp,
+	loginAsAdmin,
+	getStaffId,
+} from '../utils/helpers';
 import {
 	setResourceTags,
 	clearResourceTags,
@@ -21,8 +27,12 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 
 		// パーマリンク設定（REST API の /wp-json/ パスに必要）
 		// Set permalink structure (required for REST API /wp-json/ path).
+		// execFileSync 化に伴いシェルのシングルクォート展開が効かないため、
+		// パーマリンク構造はクォートなしの引数として直接 wpCliArgs に渡す。
+		// Since execFileSync no longer relies on a shell, pass the permalink
+		// structure as an unquoted argument via wpCliArgs.
 		try {
-			wpCli( "rewrite structure '/%postname%/' --hard" );
+			wpCliArgs( [ 'rewrite', 'structure', '/%postname%/', '--hard' ] );
 		} catch {
 			// 既に設定済みの場合は無視 / Ignore if already set.
 		}
@@ -71,9 +81,7 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 		page,
 	} ) => {
 		await loginAsAdmin( page );
-		await page.goto(
-			`/wp-admin/post.php?post=${ staffId }&action=edit`
-		);
+		await page.goto( `/wp-admin/post.php?post=${ staffId }&action=edit` );
 		// WordPress標準のタグUI（メタボックスタイトルに "Resource Tag" が含まれる）
 		// WordPress default tag UI (metabox title contains "Resource Tag").
 		const metabox = page.locator( '#tagsdiv-vkbm_resource_tag' );
@@ -82,8 +90,10 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 
 	test( '3. タグ付き表示名が正しく生成される（単一タグ）', async () => {
 		setResourceTags( staffId, [ 'male' ] );
-		const displayName = wpCli(
-			`eval "echo vkbm_get_resource_display_name( ${ staffId } );"`
+		// execFileSync 化後は shell の引用符展開が効かないため wpEvalPhp 経由で PHP コードを渡す。
+		// Pass PHP code via wpEvalPhp because shell-quoted `eval "..."` no longer works after the execFileSync migration.
+		const displayName = wpEvalPhp(
+			`echo vkbm_get_resource_display_name( ${ staffId } );`
 		);
 		expect( displayName ).toContain( staffName );
 		expect( displayName ).toContain( '(' );
@@ -92,8 +102,10 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 
 	test( '4. タグ未設定時はスタッフ名のみ返す', async () => {
 		clearResourceTags( staffId );
-		const displayName = wpCli(
-			`eval "echo vkbm_get_resource_display_name( ${ staffId } );"`
+		// execFileSync 化後は shell の引用符展開が効かないため wpEvalPhp 経由で PHP コードを渡す。
+		// Pass PHP code via wpEvalPhp because shell-quoted `eval "..."` no longer works after the execFileSync migration.
+		const displayName = wpEvalPhp(
+			`echo vkbm_get_resource_display_name( ${ staffId } );`
 		);
 		expect( displayName ).toBe( staffName );
 		expect( displayName ).not.toContain( '(' );
@@ -102,8 +114,10 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 	test( '5. 表示設定OFFの場合、タグがあってもスタッフ名のみ返す', async () => {
 		setResourceTags( staffId, [ 'male' ] );
 		setTagDisplayEnabled( false );
-		const displayName = wpCli(
-			`eval "echo vkbm_get_resource_display_name( ${ staffId } );"`
+		// execFileSync 化後は shell の引用符展開が効かないため wpEvalPhp 経由で PHP コードを渡す。
+		// Pass PHP code via wpEvalPhp because shell-quoted `eval "..."` no longer works after the execFileSync migration.
+		const displayName = wpEvalPhp(
+			`echo vkbm_get_resource_display_name( ${ staffId } );`
 		);
 		expect( displayName ).toBe( staffName );
 		expect( displayName ).not.toContain( '(' );
@@ -137,5 +151,4 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 		const data = await response.json();
 		expect( data.resource_tags ).toEqual( [] );
 	} );
-
 } );

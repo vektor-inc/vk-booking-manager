@@ -16,7 +16,12 @@
  * 4. 指名機能が無効な場合: max_capacity の値を変更して保存し、再度読み込むと値が保持されている（回帰確認）
  */
 import { test, expect } from '@playwright/test';
-import { wpCli, setStaffEnabled, getServiceMenuId } from '../utils/helpers';
+import {
+	wpCli,
+	wpEvalPhp,
+	setStaffEnabled,
+	getServiceMenuId,
+} from '../utils/helpers';
 
 /**
  * render_conditions_meta_box の HTML 出力を WP-CLI 経由で取得するヘルパー。
@@ -49,8 +54,13 @@ function getConditionsMetaboxHtml( menuId: string ): string {
 		$html = ob_get_clean();
 		echo $html;
 	`;
-	const base64Code = Buffer.from( phpCode ).toString( 'base64' );
-	return wpCli( `eval 'eval(base64_decode("${ base64Code }"));'` );
+	// execFileSync 化に伴い、shell のシングルクォート展開が効かなくなったため
+	// 旧式の `eval 'eval(base64_decode("..."));'` 形は使えない。
+	// wpEvalPhp が base64 ラップと WP-CLI 引数渡しを 1 ヘルパーに集約しているのでそれを使用する。
+	// After moving to execFileSync, the shell-single-quote form of
+	// `eval 'eval(base64_decode("..."));'` no longer works. wpEvalPhp wraps
+	// the base64 + wpCliArgs call into one helper, which is the correct entry point.
+	return wpEvalPhp( phpCode );
 }
 
 test.describe( 'PR #163: 指名機能有効時のmax_capacityフィールド非表示（WP-CLI検証）', () => {
@@ -78,7 +88,9 @@ test.describe( 'PR #163: 指名機能有効時のmax_capacityフィールド非�
 		// max_capacity 入力フィールドが出力されていないことを確認
 		// Verify max_capacity input field is NOT present in the output
 		expect( html ).not.toContain( 'id="vkbm_service_menu_max_capacity"' );
-		expect( html ).not.toContain( 'name="vkbm_service_menu[max_capacity]"' );
+		expect( html ).not.toContain(
+			'name="vkbm_service_menu[max_capacity]"'
+		);
 
 		// 案内メッセージが出力されていることを確認（英語翻訳キーで検証）
 		// Verify guidance message IS present in the output
@@ -140,8 +152,12 @@ test.describe( 'PR #163: 指名機能有効時のmax_capacityフィールド非�
 
 		// テスト前の元の値を退避（assertion 失敗時にも必ず復元するため）
 		// Save original value before test (to ensure restoration even on assertion failure)
-		const originalMaxCapacity = wpCli(
-			`eval 'echo get_post_meta( ${ menuId }, "_vkbm_max_capacity", true );'`
+		// execFileSync 化に伴い、shell のシングルクォート展開が効かなくなったため、
+		// 旧式の `eval 'echo ...'` 形式ではなく wpEvalPhp 経由で PHP コードを渡す。
+		// After moving to execFileSync, the shell-quoted `eval 'echo ...'`
+		// pattern no longer works; route the PHP code through wpEvalPhp instead.
+		const originalMaxCapacity = wpEvalPhp(
+			`echo get_post_meta( ${ menuId }, "_vkbm_max_capacity", true );`
 		);
 
 		try {
@@ -168,7 +184,9 @@ test.describe( 'PR #163: 指名機能有効時のmax_capacityフィールド非�
 			if ( originalMaxCapacity === '' ) {
 				wpCli( `post meta delete ${ menuId } _vkbm_max_capacity` );
 			} else {
-				wpCli( `post meta update ${ menuId } _vkbm_max_capacity ${ originalMaxCapacity }` );
+				wpCli(
+					`post meta update ${ menuId } _vkbm_max_capacity ${ originalMaxCapacity }`
+				);
 			}
 		}
 	} );

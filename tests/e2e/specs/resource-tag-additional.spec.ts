@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { wpCli, loginAsAdmin, getStaffId, setStaffEnabled } from '../utils/helpers';
+import {
+	wpCli,
+	wpEvalPhp,
+	loginAsAdmin,
+	getStaffId,
+	setStaffEnabled,
+} from '../utils/helpers';
 import {
 	setResourceTags,
 	clearResourceTags,
@@ -49,12 +55,16 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		await loginAsAdmin( page );
 
 		// プロバイダー設定画面のSystemタブへ直接遷移（URLパラメータで tab=system を指定）
-		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
+		await page.goto(
+			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
+		);
 		await page.waitForLoadState( 'networkidle' );
 
 		// ロケール非依存: チェックボックスの ID セレクタでリソースタグ表示設定が存在することを確認
 		// Locale-independent: verify by checkbox ID that the resource tag display setting exists
-		const resourceTagCheckbox = page.locator( '#vkbm-resource-tag-display-enabled' );
+		const resourceTagCheckbox = page.locator(
+			'#vkbm-resource-tag-display-enabled'
+		);
 		await expect( resourceTagCheckbox ).toBeVisible( { timeout: 10000 } );
 
 		// 「Resource tag display」または日本語翻訳「リソースタグ表示」ラベルが表示されていることを確認
@@ -74,18 +84,26 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		await loginAsAdmin( page );
 
 		// Systemタブへ直接遷移
-		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
+		await page.goto(
+			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
+		);
 		await page.waitForLoadState( 'networkidle' );
 
 		// リソースタグ表示設定のチェックボックスが読み込まれていることを確認
 		// Wait for the resource tag checkbox to ensure the section is loaded
-		await expect( page.locator( '#vkbm-resource-tag-display-enabled' ) ).toBeVisible( { timeout: 10000 } );
+		await expect(
+			page.locator( '#vkbm-resource-tag-display-enabled' )
+		).toBeVisible( { timeout: 10000 } );
 
 		// 説明文にプレビュー例が表示されていることを確認
 		// 英語: "Hanako Yamada ( Female, Veteran )" / 日本語: "山田花子 ( 女性, ベテラン )"
 		// CI環境では日本語ロケールで動作するため両方を許容する
-		const exampleCodeEn = page.locator( 'code' ).filter( { hasText: /Hanako Yamada/ } );
-		const exampleCodeJa = page.locator( 'code' ).filter( { hasText: /山田花子/ } );
+		const exampleCodeEn = page
+			.locator( 'code' )
+			.filter( { hasText: /Hanako Yamada/ } );
+		const exampleCodeJa = page
+			.locator( 'code' )
+			.filter( { hasText: /山田花子/ } );
 		const enCount = await exampleCodeEn.count();
 		const jaCount = await exampleCodeJa.count();
 		expect( enCount + jaCount ).toBeGreaterThan( 0 );
@@ -95,7 +113,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		// ベテランタームがなければ作成（既に存在する場合はスキップ）
 		// Create "Veteran" term if it doesn't exist
 		try {
-			wpCli( "term create vkbm_resource_tag Veteran --slug=veteran" );
+			wpCli( 'term create vkbm_resource_tag Veteran --slug=veteran' );
 		} catch {
 			// 既に存在する場合はエラーを無視
 		}
@@ -105,8 +123,10 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		setResourceTags( staffId, [ 'female', 'veteran' ] );
 		setTagDisplayEnabled( true );
 
-		const displayName = wpCli(
-			`eval "echo vkbm_get_resource_display_name( ${ staffId } );"`
+		// execFileSync 化後は shell の引用符展開が効かないため wpEvalPhp 経由で PHP コードを渡す。
+		// Pass PHP code via wpEvalPhp because shell-quoted `eval "..."` no longer works after the execFileSync migration.
+		const displayName = wpEvalPhp(
+			`echo vkbm_get_resource_display_name( ${ staffId } );`
 		);
 
 		// スタッフ名が含まれる
@@ -117,7 +137,9 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		expect( displayName ).toContain( 'Female' );
 		expect( displayName ).toContain( 'Veteran' );
 		// カンマ区切り
-		expect( displayName ).toMatch( /Female.*,.*Veteran|Veteran.*,.*Female/ );
+		expect( displayName ).toMatch(
+			/Female.*,.*Veteran|Veteran.*,.*Female/
+		);
 	} );
 
 	test( '11. REST API で表示設定OFFの場合に resource_tags が空配列になる', async ( {
@@ -146,7 +168,9 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// タクソノミーカラムは taxonomy-vkbm_resource_tag というIDで追加される
 		// The taxonomy column has ID taxonomy-vkbm_resource_tag
-		const tagColumn = page.locator( 'th#taxonomy-vkbm_resource_tag, td.taxonomy-vkbm_resource_tag' );
+		const tagColumn = page.locator(
+			'th#taxonomy-vkbm_resource_tag, td.taxonomy-vkbm_resource_tag'
+		);
 		const tagColumnCount = await tagColumn.count();
 		expect( tagColumnCount ).toBeGreaterThan( 0 );
 	} );

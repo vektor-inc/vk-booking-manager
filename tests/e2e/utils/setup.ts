@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { wpCliArgs, wpEvalPhp } from './helpers';
 
 /**
  * Configure provider settings via WP-CLI.
@@ -15,11 +15,11 @@ export const configureProviderSettings = async ( settings: any ) => {
 	// Try to get current settings
 	// 現在の設定を取得しようとします
 	try {
-		const result = execSync(
-			'npx wp-env run cli wp option get vkbm_provider_settings --format=json',
-			{ encoding: 'utf-8', stdio: 'pipe' }
+		const result = wpCliArgs(
+			[ 'option', 'get', 'vkbm_provider_settings', '--format=json' ],
+			{ stdio: 'pipe' }
 		);
-		const parsed = JSON.parse( result.trim() );
+		const parsed = JSON.parse( result );
 		// Ensure parsed result is a plain object before using it
 		if (
 			typeof parsed === 'object' &&
@@ -43,21 +43,30 @@ export const configureProviderSettings = async ( settings: any ) => {
 	// 設定をマージ
 	const mergedSettings = { ...currentSettings, ...settings };
 
-	// Write back as JSON using base64 to avoid shell escaping issues
-	// シェルのエスケープ問題を回避するため、base64を使用してJSONを書き戻す
+	// JSON 文字列にして wp option update に渡す。
+	// execFileSync を使っているため shell エスケープは不要で、
+	// 任意の JSON 文字列をそのまま引数として安全に渡せる。
+	// Pass JSON string directly to wp option update; execFileSync
+	// removes the need for shell escaping or base64 wrapping.
 	const jsonSettings = JSON.stringify( mergedSettings );
-	const base64Settings = Buffer.from( jsonSettings ).toString( 'base64' );
 
 	const maxRetries = 3;
 	let lastError;
 
 	for ( let i = 0; i < maxRetries; i++ ) {
 		try {
-			// Use base64 encoding to safely pass JSON through shell
-			// base64エンコーディングを使用してシェル経由で安全にJSONを渡します
-			// Add stdio: 'inherit' to see output
-			execSync(
-				`npx wp-env run cli bash -c "echo '${ base64Settings }' | base64 -d | wp option update vkbm_provider_settings --format=json"`,
+			// 引数として JSON 文字列を直接渡す。shell パースを経由しないため
+			// 旧実装の bash -c | base64 -d パイプ構成は不要。
+			// Pass JSON as argument; no shell pipe needed since execFileSync
+			// bypasses shell entirely.
+			wpCliArgs(
+				[
+					'option',
+					'update',
+					'vkbm_provider_settings',
+					jsonSettings,
+					'--format=json',
+				],
 				{ stdio: 'inherit' }
 			);
 			console.log(
@@ -90,17 +99,15 @@ export const createBookingPage = () => {
 	try {
 		// Activate Plugin just in case
 		// 念のためプラグインを有効化
-		execSync(
-			'npx wp-env run cli wp plugin activate vk-booking-manager-pro'
-		);
+		wpCliArgs( [ 'plugin', 'activate', 'vk-booking-manager-pro' ] );
 
 		// Install and switch to Japanese
 		// 日本語のインストールと切り替え
 		try {
-			execSync( 'npx wp-env run cli wp language core install ja', {
+			wpCliArgs( [ 'language', 'core', 'install', 'ja' ], {
 				stdio: 'ignore',
 			} );
-			execSync( 'npx wp-env run cli wp site switch-language ja' );
+			wpCliArgs( [ 'site', 'switch-language', 'ja' ] );
 		} catch ( e: any ) {
 			// Ignore if already installed or fails
 			console.warn( 'Failed to switch language to ja:', e.message );
@@ -109,8 +116,8 @@ export const createBookingPage = () => {
 		// Switch theme to twentytwentyone for stable testing
 		// テスト安定化のためテーマをTwenty Twenty-Oneに切り替え
 		try {
-			execSync(
-				'npx wp-env run cli wp theme install twentytwentyone --activate',
+			wpCliArgs(
+				[ 'theme', 'install', 'twentytwentyone', '--activate' ],
 				{ stdio: 'ignore' }
 			);
 		} catch ( e: any ) {
@@ -119,9 +126,7 @@ export const createBookingPage = () => {
 
 		// Set Permalinks
 		// パーマリンクを設定
-		execSync(
-			'npx wp-env run cli wp rewrite structure "/%postname%/" --hard'
-		);
+		wpCliArgs( [ 'rewrite', 'structure', '/%postname%/', '--hard' ] );
 
 		// Clean up existing test data
 		// 既存のテストデータをクリーンアップ（蓄積回避）
@@ -133,21 +138,22 @@ export const createBookingPage = () => {
 			];
 			for ( const postType of cleanupPostTypes ) {
 				// Get all IDs
-				const ids = execSync(
-					`npx wp-env run cli wp post list --post_type=${ postType } --post_status=any --format=ids`,
+				const ids = wpCliArgs(
+					[
+						'post',
+						'list',
+						`--post_type=${ postType }`,
+						'--post_status=any',
+						'--format=ids',
+					],
 					{ stdio: 'pipe' }
-				)
-					.toString()
-					.trim();
+				);
 				if ( ids ) {
 					// Delete all
-					// IDリストはスペース区切りで渡す
-					execSync(
-						`npx wp-env run cli wp post delete ${ ids.replace(
-							/\s+/g,
-							' '
-						) } --force`
-					);
+					// IDリストはスペース区切りで来るので配列に分解して渡す
+					// Split IDs to pass each as a separate argument
+					const idList = ids.split( /\s+/ ).filter( Boolean );
+					wpCliArgs( [ 'post', 'delete', ...idList, '--force' ] );
 					console.log( `Cleaned up ${ postType }: ${ ids }` );
 				}
 			}
@@ -158,20 +164,15 @@ export const createBookingPage = () => {
 		// Clean up Test Users (user_*)
 		// テストユーザーの削除
 		try {
-			const userIds = execSync(
-				'npx wp-env run cli wp user list --search="user_*" --field=ID',
+			const userIds = wpCliArgs(
+				[ 'user', 'list', '--search=user_*', '--field=ID' ],
 				{ stdio: 'pipe' }
-			)
-				.toString()
-				.trim();
+			);
 			if ( userIds ) {
-				// Ensure IDs are space-separated
-				execSync(
-					`npx wp-env run cli wp user delete ${ userIds.replace(
-						/\s+/g,
-						' '
-					) } --yes`
-				);
+				// IDs are whitespace-separated; pass each as its own argument
+				// IDはスペース区切りで来るので配列に分解して渡す
+				const idList = userIds.split( /\s+/ ).filter( Boolean );
+				wpCliArgs( [ 'user', 'delete', ...idList, '--yes' ] );
 				console.log( `Cleaned up test users: ${ userIds }` );
 			}
 		} catch ( e: any ) {
@@ -180,11 +181,27 @@ export const createBookingPage = () => {
 
 		// Create Staff
 		// スタッフを作成
-		const staffId = execSync(
-			'npx wp-env run cli wp post create --post_type=vkbm_resource --post_title="Staff 1" --post_status=publish --porcelain'
-		)
-			.toString()
-			.trim();
+		// post create の戻り値を未検証のまま PHP に埋めると、空文字や警告混じりで
+		// PHP 構文エラーになり原因が見えにくくなるため、数値 ID であることを検証する。
+		// Validate the staff ID is a positive integer before interpolating into PHP,
+		// otherwise an empty or warning-prefixed output causes opaque PHP parse errors.
+		const staffId = wpCliArgs( [
+			'post',
+			'create',
+			'--post_type=vkbm_resource',
+			'--post_title=Staff 1',
+			'--post_status=publish',
+			'--porcelain',
+		] );
+		if (
+			! staffId ||
+			! /^\d+$/.test( staffId ) ||
+			Number( staffId ) <= 0
+		) {
+			throw new Error(
+				`Staff post creation returned invalid ID: "${ staffId }"`
+			);
+		}
 		console.log( `Created Staff ID: ${ staffId }` );
 
 		// Create Shift for the current month
@@ -194,7 +211,7 @@ export const createBookingPage = () => {
             $year = (int) current_time('Y');
             $month = (int) current_time('n');
             $days_in_month = (int) date('t', mktime(0, 0, 0, $month, 1, $year));
-            
+
             $days = [];
             for ($d = 1; $d <= $days_in_month; $d++) {
                 $days[$d] = [
@@ -204,15 +221,15 @@ export const createBookingPage = () => {
                     ]
                 ];
             }
-            
+
             $post_data = [
                 'post_type'   => 'vkbm_shift',
                 'post_status' => 'publish',
                 'post_title'  => sprintf('%d year %02d month Staff 1', $year, $month),
             ];
-            
+
             $post_id = wp_insert_post($post_data);
-            
+
             if (!is_wp_error($post_id)) {
                 update_post_meta($post_id, '_vkbm_shift_resource_id', $resource_id);
                 update_post_meta($post_id, '_vkbm_shift_year', $year);
@@ -224,27 +241,48 @@ export const createBookingPage = () => {
             }
         `;
 
-		// Use Base64 to avoid shell escaping issues
-		const base64ShiftCode =
-			Buffer.from( createShiftCode ).toString( 'base64' );
-		execSync(
-			`npx wp-env run cli wp eval 'eval(base64_decode("${ base64ShiftCode }"));'`
-		);
-		console.log( 'Created Shift for current month' );
+		// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
+		// Use wpEvalPhp to consolidate base64 wrap + execFileSync execution.
+		// createShiftCode は失敗時に "Error: ..." を echo する実装なので、
+		// 戻り値を見て失敗時はテスト全体を fail-fast させる。
+		// createShiftCode echoes "Error: ..." on failure; surface that via the
+		// return value so the test fails fast instead of silently continuing.
+		const shiftResult = wpEvalPhp( createShiftCode );
+		if (
+			! shiftResult ||
+			shiftResult.startsWith( 'Error' ) ||
+			! /^\d+$/.test( shiftResult ) ||
+			Number( shiftResult ) <= 0
+		) {
+			throw new Error(
+				`Shift creation failed: ${ shiftResult || '(empty output)' }`
+			);
+		}
+		console.log( `Created Shift for current month (ID: ${ shiftResult })` );
 
 		// Create Service Menu
 		// サービスメニューを作成
-		const menuId = execSync(
-			'npx wp-env run cli wp post create --post_type=vkbm_service_menu --post_title="Service Menu 1" --post_status=publish --porcelain'
-		)
-			.toString()
-			.trim();
+		// 同様に menuId も PHP 埋め込み前に数値検証する。
+		// Validate menuId before interpolating into PHP, same rationale as staffId.
+		const menuId = wpCliArgs( [
+			'post',
+			'create',
+			'--post_type=vkbm_service_menu',
+			'--post_title=Service Menu 1',
+			'--post_status=publish',
+			'--porcelain',
+		] );
+		if ( ! menuId || ! /^\d+$/.test( menuId ) || Number( menuId ) <= 0 ) {
+			throw new Error(
+				`Service menu creation returned invalid ID: "${ menuId }"`
+			);
+		}
 
 		// Assign Staff to Menu (using wp eval)
 		// スタッフをメニューに割り当て (wp evalを使用)
 		// Ensure IDs are treated as integers in PHP array
 		const assignStaffCode = `update_post_meta(${ menuId }, '_vkbm_staff_ids', array((int)${ staffId }));`;
-		execSync( `npx wp-env run cli wp eval "${ assignStaffCode }"` );
+		wpEvalPhp( assignStaffCode );
 
 		// Create or Update Booking Page
 		// 予約ページを作成または更新
@@ -252,12 +290,10 @@ export const createBookingPage = () => {
 		// 存在確認
 		let existingId = '';
 		try {
-			existingId = execSync(
-				'npx wp-env run cli wp post list --name=booking --field=ID',
+			existingId = wpCliArgs(
+				[ 'post', 'list', '--name=booking', '--field=ID' ],
 				{ stdio: 'pipe' }
-			)
-				.toString()
-				.trim();
+			);
 		} catch ( e ) {
 			// ignore
 		}
@@ -267,9 +303,10 @@ export const createBookingPage = () => {
 			'<!-- wp:vk-booking-manager/reservation --><div class="wp-block-vk-booking-manager-reservation vkbm-reservation-block"></div><!-- /wp:vk-booking-manager/reservation -->';
 		const base64Content = Buffer.from( rawContent ).toString( 'base64' );
 
-		// Create or Update Booking Page logic using wp eval for safe content handling
-		// Use single quotes for the php code wrapper, and double quotes inside.
-		// Base64 string is safe to embed.
+		// Create or Update Booking Page logic using wp eval for safe content handling.
+		// 予約ページの作成・更新ロジックを wp eval で安全に行う。
+		// Base64 でラップしておくことで PHP コード内の引用符や改行を気にしなくて済む。
+		// Base64 wrapping avoids any concern about quotes or newlines in the PHP code.
 		const phpCode = `
             $post = get_page_by_path("booking");
             $content = base64_decode("${ base64Content }");
@@ -280,7 +317,7 @@ export const createBookingPage = () => {
                 "post_content" => $content,
                 "post_status"  => "publish",
             );
-            
+
             if ($post) {
                 $post_data["ID"] = $post->ID;
                 wp_update_post($post_data);
@@ -289,17 +326,13 @@ export const createBookingPage = () => {
             }
         `;
 
-		// Remove newlines to avoid shell issues, though wp-env might handle it.
-		// But safer to keep it one line or carefully quoted.
-		// Actually, with single quotes around the whole arg, newlines might be risky depending on the shell.
-		// Let's flatten it.
-		const flatPhpCode = phpCode.replace( /\s+/g, ' ' ).trim();
-
-		execSync( `npx wp-env run cli wp eval '${ flatPhpCode }'` );
+		// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
+		// Use wpEvalPhp to consolidate base64 wrap + execFileSync execution
+		wpEvalPhp( phpCode );
 
 		// Flush permalinks to ensure the booking page is accessible
 		// パーマリンクをフラッシュして予約ページがアクセス可能であることを保証
-		execSync( 'npx wp-env run cli wp rewrite flush --hard' );
+		wpCliArgs( [ 'rewrite', 'flush', '--hard' ] );
 		console.log( 'Flushed permalinks after creating booking page' );
 	} catch ( error: any ) {
 		console.error( 'Failed to setup booking data:', error.message );
@@ -327,7 +360,7 @@ export const disableEmailVerification = async () => {
 	} );
 	// Update WP setting to allow user registration
 	// ユーザー登録を許可する（これがないと新規登録ボタンを押してもエラーになる）
-	execSync( 'npx wp-env run cli wp option update users_can_register 1' );
+	wpCliArgs( [ 'option', 'update', 'users_can_register', '1' ] );
 	console.log( 'Enabled users_can_register' );
 
 	// Also ensure the booking page exists

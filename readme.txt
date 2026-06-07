@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,9 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 1.1.3 =
+* [ 不具合修正 ] 他プラグイン等が administrator ロールに数値キーの権限を混入させた環境で、プラグイン有効化時に Fatal Error（strpos の TypeError）が発生する不具合を修正
 
 = 1.1.2 =
 * [ 不具合修正 ] 無料版でスタッフ設定保存時に Fatal Error が発生する不具合を修正（無料版ビルドソース側の対応）

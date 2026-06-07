@@ -131,6 +131,9 @@ class Roles_Manager {
 		}
 
 		foreach ( $site_owner_role->capabilities as $cap => $enabled ) {
+			// 数値文字列キーの capability は PHP の仕様で int にキャストされるため、string へ明示的に変換してから判定する。
+			// Numeric string capability keys are auto-cast to int by PHP, so cast to string before checking.
+			$cap = (string) $cap;
 			if ( strpos( $cap, 'post_type_manage' ) !== false ) {
 				$site_owner_role->remove_cap( $cap );
 			}
@@ -185,6 +188,9 @@ class Roles_Manager {
 		}
 
 		foreach ( $owner_role->capabilities as $cap => $enabled ) {
+			// 数値文字列キーの capability は PHP の仕様で int にキャストされるため、string へ明示的に変換してから判定する。
+			// Numeric string capability keys are auto-cast to int by PHP, so cast to string before checking.
+			$cap = (string) $cap;
 			if ( strpos( $cap, 'post_type_manage' ) !== false ) {
 				$owner_role->remove_cap( $cap );
 			}

@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { mkdirSync } from 'fs';
-import { wpCli, loginAsAdmin, setStaffEnabled } from '../utils/helpers';
+import {
+	wpCli,
+	wpEvalPhp,
+	loginAsAdmin,
+	setStaffEnabled,
+} from '../utils/helpers';
 
 test.describe( '指名機能の使用 設定トグルテスト（PR #141）', () => {
 	test.beforeAll( () => {
@@ -59,9 +64,10 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		// 設定を保存（フォームのsubmitボタンをクリック）
 		const submitButton = page.locator( 'input[type="submit"]#submit' );
 		// submitボタンが見つからない場合は別のセレクタを試す
-		const submitBtn = ( await submitButton.count() ) > 0
-			? submitButton
-			: page.locator( '.submit input[type="submit"]' ).first();
+		const submitBtn =
+			( await submitButton.count() ) > 0
+				? submitButton
+				: page.locator( '.submit input[type="submit"]' ).first();
 		await submitBtn.click();
 		await page.waitForLoadState( 'domcontentloaded' );
 
@@ -104,14 +110,10 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await expect( resourceLabelMenu ).toBeVisible();
 
 		// 指名関連の設定は非表示（is_nomination_enabled() === false）
-		const noNominationLabel = page.locator(
-			'#vkbm-no-nomination-label'
-		);
+		const noNominationLabel = page.locator( '#vkbm-no-nomination-label' );
 		await expect( noNominationLabel ).not.toBeVisible();
 
-		const nominationFeeLabel = page.locator(
-			'#vkbm-nomination-fee-label'
-		);
+		const nominationFeeLabel = page.locator( '#vkbm-nomination-fee-label' );
 		await expect( nominationFeeLabel ).not.toBeVisible();
 	} );
 
@@ -141,7 +143,6 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		const reloadedSelect = page.locator( '#vkbm-staff-enabled' );
 		const savedValue = await reloadedSelect.inputValue();
 		expect( savedValue ).toBe( '1' );
-
 	} );
 
 	test( '5. 指名機能無効時にサービスメニュー編集画面でスタッフ連携は表示、指名料無効チェックボックスは非表示', async ( {
@@ -153,10 +154,16 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await loginAsAdmin( page );
 
 		// サービスメニュー一覧から最初のメニューの編集画面を開く
+		// 取得失敗時は page.goto で原因不明の失敗になるため、ここで明示的に検証する。
+		// Validate the ID here so a subsequent page.goto failure has a clear cause.
 		const menuId = wpCli(
 			'post list --post_type=vkbm_service_menu --post_status=publish --field=ID --format=csv'
-		)
-			.split( '\n' )[ 0 ];
+		).split( '\n' )[ 0 ];
+		if ( ! menuId ) {
+			throw new Error(
+				'サービスメニューIDの取得に失敗しました。テストデータを確認してください。'
+			);
+		}
 
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 		await page.waitForLoadState( 'domcontentloaded' );
@@ -187,10 +194,16 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await loginAsAdmin( page );
 
 		// サービスメニュー一覧から最初のメニューの編集画面を開く
+		// 取得失敗時は page.goto で原因不明の失敗になるため、ここで明示的に検証する。
+		// Validate the ID here so a subsequent page.goto failure has a clear cause.
 		const menuId = wpCli(
 			'post list --post_type=vkbm_service_menu --post_status=publish --field=ID --format=csv'
-		)
-			.split( '\n' )[ 0 ];
+		).split( '\n' )[ 0 ];
+		if ( ! menuId ) {
+			throw new Error(
+				'サービスメニューIDの取得に失敗しました。テストデータを確認してください。'
+			);
+		}
 
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 		await page.waitForLoadState( 'domcontentloaded' );
@@ -225,9 +238,9 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		const cardCount = await menuCards.count();
 		if ( cardCount > 0 ) {
 			// 担当可能スタッフのメタ項目が非表示であること
-			const staffMetaItems = menuCards.first().locator(
-				'.vkbm-menu-loop__card-meta-item'
-			);
+			const staffMetaItems = menuCards
+				.first()
+				.locator( '.vkbm-menu-loop__card-meta-item' );
 			const metaCount = await staffMetaItems.count();
 			for ( let i = 0; i < metaCount; i++ ) {
 				const dtText = await staffMetaItems
@@ -258,9 +271,9 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		const cardCount = await menuCards.count();
 		if ( cardCount > 0 ) {
 			// 担当可能スタッフの表示があるかチェック（スタッフが設定されているメニューの場合）
-			const staffMetaItems = menuCards.first().locator(
-				'.vkbm-menu-loop__card-meta-item'
-			);
+			const staffMetaItems = menuCards
+				.first()
+				.locator( '.vkbm-menu-loop__card-meta-item' );
 			const metaCount = await staffMetaItems.count();
 			// メタ項目が1つ以上あればOK（所要時間やスタッフ名が表示される）
 			expect( metaCount ).toBeGreaterThan( 0 );
@@ -304,11 +317,16 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		setStaffEnabled( false );
 
 		// WP-CLI で設定値を確認
-		const disabledResult = wpCli(
-			`eval "
-				\\\$s = get_option( 'vkbm_provider_settings', array() );
-				echo isset( \\\$s['staff_enabled'] ) ? var_export( \\\$s['staff_enabled'], true ) : 'not set';
-			"`
+		// execFileSync 化後は shell 経由の `eval "..."` が使えないため wpEvalPhp 経由で PHP を渡す。
+		// base64 化されるので $ のエスケープも不要になる。
+		// Pass PHP code via wpEvalPhp since shell-quoted `eval "..."` no longer works
+		// after the execFileSync migration. The `$` escape is unnecessary because the
+		// code is base64-encoded before being handed to WP-CLI.
+		const disabledResult = wpEvalPhp(
+			`
+				$s = get_option( 'vkbm_provider_settings', array() );
+				echo isset( $s['staff_enabled'] ) ? var_export( $s['staff_enabled'], true ) : 'not set';
+			`
 		);
 		// 0 または false または '' のいずれかであること
 		expect( [ '0', 'false', "''", '' ] ).toContain( disabledResult );
@@ -316,12 +334,13 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		// 指名機能を有効に設定
 		setStaffEnabled( true );
 
-		// WP-CLI で設定値を確認
-		const enabledResult = wpCli(
-			`eval "
-				\\\$s = get_option( 'vkbm_provider_settings', array() );
-				echo isset( \\\$s['staff_enabled'] ) ? var_export( \\\$s['staff_enabled'], true ) : 'not set';
-			"`
+		// WP-CLI で設定値を確認（同様に wpEvalPhp 経由に変更）
+		// Verify via wpEvalPhp (same conversion as the disabled case above).
+		const enabledResult = wpEvalPhp(
+			`
+				$s = get_option( 'vkbm_provider_settings', array() );
+				echo isset( $s['staff_enabled'] ) ? var_export( $s['staff_enabled'], true ) : 'not set';
+			`
 		);
 		// 1 または true のいずれかであること
 		expect( [ '1', 'true' ] ).toContain( enabledResult );

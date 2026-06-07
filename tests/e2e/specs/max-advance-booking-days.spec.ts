@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { execSync } from 'child_process';
 import { configureProviderSettings } from '../utils/setup';
 import {
 	loginAsAdmin,
@@ -8,6 +7,7 @@ import {
 	getTokyoDateParts,
 	formatDateTokyo,
 	createShiftForMonth,
+	wpCliArgs,
 } from '../utils/helpers';
 
 // テスト前に将来月のシフトを作成（グローバルセットアップで今月分は作成済み）
@@ -41,8 +41,16 @@ test.beforeEach( async () => {
 	} );
 	const menuId = getServiceMenuId();
 	try {
-		execSync(
-			`npx wp-env run cli wp post meta delete ${ menuId } _vkbm_max_advance_booking_days`,
+		// wpCliArgs（execFileSync ベース）でメタを削除
+		// Delete the post meta via wpCliArgs (execFileSync-backed)
+		wpCliArgs(
+			[
+				'post',
+				'meta',
+				'delete',
+				menuId,
+				'_vkbm_max_advance_booking_days',
+			],
 			{ stdio: 'ignore' }
 		);
 	} catch ( e ) {
@@ -56,8 +64,16 @@ test.afterEach( async () => {
 	} );
 	const menuId = getServiceMenuId();
 	try {
-		execSync(
-			`npx wp-env run cli wp post meta delete ${ menuId } _vkbm_max_advance_booking_days`,
+		// wpCliArgs（execFileSync ベース）でメタを削除
+		// Delete the post meta via wpCliArgs (execFileSync-backed)
+		wpCliArgs(
+			[
+				'post',
+				'meta',
+				'delete',
+				menuId,
+				'_vkbm_max_advance_booking_days',
+			],
 			{ stdio: 'ignore' }
 		);
 	} catch ( e ) {
@@ -103,15 +119,25 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		expect( menuId ).toBeTruthy();
 
 		// メタを 7 に設定
-		execSync(
-			`npx wp-env run cli wp post meta update ${ menuId } _vkbm_max_advance_booking_days 7`
-		);
+		// Set the meta value to 7
+		wpCliArgs( [
+			'post',
+			'meta',
+			'update',
+			menuId,
+			'_vkbm_max_advance_booking_days',
+			'7',
+		] );
 
-		// 設定した値が取得できることを確認
-		const savedValue = execSync(
-			`npx wp-env run cli wp post meta get ${ menuId } _vkbm_max_advance_booking_days`,
-			{ encoding: 'utf-8' }
-		).trim();
+		// 設定した値が取得できることを確認（wpCliArgs は trim 済み文字列を返す）
+		// Verify the stored value (wpCliArgs returns a trimmed string)
+		const savedValue = wpCliArgs( [
+			'post',
+			'meta',
+			'get',
+			menuId,
+			'_vkbm_max_advance_booking_days',
+		] );
 		expect( savedValue ).toBe( '7' );
 	} );
 
@@ -180,10 +206,16 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		} );
 
 		// サービスメニューの個別設定: 3日
+		// Per-menu setting: 3 days
 		const menuId = getServiceMenuId();
-		execSync(
-			`npx wp-env run cli wp post meta update ${ menuId } _vkbm_max_advance_booking_days 3`
-		);
+		wpCliArgs( [
+			'post',
+			'meta',
+			'update',
+			menuId,
+			'_vkbm_max_advance_booking_days',
+			'3',
+		] );
 
 		const now = new Date();
 
