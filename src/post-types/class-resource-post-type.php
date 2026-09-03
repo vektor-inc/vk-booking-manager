@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Registers the Resource custom post type.
  *
@@ -17,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Capabilities\Capabilities;
 use function vkbm_get_resource_label_plural;
 use function vkbm_get_resource_label_singular;
+use function vkbm_get_resource_menu_icon;
 
 /**
  * Registers the Resource (スタッフ) custom post type.
@@ -87,7 +87,7 @@ class Resource_Post_Type {
 			'hierarchical'      => false,
 			'rewrite'           => false,
 			'menu_position'     => 26,
-			'menu_icon'         => 'dashicons-groups',
+			'menu_icon'         => vkbm_get_resource_menu_icon(),
 			'capability_type'   => 'post',
 			'capabilities'      => $this->get_capabilities(),
 			'map_meta_cap'      => false,

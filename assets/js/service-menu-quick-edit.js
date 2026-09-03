@@ -53,13 +53,30 @@
 					? data.reservationDeadlineHours
 					: ''
 			);
-		$editRow
-			.find( 'select.vkbm-qe-reservation-day-type' )
-			.val(
-				data.reservationDayType !== undefined
-					? data.reservationDayType
-					: ''
-			);
+		const $reservationDayType = $editRow.find(
+			'select.vkbm-qe-reservation-day-type'
+		);
+		const reservationDayType =
+			data.reservationDayType !== undefined ? data.reservationDayType : '';
+		// 曜日指定/日付指定は既定で無効化してある（詳細設定が必要でクイック編集では設定できないため）。
+		// WordPress のクイック編集は行 DOM を投稿間で使い回すため、前回 custom 投稿で有効化した
+		// option が残らないよう、毎回まず両 option を無効化へリセットする。そのうえで現在値が
+		// custom のメニューでのみ該当の選択肢を有効化して既存値を選択・保持できるようにする。
+		// 詳細未設定のメニューでは無効のままにし、新規選択→保存時の無通知リセットを防ぐ。
+		$reservationDayType
+			.find(
+				'option[value="custom_weekday"], option[value="custom_date"]'
+			)
+			.prop( 'disabled', true );
+		if (
+			reservationDayType === 'custom_weekday' ||
+			reservationDayType === 'custom_date'
+		) {
+			$reservationDayType
+				.find( 'option[value="' + reservationDayType + '"]' )
+				.prop( 'disabled', false );
+		}
+		$reservationDayType.val( reservationDayType );
 		$editRow
 			.find( 'input.vkbm-qe-disable-nomination-fee' )
 			.prop(

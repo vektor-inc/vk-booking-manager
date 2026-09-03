@@ -6,26 +6,31 @@
  */
 
 
- *[class*="vkbm-"] {
+*[class*="vkbm-"] {
+
 	&,
-	& * {
+	* {
 		box-sizing: border-box;
 	}
- 	&:where(:is(h1,h2,h3,h4,h5,h6,p,li,dt,dd)),
-	& :is(dt,dd){
+
+	&:where(:is(h1,h2,h3,h4,h5,h6,p,li,dt,dd)),
+	:is(dt,dd) {
 		text-box: trim-both text;
 	}
 	// プレースホルダーの文字色を指定
-	input:where(:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit']))::placeholder{
+	input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]))::placeholder {
 		color: #ccc;
 	}
- }
-.vkbm-form__label--block{
+}
+
+.vkbm-form__label--block {
 	display: block;
 	margin-bottom: 5px;
 }
+
 .vkbm-reservation-block {
-	input:where(:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='submit'])),
+
+	input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"])),
 	textarea,
 	select {
 		padding: 0.7em;
@@ -38,8 +43,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--vkbm--spacing--md);
-	margin-top:var(--vkbm--spacing--md);
-	margin-bottom:var(--vkbm--spacing--md);
+	margin-top: var(--vkbm--spacing--md);
+	margin-bottom: var(--vkbm--spacing--md);
 	text-align: left;
 }
 

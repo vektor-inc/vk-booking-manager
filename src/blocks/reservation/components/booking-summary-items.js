@@ -1,10 +1,15 @@
 import { __ } from '@wordpress/i18n';
 import { formatCurrency } from '../../shared/pricing';
+import { formatGuestsCount } from '../../shared/guests';
 
 export const BookingSummaryItems = ( {
 	booking,
 	resourceLabel,
 	otherConditionsLabel,
+	// 数量の見出し（複数人予約）。空のときは翻訳デフォルトへフォールバックする。
+	guestsCountLabel = '',
+	// 数量の単位（実効値。空文字は単位なし）。
+	guestsUnitLabel = '',
 	emptyValue = '',
 	currencySymbol = null,
 } ) => {
@@ -33,6 +38,43 @@ export const BookingSummaryItems = ( {
 					{ menuName }
 				</dd>
 			</dl>
+			{ /* 料金区分の予約: 区分ごとの人数を表示する（0名の区分は省略）。 */ }
+			{ Array.isArray( booking?.guest_tiers ) &&
+				booking.guest_tiers.length > 0 &&
+				booking.guest_tiers
+					.filter( ( tier ) => Number( tier?.count ) > 0 )
+					.map( ( tier, index ) => (
+						<dl
+							key={ index }
+							className="vkbm-confirm__summary-item"
+						>
+							<dt className="vkbm-confirm__summary-item-title">
+								{ tier.label }
+							</dt>
+							<dd className="vkbm-confirm__summary-item-value">
+								{ formatGuestsCount(
+									Number( tier.count ),
+									guestsUnitLabel
+								) }
+							</dd>
+						</dl>
+					) ) }
+			{ Number( booking?.guests ) > 1 && (
+				<dl className="vkbm-confirm__summary-item">
+					<dt className="vkbm-confirm__summary-item-title">
+						{ typeof guestsCountLabel === 'string' &&
+						guestsCountLabel.trim() !== ''
+							? guestsCountLabel
+							: __( 'Number of guests', 'vk-booking-manager' ) }
+					</dt>
+					<dd className="vkbm-confirm__summary-item-value">
+						{ formatGuestsCount(
+							Number( booking.guests ),
+							guestsUnitLabel
+						) }
+					</dd>
+				</dl>
+			) }
 			{ booking?.is_staff_preferred && (
 				<dl className="vkbm-confirm__summary-item">
 					<dt className="vkbm-confirm__summary-item-title">
@@ -59,9 +101,12 @@ export const BookingSummaryItems = ( {
 					<dl className="vkbm-confirm__summary-item vkbm-confirm__summary-item--other-conditions">
 						<dt className="vkbm-confirm__summary-item-title">
 							{ typeof otherConditionsLabel === 'string' &&
-						otherConditionsLabel.trim() !== ''
-							? otherConditionsLabel
-							: __( 'Other conditions', 'vk-booking-manager' ) }
+							otherConditionsLabel.trim() !== ''
+								? otherConditionsLabel
+								: __(
+										'Other conditions',
+										'vk-booking-manager'
+								  ) }
 						</dt>
 						<dd className="vkbm-confirm__summary-value--multiline">
 							{ booking.other_conditions }

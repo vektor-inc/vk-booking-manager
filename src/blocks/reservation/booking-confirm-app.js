@@ -5,6 +5,7 @@ import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
 import { formatCurrency, normalizePriceValue } from '../shared/pricing';
 import { resolveLoginState } from '../shared/auth';
 import { sanitizeDraftToken } from '../shared/draft-token';
+import { formatGuestsCount } from '../shared/guests';
 import { BookingSummaryItems } from './components/booking-summary-items';
 import { ReservationHeader } from './components/reservation-header';
 
@@ -15,13 +16,6 @@ const getQueryParam = ( key ) => {
 	const params = new URLSearchParams( window.location.search );
 	const value = params.get( key ) || '';
 	return key === 'draft' ? sanitizeDraftToken( value ) : value;
-};
-
-const formatDateTime = ( iso, timezone ) => {
-	return formatDate( iso, timezone, {
-		includeTime: true,
-		includeDate: true,
-	} );
 };
 
 const formatBookingDateTimeParts = ( startAt, endAt, timezone ) => {
@@ -228,6 +222,11 @@ export const BookingConfirmApp = ( {
 	const [ submitting, setSubmitting ] = useState( false );
 	const [ submitError, setSubmitError ] = useState( '' );
 	const [ success, setSuccess ] = useState( false );
+	// お気に入り（いつもの）登録の状態。確認画面のチェックボックスで希望を受け取り、
+	// 予約確定後に登録する。
+	const [ favoriteOptIn, setFavoriteOptIn ] = useState( false );
+	const [ favoriteSaved, setFavoriteSaved ] = useState( false );
+	const [ favoriteError, setFavoriteError ] = useState( '' );
 	const [ createdStatus, setCreatedStatus ] = useState( '' );
 	const [ customerName, setCustomerName ] = useState( '' );
 	const [ customerPhone, setCustomerPhone ] = useState( '' );
@@ -263,6 +262,12 @@ export const BookingConfirmApp = ( {
 	const [ otherConditionsLabel, setOtherConditionsLabel ] = useState(
 		__( 'Other conditions', 'vk-booking-manager' )
 	);
+	// 数量の見出し（複数人一括予約）。REST が実効値を返す。
+	const [ guestsCountLabel, setGuestsCountLabel ] = useState(
+		__( 'Number of guests', 'vk-booking-manager' )
+	);
+	// 数量の単位。REST が実効値（null はロケール既定に解決済み）を返す。空文字は単位なし。
+	const [ guestsUnitLabel, setGuestsUnitLabel ] = useState( '' );
 	const [ resolvedReservationPageUrl, setResolvedReservationPageUrl ] =
 		useState( reservationPageUrl || '' );
 	const [ taxLabelText, setTaxLabelText ] = useState( '' );
@@ -457,9 +462,20 @@ export const BookingConfirmApp = ( {
 					typeof response?.other_conditions_label === 'string' &&
 					response.other_conditions_label.trim() !== ''
 				) {
-					setOtherConditionsLabel(
-						response.other_conditions_label
-					);
+					setOtherConditionsLabel( response.other_conditions_label );
+				}
+
+				// 数量の見出し。REST が実効値を返すが、念のため空ならデフォルトへフォールバックする。
+				if (
+					typeof response?.guests_count_label === 'string' &&
+					response.guests_count_label.trim() !== ''
+				) {
+					setGuestsCountLabel( response.guests_count_label );
+				}
+				// 数量の単位。REST が実効値（null はロケール既定に解決済み）を返す。
+				// 空文字は単位なしを意味するため、空判定でのフォールバックは行わない。
+				if ( typeof response?.guests_unit_label === 'string' ) {
+					setGuestsUnitLabel( response.guests_unit_label );
 				}
 
 				setTaxLabelText(
@@ -479,20 +495,6 @@ export const BookingConfirmApp = ( {
 					setResolvedReservationPageUrl(
 						response.reservation_page_url
 					);
-				}
-
-				// Debug logging
-				if ( process.env.NODE_ENV === 'development' ) {
-					console.log( '=== Provider Settings API Response ===' );
-					console.log(
-						'cancellation_policy:',
-						response?.cancellation_policy
-					);
-					console.log(
-						'terms_of_service:',
-						response?.terms_of_service
-					);
-					console.log( 'Full response:', response );
 				}
 			} )
 			.catch( () => {
@@ -874,6 +876,49 @@ export const BookingConfirmApp = ( {
 		};
 	}, [ authMode, isLoggedIn ] );
 
+	// 今回の予約内容（メニュー＋指名スタッフ）をお気に入り（いつもの）に登録する。
+	// 確認画面のチェックボックスがONのとき、予約確定後に呼び出す。
+	// 完了後にリダイレクトする場合に待ち合わせできるよう、Promise を返す。
+	const registerFavorite = () => {
+		const favoriteMenuId = Number( draft?.menu_id ) || 0;
+		if ( favoriteMenuId <= 0 ) {
+			return Promise.resolve();
+		}
+
+		setFavoriteError( '' );
+
+		return apiFetch( {
+			path: '/vkbm/v1/favorites',
+			method: 'POST',
+			data: {
+				menu_id: favoriteMenuId,
+				// 実際に指名した予約（is_staff_preferred=true）のときだけスタッフIDを送る。
+				// おまかせ・指名なし・無料版は is_staff_preferred=false のため 0 を送る。
+				// 設定読込前に true になりうる staffEnabled には依存しない。
+				resource_id: draft?.is_staff_preferred
+					? Number( draft?.resource_id ) || 0
+					: 0,
+			},
+		} )
+			.then( () => {
+				setFavoriteSaved( true );
+			} )
+			.catch( ( error ) => {
+				// 重複登録（既にお気に入り済み）も登録済み扱いにする。
+				if ( error?.code === 'duplicate_favorite' ) {
+					setFavoriteSaved( true );
+					return;
+				}
+				setFavoriteError(
+					error?.message ||
+						__(
+							'Could not add to favorites.',
+							'vk-booking-manager'
+						)
+				);
+			} );
+	};
+
 	const handleConfirm = () => {
 		if ( ! draftToken ) {
 			return;
@@ -993,7 +1038,12 @@ export const BookingConfirmApp = ( {
 
 				setCreatedStatus( parsed?.status || '' );
 				setSuccess( true );
-				if ( redirectUrl ) {
+
+				// 完了後のリダイレクト処理。
+				const navigate = () => {
+					if ( ! redirectUrl ) {
+						return;
+					}
 					const target = new URL(
 						redirectUrl,
 						typeof window !== 'undefined'
@@ -1007,6 +1057,14 @@ export const BookingConfirmApp = ( {
 						);
 					}
 					window.location.href = target.toString();
+				};
+
+				// チェックが入っていれば、今回の内容をお気に入りに登録する。
+				// リダイレクトする場合は、POST が中断されないよう登録の完了を待つ。
+				if ( favoriteOptIn && isLoggedIn ) {
+					registerFavorite().finally( navigate );
+				} else {
+					navigate();
 				}
 			} )
 			.catch( ( error ) => {
@@ -1129,10 +1187,6 @@ export const BookingConfirmApp = ( {
 				id="vkbm-confirm-memo"
 				value={ memo }
 				onChange={ ( event ) => setMemo( event.target.value ) }
-				placeholder={ __(
-					'Please enter any contact information',
-					'vk-booking-manager'
-				) }
 				maxLength={ memoMaxLength }
 			/>
 		);
@@ -1254,6 +1308,26 @@ export const BookingConfirmApp = ( {
 				{ ! termsOfServiceText && policyText && (
 					<p className="vkbm-confirm__policy">{ policyText }</p>
 				) }
+
+				{ /* ログインユーザーには、今回の内容を「いつもの」として登録するチェックを表示する。 */ }
+				{ isLoggedIn && Number( draft?.menu_id ) > 0 && (
+					<div className="vkbm-agreement__check vkbm-favorites__optin">
+						<input
+							type="checkbox"
+							checked={ favoriteOptIn }
+							onChange={ ( event ) =>
+								setFavoriteOptIn( event.target.checked )
+							}
+							id="vkbm-confirm-favorite-optin"
+						/>
+						<label htmlFor="vkbm-confirm-favorite-optin">
+							{ __(
+								'Save this content to my favorites for next time',
+								'vk-booking-manager'
+							) }
+						</label>
+					</div>
+				) }
 			</>
 		);
 	};
@@ -1284,6 +1358,25 @@ export const BookingConfirmApp = ( {
 		draft?.slot?.service_end_at || draft?.slot?.end_at || '',
 		timezone
 	);
+
+	const hasGuestTiers =
+		Array.isArray( draft?.guest_tiers ) && draft.guest_tiers.length > 0;
+
+	// 最小催行人数（グループ開催型）が設定された枠で、今回の予約を反映しても催行人数に満たない場合だけ
+	// 「開催されない可能性がある」旨を注記する。催行確定済み（充足済み）の枠では表示しない。
+	// 既存予約の合計人数（slot.booked_guests）に今回予約分（draft.guests）を加えて未達かを判定する。
+	const minCapacityForSlot = Math.max(
+		0,
+		Number( draft?.slot?.min_capacity ) || 0
+	);
+	const bookedGuestsForSlot = Math.max(
+		0,
+		Number( draft?.slot?.booked_guests ) || 0
+	);
+	const draftGuestsForSlot = Math.max( 0, Number( draft?.guests ) || 0 );
+	const showMinCapacityNote =
+		minCapacityForSlot > 0 &&
+		bookedGuestsForSlot + draftGuestsForSlot < minCapacityForSlot;
 
 	const shouldShowLogo =
 		showProviderLogo &&
@@ -1486,7 +1579,7 @@ export const BookingConfirmApp = ( {
 																	'vk-booking-manager'
 															  )
 															: __(
-																	'Cancelled',
+																	'Cancel',
 																	'vk-booking-manager'
 															  ) }
 													</button>
@@ -1501,6 +1594,10 @@ export const BookingConfirmApp = ( {
 											otherConditionsLabel={
 												otherConditionsLabel
 											}
+											guestsCountLabel={
+												guestsCountLabel
+											}
+											guestsUnitLabel={ guestsUnitLabel }
 											emptyValue="—"
 											currencySymbol={
 												currencySymbol.trim() !== ''
@@ -1546,56 +1643,126 @@ export const BookingConfirmApp = ( {
 							label={ __( 'Menu', 'vk-booking-manager' ) }
 							value={ menuName }
 						/>
+						{ /* 料金区分メニュー: 区分ごとの人数・小計を表示する（0名の区分は省略）。 */ }
+						{ hasGuestTiers ? (
+							<>
+								{ draft.guest_tiers
+									.filter(
+										( tier ) => Number( tier?.count ) > 0
+									)
+									.map( ( tier, index ) => (
+										<SummaryRow
+											key={ index }
+											label={ tier.label }
+											value={ `${ formatGuestsCount(
+												Number( tier.count ),
+												guestsUnitLabel
+											) }${
+												tier.subtotal_formatted
+													? ` / ${ tier.subtotal_formatted }`
+													: ''
+											}` }
+										/>
+									) ) }
+								<SummaryRow
+									label={ guestsCountLabel }
+									value={ formatGuestsCount(
+										Number( draft.guests ),
+										guestsUnitLabel
+									) }
+								/>
+							</>
+						) : (
+							Number( draft?.guests ) > 1 && (
+								<SummaryRow
+									label={ guestsCountLabel }
+									value={ formatGuestsCount(
+										Number( draft.guests ),
+										guestsUnitLabel
+									) }
+								/>
+							)
+						) }
 						{ staffEnabled && (
 							<SummaryRow
 								label={ resourceLabelSingular }
 								value={ staffName }
 							/>
 						) }
+						{ /* 基本料金は指名機能の ON/OFF に関わらず常に表示する（#247）。ただし料金区分メニューでは区分ごとの小計が上に表示され、この行は常に0円で冗長になるため非表示にする（#338）。 */ }
+						{ ! hasGuestTiers && (
+							<SummaryRow
+								label={ __(
+									'Service basic fee',
+									'vk-booking-manager'
+								) }
+								value={ pricingSummary.baseLabel }
+							/>
+						) }
+						{ /* 指名料は指名機能 ON のときのみ表示する。 */ }
 						{ staffEnabled && (
-							<>
-								<SummaryRow
-									label={ __(
-										'Service basic fee',
-										'vk-booking-manager'
-									) }
-									value={ pricingSummary.baseLabel }
-								/>
-								<SummaryRow
-									label={ nominationFeeLabel }
-									value={
-										pricingSummary.nominationLabel ||
-										formatCurrency(
-											0,
-											currencySymbol.trim() !== ''
-												? currencySymbol
-												: null
-										)
-									}
-								/>
-								<SummaryRow
-									label={ __(
-										'Total basic fee',
-										'vk-booking-manager'
-									) }
-									value={
-										pricingSummary.totalLabel ||
-										pricingSummary.baseLabel
-									}
-									valueClassName="vkbm-confirm__summary-item-value--price"
-								/>
-							</>
+							<SummaryRow
+								label={ nominationFeeLabel }
+								value={
+									pricingSummary.nominationLabel ||
+									formatCurrency(
+										0,
+										currencySymbol.trim() !== ''
+											? currencySymbol
+											: null
+									)
+								}
+							/>
 						) }
+						{ /* 貸し切り料金行（#305）。確認画面の draft は読み込み時に確定し以降変化しないため、他の行と同様に条件描画のみ（live region 不要）。 */ }
+						{ Boolean( draft?.user_exclusive ) &&
+							( Number( draft?.exclusive_fee ) > 0 ? (
+								<SummaryRow
+									label={ __(
+										'Private booking fee',
+										'vk-booking-manager'
+									) }
+									value={
+										typeof draft?.exclusive_fee_formatted ===
+											'string' &&
+										draft.exclusive_fee_formatted.trim() !==
+											''
+											? draft.exclusive_fee_formatted
+											: formatCurrency(
+													Number(
+														draft.exclusive_fee
+													) || 0,
+													currencySymbol.trim() !== ''
+														? currencySymbol
+														: null
+											  )
+									}
+								/>
+							) : (
+								<SummaryRow
+									label={ __(
+										'Private booking',
+										'vk-booking-manager'
+									) }
+									value={ __(
+										'Private (exclusive use of this slot)',
+										'vk-booking-manager'
+									) }
+								/>
+							) ) }
+						{ /* 合計も指名機能の ON/OFF に関わらず常に表示する（#247）。 */ }
+						<SummaryRow
+							label={ __(
+								'Total basic fee',
+								'vk-booking-manager'
+							) }
+							value={
+								pricingSummary.totalLabel ||
+								pricingSummary.baseLabel
+							}
+							valueClassName="vkbm-confirm__summary-item-value--price"
+						/>
 					</div>
-
-					{ ! canManageReservations &&
-						! providerCancellationPolicy &&
-						! providerTermsOfService &&
-						policyText && (
-							<p className="vkbm-confirm__policy">
-								{ policyText }
-							</p>
-						) }
 
 					{ ! isLoggedIn && (
 						<div className="vkbm-confirm__auth">
@@ -1734,10 +1901,6 @@ export const BookingConfirmApp = ( {
 									onChange={ ( event ) =>
 										setProviderNote( event.target.value )
 									}
-									placeholder={ __(
-										'Please enter any internal notes.',
-										'vk-booking-manager'
-									) }
 								/>
 							</div>
 						</div>
@@ -1746,12 +1909,28 @@ export const BookingConfirmApp = ( {
 					{ renderAgreements() }
 
 					<div className="vkbm-confirm__actions">
+						{ ! success && showMinCapacityNote && (
+							<p
+								id="vkbm-confirm-min-capacity-note"
+								className="vkbm-confirm__min-capacity-note description"
+							>
+								{ __(
+									'If the minimum number of participants is not reached, the session may not take place.',
+									'vk-booking-manager'
+								) }
+							</p>
+						) }
 						{ ! success && (
 							<button
 								type="button"
 								className="vkbm-confirm__button vkbm-button vkbm-button__md vkbm-button__primary"
 								onClick={ handleConfirm }
 								disabled={ ! canSubmit }
+								aria-describedby={
+									showMinCapacityNote
+										? 'vkbm-confirm-min-capacity-note'
+										: undefined
+								}
 							>
 								{ submitting
 									? __( 'Processing…', 'vk-booking-manager' )
@@ -1767,6 +1946,26 @@ export const BookingConfirmApp = ( {
 								role="status"
 							>
 								{ finalSuccessMessage }
+							</p>
+						) }
+						{ /* 予約確定時にチェックされていれば、お気に入り登録の結果を表示する。 */ }
+						{ showSuccessMessage && favoriteSaved && (
+							<p
+								className="vkbm-alert vkbm-alert__success text-center"
+								role="status"
+							>
+								{ __(
+									'Added to favorites.',
+									'vk-booking-manager'
+								) }
+							</p>
+						) }
+						{ showSuccessMessage && favoriteError && (
+							<p
+								className="vkbm-alert vkbm-alert__danger text-center"
+								role="alert"
+							>
+								{ favoriteError }
 							</p>
 						) }
 						{ submitError && (

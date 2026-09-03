@@ -1,5 +1,4 @@
 <?php
-
 /**
  * REST controller for booking draft persistence.
  *
@@ -15,10 +14,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Common\Exclusive_Fee;
+use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
+use WP_Query;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
@@ -46,10 +49,12 @@ use function sanitize_textarea_field;
 use function wp_generate_password;
 use function usleep;
 use function hash_equals;
-use function error_log;
+use function error_log; // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Operational warning logging (privacy-safe, hashed identifiers only).
 use function substr;
 use function sha1;
 use function time;
+use function strtotime;
+use function wp_date;
 use function maybe_serialize;
 use function wp_cache_delete;
 
@@ -59,11 +64,11 @@ use function wp_cache_delete;
 class Booking_Draft_Controller {
 	use Rate_Limit_Trait;
 
-	private const REST_NAMESPACE      = 'vkbm/v1';
-	private const TRANSIENT_PREFIX    = 'vkbm_draft_';
-	private const OWNER_INDEX_PREFIX  = 'vkbm_draft_owner_idx_';
-	private const TTL_SECONDS         = 1800; // 30 minutes.
-	private const OWNER_COOKIE        = 'vkbm_draft_owner';
+	private const REST_NAMESPACE     = 'vkbm/v1';
+	private const TRANSIENT_PREFIX   = 'vkbm_draft_';
+	private const OWNER_INDEX_PREFIX = 'vkbm_draft_owner_idx_';
+	private const TTL_SECONDS        = 1800; // 30 minutes.
+	private const OWNER_COOKIE       = 'vkbm_draft_owner';
 
 	// Per-owner soft lock for owner index read-modify-write critical section.
 	// owner index 更新（read_owner_index → in-memory 変更 → write_owner_index）の
@@ -95,15 +100,15 @@ class Booking_Draft_Controller {
 	// to cap each wp_options record size and mitigate DoS via oversized payloads.
 	// 予約一時データ入力フィールドに対する静的な文字数上限。
 	// sanitize_*() の後に適用し、wp_options レコードの肥大化による DoS を抑止する。
-	public const MEMO_MAX_LENGTH                  = 1000;
+	public const MEMO_MAX_LENGTH = 1000;
 	// memo の絶対上限。vkbm_draft_memo_max_length フィルタが極端に大きな値を返しても
 	// この値を超えないようクランプし、DoS 経路の再オープンを防ぐ。
 	// Absolute hard cap for memo length. Even if a third-party filter returns a huge value,
 	// the effective limit is clamped to this constant to prevent reopening the DoS path.
-	public const MEMO_HARD_MAX_LENGTH             = 10000;
-	public const LABEL_MAX_LENGTH                 = 200;
-	public const SLOT_FIELD_MAX_LENGTH            = 64;
-	public const ASSIGNABLE_STAFF_IDS_MAX_COUNT   = 50;
+	public const MEMO_HARD_MAX_LENGTH           = 10000;
+	public const LABEL_MAX_LENGTH               = 200;
+	public const SLOT_FIELD_MAX_LENGTH          = 64;
+	public const ASSIGNABLE_STAFF_IDS_MAX_COUNT = 50;
 
 	/**
 	 * Settings repository.
@@ -190,8 +195,8 @@ class Booking_Draft_Controller {
 		$resource_id = isset( $params['resource_id'] ) ? max( 0, (int) $params['resource_id'] ) : 0;
 		// date は他の日時系と同じく 64 文字でキャップ（DoS 経路防止）。
 		// Cap top-level date to the same length as other datetime/slot identifier fields.
-		$date        = isset( $params['date'] ) ? sanitize_text_field( (string) $params['date'] ) : '';
-		$date        = $this->truncate_text( $date, self::SLOT_FIELD_MAX_LENGTH );
+		$date = isset( $params['date'] ) ? sanitize_text_field( (string) $params['date'] ) : '';
+		$date = $this->truncate_text( $date, self::SLOT_FIELD_MAX_LENGTH );
 
 		if ( $menu_id <= 0 ) {
 			return new WP_Error( 'invalid_menu_id', __( 'Menu ID is invalid.', 'vk-booking-manager' ) );
@@ -213,33 +218,33 @@ class Booking_Draft_Controller {
 			: $agreed;
 		// menu_label / staff_label は sanitize 後にラベル用の静的上限で切り詰める。
 		// Apply static label length cap after sanitize.
-		$menu_label          = isset( $params['menu_label'] ) ? sanitize_text_field( (string) $params['menu_label'] ) : '';
-		$menu_label          = $this->truncate_text( $menu_label, self::LABEL_MAX_LENGTH );
-		$staff_label         = isset( $params['staff_label'] ) ? sanitize_text_field( (string) $params['staff_label'] ) : '';
-		$staff_label         = $this->truncate_text( $staff_label, self::LABEL_MAX_LENGTH );
-		$is_staff_preferred  = ! empty( $params['is_staff_preferred'] );
+		$menu_label         = isset( $params['menu_label'] ) ? sanitize_text_field( (string) $params['menu_label'] ) : '';
+		$menu_label         = $this->truncate_text( $menu_label, self::LABEL_MAX_LENGTH );
+		$staff_label        = isset( $params['staff_label'] ) ? sanitize_text_field( (string) $params['staff_label'] ) : '';
+		$staff_label        = $this->truncate_text( $staff_label, self::LABEL_MAX_LENGTH );
+		$is_staff_preferred = ! empty( $params['is_staff_preferred'] );
 
 		// 指名機能が無効の場合、指名フラグを強制的に false にする。
 		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$is_staff_preferred = false;
 		}
 
-		$slot                = isset( $params['slot'] ) && is_array( $params['slot'] ) ? $params['slot'] : array();
+		$slot = isset( $params['slot'] ) && is_array( $params['slot'] ) ? $params['slot'] : array();
 		// slot 系の識別子・日時文字列は sanitize 後に SLOT_FIELD_MAX_LENGTH で切り詰める。
 		// Slot identifier and timestamp strings: sanitize then truncate.
-		$slot_id             = isset( $slot['slot_id'] ) ? sanitize_text_field( (string) $slot['slot_id'] ) : '';
-		$slot_id             = $this->truncate_text( $slot_id, self::SLOT_FIELD_MAX_LENGTH );
-		$start_at            = isset( $slot['start_at'] ) ? sanitize_text_field( (string) $slot['start_at'] ) : '';
-		$start_at            = $this->truncate_text( $start_at, self::SLOT_FIELD_MAX_LENGTH );
-		$end_at              = isset( $slot['end_at'] ) ? sanitize_text_field( (string) $slot['end_at'] ) : '';
-		$end_at              = $this->truncate_text( $end_at, self::SLOT_FIELD_MAX_LENGTH );
-		$service_end         = isset( $slot['service_end_at'] ) ? sanitize_text_field( (string) $slot['service_end_at'] ) : '';
-		$service_end         = $this->truncate_text( $service_end, self::SLOT_FIELD_MAX_LENGTH );
-		$duration            = isset( $slot['duration_minutes'] ) ? max( 0, (int) $slot['duration_minutes'] ) : 0;
-		$slot_staff          = isset( $slot['staff'] ) && is_array( $slot['staff'] ) ? $slot['staff'] : null;
+		$slot_id     = isset( $slot['slot_id'] ) ? sanitize_text_field( (string) $slot['slot_id'] ) : '';
+		$slot_id     = $this->truncate_text( $slot_id, self::SLOT_FIELD_MAX_LENGTH );
+		$start_at    = isset( $slot['start_at'] ) ? sanitize_text_field( (string) $slot['start_at'] ) : '';
+		$start_at    = $this->truncate_text( $start_at, self::SLOT_FIELD_MAX_LENGTH );
+		$end_at      = isset( $slot['end_at'] ) ? sanitize_text_field( (string) $slot['end_at'] ) : '';
+		$end_at      = $this->truncate_text( $end_at, self::SLOT_FIELD_MAX_LENGTH );
+		$service_end = isset( $slot['service_end_at'] ) ? sanitize_text_field( (string) $slot['service_end_at'] ) : '';
+		$service_end = $this->truncate_text( $service_end, self::SLOT_FIELD_MAX_LENGTH );
+		$duration    = isset( $slot['duration_minutes'] ) ? max( 0, (int) $slot['duration_minutes'] ) : 0;
+		$slot_staff  = isset( $slot['staff'] ) && is_array( $slot['staff'] ) ? $slot['staff'] : null;
 		// slot.staff.name もラベル系として 200 文字でキャップ（DoS 経路防止）。
 		// Cap slot.staff.name with the label length limit to prevent oversize wp_options payloads.
-		$slot_staff          = $slot_staff
+		$slot_staff = $slot_staff
 			? array(
 				'id'   => isset( $slot_staff['id'] ) ? (int) $slot_staff['id'] : 0,
 				'name' => $this->truncate_text(
@@ -250,8 +255,8 @@ class Booking_Draft_Controller {
 			: null;
 		// slot.staff_label はラベル用上限を適用。
 		// slot.staff_label uses the label length cap.
-		$slot_staff_label    = isset( $slot['staff_label'] ) ? sanitize_text_field( (string) $slot['staff_label'] ) : '';
-		$slot_staff_label    = $this->truncate_text( $slot_staff_label, self::LABEL_MAX_LENGTH );
+		$slot_staff_label = isset( $slot['staff_label'] ) ? sanitize_text_field( (string) $slot['staff_label'] ) : '';
+		$slot_staff_label = $this->truncate_text( $slot_staff_label, self::LABEL_MAX_LENGTH );
 		// 巨大入力時の CPU 負荷を抑えるため、重複判定はハッシュセット（O(1)）で行い、
 		// 上限件数に達した時点でループを打ち切る（同 ID の大量送信での回避も封じる）。
 		// Use a hash set for O(1) deduplication and break out of the loop as soon as
@@ -277,11 +282,31 @@ class Booking_Draft_Controller {
 
 		$auto_assign = isset( $slot['auto_assign'] ) ? (bool) $slot['auto_assign'] : false;
 
+		// 最小催行人数（グループ開催型）と当該枠の合計予約人数。確定画面の催行注記表示に使う表示専用値。
+		// 表示のみで催行可否の強制はしないため、0以上の整数へサニタイズして保持する（負値・不正値は0）。
+		$slot_min_capacity  = isset( $slot['min_capacity'] ) ? max( 0, (int) $slot['min_capacity'] ) : 0;
+		$slot_booked_guests = isset( $slot['booked_guests'] ) ? max( 0, (int) $slot['booked_guests'] ) : 0;
+
+		// ユーザーによる貸し切り指定（#305）。フロントのチェックボックスの選択状態。
+		// フロント抑止は迂回可能なため、確定側と同じくサーバ側でフルゲートを再適用する（下記の guard 群）。
+		$user_requested_exclusive = ! empty( $params['user_exclusive'] );
+
 		if ( '' === $slot_id || '' === $start_at ) {
 			return new WP_Error( 'invalid_slot', __( 'Reservation slot information is incorrect.', 'vk-booking-manager' ) );
 		}
 
-		$meta     = isset( $params['meta'] ) && is_array( $params['meta'] ) ? $params['meta'] : array();
+		// 貸し切り（枠を専有する）予約がこの時間帯に既に入っていれば、残席があっても受付停止する。
+		// confirmation 側のロック保持下の再判定（必須の多層防御）とは別に、下書き保存の早い段階でも
+		// 同じ判定を行い、利用者に無駄な入力を続けさせないようにする（ロジックは confirmation と同型）。
+		if ( $this->slot_has_exclusive_booking_for_menu( $menu_id, $start_at, $end_at ) ) {
+			return new WP_Error(
+				'capacity_exceeded',
+				__( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ),
+				array( 'status' => 409 )
+			);
+		}
+
+		$meta = isset( $params['meta'] ) && is_array( $params['meta'] ) ? $params['meta'] : array();
 		// meta.timezone も SLOT_FIELD_MAX_LENGTH（64 文字）でキャップ。
 		// meta.timezone is also capped by the slot-field length limit.
 		$timezone = isset( $meta['timezone'] ) ? sanitize_text_field( (string) $meta['timezone'] ) : '';
@@ -304,10 +329,95 @@ class Booking_Draft_Controller {
 			$nomination_fee = $this->get_staff_nomination_fee( $resource_id );
 		}
 
+		// 予約人数（複数人一括予約）を解決する。
+		// メニューが複数人一括予約を許可している場合のみ受け付ける。
+		$max_guests = $this->get_max_guests( $menu_id );
+
+		// 料金区分が定義されているか（複数人一括予約が適用される場合のみ意味を持つ）。
+		// 区分が1つでもあれば、人数は単一の guests ではなく区分ごとの内訳で受け取る。
+		// 実効の最大受付数が1以下のメニューでは料金区分は無効（空配列扱い）にし、基本料金×人数へ倒す（#320）。
+		// get_max_guests() は複数人一括予約適用時に max(1, max_capacity) を返すため、>= 2 で「実効max_capacity≥2」と等価。
+		$menu_tiers      = ( $max_guests >= 2 ) ? Price_Tiers::normalize_tiers( get_post_meta( $menu_id, '_vkbm_price_tiers', true ) ) : array();
+		$has_price_tiers = ! empty( $menu_tiers );
+		$guest_tiers     = array();
+
+		if ( $has_price_tiers ) {
+			// 区分ごとの人数をサーバ保存メタ（ラベル・料金）に突き合わせて確定する。
+			$requested_tiers  = isset( $params['guest_tiers'] ) ? $params['guest_tiers'] : array();
+			$guest_tiers      = Price_Tiers::resolve_guest_tiers( $menu_tiers, $requested_tiers );
+			$requested_guests = Price_Tiers::total_count( $guest_tiers );
+		} else {
+			$requested_guests = isset( $params['guests'] ) ? (int) $params['guests'] : 1;
+		}
+
+		// 入力人数が上限を超える場合は、黙ってクランプせずエラーを返す。
+		// クランプして保存すると「5名で予約したのに2名分しか取れていない」という気付けないズレが生じるため、
+		// 上限超過は明示的にエラーとして利用者へ知らせる。
+		if ( $max_guests >= 1 && $requested_guests > $max_guests ) {
+			return new WP_Error(
+				'guests_exceeded',
+				sprintf(
+					/* translators: %d: maximum number of guests that can be booked. */
+					__( 'The number of guests exceeds the maximum that can be booked (%d).', 'vk-booking-manager' ),
+					$max_guests
+				),
+				array( 'status' => 400 )
+			);
+		}
+
+		// 料金区分利用時は合計が最低1名いることを必須とする（特定区分が0名でも合計1名以上ならOK）。
+		if ( $has_price_tiers && $requested_guests < 1 ) {
+			return new WP_Error(
+				'guests_required',
+				__( 'Please select at least one guest.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// 安全網として 1〜最大人数の範囲にクランプする（上限超過は上で弾いている）。
+		$guests = $this->resolve_guests( $menu_id, $requested_guests );
+
+		// ユーザーによる貸し切り指定（#305）のサーバ側ガード。
+		// フロントの表示抑止は迂回可能なため、確定側と同型の判定をここでも行い、無駄な入力の続行を防ぐ。
+		$user_exclusive = false;
+		if ( $user_requested_exclusive ) {
+			if ( $this->is_user_exclusive_selectable( $menu_id ) ) {
+				// 最小催行人数（>=）を満たさない場合は貸し切り指定を拒否する。
+				// 最大受付数が1以下のメニューでは最小催行人数は意味を持たないため実効0（判定無効）にする（#320）。
+				// Availability_Service::get_menu_min_capacity と同じく、max_capacity を上限にクランプする。
+				$max_capacity = $this->get_menu_max_capacity( $menu_id );
+				$min_capacity = $max_capacity <= 1
+					? 0
+					: max( 0, min( $max_capacity, (int) get_post_meta( $menu_id, '_vkbm_min_capacity', true ) ) );
+				if ( $min_capacity > 0 && $guests < $min_capacity ) {
+					return new WP_Error(
+						'exclusive_min_capacity',
+						__( 'The number of guests does not reach the minimum required for a private booking.', 'vk-booking-manager' ),
+						array( 'status' => 400 )
+					);
+				}
+				// 既にその枠に有効な予約があれば貸切にできない（最初の予約者のみ）。
+				if ( $this->slot_has_any_active_booking_for_menu( $menu_id, $start_at, $end_at ) ) {
+					return new WP_Error(
+						'exclusive_unavailable',
+						__( 'This slot cannot be reserved exclusively because it already has a booking.', 'vk-booking-manager' ),
+						array( 'status' => 409 )
+					);
+				}
+				$user_exclusive = true;
+			}
+			// メニューがユーザー貸し切り指定を受け付けない設定なら user_exclusive=false のまま（フラグは無視）。
+		}
+
 		$payload = array(
 			'menu_id'                   => $menu_id,
 			'resource_id'               => $resource_id,
 			'date'                      => $date,
+			'guests'                    => $guests,
+			// ユーザーによる貸し切り指定（#305）。確定時にこのフラグを再判定して _vkbm_booking_exclusive を付与する。
+			'user_exclusive'            => $user_exclusive,
+			// 料金区分の人数内訳スナップショット（区分未定義なら空配列）。
+			'guest_tiers'               => $guest_tiers,
 			'slot'                      => array(
 				'slot_id'              => $slot_id,
 				'start_at'             => $start_at,
@@ -318,6 +428,9 @@ class Booking_Draft_Controller {
 				'staff_label'          => $effective_slot_staff_label,
 				'assignable_staff_ids' => $assignable_staff,
 				'auto_assign'          => $auto_assign || ( $resource_id <= 0 ),
+				// 確定画面の催行注記（未達時のみ表示）に伝搬する表示専用の値。
+				'min_capacity'         => $slot_min_capacity,
+				'booked_guests'        => $slot_booked_guests,
 			),
 			'meta'                      => array(
 				'timezone' => $timezone,
@@ -438,8 +551,61 @@ class Booking_Draft_Controller {
 			$tax_enabled
 		);
 
-		$base_display_price               = (int) ( $price_snapshot['display_price'] ?? 0 );
-		$total_price                      = $base_display_price + $payload['nomination_fee'];
+		$menu_id_for_price = (int) ( $payload['menu_id'] ?? 0 );
+
+		// 料金区分が定義されているメニューは、区分料金（Σ 料金 × 区分人数）で合計を計算する。
+		// ラベル・料金は必ずサーバ保存メタを正とし、保存済みスナップショットの人数のみを使う（改竄防止）。
+		// 実効の最大受付数が1以下のメニューでは料金区分は無効（空配列扱い）にし、基本料金×人数へ倒す（#320）。
+		// get_max_guests() は複数人一括予約適用時に max(1, max_capacity) を返すため、>= 2 で「実効max_capacity≥2」と等価。
+		$menu_tiers      = ( $menu_id_for_price > 0 && $this->get_max_guests( $menu_id_for_price ) >= 2 )
+			? Price_Tiers::normalize_tiers( get_post_meta( $menu_id_for_price, '_vkbm_price_tiers', true ) )
+			: array();
+		$has_price_tiers = ! empty( $menu_tiers );
+
+		if ( $has_price_tiers ) {
+			// 保存済み内訳の人数を、現在のメニュー区分（ラベル・料金）に再突き合わせする。
+			$stored_tiers = is_array( $payload['guest_tiers'] ?? null ) ? $payload['guest_tiers'] : array();
+			$guest_tiers  = Price_Tiers::resolve_guest_tiers( $menu_tiers, $stored_tiers );
+
+			$guests = Price_Tiers::total_count( $guest_tiers );
+
+			// 区分構成の変更等で合計0名になった場合、guests=0／total=指名料のみで黙って返さず、
+			// 明示的にエラーにする（save_draft 側の guests_required と対称）。利用者に再選択を促す。
+			if ( $guests < 1 ) {
+				return new WP_Error(
+					'guests_required',
+					__( 'Please select at least one guest.', 'vk-booking-manager' ),
+					array( 'status' => 400 )
+				);
+			}
+
+			$payload['guests']      = $guests;
+			$payload['guest_tiers'] = $this->format_guest_tiers_for_response( $guest_tiers, $tax_enabled );
+
+			$tiers_total = Price_Tiers::total_price( $guest_tiers );
+			$total_price = $tiers_total + $payload['nomination_fee'];
+		} else {
+			// 区分未定義は従来どおり基本料金×人数（完全後方互換）。
+			$guests                 = $this->resolve_guests( $menu_id_for_price, (int) ( $payload['guests'] ?? 1 ) );
+			$payload['guests']      = $guests;
+			$payload['guest_tiers'] = array();
+
+			$base_display_price = (int) ( $price_snapshot['display_price'] ?? 0 );
+			// 基本料金は人数分を掛ける。指名料は人数に関わらず1回分。
+			$total_price = ( $base_display_price * $guests ) + $payload['nomination_fee'];
+		}
+
+		// 貸し切り料金（#305）を権威的に再計算して合計へ加算する（フロント送信額は信用しない）。
+		// ユーザー貸切が選択され、メニューがユーザー貸し切り指定を受け付ける設定のときのみ加算される。
+		$user_exclusive = ! empty( $payload['user_exclusive'] ) && $this->is_user_exclusive_selectable( $menu_id_for_price );
+		$exclusive_fee  = $user_exclusive ? $this->calculate_exclusive_fee( $menu_id_for_price, $guests ) : 0;
+		$total_price   += $exclusive_fee;
+
+		// フロント（確定画面）の貸し切り料金行表示に使う値を返す。
+		$payload['user_exclusive']          = $user_exclusive;
+		$payload['exclusive_fee']           = $exclusive_fee;
+		$payload['exclusive_fee_formatted'] = $this->format_currency_label( $exclusive_fee, $tax_enabled );
+
 		$payload['total_price']           = $total_price;
 		$payload['total_price_formatted'] = $this->format_currency_label( $total_price, $tax_enabled );
 
@@ -493,6 +659,402 @@ class Booking_Draft_Controller {
 		}
 
 		return new WP_REST_Response( array( 'deleted' => true ) );
+	}
+
+	/**
+	 * ISO8601 日時をサイトのローカル時刻の Y-m-d H:i:s 文字列へ変換する。
+	 *
+	 * 予約メタ（_vkbm_booking_service_start 等）はサイトローカルの Y-m-d H:i:s で保存されるため、
+	 * meta_query の DATETIME 比較に合わせて同じ形式へ変換する（confirmation 側と同型）。
+	 *
+	 * @param string $value ISO8601 日時。
+	 * @return string 変換後の Y-m-d H:i:s。変換できない場合は空文字。
+	 */
+	private function format_datetime_for_storage( string $value ): string {
+		if ( '' === $value ) {
+			return '';
+		}
+		$timestamp = strtotime( $value );
+		if ( false === $timestamp ) {
+			return '';
+		}
+		return wp_date( 'Y-m-d H:i:s', $timestamp );
+	}
+
+	/**
+	 * 指定スロットに、枠を専有する貸し切り予約が既に1件以上あるかを判定する。
+	 *
+	 * 既存の空き判定と同じく、publish かつ status が cancelled/no_show 以外の予約のみを対象とし、
+	 * その中で _vkbm_booking_exclusive が立っている予約がスロットに重複していれば true を返す。
+	 *
+	 * NOTE: 同型の判定を Booking_Confirmation_Controller::slot_has_exclusive_booking_for_menu にも
+	 * 意図的に複製している。下書きと確定の2コントローラは独立して動くため、共有トレイト化せず
+	 * 各クラスに閉じた実装とする。仕様変更時は両方を同じ条件で更新すること。
+	 *
+	 * @param int    $menu_id  サービスメニューID。
+	 * @param string $start_at スロット開始（ISO8601）。
+	 * @param string $end_at   スロット終了（ISO8601）。
+	 * @return bool 貸し切り予約が重複していれば true。
+	 */
+	private function slot_has_exclusive_booking_for_menu( int $menu_id, string $start_at, string $end_at ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		$start_for_storage = $this->format_datetime_for_storage( $start_at );
+		$end_for_storage   = $this->format_datetime_for_storage( $end_at );
+		if ( '' === $start_for_storage ) {
+			return false;
+		}
+		if ( '' === $end_for_storage ) {
+			$end_for_storage = $start_for_storage;
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				'post_status'    => array( 'publish' ),
+				// 1件でもヒットすれば貸し切り判定は確定するため取得は1件に絞る（軽微な最適化）。
+				'posts_per_page' => 1,
+				'no_found_rows'  => true,
+				'fields'         => 'ids',
+				'meta_query'     => array(
+					'relation' => 'AND',
+					array(
+						'key'     => '_vkbm_booking_service_id',
+						'value'   => $menu_id,
+						'compare' => '=',
+					),
+					// 貸し切りフラグが立っている予約のみを対象にする。
+					array(
+						'key'     => '_vkbm_booking_exclusive',
+						'value'   => '1',
+						'compare' => '=',
+					),
+					// キャンセル・無断キャンセルの予約は枠を消費しないためクエリ段階で除外する。
+					// posts_per_page=1 で取得を1件に絞っても、対象外ステータスの予約が
+					// 先頭に来て有効な貸し切り予約を見落とすことがないようにする。
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => '_vkbm_booking_status',
+							'compare' => 'NOT EXISTS',
+						),
+						array(
+							'key'     => '_vkbm_booking_status',
+							'value'   => array( 'cancelled', 'no_show' ),
+							'compare' => 'NOT IN',
+						),
+					),
+					array(
+						'key'     => '_vkbm_booking_service_start',
+						'value'   => $end_for_storage,
+						'compare' => '<',
+						'type'    => 'DATETIME',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => '_vkbm_booking_total_end',
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+						array(
+							'key'     => '_vkbm_booking_service_end',
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+					),
+				),
+			)
+		);
+
+		foreach ( $query->posts as $post_id ) {
+			$status = (string) get_post_meta( (int) $post_id, '_vkbm_booking_status', true );
+			// キャンセル・無断キャンセルの予約は枠を消費しないため除外する。
+			if ( 'cancelled' === $status || 'no_show' === $status ) {
+				continue;
+			}
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * メニューが「ユーザーによる貸し切り指定を受け付ける」設定として有効かどうかを返す（#305）。
+	 *
+	 * 確定コントローラ（Booking_Confirmation_Controller::is_user_exclusive_selectable）と同型の判定。
+	 * 2コントローラは独立して動くため共有トレイト化せず、各クラスに閉じた実装とする。
+	 * 仕様変更時は両方を同じ条件で更新すること。
+	 *
+	 * @param int $menu_id サービスメニューID。
+	 * @return bool ユーザー貸し切り指定が有効なら true。
+	 */
+	private function is_user_exclusive_selectable( int $menu_id ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		// メタが立っていなければ対象外。
+		if ( ! get_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true ) ) {
+			return false;
+		}
+
+		// フルゲート（Pro版・予約枠の定員ON・指名OFF）を再適用する。
+		$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		if ( ! $is_pro || ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+			return false;
+		}
+
+		// メニュー単位の複数人一括予約許可も必須。
+		if ( ! get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true ) ) {
+			return false;
+		}
+
+		// 実効の最大予約受付数が1以下なら貸し切り指定は意味を持たないため無効化する（#320）。
+		// 表示制御（管理画面の hidden）だけに頼らず、保存済みメタが残っていても実効0扱いにする。
+		// 確定コントローラ（Booking_Confirmation_Controller::is_user_exclusive_selectable）と対称。
+		if ( $this->get_menu_max_capacity( $menu_id ) <= 1 ) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * メニューの「1枠あたりの最大予約受付数」の実効値を返す（#320）。
+	 *
+	 * Availability_Service::get_menu_max_capacity と同じロジック（予約枠の定員機能OFF・指名ON時は1固定、
+	 * それ以外は保存メタを 1 以上にクランプ）を、確定/下書きの2コントローラで対称に保つために複製する。
+	 * 下書きコントローラは Availability_Service を保持しないため、ここに閉じた実装とする。
+	 * 仕様変更時は確定コントローラ側（get_menu_max_capacity）と Availability_Service 側も合わせて更新すること。
+	 *
+	 * @param int $menu_id サービスメニューID。
+	 * @return int 実効の最大予約受付数（1 以上）。
+	 */
+	private function get_menu_max_capacity( int $menu_id ): int {
+		// 予約枠の定員機能が無効、または指名機能が有効な場合は1対1予約のため上限を1に固定する。
+		if ( ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+			return 1;
+		}
+
+		$meta = get_post_meta( $menu_id, '_vkbm_max_capacity', true );
+		return '' === $meta ? 1 : max( 1, (int) $meta );
+	}
+
+	/**
+	 * メニュー設定とユーザー選択に基づき、貸し切り料金を権威的に再計算する（#305）。
+	 *
+	 * 単価・適用外人数は必ずサーバ保存メタを正とする（フロント送信額は信用しない）。
+	 * 計算式は Exclusive_Fee::calculate() に委譲する（確定コントローラ・テストと同一ロジック）。
+	 *
+	 * @param int $menu_id サービスメニューID。
+	 * @param int $guests  申込人数。
+	 * @return int 貸し切り料金（0 以上）。
+	 */
+	private function calculate_exclusive_fee( int $menu_id, int $guests ): int {
+		if ( ! $this->is_user_exclusive_selectable( $menu_id ) ) {
+			return 0;
+		}
+
+		$per_person    = max( 0, (int) get_post_meta( $menu_id, '_vkbm_exclusive_fee_per_person', true ) );
+		$exempt_guests = max( 0, (int) get_post_meta( $menu_id, '_vkbm_exclusive_fee_exempt_guests', true ) );
+
+		return Exclusive_Fee::calculate( true, $per_person, $exempt_guests, $guests );
+	}
+
+	/**
+	 * 指定スロットに、ステータスが有効な予約（貸し切りか否かを問わない）が既に1件以上あるかを判定する（#305）。
+	 *
+	 * ユーザー貸し切り指定時に「最初の予約者のみ貸切にできる」を担保するための判定。
+	 * cancelled / no_show は枠を消費しないため除外する。確定コントローラ側と同型。
+	 *
+	 * @param int    $menu_id  サービスメニューID。
+	 * @param string $start_at スロット開始（ISO8601）。
+	 * @param string $end_at   スロット終了（ISO8601）。
+	 * @return bool 有効な予約が重複していれば true。
+	 */
+	private function slot_has_any_active_booking_for_menu( int $menu_id, string $start_at, string $end_at ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		$start_for_storage = $this->format_datetime_for_storage( $start_at );
+		$end_for_storage   = $this->format_datetime_for_storage( $end_at );
+		if ( '' === $start_for_storage ) {
+			return false;
+		}
+		if ( '' === $end_for_storage ) {
+			$end_for_storage = $start_for_storage;
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				'post_status'    => array( 'publish' ),
+				'posts_per_page' => 10,
+				'no_found_rows'  => true,
+				'fields'         => 'ids',
+				'meta_query'     => array(
+					'relation' => 'AND',
+					array(
+						'key'     => '_vkbm_booking_service_id',
+						'value'   => $menu_id,
+						'compare' => '=',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => '_vkbm_booking_status',
+							'compare' => 'NOT EXISTS',
+						),
+						array(
+							'key'     => '_vkbm_booking_status',
+							'value'   => array( 'cancelled', 'no_show' ),
+							'compare' => 'NOT IN',
+						),
+					),
+					array(
+						'key'     => '_vkbm_booking_service_start',
+						'value'   => $end_for_storage,
+						'compare' => '<',
+						'type'    => 'DATETIME',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => '_vkbm_booking_total_end',
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+						array(
+							'key'     => '_vkbm_booking_service_end',
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+					),
+				),
+			)
+		);
+
+		foreach ( $query->posts as $post_id ) {
+			$status = (string) get_post_meta( (int) $post_id, '_vkbm_booking_status', true );
+			if ( 'cancelled' === $status || 'no_show' === $status ) {
+				continue;
+			}
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Resolve the number of guests for a booking against the menu's multi-guest settings.
+	 *
+	 * メニューの複数人一括予約設定に基づいて予約人数を確定する。
+	 * 複数人一括予約が無効、または指名機能が有効な場合は常に1名を返す。
+	 * 有効な場合は 1〜最大人数の範囲にクランプする。
+	 *
+	 * NOTE: 同等のロジックを Booking_Confirmation_Controller::resolve_guests にも意図的に複製している。
+	 * 下書きと確定の2つの REST コントローラは独立しており、共有トレイト化すると両者を不要に結合させるため、
+	 * あえて各クラスに閉じた実装としている。仕様変更時は必ず両方を同じ式（上限 = max_capacity）で更新すること。
+	 *
+	 * @param int $menu_id        Service menu ID.
+	 * @param int $requested      Requested number of guests.
+	 * @return int
+	 */
+	private function resolve_guests( int $menu_id, int $requested ): int {
+		// 複数人一括予約が適用されない（最大人数が取得できない）場合は常に1名とする。
+		$max = $this->get_max_guests( $menu_id );
+		if ( $max < 1 ) {
+			return 1;
+		}
+
+		// 安全網として 1〜最大人数の範囲にクランプする（入口の超過チェックを通った値のみ来る想定）。
+		return max( 1, min( $max, $requested ) );
+	}
+
+	/**
+	 * メニュー設定から「1予約あたりの最大予約人数」を求める。
+	 * 複数人一括予約が適用されない場合（無料版・指名ON・未許可・スタッフ未割当）は 0 を返す。
+	 *
+	 * Resolve the per-booking maximum number of guests from the menu settings.
+	 * Returns 0 when multi-guest booking does not apply (free edition, nomination on, not allowed, or no staff).
+	 *
+	 * @param int $menu_id サービスメニューID。
+	 * @return int 最大予約人数。複数人一括予約が適用されない場合は 0。
+	 */
+	private function get_max_guests( int $menu_id ): int {
+		// 複数人一括予約は Pro 版 かつ 予約枠の定員機能ON かつ 指名機能OFF（自動割り当て）のときのみ有効。
+		// Pro から無料版へダウングレードしてもメタが残る可能性があるため、Pro 版を再確認する。
+		$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		if ( $menu_id <= 0 || ! $is_pro || ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+			return 0;
+		}
+
+		$allow = (bool) get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+		if ( ! $allow ) {
+			return 0;
+		}
+
+		// 1予約は分割せず単一スタッフに割り当てるため、1予約あたりの最大人数の上限は max_capacity（1スタッフの上限）。
+		// 実際のスロット別の空き（最も空きの大きい単一スタッフの残り）は確定時に厳密判定する。
+		$max_raw      = get_post_meta( $menu_id, '_vkbm_max_capacity', true );
+		$max_capacity = '' === $max_raw ? 1 : max( 1, (int) $max_raw );
+
+		// 重複スタッフIDは1名として数える。
+		$staff_ids   = get_post_meta( $menu_id, '_vkbm_staff_ids', true );
+		$staff_count = is_array( $staff_ids )
+			? count(
+				array_unique(
+					array_filter(
+						array_map( 'intval', $staff_ids ),
+						static function ( int $id ): bool {
+							return $id > 0;
+						}
+					)
+				)
+			)
+			: 0;
+
+		// スタッフ未割当のメニューは割り当て先が無いため、複数人一括予約を許可しない（0 を返す）。
+		if ( $staff_count < 1 ) {
+			return 0;
+		}
+
+		return $max_capacity;
+	}
+
+	/**
+	 * 料金区分の人数内訳に、フロント表示用の整形済み料金・小計を付与する。
+	 *
+	 * @param array<int, array{label: string, price: int, count: int}> $guest_tiers 確定済み区分内訳。
+	 * @param bool                                                     $tax_enabled 税込ラベルを付けるか。
+	 * @return array<int, array{label: string, price: int, count: int, price_formatted: string, subtotal: int, subtotal_formatted: string}>
+	 */
+	private function format_guest_tiers_for_response( array $guest_tiers, bool $tax_enabled ): array {
+		$formatted = array();
+		foreach ( $guest_tiers as $tier ) {
+			$price    = isset( $tier['price'] ) ? max( 0, (int) $tier['price'] ) : 0;
+			$count    = isset( $tier['count'] ) ? max( 0, (int) $tier['count'] ) : 0;
+			$subtotal = $price * $count;
+
+			$formatted[] = array(
+				'label'              => (string) ( $tier['label'] ?? '' ),
+				'price'              => $price,
+				'count'              => $count,
+				'price_formatted'    => $this->format_currency_label( $price, $tax_enabled ),
+				'subtotal'           => $subtotal,
+				'subtotal_formatted' => $this->format_currency_label( $subtotal, $tax_enabled ),
+			);
+		}
+
+		return $formatted;
 	}
 
 	/**
@@ -936,8 +1498,8 @@ class Booking_Draft_Controller {
 	 * owner index transient を書き込み、空の場合は明示的に削除します。
 	 * TTL は draft 本体と同じ {@see self::TTL_SECONDS} を使い、自然に有効期限が揃うようにします。
 	 *
-	 * @param string                                              $owner_id Owner identifier.
-	 * @param array<int, array{token: string, created_at: int}>   $index    Normalized index entries.
+	 * @param string                                            $owner_id Owner identifier.
+	 * @param array<int, array{token: string, created_at: int}> $index    Normalized index entries.
 	 * @return void
 	 */
 	private function write_owner_index( string $owner_id, array $index ): void {
@@ -995,8 +1557,11 @@ class Booking_Draft_Controller {
 				// 既存件数が上限以上の場合は、上限に収まるまで先頭（最古）から削除する。
 				// 上限 N に対して、これから 1 件追加するため (N - 1) 件以下になるまで FIFO で evict する。
 				// While we are about to append one entry, evict from the head until we leave room for it.
-				while ( count( $index ) >= $max ) {
+				// ループ条件内での count() を避けるため、件数を変数で保持して更新する。
+				$index_count = count( $index );
+				while ( $index_count >= $max ) {
 					$oldest = array_shift( $index );
+					--$index_count;
 					if ( is_array( $oldest ) && isset( $oldest['token'] ) && '' !== $oldest['token'] ) {
 						delete_transient( $this->build_transient_key( (string) $oldest['token'] ) );
 					}
@@ -1138,6 +1703,8 @@ class Booking_Draft_Controller {
 				$existing_blob = maybe_serialize( $existing );
 				$new_blob      = maybe_serialize( $new_lock );
 
+				// オーナーロックの CAS 更新のため options テーブルへ直接書き込む（アトミック性が必要）。
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Atomic CAS update for owner lock; caching is not applicable.
 				$updated = $wpdb->update(
 					$wpdb->options,
 					array( 'option_value' => $new_blob ),
@@ -1215,6 +1782,8 @@ class Booking_Draft_Controller {
 		// Even if the delete does not happen, the next acquire_owner_lock() call will reclaim
 		// the slot via its stale-reclaim CAS once OWNER_LOCK_TTL_SECONDS elapses.
 		global $wpdb;
+		// オーナーロック解放のため options テーブルから直接削除する（アトミック性が必要）。
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Atomic delete for owner lock release; caching is not applicable.
 		$wpdb->delete(
 			$wpdb->options,
 			array(
@@ -1273,6 +1842,7 @@ class Booking_Draft_Controller {
 		// 取得最終失敗時は warning ログのみ残し callback を実行しない。
 		// owner_id のハッシュ先頭 8 文字のみログに出し、ユーザーID等の生値はログに残さない。
 		// On final failure, log a warning without leaking raw owner identifiers.
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Operational warning logging (privacy-safe, hashed identifiers only).
 		error_log( '[vkbm] owner lock acquisition failed for ' . substr( sha1( $owner_id ), 0, 8 ) . '...' );
 
 		return null;

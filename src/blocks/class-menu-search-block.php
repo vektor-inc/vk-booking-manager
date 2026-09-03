@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Registers and renders the booking search form block.
  *
@@ -111,10 +110,10 @@ class Menu_Search_Block {
 	 *
 	 * @param array<string,mixed> $attributes Attributes.
 	 * @param string              $content    Saved markup (unused).
-	 * @param WP_Block            $block      Block instance.
+	 * @param WP_Block|null       $block      Block instance.
 	 * @return string
 	 */
-	public function render_block( array $attributes, string $content = '', WP_Block $block = null ): string {
+	public function render_block( array $attributes, string $content = '', ?WP_Block $block = null ): string {
 		$target_id = $this->sanitize_identifier( (string) ( $attributes['targetId'] ?? '' ) );
 
 		if ( '' === $target_id ) {
@@ -386,8 +385,6 @@ class Menu_Search_Block {
 		$staff    = 0;
 		$category = '';
 		$keyword  = '';
-
-
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Search params are public.
 		$request_data = isset( $_GET[ self::REQUEST_KEY ] ) ? map_deep( wp_unslash( $_GET[ self::REQUEST_KEY ] ), 'sanitize_text_field' ) : null;

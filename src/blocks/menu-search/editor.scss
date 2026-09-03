@@ -1,11 +1,13 @@
-@use './style' as *;
+@use "./style" as *;
 
 .vkbm-menu-search__fields {
+
 	.block-editor-block-list__layout {
 		display: grid;
 		gap: 1rem;
 	}
-	.block-list-appender{
+
+	.block-list-appender {
 		position: relative;
 	}
 }

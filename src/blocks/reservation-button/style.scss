@@ -1,0 +1,51 @@
+@use "../../../assets/scss/index-blocks.scss" as *;
+
+// 「予約に進む」ボタンブロックのラッパー。
+// ボタン本体の見た目は共通の .vkbm-button を流用する。
+.wp-block-vk-booking-manager-reservation-button,
+.vkbm-reservation-button {
+	display: block;
+
+	// 単体配置のボタンは右寄せにせず、配置（align）設定に委ねる。
+	.vkbm-reservation-button__link {
+		max-width: 100%;
+	}
+
+	// 既定で primary 背景＋白文字を当て、menu-loop の予約ボタンと見た目を揃える。
+	// （無色のテキストリンク状態にならないようにする。WCAG 1.4.11 対策）
+	// ユーザーがコアの color supports で背景色を上書きした場合（ラッパーに
+	// .has-background が付く）は、既定の背景色を当てずユーザー指定を優先する。
+	&:not(.has-background) .vkbm-reservation-button__link {
+		background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
+	}
+
+	&:not(.has-background) .vkbm-reservation-button__link:hover {
+		background:
+			color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb))
+			75%, #000);
+	}
+
+	// 文字色も同様に、ユーザーがコアの color supports で文字色を指定した場合
+	// （ラッパーに .has-text-color が付く）は既定の白文字を当てない。
+	&:not(.has-text-color) .vkbm-reservation-button__link {
+		color: #fff;
+	}
+
+	// 無効状態（オンライン予約不可）のボタンは既定の primary 着色を上書きし、
+	// 共通の .is-disabled（薄いグレー＋操作不可）の見た目を保つ。
+	&:not(.has-background) .vkbm-reservation-button__link.is-disabled {
+		background: var(--vkbm--color--muted, #6b7280);
+	}
+}
+
+// フォーカスリングは背景色に依存せず確実に見えるよう、白の内側リング＋
+// 濃色の外側リングの二重構成にする（暗い背景でも明るい背景でも視認可能）。
+// outline は潰さない。
+.vkbm-reservation-button__link:focus,
+.vkbm-reservation-button__link:focus-visible {
+	outline: 2px solid var(--vkbm--color--primary, #2563eb);
+	outline-offset: 2px;
+	box-shadow:
+		0 0 0 2px #fff,
+		0 0 0 4px #11181c;
+}

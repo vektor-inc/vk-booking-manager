@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Provides calculated availability data for menus and staff resources.
  *
@@ -21,6 +20,7 @@ use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
@@ -47,17 +47,25 @@ class Availability_Service {
 	private const BOOKING_META_TOTAL_END = '_vkbm_booking_total_end';
 	private const BOOKING_META_RESOURCE  = '_vkbm_booking_resource_id';
 	private const BOOKING_META_STATUS    = '_vkbm_booking_status';
+	private const BOOKING_META_GUESTS    = '_vkbm_booking_guests';
+	private const BOOKING_META_EXCLUSIVE = '_vkbm_booking_exclusive';
+	private const BOOKING_META_SERVICE   = '_vkbm_booking_service_id';
 
 	private const MENU_META_DURATION             = '_vkbm_duration_minutes';
 	private const MENU_META_BUFFER_AFTER         = '_vkbm_buffer_after_minutes';
 	private const MENU_META_DEADLINE_HOURS       = '_vkbm_reservation_deadline_hours';
-	private const MENU_META_MAX_ADVANCE_DAYS    = '_vkbm_max_advance_booking_days';
+	private const MENU_META_MAX_ADVANCE_DAYS     = '_vkbm_max_advance_booking_days';
 	private const MENU_META_STAFF_IDS            = '_vkbm_staff_ids';
 	private const MENU_META_ARCHIVED             = '_vkbm_is_archived';
 	private const MENU_META_ONLINE_DISABLED      = '_vkbm_online_unavailable';
 	private const MENU_META_RESERVATION_DAY_TYPE = '_vkbm_reservation_day_type';
-	private const MENU_META_FIXED_START_TIMES    = '_vkbm_fixed_start_times';
-	private const MENU_META_MAX_CAPACITY         = '_vkbm_max_capacity';
+	// メタキーの定義元は Reservation_Day（single source of truth）。
+	private const MENU_META_RESERVATION_CUSTOM_WEEKDAYS = Reservation_Day::META_CUSTOM_WEEKDAYS;
+	private const MENU_META_RESERVATION_CUSTOM_DATES    = Reservation_Day::META_CUSTOM_DATES;
+	private const MENU_META_FIXED_START_TIMES           = '_vkbm_fixed_start_times';
+	private const MENU_META_MAX_CAPACITY                = '_vkbm_max_capacity';
+	private const MENU_META_MIN_CAPACITY                = '_vkbm_min_capacity';
+	private const MENU_META_EXCLUSIVE_WHEN_BOOKED       = '_vkbm_exclusive_when_booked';
 
 	private const DAY_STATUS_OPEN            = 'open';
 	private const DAY_STATUS_REGULAR_HOLIDAY = 'regular_holiday';
@@ -90,7 +98,9 @@ class Availability_Service {
 	/**
 	 * Booking cache.
 	 *
-	 * @var array<string, array<int, array<string, DateTimeImmutable>>>
+	 * スタッフ別予約は guests を含み、ユーザー別予約は start/end のみを持つため、guests は任意キーとする。
+	 *
+	 * @var array<string, array<int, array{start:DateTimeImmutable, end:DateTimeImmutable, guests?:int}>>
 	 */
 	private array $booking_cache = array();
 
@@ -170,14 +180,27 @@ class Availability_Service {
 			$status     = $this->map_status_to_calendar_label( $status_key );
 			$is_holiday = in_array( $status, array( 'holiday', 'off', 'special_close' ), true );
 
+			// 貸し切り予約で閉じた枠（exclusive_closed）は「空き枠」として数えない。
+			// すべての枠が貸し切りで閉じた日はカレンダー上 × 扱い（available_slots=0・is_disabled=true）になる。
+			// 満席（remaining=0 だが exclusive ではない）枠は従来どおり日数に数え、フロントで「満席」として
+			// 表示できるよう残す（既存の複数人予約の挙動を変えない）。
+			$bookable_slots = array_values(
+				array_filter(
+					$slots,
+					static function ( array $slot ): bool {
+						return empty( $slot['exclusive_closed'] );
+					}
+				)
+			);
+
 			$results[] = array(
 				'date'            => $date,
-				'available_slots' => count( $slots ),
-				'first_start_at'  => $slots ? $slots[0]['start_at'] : null,
+				'available_slots' => count( $bookable_slots ),
+				'first_start_at'  => $bookable_slots ? $bookable_slots[0]['start_at'] : null,
 				'shift_status'    => $status,
 				'is_holiday'      => $is_holiday,
-				'is_disabled'     => empty( $slots ),
-				'notes'           => $this->build_day_notes( $status_key, $slots ),
+				'is_disabled'     => empty( $bookable_slots ),
+				'notes'           => $this->build_day_notes( $status_key, $bookable_slots ),
 			);
 		}
 
@@ -413,7 +436,7 @@ class Availability_Service {
 	 */
 	private function generate_slots_for_date( WP_Post $menu_post, array $staff_ids, string $date, DateTimeZone $timezone, bool $is_staff_preferred ): array {
 		$menu_settings = $this->get_menu_settings( $menu_post );
-		if ( ! $this->is_date_allowed_for_menu( (string) ( $menu_settings['reservation_day_type'] ?? '' ), $date, $timezone ) ) {
+		if ( ! $this->is_date_allowed_for_menu( $menu_settings, $date, $timezone ) ) {
 			return array();
 		}
 
@@ -430,11 +453,11 @@ class Availability_Service {
 			}
 		}
 
-		$slot_step_minutes  = $this->get_slot_step_minutes();
-		$total_block_min    = max( $slot_step_minutes, $menu_settings['total_duration'] );
-		$service_minutes    = $menu_settings['duration'];
-		$fixed_start_times  = $menu_settings['fixed_start_times'] ?? array();
-		$deadline_cutoff    = null;
+		$slot_step_minutes = $this->get_slot_step_minutes();
+		$total_block_min   = max( $slot_step_minutes, $menu_settings['total_duration'] );
+		$service_minutes   = $menu_settings['duration'];
+		$fixed_start_times = $menu_settings['fixed_start_times'] ?? array();
+		$deadline_cutoff   = null;
 
 		if ( $menu_settings['deadline_hours'] > 0 ) {
 			// Use the site clock to avoid user-provided timezone drift, but compare in requested timezone.
@@ -452,6 +475,9 @@ class Availability_Service {
 		// Retrieve max capacity (configurable to 2+ in Pro, defaults to 1).
 		$max_capacity = $this->get_menu_max_capacity( $menu_post );
 
+		// 最小催行人数（グループ開催型）を取得（0=制約なし）。フロント・管理画面の催行状態表示に用いる。
+		$min_capacity = $this->get_menu_min_capacity( $menu_post );
+
 		$staff_info = $this->get_staff_snapshot( $staff_ids );
 		$all_slots  = array();
 
@@ -466,7 +492,7 @@ class Availability_Service {
 				continue;
 			}
 
-			$bookings    = $this->get_bookings_for_staff_date( $staff_id, $date, $timezone );
+			$bookings = $this->get_bookings_for_staff_date( $staff_id, $date, $timezone );
 			// スタッフ指名時は予約済みスロットをスキップし、自動割り当て時は予約済みも含めて返す。
 			$staff_slots = $this->build_slots_from_entry(
 				$day_entry['slots'],
@@ -478,7 +504,8 @@ class Availability_Service {
 				$bookings,
 				$slot_step_minutes,
 				$fixed_start_times,
-				$is_staff_preferred
+				$is_staff_preferred,
+				(int) $menu_post->ID
 			);
 
 			if ( empty( $staff_slots ) ) {
@@ -489,8 +516,11 @@ class Availability_Service {
 			foreach ( $staff_slots as $index => $slot ) {
 				// スタッフ指名ありの場合は従来どおり capacity=1（1対1）。
 				// Staff-preferred slots always have capacity 1 (one-on-one).
-				$booking_count = isset( $slot['booking_count'] ) ? (int) $slot['booking_count'] : 0;
-				$all_slots[]   = array(
+				$guest_count = isset( $slot['guest_count'] ) ? (int) $slot['guest_count'] : 0;
+				// 貸し切り予約で閉じた枠は、残席があっても受付停止（remaining=0）にする。
+				$exclusive_closed = ! empty( $slot['exclusive_closed'] );
+				$remaining        = $exclusive_closed ? 0 : max( 0, 1 - $guest_count );
+				$all_slots[]      = array(
 					'slot_id'          => sprintf( '%d-%s', $staff_id, gmdate( 'YmdHis', $slot['start']->getTimestamp() ) ),
 					'start_at'         => $slot['start']->format( DATE_ATOM ),
 					'end_at'           => $slot['end']->format( DATE_ATOM ),
@@ -498,8 +528,12 @@ class Availability_Service {
 					'duration_minutes' => $service_minutes,
 					'staff'            => $staff_info[ $staff_id ],
 					'capacity'         => 1,
-					'remaining'        => max( 0, 1 - $booking_count ),
-					'booking_count'    => $booking_count,
+					'remaining'        => $remaining,
+					'guest_count'      => $guest_count,
+					// 最小催行人数と当該枠の合計予約人数（指名枠は単一スタッフ=合計）。フロント・管理画面の催行状態表示用。
+					'min_capacity'     => $min_capacity,
+					'booked_guests'    => $guest_count,
+					'exclusive_closed' => $exclusive_closed,
 					'flags'            => array(
 						'is_last_slot_of_day'   => ( $index === $last_index ),
 						'requires_confirmation' => false,
@@ -510,7 +544,7 @@ class Availability_Service {
 		}
 
 		if ( ! $is_staff_preferred ) {
-			return $this->collapse_slots_for_auto_assignment( $all_slots, (int) $menu_post->ID, $max_capacity );
+			return $this->collapse_slots_for_auto_assignment( $all_slots, (int) $menu_post->ID, $max_capacity, $min_capacity );
 		}
 
 		usort(
@@ -532,14 +566,16 @@ class Availability_Service {
 	 * @param array<int, array<string, mixed>> $slots        Slots.
 	 * @param int                              $menu_id      Menu ID.
 	 * @param int                              $max_capacity Maximum simultaneous bookings per slot.
+	 * @param int                              $min_capacity 最小催行人数（0=制約なし）。
 	 * @return array<int, array<string, mixed>>
 	 */
-	private function collapse_slots_for_auto_assignment( array $slots, int $menu_id, int $max_capacity = 1 ): array {
+	private function collapse_slots_for_auto_assignment( array $slots, int $menu_id, int $max_capacity = 1, int $min_capacity = 0 ): array {
 		if ( empty( $slots ) ) {
 			return array();
 		}
 
 		$max_capacity = max( 1, $max_capacity );
+		$min_capacity = max( 0, $min_capacity );
 		$grouped      = array();
 
 		foreach ( $slots as $slot ) {
@@ -557,6 +593,8 @@ class Availability_Service {
 					'assignable_staff_ids' => array(),
 					'capacity'             => 1,
 					'remaining'            => 1,
+					// 貸し切り予約で閉じた枠かどうか。同一時間帯のどのスタッフ枠に貸し切り予約があっても閉じる。
+					'exclusive_closed'     => ! empty( $slot['exclusive_closed'] ),
 					'flags'                => array(
 						'is_last_slot_of_day'   => ! empty( $slot['flags']['is_last_slot_of_day'] ),
 						'requires_confirmation' => ! empty( $slot['flags']['requires_confirmation'] ),
@@ -566,35 +604,29 @@ class Availability_Service {
 			} else {
 				$grouped[ $key ]['flags']['is_last_slot_of_day']   = $grouped[ $key ]['flags']['is_last_slot_of_day'] || ! empty( $slot['flags']['is_last_slot_of_day'] );
 				$grouped[ $key ]['flags']['requires_confirmation'] = $grouped[ $key ]['flags']['requires_confirmation'] || ! empty( $slot['flags']['requires_confirmation'] );
+				// 同一時間帯のいずれかのスタッフ枠が貸し切りで閉じていれば、その枠は受付停止にする。
+				$grouped[ $key ]['exclusive_closed'] = $grouped[ $key ]['exclusive_closed'] || ! empty( $slot['exclusive_closed'] );
 			}
 
-			$staff_id      = isset( $slot['staff']['id'] ) ? (int) $slot['staff']['id'] : 0;
-			$booking_count = isset( $slot['booking_count'] ) ? (int) $slot['booking_count'] : 0;
+			$staff_id    = isset( $slot['staff']['id'] ) ? (int) $slot['staff']['id'] : 0;
+			$guest_count = isset( $slot['guest_count'] ) ? (int) $slot['guest_count'] : 0;
 
 			// シフトに入っているスタッフはすべて割り当て候補に追加する。
-			// max_capacity > 1 の場合、同じスタッフが複数予約を担当できるため、
-			// 予約済みのスタッフも候補に含める。
-			// Add all staff with shifts as assignable candidates.
-			// When max_capacity > 1, the same staff can handle multiple bookings,
-			// so even staff with existing bookings are included.
+			// 1予約は分割せず単一スタッフへ割り当てるため、各スタッフの負荷（予約人数）を個別に保持する。
 			if ( $staff_id > 0 ) {
 				$grouped[ $key ]['assignable_staff_ids'][] = $staff_id;
+				if ( ! isset( $grouped[ $key ]['staff_loads'] ) ) {
+					$grouped[ $key ]['staff_loads'] = array();
+				}
+				// 同一スタッフが重複して現れた場合は最大の負荷を採用する（防御的）。
+				$grouped[ $key ]['staff_loads'][ $staff_id ] = max(
+					isset( $grouped[ $key ]['staff_loads'][ $staff_id ] ) ? (int) $grouped[ $key ]['staff_loads'][ $staff_id ] : 0,
+					$guest_count
+				);
 			}
-
-			// 各スタッフの予約数を合計して、スロット全体の予約数を集計する。
-			// Sum each staff member's booking count to get the total for the slot.
-			if ( ! isset( $grouped[ $key ]['total_booking_count'] ) ) {
-				$grouped[ $key ]['total_booking_count'] = 0;
-			}
-			$grouped[ $key ]['total_booking_count'] += $booking_count;
 		}
 
 		foreach ( $grouped as $key => $slot ) {
-			$total_booked   = isset( $slot['total_booking_count'] ) ? (int) $slot['total_booking_count'] : 0;
-			$menu_remaining = max( 0, $max_capacity - $total_booked );
-
-			$grouped[ $key ]['capacity'] = $max_capacity;
-
 			if ( ! empty( $slot['assignable_staff_ids'] ) ) {
 				$unique = array_values(
 					array_unique(
@@ -614,12 +646,36 @@ class Availability_Service {
 				$grouped[ $key ]['assignable_staff_ids'] = array();
 			}
 
-			// remaining は max_capacity から既存予約数を引いた値。
-			// スタッフは同じ枠で複数予約を担当できるため、スタッフ数による制約はない。
-			// remaining = max_capacity - total bookings.
-			// Staff can handle multiple bookings in the same slot, so staff count is not a constraint.
-			$grouped[ $key ]['remaining'] = $menu_remaining;
+			// 1予約は分割せず単一スタッフへ割り当てるため、capacity は max_capacity（1スタッフの上限）。
+			$grouped[ $key ]['capacity'] = $max_capacity;
 
+			// remaining = 対応可能スタッフの中で「最も空きの大きい単一スタッフの残り」。
+			// = 1予約で入れられる最大人数。対応可能スタッフが0人なら 0（予約不可）。
+			$staff_loads    = ( isset( $slot['staff_loads'] ) && is_array( $slot['staff_loads'] ) ) ? $slot['staff_loads'] : array();
+			$best_remaining = 0;
+
+			// 催行判定用の合計予約人数（グループ開催型）。
+			// 自動割り当てでは同一時間帯がスタッフ横断で1枠に集約されるため、
+			// 各スタッフ枠の予約人数（staff_loads）を合計してその時間枠全体の相乗り人数とする。
+			$grouped[ $key ]['min_capacity']  = $min_capacity;
+			$grouped[ $key ]['booked_guests'] = (int) array_sum( $staff_loads );
+			foreach ( $grouped[ $key ]['assignable_staff_ids'] as $sid ) {
+				$load      = isset( $staff_loads[ $sid ] ) ? (int) $staff_loads[ $sid ] : 0;
+				$remaining = max( 0, $max_capacity - $load );
+				if ( $remaining > $best_remaining ) {
+					$best_remaining = $remaining;
+				}
+			}
+			$grouped[ $key ]['remaining'] = empty( $grouped[ $key ]['assignable_staff_ids'] ) ? 0 : $best_remaining;
+
+			// 貸し切り予約で閉じた枠は、残席があっても受付停止（remaining=0）に上書きする。
+			// スロット自体は消さず、フロントが「満席」と区別して「予約受付終了」を表示できるよう exclusive_closed を残す。
+			if ( ! empty( $grouped[ $key ]['exclusive_closed'] ) ) {
+				$grouped[ $key ]['remaining'] = 0;
+			}
+
+			// 内部集計用キーは出力に含めない。
+			unset( $grouped[ $key ]['staff_loads'] );
 		}
 
 		// 満枠スロットもフロントエンド側で「満枠」表示するため除外しない。
@@ -681,6 +737,7 @@ class Availability_Service {
 	 * @param bool                                         $skip_booked_slots  予約済みスロットをスキップするか。
 	 *                                                                         true: スタッフ指名時（予約済みスロットを除外）。
 	 *                                                                         false: 自動割り当て時（予約済みスロットも含めて返す）。
+	 * @param int                                          $menu_id            当該メニューID。貸し切り判定をこのメニューの予約に限定する（0 で全メニュー）。
 	 * @return array<int, array<string, DateTimeImmutable>>
 	 */
 	private function build_slots_from_entry(
@@ -693,7 +750,8 @@ class Availability_Service {
 		array $bookings,
 		int $slot_step_minutes,
 		array $fixed_start_times = array(),
-		bool $skip_booked_slots = true
+		bool $skip_booked_slots = true,
+		int $menu_id = 0
 	): array {
 		$result = array();
 
@@ -730,9 +788,12 @@ class Availability_Service {
 					}
 
 					// 予約が既にある場合の処理。
-					// スタッフ指名時はスキップし、自動割り当て時は予約数を保持して返す。
-					$booking_count = $this->count_bookings_for_slot( $cursor, $end, $bookings );
-					if ( $skip_booked_slots && $booking_count > 0 ) {
+					// スタッフ指名時はスキップし、自動割り当て時は予約人数を保持して返す。
+					$guest_count = $this->count_guests_for_slot( $cursor, $end, $bookings );
+					// 貸し切り予約がこの時間帯に重複していれば、残席があっても受付停止する。
+					$exclusive_closed = $this->slot_has_exclusive_booking( $cursor, $end, $bookings, $menu_id );
+					// スタッフ指名時は、予約済み（人数>0）または貸し切りで閉じた枠をスキップする。
+					if ( $skip_booked_slots && ( $guest_count > 0 || $exclusive_closed ) ) {
 						continue;
 					}
 
@@ -742,7 +803,8 @@ class Availability_Service {
 						'end'              => $end,
 						'service_end'      => $service_end,
 						'service_duration' => $service_minutes,
-						'booking_count'    => $booking_count,
+						'guest_count'      => $guest_count,
+						'exclusive_closed' => $exclusive_closed,
 					);
 				}
 			} else {
@@ -760,9 +822,12 @@ class Availability_Service {
 					}
 
 					// 予約が既にある場合の処理。
-					// スタッフ指名時はスキップし、自動割り当て時は予約数を保持して返す。
-					$booking_count = $this->count_bookings_for_slot( $cursor, $end, $bookings );
-					if ( $skip_booked_slots && $booking_count > 0 ) {
+					// スタッフ指名時はスキップし、自動割り当て時は予約人数を保持して返す。
+					$guest_count = $this->count_guests_for_slot( $cursor, $end, $bookings );
+					// 貸し切り予約がこの時間帯に重複していれば、残席があっても受付停止する。
+					$exclusive_closed = $this->slot_has_exclusive_booking( $cursor, $end, $bookings, $menu_id );
+					// スタッフ指名時は、予約済み（人数>0）または貸し切りで閉じた枠をスキップする。
+					if ( $skip_booked_slots && ( $guest_count > 0 || $exclusive_closed ) ) {
 						$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
 						continue;
 					}
@@ -774,7 +839,8 @@ class Availability_Service {
 						'end'              => $end,
 						'service_end'      => $service_end,
 						'service_duration' => $service_minutes,
-						'booking_count'    => $booking_count,
+						'guest_count'      => $guest_count,
+						'exclusive_closed' => $exclusive_closed,
 					);
 
 					$cursor = $cursor->modify( sprintf( '+%d minutes', $slot_step_minutes ) );
@@ -798,21 +864,62 @@ class Availability_Service {
 	}
 
 	/**
-	 * 指定した時間帯に重複する予約の件数を返す。
+	 * 指定した時間帯に重複する予約の合計予約人数を返す。
 	 *
-	 * @param DateTimeImmutable                            $start    候補スロット開始。
-	 * @param DateTimeImmutable                            $end      候補スロット終了。
-	 * @param array<int, array<string, DateTimeImmutable>> $bookings 予約リスト。
-	 * @return int
+	 * 複数人予約では1予約が人数分の枠を消費するため、予約件数ではなく
+	 * 重複する各予約の guests を合計した値（既定1名）を返す。
+	 *
+	 * @param DateTimeImmutable                                                              $start    候補スロット開始。
+	 * @param DateTimeImmutable                                                              $end      候補スロット終了。
+	 * @param array<int, array{start:DateTimeImmutable, end:DateTimeImmutable, guests?:int}> $bookings 予約リスト。
+	 * @return int 重複する予約の合計予約人数。
 	 */
-	public function count_bookings_for_slot( DateTimeImmutable $start, DateTimeImmutable $end, array $bookings ): int {
+	public function count_guests_for_slot( DateTimeImmutable $start, DateTimeImmutable $end, array $bookings ): int {
 		$count = 0;
 		foreach ( $bookings as $booking ) {
 			if ( $this->is_slot_overlapping( $start, $end, $booking ) ) {
-				++$count;
+				// 件数ではなく予約人数を加算する（複数人予約で枠を人数分消費するため）。
+				$guests = isset( $booking['guests'] ) ? max( 1, (int) $booking['guests'] ) : 1;
+				$count += $guests;
 			}
 		}
 		return $count;
+	}
+
+	/**
+	 * 指定した時間帯に貸し切り（枠を専有する）予約が1件でも重複しているか判定する。
+	 *
+	 * 貸し切り予約が入った時間帯は、残席があっても他のユーザーは予約できなくする。
+	 * count_guests_for_slot() と同じ overlap 走査を使い回し、空き判定・受付停止を
+	 * すべてこのヘルパー経由で統一する。判定対象（status フィルタ済みの予約配列）は
+	 * get_bookings_for_staff_date() が返す配列をそのまま渡す想定で、各予約の
+	 * exclusive キーを参照する。
+	 *
+	 * 貸し切りは「当該メニューに入った予約」だけがそのメニューの枠を閉じる仕様のため、
+	 * $menu_id を指定した場合は予約の service_id が一致する貸し切り予約のみを対象にする
+	 * （メニューAの貸し切り予約がメニューBの枠を閉じないようにする）。$menu_id が 0 の場合は
+	 * メニューを問わず判定する（後方互換）。
+	 *
+	 * @param DateTimeImmutable                                                                                                $start    候補スロット開始。
+	 * @param DateTimeImmutable                                                                                                $end      候補スロット終了。
+	 * @param array<int, array{start:DateTimeImmutable, end:DateTimeImmutable, guests?:int, exclusive?:bool, service_id?:int}> $bookings 予約リスト。
+	 * @param int                                                                                                              $menu_id  当該メニューID（>0 でそのメニューの貸し切り予約のみ対象。0 で全メニュー対象）。
+	 * @return bool 重複する貸し切り予約があれば true。
+	 */
+	public function slot_has_exclusive_booking( DateTimeImmutable $start, DateTimeImmutable $end, array $bookings, int $menu_id = 0 ): bool {
+		foreach ( $bookings as $booking ) {
+			if ( empty( $booking['exclusive'] ) ) {
+				continue;
+			}
+			// 当該メニュー限定指定がある場合は、予約のメニュー（service_id）が一致するものだけを対象にする。
+			if ( $menu_id > 0 && (int) ( $booking['service_id'] ?? 0 ) !== $menu_id ) {
+				continue;
+			}
+			if ( $this->is_slot_overlapping( $start, $end, $booking ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -861,7 +968,7 @@ class Availability_Service {
 	 * @param int          $staff_id Staff ID.
 	 * @param string       $date     Date (Y-m-d).
 	 * @param DateTimeZone $timezone Timezone.
-	 * @return array<int, array<string, DateTimeImmutable>>
+	 * @return array<int, array{start:DateTimeImmutable, end:DateTimeImmutable, guests:int}>
 	 */
 	private function get_bookings_for_staff_date( int $staff_id, string $date, DateTimeZone $timezone ): array {
 		$cache_key = sprintf( '%d-%s', $staff_id, $date );
@@ -920,13 +1027,15 @@ class Availability_Service {
 
 		foreach ( $query->posts as $post_id ) {
 			$status = (string) get_post_meta( (int) $post_id, self::BOOKING_META_STATUS, true );
-			if ( 'no_show' === $status ) {
+			// キャンセル・無断キャンセルの予約は枠を消費しないため残数集計から除外する
+			// （確定時の負荷集計と同じ方針）。
+			if ( 'no_show' === $status || 'cancelled' === $status ) {
 				continue;
 			}
 
 			$start_raw     = (string) get_post_meta( (int) $post_id, self::BOOKING_META_START, true );
 			$total_end_raw = (string) get_post_meta( (int) $post_id, self::BOOKING_META_TOTAL_END, true );
-			$end_raw = '' !== $total_end_raw ? $total_end_raw : (string) get_post_meta( (int) $post_id, self::BOOKING_META_END, true );
+			$end_raw       = '' !== $total_end_raw ? $total_end_raw : (string) get_post_meta( (int) $post_id, self::BOOKING_META_END, true );
 
 			if ( ! $start_raw || ! $end_raw ) {
 				continue;
@@ -939,9 +1048,26 @@ class Availability_Service {
 				continue;
 			}
 
+			// 予約人数（複数人予約。未設定の既存予約は1名として扱う）。
+			$guests_raw = get_post_meta( (int) $post_id, self::BOOKING_META_GUESTS, true );
+			$guests     = '' === $guests_raw ? 1 : max( 1, (int) $guests_raw );
+
+			// 貸し切り予約フラグ（この予約が枠を専有するか）。
+			// 設定ONのメニューで予約確定時に true が付与される。判定経路を統一するため
+			// ここで booking 配列に exclusive キーとして持たせ、slot_has_exclusive_booking() で参照する。
+			$exclusive = (bool) get_post_meta( (int) $post_id, self::BOOKING_META_EXCLUSIVE, true );
+
+			// 予約のメニューID（サービスID）。貸し切り判定は「当該メニューの貸し切り予約のみ」を
+			// 対象にするため、判定時にこの service_id で絞り込む（メニューAの貸し切りが
+			// メニューBの枠を閉じないようにする）。
+			$service_id = (int) get_post_meta( (int) $post_id, self::BOOKING_META_SERVICE, true );
+
 			$bookings[] = array(
-				'start' => $start_dt,
-				'end'   => $end_dt,
+				'start'      => $start_dt,
+				'end'        => $end_dt,
+				'guests'     => $guests,
+				'exclusive'  => $exclusive,
+				'service_id' => $service_id,
 			);
 		}
 
@@ -1010,13 +1136,15 @@ class Availability_Service {
 
 		foreach ( $query->posts as $post_id ) {
 			$status = (string) get_post_meta( (int) $post_id, self::BOOKING_META_STATUS, true );
-			if ( 'no_show' === $status ) {
+			// キャンセル・無断キャンセルの予約は枠を消費しないため除外する
+			// （get_bookings_for_staff_date() と同じ集計方針）。
+			if ( 'no_show' === $status || 'cancelled' === $status ) {
 				continue;
 			}
 
 			$start_raw     = (string) get_post_meta( (int) $post_id, self::BOOKING_META_START, true );
 			$total_end_raw = (string) get_post_meta( (int) $post_id, self::BOOKING_META_TOTAL_END, true );
-			$end_raw = '' !== $total_end_raw ? $total_end_raw : (string) get_post_meta( (int) $post_id, self::BOOKING_META_END, true );
+			$end_raw       = '' !== $total_end_raw ? $total_end_raw : (string) get_post_meta( (int) $post_id, self::BOOKING_META_END, true );
 
 			if ( ! $start_raw || ! $end_raw ) {
 				continue;
@@ -1193,11 +1321,48 @@ class Availability_Service {
 	 * @return int
 	 */
 	public function get_menu_max_capacity( WP_Post $menu_post ): int {
-		$meta = get_post_meta( $menu_post->ID, self::MENU_META_MAX_CAPACITY, true );
+		// 複数人予約機能が無効、または指名機能が有効な場合は1対1予約のため上限を1に固定する。
+		// これによりフロントの空き枠生成・確定時の capacity チェックの双方で複数人受付を抑止する。
+		if ( ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+			return 1;
+		}
+
+		$meta     = get_post_meta( $menu_post->ID, self::MENU_META_MAX_CAPACITY, true );
 		$capacity = '' === $meta ? 1 : (int) $meta;
 		return max( 1, $capacity );
 	}
 
+	/**
+	 * サービスメニューの最小催行人数（グループ開催型）を取得する。
+	 *
+	 * 同じ時間枠の合計予約人数がこの値に達したら開催確定とみなす表示用の値です。
+	 * 0 は「制約なし（催行判定なし）」で、未設定・Free版・指名ON・複数人予約OFF時は 0 を返します。
+	 * 最大同時予約人数（get_menu_max_capacity）を上限としてクランプします。
+	 *
+	 * @param WP_Post $menu_post メニューの投稿オブジェクト。
+	 * @return int 最小催行人数（0=制約なし）。
+	 */
+	public function get_menu_min_capacity( WP_Post $menu_post ): int {
+		// 最小催行人数は複数人相乗りの催行判定が前提のため、最大受付数が1（複数人予約OFF・指名ON・Free版）の場合は無効。
+		// max_capacity と同じゲートに追従し、1対1予約のメニューでは常に0（制約なし）を返す。
+		$max_capacity = $this->get_menu_max_capacity( $menu_post );
+		if ( $max_capacity <= 1 ) {
+			return 0;
+		}
+
+		$meta = get_post_meta( $menu_post->ID, self::MENU_META_MIN_CAPACITY, true );
+		$min  = '' === $meta ? 0 : (int) $meta;
+
+		// 0未満は0へ、最大受付数を超える値は最大受付数へクランプする。
+		return max( 0, min( $max_capacity, $min ) );
+	}
+
+	/**
+	 * メニュー単位の予約設定（締切・上限・指名要否など）を解決して返す。
+	 *
+	 * @param WP_Post $menu_post サービスメニューの投稿オブジェクト。
+	 * @return array メニューに適用される設定値の配列。
+	 */
 	private function get_menu_settings( WP_Post $menu_post ): array {
 		$settings              = $this->settings_repository->get_settings();
 		$provider_deadline     = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
@@ -1210,19 +1375,23 @@ class Availability_Service {
 
 		// 予約可能期間（日数）の設定を取得。サービス個別設定があればそちらを優先。
 		// Retrieve max advance booking days. Per-service override takes priority.
-		$provider_max_advance  = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
-		$max_advance_meta      = get_post_meta( $menu_post->ID, self::MENU_META_MAX_ADVANCE_DAYS, true );
-		$max_advance_days      = '' === $max_advance_meta ? $provider_max_advance : (int) $max_advance_meta;
+		$provider_max_advance = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
+		$max_advance_meta     = get_post_meta( $menu_post->ID, self::MENU_META_MAX_ADVANCE_DAYS, true );
+		$max_advance_days     = '' === $max_advance_meta ? $provider_max_advance : (int) $max_advance_meta;
 
 		$duration          = $duration > 0 ? $duration : 60;
 		$slot_step_minutes = $this->get_slot_step_minutes();
 		$total_block       = max( $duration + $buffer_after, $slot_step_minutes );
 
-		$reservation_day_type = (string) get_post_meta( $menu_post->ID, self::MENU_META_RESERVATION_DAY_TYPE, true );
-		$allowed_day_types    = array( '', 'weekend', 'weekday' );
-		if ( ! in_array( $reservation_day_type, $allowed_day_types, true ) ) {
-			$reservation_day_type = '';
-		}
+		// 予約可能日種別は共有ヘルパーで許容値（指定なし・土日限定・平日限定・曜日指定・日付指定）に正規化する。
+		$reservation_day_type = Reservation_Day::sanitize_type( (string) get_post_meta( $menu_post->ID, self::MENU_META_RESERVATION_DAY_TYPE, true ) );
+
+		// 曜日指定（頻度 × 曜日）・日付指定（単日・期間）の詳細設定を取得する。
+		// 種別が custom_weekday / custom_date のときだけ is_date_allowed_for_menu() で参照される。
+		$reservation_custom_weekdays = get_post_meta( $menu_post->ID, self::MENU_META_RESERVATION_CUSTOM_WEEKDAYS, true );
+		$reservation_custom_weekdays = is_array( $reservation_custom_weekdays ) ? $reservation_custom_weekdays : array();
+		$reservation_custom_dates    = get_post_meta( $menu_post->ID, self::MENU_META_RESERVATION_CUSTOM_DATES, true );
+		$reservation_custom_dates    = is_array( $reservation_custom_dates ) ? $reservation_custom_dates : array();
 
 		$fixed_start_times_raw = get_post_meta( $menu_post->ID, self::MENU_META_FIXED_START_TIMES, true );
 		$fixed_start_times     = is_array( $fixed_start_times_raw ) ? $fixed_start_times_raw : array();
@@ -1242,45 +1411,49 @@ class Availability_Service {
 		sort( $fixed_start_times, SORT_STRING );
 
 		return array(
-			'duration'             => $duration,
-			'total_duration'       => $total_block,
-			'deadline_hours'       => max( 0, $deadline ),
-			'max_advance_days'     => max( 0, $max_advance_days ),
-			'reservation_day_type' => $reservation_day_type,
-			'fixed_start_times'    => $fixed_start_times,
+			'duration'                    => $duration,
+			'total_duration'              => $total_block,
+			'deadline_hours'              => max( 0, $deadline ),
+			'max_advance_days'            => max( 0, $max_advance_days ),
+			'reservation_day_type'        => $reservation_day_type,
+			'reservation_custom_weekdays' => $reservation_custom_weekdays,
+			'reservation_custom_dates'    => $reservation_custom_dates,
+			'fixed_start_times'           => $fixed_start_times,
 		);
 	}
 
 		/**
 		 * Determine if the given date is reservable for the menu day restriction.
 		 *
-		 * @param string       $reservation_day_type Restriction type (''|weekend|weekday).
-		 * @param string       $date                 Date string (Y-m-d).
-		 * @param DateTimeZone $timezone             Timezone for weekday calculation.
+		 * @param array<string, mixed> $menu_settings 予約枠設定（get_menu_settings() の戻り値）。
+		 * @param string               $date          Date string (Y-m-d).
+		 * @param DateTimeZone         $timezone      Timezone for weekday calculation.
 		 * @return bool
 		 */
-	private function is_date_allowed_for_menu( string $reservation_day_type, string $date, DateTimeZone $timezone ): bool {
+	private function is_date_allowed_for_menu( array $menu_settings, string $date, DateTimeZone $timezone ): bool {
+		$reservation_day_type = (string) ( $menu_settings['reservation_day_type'] ?? '' );
+
 		if ( '' === $reservation_day_type ) {
 			return true;
 		}
 
+		// 月次空き状況は Y-m-d 文字列と DateTimeZone から日付を組み立てる。
+		// パース経路は従来どおりこの箇所で保持し、失敗時は許可（true）へフォールバックする。
 		$datetime = DateTimeImmutable::createFromFormat( 'Y-m-d', $date, $timezone );
 		if ( ! $datetime instanceof DateTimeImmutable ) {
 			return true;
 		}
 
-		$weekday    = (int) $datetime->format( 'N' ); // 1 (Mon) - 7 (Sun).
-		$is_weekend = ( 6 === $weekday || 7 === $weekday );
-
-		if ( 'weekend' === $reservation_day_type ) {
-			return $is_weekend;
-		}
-
-		if ( 'weekday' === $reservation_day_type ) {
-			return ! $is_weekend;
-		}
-
-		return true;
+		// 曜日指定・日付指定は実際の日付が必要なため、共有ヘルパーの日付ベース判定へ委譲する。
+		// '' / weekend / weekday は is_date_allowed() 内で従来どおり曜日番号ベースの判定になる。
+		return Reservation_Day::is_date_allowed(
+			$reservation_day_type,
+			$datetime,
+			array(
+				'weekdays' => is_array( $menu_settings['reservation_custom_weekdays'] ?? null ) ? $menu_settings['reservation_custom_weekdays'] : array(),
+				'dates'    => is_array( $menu_settings['reservation_custom_dates'] ?? null ) ? $menu_settings['reservation_custom_dates'] : array(),
+			)
+		);
 	}
 
 	/**

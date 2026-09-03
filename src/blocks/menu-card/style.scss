@@ -1,0 +1,27 @@
+@use "../../../assets/scss/index-blocks.scss" as *;
+
+/***********************************
+ * Menu Card (single service card)
+ *
+ * カード本体のマークアップは menu-loop と同じ vkbm-menu-loop__* クラスが
+ * 出力されるため、見た目は menu-loop の style がそのまま適用される。
+ * ここでは 1 枚表示用のラッパ（vkbm-menu-card）の余白などのみ微調整する。
+ ***********************************/
+
+.vkbm-menu-card {
+	display: block;
+	width: 100%;
+}
+
+// 単一カードはグリッドではないため、カード自身が幅いっぱいに広がるようにする。
+.vkbm-menu-card .vkbm-menu-loop__card-item {
+	width: 100%;
+}
+
+// 注意文（編集者・管理者向け）はカード本体と同じ余白感で表示する。
+.vkbm-menu-card--notice {
+
+	.vkbm-alert {
+		margin: 0;
+	}
+}

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Handles persistence of resource schedule templates via post meta.
  *

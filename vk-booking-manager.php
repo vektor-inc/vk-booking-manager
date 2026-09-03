@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     1.1.3
+ * Version:     2.0.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -59,12 +59,17 @@ require_once __DIR__ . '/src/bookings/class-booking-admin.php';
 require_once __DIR__ . '/src/bookings/class-booking-draft-controller.php';
 require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
 require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
+require_once __DIR__ . '/src/common/class-price-tiers.php';
+require_once __DIR__ . '/src/common/class-exclusive-fee.php';
 require_once __DIR__ . '/src/assets/class-common-styles.php';
 require_once __DIR__ . '/src/term-order/class-term-order-manager.php';
 require_once __DIR__ . '/src/blocks/class-block-category.php';
+require_once __DIR__ . '/src/blocks/shared/class-reservation-button-renderer.php';
 require_once __DIR__ . '/src/blocks/class-menu-search-block.php';
 require_once __DIR__ . '/src/blocks/class-menu-loop-block.php';
+require_once __DIR__ . '/src/blocks/class-menu-card-block.php';
 require_once __DIR__ . '/src/blocks/class-reservation-block.php';
+require_once __DIR__ . '/src/blocks/class-reservation-button-block.php';
 require_once __DIR__ . '/src/availability/class-availability-service.php';
 require_once __DIR__ . '/src/rest/class-availability-controller.php';
 require_once __DIR__ . '/src/rest/class-menu-preview-controller.php';
@@ -79,6 +84,7 @@ require_once __DIR__ . '/src/notifications/class-booking-notification-service.ph
 require_once __DIR__ . '/src/auth/class-auth-shortcodes.php';
 require_once __DIR__ . '/src/post-order/class-post-order-manager.php';
 require_once __DIR__ . '/src/admin/class-owner-admin-menu-filter.php';
+require_once __DIR__ . '/src/admin/class-pro-upsell.php';
 require_once __DIR__ . '/src/admin/class-style-guide-page.php';
 require_once __DIR__ . '/src/admin/class-setup-notices.php';
 require_once __DIR__ . '/src/admin/class-user-profile-fields.php';
@@ -93,6 +99,7 @@ require_once __DIR__ . '/src/provider-settings/class-settings-service.php';
 use VKBookingManager\Admin\Email_Log_Page;
 use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\Admin\Owner_Admin_Menu_Filter;
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Admin\Service_Menu_Editor;
 use VKBookingManager\Admin\Shift_Dashboard_Page;
 use VKBookingManager\Admin\Style_Guide_Page;
@@ -107,10 +114,14 @@ use VKBookingManager\Bookings\Booking_Admin;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
+use VKBookingManager\Bookings\User_Favorites_Controller;
 use VKBookingManager\Blocks\Block_Category;
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\Blocks\Menu_Card_Block;
 use VKBookingManager\Blocks\Menu_Search_Block;
 use VKBookingManager\Blocks\Reservation_Block;
+use VKBookingManager\Blocks\Reservation_Button_Block;
+use VKBookingManager\Blocks\Reservation_Button_Renderer;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Capabilities\Roles_Manager;
 use VKBookingManager\Notifications\Booking_Notification_Service;
@@ -134,12 +145,12 @@ use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 
-/**
- * Builds the plugin instance.
- *
- * @return Plugin|null
- */
 if ( ! function_exists( 'vkbm_plugin' ) ) {
+	/**
+	 * Builds the plugin instance.
+	 *
+	 * @return Plugin|null
+	 */
 	function vkbm_plugin(): ?Plugin {
 		static $plugin = null;
 
@@ -151,114 +162,126 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 			return null;
 		}
 
-	$settings_repository = new Settings_Repository();
-	$settings_sanitizer  = new Settings_Sanitizer();
-	$settings_service    = new Settings_Service( $settings_repository, $settings_sanitizer );
+		$settings_repository = new Settings_Repository();
+		$settings_sanitizer  = new Settings_Sanitizer();
+		$settings_service    = new Settings_Service( $settings_repository, $settings_sanitizer );
 
-	$common_styles          = new Common_Styles();
-	$roles_manager          = new Roles_Manager();
-	$shift_dashboard_page   = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
-	$provider_settings_page = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '' );
-	$email_log_page         = new Email_Log_Page( 'vkbm-provider-settings', Capabilities::MANAGE_PROVIDER_SETTINGS );
-	// Development-only: keep access permissive (file presence is the main gate).
-	$style_guide_page                = new Style_Guide_Page( 'read' );
-	$setup_notices                   = new Setup_Notices();
-	$user_profile_fields             = new User_Profile_Fields();
-	$resource_schedule_repository    = new Resource_Schedule_Template_Repository();
-	$resource_schedule_meta_box      = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
-	$shift_editor                    = new Shift_Editor();
-	$staff_editor                    = new Staff_Editor();
-	$resource_tag_taxonomy           = new Resource_Tag_Taxonomy();
-	$service_menu_editor             = new Service_Menu_Editor();
-	$resource_post_type              = new Resource_Post_Type();
-	$owner_admin_menu_filter         = new Owner_Admin_Menu_Filter();
-	$shift_post_type                 = new Shift_Post_Type();
-	$service_menu_post_type          = new Service_Menu_Post_Type();
-	$booking_post_type               = new Booking_Post_Type();
-	$booking_notification_service    = new Booking_Notification_Service( $settings_repository );
-	$oembed_override                 = new OEmbed_Override();
-	$booking_admin                   = new Booking_Admin( $booking_notification_service );
-	$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository );
-	$availability_service            = new Availability_Service( $settings_repository );
-	$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service );
-	$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
-	$menu_search_block               = new Menu_Search_Block();
-	$menu_loop_block                 = new Menu_Loop_Block();
-	$reservation_block               = new Reservation_Block();
-	$availability_controller         = new Availability_Controller( $availability_service );
-	$current_user_controller         = new Current_User_Controller( $settings_service );
-	$menu_preview_controller         = new Menu_Preview_Controller( $menu_loop_block );
-	$provider_settings_controller    = new Provider_Settings_Controller( $settings_repository );
-	$auth_shortcodes                 = new Auth_Shortcodes( $settings_service );
-	$auth_form_controller            = new Auth_Form_Controller( $auth_shortcodes );
-	$post_order_manager              = new Post_Order_Manager(
-		array(
-			Resource_Post_Type::POST_TYPE,
-			Service_Menu_Post_Type::POST_TYPE,
-		)
-	);
-	$term_order_manager              = new Term_Order_Manager(
-		array(
-			Service_Menu_Post_Type::TAXONOMY,
-			Service_Menu_Post_Type::TAXONOMY_GROUP,
-			Resource_Tag_Taxonomy::TAXONOMY,
-		)
-	);
+		$common_styles          = new Common_Styles();
+		$roles_manager          = new Roles_Manager();
+		$shift_dashboard_page   = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
+		$provider_settings_page = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '' );
+		$email_log_page         = new Email_Log_Page( 'vkbm-provider-settings', Capabilities::MANAGE_PROVIDER_SETTINGS );
+		// Development-only: keep access permissive (file presence is the main gate).
+		$style_guide_page                = new Style_Guide_Page( 'read' );
+		$setup_notices                   = new Setup_Notices();
+		$user_profile_fields             = new User_Profile_Fields();
+		$resource_schedule_repository    = new Resource_Schedule_Template_Repository();
+		$resource_schedule_meta_box      = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
+		$shift_editor                    = new Shift_Editor();
+		$staff_editor                    = new Staff_Editor();
+		$resource_tag_taxonomy           = new Resource_Tag_Taxonomy();
+		$service_menu_editor             = new Service_Menu_Editor();
+		$resource_post_type              = new Resource_Post_Type();
+		$owner_admin_menu_filter         = new Owner_Admin_Menu_Filter();
+		$shift_post_type                 = new Shift_Post_Type();
+		$service_menu_post_type          = new Service_Menu_Post_Type();
+		$booking_post_type               = new Booking_Post_Type();
+		$booking_notification_service    = new Booking_Notification_Service( $settings_repository );
+		$oembed_override                 = new OEmbed_Override();
+		$booking_admin                   = new Booking_Admin( $booking_notification_service );
+		$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository );
+		$availability_service            = new Availability_Service( $settings_repository );
+		$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service );
+		$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
+		$user_favorites_controller       = new User_Favorites_Controller();
+		$reservation_button_renderer     = new Reservation_Button_Renderer( $settings_repository );
+		$menu_search_block               = new Menu_Search_Block();
+		$menu_loop_block                 = new Menu_Loop_Block( $settings_repository, $reservation_button_renderer );
+		$menu_card_block                 = new Menu_Card_Block( $menu_loop_block );
+		$reservation_block               = new Reservation_Block();
+		$reservation_button_block        = new Reservation_Button_Block( $reservation_button_renderer );
+		$availability_controller         = new Availability_Controller( $availability_service );
+		$current_user_controller         = new Current_User_Controller( $settings_service );
+		$menu_preview_controller         = new Menu_Preview_Controller( $menu_loop_block );
+		$provider_settings_controller    = new Provider_Settings_Controller( $settings_repository );
+		$auth_shortcodes                 = new Auth_Shortcodes( $settings_service );
+		$auth_form_controller            = new Auth_Form_Controller( $auth_shortcodes );
+		$post_order_manager              = new Post_Order_Manager(
+			array(
+				Resource_Post_Type::POST_TYPE,
+				Service_Menu_Post_Type::POST_TYPE,
+			)
+		);
+		$term_order_manager              = new Term_Order_Manager(
+			array(
+				Service_Menu_Post_Type::TAXONOMY,
+				Service_Menu_Post_Type::TAXONOMY_GROUP,
+				Resource_Tag_Taxonomy::TAXONOMY,
+			)
+		);
 
-	// リソースタグタクソノミーを登録（Pro版のみの機能）
-	// Register the resource tag taxonomy (Pro edition only).
-	$resource_tag_taxonomy->register();
+		// リソースタグタクソノミーを登録（Pro版のみの機能）
+		// Register the resource tag taxonomy (Pro edition only).
+		$resource_tag_taxonomy->register();
 
-	// Register development-only style guide page (menu appears only when docs/ui/style-guide.html exists).
-	$style_guide_page->register();
-	$setup_notices->register();
-	$email_log_page->register();
+		// Register development-only style guide page (menu appears only when docs/ui/style-guide.html exists).
+		$style_guide_page->register();
+		$setup_notices->register();
+		$email_log_page->register();
 
-	// ブロックインサーターに専用カテゴリーを追加（プラグインのブロックを見つけやすくするため）.
-	// Register the block inserter category (so plugin blocks are easy to find).
-	( new Block_Category() )->register();
-	$plugin = new Plugin(
-		$common_styles,
-		$provider_settings_page,
-		$roles_manager,
-		$resource_schedule_meta_box,
-		$shift_editor,
-		$staff_editor,
-		$service_menu_editor,
-		$shift_dashboard_page,
-		$owner_admin_menu_filter,
-		$resource_post_type,
-		$shift_post_type,
-		$service_menu_post_type,
-		$booking_post_type,
-		$booking_admin,
-		$booking_draft_controller,
-		$my_bookings_controller,
-		$menu_search_block,
-		$menu_loop_block,
-		$reservation_block,
-		$availability_controller,
-		$current_user_controller,
-		$booking_confirmation_controller,
-		$menu_preview_controller,
-		$provider_settings_controller,
-		$booking_notification_service,
-		$oembed_override,
-		$auth_shortcodes,
-		$auth_form_controller,
-		$post_order_manager,
-		$term_order_manager,
-		$user_profile_fields
-	);
+		// 無料版でプロ版への誘導リンク（プラグイン一覧）を登録する。Pro 版では no-op。
+		( new Pro_Upsell() )->register();
+
+		// ブロックインサーターに専用カテゴリーを追加（プラグインのブロックを見つけやすくするため）.
+		// Register the block inserter category (so plugin blocks are easy to find).
+		( new Block_Category() )->register();
+		$plugin = new Plugin(
+			$common_styles,
+			$provider_settings_page,
+			$roles_manager,
+			$resource_schedule_meta_box,
+			$shift_editor,
+			$staff_editor,
+			$service_menu_editor,
+			$shift_dashboard_page,
+			$owner_admin_menu_filter,
+			$resource_post_type,
+			$shift_post_type,
+			$service_menu_post_type,
+			$booking_post_type,
+			$booking_admin,
+			$booking_draft_controller,
+			$my_bookings_controller,
+			$menu_search_block,
+			$menu_loop_block,
+			$menu_card_block,
+			$reservation_block,
+			$reservation_button_block,
+			$availability_controller,
+			$current_user_controller,
+			$booking_confirmation_controller,
+			$menu_preview_controller,
+			$provider_settings_controller,
+			$booking_notification_service,
+			$oembed_override,
+			$auth_shortcodes,
+			$auth_form_controller,
+			$post_order_manager,
+			$term_order_manager,
+			$user_profile_fields,
+			$user_favorites_controller
+		);
 
 		return $plugin;
 	}
 }
 
-/**
- * Bootstraps the plugin.
- */
 if ( ! function_exists( 'vkbm_init_plugin' ) ) {
+	/**
+	 * Bootstraps the plugin.
+	 *
+	 * @return void
+	 */
 	function vkbm_init_plugin(): void {
 		$plugin = vkbm_plugin();
 
@@ -315,10 +338,12 @@ if ( ! function_exists( 'vkbm_init_plugin' ) ) {
 
 add_action( 'plugins_loaded', 'vkbm_init_plugin' );
 
-/**
- * Activation callback.
- */
 if ( ! function_exists( 'vkbm_activate_plugin' ) ) {
+	/**
+	 * Activation callback.
+	 *
+	 * @return void
+	 */
 	function vkbm_activate_plugin(): void {
 		$plugin = vkbm_plugin();
 
@@ -333,13 +358,13 @@ if ( ! function_exists( 'vkbm_activate_plugin' ) ) {
 register_activation_hook( __FILE__, 'vkbm_activate_plugin' );
 
 
-/**
- * Normalize reservation page URL against the current site.
- *
- * @param string $url Raw URL from settings.
- * @return string
- */
 if ( ! function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
+	/**
+	 * Normalize reservation page URL against the current site.
+	 *
+	 * @param string $url Raw URL from settings.
+	 * @return string
+	 */
 	function vkbm_normalize_reservation_page_url( string $url ): string {
 		$url = trim( $url );
 
@@ -365,12 +390,12 @@ if ( ! function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
 	}
 }
 
-/**
- * Retrieve and cache the reservation page URL for logout redirects.
- *
- * @return string
- */
 if ( ! function_exists( 'vkbm_get_reservation_page_logout_url' ) ) {
+	/**
+	 * Retrieve and cache the reservation page URL for logout redirects.
+	 *
+	 * @return string
+	 */
 	function vkbm_get_reservation_page_logout_url(): string {
 		static $cached = null;
 

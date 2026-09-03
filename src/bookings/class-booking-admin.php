@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Handles Booking post type admin UI and meta persistence.
  *
@@ -16,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -58,6 +58,8 @@ class Booking_Admin {
 	private const META_IS_PREFERRED           = '_vkbm_booking_is_staff_preferred';
 	private const META_TOTAL_END              = '_vkbm_booking_total_end';
 	private const META_SERVICE_BASE_PRICE     = '_vkbm_booking_service_base_price';
+	private const META_GUESTS                 = '_vkbm_booking_guests';
+	private const META_GUEST_TIERS            = '_vkbm_booking_guest_tiers';
 
 	private const STATUS_CONFIRMED              = 'confirmed';
 	private const STATUS_PENDING                = 'pending';
@@ -76,11 +78,18 @@ class Booking_Admin {
 	private $notification_service;
 
 	/**
+	 * 管理通知のリダイレクトクエリ付与フィルタを多重登録しないためのフラグ。
+	 *
+	 * @var bool
+	 */
+	private $notice_redirect_filter_added = false;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Booking_Notification_Service|null $notification_service Notification handler.
 	 */
-	public function __construct( Booking_Notification_Service $notification_service = null ) {
+	public function __construct( ?Booking_Notification_Service $notification_service = null ) {
 		$this->notification_service = $notification_service;
 	}
 
@@ -93,6 +102,7 @@ class Booking_Admin {
 		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_quick_edit' ), 10, 3 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_quick_edit_assets' ) );
+		add_action( 'wp_ajax_vkbm_conflicting_staff', array( $this, 'ajax_conflicting_staff' ) );
 		add_action( 'admin_menu', array( $this, 'register_reservation_page_menu' ) );
 		add_action( 'admin_notices', array( $this, 'render_staff_conflict_notice' ) );
 		add_filter( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_columns', array( $this, 'register_columns' ) );
@@ -151,6 +161,8 @@ class Booking_Admin {
 
 		foreach ( $submenu[ $parent_slug ] as $index => $item ) {
 			if ( isset( $item[2] ) && $menu_slug === $item[2] ) {
+				// 管理メニューのサブメニューURLを意図的に差し替えるため、グローバル上書きを許可する。
+				// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Intentionally rewriting the admin submenu URL.
 				$submenu[ $parent_slug ][ $index ][2] = $url;
 				break;
 			}
@@ -180,6 +192,46 @@ class Booking_Admin {
 			VKBM_VERSION,
 			true
 		);
+
+		// 日時変更時に競合スタッフを再判定するための Ajax 設定を渡す。
+		$current_post_id = isset( $_GET['post'] ) ? absint( wp_unslash( $_GET['post'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen context, not a form action.
+		wp_localize_script(
+			'vkbm-booking-admin',
+			'vkbmBookingAdmin',
+			array(
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'action'  => 'vkbm_conflicting_staff',
+				'nonce'   => wp_create_nonce( self::NONCE_ACTION ),
+				'postId'  => $current_post_id,
+			)
+		);
+	}
+
+	/**
+	 * Ajax: 指定日時に競合するスタッフIDを返す（予約編集画面の配分プルダウン用）。
+	 */
+	public function ajax_conflicting_staff(): void {
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) ) {
+			wp_send_json_error( array( 'message' => 'invalid_nonce' ), 403 );
+		}
+
+		$post_id = isset( $_POST['post_id'] ) ? absint( wp_unslash( $_POST['post_id'] ) ) : 0;
+
+		if ( ! current_user_can( Capabilities::MANAGE_RESERVATIONS, $post_id ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		$date       = isset( $_POST['date'] ) ? $this->sanitize_date( sanitize_text_field( wp_unslash( $_POST['date'] ) ) ) : '';
+		$start_time = isset( $_POST['start_time'] ) ? $this->sanitize_time( sanitize_text_field( wp_unslash( $_POST['start_time'] ) ) ) : '';
+		$end_time   = isset( $_POST['end_time'] ) ? $this->sanitize_time( sanitize_text_field( wp_unslash( $_POST['end_time'] ) ) ) : '';
+
+		$start = ( '' !== $date && '' !== $start_time ) ? $this->combine_datetime( $date, $start_time ) : '';
+		$end   = ( '' !== $date && '' !== $end_time ) ? $this->combine_datetime( $date, $end_time ) : '';
+
+		$ids = $this->get_conflicting_staff_ids( $post_id, $start, $end );
+
+		wp_send_json_success( array( 'ids' => array_map( 'intval', $ids ) ) );
 	}
 
 	/**
@@ -246,13 +298,16 @@ class Booking_Admin {
 		if ( ! Staff_Editor::is_nomination_enabled() ) {
 			$nomination_fee = 0;
 		}
-		$has_base_total_price = metadata_exists( 'post', $post->ID, self::META_BASE_TOTAL_PRICE );
-		$base_total_price     = $has_base_total_price
+		// 予約人数（複数人予約）。未設定の既存予約は1名として扱う。
+		$guests = max( 1, (int) get_post_meta( $post->ID, self::META_GUESTS, true ) );
+		// 料金区分の人数内訳スナップショット。区分定義予約は人数編集UIの代わりに内訳を表示する。
+		$guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $post->ID, self::META_GUEST_TIERS, true ) );
+		// 保存済みの合計（META_BASE_TOTAL_PRICE）はそのまま表示し、指名機能の現在状態で上書きしない。
+		// 合計未保存の旧データのみ「単価 × 人数（＋指名料）」で再計算する（指名料は上で機能状態を反映済み）。
+		$has_base_total_price   = metadata_exists( 'post', $post->ID, self::META_BASE_TOTAL_PRICE );
+		$base_total_price       = $has_base_total_price
 			? (int) get_post_meta( $post->ID, self::META_BASE_TOTAL_PRICE, true )
-			: max( 0, (int) $service_base_price ) + max( 0, (int) $nomination_fee );
-		if ( ! Staff_Editor::is_nomination_enabled() ) {
-			$base_total_price = max( 0, (int) $service_base_price );
-		}
+			: max( 0, ( (int) $service_base_price * $guests ) ) + max( 0, (int) $nomination_fee );
 		$has_billed_total_price = metadata_exists( 'post', $post->ID, self::META_BILLED_TOTAL_PRICE );
 		$billed_total_price     = $has_billed_total_price ? (int) get_post_meta( $post->ID, self::META_BILLED_TOTAL_PRICE, true ) : '';
 		$is_preferred           = '1' === (string) get_post_meta( $post->ID, self::META_IS_PREFERRED, true );
@@ -344,28 +399,43 @@ class Booking_Admin {
 							</label>
 						</td>
 					</tr>
+					<?php $vkbm_singular = vkbm_get_resource_label_singular(); ?>
 					<tr>
 						<th scope="row">
-							<label for="vkbm-booking-resource">
+							<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
+								<label for="vkbm-booking-resource">
+									<?php
+									printf(
+										/* translators: %s: Resource label (singular). */
+										esc_html__( 'Person in charge%s', 'vk-booking-manager' ),
+										esc_html( $vkbm_singular )
+									);
+									?>
+								</label>
+							<?php else : ?>
 								<?php
-								$singular = vkbm_get_resource_label_singular();
 								printf(
 									/* translators: %s: Resource label (singular). */
-									esc_html__( 'Person in charge%s', 'vk-booking-manager' ),
-									esc_html( $singular )
+									esc_html__( 'Person in charge%s and number of guests', 'vk-booking-manager' ),
+									esc_html( $vkbm_singular )
 								);
 								?>
-							</label>
+							<?php endif; ?>
 						</th>
 						<td>
-							<select id="vkbm-booking-resource" name="vkbm_booking[resource_id]">
+							<?php
+							// 担当スタッフは単一選択。指名OFFのときは人数入力も表示する（1予約は分割せず単一スタッフへ割り当てる）。
+							$vkbm_max_capacity = $service_id > 0 ? max( 1, (int) get_post_meta( $service_id, '_vkbm_max_capacity', true ) ) : 1;
+							// 同じ時間帯に別予約があるスタッフ（保存時刻時点）を JS でプルダウンから除外するため、IDを渡す。
+							$vkbm_conflict_staff_ids = $this->get_conflicting_staff_ids( (int) $post->ID, (string) $start, (string) $end );
+							?>
+							<select id="vkbm-booking-resource" class="vkbm-booking-resource" name="vkbm_booking[resource_id]" data-conflict-staff-ids="<?php echo esc_attr( implode( ',', $vkbm_conflict_staff_ids ) ); ?>">
 								<option value="0">
 									<?php
-									$singular = vkbm_get_resource_label_singular();
 									printf(
 										/* translators: %s: Resource label (singular). */
 										esc_html__( 'Select %s', 'vk-booking-manager' ),
-										esc_html( $singular )
+										esc_html( $vkbm_singular )
 									);
 									?>
 								</option>
@@ -375,6 +445,51 @@ class Booking_Admin {
 									</option>
 								<?php endforeach; ?>
 							</select>
+							<?php if ( ! Staff_Editor::is_nomination_enabled() ) : ?>
+								<?php if ( ! empty( $guest_tiers ) ) : ?>
+									<?php
+									// 料金区分が定義されている予約は、人数編集の代わりに区分ごとの内訳を表示する（編集不可）。
+									$vkbm_guests_unit = vkbm_get_guests_unit_label();
+									?>
+									<p class="vkbm-booking-guests">
+										<?php echo esc_html( vkbm_get_guests_count_label() ); ?>
+										<span class="vkbm-booking-meta__value"><?php echo esc_html( vkbm_format_guests_count( (int) $guests, $vkbm_guests_unit ) ); ?></span>
+									</p>
+									<ul class="vkbm-booking-guest-tiers" style="margin: 4px 0 0;">
+										<?php foreach ( $guest_tiers as $tier ) : ?>
+											<li>
+												<?php
+												printf(
+													/* translators: 1: Price category label, 2: Quantity value (with unit). */
+													esc_html__( '%1$s: %2$s', 'vk-booking-manager' ),
+													esc_html( (string) $tier['label'] ),
+													esc_html( vkbm_format_guests_count( (int) $tier['count'], $vkbm_guests_unit ) )
+												);
+												?>
+											</li>
+										<?php endforeach; ?>
+									</ul>
+									<p class="description">
+										<?php esc_html_e( 'This booking uses price categories. The breakdown is fixed at the time of reservation.', 'vk-booking-manager' ); ?>
+									</p>
+								<?php else : ?>
+									<p class="vkbm-booking-guests">
+										<label>
+											<?php echo esc_html( vkbm_get_guests_count_label() ); ?>
+											<input type="number" class="small-text" name="vkbm_booking[guests]" min="1" max="<?php echo esc_attr( (string) $vkbm_max_capacity ); ?>" step="1" value="<?php echo esc_attr( (string) max( 1, (int) $guests ) ); ?>" />
+										</label>
+									</p>
+									<p class="description">
+										<?php
+										printf(
+											/* translators: %d: Maximum number of guests per booking. */
+											esc_html__( 'Up to %d guests can be reserved per booking. The base fee is recalculated from the number of guests on save.', 'vk-booking-manager' ),
+											(int) $vkbm_max_capacity
+										);
+										?>
+									</p>
+								<?php endif; ?>
+							<?php endif; ?>
 						</td>
 					</tr>
 					<tr>
@@ -447,20 +562,23 @@ class Booking_Admin {
 							</p>
 						</td>
 					</tr>
-					<tr>
-						<th scope="row"><?php esc_html_e( 'Service basic fee', 'vk-booking-manager' ); ?></th>
-						<td>
-							<span class="vkbm-booking-meta__value"><?php echo esc_html( $base_price_label ); ?></span>
-							<?php
-							if ( '' !== $tax_label ) {
-								echo ' ' . esc_html( $tax_label );
-							}
-							?>
-							<p class="description">
-								<?php esc_html_e( 'This is the basic service charge at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ); ?>
-							</p>
-						</td>
-					</tr>
+					<?php if ( empty( $guest_tiers ) ) : ?>
+						<?php // 料金区分メニューでは区分ごとの小計が別途表示され、この「サービス基本料金」行は常に0円で冗長になるため非表示にする（区分なしの単一料金メニューのときのみ出力する / #338）。 ?>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Service basic fee', 'vk-booking-manager' ); ?></th>
+							<td>
+								<span class="vkbm-booking-meta__value"><?php echo esc_html( $base_price_label ); ?></span>
+								<?php
+								if ( '' !== $tax_label ) {
+									echo ' ' . esc_html( $tax_label );
+								}
+								?>
+								<p class="description">
+									<?php esc_html_e( 'This is the basic service charge at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+					<?php endif; ?>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'Total basic fee', 'vk-booking-manager' ); ?></th>
 						<td>
@@ -651,17 +769,56 @@ class Booking_Admin {
 		$author_id            = $this->sanitize_author_id( $data['author_id'] );
 		$attachment_ids       = $data['attachment_ids'];
 
-		$has_conflict        = $this->has_staff_conflict( $post_id, $resource_id, $start, $end );
-		$settings            = ( new Settings_Repository() )->get_settings();
-		$allow_overlap_admin = ! empty( $settings['provider_allow_staff_overlap_admin'] );
-
-		if ( $has_conflict && ! $allow_overlap_admin ) {
-			$this->set_staff_conflict_notice( $post_id, $resource_id, self::ADMIN_NOTICE_TYPE_ERROR );
-			return;
+		// 担当スタッフと人数を確定する。1予約は分割せず単一スタッフに割り当てる。
+		// 指名機能ON：1対1・1名。指名機能OFF：単一スタッフ＋人数（1〜max_capacity）。
+		$max_capacity = $service_id > 0 ? max( 1, (int) get_post_meta( $service_id, '_vkbm_max_capacity', true ) ) : 1;
+		// 入力人数が1予約あたりの上限を超えているかどうか（超過時は後段で保存を中断するため保持）。
+		$guests_exceeded = false;
+		// 料金区分が定義されている予約は人数編集UIが無いため、既存の人数・内訳をそのまま保持する。
+		$has_saved_guest_tiers = ! empty( Price_Tiers::normalize_guest_tiers( get_post_meta( $post_id, self::META_GUEST_TIERS, true ) ) );
+		if ( $has_saved_guest_tiers ) {
+			$guests = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
+		} elseif ( Staff_Editor::is_nomination_enabled() ) {
+			// 指名ONは原則1対1だが、指名OFF時に作成された複数人予約（guests>1）の既存データは
+			// 指名UIでは表現できない。明示的な変換以外で人数を失わないよう、既存人数をそのまま保持する。
+			$existing_guests = (int) get_post_meta( $post_id, self::META_GUESTS, true );
+			$guests          = $existing_guests > 1 ? $existing_guests : 1;
+		} else {
+			// 指名OFF：送信された人数を 1〜max_capacity にクランプする。
+			// 上限超過は黙ってクランプ保存せず、後段で保存を中断する（フロントの上限超過エラーと対称）。
+			$requested_guests = (int) $data['guests'];
+			$guests_exceeded  = $requested_guests > $max_capacity;
+			$guests           = max( 1, min( $max_capacity, $requested_guests ) );
 		}
 
-		if ( $has_conflict && $allow_overlap_admin ) {
-			$this->set_staff_conflict_notice( $post_id, $resource_id, self::ADMIN_NOTICE_TYPE_WARNING );
+		// 担当スタッフをサーバー側で競合判定する。
+		// キャンセル・無断キャンセルは枠を消費しないため競合判定を行わない（他の集計と同じ扱い）。
+		if ( self::STATUS_CANCELLED !== $status && self::STATUS_NO_SHOW !== $status ) {
+			// 入力人数が1予約あたりの上限を超えている場合は、黙ってクランプ保存せずに中断する。
+			// 競合判定より前に弾くことで、無駄な競合クエリも避ける。
+			if ( $guests_exceeded ) {
+				$this->set_guests_exceeded_notice( $post_id, $max_capacity );
+				return;
+			}
+
+			// 担当スタッフが割り当てられていない予約は、他予約でスタッフが埋まると対応できないため保存を中断する。
+			if ( $resource_id <= 0 ) {
+				$this->set_staff_required_notice( $post_id );
+				return;
+			}
+
+			$has_conflict        = in_array( $resource_id, $this->get_conflicting_staff_ids( $post_id, $start, $end ), true );
+			$settings            = ( new Settings_Repository() )->get_settings();
+			$allow_overlap_admin = ! empty( $settings['provider_allow_staff_overlap_admin'] );
+
+			if ( $has_conflict && ! $allow_overlap_admin ) {
+				$this->set_staff_conflict_notice( $post_id, $resource_id, self::ADMIN_NOTICE_TYPE_ERROR );
+				return;
+			}
+
+			if ( $has_conflict && $allow_overlap_admin ) {
+				$this->set_staff_conflict_notice( $post_id, $resource_id, self::ADMIN_NOTICE_TYPE_WARNING );
+			}
 		}
 
 		// 基本料金は管理画面から編集させない（POST値は信頼しない）.
@@ -692,18 +849,34 @@ class Booking_Admin {
 		if ( $should_fill_base_price_snapshot ) {
 			$this->update_meta_value_allow_zero( $post_id, self::META_SERVICE_BASE_PRICE, $service_base_price );
 		}
-		$should_fill_base_total_price = ! metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE );
-		if ( $should_fill_base_total_price ) {
-			$base_price_for_total     = metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE )
-				? (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true )
-				: ( '' === $service_base_price ? 0 : (int) $service_base_price );
-			$nomination_fee_for_total = (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true );
-			if ( ! Staff_Editor::is_nomination_enabled() ) {
-				$nomination_fee_for_total = 0;
-			}
-			$base_total_price = max( 0, $base_price_for_total + max( 0, $nomination_fee_for_total ) );
-			$this->update_meta_value_allow_zero( $post_id, self::META_BASE_TOTAL_PRICE, $base_total_price );
+
+		// 予約人数を保存する。
+		$this->update_meta_value( $post_id, self::META_GUESTS, (string) $guests );
+
+		// 基本料金合計は「基本料金スナップショット × 人数（＋指名料）」で常に再計算する。
+		// 人数を編集した場合に合計へ反映させるため、スナップショット有無に関わらず更新する
+		// （単価のスナップショットは保持されるため、予約時点の価格は維持される）。
+		$base_price_for_total = metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE )
+			? (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true )
+			: ( '' === $service_base_price ? 0 : (int) $service_base_price );
+		// 指名料は予約時点で保存したスナップショット（META_NOMINATION_FEE）を基本そのまま使用する。
+		// 合計が既に保存済みの予約は、指名機能を後から無効化しても請求済みの料金履歴を保つためゼロにしない。
+		// ただし「合計未保存（旧データ）かつ 指名OFF」のときは、表示側（一覧列・編集画面）が指名料を
+		// 除外して再計算するのに合わせ、保存側でも指名料を含めない（表示と保存の整合）。
+		$nomination_fee_for_total = max( 0, (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
+		if ( ! metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE ) && ! Staff_Editor::is_nomination_enabled() ) {
+			$nomination_fee_for_total = 0;
 		}
+		// 料金区分が定義されている予約は、人数編集UIが無く内訳が確定しているため、
+		// 保存済みの区分内訳（Σ 区分料金 × 区分人数）＋指名料で合計を再計算する。
+		// 区分未定義は従来どおり 基本料金スナップショット × 人数 ＋指名料。
+		$saved_guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $post_id, self::META_GUEST_TIERS, true ) );
+		if ( ! empty( $saved_guest_tiers ) ) {
+			$base_total_price = max( 0, Price_Tiers::total_price( $saved_guest_tiers ) + $nomination_fee_for_total );
+		} else {
+			$base_total_price = max( 0, ( $base_price_for_total * $guests ) + $nomination_fee_for_total );
+		}
+		$this->update_meta_value_allow_zero( $post_id, self::META_BASE_TOTAL_PRICE, $base_total_price );
 		$this->update_meta_value_allow_zero( $post_id, self::META_BILLED_TOTAL_PRICE, $billed_total_price );
 		$this->update_meta_value( $post_id, self::META_CUSTOMER, $customer );
 		$this->update_meta_value( $post_id, self::META_CUSTOMER_TEL, $customer_tel );
@@ -792,12 +965,24 @@ class Booking_Admin {
 				);
 				break;
 			case 'vkbm_booking_billed_total':
+				// 予約人数（複数人予約）。未設定の既存予約は1名として扱う。
+				$guests = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
+				// 基本料金スナップショット。未保存の旧予約はメニューの _vkbm_base_price をフォールバックに使う（render_meta_box と同じ挙動）。
+				$has_base_price_snapshot = metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE );
+				if ( $has_base_price_snapshot ) {
+					$service_base_price = (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true );
+				} else {
+					$service_menu_id    = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
+					$service_base_price = $service_menu_id > 0 ? max( 0, (int) get_post_meta( $service_menu_id, '_vkbm_base_price', true ) ) : 0;
+				}
 				$has_base_total = metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE );
 				$base_total     = $has_base_total
 					? (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true )
-					: ( (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true ) + (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
-				if ( ! Staff_Editor::is_nomination_enabled() ) {
-					$base_total = (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true );
+					: ( ( $service_base_price * $guests ) + (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
+				// 保存済みの合計（META_BASE_TOTAL_PRICE）は予約確定時の金額なので上書きしない。
+				// 合計未保存の旧データのみ、指名OFF時に指名料を除いて再計算する。
+				if ( ! $has_base_total && ! Staff_Editor::is_nomination_enabled() ) {
+					$base_total = $service_base_price * $guests;
 				}
 
 				$has_billed_total = metadata_exists( 'post', $post_id, self::META_BILLED_TOTAL_PRICE );
@@ -952,15 +1137,17 @@ class Booking_Admin {
 		$allow_service_change = isset( $raw['allow_service_change'] );
 		$customer             = isset( $raw['customer'] ) ? sanitize_text_field( (string) $raw['customer'] ) : '';
 		// 電話番号を正規化する：全角数字を半角に変換し、数字以外の文字（ハイフン・スペース・括弧など）を除去する.
-		$customer_tel         = isset( $raw['customer_tel'] ) ? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) $raw['customer_tel'] ) ) : '';
-		$customer_email       = isset( $raw['customer_email'] ) ? sanitize_email( (string) $raw['customer_email'] ) : '';
-		$billed_total_price   = array_key_exists( 'billed_total_price', $raw ) ? $this->sanitize_base_price( $raw['billed_total_price'] ) : '';
-		$status               = isset( $raw['status'] ) ? $this->sanitize_status( (string) $raw['status'] ) : self::STATUS_CONFIRMED;
-		$note                 = isset( $raw['note'] ) ? wp_kses_post( (string) $raw['note'] ) : '';
-		$internal_note        = isset( $raw['internal_note'] ) ? wp_kses_post( (string) $raw['internal_note'] ) : '';
-		$is_staff_preferred   = isset( $raw['is_staff_preferred'] ) ? '1' : '';
-		$author_id            = isset( $raw['author_id'] ) ? absint( $raw['author_id'] ) : 0;
-		$attachment_ids       = isset( $raw['attachment_ids'] ) ? $this->normalize_attachment_ids( $raw['attachment_ids'] ) : array();
+		$customer_tel       = isset( $raw['customer_tel'] ) ? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) $raw['customer_tel'] ) ) : '';
+		$customer_email     = isset( $raw['customer_email'] ) ? $this->sanitize_email( $raw['customer_email'] ) : '';
+		$billed_total_price = array_key_exists( 'billed_total_price', $raw ) ? $this->sanitize_base_price( $raw['billed_total_price'] ) : '';
+		$status             = isset( $raw['status'] ) ? $this->sanitize_status( (string) $raw['status'] ) : self::STATUS_CONFIRMED;
+		$note               = isset( $raw['note'] ) ? wp_kses_post( (string) $raw['note'] ) : '';
+		$internal_note      = isset( $raw['internal_note'] ) ? wp_kses_post( (string) $raw['internal_note'] ) : '';
+		$is_staff_preferred = isset( $raw['is_staff_preferred'] ) ? '1' : '';
+		$author_id          = isset( $raw['author_id'] ) ? absint( $raw['author_id'] ) : 0;
+		$attachment_ids     = isset( $raw['attachment_ids'] ) ? $this->normalize_attachment_ids( $raw['attachment_ids'] ) : array();
+		// 予約人数（指名OFFの単一スタッフ予約）。1以上の整数にする。上限クランプは保存時に行う。
+		$guests = isset( $raw['guests'] ) ? max( 1, (int) $raw['guests'] ) : 1;
 
 		return array(
 			'date'                 => $date,
@@ -980,6 +1167,7 @@ class Booking_Admin {
 			'is_staff_preferred'   => $is_staff_preferred,
 			'author_id'            => $author_id,
 			'attachment_ids'       => $attachment_ids,
+			'guests'               => $guests,
 		);
 	}
 
@@ -1287,6 +1475,81 @@ class Booking_Admin {
 	}
 
 	/**
+	 * 指定時間帯に別予約（確定・保留中）が重なっているスタッフIDの一覧を取得する。
+	 *
+	 * 現在編集中の予約は除外する。1予約は単一スタッフに割り当てられるため、
+	 * 重なる予約の担当スタッフ（resource_id）を対象とする。
+	 *
+	 * Get the IDs of staff that already have another (confirmed/pending) booking
+	 * overlapping the given time slot, excluding the booking being edited.
+	 *
+	 * @param int    $post_id  現在編集中の予約ID（除外）。
+	 * @param string $start_at 予約開始日時（Y-m-d H:i:s）。
+	 * @param string $end_at   予約終了日時（Y-m-d H:i:s）。
+	 * @return array<int, int> 競合しているスタッフIDの配列。
+	 */
+	private function get_conflicting_staff_ids( int $post_id, string $start_at, string $end_at ): array {
+		if ( '' === $start_at ) {
+			return array();
+		}
+		if ( '' === $end_at ) {
+			$end_at = $start_at;
+		}
+
+		// 時間帯が重なる確定・保留中の予約を取得する（現在の予約は除外）。
+		$query = new WP_Query(
+			array(
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				'post_status'    => array( 'publish' ),
+				'posts_per_page' => -1,
+				'no_found_rows'  => true,
+				'fields'         => 'ids',
+				'post__not_in'   => array( $post_id ),
+				'meta_query'     => array(
+					'relation' => 'AND',
+					array(
+						'key'     => self::META_STATUS,
+						'value'   => array( self::STATUS_CONFIRMED, self::STATUS_PENDING ),
+						'compare' => 'IN',
+					),
+					array(
+						// 既存の予約開始が、現在の予約終了より前なら時間帯が重なる可能性がある。
+						'key'     => self::META_DATE_START,
+						'value'   => $end_at,
+						'compare' => '<',
+						'type'    => 'DATETIME',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => self::META_TOTAL_END,
+							'value'   => $start_at,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+						array(
+							'key'     => self::META_DATE_END,
+							'value'   => $start_at,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+					),
+				),
+			)
+		);
+
+		$staff_ids = array();
+		foreach ( $query->posts as $other_id ) {
+			$resource_id = (int) get_post_meta( (int) $other_id, self::META_RESOURCE_ID, true );
+			if ( $resource_id > 0 ) {
+				$staff_ids[ $resource_id ] = $resource_id;
+			}
+		}
+
+		return array_values( $staff_ids );
+	}
+
+	/**
 	 * Persist staff conflict notice and enqueue redirect flag.
 	 *
 	 * @param int    $post_id     Booking post ID.
@@ -1329,23 +1592,95 @@ class Booking_Admin {
 			}
 		}
 
-		$user_id = get_current_user_id();
-		$key     = self::ADMIN_NOTICE_TRANSIENT_PREFIX . $user_id . '_' . $post_id;
-		set_transient(
-			$key,
-			array(
-				'message' => $message,
-				'type'    => $notice_type,
-			),
-			30
+		$this->push_admin_notice( $post_id, $message, $notice_type );
+	}
+
+	/**
+	 * 入力人数が1スタッフあたりの上限を超えたため保存を中断した旨の管理通知を登録する。
+	 *
+	 * @param int $post_id      予約投稿ID。
+	 * @param int $max_capacity 1スタッフあたりの最大受付数。
+	 */
+	private function set_guests_exceeded_notice( int $post_id, int $max_capacity ): void {
+		$message = sprintf(
+			/* translators: 1: resource label, 2: maximum number of guests per resource. */
+			__( 'The number of guests per %1$s exceeds the maximum (%2$d), so the reservation was not saved.', 'vk-booking-manager' ),
+			vkbm_get_resource_label_singular(),
+			max( 1, $max_capacity )
+		);
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。
+		$message .= ' ' . __( 'Please reduce the number of guests and save again.', 'vk-booking-manager' );
+
+		$this->push_admin_notice( $post_id, $message, self::ADMIN_NOTICE_TYPE_ERROR );
+	}
+
+	/**
+	 * 担当スタッフが1人も割り当てられていないため保存を中断した旨の管理通知を登録する。
+	 *
+	 * @param int $post_id 予約投稿ID。
+	 */
+	private function set_staff_required_notice( int $post_id ): void {
+		$label = vkbm_get_resource_label_singular();
+
+		$message = sprintf(
+			/* translators: %s: resource label. */
+			__( 'No %s is assigned, so the reservation was not saved.', 'vk-booking-manager' ),
+			$label
+		);
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。
+		$message .= ' ' . sprintf(
+			/* translators: %s: resource label. */
+			__( 'Please assign at least one %s.', 'vk-booking-manager' ),
+			$label
 		);
 
-		add_filter(
-			'redirect_post_location',
-			static function ( string $location ) use ( $post_id ): string {
-				return add_query_arg( self::ADMIN_NOTICE_QUERY_VAR, (string) $post_id, $location );
-			}
+		$this->push_admin_notice( $post_id, $message, self::ADMIN_NOTICE_TYPE_ERROR );
+	}
+
+	/**
+	 * 管理通知を1件、保存後のリダイレクト先で表示できるよう transient へ積む。
+	 * 同一リクエストで複数回呼ばれた場合は既存の通知に追記し、すべて表示できるようにする。
+	 *
+	 * Queue one admin notice into a transient so it can be shown after the post-save redirect.
+	 * When called multiple times in the same request, append to the existing notices so all are shown.
+	 *
+	 * @param int    $post_id 予約投稿ID。
+	 * @param string $message 表示メッセージ。
+	 * @param string $type    通知種別（error / warning）。
+	 */
+	private function push_admin_notice( int $post_id, string $message, string $type ): void {
+		$user_id = get_current_user_id();
+		$key     = self::ADMIN_NOTICE_TRANSIENT_PREFIX . $user_id . '_' . $post_id;
+
+		// 既存の通知を読み込み、リスト形式へ正規化する（旧来の単一形式にも後方互換で対応）。
+		$existing = get_transient( $key );
+		$notices  = array();
+		if ( is_array( $existing ) && isset( $existing['notices'] ) && is_array( $existing['notices'] ) ) {
+			$notices = $existing['notices'];
+		} elseif ( is_array( $existing ) && isset( $existing['message'] ) ) {
+			$notices[] = array(
+				'message' => (string) $existing['message'],
+				'type'    => (string) ( $existing['type'] ?? self::ADMIN_NOTICE_TYPE_ERROR ),
+			);
+		}
+
+		$notices[] = array(
+			'message' => $message,
+			'type'    => $type,
 		);
+
+		set_transient( $key, array( 'notices' => $notices ), 30 );
+
+		// リダイレクト先に通知表示用のクエリを付与する（多重登録は避ける）。
+		if ( ! $this->notice_redirect_filter_added ) {
+			$this->notice_redirect_filter_added = true;
+			add_filter(
+				'redirect_post_location',
+				static function ( string $location ) use ( $post_id ): string {
+					return add_query_arg( self::ADMIN_NOTICE_QUERY_VAR, (string) $post_id, $location );
+				}
+			);
+		}
 	}
 
 	/**
@@ -1375,19 +1710,37 @@ class Booking_Admin {
 
 		delete_transient( $key );
 
-		$message = is_array( $payload ) ? (string) ( $payload['message'] ?? '' ) : (string) $payload;
-		$type    = is_array( $payload ) ? (string) ( $payload['type'] ?? self::ADMIN_NOTICE_TYPE_ERROR ) : self::ADMIN_NOTICE_TYPE_ERROR;
-		if ( '' === $message ) {
-			return;
+		// 通知をリスト形式へ正規化する（旧来の単一形式にも後方互換で対応）。
+		$notices = array();
+		if ( is_array( $payload ) && isset( $payload['notices'] ) && is_array( $payload['notices'] ) ) {
+			$notices = $payload['notices'];
+		} elseif ( is_array( $payload ) && isset( $payload['message'] ) ) {
+			$notices[] = array(
+				'message' => (string) $payload['message'],
+				'type'    => (string) ( $payload['type'] ?? self::ADMIN_NOTICE_TYPE_ERROR ),
+			);
+		} elseif ( ! is_array( $payload ) ) {
+			$notices[] = array(
+				'message' => (string) $payload,
+				'type'    => self::ADMIN_NOTICE_TYPE_ERROR,
+			);
 		}
 
-		$notice_class = self::ADMIN_NOTICE_TYPE_WARNING === $type ? 'notice-warning' : 'notice-error';
+		// 積まれた通知をそれぞれ個別の通知ブロックとして出力する。
+		foreach ( $notices as $notice ) {
+			$message = is_array( $notice ) ? (string) ( $notice['message'] ?? '' ) : '';
+			if ( '' === $message ) {
+				continue;
+			}
+			$type         = is_array( $notice ) ? (string) ( $notice['type'] ?? self::ADMIN_NOTICE_TYPE_ERROR ) : self::ADMIN_NOTICE_TYPE_ERROR;
+			$notice_class = self::ADMIN_NOTICE_TYPE_WARNING === $type ? 'notice-warning' : 'notice-error';
 
-		printf(
-			'<div class="notice %1$s"><p>%2$s</p></div>',
-			esc_attr( $notice_class ),
-			esc_html( $message )
-		);
+			printf(
+				'<div class="notice %1$s"><p>%2$s</p></div>',
+				esc_attr( $notice_class ),
+				esc_html( $message )
+			);
+		}
 	}
 	/**
 	 * Attempt to update post title if empty.
@@ -1544,6 +1897,38 @@ class Booking_Admin {
 	}
 
 	/**
+	 * 顧客メールアドレスをサニタイズし、形式が不正な場合は空文字を返す.
+	 *
+	 * sanitize_email() だけでは `foo@` のような不正な形式が通過しうるため、
+	 * is_email() による形式検証を併用する。
+	 * （src/provider-settings/class-settings-sanitizer.php と同一方針）.
+	 *
+	 * @param mixed $value 入力値（未指定・空も許容する）.
+	 * @return string 妥当なメールアドレス、または空文字.
+	 */
+	private function sanitize_email( $value ): string {
+		// 空値はそのまま空文字として扱う（メール未入力を許容するため）.
+		if ( empty( $value ) ) {
+			return '';
+		}
+
+		// 配列など非スカラー値は (string) キャスト時に警告が出るため空文字として扱う.
+		if ( ! is_scalar( $value ) ) {
+			return '';
+		}
+
+		// まず sanitize_email() で危険な文字を除去する.
+		$email = sanitize_email( (string) $value );
+
+		// is_email() で最終的な形式検証を行い、不正なら空文字にする.
+		if ( ! is_email( $email ) ) {
+			return '';
+		}
+
+		return $email;
+	}
+
+	/**
 	 * Retrieve status labels.
 	 *
 	 * @return array<string, string>
@@ -1618,7 +2003,7 @@ class Booking_Admin {
 		$roles      = wp_roles();
 		$role_names = $roles ? array_keys( $roles->roles ) : array();
 		$options    = array();
-		$users = get_users(
+		$users      = get_users(
 			array(
 				'role__in'    => $role_names,
 				'orderby'     => 'display_name',

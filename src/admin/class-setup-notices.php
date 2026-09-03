@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Provides setup notices in wp-admin.
  *

@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\ProviderSettings;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use WP_UnitTestCase;
@@ -280,11 +281,17 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$this->assertTrue( $defaults['staff_enabled'] );
 
 		// staff_enabled を有効（truthy）で送信した場合。
+		// 無料版では指名機能が常に無効のため、送信値に関わらず false へ強制される。
+		// Pro 版では送信値どおり true が保存される。
 		$result_enabled = $sanitizer->sanitize(
 			[ 'staff_enabled' => '1' ],
 			$defaults
 		);
-		$this->assertTrue( $result_enabled['staff_enabled'] );
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->assertFalse( $result_enabled['staff_enabled'], '無料版では staff_enabled が強制的に無効になること' );
+		} else {
+			$this->assertTrue( $result_enabled['staff_enabled'], 'Pro 版では送信値どおり有効が保存されること' );
+		}
 
 		// staff_enabled を無効（空文字）で送信した場合。
 		$result_disabled = $sanitizer->sanitize(
@@ -299,6 +306,76 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 			$defaults
 		);
 		$this->assertFalse( $result_missing['staff_enabled'] );
+	}
+
+	/**
+	 * slot_capacity_enabled のサニタイズと後方互換フォールバックを検証するテスト（issue #281 / 呼称統一 #326）。
+	 *
+	 * 後方互換の核心：フォーム未送信時に false で焼き付けず、既定（true）を維持する事。
+	 * staff_enabled と異なり、未送信時に無効化してはならない（既存サイトの挙動を変えないため）。
+	 * 呼称統一（#326）でキー名を multiple_guests_enabled → slot_capacity_enabled に改名したため、
+	 * 新キーでの送信・旧キー送信のフォールバック・未送信時の既定維持の3系統を検証する。
+	 */
+	public function test_sanitize_slot_capacity_enabled(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		// デフォルト設定で slot_capacity_enabled が true（有効）であることを確認する。
+		$this->assertTrue( $defaults['slot_capacity_enabled'], '既定値は有効であること（未保存サイト相当）' );
+
+		$is_free = Pro_Upsell::is_free_edition();
+
+		// 条件と期待値の配列。無料版では常に false へ強制される。
+		$test_cases = array(
+			array(
+				'test_condition_name' => '新キー 有効（"1"）を送信 → Pro:true / Free:false',
+				'input'               => array( 'slot_capacity_enabled' => '1' ),
+				'expected_pro'        => true,
+			),
+			array(
+				'test_condition_name' => '新キー 無効（"0"）を送信 → 明示OFFで false',
+				'input'               => array( 'slot_capacity_enabled' => '0' ),
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => '新キー 無効（空文字）を送信 → false',
+				'input'               => array( 'slot_capacity_enabled' => '' ),
+				'expected_pro'        => false,
+			),
+			array(
+				// 旧キー送信のフォールバック（未リリース段階の開発DB互換）。
+				'test_condition_name' => '旧キーのみ 無効（"0"）を送信 → false（旧キーへフォールバック）',
+				'input'               => array( 'multiple_guests_enabled' => '0' ),
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => '旧キーのみ 有効（"1"）を送信 → true（旧キーへフォールバック）',
+				'input'               => array( 'multiple_guests_enabled' => '1' ),
+				'expected_pro'        => true,
+			),
+			array(
+				// 後方互換の核心ケース：未送信時に false で焼き付けないこと。
+				'test_condition_name' => 'キー未送信（指名ON時の disabled select 相当） → 既定の true を維持（後方互換）',
+				'input'               => array(),
+				'expected_pro'        => true,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result   = $sanitizer->sanitize( $case['input'], $defaults );
+			$expected = $is_free ? false : $case['expected_pro'];
+			$this->assertSame(
+				$expected,
+				$result['slot_capacity_enabled'],
+				$case['test_condition_name']
+			);
+			// 旧キーは新キーへ集約され、保存データには残らない事を確認する。
+			$this->assertArrayNotHasKey(
+				'multiple_guests_enabled',
+				$result,
+				'旧キー multiple_guests_enabled は保存データから除去されること: ' . $case['test_condition_name']
+			);
+		}
 	}
 
 	/**
@@ -337,7 +414,8 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 				'expected'            => [
 					'no_nomination_label'  => 'お任せ',
 					'nomination_fee_label' => '指名手数料',
-					'staff_enabled'        => true,
+					// 無料版では指名機能が常に無効へ強制されるため false、Pro 版は送信値どおり true。
+					'staff_enabled'        => ! Pro_Upsell::is_free_edition(),
 				],
 			],
 			[

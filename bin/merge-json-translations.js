@@ -3,9 +3,11 @@
 /**
  * Merge translations from bundled component files into main translation files.
  *
- * This script handles two scenarios:
+ * This script handles four scenarios:
  * 1. booking-ui files (daily-slot-list.js, calendar-grid.js, etc.) are bundled into app.js
  * 2. menu-loop/edit.js is bundled into menu-loop/index.js
+ * 3. menu-card/edit.js is bundled into menu-card/index.js
+ * 4. reservation-button/edit.js is bundled into reservation-button/index.js
  *
  * Since wp i18n make-json generates separate JSON files for each source file,
  * but these components are bundled together, their translations need to be merged.
@@ -247,6 +249,168 @@ if ( menuLoopIndexJsFile && menuLoopEditJsFile ) {
 	if ( ! menuLoopEditJsFile ) {
 		console.log(
 			'\n[Menu Loop Block] edit.js translation file not found, skipping edit.js merge'
+		);
+	}
+}
+
+// ============================================
+// Part 3: Merge menu-card/edit.js into menu-card/index.js
+// ============================================
+// menu-loop と同様に、index.js にダミーの翻訳文字列があるため index.js 用の JSON が生成される。
+// edit.js は index.js にバンドルされるため、edit.js の翻訳を index.js の JSON にマージする。
+const menuCardIndexJsFile = jsonFiles.find( ( file ) => {
+	const content = fs.readFileSync( file.path, 'utf8' );
+	const data = JSON.parse( content );
+	return (
+		data.source && data.source.includes( 'src/blocks/menu-card/index.js' )
+	);
+} );
+
+const menuCardEditJsFile = jsonFiles.find( ( file ) => {
+	const content = fs.readFileSync( file.path, 'utf8' );
+	const data = JSON.parse( content );
+	return (
+		data.source && data.source.includes( 'src/blocks/menu-card/edit.js' )
+	);
+} );
+
+if ( menuCardIndexJsFile && menuCardEditJsFile ) {
+	console.log(
+		'\n[Menu Card Block] Merging edit.js translations into index.js...'
+	);
+
+	const indexJsData = JSON.parse(
+		fs.readFileSync( menuCardIndexJsFile.path, 'utf8' )
+	);
+	const editJsData = JSON.parse(
+		fs.readFileSync( menuCardEditJsFile.path, 'utf8' )
+	);
+
+	const indexMessages = indexJsData.locale_data?.messages || {};
+	const editMessages = editJsData.locale_data?.messages || {};
+
+	let mergedCount = 0;
+
+	// Merge edit.js messages into index.js translation file
+	for ( const [ key, value ] of Object.entries( editMessages ) ) {
+		if ( key !== '' && ! indexMessages[ key ] ) {
+			indexMessages[ key ] = value;
+			mergedCount++;
+		}
+	}
+
+	if ( mergedCount > 0 ) {
+		indexJsData.locale_data.messages = indexMessages;
+		fs.writeFileSync(
+			menuCardIndexJsFile.path,
+			JSON.stringify( indexJsData, null, '\t' )
+		);
+		console.log(
+			`Merged ${ mergedCount } translation entries from edit.js into ${ menuCardIndexJsFile.filename }`
+		);
+		totalMergedCount += mergedCount;
+	} else {
+		console.log(
+			'No menu-card translations to merge (all translations may already be merged)'
+		);
+	}
+} else {
+	if ( ! menuCardIndexJsFile ) {
+		console.log(
+			'\n[Menu Card Block] index.js translation file not found, skipping edit.js merge'
+		);
+	}
+	if ( ! menuCardEditJsFile ) {
+		console.log(
+			'\n[Menu Card Block] edit.js translation file not found, skipping edit.js merge'
+		);
+	}
+}
+
+// ============================================
+// Part 4: Merge reservation-button/edit.js into reservation-button/index.js
+// ============================================
+// menu-loop と同様、index.js にダミー翻訳文字列があり make-json が JSON を生成するが、
+// 実際の翻訳は index.js にバンドルされる edit.js 側にあるため、edit.js の翻訳を
+// index.js の JSON にマージする。
+//
+// data.source は環境により以下のいずれかの形になりうるため、PHP 側の
+// filter_script_translation_file() が扱うパス variant と揃えて判定する。
+//   - src/blocks/reservation-button/<file>
+//   - blocks/reservation-button/<file>
+//   - reservation-button/<file>
+const reservationButtonSourceMatches = ( source, file ) => {
+	if ( ! source ) {
+		return false;
+	}
+	return (
+		source.includes( `src/blocks/reservation-button/${ file }` ) ||
+		source.includes( `blocks/reservation-button/${ file }` ) ||
+		source.includes( `reservation-button/${ file }` )
+	);
+};
+
+const reservationButtonIndexJsFile = jsonFiles.find( ( file ) => {
+	const content = fs.readFileSync( file.path, 'utf8' );
+	const data = JSON.parse( content );
+	return reservationButtonSourceMatches( data.source, 'index.js' );
+} );
+
+const reservationButtonEditJsFile = jsonFiles.find( ( file ) => {
+	const content = fs.readFileSync( file.path, 'utf8' );
+	const data = JSON.parse( content );
+	return reservationButtonSourceMatches( data.source, 'edit.js' );
+} );
+
+if ( reservationButtonIndexJsFile && reservationButtonEditJsFile ) {
+	console.log(
+		'\n[Reservation Button Block] Merging edit.js translations into index.js...'
+	);
+
+	const indexJsData = JSON.parse(
+		fs.readFileSync( reservationButtonIndexJsFile.path, 'utf8' )
+	);
+	const editJsData = JSON.parse(
+		fs.readFileSync( reservationButtonEditJsFile.path, 'utf8' )
+	);
+
+	const indexMessages = indexJsData.locale_data?.messages || {};
+	const editMessages = editJsData.locale_data?.messages || {};
+
+	let mergedCount = 0;
+
+	// Merge edit.js messages into index.js translation file
+	for ( const [ key, value ] of Object.entries( editMessages ) ) {
+		if ( key !== '' && ! indexMessages[ key ] ) {
+			indexMessages[ key ] = value;
+			mergedCount++;
+		}
+	}
+
+	if ( mergedCount > 0 ) {
+		indexJsData.locale_data.messages = indexMessages;
+		fs.writeFileSync(
+			reservationButtonIndexJsFile.path,
+			JSON.stringify( indexJsData, null, '\t' )
+		);
+		console.log(
+			`Merged ${ mergedCount } translation entries from edit.js into ${ reservationButtonIndexJsFile.filename }`
+		);
+		totalMergedCount += mergedCount;
+	} else {
+		console.log(
+			'No reservation-button translations to merge (all translations may already be merged)'
+		);
+	}
+} else {
+	if ( ! reservationButtonIndexJsFile ) {
+		console.log(
+			'\n[Reservation Button Block] index.js translation file not found, skipping edit.js merge'
+		);
+	}
+	if ( ! reservationButtonEditJsFile ) {
+		console.log(
+			'\n[Reservation Button Block] edit.js translation file not found, skipping edit.js merge'
 		);
 	}
 }

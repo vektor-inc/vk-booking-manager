@@ -19,7 +19,7 @@
 	/**
 	 * Get HTML string from a template or script element (for HTML5 <template> or legacy script type="text/template").
 	 * @param {string|Element|jQuery} selectorOrElement - CSS selector, DOM element, or jQuery object.
-	 * @return {string}
+	 * @return {string} The template's HTML string, or an empty string when not found.
 	 */
 	function getTemplateHtml( selectorOrElement ) {
 		const el =
@@ -37,6 +37,62 @@
 			return div.innerHTML;
 		}
 		return el.innerHTML || '';
+	}
+
+	/**
+	 * リソースメニューアイコンのピッカー（プリセット選択・直接入力・プレビュー）を初期化する。
+	 */
+	function initIconPickers() {
+		const iconPattern = /^dashicons-[a-z0-9-]+$/;
+
+		document
+			.querySelectorAll( '.vkbm-icon-picker' )
+			.forEach( function ( picker ) {
+				const input = picker.querySelector(
+					'.vkbm-icon-picker__input'
+				);
+				if ( ! input ) {
+					return;
+				}
+
+				const preview = picker.querySelector(
+					'.vkbm-icon-picker__preview'
+				);
+				const presets = picker.querySelectorAll(
+					'.vkbm-icon-picker__preset'
+				);
+
+				// 入力値に合わせてプレビューとプリセットの選択状態を同期する。
+				const syncState = function () {
+					const value = input.value.trim();
+					const isValid = iconPattern.test( value );
+
+					if ( preview ) {
+						preview.className =
+							'vkbm-icon-picker__preview dashicons' +
+							( isValid ? ' ' + value : '' );
+					}
+
+					presets.forEach( function ( preset ) {
+						const selected =
+							preset.getAttribute( 'data-icon' ) === value;
+						preset.classList.toggle( 'is-selected', selected );
+						preset.setAttribute(
+							'aria-pressed',
+							selected ? 'true' : 'false'
+						);
+					} );
+				};
+
+				presets.forEach( function ( preset ) {
+					preset.addEventListener( 'click', function () {
+						input.value = preset.getAttribute( 'data-icon' ) || '';
+						syncState();
+					} );
+				} );
+
+				input.addEventListener( 'input', syncState );
+			} );
 	}
 
 	function updateBookingCancelModeState() {
@@ -524,5 +580,6 @@
 		updateReservationMenuListModeState();
 		updatePrivacyPolicyModeState();
 		initColorPicker();
+		initIconPickers();
 	} );
 } )( jQuery );

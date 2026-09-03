@@ -1,0 +1,51 @@
+{
+	"translation-revision-date": "2026-02-23 23:58+0900",
+	"generator": "vk-booking-manager",
+	"source": "src/blocks/reservation-button/index.js",
+	"domain": "messages",
+	"locale_data": {
+		"messages": {
+			"": {
+				"domain": "messages",
+				"lang": "ja",
+				"plural-forms": "nplurals=1; plural=0;"
+			},
+			"Proceed to Reservation Button Block": [
+				"予約に進むボタンブロック"
+			],
+			"Proceed to Reservation": [
+				"予約に進む"
+			],
+			"Auto (current plan)": [
+				"自動（現在のプラン）"
+			],
+			"Button settings": [
+				"ボタン設定"
+			],
+			"The reservation page has not been set.": [
+				"予約ページが設定されていません。"
+			],
+			"Open BM basic settings": [
+				"BM 基本設定画面を開く"
+			],
+			"(opens in a new tab)": [
+				"（新しいタブで開きます）"
+			],
+			"Target plan": [
+				"対象プラン"
+			],
+			"When set to Auto, the current plan detail page is used.": [
+				"「自動」にすると、現在のプラン詳細ページが使用されます。"
+			],
+			"The current plan cannot be determined on this page. Please select a target plan above.": [
+				"このページでは現在のプランを特定できません。上で対象プランを選択してください。"
+			],
+			"Button label": [
+				"ボタンラベル"
+			],
+			"If left blank, the default label from BM basic settings is used.": [
+				"空欄の場合は、BM 基本設定の既定ラベルが使用されます。"
+			]
+		}
+	}
+}

@@ -1,6 +1,6 @@
 import { ReservationHeaderNav } from './reservation-header-nav';
 
-export const ReservationHeader = ({
+export const ReservationHeader = ( {
 	showBrand = false,
 	brandLinkHref = '',
 	showLogo = false,
@@ -9,52 +9,52 @@ export const ReservationHeader = ({
 	showName = false,
 	brandName = '',
 	nav = null,
-}) => {
+} ) => {
 	const brand = showBrand ? (
 		brandLinkHref ? (
 			<a
 				className="vkbm-reservation-header__brand vkbm-reservation-header__brand-link"
-				href={brandLinkHref}
+				href={ brandLinkHref }
 			>
-				{showLogo && (
+				{ showLogo && (
 					<img
 						className="vkbm-reservation-header__brand-logo"
-						src={logoUrl}
-						alt={logoAlt}
+						src={ logoUrl }
+						alt={ logoAlt }
 						loading="lazy"
 					/>
-				)}
-				{showName && (
+				) }
+				{ showName && (
 					<span className="vkbm-reservation-header__brand-name">
-						{brandName}
+						{ brandName }
 					</span>
-				)}
+				) }
 			</a>
 		) : (
 			<div className="vkbm-reservation-header__brand">
-				{showLogo && (
+				{ showLogo && (
 					<img
 						className="vkbm-reservation-header__brand-logo"
-						src={logoUrl}
-						alt={logoAlt}
+						src={ logoUrl }
+						alt={ logoAlt }
 						loading="lazy"
 					/>
-				)}
-				{showName && (
+				) }
+				{ showName && (
 					<span className="vkbm-reservation-header__brand-name">
-						{brandName}
+						{ brandName }
 					</span>
-				)}
+				) }
 			</div>
 		)
 	) : null;
 
-	const navNode = nav ? <ReservationHeaderNav {...nav} /> : null;
+	const navNode = nav ? <ReservationHeaderNav { ...nav } /> : null;
 
 	return (
 		<div className="vkbm-reservation-header">
-			{brand}
-			{navNode}
+			{ brand }
+			{ navNode }
 		</div>
 	);
 };

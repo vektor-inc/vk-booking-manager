@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Registers the Shift custom post type.
  *

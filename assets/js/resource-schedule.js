@@ -12,16 +12,6 @@
 	const $useProvider = $( useProviderSelector );
 	const $daysContainer = $( daysContainerSelector );
 
-	const weekdayLabels = [
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.sun || 'Sun',
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.mon || 'Mon',
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.tue || 'Tue',
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.wed || 'Wed',
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.thu || 'Thu',
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.fri || 'Fri',
-		window?.vkbmResourceSchedule?.strings?.weekdayShort?.sat || 'Sat',
-	];
-
 	const toggleDaysVisibility = () => {
 		if ( $useProvider.is( ':checked' ) ) {
 			$daysContainer.hide();

@@ -106,8 +106,7 @@ export const SelectedPlanSummary = ( {
 		} ) );
 
 	const staffItems = staffOptions.map( ( staff ) => {
-		const staffName =
-			staff.title?.rendered ?? staff.name ?? staff.title;
+		const staffName = staff.title?.rendered ?? staff.name ?? staff.title;
 		const tags = staff.resource_tags;
 		return {
 			id: staff.id,
@@ -142,10 +141,7 @@ export const SelectedPlanSummary = ( {
 							}
 							placeholder={
 								noNominationLabel ||
-								__(
-									'No preference',
-									'vk-booking-manager'
-								)
+								__( 'No preference', 'vk-booking-manager' )
 							}
 							disabled={
 								! staffItems.length || lockStaffSelection
@@ -161,10 +157,7 @@ export const SelectedPlanSummary = ( {
 							}
 							placeholder={
 								noNominationLabel ||
-								__(
-									'No preference',
-									'vk-booking-manager'
-								)
+								__( 'No preference', 'vk-booking-manager' )
 							}
 						/>
 					) ) }

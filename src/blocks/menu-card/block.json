@@ -1,0 +1,57 @@
+{
+	"apiVersion": 3,
+	"name": "vk-booking-manager/menu-card",
+	"title": "Service Card",
+	"description": "Displays a card for the service being viewed on its detail page.",
+	"category": "vk-booking-manager",
+	"icon": "id",
+	"textdomain": "vk-booking-manager",
+	"keywords": [
+		"menu",
+		"service",
+		"card",
+		"booking"
+	],
+	"attributes": {
+		"selectedMenuId": {
+			"type": "number",
+			"default": 0
+		},
+		"showImage": {
+			"type": "boolean",
+			"default": true
+		},
+		"showExcerpt": {
+			"type": "boolean",
+			"default": true
+		},
+		"showMeta": {
+			"type": "boolean",
+			"default": true
+		},
+		"showCategories": {
+			"type": "boolean",
+			"default": true
+		},
+		"showReserveButton": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"supports": {
+		"align": [
+			"wide",
+			"full"
+		],
+		"anchor": true,
+		"customClassName": true,
+		"contentRole": true,
+		"spacing": {
+			"margin": true,
+			"padding": true
+		}
+	},
+	"style": "file:./style-index.css",
+	"editorStyle": "file:./index.css",
+	"editorScript": "file:./index.js"
+}

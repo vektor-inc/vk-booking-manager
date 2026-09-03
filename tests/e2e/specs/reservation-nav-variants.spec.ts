@@ -1,7 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
-import { execSync } from 'child_process';
+import { wpCliArgs } from '../utils/helpers';
 
-const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
+const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 const ADMIN_USER = 'admin';
 const ADMIN_PASSWORD = 'password';
 const MEMBER_USER = 'e2e-member';
@@ -269,31 +269,46 @@ test.describe( 'Reservation header nav variants', () => {
 	// Prepare users needed for tests (test data already created by global setup)
 	test.beforeAll( async () => {
 		// 管理者ログイン用のパスワードを明示的に固定して、環境差分で失敗しないようにする。
-		execSync(
-			`npx wp-env run cli wp user update ${ ADMIN_USER } --user_pass='${ ADMIN_PASSWORD }'`
-		);
+		wpCliArgs( [
+			'user',
+			'update',
+			ADMIN_USER,
+			`--user_pass=${ ADMIN_PASSWORD }`,
+		] );
 
 		// 一般会員（subscriber）ユーザーを用意する。存在しない場合のみ作成。
 		try {
-			execSync(
-				`npx wp-env run cli wp user get ${ MEMBER_USER } --field=ID`,
-				{ stdio: 'ignore' }
-			);
+			wpCliArgs( [ 'user', 'get', MEMBER_USER, '--field=ID' ], {
+				stdio: 'ignore',
+			} );
 		} catch {
-			execSync(
-				`npx wp-env run cli wp user create ${ MEMBER_USER } ${ MEMBER_EMAIL } --role=subscriber --user_pass='${ MEMBER_PASSWORD }'`
-			);
+			wpCliArgs( [
+				'user',
+				'create',
+				MEMBER_USER,
+				MEMBER_EMAIL,
+				'--role=subscriber',
+				`--user_pass=${ MEMBER_PASSWORD }`,
+			] );
 		}
 		// 既存ユーザーでも毎回パスワードを揃えてログイン失敗を防ぐ。
-		execSync(
-			`npx wp-env run cli wp user update ${ MEMBER_USER } --user_pass='${ MEMBER_PASSWORD }'`
-		);
+		wpCliArgs( [
+			'user',
+			'update',
+			MEMBER_USER,
+			`--user_pass=${ MEMBER_PASSWORD }`,
+		] );
 
 		// ブロックエディタ検証で使う予約ページIDを取得。
-		bookingPageId = execSync(
-			'npx wp-env run cli wp post list --post_type=page --name=booking --field=ID --format=ids',
-			{ encoding: 'utf-8' }
-		).trim();
+		// wpCliArgs は内部で trim 済みのため末尾の .trim() は不要。
+		bookingPageId = wpCliArgs( [
+			'post',
+			'list',
+			'--post_type=page',
+			'--name=booking',
+			'--field=ID',
+			'--format=ids',
+		] );
 		if ( ! bookingPageId ) {
 			throw new Error(
 				'Booking page ID could not be resolved. Ensure the booking page exists before running editor nav tests.'

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Rate limit utility trait.
  *

@@ -4,20 +4,25 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
+class ComposerStaticInitc03c7c299908b698671f9bee5be09229
 {
     public static $files = array (
         '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
         'ec07570ca5a812141189b1fa81503674' => __DIR__ . '/..' . '/phpunit/phpunit/src/Framework/Assert/Functions.php',
         '38fbb71d514eee25044aa9d94851ee76' => __DIR__ . '/..' . '/wp-phpunit/wp-phpunit/__loaded.php',
-        'f6d4f6bcee7247df6b777884c3e22f98' => __DIR__ . '/..' . '/yahnis-elsts/plugin-update-checker/load-v5p6.php',
+        'bc0af1337b39f0d750e835f5263eb646' => __DIR__ . '/..' . '/yahnis-elsts/plugin-update-checker/load-v5p7.php',
         '7d3b315c4f303f2fc14aca642a738e50' => __DIR__ . '/..' . '/yoast/phpunit-polyfills/phpunitpolyfills-autoload.php',
     );
 
     public static $prefixLengthsPsr4 = array (
+        'V' =>
+        array (
+            'VariableAnalysis\\' => 17,
+        ),
         'P' =>
         array (
             'PhpParser\\' => 10,
+            'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\' => 57,
         ),
         'D' =>
         array (
@@ -27,9 +32,17 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
     );
 
     public static $prefixDirsPsr4 = array (
+        'VariableAnalysis\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/sirbrillig/phpcs-variable-analysis/VariableAnalysis',
+        ),
         'PhpParser\\' =>
         array (
             0 => __DIR__ . '/..' . '/nikic/php-parser/lib/PhpParser',
+        ),
+        'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/dealerdirect/phpcodesniffer-composer-installer/src',
         ),
         'Doctrine\\Instantiator\\' =>
         array (
@@ -43,6 +56,58 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
 
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
+        'PHPCSUtils\\AbstractSniffs\\AbstractArrayDeclarationSniff' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/AbstractSniffs/AbstractArrayDeclarationSniff.php',
+        'PHPCSUtils\\BackCompat\\BCFile' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/BackCompat/BCFile.php',
+        'PHPCSUtils\\BackCompat\\BCTokens' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/BackCompat/BCTokens.php',
+        'PHPCSUtils\\BackCompat\\Helper' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/BackCompat/Helper.php',
+        'PHPCSUtils\\Exceptions\\InvalidTokenArray' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/InvalidTokenArray.php',
+        'PHPCSUtils\\Exceptions\\LogicException' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/LogicException.php',
+        'PHPCSUtils\\Exceptions\\MissingArgumentError' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/MissingArgumentError.php',
+        'PHPCSUtils\\Exceptions\\OutOfBoundsStackPtr' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/OutOfBoundsStackPtr.php',
+        'PHPCSUtils\\Exceptions\\RuntimeException' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/RuntimeException.php',
+        'PHPCSUtils\\Exceptions\\TestFileNotFound' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/TestFileNotFound.php',
+        'PHPCSUtils\\Exceptions\\TestMarkerNotFound' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/TestMarkerNotFound.php',
+        'PHPCSUtils\\Exceptions\\TestTargetNotFound' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/TestTargetNotFound.php',
+        'PHPCSUtils\\Exceptions\\TypeError' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/TypeError.php',
+        'PHPCSUtils\\Exceptions\\UnexpectedTokenType' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/UnexpectedTokenType.php',
+        'PHPCSUtils\\Exceptions\\ValueError' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/ValueError.php',
+        'PHPCSUtils\\Fixers\\SpacesFixer' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Fixers/SpacesFixer.php',
+        'PHPCSUtils\\Internal\\AttributeHelper' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/AttributeHelper.php',
+        'PHPCSUtils\\Internal\\Cache' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/Cache.php',
+        'PHPCSUtils\\Internal\\IsShortArrayOrList' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/IsShortArrayOrList.php',
+        'PHPCSUtils\\Internal\\IsShortArrayOrListWithCache' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/IsShortArrayOrListWithCache.php',
+        'PHPCSUtils\\Internal\\NoFileCache' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/NoFileCache.php',
+        'PHPCSUtils\\Internal\\StableCollections' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/StableCollections.php',
+        'PHPCSUtils\\TestUtils\\ConfigDouble' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/TestUtils/ConfigDouble.php',
+        'PHPCSUtils\\TestUtils\\RulesetDouble' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/TestUtils/RulesetDouble.php',
+        'PHPCSUtils\\TestUtils\\UtilityMethodTestCase' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/TestUtils/UtilityMethodTestCase.php',
+        'PHPCSUtils\\Tokens\\Collections' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Tokens/Collections.php',
+        'PHPCSUtils\\Tokens\\TokenHelper' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Tokens/TokenHelper.php',
+        'PHPCSUtils\\Utils\\Arrays' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Arrays.php',
+        'PHPCSUtils\\Utils\\AttributeBlock' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/AttributeBlock.php',
+        'PHPCSUtils\\Utils\\Conditions' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Conditions.php',
+        'PHPCSUtils\\Utils\\Constants' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Constants.php',
+        'PHPCSUtils\\Utils\\Context' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Context.php',
+        'PHPCSUtils\\Utils\\ControlStructures' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/ControlStructures.php',
+        'PHPCSUtils\\Utils\\FileInfo' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/FileInfo.php',
+        'PHPCSUtils\\Utils\\FilePath' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/FilePath.php',
+        'PHPCSUtils\\Utils\\FunctionDeclarations' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/FunctionDeclarations.php',
+        'PHPCSUtils\\Utils\\GetTokensAsString' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/GetTokensAsString.php',
+        'PHPCSUtils\\Utils\\Lists' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Lists.php',
+        'PHPCSUtils\\Utils\\MessageHelper' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/MessageHelper.php',
+        'PHPCSUtils\\Utils\\Namespaces' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Namespaces.php',
+        'PHPCSUtils\\Utils\\NamingConventions' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/NamingConventions.php',
+        'PHPCSUtils\\Utils\\Numbers' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Numbers.php',
+        'PHPCSUtils\\Utils\\ObjectDeclarations' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/ObjectDeclarations.php',
+        'PHPCSUtils\\Utils\\Operators' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Operators.php',
+        'PHPCSUtils\\Utils\\Orthography' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Orthography.php',
+        'PHPCSUtils\\Utils\\Parentheses' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Parentheses.php',
+        'PHPCSUtils\\Utils\\PassedParameters' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/PassedParameters.php',
+        'PHPCSUtils\\Utils\\Scopes' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Scopes.php',
+        'PHPCSUtils\\Utils\\TextStrings' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/TextStrings.php',
+        'PHPCSUtils\\Utils\\TypeString' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/TypeString.php',
+        'PHPCSUtils\\Utils\\UseStatements' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/UseStatements.php',
+        'PHPCSUtils\\Utils\\Variables' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Variables.php',
         'PHPUnit\\Exception' => __DIR__ . '/..' . '/phpunit/phpunit/src/Exception.php',
         'PHPUnit\\Framework\\ActualValueIsNotAnObjectException' => __DIR__ . '/..' . '/phpunit/phpunit/src/Framework/Exception/ActualValueIsNotAnObjectException.php',
         'PHPUnit\\Framework\\Assert' => __DIR__ . '/..' . '/phpunit/phpunit/src/Framework/Assert.php',
@@ -676,6 +741,7 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
         'VKBookingManager\\Admin\\Email_Log_Page' => __DIR__ . '/../..' . '/src/admin/class-email-log-page.php',
         'VKBookingManager\\Admin\\Email_Log_Repository' => __DIR__ . '/../..' . '/src/admin/class-email-log-repository.php',
         'VKBookingManager\\Admin\\Owner_Admin_Menu_Filter' => __DIR__ . '/../..' . '/src/admin/class-owner-admin-menu-filter.php',
+        'VKBookingManager\\Admin\\Pro_Upsell' => __DIR__ . '/../..' . '/src/admin/class-pro-upsell.php',
         'VKBookingManager\\Admin\\Provider_Settings_Page' => __DIR__ . '/../..' . '/src/admin/class-provider-settings-page.php',
         'VKBookingManager\\Admin\\Service_Menu_Editor' => __DIR__ . '/../..' . '/src/admin/class-service-menu-editor.php',
         'VKBookingManager\\Admin\\Setup_Notices' => __DIR__ . '/../..' . '/src/admin/class-setup-notices.php',
@@ -686,17 +752,25 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
         'VKBookingManager\\Auth\\Auth_Shortcodes' => __DIR__ . '/../..' . '/src/auth/class-auth-shortcodes.php',
         'VKBookingManager\\Availability\\Availability_Service' => __DIR__ . '/../..' . '/src/availability/class-availability-service.php',
         'VKBookingManager\\Blocks\\Block_Category' => __DIR__ . '/../..' . '/src/blocks/class-block-category.php',
+        'VKBookingManager\\Blocks\\Menu_Card_Block' => __DIR__ . '/../..' . '/src/blocks/class-menu-card-block.php',
         'VKBookingManager\\Blocks\\Menu_Loop_Block' => __DIR__ . '/../..' . '/src/blocks/class-menu-loop-block.php',
         'VKBookingManager\\Blocks\\Menu_Search_Block' => __DIR__ . '/../..' . '/src/blocks/class-menu-search-block.php',
         'VKBookingManager\\Blocks\\Reservation_Block' => __DIR__ . '/../..' . '/src/blocks/class-reservation-block.php',
+        'VKBookingManager\\Blocks\\Reservation_Button_Block' => __DIR__ . '/../..' . '/src/blocks/class-reservation-button-block.php',
+        'VKBookingManager\\Blocks\\Reservation_Button_Renderer' => __DIR__ . '/../..' . '/src/blocks/shared/class-reservation-button-renderer.php',
         'VKBookingManager\\Bookings\\Booking_Admin' => __DIR__ . '/../..' . '/src/bookings/class-booking-admin.php',
         'VKBookingManager\\Bookings\\Booking_Confirmation_Controller' => __DIR__ . '/../..' . '/src/bookings/class-booking-confirmation-controller.php',
         'VKBookingManager\\Bookings\\Booking_Draft_Controller' => __DIR__ . '/../..' . '/src/bookings/class-booking-draft-controller.php',
         'VKBookingManager\\Bookings\\My_Bookings_Controller' => __DIR__ . '/../..' . '/src/bookings/class-my-bookings-controller.php',
+        'VKBookingManager\\Bookings\\User_Favorites_Controller' => __DIR__ . '/../..' . '/src/bookings/class-user-favorites-controller.php',
         'VKBookingManager\\Capabilities\\Capabilities' => __DIR__ . '/../..' . '/src/capabilities/class-capabilities.php',
         'VKBookingManager\\Capabilities\\Roles_Manager' => __DIR__ . '/../..' . '/src/capabilities/class-roles-manager.php',
+        'VKBookingManager\\Common\\Exclusive_Fee' => __DIR__ . '/../..' . '/src/common/class-exclusive-fee.php',
+        'VKBookingManager\\Common\\Price_Tiers' => __DIR__ . '/../..' . '/src/common/class-price-tiers.php',
         'VKBookingManager\\Common\\Rate_Limit_Trait' => __DIR__ . '/../..' . '/src/common/trait-rate-limit.php',
+        'VKBookingManager\\Common\\Reservation_Day' => __DIR__ . '/../..' . '/src/common/class-reservation-day.php',
         'VKBookingManager\\Common\\VKBM_Helper' => __DIR__ . '/../..' . '/src/common/class-vkbm-helpers.php',
+        'VKBookingManager\\Common\\Weekday_Rule' => __DIR__ . '/../..' . '/src/common/class-weekday-rule.php',
         'VKBookingManager\\Notifications\\Booking_Notification_Service' => __DIR__ . '/../..' . '/src/notifications/class-booking-notification-service.php',
         'VKBookingManager\\OEmbed\\OEmbed_Override' => __DIR__ . '/../..' . '/src/oembed/class-oembed-override.php',
         'VKBookingManager\\Plugin' => __DIR__ . '/../..' . '/src/class-plugin.php',
@@ -720,42 +794,80 @@ class ComposerStaticInite905510a6fa7436d18ff998d5d9548d3
         'VKBookingManager\\Staff\\Staff_Editor' => __DIR__ . '/../..' . '/src/staff/class-staff-editor.php',
         'VKBookingManager\\TermOrder\\Term_Order_Manager' => __DIR__ . '/../..' . '/src/term-order/class-term-order-manager.php',
         'VKBookingManager\\Tests\\Admin\\Admin_Page_Rendering_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/class-admin-page-rendering-test.php',
+        'VKBookingManager\\Tests\\Admin\\Pro_Upsell_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-pro-upsell.php',
+        'VKBookingManager\\Tests\\Admin\\Service_Menu_Editor_Exclusive_When_Booked_Persistence_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-service-menu-editor-exclusive-when-booked-persistence.php',
+        'VKBookingManager\\Tests\\Admin\\Service_Menu_Editor_Rendering_Order_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-service-menu-editor-rendering-order.php',
         'VKBookingManager\\Tests\\Admin\\Service_Menu_Editor_Sanitize_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-service-menu-editor-sanitize.php',
         'VKBookingManager\\Tests\\Admin\\Shift_Dashboard_Hidden_Count_Rendering_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-shift-dashboard-hidden-count-rendering.php',
+        'VKBookingManager\\Tests\\Admin\\Shift_Dashboard_Min_Capacity_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-shift-dashboard-min-capacity.php',
         'VKBookingManager\\Tests\\Admin\\Shift_Dashboard_Sprintf_Test' => __DIR__ . '/../..' . '/tests/phpunit/admin/test-shift-dashboard-sprintf.php',
         'VKBookingManager\\Tests\\Assets\\Common_Styles_Test' => __DIR__ . '/../..' . '/tests/phpunit/assets/test-common-styles.php',
         'VKBookingManager\\Tests\\Auth\\Auth_Shortcodes_Test' => __DIR__ . '/../..' . '/tests/phpunit/auth/test-auth-shortcodes.php',
         'VKBookingManager\\Tests\\Auth\\Testable_Auth_Shortcodes' => __DIR__ . '/../..' . '/tests/phpunit/auth/test-auth-shortcodes.php',
         'VKBookingManager\\Tests\\Availability\\Build_Slots_Fixed_Start_Times_Test' => __DIR__ . '/../..' . '/tests/phpunit/availability/test-build-slots-fixed-start-times.php',
         'VKBookingManager\\Tests\\Availability\\Capacity_Test' => __DIR__ . '/../..' . '/tests/phpunit/availability/test-capacity.php',
+        'VKBookingManager\\Tests\\Availability\\Exclusive_Booking_Test' => __DIR__ . '/../..' . '/tests/phpunit/availability/test-exclusive-booking.php',
+        'VKBookingManager\\Tests\\Availability\\Is_Date_Allowed_For_Menu_Test' => __DIR__ . '/../..' . '/tests/phpunit/availability/test-is-date-allowed-for-menu.php',
         'VKBookingManager\\Tests\\Bookings\\Availability_Service_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
+        'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Email_Sanitize_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-admin-email-sanitize.php',
+        'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Guests_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-admin-guests.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Staff_Conflict_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-admin-staff-conflict.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Admin_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-admin-staff-conflict.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Confirmation_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Draft_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-draft-controller.php',
         'VKBookingManager\\Tests\\Bookings\\Booking_Notification_Service_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-booking-confirmation-controller.php',
+        'VKBookingManager\\Tests\\Bookings\\Exclusive_Availability_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-exclusive-booking-controllers.php',
+        'VKBookingManager\\Tests\\Bookings\\Exclusive_Booking_Controllers_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-exclusive-booking-controllers.php',
+        'VKBookingManager\\Tests\\Bookings\\Exclusive_Notification_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-exclusive-booking-controllers.php',
+        'VKBookingManager\\Tests\\Bookings\\Is_Reservation_Day_Allowed_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-is-reservation-day-allowed.php',
+        'VKBookingManager\\Tests\\Bookings\\Max_Capacity_Availability_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-max-capacity-disables-multi-guest-settings.php',
+        'VKBookingManager\\Tests\\Bookings\\Max_Capacity_Disables_Multi_Guest_Settings_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-max-capacity-disables-multi-guest-settings.php',
+        'VKBookingManager\\Tests\\Bookings\\Max_Capacity_Notification_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-max-capacity-disables-multi-guest-settings.php',
+        'VKBookingManager\\Tests\\Bookings\\My_Bookings_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-my-bookings-controller.php',
+        'VKBookingManager\\Tests\\Bookings\\Staff_Distribution_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-staff-distribution.php',
+        'VKBookingManager\\Tests\\Bookings\\User_Exclusive_Availability_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-user-exclusive-booking.php',
+        'VKBookingManager\\Tests\\Bookings\\User_Exclusive_Booking_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-user-exclusive-booking.php',
+        'VKBookingManager\\Tests\\Bookings\\User_Exclusive_Notification_Test_Double' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-user-exclusive-booking.php',
+        'VKBookingManager\\Tests\\Bookings\\User_Favorites_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/bookings/test-user-favorites-controller.php',
         'VKBookingManager\\Tests\\Capabilities\\Roles_Manager_Numeric_Cap_Key_Test' => __DIR__ . '/../..' . '/tests/phpunit/capabilities/test-roles-manager-numeric-cap-key.php',
+        'VKBookingManager\\Tests\\Common\\Exclusive_Fee_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-exclusive-fee.php',
         'VKBookingManager\\Tests\\Common\\Get_Staff_Display_Name_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-get-staff-display-name.php',
+        'VKBookingManager\\Tests\\Common\\Guests_Label_Helpers_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-guests-label-helpers.php',
         'VKBookingManager\\Tests\\Common\\Helper_Currency_Symbol_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-helper-currency-symbol.php',
         'VKBookingManager\\Tests\\Common\\Helper_Phone_Normalization_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-helper-phone-normalization.php',
+        'VKBookingManager\\Tests\\Common\\Min_Capacity_Status_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-min-capacity-status.php',
+        'VKBookingManager\\Tests\\Common\\Price_Tiers_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-price-tiers.php',
         'VKBookingManager\\Tests\\Common\\Rate_Limit_Trait_Stub' => __DIR__ . '/../..' . '/tests/phpunit/common/test-rate-limit-trait.php',
         'VKBookingManager\\Tests\\Common\\Rate_Limit_Trait_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-rate-limit-trait.php',
+        'VKBookingManager\\Tests\\Common\\Reservation_Day_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-reservation-day.php',
         'VKBookingManager\\Tests\\Common\\VKBM_Helper_Get_User_Display_Name_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-vkbm-helper-get-user-display-name.php',
+        'VKBookingManager\\Tests\\Common\\Weekday_Rule_Test' => __DIR__ . '/../..' . '/tests/phpunit/common/test-weekday-rule.php',
+        'VKBookingManager\\Tests\\Frontend\\Menu_Loop_Card_Min_Capacity_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/test-menu-loop-card-min-capacity.php',
+        'VKBookingManager\\Tests\\Frontend\\Menu_Loop_Card_Price_Tiers_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/test-menu-loop-card-price-tiers.php',
+        'VKBookingManager\\Tests\\Frontend\\Menu_Loop_Card_Reservation_Day_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/test-menu-loop-card-reservation-day.php',
+        'VKBookingManager\\Tests\\Frontend\\Menu_Loop_Card_Start_Time_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/test-menu-loop-card-start-time.php',
         'VKBookingManager\\Tests\\Frontend\\Reservation_Block_Rendering_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/class-reservation-block-rendering-test.php',
+        'VKBookingManager\\Tests\\Frontend\\Reservation_Button_Renderer_Test' => __DIR__ . '/../..' . '/tests/phpunit/rendering/test-reservation-button-renderer.php',
         'VKBookingManager\\Tests\\Notifications\\Booking_Notification_Service_Test' => __DIR__ . '/../..' . '/tests/phpunit/notifications/test-booking-notification-service.php',
+        'VKBookingManager\\Tests\\PostTypes\\Resource_Post_Type_Menu_Icon_Test' => __DIR__ . '/../..' . '/tests/phpunit/post-types/test-resource-post-type-menu-icon.php',
         'VKBookingManager\\Tests\\PostTypes\\Service_Menu_Group_Sort_Test' => __DIR__ . '/../..' . '/tests/phpunit/post-types/test-service-menu-group-sort.php',
+        'VKBookingManager\\Tests\\PostTypes\\Service_Menu_Min_Capacity_Auth_Test' => __DIR__ . '/../..' . '/tests/phpunit/post-types/test-service-menu-min-capacity-auth.php',
+        'VKBookingManager\\Tests\\PostTypes\\Service_Menu_Price_Tiers_Auth_Test' => __DIR__ . '/../..' . '/tests/phpunit/post-types/test-service-menu-price-tiers-auth.php',
+        'VKBookingManager\\Tests\\PostTypes\\Service_Menu_Revisions_Test' => __DIR__ . '/../..' . '/tests/phpunit/post-types/test-service-menu-revisions.php',
         'VKBookingManager\\Tests\\ProviderSettings\\Settings_Repository_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-repository.php',
+        'VKBookingManager\\Tests\\ProviderSettings\\Settings_Sanitizer_Guests_Unit_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-sanitizer-guests-unit.php',
         'VKBookingManager\\Tests\\ProviderSettings\\Settings_Sanitizer_Test' => __DIR__ . '/../..' . '/tests/phpunit/provider-settings/test-settings-sanitizer.php',
         'VKBookingManager\\Tests\\REST\\Auth_Form_Controller_Test' => __DIR__ . '/../..' . '/tests/phpunit/rest/test-auth-form-controller.php',
+        'VKBookingManager\\Tests\\Resources\\Resource_Menu_Icon_Test' => __DIR__ . '/../..' . '/tests/phpunit/resources/test-resource-menu-icon.php',
         'VKBookingManager\\Tests\\Staff\\Staff_Editor_Free_Source_Test' => __DIR__ . '/../..' . '/tests/phpunit/staff/test-staff-editor-free-source.php',
     );
 
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInite905510a6fa7436d18ff998d5d9548d3::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInite905510a6fa7436d18ff998d5d9548d3::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInite905510a6fa7436d18ff998d5d9548d3::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInitc03c7c299908b698671f9bee5be09229::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInitc03c7c299908b698671f9bee5be09229::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInitc03c7c299908b698671f9bee5be09229::$classMap;
 
         }, null, ClassLoader::class);
     }

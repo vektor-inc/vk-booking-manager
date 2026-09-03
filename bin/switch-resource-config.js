@@ -1,5 +1,6 @@
 const fs = require( 'fs' );
 const path = require( 'path' );
+const { injectGeneratedFileBanner } = require( './lib/generated-file-banner' );
 
 const edition = process.argv[ 2 ];
 if ( edition !== 'free' && edition !== 'pro' ) {
@@ -28,7 +29,10 @@ const resourceTagSourcePath = path.join(
 	resourcesDir,
 	`class-resource-tag-taxonomy-${ edition }.php`
 );
-const resourceTagTargetPath = path.join( resourcesDir, 'class-resource-tag-taxonomy.php' );
+const resourceTagTargetPath = path.join(
+	resourcesDir,
+	'class-resource-tag-taxonomy.php'
+);
 
 if ( ! fs.existsSync( sourcePath ) ) {
 	console.error( `Config source not found: ${ sourcePath }` );
@@ -36,6 +40,8 @@ if ( ! fs.existsSync( sourcePath ) ) {
 }
 
 fs.copyFileSync( sourcePath, targetPath );
+// コピー直後に「直接編集禁止」バナーを注入する（冪等）。
+injectGeneratedFileBanner( targetPath );
 
 const otherEdition = edition === 'free' ? 'pro' : 'free';
 const otherPath = path.join(
@@ -65,6 +71,8 @@ if ( ! fs.existsSync( staffSourcePath ) ) {
 }
 
 fs.copyFileSync( staffSourcePath, staffTargetPath );
+// コピー直後に「直接編集禁止」バナーを注入する（冪等）。
+injectGeneratedFileBanner( staffTargetPath );
 
 if ( fs.existsSync( otherStaffPath ) ) {
 	fs.unlinkSync( otherStaffPath );
@@ -75,11 +83,15 @@ if ( fs.existsSync( staffSourcePath ) ) {
 }
 
 if ( ! fs.existsSync( resourceTagSourcePath ) ) {
-	console.error( `Resource tag taxonomy source not found: ${ resourceTagSourcePath }` );
+	console.error(
+		`Resource tag taxonomy source not found: ${ resourceTagSourcePath }`
+	);
 	process.exit( 1 );
 }
 
 fs.copyFileSync( resourceTagSourcePath, resourceTagTargetPath );
+// コピー直後に「直接編集禁止」バナーを注入する（冪等）。
+injectGeneratedFileBanner( resourceTagTargetPath );
 
 if ( fs.existsSync( otherResourceTagPath ) ) {
 	fs.unlinkSync( otherResourceTagPath );

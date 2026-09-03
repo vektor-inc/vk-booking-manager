@@ -127,6 +127,23 @@ class Staff_Editor_Free_Source_Test extends WP_UnitTestCase {
 				'needle'              => 'public static function is_enabled(',
 				'should_contain'      => true,
 			),
+			array(
+				'test_condition_name' => 'Free版でも is_slot_capacity_enabled() が宣言されている事 (Pro との API 互換)',
+				'needle'              => 'public static function is_slot_capacity_enabled(',
+				'should_contain'      => true,
+			),
+			array(
+				// 呼称統一（#326）で旧名 is_multiple_guests_enabled() は死にコードのため削除済み。
+				// 再導入されていない事を確認する（過剰な後方互換の排除）。
+				'test_condition_name' => 'Free スタブに旧名 is_multiple_guests_enabled() が残っていない事 (呼称統一 #326・死にコード削除)',
+				'needle'              => 'is_multiple_guests_enabled',
+				'should_contain'      => false,
+			),
+			array(
+				'test_condition_name' => 'Free スタブには $slot_capacity_enabled_cache 代入処理が含まれない事 (no-op を維持)',
+				'needle'              => 'self::$slot_capacity_enabled_cache',
+				'should_contain'      => false,
+			),
 			// 境界値: Free スタブは実体ロジックを持たない事の確認。
 			// Pro 実装で使われているキャッシュプロパティの代入文 (実体クリア処理) を
 			// Free 側に紛れ込ませないようにする。

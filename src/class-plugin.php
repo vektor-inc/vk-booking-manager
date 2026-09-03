@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Main plugin orchestrator.
  *
@@ -22,12 +21,15 @@ use VKBookingManager\Admin\User_Profile_Fields;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\Blocks\Menu_Card_Block;
 use VKBookingManager\Blocks\Menu_Search_Block;
 use VKBookingManager\Blocks\Reservation_Block;
+use VKBookingManager\Blocks\Reservation_Button_Block;
 use VKBookingManager\Bookings\Booking_Admin;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
+use VKBookingManager\Bookings\User_Favorites_Controller;
 use VKBookingManager\Capabilities\Roles_Manager;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\OEmbed\OEmbed_Override;
@@ -164,6 +166,13 @@ class Plugin {
 	private $my_bookings_controller;
 
 	/**
+	 * User favorites REST controller.
+	 *
+	 * @var User_Favorites_Controller
+	 */
+	private $user_favorites_controller;
+
+	/**
 	 * Menu search block handler.
 	 *
 	 * @var Menu_Search_Block
@@ -178,11 +187,25 @@ class Plugin {
 	private $menu_loop_block;
 
 	/**
+	 * Menu card block handler.
+	 *
+	 * @var Menu_Card_Block
+	 */
+	private $menu_card_block;
+
+	/**
 	 * Reservation block handler.
 	 *
 	 * @var Reservation_Block
 	 */
 	private $reservation_block;
+
+	/**
+	 * 予約に進むボタンブロックのハンドラ。
+	 *
+	 * @var Reservation_Button_Block
+	 */
+	private $reservation_button_block;
 
 	/**
 	 * Availability REST controller.
@@ -289,7 +312,9 @@ class Plugin {
 	 * @param My_Bookings_Controller          $my_bookings_controller Current user bookings REST controller.
 	 * @param Menu_Search_Block               $menu_search_block      Menu search block handler.
 	 * @param Menu_Loop_Block                 $menu_loop_block        Menu loop block handler.
+	 * @param Menu_Card_Block                 $menu_card_block        Menu card block handler.
 	 * @param Reservation_Block               $reservation_block      Reservation block handler.
+	 * @param Reservation_Button_Block        $reservation_button_block 予約に進むボタンブロックのハンドラ。
 	 * @param Availability_Controller         $availability_controller Availability REST controller.
 	 * @param Current_User_Controller         $current_user_controller Current user REST controller.
 	 * @param Booking_Confirmation_Controller $booking_confirmation_controller Booking confirmation REST controller.
@@ -302,6 +327,7 @@ class Plugin {
 	 * @param Post_Order_Manager              $post_order_manager      Post order handler.
 	 * @param Term_Order_Manager              $term_order_manager      Term order handler.
 	 * @param User_Profile_Fields             $user_profile_fields     User profile fields handler.
+	 * @param User_Favorites_Controller       $user_favorites_controller User favorites REST controller.
 	 */
 	public function __construct(
 		Common_Styles $common_styles,
@@ -322,7 +348,9 @@ class Plugin {
 		My_Bookings_Controller $my_bookings_controller,
 		Menu_Search_Block $menu_search_block,
 		Menu_Loop_Block $menu_loop_block,
+		Menu_Card_Block $menu_card_block,
 		Reservation_Block $reservation_block,
+		Reservation_Button_Block $reservation_button_block,
 		Availability_Controller $availability_controller,
 		Current_User_Controller $current_user_controller,
 		Booking_Confirmation_Controller $booking_confirmation_controller,
@@ -334,7 +362,8 @@ class Plugin {
 		Auth_Form_Controller $auth_form_controller,
 		Post_Order_Manager $post_order_manager,
 		Term_Order_Manager $term_order_manager,
-		User_Profile_Fields $user_profile_fields
+		User_Profile_Fields $user_profile_fields,
+		User_Favorites_Controller $user_favorites_controller
 	) {
 		$this->common_styles                   = $common_styles;
 		$this->provider_settings_page          = $provider_settings_page;
@@ -354,7 +383,9 @@ class Plugin {
 		$this->my_bookings_controller          = $my_bookings_controller;
 		$this->menu_search_block               = $menu_search_block;
 		$this->menu_loop_block                 = $menu_loop_block;
+		$this->menu_card_block                 = $menu_card_block;
 		$this->reservation_block               = $reservation_block;
+		$this->reservation_button_block        = $reservation_button_block;
 		$this->availability_controller         = $availability_controller;
 		$this->current_user_controller         = $current_user_controller;
 		$this->booking_confirmation_controller = $booking_confirmation_controller;
@@ -367,6 +398,7 @@ class Plugin {
 		$this->post_order_manager              = $post_order_manager;
 		$this->term_order_manager              = $term_order_manager;
 		$this->user_profile_fields             = $user_profile_fields;
+		$this->user_favorites_controller       = $user_favorites_controller;
 	}
 
 	/**
@@ -394,9 +426,12 @@ class Plugin {
 		$this->booking_admin->register();
 		$this->booking_draft_controller->register();
 		$this->my_bookings_controller->register();
+		$this->user_favorites_controller->register();
 		$this->menu_search_block->register();
 		$this->menu_loop_block->register();
+		$this->menu_card_block->register();
 		$this->reservation_block->register();
+		$this->reservation_button_block->register();
 		$this->availability_controller->register();
 		$this->current_user_controller->register();
 		$this->booking_confirmation_controller->register();
@@ -522,9 +557,13 @@ class Plugin {
 			return $file;
 		}
 
-		// ファイルパスが無い場合でも、menu-loopブロックの場合は処理を続行（edit.jsのJSONを探すため）.
+		// ファイルパスが無い場合でも、menu-loop / menu-card / reservation-button ブロックの場合は
+		// 処理を続行（index.js にマージされた edit.js の翻訳 JSON を探すため）.
 		// その他の場合は早期リターン.
-		if ( ! $file && false === strpos( $handle, 'menu-loop' ) ) {
+		if ( ! $file
+			&& false === strpos( $handle, 'menu-loop' )
+			&& false === strpos( $handle, 'menu-card' )
+			&& false === strpos( $handle, 'reservation-button' ) ) {
 			return $file;
 		}
 
@@ -563,8 +602,12 @@ class Plugin {
 		// （app.jsにはcalendar-grid.js、daily-slot-list.js、selected-plan-summary.js、
 		// reservation-header などが全てバンドルされ、
 		// build:i18n:json実行時にbin/merge-json-translations.jsで全ての翻訳がマージされている）.
-		if ( false !== strpos( $handle, 'reservation' ) ) {
+		// 注意: reservation-button ブロックは別ブロックなので、ここで吸い込まないよう
+		// 明示的に除外する（reservation-button は後続のステップ3-3で解決する）.
+		if ( false !== strpos( $handle, 'reservation' ) && false === strpos( $handle, 'reservation-button' ) ) {
 			foreach ( $json_files as $json_file ) {
+				// バンドルされたローカルの JSON ファイルを読み込むため file_get_contents で問題ない。
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a bundled local JSON asset file.
 				$json_content = file_get_contents( $json_file );
 				if ( false === $json_content ) {
 					continue;
@@ -584,52 +627,20 @@ class Plugin {
 			}
 		}
 
-		// ステップ3-2: menu-loopブロックの場合は、index.jsのJSONファイルを優先的に検索.
+		// ステップ3-2: menu-loop / menu-card / reservation-button ブロックの場合は、index.jsのJSONファイルを優先的に検索.
 		// （index.jsにはダミーの翻訳文字列が追加され、build:i18n:json実行時にbin/merge-json-translations.jsで
 		// edit.jsの翻訳がindex.jsのJSONにマージされている）.
-		// ハンドル名のパターン: vk-booking-manager-menu-loop-editor-script または vk-booking-manager/menu-loop-editor-script.
-		if ( false !== strpos( $handle, 'menu-loop' ) ) {
-			foreach ( $json_files as $json_file ) {
-				$json_content = file_get_contents( $json_file );
-				if ( false === $json_content ) {
-					continue;
-				}
-
-				$json_data = json_decode( $json_content, true );
-				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
-					continue;
-				}
-
-				$source = $json_data['source'];
-
-				// index.jsのJSONファイルを優先的に探す（edit.jsの翻訳がマージされている）.
-				if ( false !== strpos( $source, 'src/blocks/menu-loop/index.js' ) ||
-					false !== strpos( $source, 'blocks/menu-loop/index.js' ) ||
-					false !== strpos( $source, 'menu-loop/index.js' ) ) {
-					return $json_file;
-				}
+		// ハンドル名のパターン: vk-booking-manager-menu-loop-editor-script / vk-booking-manager/menu-card-editor-script など.
+		// いずれも同じ「index.js優先・edit.jsフォールバック」探索のため、共通ヘルパーに集約している.
+		// 注意: reservation-button は上のステップ3で reservation app.js に吸い込まれないよう除外済み.
+		foreach ( array( 'menu-loop', 'menu-card', 'reservation-button' ) as $block_slug ) {
+			if ( false === strpos( $handle, $block_slug ) ) {
+				continue;
 			}
 
-			// index.jsのJSONが見つからない場合、edit.jsのJSONをフォールバックとして探す.
-			foreach ( $json_files as $json_file ) {
-				$json_content = file_get_contents( $json_file );
-				if ( false === $json_content ) {
-					continue;
-				}
-
-				$json_data = json_decode( $json_content, true );
-				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
-					continue;
-				}
-
-				$source = $json_data['source'];
-
-				// edit.jsのJSONファイルを探す（フォールバック）.
-				if ( false !== strpos( $source, 'src/blocks/menu-loop/edit.js' ) ||
-					false !== strpos( $source, 'blocks/menu-loop/edit.js' ) ||
-					false !== strpos( $source, 'menu-loop/edit.js' ) ) {
-					return $json_file;
-				}
+			$found = $this->find_block_translation_json( $json_files, $block_slug );
+			if ( null !== $found ) {
+				return $found;
 			}
 		}
 
@@ -639,6 +650,8 @@ class Plugin {
 
 		if ( ! empty( $handle_clean ) ) {
 			foreach ( $json_files as $json_file ) {
+				// バンドルされたローカルの JSON ファイルを読み込むため file_get_contents で問題ない。
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a bundled local JSON asset file.
 				$json_content = file_get_contents( $json_file );
 				if ( false === $json_content ) {
 					continue;
@@ -661,6 +674,49 @@ class Plugin {
 		// ステップ7: どの方法でも見つからなかった場合、元のファイルパスをそのまま返す.
 		// （WordPressのデフォルトの動作にフォールバック）.
 		return $file;
+	}
+
+	/**
+	 * 指定ブロックの翻訳JSONファイルを探索する.
+	 *
+	 * edit.js が index.js にバンドルされ、build:i18n:json 実行時に
+	 * bin/merge-json-translations.js で edit.js の翻訳が index.js の JSON にマージされる
+	 * menu-loop / menu-card 系ブロック向けの探索ロジック。
+	 * まず index.js の JSON を優先的に探し、見つからなければ edit.js の JSON を
+	 * フォールバックとして探す。どちらも見つからなければ null を返す。
+	 *
+	 * @param array<int,string> $json_files 翻訳JSONファイルのパス一覧.
+	 * @param string            $block_slug ブロックスラッグ（例: menu-loop / menu-card）.
+	 * @return string|null 見つかった翻訳JSONファイルのパス。見つからない場合は null。
+	 */
+	private function find_block_translation_json( array $json_files, string $block_slug ) {
+		// index.js を優先、見つからなければ edit.js をフォールバックとして探索する。
+		foreach ( array( 'index.js', 'edit.js' ) as $entry ) {
+			foreach ( $json_files as $json_file ) {
+				// バンドルされたローカルの JSON ファイルを読み込むため file_get_contents で問題ない。
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a bundled local JSON asset file.
+				$json_content = file_get_contents( $json_file );
+				if ( false === $json_content ) {
+					continue;
+				}
+
+				$json_data = json_decode( $json_content, true );
+				if ( ! is_array( $json_data ) || ! isset( $json_data['source'] ) ) {
+					continue;
+				}
+
+				$source = $json_data['source'];
+
+				// 例: src/blocks/menu-card/index.js / blocks/menu-card/index.js / menu-card/index.js のいずれにも一致させる。
+				if ( false !== strpos( $source, 'src/blocks/' . $block_slug . '/' . $entry ) ||
+					false !== strpos( $source, 'blocks/' . $block_slug . '/' . $entry ) ||
+					false !== strpos( $source, $block_slug . '/' . $entry ) ) {
+					return $json_file;
+				}
+			}
+		}
+
+		return null;
 	}
 
 	/**

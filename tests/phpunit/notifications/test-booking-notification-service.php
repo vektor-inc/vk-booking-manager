@@ -314,4 +314,98 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 		$this->assertSame( '店舗名', $actual_with_tags );
 	}
 
+	/**
+	 * get_reservation_information_lines: 条件ごとに出力される予約情報行を検証する。
+	 *
+	 * 出力行は payload とステータスラベルの組み合わせで決まる。各条件で「出力されるべき文字列(contains)」と
+	 * 「出力されてはいけない文字列(not_contains)」をケース配列で定義し、foreach でまとめて検証する。
+	 *
+	 * 検証している分岐:
+	 * - ステータス行 : $status_label が空でないときのみ出力。
+	 * - スタッフ行   : 指名機能ON（staff_enabled=true）のときのみ出力。
+	 * - 人数行       : 複数人予約（guests>1）のときのみ出力。
+	 * - 所要時間/料金行: それぞれの値が空でないときのみ出力。
+	 * 1予約は単一スタッフに割り当てられるため、複数スタッフ配分の内訳行は存在しない。
+	 */
+	public function test_get_reservation_information_lines(): void {
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$method  = new ReflectionMethod( Booking_Notification_Service::class, 'get_reservation_information_lines' );
+		$method->setAccessible( true );
+
+		// テストは ja ロケールで実行されるためラベルは翻訳される（例: 'Number of guests: %d' → '人数: %d名'）。
+		// そこで照合キーには「翻訳されるラベル」ではなく「payload に渡した値（センチネル）」を使い、ロケール非依存にする。
+		$status_sentinel = 'STATUS-SENTINEL-XYZ'; // ステータス行が出たときだけ本文に現れる一意な値。
+
+		// 全ケース共通のベース payload（各ケースで必要な項目だけ上書きする）。
+		// booking_id・日時はガード値（3 など）と重複しない値にして、人数の数値マーカーが他行と衝突しないようにする。
+		$base = array(
+			'booking_id'              => 1,
+			'menu_title'              => 'メニュー値',
+			'staff_title'             => 'スタッフ名値',
+			'reservation_datetime'    => '2026-07-01',
+			'duration_label'          => '',
+			'duration_label_heading'  => '所要時間',
+			'price_label'             => '',
+			'guests'                  => 1,
+			'staff_enabled'           => false,
+			'resource_label_singular' => 'スタッフ',
+		);
+
+		$cases = array(
+			array(
+				'name'         => '指名ON・人数3・ステータスなし => スタッフ行と人数行あり / ステータス行なし',
+				'overrides'    => array(
+					'staff_enabled' => true,
+					'guests'        => 3,
+				),
+				'status_label' => '',
+				// スタッフ名値=スタッフ行 / '3'=人数行（人数: 3名）。他の行に '3' は現れない。
+				'contains'     => array( 'メニュー値', 'スタッフ名値', '3' ),
+				// status_label 未指定なのでセンチネルは出力されない＝ステータス行なし。
+				'not_contains' => array( $status_sentinel ),
+			),
+			array(
+				'name'         => '指名OFF・人数1 => スタッフ行も人数行も出力しない',
+				'overrides'    => array(
+					'staff_enabled' => false,
+					'guests'        => 1,
+				),
+				'status_label' => '',
+				'contains'     => array( 'メニュー値' ),
+				// スタッフ名値が無い＝スタッフ行なし。'3' が無い＝人数行なし（guests=1 は出力されない）。
+				'not_contains' => array( 'スタッフ名値', '3', $status_sentinel ),
+			),
+			array(
+				'name'         => 'ステータスラベルあり => ステータス行を出力',
+				'overrides'    => array(),
+				'status_label' => $status_sentinel,
+				// 渡したセンチネルがそのまま本文に出る＝ステータス行あり（ラベル翻訳に依存しない）。
+				'contains'     => array( $status_sentinel ),
+				'not_contains' => array(),
+			),
+			array(
+				'name'         => '所要時間・料金あり => 所要時間行と料金行を出力',
+				'overrides'    => array(
+					'duration_label' => '所要時間値60',
+					'price_label'    => '料金値5000',
+				),
+				'status_label' => '',
+				// duration_label / price_label に渡した値がそのまま出力される。
+				'contains'     => array( '所要時間値60', '料金値5000' ),
+				'not_contains' => array(),
+			),
+		);
+
+		foreach ( $cases as $case ) {
+			$payload = array_merge( $base, $case['overrides'] );
+			$text    = implode( "\n", $method->invoke( $service, $payload, $case['status_label'] ) );
+
+			foreach ( $case['contains'] as $needle ) {
+				$this->assertStringContainsString( $needle, $text, $case['name'] . " => '{$needle}' を含むべき" );
+			}
+			foreach ( $case['not_contains'] as $needle ) {
+				$this->assertStringNotContainsString( $needle, $text, $case['name'] . " => '{$needle}' を含まないべき" );
+			}
+		}
+	}
 }

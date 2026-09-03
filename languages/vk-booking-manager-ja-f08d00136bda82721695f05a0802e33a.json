@@ -1,6 +1,6 @@
 {
 	"translation-revision-date": "2026-02-23 23:58+0900",
-	"generator": "WP-CLI/2.10.0",
+	"generator": "vk-booking-manager",
 	"source": "src/blocks/menu-loop/index.js",
 	"domain": "messages",
 	"locale_data": {
@@ -21,6 +21,15 @@
 			],
 			"Menu order": [
 				"メニュー順"
+			],
+			"Display featured image": [
+				"アイキャッチ画像を表示"
+			],
+			"Show excerpt": [
+				"抜粋を表示"
+			],
+			"Show required time/price": [
+				"所要時間/料金を表示"
 			],
 			"title": [
 				"タイトル"
@@ -82,17 +91,8 @@
 			"Display element": [
 				"表示要素"
 			],
-			"Display featured image": [
-				"アイキャッチ画像を表示"
-			],
 			"View Service Tag": [
 				"サービスタグを表示"
-			],
-			"Show excerpt": [
-				"抜粋を表示"
-			],
-			"Show required time/price": [
-				"所要時間/料金を表示"
 			],
 			"Show details button": [
 				"詳細ボタンを表示"

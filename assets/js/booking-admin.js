@@ -15,6 +15,140 @@
 			updateServiceSelect();
 		}
 
+		// 担当スタッフ単一選択：同じ時間帯に別予約があるスタッフを候補から除外する。
+		// 1予約は分割せず単一スタッフに割り当てるため、リピーターではなく単一の select を扱う。
+		const resourceSelect = document.querySelector( '.vkbm-booking-resource' );
+		if ( resourceSelect ) {
+			// 競合スタッフIDはサーバー側が data 属性で渡す（保存時刻時点の判定）。
+			let conflictIds = new Set(
+				( resourceSelect.dataset.conflictStaffIds || '' )
+					.split( ',' )
+					.map( function ( value ) {
+						return value.trim();
+					} )
+					.filter( Boolean )
+			);
+
+			// 同じ時間帯に別予約があるスタッフを候補から非表示・選択不可にする（選択中の値は常に表示）。
+			const updateStaffOptions = function () {
+				const current = resourceSelect.value;
+				Array.prototype.forEach.call(
+					resourceSelect.options,
+					function ( option ) {
+						if ( option.value === '0' ) {
+							return;
+						}
+						const exclude =
+							option.value !== current &&
+							conflictIds.has( option.value );
+						option.hidden = exclude;
+						option.disabled = exclude;
+					}
+				);
+			};
+
+			// 日時を変更したら Ajax で競合スタッフを再判定し、候補を更新する。
+			const ajaxConfig = window.vkbmBookingAdmin || {};
+			const dateField = document.getElementById( 'vkbm-booking-date' );
+			const startField = document.querySelector(
+				'input[name="vkbm_booking[start_time]"]'
+			);
+			const endField = document.querySelector(
+				'input[name="vkbm_booking[end_time]"]'
+			);
+
+			// 競合スタッフ取得リクエストの世代管理。デバウンス後でも応答が前後する可能性があるため、
+			// 最新リクエストの応答のみを反映して古い応答による上書きを防ぐ。
+			let latestConflictRequestId = 0;
+			const refreshConflicts = function () {
+				if ( ! ajaxConfig.ajaxUrl || ! window.fetch ) {
+					return;
+				}
+				const requestId = ++latestConflictRequestId;
+				const body = new URLSearchParams();
+				body.set(
+					'action',
+					ajaxConfig.action || 'vkbm_conflicting_staff'
+				);
+				body.set( 'nonce', ajaxConfig.nonce || '' );
+				body.set( 'post_id', String( ajaxConfig.postId || 0 ) );
+				body.set( 'date', dateField ? dateField.value : '' );
+				body.set( 'start_time', startField ? startField.value : '' );
+				body.set( 'end_time', endField ? endField.value : '' );
+
+				window
+					.fetch( ajaxConfig.ajaxUrl, {
+						method: 'POST',
+						credentials: 'same-origin',
+						headers: {
+							'Content-Type':
+								'application/x-www-form-urlencoded',
+						},
+						body: body.toString(),
+					} )
+					.then( function ( response ) {
+						// HTTPエラー（4xx/5xx）を明示的に検出し、JSON解析前に失敗させる。
+						if ( ! response.ok ) {
+							throw new Error( 'HTTP error ' + response.status );
+						}
+						return response.json();
+					} )
+					.then( function ( json ) {
+						// 最新リクエストの応答でなければ破棄する（古い応答による上書き防止）。
+						if ( requestId !== latestConflictRequestId ) {
+							return;
+						}
+						if (
+							json &&
+							json.success &&
+							json.data &&
+							Array.isArray( json.data.ids )
+						) {
+							conflictIds = new Set(
+								json.data.ids.map( function ( value ) {
+									return String( value );
+								} )
+							);
+							updateStaffOptions();
+						}
+					} )
+					.catch( function ( error ) {
+						// 競合スタッフの再判定は補助機能のため、失敗しても処理は止めない。
+						// 候補は前回値のまま据え置き、警告ログだけ残す。
+						if ( window.console && window.console.warn ) {
+							window.console.warn(
+								'vkbm: failed to refresh conflicting staff list',
+								error
+							);
+						}
+					} );
+			};
+
+			// 日時フィールドを連続で変更した際に Ajax が多重発火しないよう、
+			// refreshConflicts を 400ms デバウンスして最後の変更のみ反映する。
+			let conflictDebounceTimer = null;
+			const debouncedRefreshConflicts = function () {
+				if ( conflictDebounceTimer ) {
+					window.clearTimeout( conflictDebounceTimer );
+				}
+				conflictDebounceTimer = window.setTimeout(
+					refreshConflicts,
+					400
+				);
+			};
+
+			[ dateField, startField, endField ].forEach( function ( field ) {
+				if ( field ) {
+					field.addEventListener(
+						'change',
+						debouncedRefreshConflicts
+					);
+				}
+			} );
+
+			updateStaffOptions();
+		}
+
 		const attachmentWrap = document.querySelector(
 			'.vkbm-booking-attachments'
 		);

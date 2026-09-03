@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Common helper utilities for VK Booking Manager.
  *
@@ -206,6 +205,61 @@ class VKBM_Helper {
 		}
 
 		return $user->user_login;
+	}
+
+	/**
+	 * 最小催行人数（グループ開催型）の催行状態を算出する。
+	 *
+	 * 同じ日時・対応スタッフのスロットに相乗りした合計予約人数が
+	 * 最小催行人数に達したら「開催決定」とみなす表示用ロジック。
+	 * 表示・可視化のみを目的とし、自動中止や通知などの判定は行わない。
+	 *
+	 * - 最小催行人数が 0 以下（未設定）の場合は制約なしとして state='none' を返し、
+	 *   従来挙動（催行判定なし）を維持する。
+	 * - 合計予約人数が最小催行人数以上なら state='fulfilled'（開催決定）。
+	 * - 未達なら state='pending'、shortfall に「あと何名で開催か」を返す。
+	 *
+	 * 表示文言の生成は呼び出し側（フロント JS・管理画面 PHP）に委ね、
+	 * このメソッドは判定に必要な数値とフラグのみを返す純粋関数とする。
+	 *
+	 * @param int $min_capacity  最小催行人数（0 以下は制約なし）。
+	 * @param int $booked_guests 当該スロットの合計予約人数（0 以上）。
+	 * @return array{state:string, min_capacity:int, booked_guests:int, shortfall:int}
+	 *               state: 'none'（制約なし）/'pending'（未達）/'fulfilled'（達成）。
+	 *               shortfall: 開催までに不足している人数（達成・制約なし時は 0）。
+	 */
+	public static function get_min_capacity_status( int $min_capacity, int $booked_guests ): array {
+		// 負の入力は防御的に 0 へ丸める（メタ未設定・不正値対策）。
+		$min_capacity  = max( 0, $min_capacity );
+		$booked_guests = max( 0, $booked_guests );
+
+		// 最小催行人数が未設定（0）なら制約なし。従来どおり催行判定をしない。
+		if ( 0 === $min_capacity ) {
+			return array(
+				'state'         => 'none',
+				'min_capacity'  => 0,
+				'booked_guests' => $booked_guests,
+				'shortfall'     => 0,
+			);
+		}
+
+		// 合計予約人数が最小催行人数に達していれば開催決定。
+		if ( $booked_guests >= $min_capacity ) {
+			return array(
+				'state'         => 'fulfilled',
+				'min_capacity'  => $min_capacity,
+				'booked_guests' => $booked_guests,
+				'shortfall'     => 0,
+			);
+		}
+
+		// 未達。あと何名で開催かを算出する。
+		return array(
+			'state'         => 'pending',
+			'min_capacity'  => $min_capacity,
+			'booked_guests' => $booked_guests,
+			'shortfall'     => $min_capacity - $booked_guests,
+		);
 	}
 
 	/**

@@ -1,4 +1,4 @@
-@use '../../../assets/scss/index-blocks.scss' as *;
+@use "../../../assets/scss/index-blocks.scss" as *;
 
 .wp-block-vk-booking-manager-reservation {
 	display: block;
@@ -53,7 +53,7 @@
 
 .vkbm-reservation-header__brand-name {
 	font-weight: 600;
-	font-size:1.2rem;
+	font-size: 1.2rem;
 	color: #0f172a;
 }
 
@@ -64,18 +64,22 @@
 .vkbm-reservation-header__nav {
 	display: flex;
 	align-items: center;
-	gap: 0.35rem;
+	justify-content: flex-end;
+	font-size: 0.9rem;
+	gap: var(--vkbm--spacing--xs);
+
 	button,
 	a {
-		text-underline-offset:0.25em;
+		text-underline-offset: 0.25em;
+
 		&:hover {
 			text-decoration: none;
 		}
 	}
 	// TT1 など上書き用
-	.vkbm-reservation-header__nav-link:not(:hover):not(:active):not(.has-background){
+	.vkbm-reservation-header__nav-link:not(:hover):not(:active):not(.has-background) {
 		background: none;
-		color: var( --vkbm--color--link, #1d8fcb);
+		color: var(--vkbm--color--link, #1d8fcb);
 	}
 }
 
@@ -148,6 +152,7 @@
 }
 
 .vkbm-reservation-content__menu-preview-card {
+
 	.vkbm-menu-loop__item {
 		margin: 0;
 	}
@@ -188,18 +193,18 @@
 	background: #f9fafb;
 }
 
-	.vkbm-plan-summary__pricing--placeholder {
-		border-style: dashed;
-		background: rgba(148, 163, 184, 0.075);
-		color: #475569;
-		text-align: center;
-	}
+.vkbm-plan-summary__pricing--placeholder {
+	border-style: dashed;
+	background: rgba(148, 163, 184, 0.075);
+	color: #475569;
+	text-align: center;
+}
 
-	.vkbm-plan-summary__pricing--alert {
-		border: 0;
-		padding: 0;
-		background: transparent;
-	}
+.vkbm-plan-summary__pricing--alert {
+	border: 0;
+	padding: 0;
+	background: transparent;
+}
 
 .vkbm-plan-summary__pricing-placeholder {
 	margin: 0;
@@ -216,8 +221,9 @@
 .vkbm-plan-summary__pricing-label {
 	color: #555;
 }
+
 .vkbm-plan-summary__pricing-tax {
-	font-size:0.88em;
+	font-size: 0.88em;
 }
 
 .vkbm-plan-summary__pricing-value {
@@ -238,13 +244,19 @@
 	border: 1px dashed var(--vkbm--color--border);
 	border-radius: 6px;
 }
-.vkbm-plan-summary__status-label{
-	margin-right:1em;
+
+.vkbm-plan-summary__status-label {
+	margin-right: 1em;
 }
 
 .vkbm-plan-summary__status--detached {
 	margin-top: 1.5rem;
 	scroll-margin-top: var(--vkbm--reservation-scroll-offset, 100px);
+	// 日時・人数・貸切・料金・操作ボタンを子に持つ。貸切ブロックや料金行のような縦長要素を
+	// space-between の横一列に押し込むと、幅が確保できず文字が1字ずつ折り返して崩れる。
+	// flex-wrap を許可し、縦積みすべき要素（貸切・貸切料金行）は別途 flex-basis:100% で
+	// 1行を占有させて人数入力の直下へ落とす（design-rules「グループごとの改行／縦積み」）。
+	flex-wrap: wrap;
 }
 
 .vkbm-plan-summary__actions {
@@ -252,25 +264,177 @@
 	flex-direction: column;
 	align-items: flex-end;
 	gap: 0.35rem;
+	// 親 __status--detached が flex-wrap したとき（貸切ブロックが全幅で割り込む場合など）、
+	// 操作ボタンの行が左寄せにならず従来どおり右端に揃うよう、左マージンを auto で詰める。
+	margin-left: auto;
+}
+
+// 人数（複数人予約）選択欄.
+.vkbm-plan-summary__guests {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.vkbm-plan-summary__guests-label {
+	font-size: 0.875rem;
+	white-space: nowrap;
+}
+
+.vkbm-plan-summary__guests-select {
+	min-width: 4rem;
+	padding: 0.35rem 0.5rem;
+	border: 1px solid var(--vkbm--color--border, #e0e0e0);
+	border-radius: var(--vkbm--radius--md, 4px);
+	font-size: 0.95rem;
+}
+
+// 料金区分（大人料金・子供料金など）の人数入力欄.
+.vkbm-plan-summary__guest-tiers {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+// 1区分の行：ラベル（区分名＋料金）と人数入力をラベル左・入力右で揃える.
+.vkbm-plan-summary__guest-tier {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.vkbm-plan-summary__guest-tier-label {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	font-size: 0.875rem;
+}
+
+// 区分料金は補足情報として弱めの色で示す.
+.vkbm-plan-summary__guest-tier-price {
+	font-size: 0.8125rem;
+	color: var(--vkbm--color--text-secondary, #666);
+	white-space: nowrap;
+}
+
+// 概算合計は合計として視覚的に強調する（区分行との境界に区切り線）.
+.vkbm-plan-summary__guest-tiers-total {
+	margin-top: 0.25rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--vkbm--color--border, #e0e0e0);
+	font-size: 0.95rem;
+	font-weight: 700;
+	text-align: right;
+}
+
+// ユーザーによる貸し切り指定（#305）。人数入力の直下に配置するチェックと注記.
+// 親 __status--detached は flex 横並び（space-between）のため、貸切ブロックは縦長で押し潰されやすい。
+// flex-basis:100% で親 flex の1行を占有し、人数入力の下に折り返して全幅で縦積み表示させる。
+.vkbm-plan-summary__exclusive {
+	flex: 1 1 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 0.375rem;
+}
+
+// チェックとラベルを揃え、タップ領域を確保する（label 全体をクリック可能に）.
+.vkbm-plan-summary__exclusive-label {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	cursor: pointer;
+	font-size: 0.9rem;
+	line-height: 1.5;
+}
+
+.vkbm-plan-summary__exclusive-checkbox {
+	margin-top: 0.2em;
+	flex: 0 0 auto;
+}
+
+// チェック無効時は label もカーソルで無効を伝える.
+.vkbm-plan-summary__exclusive-checkbox:disabled {
+	cursor: not-allowed;
+}
+
+// 無効チェック時はラベル文字も弱めて「押せない」ことを色だけでなくテキストの濃度でも示す。
+// 無効理由は別途テキスト併記しているため、色のみに依存しない（design-rules 準拠）。
+.vkbm-plan-summary__exclusive-label:has(.vkbm-plan-summary__exclusive-checkbox:disabled) {
+	cursor: not-allowed;
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+.vkbm-plan-summary__exclusive-note {
+	font-size: 0.8125rem;
+	margin: 0;
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+// 無効理由（既存予約あり・人数不足）は danger 系で目立たせるが、テキスト併記で色だけに頼らない.
+.vkbm-plan-summary__exclusive-note--disabled {
+	color: var(--vkbm--color--danger-text, #842029);
+}
+
+// 適用外人数到達時の淡色注記.
+// fallback は白背景で AA(4.5:1) を満たす #666（5.49:1）に統一する（#888 は 3.54:1 で不適合）.
+.vkbm-plan-summary__exclusive-note--muted {
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+// 貸切料金行の aria-live 常設コンテナ。親 flex（__status--detached）の1行を占有して全幅で表示する。
+.vkbm-plan-summary__exclusive-fee-live {
+	flex: 1 1 100%;
+}
+
+// 空のときはレイアウトに影響させない（中身が入ったときだけ余白が出る）.
+.vkbm-plan-summary__exclusive-fee-live:empty {
+	display: none;
+}
+
+// 料金サマリーの貸切料金行.
+.vkbm-plan-summary__exclusive-fee {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--vkbm--color--border, #e0e0e0);
+	font-size: 0.9rem;
+}
+
+.vkbm-plan-summary__exclusive-fee-label {
+	white-space: nowrap;
+}
+
+.vkbm-plan-summary__exclusive-fee-value {
+	font-weight: 700;
+	text-align: right;
+	white-space: nowrap;
+}
+
+// 適用外人数到達で ¥0 になったときは淡色＋注記で「黙って消えた」ように見えないようにする.
+// fallback は白背景で AA(4.5:1) を満たす #666（5.49:1）に統一する（#888 は 3.54:1 で不適合）.
+.vkbm-plan-summary__exclusive-fee-value--muted {
+	font-weight: 400;
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+.vkbm-plan-summary__exclusive-fee-note {
+	display: block;
+	font-size: 0.75rem;
+	font-weight: 400;
 }
 
 .vkbm-plan-summary__action {
-	background: var(
-		--vkbm--color--reservation-action,
-		var(--vkbm--color--primary, var(--wp--preset--color--primary, #2563eb))
-	);
+	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--wp--preset--color--primary, #2563eb)));
 }
 
 .vkbm-plan-summary__action:hover {
-	background: color-mix(
-		in srgb,
-		var(
-			--vkbm--color--reservation-action,
-			var(--vkbm--color--primary, var(--wp--preset--color--primary, #2563eb))
-		)
-		75%,
-		#000
-	);
+	background:
+		color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--wp--preset--color--primary, #2563eb)))
+		75%, #000);
 }
 
 .vkbm-plan-summary__hint,
@@ -281,6 +445,12 @@
 
 .vkbm-plan-summary__hint {
 	color: #666;
+}
+
+// 残枠超過など、操作の妨げとなる状態を伝えるヒント.
+// 特異性を .vkbm-plan-summary__hint と同等以上に上げ、後続の単体クラスに上書きされないようにする.
+.vkbm-plan-summary__hint.vkbm-plan-summary__hint--warning {
+	color: var(--vkbm--color--danger-text, #842029);
 }
 
 .vkbm-plan-summary__error {
@@ -346,6 +516,7 @@
 		opacity: 0.4;
 		cursor: default;
 	}
+
 	&--selected {
 		background: rgba(29, 143, 203, 0.1);
 		outline: none;
@@ -364,8 +535,9 @@
 	font-size: 0.75rem;
 	padding: 0 0.4rem;
 }
+
 .vkbm-calendar__status {
-	font-size: var( --vkbm--font-size--sm, 0.75rem);
+	font-size: var(--vkbm--font-size--sm, 0.75rem);
 	white-space: nowrap;
 }
 
@@ -382,8 +554,8 @@
 	text-align: left;
 	background: #fff;
 	cursor: pointer;
-	font-size: var( --vkbm--font-size--sm, 0.75rem);
-	font-weight: normal;
+	font-size: var(--vkbm--font-size--sm, 0.75rem);
+	font-weight: 400;
 
 	&.is-selected {
 		border-color: var(--vkbm--color--accent);
@@ -392,6 +564,15 @@
 
 	// 満枠スロットのスタイル / Fully booked slot styles.
 	&.is-full {
+		background: #f0f0f0;
+		color: #767676;
+		border-color: #d0d0d0;
+		cursor: not-allowed;
+	}
+
+	// 貸し切り予約で受付終了になった枠のスタイル（満席と同じく無効状態で残す）。
+	// Closed slot due to a private (exclusive) booking; kept as a disabled state like full slots.
+	&.is-exclusive-closed {
 		background: #f0f0f0;
 		color: #767676;
 		border-color: #d0d0d0;
@@ -409,21 +590,46 @@
 	&--full {
 		color: #999;
 	}
+
+	// 貸し切り予約で受付終了になった枠の表示 / Display when closed by an exclusive booking.
+	// 無効背景（#f0f0f0）上で通常テキスト相当のコントラストを確保し、満枠（--full）と区別できるようにする。
+	&--closed {
+		color: #595959;
+	}
 }
 
-	.vkbm-slot-list--placeholder {
-		padding: 1rem;
-		border: 1px dashed var(--vkbm--color--border);
-		border-radius: 6px;
-		color: #666;
+// 最小催行人数（グループ開催型）の催行状態バッジ。
+// 色だけで区別せず必ずテキストラベルを併記する。白カード背景上で 4.5:1 以上のコントラストを担保するため
+// success-text / warning-text（いずれも白上で十分なコントラスト）を用いる。
+.vkbm-slot-list__fulfillment {
+	font-size: var(--vkbm--font-size--xs, 0.75rem);
+	font-weight: 700;
+	margin-top: 2px;
+
+	// 開催決定（達成）。
+	&--confirmed {
+		color: var(--vkbm--color--success-text, #0f5132);
 	}
 
-	.vkbm-slot-list--alert {
-		padding: 0;
-		border: 0;
-		border-radius: 0;
-		color: inherit;
+	// 開催前（未達。あと N 名）。
+	&--pending {
+		color: var(--vkbm--color--warning-text, #664d03);
 	}
+}
+
+.vkbm-slot-list--placeholder {
+	padding: 1rem;
+	border: 1px dashed var(--vkbm--color--border);
+	border-radius: 6px;
+	color: #666;
+}
+
+.vkbm-slot-list--alert {
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	color: inherit;
+}
 
 .vkbm-reservation-content__notice {
 	border: 1px dashed var(--vkbm--color--border);
@@ -438,13 +644,6 @@
 	font-size: 0.875rem;
 }
 
-.vkbm-reservation-header__nav {
-	display: flex;
-	justify-content: flex-end;
-	font-size: 0.9rem;
-	gap: var(--vkbm--spacing--xs);
-}
-
 .vkbm-reservation-header__nav .vkbm-reservation-header__nav-link.is-active {
 	color: var(--vkbm--color--accent, #1d8fcb);
 	text-decoration: underline;
@@ -456,11 +655,11 @@
 }
 
 .vkbm-reservation-header__nav::before {
-	content: '[';
+	content: "[";
 }
 
 .vkbm-reservation-header__nav::after {
-	content: ']';
+	content: "]";
 }
 
 .vkbm-reservation-header__nav-link + .vkbm-reservation-header__nav-link {
@@ -482,6 +681,7 @@
 	background: #fff;
 	container-type: inline-size;
 }
+
 .vkbm-confirm__summary--cancelled {
 	opacity: 0.6;
 }
@@ -503,12 +703,12 @@
 }
 
 .vkbm-confirm__status::before {
-	content: '[';
+	content: "[";
 	margin-right: 0.25em;
 }
 
 .vkbm-confirm__status::after {
-	content: ']';
+	content: "]";
 	margin-left: 0.25em;
 }
 
@@ -516,25 +716,111 @@
 	white-space: nowrap;
 }
 
+// 「今後の予約」「過去の予約」セクションの見出し。
+.vkbm-confirm__group-title {
+	margin: 0 0 0.75rem;
+	font-size: 1rem;
+	font-weight: 700;
+}
+
+// 過去の予約セクションは今後の予約との間に余白を空ける。
+.vkbm-confirm--past {
+	margin-top: 1.5rem;
+}
+
+// 予約カードの操作ボタン群（キャンセル／同じ内容で予約する）。
+.vkbm-confirm__actions {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+// お気に入り（いつもの）クイック選択。
+.vkbm-favorites {
+	margin-bottom: 1.25rem;
+	padding: 0.75rem 1rem;
+	border: 1px solid var(--vkbm--color--border, #e0e0e0);
+	border-radius: var(--vkbm--radius--md, 6px);
+	background: #f9fafb;
+}
+
+.vkbm-favorites__title {
+	margin: 0 0 0.5rem;
+	font-size: 0.95rem;
+	font-weight: 700;
+}
+
+.vkbm-favorites__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+// チップ（適用ボタン＋削除ボタン）。
+.vkbm-favorites__item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.vkbm-favorites__remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	padding: 0;
+	// 常時枠線と背景を敷き、削除用の「×」ボタンだと認識できるようにする。
+	// 親カード（#f9fafb）と白背景がほぼ同化するため、枠線は border 既定より
+	// 一段濃いグレーにしてボタンの輪郭が視認できるようにする。
+	border: 1px solid #adb5bd;
+	border-radius: 50%;
+	background: #fff;
+	color: var(--vkbm--color--text-muted, #666);
+	font-size: 1rem;
+	line-height: 1;
+	cursor: pointer;
+
+	&:hover {
+		border-color: var(--wp--preset--color--danger, #dc3545);
+		background: var(--wp--preset--color--danger, #dc3545);
+		color: #fff;
+	}
+}
+
+// 「この組み合わせをお気に入りに登録」ボタンの配置。
+.vkbm-favorites__add {
+	margin: 0.75rem 0;
+}
+
+.vkbm-favorites__status {
+	margin-bottom: 0.75rem;
+}
+
 .vkbm-confirm__summary-item {
 	display: flex;
 	justify-content: space-between;
 	border-bottom: 1px solid var(--vkbm--color--border, #e0e0e0);
-	margin:0;
+	margin: 0;
 	padding: 0.7rem 0.5rem;
-	font-size:14px;
+	font-size: 14px;
+
 	&-title {
-		font-weight: bold;
+		font-weight: 700;
 		white-space: nowrap;
 	}
+
 	&-value {
-		font-weight: normal;
-		margin-bottom:0;
+		font-weight: 400;
+		margin-bottom: 0;
 	}
 
 	&-value--price {
-		font-weight: bold;
-		font-size:1.2em;
+		font-weight: 700;
+		font-size: 1.2em;
 		text-align: right;
 		min-width: 130px;
 		display: inline-block;
@@ -542,35 +828,61 @@
 	}
 
 }
+
 @container (max-width: 499px) {
+
 	.vkbm-confirm__summary-item {
 		display: block;
+
 		&-title,
 		&-value {
 			display: block;
 		}
+
 		&-title {
 			margin-bottom: 0.5rem;
 		}
+
 		&-value {
 			margin-left: 0;
 		}
 	}
+
+	// 日時と操作ボタンの横並びは、ボタンの最小幅が縮小できず
+	// カード右端からはみ出すため、狭い幅では日時の下へ縦積みにする。
+	.vkbm-confirm__summary-title {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	// 狭い幅では予約カードの操作ボタン（キャンセル／同じ内容で予約する）を
+	// 縦積み・全幅にして左揃えのまま崩れないようにする。
+	.vkbm-confirm__actions {
+		flex-direction: column;
+		align-items: stretch;
+
+		.vkbm-button {
+			width: 100%;
+		}
+	}
 }
+
 .vkbm-confirm__summary-item--other-conditions {
-	margin-bottom:0;
-	margin-block-end:0;
-	padding-bottom:0;
+	margin-bottom: 0;
+	margin-block-end: 0;
+	padding-bottom: 0;
 	flex-direction: column;
 	align-items: flex-start;
 	justify-content: flex-start;
+
 	dt {
-		margin-bottom:1rem;
+		margin-bottom: 1rem;
 	}
+
 	dd {
-		margin-left:0;
-		font-size:.88rem;
-		padding-bottom:0;
+		margin-left: 0;
+		font-size: 0.88rem;
+		padding-bottom: 0;
 		line-height: 1.5;
 	}
 }
@@ -580,13 +892,14 @@
 }
 
 .vkbm-reservation-content--confirm {
+
 	.vkbm-alert {
 		font-size: 0.95rem;
 	}
 
 	.vkbm-confirm__actions {
-		margin-top:1em;
-		margin-bottom:1em;
+		margin-top: 1em;
+		margin-bottom: 1em;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;

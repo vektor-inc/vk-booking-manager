@@ -29,7 +29,9 @@ export const vkBookingManagerCategoryIcon = () => {
 	);
 
 	const applyIcon = () => {
-		if ( ! getCategories().some( ( category ) => category.slug === SLUG ) ) {
+		if (
+			! getCategories().some( ( category ) => category.slug === SLUG )
+		) {
 			return false;
 		}
 		updateCategory( SLUG, { icon } );

@@ -16,6 +16,7 @@
 	transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
 	user-select: none;
 	white-space: nowrap;
+
 	&:not(.vkbm-button__link) {
 		text-decoration: none !important;
 	}
@@ -29,10 +30,25 @@
 .vkbm-button[disabled],
 .vkbm-button:disabled,
 .vkbm-button.is-disabled,
-.vkbm-button[aria-disabled='true'] {
+.vkbm-button[aria-disabled="true"] {
 	cursor: not-allowed;
 	opacity: 0.5;
 	pointer-events: none;
+}
+
+// ボタン内の読み上げ専用テキスト（無効理由など）を視覚的に隠す。
+// テーマ側で screen-reader-text が未定義でも確実に隠れるよう自前で定義する。
+.vkbm-button .screen-reader-text {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	border: 0;
+	clip: rect(1px, 1px, 1px, 1px);
+	clip-path: inset(50%);
+	word-wrap: normal !important;
 }
 
 .vkbm-button__xs {
@@ -54,46 +70,35 @@
 
 .vkbm-button__primary,
 a.vkbm-button__primary {
-	background: var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb);
+	background: var(--vkbm--color--primary, #2563eb);
 	color: #fff;
 }
 
 .vkbm-plan-summary__action.vkbm-button__primary {
-	background: var(
-		--vkbm--color--reservation-action,
-		var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb)
-	);
+	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
 }
 
 .vkbm-button__primary:hover {
+
 	/* background only (keep text color) */
-	background: color-mix(in srgb, var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb) 75%, #000);
+	background: color-mix(in srgb, var(--vkbm--color--primary, #2563eb) 75%, #000);
 }
 
 .vkbm-plan-summary__action.vkbm-button__primary:hover {
-	background: color-mix(
-		in srgb,
-		var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb))
-		75%,
-		#000
-	);
+	background:
+		color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb))
+		75%, #000);
 }
 
 .vkbm-menu-loop__button--reserve {
-	background: var(
-		--vkbm--color--reservation-action,
-		var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb)
-	);
+	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
 	color: #fff;
 }
 
 .vkbm-menu-loop__button--reserve:hover {
-	background: color-mix(
-		in srgb,
-		var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--vkbm--color--primary), #2563eb))
-		75%,
-		#000
-	);
+	background:
+		color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb))
+		75%, #000);
 }
 
 .vkbm-button__secondary,
@@ -128,7 +133,7 @@ a.vkbm-button__danger {
 
 .vkbm-button-outline {
 	background: transparent;
-	border-color: currentColor;
+	border-color: currentcolor;
 }
 
 .vkbm-button-outline__primary {
@@ -180,7 +185,7 @@ a.vkbm-button__danger {
 }
 
 .vkbm-buttons a {
-	font-weight: normal;
+	font-weight: 400;
 }
 
 .vkbm-buttons__center {

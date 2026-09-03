@@ -2,6 +2,19 @@ import { execFileSync, ExecFileSyncOptions } from 'child_process';
 import type { Page } from '@playwright/test';
 
 /**
+ * e2e が利用するテスト用 wp-env 設定ファイル。
+ * wp-env v11 では開発用と同一設定での tests 環境同時起動が非推奨のため、
+ * テスト専用の .wp-env-tests.json（ポート 8889）を --config で指定し、
+ * その cli コンテナに対して WP-CLI を実行する。開発用環境（8888）と分離する。
+ * Test-only wp-env config used by e2e. Under wp-env v11 the legacy combined
+ * tests environment is deprecated, so we target a dedicated config file
+ * (.wp-env-tests.json, port 8889) via --config, separated from development.
+ * Override the config path with WP_ENV_TESTS_CONFIG if needed.
+ */
+const WP_ENV_TESTS_CONFIG =
+	process.env.WP_ENV_TESTS_CONFIG || '.wp-env-tests.json';
+
+/**
  * WP-CLI コマンドを実行するヘルパー（推奨：引数を配列で渡す版）。
  * Helper to run WP-CLI commands via wp-env using execFileSync (recommended).
  *
@@ -20,7 +33,15 @@ export const wpCliArgs = (
 ): string => {
 	const out = execFileSync(
 		'npx',
-		[ 'wp-env', 'run', 'cli', 'wp', ...args ],
+		[
+			'wp-env',
+			'run',
+			'--config',
+			WP_ENV_TESTS_CONFIG,
+			'cli',
+			'wp',
+			...args,
+		],
 		{
 			encoding: 'utf-8',
 			...opts,
@@ -236,6 +257,38 @@ export const formatDateTokyo = ( date: Date ): string => {
 };
 
 /**
+ * Asia/Tokyo 基準の「当月」と「翌月」の year/month を返すヘルパー。
+ * 12月の場合は翌月を翌年1月に繰り上げる（年跨ぎ）。
+ * シフト seeding（global-setup.ts / proof spec の復元）で当月＋翌月を投入する際、
+ * 年跨ぎロジックの重複を避けるために共通化したもの。
+ * Helper that returns the current and next month (year/month) in Asia/Tokyo,
+ * rolling December over to January of the next year. Centralizes the
+ * year-rollover logic shared by shift seeding (global-setup.ts and the
+ * proof spec restore).
+ *
+ * @return 当月・翌月の { year, month } を順に並べた配列（month は 1-12）
+ */
+export const getCurrentAndNextTokyoMonths = (): Array< {
+	year: number;
+	month: number;
+} > => {
+	// 現在時刻を Asia/Tokyo 基準の年・月に変換する。
+	// Convert "now" to the year/month in Asia/Tokyo.
+	const tokyoNow = getTokyoDateParts( new Date() );
+	const currentYear = Number.parseInt( tokyoNow.year, 10 );
+	const currentMonth = Number.parseInt( tokyoNow.month, 10 );
+	// 翌月（12月の場合は翌年1月へ繰り上げる）。
+	// Next month, rolling December over to January of the following year.
+	const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+	const nextMonthYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+
+	return [
+		{ year: currentYear, month: currentMonth },
+		{ year: nextMonthYear, month: nextMonth },
+	];
+};
+
+/**
  * 指定月のシフトを作成するヘルパー。
  * 既存のシフトがあれば更新、なければ新規作成する。
  * Helper to create or update a shift for a given month.
@@ -313,6 +366,12 @@ export const createShiftForMonth = (
 				'post_status' => 'publish',
 				'post_title'  => sprintf('%d-%02d Staff %d', $year, $month, $resource_id),
 			]);
+			// wp_insert_post は失敗時に 0 または WP_Error を返す。失敗を呼び出し側で
+			// fail-fast 判定できるよう "Error: ..." を echo して以降の処理を打ち切る。
+			if (is_wp_error($post_id) || !$post_id) {
+				echo 'Error: ' . (is_wp_error($post_id) ? $post_id->get_error_message() : 'wp_insert_post returned 0');
+				return;
+			}
 			update_post_meta($post_id, '_vkbm_shift_resource_id', $resource_id);
 			update_post_meta($post_id, '_vkbm_shift_year', $year);
 			update_post_meta($post_id, '_vkbm_shift_month', $month);
@@ -322,7 +381,20 @@ export const createShiftForMonth = (
 	`;
 	// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
 	// Use wpEvalPhp to consolidate base64 wrapping + execFileSync execution
-	wpEvalPhp( createShiftCode );
+	//
+	// 戻り値（echo された post ID）を検証し、数値の正の整数でなければ throw して
+	// fail-fast する。旧インライン seeding が持っていた失敗検知を helper 集約後も維持し、
+	// global-setup の当月+翌月 seeding 等が最初の失敗で明確に止まるようにする。
+	// Validate the echoed post ID and throw on failure to preserve the fail-fast
+	// behavior the old inline seeding had before this was centralized.
+	const result = wpEvalPhp( createShiftCode ).trim();
+	if ( ! /^\d+$/.test( result ) || Number( result ) <= 0 ) {
+		throw new Error(
+			`Shift seeding failed for ${ year }-${ month } (Staff ${ safeStaffId }): ${
+				result || '(empty output)'
+			}`
+		);
+	}
 };
 
 /**
@@ -343,4 +415,62 @@ export const setStaffEnabled = ( enabled: boolean ): void => {
 	// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
 	// Use wpEvalPhp to consolidate base64 wrapping + execFileSync execution
 	wpEvalPhp( phpCode );
+};
+
+/**
+ * プロバイダー設定の現在の staff_enabled 値を取得するヘルパー。
+ *
+ * テストで元の状態を保存し、後片付けで正確に復元するために使用する。
+ *
+ * @return true で有効、false で無効
+ */
+export const getStaffEnabled = (): boolean => {
+	const phpCode = `
+		$s = get_option( 'vkbm_provider_settings', array() );
+		echo empty( $s['staff_enabled'] ) ? '0' : '1';
+	`;
+	return wpEvalPhp( phpCode ).trim() === '1';
+};
+
+/**
+ * このプラグインの実在スラッグ（= マウント元フォルダ名）を解決する。
+ * Resolve this plugin's actual slug (= the wp-env mounted directory name).
+ *
+ * wp-env はカレントディレクトリ（`.`）をフォルダ名そのままのスラッグでマウントするため、
+ * CI（vk-booking-manager-pro）と git worktree（agent-xxxx 等）でスラッグが食い違う。
+ * プラグイン本体ファイル名は `vk-booking-manager.php` で固定なので、
+ * インストール済みプラグインの中から `<slug>/vk-booking-manager.php` を持つものを探す。
+ *
+ * wp-env mounts the current directory using its folder name as the slug, so the
+ * slug differs between CI (vk-booking-manager-pro) and git worktrees (agent-xxxx).
+ * The plugin's main file name is always `vk-booking-manager.php`, so we look up
+ * the installed plugin whose file is `<slug>/vk-booking-manager.php`.
+ *
+ * @return 解決したプラグインスラッグ
+ */
+export const resolvePluginSlug = (): string => {
+	// plugin list を JSON で取得し JSON.parse でパースする（CSV を手動分割すると
+	// フォルダ名に `,` を含む場合に誤判定しうるため）。file フィールドは
+	// `<slug>/<main-file>.php` 形式。
+	// Parse `plugin list` as JSON instead of hand-splitting CSV (which would
+	// misparse folder names containing `,`). The `file` field is
+	// `<slug>/<main-file>.php`.
+	const plugins = JSON.parse(
+		wpCliArgs(
+			[ 'plugin', 'list', '--fields=name,file', '--format=json' ],
+			{ stdio: 'pipe' }
+		)
+	) as Array< { name: string; file: string } >;
+
+	for ( const { name, file } of plugins ) {
+		// file が `<slug>/vk-booking-manager.php` と厳密一致すれば当該プラグイン。
+		// If `file` exactly matches `<slug>/vk-booking-manager.php`, this is the plugin.
+		if ( file === `${ name }/vk-booking-manager.php` ) {
+			return name;
+		}
+	}
+
+	// 見つからない場合は従来の固定スラッグにフォールバック（CI の通常ケース）。
+	// Fall back to the conventional hardcoded slug (covers normal CI checkout).
+	return 'vk-booking-manager-pro';
 };

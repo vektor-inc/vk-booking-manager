@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { execSync } from 'child_process';
+import { wpCliArgs, wpEvalPhp } from '../utils/helpers';
 
 // プロフィール画面でパスワード変更エラー表示のテスト（issue #74）
 test.describe( 'Profile password change error display (#74)', () => {
@@ -8,17 +8,23 @@ test.describe( 'Profile password change error display (#74)', () => {
 	test.beforeAll( async () => {
 		// テスト用ユーザーを作成（既存の場合は削除して再作成）
 		try {
-			execSync(
-				'npx wp-env run cli wp user delete profile_e2e_user --yes',
-				{ stdio: 'ignore' }
-			);
+			wpCliArgs( [ 'user', 'delete', 'profile_e2e_user', '--yes' ], {
+				stdio: 'ignore',
+			} );
 		} catch ( e ) {
 			// ユーザーが存在しない場合は無視
 		}
 
 		try {
-			execSync(
-				'npx wp-env run cli wp user create profile_e2e_user profile_e2e@example.com --user_pass=OldPassword123 --role=subscriber',
+			wpCliArgs(
+				[
+					'user',
+					'create',
+					'profile_e2e_user',
+					'profile_e2e@example.com',
+					'--user_pass=OldPassword123',
+					'--role=subscriber',
+				],
 				{ stdio: 'inherit' }
 			);
 		} catch ( e: unknown ) {
@@ -39,12 +45,9 @@ test.describe( 'Profile password change error display (#74)', () => {
 				update_user_meta($user->ID, 'gender', 'male');
 			}
 		`;
-		const base64Code = Buffer.from( setMetaCode ).toString( 'base64' );
 		try {
-			execSync(
-				`npx wp-env run cli wp eval 'eval(base64_decode("${ base64Code }"));'`,
-				{ stdio: 'inherit' }
-			);
+			// wpEvalPhp が base64 ラップ＋execFileSync 実行をまとめて行う
+			wpEvalPhp( setMetaCode, { stdio: 'inherit' } );
 		} catch ( e: unknown ) {
 			console.error(
 				'Failed to set user meta:',
@@ -58,10 +61,9 @@ test.describe( 'Profile password change error display (#74)', () => {
 	// Clean up test user after all tests
 	test.afterAll( async () => {
 		try {
-			execSync(
-				'npx wp-env run cli wp user delete profile_e2e_user --yes',
-				{ stdio: 'ignore' }
-			);
+			wpCliArgs( [ 'user', 'delete', 'profile_e2e_user', '--yes' ], {
+				stdio: 'ignore',
+			} );
 		} catch ( e ) {
 			// クリーンアップ失敗は無視
 		}
@@ -71,11 +73,18 @@ test.describe( 'Profile password change error display (#74)', () => {
 	test.beforeEach( async () => {
 		// vkbm_rl_ プレフィックスのトランジェントのみ削除（他テストへの影響を防止）
 		try {
-			const result = execSync(
-				`npx wp-env run cli wp eval 'global $wpdb; $keys = $wpdb->get_col("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE \\'_transient_vkbm_rl_%\\'"); foreach ($keys as $key) { $name = str_replace("_transient_", "", $key); delete_transient($name); } echo count($keys) . " transients deleted";'`,
-				{ encoding: 'utf-8', stdio: 'pipe' }
-			);
-			console.log( `Rate limit transients cleanup: ${ result.trim() }` );
+			// 複数文の PHP を base64 ラップして実行するため wpEvalPhp を使用する
+			const cleanupCode = `
+				global $wpdb;
+				$keys = $wpdb->get_col( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '_transient_vkbm_rl_%'" );
+				foreach ( $keys as $key ) {
+					$name = str_replace( '_transient_', '', $key );
+					delete_transient( $name );
+				}
+				echo count( $keys ) . ' transients deleted';
+			`;
+			const result = wpEvalPhp( cleanupCode );
+			console.log( `Rate limit transients cleanup: ${ result }` );
 		} catch ( e ) {
 			// 削除失敗は無視（トランジェントが存在しない場合など）
 		}
@@ -112,9 +121,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		} );
 
 		// 「新しいパスワード」に値を入力
-		await page
-			.locator( '#vkbm-profile-password' )
-			.fill( 'NewPassword123' );
+		await page.locator( '#vkbm-profile-password' ).fill( 'NewPassword123' );
 
 		// 「新しいパスワード（確認）」に異なる値を入力
 		await page
@@ -164,9 +171,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		await page.locator( '#vkbm-profile-password' ).fill( 'short' );
 
 		// 「新しいパスワード（確認）」に同じ短いパスワードを入力
-		await page
-			.locator( '#vkbm-profile-password-confirm' )
-			.fill( 'short' );
+		await page.locator( '#vkbm-profile-password-confirm' ).fill( 'short' );
 
 		// 保存ボタンをクリック
 		await page

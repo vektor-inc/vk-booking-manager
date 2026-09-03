@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Post order manager for custom post types.
  *
@@ -196,7 +195,7 @@ class Post_Order_Manager {
 			);
 		}
 
-		$raw_ids = isset( $_POST['orderedIds'] ) && is_array( $_POST['orderedIds'] )
+		$raw_ids     = isset( $_POST['orderedIds'] ) && is_array( $_POST['orderedIds'] )
 			? array_map( 'absint', wp_unslash( $_POST['orderedIds'] ) )
 			: array();
 		$ordered_ids = $this->sanitize_ids( $raw_ids );
@@ -314,6 +313,7 @@ class Post_Order_Manager {
 
 		if ( ! empty( $updated_ids ) ) {
 			clean_post_cache( $updated_ids );
+			// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
 			update_option( self::ORDER_VERSION_OPTION, current_time( 'timestamp' ) );
 		}
 

@@ -1,4 +1,4 @@
-import { wpCliArgs, wpEvalPhp } from './helpers';
+import { wpCliArgs, wpEvalPhp, resolvePluginSlug } from './helpers';
 
 /**
  * Configure provider settings via WP-CLI.
@@ -99,7 +99,13 @@ export const createBookingPage = () => {
 	try {
 		// Activate Plugin just in case
 		// 念のためプラグインを有効化
-		wpCliArgs( [ 'plugin', 'activate', 'vk-booking-manager-pro' ] );
+		// プラグインスラッグは wp-env のマウント元ディレクトリ名に一致するため、
+		// CI（vk-booking-manager-pro）と worktree（agent-xxxx 等）で異なる場合がある。
+		// 動的に解決することで両環境で確実に動作させる。
+		// The plugin slug equals the wp-env mounted directory name, which differs
+		// between CI (vk-booking-manager-pro) and worktrees (agent-xxxx).
+		// Resolve it dynamically so both environments work correctly.
+		wpCliArgs( [ 'plugin', 'activate', resolvePluginSlug() ] );
 
 		// Install and switch to Japanese
 		// 日本語のインストールと切り替え
@@ -286,18 +292,6 @@ export const createBookingPage = () => {
 
 		// Create or Update Booking Page
 		// 予約ページを作成または更新
-		// Check if exists
-		// 存在確認
-		let existingId = '';
-		try {
-			existingId = wpCliArgs(
-				[ 'post', 'list', '--name=booking', '--field=ID' ],
-				{ stdio: 'pipe' }
-			);
-		} catch ( e ) {
-			// ignore
-		}
-
 		// Create content with block and paragraph
 		const rawContent =
 			'<!-- wp:vk-booking-manager/reservation --><div class="wp-block-vk-booking-manager-reservation vkbm-reservation-block"></div><!-- /wp:vk-booking-manager/reservation -->';
@@ -343,8 +337,6 @@ export const createBookingPage = () => {
 /**
  * Disable email verification specifically for E2E tests.
  * E2Eテスト用にメール認証を無効化
- *
- * @param {Object} requestContext
  */
 export const disableEmailVerification = async () => {
 	// メール認証を無効化（＝登録即ログイン状態）

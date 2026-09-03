@@ -13,23 +13,29 @@
 		font-weight: 600;
 		text-decoration: underline;
 	}
+
 	:is(h2,h3,h4,h5) {
-		margin: 0 0 .5em;
+		margin: 0 0 0.5em;
 	}
+
 	ul {
 		margin: 0;
 		padding-left: 0;
 		list-style: none;
 	}
+
 	li {
 		text-align: left;
 	}
+
 	li + li {
 		margin-top: 0.35rem;
 	}
+
 	*:first-child {
 		margin-top: 0;
 	}
+
 	*:last-child {
 		margin-bottom: 0;
 	}

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Adds VKBM user meta fields to the WordPress user profile screens.
  *

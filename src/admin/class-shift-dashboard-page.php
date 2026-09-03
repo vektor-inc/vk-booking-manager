@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Provides the Booking Manager shift dashboard.
  *
@@ -63,6 +62,21 @@ class Shift_Dashboard_Page {
 	private const META_BOOKING_EMAIL     = '_vkbm_booking_customer_email';
 	private const META_BOOKING_STATUS    = '_vkbm_booking_status';
 	private const META_BOOKING_NOTE      = '_vkbm_booking_note';
+	private const META_BOOKING_GUESTS    = '_vkbm_booking_guests';
+
+	/**
+	 * サービスメニューの「1枠あたり最大予約受付数」メタキー。
+	 *
+	 * @var string
+	 */
+	private const META_MENU_MAX_CAPACITY = '_vkbm_max_capacity';
+
+	/**
+	 * サービスメニューの最小催行人数メタキー（グループ開催型）。
+	 *
+	 * @var string
+	 */
+	private const META_MENU_MIN_CAPACITY = '_vkbm_min_capacity';
 
 	private const BOOKING_STATUS_CONFIRMED = 'confirmed';
 	private const BOOKING_STATUS_PENDING   = 'pending';
@@ -369,6 +383,11 @@ class Shift_Dashboard_Page {
 																		if ( ! empty( $booking['class'] ) ) {
 																			$booking_classes[] = $booking['class'];
 																		}
+																		// 最小催行人数（グループ開催型）が未達の枠は色付けで可視化する。
+																		// 色だけに頼らずカード内にテキストラベルも併記する（後述）。
+																		if ( 'pending' === ( $booking['min_capacity_state'] ?? 'none' ) ) {
+																			$booking_classes[] = 'is-min-capacity-pending';
+																		}
 
 																		$booking_style = sprintf(
 																			'--booking-start:%s; --booking-end:%s; --overlap-index:%d; --overlap-total:%d;',
@@ -394,11 +413,47 @@ class Shift_Dashboard_Page {
 																					<?php if ( ! empty( $booking['customer'] ) ) : ?>
 																						<span class="vkbm-booking-card__customer"><?php echo esc_html( $booking['customer'] ); ?></span>
 																					<?php endif; ?>
+																					<?php
+																					// 人数（>1）または受付上限（>1）のいずれかがあれば人数情報を表示する。
+																					// 上限を後から1へ減らしても、人数>1 の既存予約では人数表示を維持する。
+																					$card_guests = (int) ( $booking['guests'] ?? 1 );
+																					// get_booking_slot_capacity() は常に 1 以上を返すため、欠損時も「X / 0」表示を避けて 1 を既定とする。
+																						$card_capacity = (int) ( $booking['slot_capacity'] ?? 1 );
+																					?>
+																				<?php if ( $card_guests > 1 || $card_capacity > 1 ) : ?>
+																						<span class="vkbm-booking-card__divider"> / </span>
+																						<span class="vkbm-booking-card__guests">
+																							<?php
+																							printf(
+																								/* translators: 1: booked guests for this reservation, 2: per-slot reception capacity. リソースが人とは限らないため単位語は付けない（空き枠リストの残数表示と揃える）。 */
+																								esc_html__( '%1$d / %2$d', 'vk-booking-manager' ),
+																								(int) $card_guests,
+																								(int) $card_capacity
+																							);
+																							?>
+																						</span>
+																					<?php endif; ?>
 																				</span>
 																			<?php endif; ?>
 
 																			<?php if ( ! empty( $booking['service'] ) ) : ?>
 																				<span class="vkbm-booking-card__service"><?php echo esc_html( $booking['service'] ); ?></span>
+																			<?php endif; ?>
+																			<?php
+																			// 最小催行人数（グループ開催型）が未達の枠は、色付けに加えてテキストでも明示する。
+																			// 色だけで催行状態を区別しないアクセシビリティ要件への対応。
+																			if ( 'pending' === ( $booking['min_capacity_state'] ?? 'none' ) ) :
+																				?>
+																				<span class="vkbm-booking-card__min-capacity">
+																					<?php
+																					printf(
+																						/* translators: 1: current total guests for the time slot, 2: minimum participants required to confirm. */
+																						esc_html__( 'Below minimum participants (%1$d / %2$d)', 'vk-booking-manager' ),
+																						(int) ( $booking['group_guests'] ?? 0 ),
+																						(int) ( $booking['min_capacity'] ?? 0 )
+																					);
+																					?>
+																				</span>
 																			<?php endif; ?>
 																		<?php if ( ! empty( $booking['url'] ) ) : ?>
 																			</a>
@@ -416,12 +471,18 @@ class Shift_Dashboard_Page {
 																			type="button"
 																			class="vkbm-bookings__more-badge js-vkbm-more-badge"
 																			data-vkbm-modal-target="<?php echo esc_attr( $modal_id ); ?>"
-																			aria-label="<?php echo esc_attr( sprintf(
+																			aria-label="
+																			<?php
+																			echo esc_attr(
+																				sprintf(
 																				/* translators: 1: number of hidden bookings, 2: time range */
-																				__( 'Show %1$d more bookings for %2$s', 'vk-booking-manager' ),
-																				(int) $shift['hidden_count'],
-																				$shift['time']
-																			) ); ?>"
+																					__( 'Show %1$d more bookings for %2$s', 'vk-booking-manager' ),
+																					(int) $shift['hidden_count'],
+																					$shift['time']
+																				)
+																			);
+																			?>
+																			"
 																		>
 																			<?php
 																			printf(
@@ -866,9 +927,9 @@ class Shift_Dashboard_Page {
 
 				foreach ( $clusters as $cluster ) {
 					// スイープラインでカラムインデックスを割り当て / Assign column indices via sweep-line.
-					$columns       = array(); // 各カラムの終了時刻を保持 / Holds end time of each column.
+					$columns        = array(); // 各カラムの終了時刻を保持 / Holds end time of each column.
 					$max_concurrent = 0;
-					$assignments   = array(); // booking index => column index.
+					$assignments    = array(); // booking index => column index.
 
 					foreach ( $cluster['bookings'] as $ci => $cb ) {
 						// 空きカラムを探す / Find a free column whose end <= this booking start.
@@ -882,7 +943,7 @@ class Shift_Dashboard_Page {
 
 						if ( null === $assigned_col ) {
 							// 空きカラムがないので新しいカラムを追加 / No free column; add a new one.
-							$assigned_col            = count( $columns );
+							$assigned_col             = count( $columns );
 							$columns[ $assigned_col ] = $cb['end_decimal'];
 						} else {
 							$columns[ $assigned_col ] = $cb['end_decimal'];
@@ -1119,6 +1180,7 @@ class Shift_Dashboard_Page {
 
 				$booking = array(
 					'post_id'       => $post_id,
+					'service_id'    => $service_id,
 					'start_decimal' => $start_decimal,
 					'end_decimal'   => $end_decimal,
 					'start_label'   => $start_dt->format( 'H:i' ),
@@ -1134,7 +1196,10 @@ class Shift_Dashboard_Page {
 					'note'          => (string) get_post_meta( $post_id, self::META_BOOKING_NOTE, true ),
 				);
 
-				$map[ $resource_id ][] = $booking;
+				// 1予約は単一スタッフに割り当てられるため、担当スタッフのレーンへ全人数でカードを展開する。
+				$lane_booking                 = $booking;
+				$lane_booking['staff_guests'] = max( 1, (int) get_post_meta( $post_id, self::META_BOOKING_GUESTS, true ) );
+				$map[ $resource_id ][]        = $lane_booking;
 			}
 
 			wp_reset_postdata();
@@ -1151,7 +1216,135 @@ class Shift_Dashboard_Page {
 			$map[ $resource_id ] = array_values( $rows );
 		}
 
+		// 最小催行人数（グループ開催型）の催行状態を各予約へ付与する。
+		// 同一サービス・同一時間帯に相乗りした合計予約人数をスタッフ横断で集計し、
+		// メニューの最小催行人数と比較して未達フラグを立てる（表示・可視化のみ）。
+		$this->annotate_min_capacity_state( $map );
+
 		return $map;
+	}
+
+	/**
+	 * 日表示の予約一覧に最小催行人数（グループ開催型）の催行状態を付与する。
+	 *
+	 * 「1回 = 同じ日時（同じ開始・終了時刻）のサービススロット」を1セッションとみなし、
+	 * 同一サービス・同一スロット（開始/終了が一致）に相乗りした合計予約人数（キャンセル以外）を
+	 * スタッフ横断で集計してメニューの最小催行人数と比較する。
+	 * 時間帯の重なり（overlap）では別開始時刻の別セッションやバッファ込み隣接枠まで巻き込み
+	 * 誤判定するため、開始・終了時刻が厳密に一致する枠だけを束ねる。
+	 *
+	 * 各予約レコードに以下を追記する（参照渡しで $map を更新）:
+	 * - group_guests:        当該スロットの合計予約人数（スタッフ横断・同一開始終了）。
+	 * - min_capacity:        メニューの最小催行人数（0=制約なし）。
+	 * - min_capacity_state:  'none'/'pending'/'fulfilled'（VKBM_Helper::get_min_capacity_status と同じ）。
+	 *
+	 * @param array<int, array<int, array<string, mixed>>> $map 予約マップ（参照渡し）。
+	 * @return void
+	 */
+	private function annotate_min_capacity_state( array &$map ): void {
+		// メニューごとの最小催行人数をキャッシュして get_post_meta の重複呼び出しを抑える。
+		$min_capacity_cache = array();
+		// 予約人数（_vkbm_booking_guests）を post_id 単位でキャッシュする。
+		$guest_cache = array();
+
+		// セッション単位（サービス×開始時刻×終了時刻）に合計予約人数を集計する。
+		// キャンセル済みは催行人数に数えない。スタッフ横断で同一スロットを1セッションとして束ねる。
+		$session_guests = array();
+		foreach ( $map as $rows ) {
+			foreach ( $rows as $row ) {
+				$service_id = (int) ( $row['service_id'] ?? 0 );
+				if ( $service_id <= 0 ) {
+					continue;
+				}
+				if ( self::BOOKING_STATUS_CANCELLED === (string) ( $row['status'] ?? '' ) ) {
+					continue;
+				}
+
+				$session_key = $this->build_session_key( $row );
+				$post_id     = (int) ( $row['post_id'] ?? 0 );
+				if ( ! isset( $guest_cache[ $post_id ] ) ) {
+					$guest_cache[ $post_id ] = max( 1, (int) get_post_meta( $post_id, self::META_BOOKING_GUESTS, true ) );
+				}
+
+				$session_guests[ $session_key ] = ( $session_guests[ $session_key ] ?? 0 ) + $guest_cache[ $post_id ];
+			}
+		}
+
+		foreach ( $map as $resource_id => $rows ) {
+			foreach ( $rows as $index => $row ) {
+				$service_id = (int) ( $row['service_id'] ?? 0 );
+
+				// サービス未設定の予約は催行判定の対象外。
+				if ( $service_id <= 0 ) {
+					$map[ $resource_id ][ $index ]['group_guests']       = 0;
+					$map[ $resource_id ][ $index ]['min_capacity']       = 0;
+					$map[ $resource_id ][ $index ]['min_capacity_state'] = 'none';
+					continue;
+				}
+
+				// メニューの最小催行人数（0=制約なし）。最大受付数も考慮してクランプする。
+				if ( ! isset( $min_capacity_cache[ $service_id ] ) ) {
+					$min_capacity_cache[ $service_id ] = $this->get_menu_min_capacity_for_service( $service_id );
+				}
+				$min_capacity = $min_capacity_cache[ $service_id ];
+
+				// 同一セッション（同一サービス・同一開始/終了時刻）の合計予約人数。
+				// キャンセル済みのみの枠は集計に現れないため 0 とする。
+				$session_key  = $this->build_session_key( $row );
+				$group_guests = (int) ( $session_guests[ $session_key ] ?? 0 );
+
+				$status = \VKBookingManager\Common\VKBM_Helper::get_min_capacity_status( $min_capacity, $group_guests );
+
+				$map[ $resource_id ][ $index ]['group_guests']       = $group_guests;
+				$map[ $resource_id ][ $index ]['min_capacity']       = $min_capacity;
+				$map[ $resource_id ][ $index ]['min_capacity_state'] = $status['state'];
+			}
+		}
+	}
+
+	/**
+	 * 催行集計用のセッションキー（サービス×開始時刻×終了時刻）を組み立てる。
+	 *
+	 * 「1回 = 同じ日時のサービススロット」を表すキー。開始・終了時刻が一致する枠だけを
+	 * 同一セッションとして束ねるため、サービスIDと開始/終了の十進時刻を結合する。
+	 * 浮動小数の表記揺れを避けるため小数第4位で丸めて文字列化する。
+	 *
+	 * @param array<string, mixed> $row 予約レコード（service_id / start_decimal / end_decimal を含む）。
+	 * @return string セッションキー。
+	 */
+	private function build_session_key( array $row ): string {
+		return sprintf(
+			'%d|%.4F|%.4F',
+			(int) ( $row['service_id'] ?? 0 ),
+			(float) ( $row['start_decimal'] ?? 0 ),
+			(float) ( $row['end_decimal'] ?? 0 )
+		);
+	}
+
+	/**
+	 * サービスメニューの最小催行人数を取得する（管理画面用）。
+	 *
+	 * Availability_Service::get_menu_min_capacity と同じく、最大受付数（1枠あたり最大受付数）を
+	 * 上限としてクランプし、最大受付数が1以下のメニューでは0（制約なし）を返す。
+	 *
+	 * @param int $service_id サービスメニューの投稿ID。
+	 * @return int 最小催行人数（0=制約なし）。
+	 */
+	private function get_menu_min_capacity_for_service( int $service_id ): int {
+		if ( $service_id <= 0 ) {
+			return 0;
+		}
+
+		$max_capacity = max( 1, (int) get_post_meta( $service_id, self::META_MENU_MAX_CAPACITY, true ) );
+		// 1対1予約（最大受付数1）のメニューでは催行人数の概念がないため制約なし扱い。
+		if ( $max_capacity <= 1 ) {
+			return 0;
+		}
+
+		$meta = get_post_meta( $service_id, self::META_MENU_MIN_CAPACITY, true );
+		$min  = '' === $meta ? 0 : (int) $meta;
+
+		return max( 0, min( $max_capacity, $min ) );
 	}
 
 	/**
@@ -1434,7 +1627,7 @@ class Shift_Dashboard_Page {
 					'url'     => '',
 					'entries' => array(),
 				);
-				$week_count++;
+				++$week_count;
 			}
 			$weeks[] = $week;
 		}
@@ -1876,6 +2069,25 @@ class Shift_Dashboard_Page {
 	}
 
 	/**
+	 * 予約が属するスロットの最大受付数（メニューの1枠あたり最大受付数）を取得する。
+	 *
+	 * @param int $post_id 予約投稿ID。
+	 * @return int 最大受付数（最小1）。
+	 */
+	private function get_booking_slot_capacity( int $post_id ): int {
+		if ( $post_id <= 0 ) {
+			return 1;
+		}
+
+		$service_id = (int) get_post_meta( $post_id, self::META_BOOKING_SERVICE, true );
+		if ( $service_id <= 0 ) {
+			return 1;
+		}
+
+		return max( 1, (int) get_post_meta( $service_id, self::META_MENU_MAX_CAPACITY, true ) );
+	}
+
+	/**
 	 * Map booking data to card structure for templates.
 	 *
 	 * @param array<string, mixed> $booking Booking payload.
@@ -1910,16 +2122,29 @@ class Shift_Dashboard_Page {
 		}
 
 		return array(
-			'class'         => $class,
-			'time'          => $booking['time_range'] ?? '',
-			'customer'      => $booking['customer'] ?? '',
-			'service'       => $booking['service'] ?? '',
-			'badges'        => $badges,
-			'start_decimal' => $booking['start_decimal'] ?? 0,
-			'end_decimal'   => $booking['end_decimal'] ?? 0,
-			'url'           => $edit_url,
-			'overlap_index' => $booking['overlap_index'] ?? 0,
-			'overlap_total' => $booking['overlap_total'] ?? 1,
+			'class'              => $class,
+			'time'               => $booking['time_range'] ?? '',
+			'customer'           => $booking['customer'] ?? '',
+			'service'            => $booking['service'] ?? '',
+			// 予約人数。複数スタッフへ配分された予約は、このレーン担当分（staff_guests）を表示する。
+			// 配分情報が無い場合は予約全体の人数を表示する（未設定の既存予約は1名）。
+			'guests'             => isset( $booking['staff_guests'] )
+				? max( 1, (int) $booking['staff_guests'] )
+				: max( 1, (int) get_post_meta( (int) ( $booking['post_id'] ?? 0 ), self::META_BOOKING_GUESTS, true ) ),
+			// この予約が属するスロットの最大受付数（メニューの1枠あたり最大受付数）。
+			// カードに「何人中何人」を表示するための分母として使う。
+			'slot_capacity'      => $this->get_booking_slot_capacity( (int) ( $booking['post_id'] ?? 0 ) ),
+			// 最小催行人数（グループ開催型）の催行状態。'none'/'pending'/'fulfilled'。
+			// 'pending'（未達）の枠を管理画面で色付け可視化するために使う。
+			'min_capacity'       => (int) ( $booking['min_capacity'] ?? 0 ),
+			'group_guests'       => (int) ( $booking['group_guests'] ?? 0 ),
+			'min_capacity_state' => (string) ( $booking['min_capacity_state'] ?? 'none' ),
+			'badges'             => $badges,
+			'start_decimal'      => $booking['start_decimal'] ?? 0,
+			'end_decimal'        => $booking['end_decimal'] ?? 0,
+			'url'                => $edit_url,
+			'overlap_index'      => $booking['overlap_index'] ?? 0,
+			'overlap_total'      => $booking['overlap_total'] ?? 1,
 		);
 	}
 

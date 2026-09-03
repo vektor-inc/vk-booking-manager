@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2007-2025 Diego Perini
+ * Copyright (C) 2007-2026 Diego Perini
  * All rights reserved.
  *
  * nwsapi.js - Fast CSS Selectors API Engine
  *
  * Author: Diego Perini <diego.perini at gmail com>
- * Version: 2.2.23
+ * Version: 2.2.24
  * Created: 20070722
- * Release: 20251205
+ * Release: 20260606
  *
  * License:
  *  https://javascript.nwbox.com/nwsapi/MIT-LICENSE
@@ -30,24 +30,20 @@
 
 })(this, function Factory(global, Export) {
 
-  var version = 'nwsapi-2.2.23',
+  var version = 'nwsapi-2.2.24',
 
   doc = global.document,
   root = doc.documentElement,
   slice = Array.prototype.slice,
 
-  HSP = '[\\x20\\t]',
-  VSP = '[\\r\\n\\f]',
-  WSP = '[\\x20\\t\\r\\n\\f]',
+  HSP = '\\x20\\t',
+  VSP = '\\r\\n\\f',
+  WSP = '[' + HSP + VSP + ']',
 
   CFG = {
     // extensions
     operators: '[~*^$|]=|=',
     combinators: '[\\x20\\t>+~](?=[^>+~])'
-  },
-
-  HAS = {
-    nestedself: ':has\\x28(?::has\\x28|.*)\\x29)\\x29',
   },
 
   NOT = {
@@ -81,9 +77,9 @@
 
   GROUPS = {
     // pseudo-classes requiring parameters
-    linguistic: '(dir|lang)(?:\\x28\\s?([-\\w]{2,})\\s?\\x29)',
-    logicalsel: '(is|where|matches|not|has)(?:\\x28\\s?(' + '[^()]*|.*' + ')\\s?\\x29)',
-    treestruct: '(nth(?:-last)?(?:-child|-of\\-type))(?:\\x28\\s?(even|odd|(?:[-+]?\\d*)(?:n\\s?[-+]?\\s?\\d*)?)\\s?\\x29)',
+    linguistic: '(dir|lang)(?:\\x28\\s?([-\\w]{2,})\\s?(?:\\x29|$))',
+    logicalsel: '(is|where|matches|not|has)(?:\\x28\\s?(' + '[^()]*|.*' + ')\\s?(?:\\x29|$))',
+    treestruct: '(nth(?:-last)?(?:-child|-of\\-type))(?:\\x28\\s?(even|odd|(?:[-+]?\\d*)(?:n\\s?[-+]?\\s?\\d*)?)\\s?(?:\\x29|$))',
     // pseudo-classes not requiring parameters
     locationpc: '(any\\-link|link|visited|target|defined)\\b',
     useraction: '(hover|active|focus\\-within|focus\\-visible|focus)\\b',
@@ -336,7 +332,11 @@
 
   // convert escape sequence in a CSS string or identifier
   // to javascript string with javascript escape sequences
-  convertEscapes =
+  escapeIdentifier =
+//    global.CSS && typeof global.CSS.escape == 'function' ?
+//    function(str) {
+//      return global.CSS.escape(str);
+//    } :
     function(str) {
       return REX.HasEscapes.test(str) ?
         str.replace(REX.FixEscapes,
@@ -708,15 +708,13 @@
 
       // non-ascii chars
       noascii = '[^\\x00-\\x9f]',
-      // escaped chars
-      escaped = '\\\\[^\\r\\n\\f0-9a-fA-F]',
       // unicode chars
-      unicode = '\\\\[0-9a-fA-F]{1,6}(?:\\r\\n|\\s)?',
+      unicode = '\\\\[0-9a-fA-F]{1,6}',
 
       // can start with single/double dash
       // but it can not start with a digit
-      identifier = '-?(?:[a-zA-Z_-]|' + noascii + '|' + escaped + '|' + unicode + ')' +
-          '(?:-{2}|[0-9]|[a-zA-Z_-]|' + noascii + '|' + escaped + '|' + unicode + ')*',
+      identifier = '(?:-|--|' + unicode + '[' + HSP + ']' +
+                    '?|\\\\[^' + VSP + ']|' + noascii + '|[\\w-])+',
 
       pseudonames = '[-\\w]+',
       pseudoparms = '(?:[-+]?\\d*)(?:n\\s?[-+]?\\s?\\d*)',
@@ -902,7 +900,7 @@
   compileSelector =
     function(expression, source, mode, callback) {
 
-      var a, b, n, f, name, NS, referenceElement,
+      var a, b, n, f, k = 0, name, NS, referenceElement,
       compat, expr, match, result, status, symbol, test,
       type, selector = expression, vars;
 
@@ -914,6 +912,8 @@
       selector_recursion_label:
 
       while (selector) {
+
+	++k;
 
         // get namespace prefix if present or get first char of selector
         symbol = STD.apimethods.test(selector) ? '|' : selector[0];
@@ -978,7 +978,7 @@
               // whitespace separated list but value contains space
               break;
             } else if (match[4]) {
-              match[4] = convertEscapes(match[4]).replace(REX.RegExpChar, '\\$&');
+              match[4] = escapeIdentifier(match[4]).replace(REX.RegExpChar, '\\$&');
             }
             type = match[5] == 'i' || (HTML_DOCUMENT && HTML_TABLE[expr.toLowerCase()]) ? 'i' : '';
             source = 'if((' +
@@ -992,14 +992,14 @@
           // E ~ F (F relative sibling of E)
           case '~':
             match = selector.match(Patterns.relative);
-            source = 'while(e&&(e=e.previousElementSibling)){' + source + '}';
+            source = 'var N' + k + '=e;while(e&&(e=e.previousElementSibling)){' + source + '}e=N' + k + ';';
             break;
 
           // *** Adjacent sibling combinator
           // E + F (F adiacent sibling of E)
           case '+':
             match = selector.match(Patterns.adjacent);
-            source = 'if(e&&(e=e.previousElementSibling)){' + source + '}';
+            source = 'var N' + k + '=e;if(e&&(e=e.previousElementSibling)){' + source + '}e=N' + k + ';';
             break;
 
           // *** Descendant combinator
@@ -1007,14 +1007,14 @@
           case '\x09':
           case '\x20':
             match = selector.match(Patterns.ancestor);
-            source = 'while(e&&(e=e.parentElement)){' + source + '}';
+            source = 'var N' + k + '=e;while(e&&(e=e.parentElement)){' + source + '}e=N' + k + ';';
             break;
 
           // *** Child combinator
           // E > F (F children of E)
           case '>':
             match = selector.match(Patterns.children);
-            source = 'if(e&&(e=e.parentElement)){' + source + '}';
+            source = 'var N' + k + '=e;if(e&&(e=e.parentElement)){' + source + '}e=N' + k + ';';
             break;
 
           // *** user supplied combinators extensions
@@ -1160,8 +1160,7 @@
                         '.querySelectorAll("*' + expr + '")' : '.children') +
                         ').includes(e.nextElementSibling)){' + source + '}';
                   } else {
-                    source = 'if(e.querySelector(":scope ' + expr + '"))' +
-                      '{' + source + '}';
+                    source = 'if(s.first(":scope ' + expr + '",e)){' + source + '}';
                   }
                   break;
                 default:
@@ -1534,8 +1533,8 @@
       }
       return selectors.replace(/:scope/i,
         (element.localName) +
-        (element.id ? '#' + escape(element.id) : '') +
-        (element.className ? '.' + escape(element.classList[0]) : ''));
+        (element.id ? '#' + escapeIdentifier(element.id) : '') +
+        (element.className ? '.' + escapeIdentifier(element.classList[0]) : ''));
     },
 
   // equivalent of w3c 'closest' method
@@ -1578,6 +1577,9 @@
       } else if (arguments[0] === '') {
         emit('\'\'' + qsInvalid);
         return Config.VERBOSITY ? undefined : (type ? none : false);
+      } else if (/^[.#]?\d/.test(selectors)) {
+        emit('\'\'' + qsInvalid);
+        return Config.VERBOSITY ? undefined : (type ? none : false);
       }
 
       // input NULL or UNDEFINED
@@ -1585,12 +1587,8 @@
         selectors = '' + selectors;
       }
 
-      if ((/:scope/i).test(selectors)) {
-        selectors = makeref(selectors, Snapshot.from);
-      }
-
       // normalize input string
-      parsed = unescape(selectors).
+      parsed = selectors.
         replace(/\x00|\\$/g, '\ufffd').
         replace(REX.CombineWSP, '\x20').
         replace(REX.PseudosWSP, '$1').
@@ -1741,7 +1739,7 @@
         }
 
         nodeset[i] = token[1] + token[2];
-        token[2] = unescapeIdentifier(token[2]);
+	token[2] = unescapeIdentifier(token[2]);
         htmlset[i] = compat[token[1]](context, token[2]);
         factory[i] = compile(optimized[i], true, null);
 
@@ -1903,6 +1901,7 @@
 
     first: first,
     match: match,
+    select: select,
 
     ancestor: ancestor,
 
@@ -1943,9 +1942,10 @@
     byTag: byTag,
     byClass: byClass,
 
-    match: match,
     first: first,
+    match: match,
     select: select,
+
     closest: ancestor,
 
     compile: compile,

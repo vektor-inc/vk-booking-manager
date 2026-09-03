@@ -1,15 +1,16 @@
 :root {
 	--vkbm--color--border: #e0e0e0;
 	--vkbm--color--accent: #1d8fcb;
+
 	/* --vkbm--color--primary は基本設定画面で未指定の場合にテーマ側で--wp--preset--color--primary があたるように指定 */
 	--vkbm--color--primary: var(--wp--preset--color--primary, #2563eb);
 	--vkbm--color--secondary: var(--wp--preset--color--secondary, #222);
-	--vkbm--color--reservation-action: var(--vkbm--color--primary, var(--wp--preset--color--primary, #000000));
-	--vkbm--color--bg-primary: #ffffff;
+	--vkbm--color--reservation-action: var(--vkbm--color--primary, var(--wp--preset--color--primary, #000));
+	--vkbm--color--bg-primary: #fff;
 	--vkbm--color--bg-secondary: #f9fafb;
 	--vkbm--color--link: var(--vkbm--color--accent, #1d8fcb);
 	--vkbm--color--text-primary: var(--wp--preset--color--text-normal, #333);
-	--vkbm--color--text-secondary: #666666;
+	--vkbm--color--text-secondary: #666;
 
 	--vkbm--color--info-bg: #cff4fc;
 	--vkbm--color--info-border: #b6effb;
@@ -32,8 +33,8 @@
 	--vkbm--color--danger-link: #842029;
 
 	--vkbm--radius--md: 8px;
-	--vkbm--radius--sm: calc( var(--vkbm--radius--md, 8px) / 2 );
-	--vkbm--radius--xs: calc( var(--vkbm--radius--md, 8px) / 4 );
+	--vkbm--radius--sm: calc(var(--vkbm--radius--md, 8px) / 2);
+	--vkbm--radius--xs: calc(var(--vkbm--radius--md, 8px) / 4);
 	--vkbm--spacing--lg: 2rem;
 	--vkbm--spacing--md: 1.5rem;
 	--vkbm--spacing--sm: 1rem;

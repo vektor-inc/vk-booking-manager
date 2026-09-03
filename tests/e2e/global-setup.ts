@@ -1,5 +1,11 @@
 import { configureProviderSettings } from './utils/setup';
-import { wpCliArgs, wpEvalPhp } from './utils/helpers';
+import {
+	wpCliArgs,
+	wpEvalPhp,
+	resolvePluginSlug,
+	createShiftForMonth,
+	getCurrentAndNextTokyoMonths,
+} from './utils/helpers';
 
 /**
  * Playwright グローバルセットアップ。
@@ -20,9 +26,23 @@ async function globalSetup() {
 
 	// プラグインを有効化（失敗時は後続処理が全て壊れるため即時停止）
 	// Activate the plugin (fail-fast: subsequent steps depend on the plugin)
+	//
+	// プラグインのスラッグ（= プラグインフォルダ名）は wp-env のマウント元
+	// ディレクトリ名に一致する。CI のチェックアウトは `vk-booking-manager-pro`
+	// だが、git worktree 等ではフォルダ名が異なり（例: agent-xxxx）、スラッグ固定
+	// では「plugin could not be found」で落ちる。マウント環境差で壊れないよう、
+	// このプラグインのテキストドメイン（vk-booking-manager）を含む実在スラッグを
+	// 動的に解決して有効化する。既に有効な場合も成功扱いとする。
+	// The plugin slug equals the wp-env mounted directory name. CI checks out
+	// into `vk-booking-manager-pro`, but git worktrees use a different folder
+	// name (e.g. agent-xxxx), so a hardcoded slug fails with "plugin could not
+	// be found". Resolve the real slug dynamically (a folder containing this
+	// plugin's textdomain) so the setup is robust across mount environments.
 	try {
-		wpCliArgs( [ 'plugin', 'activate', 'vk-booking-manager-pro' ] );
-		console.log( 'Plugin activated' );
+		const targetSlug = resolvePluginSlug();
+		// 既に有効でも `plugin activate` は成功扱い（冪等）なのでそのまま実行する。
+		wpCliArgs( [ 'plugin', 'activate', targetSlug ] );
+		console.log( `Plugin activated: ${ targetSlug }` );
 	} catch ( e: any ) {
 		throw new Error(
 			`Plugin activation failed — aborting global setup: ${ e.message }`
@@ -128,50 +148,29 @@ async function globalSetup() {
 	}
 	console.log( `Created Staff ID: ${ staffId }` );
 
-	// 今月のシフトを作成（予約に必要）
-	// Create shift for current month (required for bookings)
-	const createShiftCode = `
-		$resource_id = ${ staffId };
-		$tz = new DateTimeZone('Asia/Tokyo');
-		$year = (int) wp_date('Y', time(), $tz);
-		$month = (int) wp_date('n', time(), $tz);
-		$days_in_month = (int) wp_date('t', mktime(0, 0, 0, $month, 1, $year), $tz);
-		$days = [];
-		for ($d = 1; $d <= $days_in_month; $d++) {
-			$days[$d] = [
-				'status' => 'open',
-				'slots' => [['start' => '09:00', 'end' => '18:00']]
-			];
-		}
-		$post_id = wp_insert_post([
-			'post_type'   => 'vkbm_shift',
-			'post_status' => 'publish',
-			'post_title'  => sprintf('%d year %02d month Staff 1', $year, $month),
-		]);
-		if (!is_wp_error($post_id)) {
-			update_post_meta($post_id, '_vkbm_shift_resource_id', $resource_id);
-			update_post_meta($post_id, '_vkbm_shift_year', $year);
-			update_post_meta($post_id, '_vkbm_shift_month', $month);
-			update_post_meta($post_id, '_vkbm_shift_days', $days);
-			echo $post_id;
-		} else {
-			echo 'Error: ' . $post_id->get_error_message();
-		}
-	`;
-	// wpEvalPhp 経由で base64 ラップ＋execFileSync 実行に統一
-	// Use wpEvalPhp to consolidate base64 wrap + execFileSync execution
-	const shiftResult = wpEvalPhp( createShiftCode );
-	if (
-		! shiftResult ||
-		shiftResult.startsWith( 'Error' ) ||
-		! /^\d+$/.test( shiftResult ) ||
-		Number( shiftResult ) <= 0
-	) {
-		throw new Error(
-			`Shift creation failed: ${ shiftResult || '(empty output)' }`
+	// 当月＋翌月のシフトを作成（予約に必要）。
+	// Create shifts for the current and next month (required for bookings).
+	//
+	// 月境界（JST 月初）の時刻依存フレーク対策（issue #324）として、
+	// 当月だけでなく翌月分も必ず投入する。これにより、ブラウザ表示月と
+	// seeding 月に1か月のズレが生じても、いずれかの月に空き枠が存在する状態を保つ
+	// （ヘルパー側の翌月送りフォールバックと組み合わせて二重に守る）。
+	// To guard against the month-boundary flake (issue #324), seed both the
+	// current and the next month so a one-month drift between the browser's
+	// displayed month and the seeded month still leaves available slots.
+	//
+	// 月は Asia/Tokyo 基準で算出する（WP の seeding TZ と一致させる）。
+	// 当月＋翌月（12月→翌1月の年跨ぎ考慮）は共通ヘルパーで算出し、proof spec の
+	// 復元処理とロジックを共有する。createShiftForMonth は冪等（既存シフトがあれば更新）。
+	// Compute months in Asia/Tokyo via the shared helper (same logic the proof
+	// spec uses to restore state). createShiftForMonth is idempotent.
+	const monthsToSeed = getCurrentAndNextTokyoMonths();
+	for ( const { year, month } of monthsToSeed ) {
+		createShiftForMonth( staffId, year, month );
+		console.log(
+			`Created/updated shift for ${ year }-${ month } (Staff ${ staffId })`
 		);
 	}
-	console.log( `Created Shift for current month (ID: ${ shiftResult })` );
 
 	// サービスメニューを作成しスタッフを割り当て
 	// Create service menu and assign staff

@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { execSync } from 'child_process';
+import { wpCliArgs, wpEvalPhp } from '../utils/helpers';
 
 /**
  * PR #206 / issue #194: ログイン失敗メッセージ統一によるユーザー列挙対策
@@ -33,17 +33,6 @@ const LEGACY_NON_EXISTENT_JA = '存在しないユーザー';
 const LEGACY_NON_EXISTENT_EN = 'non-existent user';
 
 /**
- * `npx wp-env run cli` 経由で WP-CLI コマンドを実行するヘルパー
- * Helper to run WP-CLI through wp-env
- */
-function runWpCli( cmd: string, silent = false ): string {
-	return execSync( `npx wp-env run cli ${ cmd }`, {
-		encoding: 'utf-8',
-		stdio: silent ? 'pipe' : 'pipe',
-	} ).trim();
-}
-
-/**
  * テスト用ログインページ（[vkbm_login_form] ショートコードのみ）を確実に用意する
  * Ensure a dedicated test login page exists that only renders [vkbm_login_form]
  */
@@ -65,9 +54,8 @@ function ensureLoginPage(): void {
 			wp_insert_post( $post_data );
 		}
 	`;
-	const flat = phpCode.replace( /\s+/g, ' ' ).trim();
-	execSync( `npx wp-env run cli wp eval '${ flat }'`, { stdio: 'pipe' } );
-	execSync( 'npx wp-env run cli wp rewrite flush --hard', { stdio: 'pipe' } );
+	wpEvalPhp( phpCode );
+	wpCliArgs( [ 'rewrite', 'flush', '--hard' ] );
 }
 
 /**
@@ -76,17 +64,19 @@ function ensureLoginPage(): void {
  */
 function ensureTestUser(): void {
 	try {
-		execSync(
-			`npx wp-env run cli wp user delete ${ TEST_USER_LOGIN } --yes`,
-			{ stdio: 'pipe' }
-		);
+		wpCliArgs( [ 'user', 'delete', TEST_USER_LOGIN, '--yes' ] );
 	} catch ( _e ) {
 		// 存在しなければ無視 / ignore when user does not exist
 	}
-	execSync(
-		`npx wp-env run cli wp user create ${ TEST_USER_LOGIN } ${ TEST_USER_EMAIL } --user_pass=${ TEST_USER_PASSWORD } --role=subscriber --porcelain`,
-		{ stdio: 'pipe' }
-	);
+	wpCliArgs( [
+		'user',
+		'create',
+		TEST_USER_LOGIN,
+		TEST_USER_EMAIL,
+		`--user_pass=${ TEST_USER_PASSWORD }`,
+		'--role=subscriber',
+		'--porcelain',
+	] );
 }
 
 /**
@@ -95,15 +85,11 @@ function ensureTestUser(): void {
  */
 function ensureJapaneseLocale(): void {
 	try {
-		execSync( 'npx wp-env run cli wp language core install ja', {
-			stdio: 'pipe',
-		} );
+		wpCliArgs( [ 'language', 'core', 'install', 'ja' ] );
 	} catch ( _e ) {
 		// already installed
 	}
-	execSync( 'npx wp-env run cli wp site switch-language ja', {
-		stdio: 'pipe',
-	} );
+	wpCliArgs( [ 'site', 'switch-language', 'ja' ] );
 }
 
 /**
@@ -112,10 +98,18 @@ function ensureJapaneseLocale(): void {
  */
 function flushRateLimitTransients(): void {
 	try {
-		execSync(
-			`npx wp-env run cli wp eval 'global $wpdb; $rows = $wpdb->get_col("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE \\'_transient_vkbm_rl_%\\'"); foreach ($rows as $k) { delete_transient(str_replace("_transient_", "", $k)); }'`,
-			{ stdio: 'pipe' }
-		);
+		// shell/WP-CLI パースを経由しないので素の複数文 PHP をそのまま渡せる。
+		// No shell/WP-CLI parsing here, so raw multi-statement PHP is passed as-is.
+		const phpCode = `
+			global $wpdb;
+			$rows = $wpdb->get_col(
+				"SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE '_transient_vkbm_rl_%'"
+			);
+			foreach ( $rows as $k ) {
+				delete_transient( str_replace( '_transient_', '', $k ) );
+			}
+		`;
+		wpEvalPhp( phpCode );
 	} catch ( _e ) {
 		// ignore
 	}
@@ -134,10 +128,12 @@ function disableRateLimitSetting(): void {
 		// Read current settings, merge with the rate-limit-disabling values, and write back.
 		let current: any = {};
 		try {
-			const raw = execSync(
-				'npx wp-env run cli wp option get vkbm_provider_settings --format=json',
-				{ encoding: 'utf-8', stdio: 'pipe' }
-			).trim();
+			const raw = wpCliArgs( [
+				'option',
+				'get',
+				'vkbm_provider_settings',
+				'--format=json',
+			] );
 			const parsed = JSON.parse( raw );
 			if (
 				typeof parsed === 'object' &&
@@ -156,14 +152,18 @@ function disableRateLimitSetting(): void {
 			registration_rate_limit_enabled: 0,
 		};
 
-		// シェル経由の JSON エスケープ問題を避けるため base64 を経由する
-		// Use base64 to safely pass JSON through the shell.
+		// JSON を base64 化して PHP の単一引用符リテラルに埋め込む。
+		// b64 は [A-Za-z0-9+/=] のみなので PHP リテラル外への脱出リスクはない。
+		// json_decode(base64_decode(...)) で連想配列に戻して update_option する。
+		// Encode the JSON as base64 and embed it in a PHP single-quoted literal.
+		// base64 contains only [A-Za-z0-9+/=], so there is no risk of escaping
+		// the PHP literal. Decode it back to an associative array via
+		// json_decode(base64_decode(...)) and write it with update_option.
 		const b64 = Buffer.from( JSON.stringify( merged ) ).toString(
 			'base64'
 		);
-		execSync(
-			`npx wp-env run cli bash -c "echo '${ b64 }' | base64 -d | wp option update vkbm_provider_settings --format=json"`,
-			{ stdio: 'pipe' }
+		wpEvalPhp(
+			`update_option( 'vkbm_provider_settings', json_decode( base64_decode( '${ b64 }' ), true ) );`
 		);
 	} catch ( _e ) {
 		// ignore
@@ -173,6 +173,9 @@ function disableRateLimitSetting(): void {
 /**
  * ログインフォームに値を入れて送信し、エラーアラートの本文を返す。
  * Fill the login form, submit, and return the rendered error message text.
+ * @param page
+ * @param usernameOrEmail
+ * @param password
  */
 async function submitLoginAndGetError(
 	page: Page,
@@ -195,9 +198,7 @@ async function submitLoginAndGetError(
 	// リダイレクト後の表示を待つ / wait for redirect-back with error
 	await page.waitForSelector( '.vkbm-auth-card--login', { timeout: 15000 } );
 
-	const alert = page.locator(
-		'.vkbm-auth-card--login .vkbm-alert__danger'
-	);
+	const alert = page.locator( '.vkbm-auth-card--login .vkbm-alert__danger' );
 	await expect( alert ).toBeVisible( { timeout: 10000 } );
 
 	const text = ( await alert.textContent() ) || '';
@@ -210,7 +211,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 		// Save the current locale so we can restore it in afterAll to avoid
 		// leaking the `ja` switch into subsequent specs.
 		try {
-			const currentLocale = runWpCli( 'wp option get WPLANG', true );
+			const currentLocale = wpCliArgs( [ 'option', 'get', 'WPLANG' ] );
 			// 空文字は en_US 相当（WPLANG 未設定）
 			// Empty string means default (en_US).
 			ORIGINAL_LOCALE = currentLocale || 'en_US';
@@ -237,19 +238,13 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 		// 元の言語に戻す（このスペックが他テストの環境を汚染しないようにするため）
 		// Restore the original locale to avoid polluting other specs.
 		try {
-			execSync(
-				`npx wp-env run cli wp site switch-language ${ ORIGINAL_LOCALE }`,
-				{ stdio: 'pipe' }
-			);
+			wpCliArgs( [ 'site', 'switch-language', ORIGINAL_LOCALE ] );
 		} catch ( _e ) {
 			// ignore
 		}
 
 		try {
-			execSync(
-				`npx wp-env run cli wp user delete ${ TEST_USER_LOGIN } --yes`,
-				{ stdio: 'pipe' }
-			);
+			wpCliArgs( [ 'user', 'delete', TEST_USER_LOGIN, '--yes' ] );
 		} catch ( _e ) {
 			// ignore
 		}
@@ -375,9 +370,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 
 		// ログイン状態は body の logged-in クラスで確認する
 		// Verify logged-in state via body class
-		const bodyClass = await page
-			.locator( 'body' )
-			.getAttribute( 'class' );
+		const bodyClass = await page.locator( 'body' ).getAttribute( 'class' );
 		expect( bodyClass ).toContain( 'logged-in' );
 	} );
 } );

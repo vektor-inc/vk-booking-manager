@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Coordinates repository interactions and data sanitization.
  *

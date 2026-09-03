@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/postcss-plugins/postcss-ds-token-fallbacks.mjs"],
+  "sourcesContent": ["import { addFallbackToVar } from './ds-token-fallbacks.mjs';\n\nconst plugin = () => ( {\n\tpostcssPlugin: 'postcss-ds-token-fallbacks',\n\t/** @param {import('postcss').Declaration} decl */\n\tDeclaration( decl ) {\n\t\tconst updated = addFallbackToVar( decl.value );\n\t\tif ( updated !== decl.value ) {\n\t\t\tdecl.value = updated;\n\t\t}\n\t},\n} );\n\nplugin.postcss = true;\n\nexport default plugin;\n"],
+  "mappings": ";AAAA,SAAS,wBAAwB;AAEjC,IAAM,SAAS,OAAQ;AAAA,EACtB,eAAe;AAAA;AAAA,EAEf,YAAa,MAAO;AACnB,UAAM,UAAU,iBAAkB,KAAK,KAAM;AAC7C,QAAK,YAAY,KAAK,OAAQ;AAC7B,WAAK,QAAQ;AAAA,IACd;AAAA,EACD;AACD;AAEA,OAAO,UAAU;AAEjB,IAAO,qCAAQ;",
+  "names": []
+}

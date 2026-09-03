@@ -1,5 +1,6 @@
 const fs = require( 'fs' );
 const path = require( 'path' );
+const { injectGeneratedFileBanner } = require( './lib/generated-file-banner' );
 
 const edition = process.argv[ 2 ];
 if ( edition !== 'free' && edition !== 'pro' ) {
@@ -33,4 +34,9 @@ if ( ! fs.existsSync( staffSourcePath ) ) {
 }
 
 fs.copyFileSync( sourcePath, targetPath );
+// コピー直後に「直接編集禁止」バナーを注入する（冪等）。
+injectGeneratedFileBanner( targetPath );
+
 fs.copyFileSync( staffSourcePath, staffTargetPath );
+// コピー直後に「直接編集禁止」バナーを注入する（冪等）。
+injectGeneratedFileBanner( staffTargetPath );

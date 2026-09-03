@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { wpCliArgs } from '../utils/helpers';
 
-const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8888';
+const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 const E2E_DEBUG =
 	process.env.E2E_DEBUG === 'true' || process.env.E2E_DEBUG === '1';
 
@@ -100,7 +100,7 @@ const maskPostData = ( postData: string | null, contentType: string = '' ) => {
 test.describe( 'Booking Flow with New User Registration (No Email Verification)', () => {
 	// 各テスト実行前にWordPressのトランジェントを削除してレート制限を回避
 	// Delete WordPress transients before each test to avoid rate limits
-	test.beforeEach( async ( { page } ) => {
+	test.beforeEach( async () => {
 		// shell パース経由のリスクを避けるため execFileSync ベースの wpCliArgs を使用する
 		// Use execFileSync-based wpCliArgs to avoid shell-parse risks
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'ignore' } );
@@ -151,7 +151,6 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 	test( 'should allow a new user to register and complete a booking', async ( {
 		page,
-		context,
 	} ) => {
 		const username = `user-${ Date.now() }-${ Math.random()
 			.toString( 36 )
@@ -604,7 +603,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			await page.waitForTimeout( 1000 );
 
 			// 登録のデバッグ用にネットワークレスポンスをリッスン
-			let registrationResponse: any = null;
+			let _registrationResponse: any = null;
 			page.on( 'response', async ( response ) => {
 				const url = response.url();
 				if (
@@ -620,7 +619,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 					let body = '';
 					try {
 						body = await response.text();
-						registrationResponse = {
+						_registrationResponse = {
 							url,
 							status: response.status(),
 							body,

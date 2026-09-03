@@ -1,5 +1,4 @@
 <?php
-
 /**
  * REST controller for menu preview.
  *

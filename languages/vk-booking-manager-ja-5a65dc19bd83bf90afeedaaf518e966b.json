@@ -1,6 +1,6 @@
 {
 	"translation-revision-date": "2026-02-23 23:58+0900",
-	"generator": "WP-CLI/2.10.0",
+	"generator": "vk-booking-manager",
 	"source": "src/blocks/reservation/app.js",
 	"domain": "messages",
 	"locale_data": {
@@ -22,11 +22,14 @@
 			"Other conditions": [
 				"その他条件"
 			],
+			"Private booking fee": [
+				"貸切料金"
+			],
 			"Pending": [
 				"仮予約"
 			],
 			"Cancelled": [
-				"キャンセル"
+				"キャンセル済み"
 			],
 			"I agree to the terms of use": [
 				"利用規約に同意します"
@@ -39,6 +42,12 @@
 			],
 			"Total basic fee": [
 				"基本料金合計"
+			],
+			"Please select at least one guest.": [
+				"1名以上を選択してください。"
+			],
+			"Number of guests": [
+				"人数"
 			],
 			"Could not get menu list.": [
 				"メニュー一覧を取得できませんでした。"
@@ -64,11 +73,17 @@
 			"Failed to read free space.": [
 				"空き状況の読み込みに失敗しました。"
 			],
+			"Could not delete the favorite.": [
+				"お気に入りを削除できませんでした。"
+			],
 			"The editor does not transition to the confirmation page.": [
 				"エディターが確認ページに遷移しません。"
 			],
 			"Please select your menu and reservation slot before proceeding.": [
 				"進む前にメニューと予約枠を選択してください。"
+			],
+			"Please select the quantity.": [
+				"数量を選択してください。"
 			],
 			"Temporary reservation data save failed.": [
 				"仮予約データの保存に失敗しました。"
@@ -94,17 +109,38 @@
 			"Your reservation has been completed.": [
 				"予約が完了しました。"
 			],
+			"Processing…": [
+				"処理中…"
+			],
+			"Cancel": [
+				"キャンセル"
+			],
+			"Book the same again": [
+				"同じ内容で予約する"
+			],
 			"Loading…": [
 				"読み込み中…"
 			],
 			"There are no reservations to display.": [
 				"表示する予約はありません。"
 			],
-			"Processing…": [
-				"処理中…"
+			"Upcoming reservations": [
+				"今後の予約"
+			],
+			"Past reservations": [
+				"過去の予約"
 			],
 			"Loading form…": [
 				"フォームを読み込み中…"
+			],
+			"Favorites": [
+				"お気に入り"
+			],
+			"Your usual": [
+				"よく使う予約"
+			],
+			"Delete favorite": [
+				"お気に入りを削除"
 			],
 			"Loading service menu…": [
 				"サービスメニューを読み込み中"
@@ -112,11 +148,32 @@
 			"There are no service menus to display.": [
 				"表示するサービスメニューはありません。"
 			],
-			"Selected frame": [
-				"選択枠"
-			],
 			"Not selected": [
 				"未選択"
+			],
+			"Total: %s": [
+				"合計：%s"
+			],
+			"You can book up to %d more.": [
+				"残り%d名まで予約できます。"
+			],
+			"Make this time slot private (no other bookings will be accepted)": [
+				"この時間帯を貸切にする（他の方の予約を受け付けません）"
+			],
+			"This slot already has a booking, so a private booking cannot be specified.": [
+				"この枠は既にご予約があるため貸切指定はできません"
+			],
+			"A private booking requires at least %d guests.": [
+				"貸切にするには %d 名以上のお申し込みが必要です。"
+			],
+			"Making it private means no one else can book this time slot.": [
+				"貸切にすると、この枠は他の方が予約できなくなります。"
+			],
+			"No private booking fee applies because there are %d or more guests.": [
+				"%d 名以上のお申し込みのため貸切料金はかかりません"
+			],
+			"A private booking fee of %s per guest will be added.": [
+				"貸切料金として一人あたり %s プラスになります。"
 			],
 			"Mon": [
 				"月"
@@ -163,11 +220,20 @@
 			"There are no available reservation times for the selected criteria.": [
 				"選択した条件に該当する予約可能な時間がありません。"
 			],
-			"%d slots left": [
-				"残り%d枠"
+			"Remaining %1$d / %2$d": [
+				"残 %1$d / 満 %2$d"
 			],
 			"Fully booked": [
 				"満枠"
+			],
+			"Reservations closed": [
+				"予約受付終了"
+			],
+			"Session confirmed": [
+				"開催決定"
+			],
+			"%d more to confirm": [
+				"あと%d名で開催"
 			],
 			"Menu": [
 				"メニュー"
@@ -208,6 +274,9 @@
 			"System Terms of Use": [
 				"システム利用規約"
 			],
+			"Private booking": [
+				"貸し切り予約"
+			],
 			"Telephone number": [
 				"電話番号"
 			],
@@ -235,6 +304,9 @@
 			"Couldn't load temporary reservation data. Please try again from the reservation page.": [
 				"仮予約データを読み込めませんでした。予約ページから再度お試しください。"
 			],
+			"Could not add to favorites.": [
+				"お気に入りに登録できませんでした。"
+			],
 			"Confirmation of reservation failed. Please try again later.": [
 				"予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
 			],
@@ -252,6 +324,12 @@
 			],
 			"I agree to the cancellation policy": [
 				"キャンセルポリシーに同意します"
+			],
+			"Save this content to my favorites for next time": [
+				"次回のために、この内容をお気に入りに登録する"
+			],
+			"Private (exclusive use of this slot)": [
+				"貸切（この枠を専有）"
 			],
 			"You must log in to confirm your reservation.": [
 				"予約を確認するにはログインする必要があります。"
@@ -271,8 +349,14 @@
 			"Please enter any internal notes.": [
 				"社内用メモがあれば入力してください。"
 			],
+			"If the minimum number of participants is not reached, the session may not take place.": [
+				"最少催行人数に満たない場合、開催されない可能性があります。"
+			],
 			"Reserve with this content": [
 				"この内容で予約する"
+			],
+			"Added to favorites.": [
+				"お気に入りに登録しました。"
 			]
 		}
 	}

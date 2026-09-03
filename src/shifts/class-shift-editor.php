@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Shift editor for managing shift posts.
  *
@@ -32,10 +31,10 @@ class Shift_Editor {
 	private const BULK_NONCE_NAME   = '_vkbm_shift_bulk_create_nonce';
 	private const BULK_ACTION       = 'vkbm_shift_bulk_create';
 
-	public const META_RESOURCE = '_vkbm_shift_resource_id';
-	public const META_YEAR     = '_vkbm_shift_year';
-	public const META_MONTH    = '_vkbm_shift_month';
-	private const META_DAYS     = '_vkbm_shift_days';
+	public const META_RESOURCE            = '_vkbm_shift_resource_id';
+	public const META_YEAR                = '_vkbm_shift_year';
+	public const META_MONTH               = '_vkbm_shift_month';
+	private const META_DAYS               = '_vkbm_shift_days';
 	private const META_DEFAULT_STAFF_FLAG = '_vkbm_shift_default_staff';
 
 	private const DAY_STATUS_OPEN             = 'open';
@@ -315,8 +314,8 @@ class Shift_Editor {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only context for asset enqueuing.
 		$get_post = isset( $_GET['post'] ) ? absint( $_GET['post'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only context for asset enqueuing.
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Read-only context for asset enqueuing. Value sanitized with absint().
-		$post_id  = $get_post > 0 ? $get_post : ( isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0 );
-		$state    = $this->get_editor_state( $post_id );
+		$post_id = $get_post > 0 ? $get_post : ( isset( $_POST['post_ID'] ) ? absint( $_POST['post_ID'] ) : 0 );
+		$state   = $this->get_editor_state( $post_id );
 
 		if ( 'edit.php' === $hook ) {
 			wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
@@ -730,6 +729,7 @@ class Shift_Editor {
 			$days = array();
 		}
 
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
 		$timestamp     = current_time( 'timestamp' );
 		$current_year  = (int) wp_date( 'Y', $timestamp );
 		$current_month = (int) wp_date( 'n', $timestamp );
@@ -989,10 +989,12 @@ class Shift_Editor {
 		$template_repository = $this->get_resource_template_repository();
 
 		if ( $year <= 0 ) {
+			// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
 			$year = (int) wp_date( 'Y', current_time( 'timestamp' ) );
 		}
 
 		if ( $month < 1 || $month > 12 ) {
+			// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
 			$month = (int) wp_date( 'n', current_time( 'timestamp' ) );
 		}
 

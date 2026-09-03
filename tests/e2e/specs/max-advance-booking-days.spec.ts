@@ -82,17 +82,22 @@ test.afterEach( async () => {
 } );
 
 test.describe( '予約可能期間（Max advance booking period）の設定機能', () => {
-
-	test( '共通設定画面に Max advance booking period フィールドが表示され、保存できること', async ( { page } ) => {
+	test( '共通設定画面に Max advance booking period フィールドが表示され、保存できること', async ( {
+		page,
+	} ) => {
 		// 管理画面にログイン
 		await loginAsAdmin( page );
 
 		// プロバイダー設定画面の「システム」タブに直接移動（tab=system クエリパラメータ指定）
-		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
+		await page.goto(
+			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
+		);
 		await page.waitForLoadState( 'networkidle' );
 
 		// Max advance booking period の入力フィールドが存在することを確認
-		const maxAdvanceInput = page.locator( '#vkbm-provider-max-advance-booking-days' );
+		const maxAdvanceInput = page.locator(
+			'#vkbm-provider-max-advance-booking-days'
+		);
 		await expect( maxAdvanceInput ).toBeVisible( { timeout: 10000 } );
 
 		// 14 を入力
@@ -104,11 +109,15 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		await page.waitForLoadState( 'networkidle' );
 
 		// 保存後、システムタブに再アクセスして値を確認
-		await page.goto( '/wp-admin/admin.php?page=vkbm-provider-settings&tab=system' );
+		await page.goto(
+			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
+		);
 		await page.waitForLoadState( 'networkidle' );
 
 		// 保存された値を確認
-		const savedValue = await page.locator( '#vkbm-provider-max-advance-booking-days' ).inputValue();
+		const savedValue = await page
+			.locator( '#vkbm-provider-max-advance-booking-days' )
+			.inputValue();
 		expect( savedValue ).toBe( '14' );
 	} );
 
@@ -141,7 +150,9 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		expect( savedValue ).toBe( '7' );
 	} );
 
-	test( 'REST API: 制限日数を超える日付のスロットが空で、制限内はスロットが存在すること（共通設定: 7日）', async ( { page } ) => {
+	test( 'REST API: 制限日数を超える日付のスロットが空で、制限内はスロットが存在すること（共通設定: 7日）', async ( {
+		page,
+	} ) => {
 		// wp-cli 経由で共通設定に max_advance_booking_days = 7 を設定
 		await configureProviderSettings( {
 			provider_max_advance_booking_days: 7,
@@ -166,7 +177,9 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		);
 		expect( beyondResponse.status() ).toBe( 200 );
 		const beyondData = await beyondResponse.json();
-		const beyondSlots = Array.isArray( beyondData ) ? beyondData : beyondData.slots || [];
+		const beyondSlots = Array.isArray( beyondData )
+			? beyondData
+			: beyondData.slots || [];
 		expect( beyondSlots ).toEqual( [] );
 
 		// 制限内の日付: スロットが存在すること（シフトが設定済みなので空でないはず）
@@ -175,11 +188,15 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		);
 		expect( withinResponse.status() ).toBe( 200 );
 		const withinData = await withinResponse.json();
-		const withinSlots = Array.isArray( withinData ) ? withinData : withinData.slots || [];
+		const withinSlots = Array.isArray( withinData )
+			? withinData
+			: withinData.slots || [];
 		expect( withinSlots.length ).toBeGreaterThan( 0 );
 	} );
 
-	test( 'REST API: 0（無制限）の場合は将来日付もスロットが返ること', async ( { page } ) => {
+	test( 'REST API: 0（無制限）の場合は将来日付もスロットが返ること', async ( {
+		page,
+	} ) => {
 		// beforeEach で provider_max_advance_booking_days = 0 にリセット済み
 
 		const menuId = getServiceMenuId();
@@ -199,7 +216,9 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		expect( slots.length ).toBeGreaterThan( 0 );
 	} );
 
-	test( 'REST API: サービス個別設定が共通設定より優先されること', async ( { page } ) => {
+	test( 'REST API: サービス個別設定が共通設定より優先されること', async ( {
+		page,
+	} ) => {
 		// 共通設定: 30日
 		await configureProviderSettings( {
 			provider_max_advance_booking_days: 30,
@@ -220,7 +239,9 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		const now = new Date();
 
 		// 5日後の日付（共通設定30日以内だが、個別設定3日を超える）
-		const beyondMenuDate = new Date( now.getTime() + 5 * 24 * 60 * 60 * 1000 );
+		const beyondMenuDate = new Date(
+			now.getTime() + 5 * 24 * 60 * 60 * 1000
+		);
 		const beyondMenuDateStr = formatDateTokyo( beyondMenuDate );
 
 		// 個別設定（3日）が優先されるため、5日後のスロットは空であること
@@ -229,7 +250,9 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		);
 		expect( beyondResponse.status() ).toBe( 200 );
 		const beyondData = await beyondResponse.json();
-		const beyondSlots = Array.isArray( beyondData ) ? beyondData : beyondData.slots || [];
+		const beyondSlots = Array.isArray( beyondData )
+			? beyondData
+			: beyondData.slots || [];
 		expect( beyondSlots ).toEqual( [] );
 
 		// 2日後の日付（個別設定3日以内）: スロットが存在すること
@@ -241,7 +264,9 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		);
 		expect( withinResponse.status() ).toBe( 200 );
 		const withinData = await withinResponse.json();
-		const withinSlots = Array.isArray( withinData ) ? withinData : withinData.slots || [];
+		const withinSlots = Array.isArray( withinData )
+			? withinData
+			: withinData.slots || [];
 		expect( withinSlots.length ).toBeGreaterThan( 0 );
 	} );
 } );

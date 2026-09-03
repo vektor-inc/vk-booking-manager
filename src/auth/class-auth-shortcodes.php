@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Front-end login & registration shortcodes.
  *
@@ -297,8 +296,6 @@ class Auth_Shortcodes {
 	 */
 	public function handle_form_submission(): void {
 		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
-		
-
 
 		if ( 'POST' !== $request_method ) {
 			return;
@@ -1140,7 +1137,6 @@ class Auth_Shortcodes {
 		$honeypot = isset( $_POST['vkbm_hp_email'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_hp_email'] ) ) : '';
 
 		if ( ! wp_verify_nonce( $nonce, 'vkbm_registration_form' ) ) {
-
 			$this->registration_errors->add( 'invalid_nonce', __( 'Security check failed. Please reload the page and try again.', 'vk-booking-manager' ) );
 			$this->persist_registration_errors();
 			return;
@@ -1272,13 +1268,10 @@ class Auth_Shortcodes {
 		$user_id = wp_create_user( $username, $password, $email );
 
 		if ( is_wp_error( $user_id ) ) {
-
 			$this->registration_errors->add( 'registration_failed', $user_id->get_error_message() );
 			$this->persist_registration_errors();
 			return;
 		}
-
-
 
 		$this->store_registration_metadata( $user_id, $first_name, $last_name, $kana_name, $phone, $birth, $gender );
 
@@ -1883,8 +1876,9 @@ class Auth_Shortcodes {
 	/**
 	 * Generic helper to store a notice cookie.
 	 *
-	 * @param string $name    Cookie key.
-	 * @param string $message Notice.
+	 * @param string      $name    Cookie key.
+	 * @param string      $message Notice.
+	 * @param string|null $path    Cookie path. Defaults to the reservation page path.
 	 */
 	private function set_notice_cookie( string $name, string $message, ?string $path = null ): void {
 		if ( headers_sent() ) {
@@ -2137,17 +2131,7 @@ class Auth_Shortcodes {
 	/**
 	 * Render a text-based form field.
 	 *
-	 * @param array{
-	 *   id: string,
-	 *   name: string,
-	 *   label: string,
-	 *   value: string,
-	 *   type?: string,
-	 *   args?: array<string, mixed>
-	 * } $args Field arguments.
-	 *   autocomplete?: string,
-	 *   required?: bool
-	 * } $args Field settings.
+	 * @param array{id:string, name:string, label:string, value:string, type?:string, autocomplete?:string, required?:bool, args?:array<string, mixed>} $args Field settings.
 	 * @return void
 	 */
 	private function render_text_field( array $args ): void {

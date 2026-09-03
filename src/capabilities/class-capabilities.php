@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Defines reusable capability identifiers for the plugin.
  *

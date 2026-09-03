@@ -1,5 +1,4 @@
 <?php
-
 /**
  * REST controller for current user data.
  *

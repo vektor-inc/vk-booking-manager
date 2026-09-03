@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Enqueues common CSS for the whole plugin.
  *

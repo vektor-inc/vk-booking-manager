@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Registers and renders the service menu loop block.
  *
@@ -15,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Price_Tiers;
+use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -24,12 +25,8 @@ use WP_Block;
 use WP_Post;
 use WP_Query;
 use function current_user_can;
-use function esc_url_raw;
 use function generate_block_asset_handle;
-use function home_url;
-use function is_ssl;
 use function sanitize_key;
-use function str_starts_with;
 use function wp_set_script_translations;
 
 /**
@@ -56,6 +53,13 @@ class Menu_Loop_Block {
 	private $provider_settings = null;
 
 	/**
+	 * 予約ボタンの共通描画ヘルパー。
+	 *
+	 * @var Reservation_Button_Renderer
+	 */
+	private $reservation_button_renderer;
+
+	/**
 	 * Whether blocks are registered.
 	 *
 	 * @var bool
@@ -65,10 +69,12 @@ class Menu_Loop_Block {
 	/**
 	 * Constructor.
 	 *
-	 * @param Settings_Repository|null $settings_repository Provider settings repository.
+	 * @param Settings_Repository|null         $settings_repository         Provider settings repository.
+	 * @param Reservation_Button_Renderer|null $reservation_button_renderer 予約ボタンの共通描画ヘルパー。
 	 */
-	public function __construct( ?Settings_Repository $settings_repository = null ) {
-		$this->settings_repository = $settings_repository ?? new Settings_Repository();
+	public function __construct( ?Settings_Repository $settings_repository = null, ?Reservation_Button_Renderer $reservation_button_renderer = null ) {
+		$this->settings_repository         = $settings_repository ?? new Settings_Repository();
+		$this->reservation_button_renderer = $reservation_button_renderer ?? new Reservation_Button_Renderer( $this->settings_repository );
 	}
 
 	/**
@@ -105,11 +111,11 @@ class Menu_Loop_Block {
 	 *
 	 * @param array<string,mixed> $attributes Block attributes.
 	 * @param string              $content    Saved content (unused).
-	 * @param WP_Block            $block      Block instance (unused).
+	 * @param WP_Block|null       $block      Block instance (unused).
 	 *
 	 * @return string
 	 */
-	public function render_block( array $attributes, string $content = '', WP_Block $block = null ): string { // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UnusedVariable
+	public function render_block( array $attributes, string $content = '', ?WP_Block $block = null ): string { // phpcs:ignore VariableAnalysis.CodeAnalysis.VariableAnalysis.UnusedVariable
 		$loop_id = $this->sanitize_identifier( $attributes['loopId'] ?? '' );
 		if ( '' === $loop_id ) {
 			return $this->render_notice( __( 'Menu loop ID has not been set. Please check your ID.', 'vk-booking-manager' ) );
@@ -643,6 +649,14 @@ class Menu_Loop_Block {
 			return '';
 		}
 
+		// 公開ステータスのホワイトリスト。draft / pending / future / trash / auto-draft などを描画しない。
+		// selectedMenuId 等で非公開ステータスのサービスを手動指定された場合に、
+		// 下書きやゴミ箱の内容が公開フロントへ描画されるのを防ぐ。
+		// （private は直前の権限チェックを通過したもののみ残る。）
+		if ( ! in_array( $post->post_status, array( 'publish', 'private' ), true ) ) {
+			return '';
+		}
+
 		$attributes = array_merge(
 			$this->get_default_attributes(),
 			$overrides
@@ -790,7 +804,29 @@ class Menu_Loop_Block {
 			}
 		}
 
-		if ( ! empty( $attributes['showMeta'] ) ) {
+		// アクションボタンをメタ情報の表示有無と独立して扱うかどうか。
+		// menu-card ブロックのみ true を渡す。menu-loop は未指定（既定 false）のため従来挙動を完全維持する。
+		$actions_independent_of_meta = ! empty( $attributes['actionsIndependentOfMeta'] );
+
+		if ( $actions_independent_of_meta ) {
+			// menu-card 専用パス: アクションボタンは showMeta と独立して showReserveButton 等に従う。
+			$actions_markup = $this->render_actions( $post, $attributes );
+
+			if ( ! empty( $attributes['showMeta'] ) ) {
+				// メタ情報表示時は、従来どおりメタ（dl・料金）とアクションを同じラッパ内にまとめる。
+				$meta_markup = $this->render_meta_information( $post, $attributes, $actions_markup );
+				if ( '' !== $meta_markup ) {
+					$segments[] = $meta_markup;
+				}
+			} elseif ( '' !== $actions_markup ) {
+				// メタ情報非表示時でも、アクションボタンのみを同等のラッパ構造で出力する。
+				$segments[] = sprintf(
+					'<div class="vkbm-menu-loop__card-meta-wrap"><div class="vkbm-menu-loop__card-meta-side">%s</div></div>',
+					$actions_markup
+				);
+			}
+		} elseif ( ! empty( $attributes['showMeta'] ) ) {
+			// menu-loop 従来パス: メタ情報・料金・アクションをまとめて showMeta で出し分ける（既存挙動）。
 			$meta_markup = $this->render_meta_information( $post, $attributes );
 			if ( '' !== $meta_markup ) {
 				$segments[] = $meta_markup;
@@ -803,11 +839,12 @@ class Menu_Loop_Block {
 	/**
 	 * Render meta information markup.
 	 *
-	 * @param WP_Post             $post       Post object.
-	 * @param array<string,mixed> $attributes Attributes.
+	 * @param WP_Post             $post           Post object.
+	 * @param array<string,mixed> $attributes     Attributes.
+	 * @param string|null         $actions_markup 事前生成済みのアクションボタンHTML。null の場合はこのメソッド内で生成する。
 	 * @return string
 	 */
-	private function render_meta_information( WP_Post $post, array $attributes ): string {
+	private function render_meta_information( WP_Post $post, array $attributes, ?string $actions_markup = null ): string {
 		$duration             = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
 		$price                = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$reservation_day_type = (string) get_post_meta( $post->ID, '_vkbm_reservation_day_type', true );
@@ -840,6 +877,40 @@ class Menu_Loop_Block {
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
 				esc_html( $duration_heading ),
 				esc_html( $duration_value )
+			);
+		}
+
+		// 固定の開始時間（_vkbm_fixed_start_times）が設定されていれば表示する。
+		// 管理画面「Fixed start times」で入力された HH:MM 形式の文字列配列を想定する。
+		$start_times = get_post_meta( $post->ID, '_vkbm_fixed_start_times', true );
+		$start_times = is_array( $start_times ) ? $start_times : array();
+		// 各要素を文字列化・トリムし、空文字を除外して詰め直す（保存順は維持する）。
+		$start_times = array_values(
+			array_filter(
+				array_map(
+					static function ( $start_time ): string {
+						return trim( (string) $start_time );
+					},
+					$start_times
+				),
+				static function ( string $start_time ): bool {
+					return '' !== $start_time;
+				}
+			)
+		);
+
+		// 1件以上ある場合のみ開始時間の項目を追加する（自由予約メニューでは出さない）。
+		if ( ! empty( $start_times ) ) {
+			// 各時刻を個別にエスケープする。
+			$escaped_times = array_map( 'esc_html', $start_times );
+			// 区切りの直前をノーブレークスペースで固定し、狭幅で折り返した際に
+			// 記号「/」だけが次行の行頭へ孤立しないようにする（改行は「/ 」の後でのみ起こる）。
+			// 各時刻は esc_html 済み・区切りは固定リテラルのため、dd へはそのまま出力する。
+			$start_times_markup = implode( '&nbsp;/ ', $escaped_times );
+			$items[]            = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html__( 'Start time', 'vk-booking-manager' ),
+				$start_times_markup
 			);
 		}
 
@@ -888,14 +959,8 @@ class Menu_Loop_Block {
 		}
 
 		if ( '' !== $reservation_day_type ) {
-			$reservation_day_label = '';
-			if ( 'weekend' === $reservation_day_type ) {
-				$reservation_day_label = __( 'Saturdays and Sundays only', 'vk-booking-manager' );
-			} elseif ( 'weekday' === $reservation_day_type ) {
-				$reservation_day_label = __( 'Weekdays only', 'vk-booking-manager' );
-			} else {
-				$reservation_day_label = $reservation_day_type;
-			}
+			// 種別→ラベルの写像は共有ヘルパーに集約している。
+			$reservation_day_label = Reservation_Day::label( $reservation_day_type );
 
 			if ( '' !== $reservation_day_label ) {
 				$items[] = sprintf(
@@ -914,7 +979,40 @@ class Menu_Loop_Block {
 			);
 		}
 
-		if ( is_numeric( $price ) && (int) $price >= 0 ) {
+		// 予約枠の定員（_vkbm_max_capacity）を表示する。
+		// 1枠あたりの最大予約受付数が 2 以上の複数人前提のメニューのときだけ、
+		// 最少催行人数の直前にメタ項目を追加する。max が 1 または未設定（実質 1）の
+		// 単独予約前提のメニューでは従来どおり表示しない。
+		$max_capacity = (int) get_post_meta( $post->ID, '_vkbm_max_capacity', true );
+		$min_capacity = (int) get_post_meta( $post->ID, '_vkbm_min_capacity', true );
+		if ( $max_capacity >= 2 ) {
+			// 値は数量整形ヘルパーで「整数＋単位」（例: 6名 / 6 guests）に揃える。
+			$items[] = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html__( 'Time slot capacity', 'vk-booking-manager' ),
+				esc_html( vkbm_format_guests_count( $max_capacity ) )
+			);
+		}
+
+		// 最少催行人数（_vkbm_min_capacity）を表示する。
+		// 1枠あたりの最大予約受付数（_vkbm_max_capacity）が 2 以上、かつ最少催行人数が 2 以上の
+		// 複数人前提のメニューのときだけ、定員の直後に項目を追加する。
+		// max が 1 または未設定（実質 1）、min が 0/1（制約なし or 単独でも催行）の場合は従来どおり表示しない。
+		if ( $max_capacity >= 2 && $min_capacity >= 2 ) {
+			// 値は数量整形ヘルパーで「整数＋単位」（例: 2名 / 2 guests）に揃える。
+			$items[] = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html__( 'Minimum participants to confirm', 'vk-booking-manager' ),
+				esc_html( vkbm_format_guests_count( $min_capacity ) )
+			);
+		}
+
+		// 料金区分（_vkbm_price_tiers）が設定されていれば、単一料金ではなく区分一覧を表示する（排他）。
+		// 区分が無い場合のみ従来どおり基本料金の単一表示にフォールバックする。
+		$price_tiers_raw = get_post_meta( $post->ID, '_vkbm_price_tiers', true );
+		if ( Price_Tiers::has_tiers( $price_tiers_raw ) ) {
+			$price_markup = $this->render_price_tiers( Price_Tiers::normalize_tiers( $price_tiers_raw ) );
+		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__card-price">%s</div>',
 				wp_kses_post( $this->format_price_display( (int) $price ) )
@@ -929,7 +1027,11 @@ class Menu_Loop_Block {
 			);
 		}
 
-		$actions_markup = $this->render_actions( $post, $attributes );
+		// 呼び出し元から渡されていればそれを使う（render_card_body 側で生成済み）。
+		// 渡されていない場合のみここで生成する（後方互換）。
+		if ( null === $actions_markup ) {
+			$actions_markup = $this->render_actions( $post, $attributes );
+		}
 
 		if ( '' === $meta_markup && '' === $price_markup && '' === $actions_markup ) {
 			return '';
@@ -977,35 +1079,23 @@ class Menu_Loop_Block {
 		}
 
 		if ( $show_reserve ) {
-			$settings = $this->get_provider_settings();
-			$label    = trim( (string) ( $settings['menu_loop_reserve_button_label'] ?? '' ) );
-			if ( '' === $label ) {
-				$label = __( 'Proceed to Reservation', 'vk-booking-manager' );
-			}
+			// 予約ボタンは共通ヘルパーで描画し、予約ブロックと挙動・見た目を統一する。
+			// メニューループ固有のクラスは extra_classes として渡す。
+			// 予約ページ未設定時の代替リンクとしてプラン投稿のパーマリンクを使う。
+			// 同じ「予約」リンクが複数並ぶため、アクセシブルネームにプラン名を含めて
+			// リンクの目的（どのプランの予約か）を明確にする。
+			$reserve_button = $this->reservation_button_renderer->render_button(
+				$post,
+				array(
+					'label'             => trim( (string) ( $this->get_provider_settings()['menu_loop_reserve_button_label'] ?? '' ) ),
+					'extra_classes'     => 'vkbm-menu-loop__button vkbm-menu-loop__button--reserve',
+					'fallback_url'      => (string) get_permalink( $post ),
+					'accessible_suffix' => (string) get_the_title( $post ),
+				)
+			);
 
-			// オンライン予約が無効の場合はグレーアウトした非活性ボタンを表示する.
-			// Show a disabled (greyed-out) button when online booking is disabled.
-			$online_disabled = '1' === (string) get_post_meta( $post->ID, '_vkbm_online_unavailable', true );
-
-			if ( $online_disabled ) {
-				// オンライン予約が無効の場合、理由を title 属性で表示する.
-				$buttons[] = sprintf(
-					'<span class="vkbm-menu-loop__button vkbm-menu-loop__button--reserve vkbm-button vkbm-button__sm is-disabled" role="link" aria-disabled="true" title="%s">%s</span>',
-					esc_attr( __( 'This menu does not accept online reservations.', 'vk-booking-manager' ) ),
-					esc_html( $label )
-				);
-			} else {
-				$reserve_url = $this->build_reservation_link( $post );
-				if ( '' === $reserve_url ) {
-					$reserve_url = get_permalink( $post );
-				}
-				if ( '' !== $reserve_url ) {
-					$buttons[] = sprintf(
-						'<a class="vkbm-menu-loop__button vkbm-menu-loop__button--reserve vkbm-button vkbm-button__sm" href="%1$s">%2$s</a>',
-						esc_url( $reserve_url ),
-						esc_html( $label )
-					);
-				}
+			if ( '' !== $reserve_button ) {
+				$buttons[] = $reserve_button;
 			}
 		}
 
@@ -1068,6 +1158,53 @@ class Menu_Loop_Block {
 	}
 
 	/**
+	 * 料金区分の一覧マークアップを生成する。
+	 *
+	 * 区分名（dt）と料金（dd）を両端揃えの dl リストで表示する。
+	 * 金額は単一料金と同じトーンで強調し、税込みラベルは各行ではなく
+	 * 一覧の末尾に 1 回だけ付ける。区分は件数によらず全件を縦に並べて表示する。
+	 *
+	 * @param array<int, array{label: string, price: int}> $tiers 正規化済みの料金区分。
+	 * @return string 料金区分一覧の HTML。区分が無い場合は空文字列。
+	 */
+	private function render_price_tiers( array $tiers ): string {
+		if ( empty( $tiers ) ) {
+			return '';
+		}
+
+		$rows = array();
+		foreach ( $tiers as $tier ) {
+			// ラベル・料金はいずれも正規化済みだが、出力時に改めてエスケープする。
+			$label = isset( $tier['label'] ) ? (string) $tier['label'] : '';
+			$price = isset( $tier['price'] ) ? (int) $tier['price'] : 0;
+
+			$rows[] = sprintf(
+				'<div class="vkbm-menu-loop__card-prices-row"><dt class="vkbm-menu-loop__card-prices-label">%1$s</dt><dd class="vkbm-menu-loop__card-prices-value">%2$s</dd></div>',
+				esc_html( $label ),
+				esc_html( VKBM_Helper::format_currency( $price ) )
+			);
+		}
+
+		// 税込みラベルは各行ではなく一覧の末尾に 1 回だけ表示する。
+		$tax_markup = '';
+		$tax_label  = VKBM_Helper::get_tax_included_label();
+		if ( '' !== $tax_label ) {
+			$tax_markup = sprintf(
+				'<p class="vkbm-menu-loop__card-prices-tax">%s</p>',
+				esc_html( $tax_label )
+			);
+		}
+
+		return sprintf(
+			// スクリーンリーダー向けに、この dl が料金一覧であることを aria-label で明示する。
+			'<dl class="vkbm-menu-loop__card-prices" aria-label="%1$s">%2$s</dl>%3$s',
+			esc_attr__( 'Prices', 'vk-booking-manager' ),
+			implode( '', $rows ),
+			$tax_markup
+		);
+	}
+
+	/**
 	 * Default attribute set matching block settings.
 	 *
 	 * @return array<string,mixed>
@@ -1084,27 +1221,6 @@ class Menu_Loop_Block {
 			'hideGroupTitle'    => false,
 			'showDetailButton'  => true,
 			'showReserveButton' => true,
-		);
-	}
-
-	/**
-	 * Build reservation page link with preselected menu ID.
-	 *
-	 * @param WP_Post $post Service menu post.
-	 * @return string
-	 */
-	private function build_reservation_link( WP_Post $post ): string {
-		$reservation_url = $this->get_reservation_page_url();
-
-		if ( '' === $reservation_url ) {
-			return '';
-		}
-
-		return add_query_arg(
-			array(
-				'menu_id' => (string) $post->ID,
-			),
-			$reservation_url
 		);
 	}
 
@@ -1176,48 +1292,6 @@ class Menu_Loop_Block {
 	}
 
 
-
-	/**
-	 * Retrieve configured reservation page URL.
-	 *
-	 * @return string
-	 */
-	private function get_reservation_page_url(): string {
-		$settings = $this->get_provider_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		return $this->normalize_reservation_page_url( $url );
-	}
-
-	/**
-	 * Normalize reservation page URL for menu links.
-	 *
-	 * @param string $url Raw URL.
-	 * @return string
-	 */
-	private function normalize_reservation_page_url( string $url ): string {
-		$url = trim( $url );
-
-		if ( '' === $url ) {
-			return '';
-		}
-
-		if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
-			return esc_url_raw( $url );
-		}
-
-		if ( str_starts_with( $url, '//' ) ) {
-			$scheme = is_ssl() ? 'https:' : 'http:';
-			return esc_url_raw( $scheme . $url );
-		}
-
-		if ( ! str_starts_with( $url, '/' ) ) {
-			$url = '/' . $url;
-		}
-
-		return esc_url_raw( home_url( $url ) );
-	}
-
 	/**
 	 * Render empty state markup.
 	 *
@@ -1264,7 +1338,6 @@ class Menu_Loop_Block {
 		if ( '' === $loop_id ) {
 			return compact( 'staff', 'category', 'keyword' );
 		}
-
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Search params are public.
 		$request_data = isset( $_GET[ self::REQUEST_KEY ] ) ? map_deep( wp_unslash( $_GET[ self::REQUEST_KEY ] ), 'sanitize_text_field' ) : null;

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * REST controller for provider settings.
  *
@@ -90,15 +89,15 @@ class Provider_Settings_Controller {
 		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
 
 		// 指名関連ラベルを取得する（ヘルパー関数がフォールバックを処理）。
-		$no_nomination_label  = vkbm_get_no_nomination_label();
-		$nomination_fee_label = vkbm_get_nomination_fee_label();
-		$provider_name           = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
-		$provider_logo_id        = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
-		$reservation             = $this->normalize_reservation_page_url(
+		$no_nomination_label    = vkbm_get_no_nomination_label();
+		$nomination_fee_label   = vkbm_get_nomination_fee_label();
+		$provider_name          = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
+		$provider_logo_id       = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
+		$reservation            = $this->normalize_reservation_page_url(
 			isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : ''
 		);
-		$show_menu_list          = ! empty( $settings['reservation_show_menu_list'] );
-		$menu_list_display_mode  = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
+		$show_menu_list         = ! empty( $settings['reservation_show_menu_list'] );
+		$menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
 		if ( ! in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$menu_list_display_mode = 'card';
 		}
@@ -118,8 +117,12 @@ class Provider_Settings_Controller {
 		$closed_day_label    = isset( $settings['closed_day_label'] ) ? (string) $settings['closed_day_label'] : '';
 		// Use the shared helper to apply fallback when the setting is empty.
 		// 設定が空の場合にデフォルト値を適用するため共通ヘルパーを使用する。
-		$duration_label      = vkbm_get_duration_label();
-		$nomination_enabled  = Staff_Editor::is_nomination_enabled();
+		$duration_label = vkbm_get_duration_label();
+		// 数量の見出し・単位は実効値に解決して返す。
+		// 単位ヘルパーは null（未設定）をロケール既定へ解決するため、フロントは受け取った値をそのまま使える。
+		$guests_count_label = vkbm_get_guests_count_label();
+		$guests_unit_label  = vkbm_get_guests_unit_label();
+		$nomination_enabled = Staff_Editor::is_nomination_enabled();
 
 		// 無料版ではデフォルトスタッフのIDを取得する.
 		$default_staff_id = 0;
@@ -152,6 +155,9 @@ class Provider_Settings_Controller {
 				'closed_day_label'                   => $closed_day_label,
 				'duration_label'                     => $duration_label,
 				'other_conditions_label'             => vkbm_get_other_conditions_label(),
+				// 数量の見出し（実効値）と単位（実効値。null はロケール既定に解決済み）。
+				'guests_count_label'                 => $guests_count_label,
+				'guests_unit_label'                  => $guests_unit_label,
 			)
 		);
 	}

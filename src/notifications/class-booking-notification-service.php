@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Booking notification service.
  *
@@ -15,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
+use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -64,6 +64,8 @@ class Booking_Notification_Service {
 	private const META_REMINDER_SENT      = '_vkbm_booking_reminder_sent';
 	private const META_DATE_START         = '_vkbm_booking_service_start';
 	private const META_STATUS             = '_vkbm_booking_status';
+	private const META_GUESTS             = '_vkbm_booking_guests';
+	private const META_GUEST_TIERS        = '_vkbm_booking_guest_tiers';
 	private const TYPE_PENDING_CUSTOMER   = 'pending_customer';
 	private const TYPE_PENDING_PROVIDER   = 'pending_provider';
 	private const TYPE_CONFIRMED_CUSTOMER = 'confirmed_customer';
@@ -162,7 +164,8 @@ class Booking_Notification_Service {
 			return;
 		}
 
-		$max_hours  = max( $reminder_hours );
+		$max_hours = max( $reminder_hours );
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
 		$now        = current_time( 'timestamp' );
 		$window_end = $now + ( $max_hours * HOUR_IN_SECONDS ) + self::REMINDER_WINDOW;
 		$start_min  = wp_date( 'Y-m-d H:i:s', $now );
@@ -618,18 +621,29 @@ class Booking_Notification_Service {
 			? (int) get_post_meta( $booking_id, '_vkbm_booking_service_base_price', true )
 			: (int) get_post_meta( $menu_id, '_vkbm_base_price', true );
 		$base_price         = max( 0, $base_price );
+		// 予約人数（複数人予約）。未設定の既存予約は1名として扱う。
+		$guests = $this->get_booking_guests( $booking_id );
+		// 料金区分の人数内訳スナップショット。未設定の既存予約は空配列（従来表示）。
+		$guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $booking_id, self::META_GUEST_TIERS, true ) );
 
-		$menu_title          = $menu_id > 0 ? get_the_title( $menu_id ) : '';
-		$staff_title         = '';
-		$nomination_enabled  = Staff_Editor::is_nomination_enabled();
+		$menu_title         = $menu_id > 0 ? get_the_title( $menu_id ) : '';
+		$staff_title        = '';
+		$nomination_enabled = Staff_Editor::is_nomination_enabled();
 		if ( $nomination_enabled && $is_staff_preferred && $staff_id > 0 ) {
 			$staff_title = vkbm_get_resource_display_name( $staff_id );
 		}
 		if ( $nomination_enabled && '' === $staff_title ) {
 			$staff_title = vkbm_get_no_nomination_label();
 		}
-		$duration    = $this->get_menu_duration( $menu_id );
-		$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $settings );
+		$duration = $this->get_menu_duration( $menu_id );
+		// 料金区分が定義されている予約は、確定保存済みの基本料金合計（区分料金合計＋指名料）をそのまま表示する。
+		// 区分未定義は従来どおり 基本料金 × 人数（＋指名料）で表示する。
+		if ( ! empty( $guest_tiers ) && metadata_exists( 'post', $booking_id, '_vkbm_booking_base_total_price' ) ) {
+			$base_total  = max( 0, (int) get_post_meta( $booking_id, '_vkbm_booking_base_total_price', true ) );
+			$price_label = $this->format_price_with_tax_label( $base_total );
+		} else {
+			$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $guests );
+		}
 		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? trim( (string) $settings['resource_label_singular'] ) : '';
 		if ( '' === $resource_label_singular ) {
 			$resource_label_singular = __( 'Staff', 'vk-booking-manager' );
@@ -655,6 +669,8 @@ class Booking_Notification_Service {
 			'staff_title'                  => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
 			'reservation_datetime'         => $this->format_reservation_datetime_range( $start, $end ),
 			'duration_label'               => $duration,
+			'guests'                       => $guests,
+			'guest_tiers'                  => $guest_tiers,
 			'price_label'                  => $price_label,
 			'customer_name'                => '' !== $customer_name ? $customer_name : __( 'Customer', 'vk-booking-manager' ),
 			'booking_author_name'          => $booking_author_name,
@@ -671,6 +687,7 @@ class Booking_Notification_Service {
 			'resource_label_singular'      => $resource_label_singular,
 			'duration_label_heading'       => $duration_label_heading,
 			'staff_enabled'                => $nomination_enabled,
+			'is_staff_preferred'           => $is_staff_preferred,
 			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'edit_url'                     => $edit_url,
 		);
@@ -759,7 +776,7 @@ class Booking_Notification_Service {
 	/**
 	 * Build shared reservation information lines.
 	 *
-	 * @param array<string,mixed> $payload Booking payload.
+	 * @param array<string,mixed> $payload      Booking payload.
 	 * @param string              $status_label Status label.
 	 * @return array<int,string>
 	 */
@@ -781,6 +798,34 @@ class Booking_Notification_Service {
 		}
 		/* translators: %s: Reservation datetime range. */
 		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
+		// 複数人予約の場合のみ数量行を出力する。
+		// 見出し・単位は基本設定でカスタマイズ可能（単位が空なら数値のみ）。
+		if ( isset( $payload['guests'] ) && (int) $payload['guests'] > 1 ) {
+			$lines[] = sprintf(
+				/* translators: 1: Quantity label heading, 2: Quantity value (with unit). */
+				__( '%1$s: %2$s', 'vk-booking-manager' ),
+				vkbm_get_guests_count_label(),
+				vkbm_format_guests_count( (int) $payload['guests'] )
+			);
+		}
+		// 料金区分が定義されている予約は、区分ごとの人数内訳を出力する（0名の区分は省略する）。
+		if ( ! empty( $payload['guest_tiers'] ) && is_array( $payload['guest_tiers'] ) ) {
+			foreach ( $payload['guest_tiers'] as $tier ) {
+				if ( ! is_array( $tier ) ) {
+					continue;
+				}
+				$count = isset( $tier['count'] ) ? (int) $tier['count'] : 0;
+				if ( $count < 1 ) {
+					continue;
+				}
+				$lines[] = sprintf(
+					/* translators: 1: Price category label, 2: Quantity value (with unit). */
+					__( '%1$s: %2$s', 'vk-booking-manager' ),
+					(string) ( $tier['label'] ?? '' ),
+					vkbm_format_guests_count( $count )
+				);
+			}
+		}
 		if ( $payload['duration_label'] ) {
 			// Use the configurable duration label heading from provider settings.
 			// 基本設定の所要時間ラベル見出しを使用する。
@@ -815,17 +860,17 @@ class Booking_Notification_Service {
 		$lines[] = '';
 		$lines[] = $lead;
 		if ( 'pending' === (string) ( $payload['status'] ?? '' ) ) {
-			$lines[] = __( 'This reservation is a provisional reservation. The administrator will confirm and confirm.', 'vk-booking-manager' );
+			$lines[] = __( 'This reservation is a provisional reservation. The administrator will review and confirm it.', 'vk-booking-manager' );
 		}
-		$lines[] = __( 'Please check the following information.', 'vk-booking-manager' );
-		$lines[] = '';
-		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload ) );
+		$lines[]      = __( 'Please check the following information.', 'vk-booking-manager' );
+		$lines[]      = '';
+		$lines        = array_merge( $lines, $this->get_reservation_information_lines( $payload ) );
 		$customer_tel = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
 		/* translators: %s: Customer contact value. */
-		$lines[]      = sprintf( __( 'Contact: %s', 'vk-booking-manager' ), $customer_tel );
-		$lines[]      = __( 'Request contents/memo:', 'vk-booking-manager' );
-		$lines[]      = $payload['memo'];
-		$lines[]      = '';
+		$lines[] = sprintf( __( 'Contact: %s', 'vk-booking-manager' ), $customer_tel );
+		$lines[] = __( 'Request contents/memo:', 'vk-booking-manager' );
+		$lines[] = $payload['memo'];
+		$lines[] = '';
 		if ( '' !== $cancellation_policy ) {
 			$lines[] = '';
 			$lines[] = __( '--- Cancellation Policy ---', 'vk-booking-manager' );
@@ -869,19 +914,19 @@ class Booking_Notification_Service {
 			$lines[] = sprintf( __( 'A new %s has been registered.', 'vk-booking-manager' ), $status_label );
 		}
 		$lines[] = '';
-		$lines = array_merge( $lines, $this->get_reservation_information_lines( $payload, $status_label ) );
-		$lines[]        = '';
-		$lines[]        = __( '--- Customer information ---', 'vk-booking-manager' );
+		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload, $status_label ) );
+		$lines[] = '';
+		$lines[] = __( '--- Customer information ---', 'vk-booking-manager' );
 		/* translators: %s: Customer name. */
 		$lines[]        = sprintf( __( 'Name: %s', 'vk-booking-manager' ), $payload['customer_name'] );
 		$customer_email = isset( $payload['customer_email'] ) && '' !== $payload['customer_email'] ? $payload['customer_email'] : __( 'Not provided', 'vk-booking-manager' );
 		$customer_tel   = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
 		/* translators: %s: Customer email address. */
-		$lines[]        = sprintf( __( 'Email: %s', 'vk-booking-manager' ), $customer_email );
+		$lines[] = sprintf( __( 'Email: %s', 'vk-booking-manager' ), $customer_email );
 		/* translators: %s: Customer phone number. */
-		$lines[]        = sprintf( __( 'Phone number: %s', 'vk-booking-manager' ), $customer_tel );
-		$lines[]        = __( 'Note:', 'vk-booking-manager' );
-		$lines[]        = $payload['memo'];
+		$lines[] = sprintf( __( 'Phone number: %s', 'vk-booking-manager' ), $customer_tel );
+		$lines[] = __( 'Note:', 'vk-booking-manager' );
+		$lines[] = $payload['memo'];
 		if ( '' !== $cancellation_policy ) {
 			$lines[] = '';
 			$lines[] = __( '--- Cancellation Policy ---', 'vk-booking-manager' );
@@ -967,12 +1012,12 @@ class Booking_Notification_Service {
 	/**
 	 * 指定タイムスタンプの曜日略称を、WordPress ロケール情報から取得します。
 	 *
-	 * @param int          $timestamp Unix timestamp.
+	 * @param int           $timestamp Unix timestamp.
 	 * @param \DateTimeZone $timezone タイムゾーン.
 	 * @return string
 	 */
 	private function get_localized_weekday_abbrev( int $timestamp, \DateTimeZone $timezone ): string {
-		$locale = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
+		$locale         = function_exists( 'determine_locale' ) ? determine_locale() : get_locale();
 		$weekday_number = (int) wp_date( 'w', $timestamp, $timezone );
 
 		if ( 0 === strpos( (string) $locale, 'ja' ) ) {
@@ -985,7 +1030,7 @@ class Booking_Notification_Service {
 		global $wp_locale;
 
 		if ( isset( $wp_locale ) && method_exists( $wp_locale, 'get_weekday' ) && method_exists( $wp_locale, 'get_weekday_abbrev' ) ) {
-			$weekday_name   = (string) $wp_locale->get_weekday( $weekday_number );
+			$weekday_name = (string) $wp_locale->get_weekday( $weekday_number );
 
 			if ( '' !== $weekday_name ) {
 				return (string) $wp_locale->get_weekday_abbrev( $weekday_name );
@@ -1054,17 +1099,31 @@ class Booking_Notification_Service {
 	}
 
 	/**
+	 * 予約の人数（複数人予約）を取得する。未設定の既存予約は1名として扱う。
+	 *
+	 * Get the booking's guest count (multi-guest). Legacy bookings without the meta count as 1.
+	 *
+	 * @param int $booking_id Booking post ID.
+	 * @return int
+	 */
+	private function get_booking_guests( int $booking_id ): int {
+		return max( 1, (int) get_post_meta( $booking_id, self::META_GUESTS, true ) );
+	}
+
+	/**
 	 * Build the price label, including nomination fee if present.
 	 *
-	 * @param int                 $base_price    Base price.
-	 * @param int                 $nomination_fee Nomination fee.
-	 * @param array<string,mixed> $settings      Provider settings.
+	 * @param int $base_price     Base price (per guest).
+	 * @param int $nomination_fee Nomination fee.
+	 * @param int $guests         Number of guests (multi-guest booking).
 	 * @return string
 	 */
-	private function get_menu_price_label( int $base_price, int $nomination_fee, array $settings ): string {
+	private function get_menu_price_label( int $base_price, int $nomination_fee, int $guests = 1 ): string {
 		$base_price = max( 0, $base_price );
+		$guests     = max( 1, $guests );
 
-		$display = $base_price;
+		// 基本料金は人数分を掛ける（複数人予約）。
+		$display = $base_price * $guests;
 
 		// Build the base price portion.
 		// 基本料金部分を組み立てる。
@@ -1083,6 +1142,24 @@ class Booking_Notification_Service {
 
 		// Append tax-included label at the end of the entire price string.
 		// （税込）ラベルを料金文字列全体の末尾に追加する。
+		$tax_label = VKBM_Helper::get_tax_included_label();
+		if ( '' !== $tax_label ) {
+			$label .= $tax_label;
+		}
+
+		return $label;
+	}
+
+	/**
+	 * 金額に税込ラベルを付与した表示用文字列を組み立てる。
+	 *
+	 * 料金区分利用時のように、合計金額が確定済みの場面で使用する。
+	 *
+	 * @param int $amount 金額。
+	 * @return string
+	 */
+	private function format_price_with_tax_label( int $amount ): string {
+		$label     = VKBM_Helper::format_currency( max( 0, $amount ) );
 		$tax_label = VKBM_Helper::get_tax_included_label();
 		if ( '' !== $tax_label ) {
 			$label .= $tax_label;

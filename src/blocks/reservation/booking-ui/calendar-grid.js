@@ -109,7 +109,9 @@ export const CalendarGrid = ( {
 			case 'holiday':
 				// Use custom closed day label if set, otherwise use default translation.
 				// カスタム休業日ラベルが設定されている場合はそれを使用し、未設定の場合はデフォルトの翻訳を使用する。
-				return closedDayLabel || __( 'Closed days', 'vk-booking-manager' );
+				return (
+					closedDayLabel || __( 'Closed days', 'vk-booking-manager' )
+				);
 			case 'special_open':
 				return __( 'Special Opening', 'vk-booking-manager' );
 			case 'special_close':

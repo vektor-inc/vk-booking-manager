@@ -113,7 +113,7 @@
 	 * @param {Element} root - ダッシュボードのルート要素 / Dashboard root element.
 	 */
 	function attachModalHandlers( root ) {
-		var badges = toArray(
+		const badges = toArray(
 			root.querySelectorAll( '.js-vkbm-more-badge' )
 		);
 
@@ -121,7 +121,7 @@
 			return;
 		}
 
-		var lastFocusedElement = null;
+		let lastFocusedElement = null;
 
 		/**
 		 * モーダルを閉じる / Close the given modal.
@@ -145,7 +145,7 @@
 		/**
 		 * モーダルを開く / Open the given modal.
 		 *
-		 * @param {Element} modal - モーダル要素 / Modal element.
+		 * @param {Element} modal   - モーダル要素 / Modal element.
 		 * @param {Element} trigger - トリガー要素 / Trigger element.
 		 */
 		function openModal( modal, trigger ) {
@@ -164,7 +164,9 @@
 			document.body.style.overflow = 'hidden';
 
 			// 閉じるボタンにフォーカスを移す / Focus the close button.
-			var closeBtn = modal.querySelector( '.vkbm-booking-modal__close' );
+			const closeBtn = modal.querySelector(
+				'.vkbm-booking-modal__close'
+			);
 			if ( closeBtn ) {
 				closeBtn.focus();
 			}
@@ -176,24 +178,24 @@
 				event.preventDefault();
 				event.stopPropagation();
 
-				var targetId = badge.getAttribute( 'data-vkbm-modal-target' );
+				const targetId = badge.getAttribute( 'data-vkbm-modal-target' );
 				if ( ! targetId ) {
 					return;
 				}
 
-				var modal = document.getElementById( targetId );
+				const modal = document.getElementById( targetId );
 				openModal( modal, badge );
 			} );
 		} );
 
 		// オーバーレイ・閉じるボタンでモーダルを閉じる / Close modal on overlay/close button click.
-		var closeButtons = toArray(
+		const closeButtons = toArray(
 			root.querySelectorAll( '.js-vkbm-modal-close' )
 		);
 
 		closeButtons.forEach( function ( btn ) {
 			btn.addEventListener( 'click', function () {
-				var modal = btn.closest( '.vkbm-booking-modal' );
+				const modal = btn.closest( '.vkbm-booking-modal' );
 				closeModal( modal );
 			} );
 		} );
@@ -207,7 +209,7 @@
 
 				// body 直下に移動済みのモーダルも検索するため document から取得する.
 				// Search from document since modals are moved to body when opened.
-				var openModals = toArray(
+				const openModals = toArray(
 					document.querySelectorAll(
 						'.vkbm-booking-modal:not([hidden])'
 					)

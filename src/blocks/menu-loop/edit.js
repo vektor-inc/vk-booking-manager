@@ -2,7 +2,6 @@ import { __ } from '@wordpress/i18n';
 import { useBlockProps, InspectorControls } from '@wordpress/block-editor';
 import {
 	PanelBody,
-	RangeControl,
 	SelectControl,
 	TextControl,
 	ToggleControl,
@@ -94,14 +93,6 @@ const EditComponent = ( { attributes, setAttributes, clientId } ) => {
 				block.clientId !== clientId &&
 				block?.attributes?.loopId === attributes.loopId
 		);
-
-	const setNumericAttribute = ( key, value, fallback ) => {
-		if ( typeof value === 'number' ) {
-			setAttributes( { [ key ]: value } );
-		} else if ( fallback !== undefined ) {
-			setAttributes( { [ key ]: fallback } );
-		}
-	};
 
 	const selectedGroupIds = Array.isArray( attributes.selectedGroupIds )
 		? attributes.selectedGroupIds

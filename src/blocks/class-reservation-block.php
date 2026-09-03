@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Registers the reservation block metadata.
  *

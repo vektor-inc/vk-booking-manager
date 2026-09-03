@@ -69,29 +69,50 @@ export const DailySlotList = ( {
 	return (
 		<div className="vkbm-slot-list">
 			{ slots.map( ( slot ) => {
+				// 貸し切り予約が入って受付終了になった枠。満席とは区別して別文言・別状態で表示する。
+				// Slot closed because an exclusive (private) booking was placed.
+				const isExclusiveClosed = Boolean( slot.exclusive_closed );
 				// capacity > 1 の場合のみ残り枠数を表示する。
 				// Show remaining count only when capacity is greater than 1.
 				const showRemaining =
-					slot.capacity > 1 && slot.remaining > 0;
+					slot.capacity > 1 &&
+					slot.remaining > 0 &&
+					! isExclusiveClosed;
 				const isFull =
-					slot.capacity > 1 && slot.remaining <= 0;
+					! isExclusiveClosed &&
+					slot.capacity > 1 &&
+					slot.remaining <= 0;
+				// 貸し切り受付終了・満席のいずれも選択不可（グレーアウトの無効状態で残す）。
+				const isDisabled = isFull || isExclusiveClosed;
+
+				// 最小催行人数（グループ開催型）。0以下は制約なしのため催行状態は表示しない。
+				const minCapacity = Number( slot.min_capacity ) || 0;
+				const bookedGuests = Math.max(
+					0,
+					Number( slot.booked_guests ) || 0
+				);
+				const showFulfillment = minCapacity > 0;
+				const isFulfilled =
+					showFulfillment && bookedGuests >= minCapacity;
+				// 開催までに不足している人数（達成済み・制約なしは表示しない）。
+				const shortfall = isFulfilled
+					? 0
+					: Math.max( 0, minCapacity - bookedGuests );
 
 				return (
 					<button
 						type="button"
 						key={ slot.slot_id }
-						disabled={ isFull }
+						disabled={ isDisabled }
 						className={ [
 							'vkbm-slot-list__item',
-							selectedSlotId === slot.slot_id &&
-								'is-selected',
+							selectedSlotId === slot.slot_id && 'is-selected',
 							isFull && 'is-full',
+							isExclusiveClosed && 'is-exclusive-closed',
 						]
 							.filter( Boolean )
 							.join( ' ' ) }
-						onClick={ () =>
-							! isFull && onSelectSlot( slot )
-						}
+						onClick={ () => ! isDisabled && onSelectSlot( slot ) }
 					>
 						<div className="vkbm-slot-list__time">
 							{ formatDisplayTime( slot.start_at ) } -{ ' ' }
@@ -114,23 +135,50 @@ export const DailySlotList = ( {
 						{ showRemaining && (
 							<div className="vkbm-slot-list__remaining">
 								{ sprintf(
-									/* translators: %d: number of remaining slots */
+									/* translators: 1: remaining count, 2: capacity (max per booking). リソースが人とは限らないため単位語は付けない。 */
 									__(
-										'%d slots left',
+										'Remaining %1$d / %2$d',
 										'vk-booking-manager'
 									),
-									slot.remaining
+									slot.remaining,
+									slot.capacity
 								) }
 							</div>
 						) }
 						{ isFull && (
 							<div className="vkbm-slot-list__remaining vkbm-slot-list__remaining--full">
+								{ __( 'Fully booked', 'vk-booking-manager' ) }
+							</div>
+						) }
+						{ isExclusiveClosed && (
+							<div className="vkbm-slot-list__remaining vkbm-slot-list__remaining--closed">
 								{ __(
-									'Fully booked',
+									'Reservations closed',
 									'vk-booking-manager'
 								) }
 							</div>
 						) }
+						{ showFulfillment &&
+							! isExclusiveClosed &&
+							( isFulfilled ? (
+								<div className="vkbm-slot-list__fulfillment vkbm-slot-list__fulfillment--confirmed">
+									{ __(
+										'Session confirmed',
+										'vk-booking-manager'
+									) }
+								</div>
+							) : (
+								<div className="vkbm-slot-list__fulfillment vkbm-slot-list__fulfillment--pending">
+									{ sprintf(
+										/* translators: %d: number of additional participants needed to confirm the session. */
+										__(
+											'%d more to confirm',
+											'vk-booking-manager'
+										),
+										shortfall
+									) }
+								</div>
+							) ) }
 					</button>
 				);
 			} ) }

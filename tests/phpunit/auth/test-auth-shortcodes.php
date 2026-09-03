@@ -111,6 +111,9 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			'user_pass_confirm'       => 'password456',
 			'kana_name'               => 'たろう',
 			'phone_number'            => '090-0000-0000',
+			// Provide consent fields to mirror the real registration flow. / 実際の登録フローに合わせて同意フィールドを付与。
+			'vkbm_agree_terms_of_service' => '1',
+			'vkbm_agree_privacy_policy'   => '1',
 		];
 
 		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
@@ -265,6 +268,9 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			'user_pass_confirm'       => 'password123',
 			'kana_name'               => 'たろう',
 			'phone_number'            => '090-0000-0000',
+			// Provide consent fields to mirror the real registration flow. / 実際の登録フローに合わせて同意フィールドを付与。
+			'vkbm_agree_terms_of_service' => '1',
+			'vkbm_agree_privacy_policy'   => '1',
 		];
 
 		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
@@ -802,6 +808,11 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 				'user_pass_confirm'       => 'password123',
 				'kana_name'               => 'たろう',
 				'phone_number'            => '090-0000-0000',
+				// Default settings ship with a non-empty terms of service, so the
+				// registration handler requires explicit agreement to succeed.
+				// デフォルト設定には利用規約が含まれるため、登録成功には同意が必須。
+				'vkbm_agree_terms_of_service' => '1',
+				'vkbm_agree_privacy_policy'   => '1',
 			];
 
 			$service = new Settings_Service( $repository, new Settings_Sanitizer() );

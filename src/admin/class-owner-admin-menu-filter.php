@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Hides WordPress admin menus that should not be visible to salon owners.
  *

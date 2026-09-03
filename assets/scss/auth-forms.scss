@@ -1,6 +1,6 @@
 .vkbm-auth-card {
 	max-width: 520px;
-	border:1px solid var(--vkbm--color--border);
+	border: 1px solid var(--vkbm--color--border);
 	border-radius: var(--vkbm--radius--md);
 	background-color: var(--vkbm--color--bg-primary);
 	padding: var(--vkbm--spacing--lg);
@@ -10,8 +10,8 @@
 
 .vkbm-auth-card__title {
 	text-align: center;
-	font-size:1.4rem;
-	margin-top:0;
+	font-size: 1.4rem;
+	margin-top: 0;
 	margin-bottom: var(--vkbm--spacing--sm);
 }
 
@@ -67,7 +67,7 @@
 }
 
 .vkbm-auth-form__password-toggle-icon {
-	fill: currentColor;
+	fill: currentcolor;
 }
 
 .vkbm-auth-form__password-toggle-label {
@@ -171,7 +171,7 @@
 
 .vkbm-auth-form__link {
 	text-decoration: underline;
-	text-underline-offset: .25em;
+	text-underline-offset: 0.25em;
 }
 
 .vkbm-auth-form__link:hover,
@@ -210,6 +210,7 @@
 }
 
 @media (max-width: 600px) {
+
 	.vkbm-auth-card {
 		padding: 1.5rem;
 	}

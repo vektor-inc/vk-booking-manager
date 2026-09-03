@@ -1,4 +1,12 @@
 <?php
+/**
+ * ⚠️ 自動生成ファイル — 直接編集しないでください。
+ *
+ * このファイルはビルド／dist 処理（bin/switch-resource-config.js /
+ * bin/switch-resource-config-dev.js）が `*-free.php` / `*-pro.php` から
+ * コピーして生成し、ビルドのたびに上書きします。直接編集しても次のビルドで失われます。
+ * 変更が必要な場合は対応する `*-free.php` / `*-pro.php`（差し替え元）を編集してください。
+ */
 
 /**
  * Free edition: staff editor is disabled.
@@ -46,20 +54,27 @@ class Staff_Editor {
 	}
 
 	/**
-	 * Clear the nomination-enabled cache (no-op for Free edition).
-	 *
 	 * 指名機能キャッシュをクリアする（Free版では no-op）。
 	 *
-	 * Defined for API compatibility with the Pro edition. The Free edition
-	 * disables the nomination feature itself, so there is no cache to clear.
-	 *
-	 * Pro版とのAPI互換性のために定義。Free版では指名機能自体が無効のため、
-	 * 実体としてクリアすべきキャッシュは存在しない。
+	 * Pro版とのAPI互換性のために定義する。Free版では指名機能・予約枠の定員機能とも
+	 * 無効のため、実体としてクリアすべきキャッシュは存在しない。
 	 *
 	 * @return void
 	 */
 	public static function clear_nomination_enabled_cache(): void {
-		// No-op for Free edition. / Free版では何もしない.
+		// Free版では何もしない.
+	}
+
+	/**
+	 * 予約枠の定員（同一枠で複数人を受け入れる）機能が有効かどうかを返す。
+	 *
+	 * Free版ではこの機能は利用できないため常に無効を返す。
+	 * Pro版とのAPI互換性のために定義する。
+	 *
+	 * @return bool
+	 */
+	public static function is_slot_capacity_enabled(): bool {
+		return false;
 	}
 
 	/**

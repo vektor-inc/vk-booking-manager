@@ -15,6 +15,7 @@
 }
 
 @media (max-width: 782px) {
+
 	.vkbm-shift-dashboard__heading {
 		position: static;
 	}
@@ -123,6 +124,7 @@
 }
 
 @media (min-width: 960px) {
+
 	.vkbm-shift-dashboard__layout {
 		grid-template-columns: minmax(0, 1fr) 320px;
 	}
@@ -314,7 +316,7 @@
 }
 
 .vkbm-timeline-grid__time::after {
-	content: '';
+	content: "";
 	position: absolute;
 	right: -1px;
 	left: 0;
@@ -337,14 +339,7 @@
 	border-right: 1px solid var(--vkbm--admin--color--border-light);
 	min-width: var(--vkbm-resource-min-width, 220px);
 	padding-bottom: 16px;
-	background:
-		repeating-linear-gradient(
-			to bottom,
-			rgba(32, 41, 51, 0.04),
-			rgba(32, 41, 51, 0.04) 1px,
-			transparent 1px,
-			transparent var(--hour-height, 56px)
-		);
+	background: repeating-linear-gradient(to bottom, rgba(32, 41, 51, 0.04), rgba(32, 41, 51, 0.04) 1px, transparent 1px, transparent var(--hour-height, 56px));
 }
 
 .vkbm-resource-lane:last-child {
@@ -423,13 +418,7 @@
 	position: absolute;
 	left: calc(100% / var(--overlap-total, 1) * var(--overlap-index, 0) + var(--overlap-gap) / 2);
 	width: calc(100% / var(--overlap-total, 1) - var(--overlap-gap));
-	top: max(
-		0px,
-		calc(
-			(var(--booking-start) - var(--start, var(--timeline-start, 9))) * var(--hour-height, 56px)
-			- var(--vkbm-booking-offset, 0px)
-		)
-	);
+	top: max(0px, calc((var(--booking-start) - var(--start, var(--timeline-start, 9))) * var(--hour-height, 56px) - var(--vkbm-booking-offset, 0px)));
 	height: calc((var(--booking-end) - var(--booking-start)) * var(--hour-height, 56px));
 	background: var(--vkbm--admin--color--surface);
 	border-radius: var(--vkbm-border-radius--sm, 4px);
@@ -468,6 +457,15 @@
 .vkbm-booking-card__service {
 	font-size: var(--vkbm--admin--font-size--xs);
 	color: var(--vkbm--admin--color--text-secondary);
+}
+
+// 最小催行人数（グループ開催型）が未達の枠のテキストラベル。
+// 色だけに頼らずテキストでも未達を示す（アクセシビリティ要件）。
+// 文字色は白〜淡背景上で 4.5:1 以上のコントラストを確保できる濃い橙系を使う。
+.vkbm-booking-card__min-capacity {
+	font-size: var(--vkbm--admin--font-size--xs);
+	font-weight: 700;
+	color: #8c5800;
 }
 
 .vkbm-booking-card--confirmed {
@@ -522,6 +520,15 @@
 
 .vkbm-booking-card--no-show .vkbm-booking-card__customer {
 	color: #a72222;
+}
+
+// 最小催行人数（グループ開催型）が未達の枠の可視化。
+// 背景・ボーダーは予約ステータス（cancelled / no-show / pending 等）の表現に使われているため、
+// それらを上書きせずに重ねられるよう outline（オーバーレイ）で「未達」を示す。
+// 主状態の色を残したまま橙系の破線アウトラインを足し、加えて未達ラベルも併記する。
+.vkbm-booking-card.is-min-capacity-pending {
+	outline: 2px dashed #d97706;
+	outline-offset: 1px;
 }
 
 .vkbm-off-duty {
@@ -917,6 +924,7 @@
 }
 
 @media screen and (max-width: 1280px) {
+
 	.vkbm-shift-dashboard__layout {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -927,6 +935,7 @@
 }
 
 @media screen and (max-width: 960px) {
+
 	.vkbm-day-view__content {
 		--vkbm-axis-width: 64px;
 		--vkbm-resource-min-width: 180px;

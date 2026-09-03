@@ -36,21 +36,21 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		 *
 		 * @var string
 		 */
-	private $repo;
+		private $repo;
 
-	/**
-	 * Plugin file path.
-	 *
+		/**
+		 * Plugin file path.
+		 *
 		 * @var string
 		 */
-	private $plugin_file;
+		private $plugin_file;
 
-	/**
-	 * Expected asset filename.
-	 *
-	 * @var string
-	 */
-	private $asset_filename = 'vk-booking-manager.zip';
+		/**
+		 * Expected asset filename.
+		 *
+		 * @var string
+		 */
+		private $asset_filename = 'vk-booking-manager.zip';
 
 		/**
 		 * GitHub API result.
@@ -239,8 +239,8 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 			// Avoid deprecated dirname(null) error and only process if plugin_slug is set.
 			// dirname(null) の非推奨警告を避けるため plugin_slug がある時のみ処理する。
 			if ( ! empty( $this->plugin_slug ) ) {
-				$plugin_folder       = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
-				$result_destination  = $result['destination'] ?? '';
+				$plugin_folder      = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
+				$result_destination = $result['destination'] ?? '';
 				if ( '' !== $result_destination ) {
 					$wp_filesystem->move( $result_destination, $plugin_folder );
 					$result['destination'] = $plugin_folder;

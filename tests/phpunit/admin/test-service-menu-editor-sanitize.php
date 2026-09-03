@@ -163,4 +163,66 @@ class Service_Menu_Editor_Sanitize_Test extends WP_UnitTestCase {
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
 		}
 	}
+
+	/**
+	 * プライベートメソッド sanitize_price_tiers をリフレクションで呼び出す.
+	 *
+	 * @param mixed $raw 料金区分の生入力（label/price の並行配列）。
+	 * @return array<int, array{label: string, price: int}>
+	 */
+	private function call_sanitize_price_tiers( $raw ): array {
+		$editor     = new Service_Menu_Editor();
+		$reflection = new ReflectionClass( $editor );
+		$method     = $reflection->getMethod( 'sanitize_price_tiers' );
+		$method->setAccessible( true );
+		return $method->invoke( $editor, $raw );
+	}
+
+	/**
+	 * sanitize_price_tiers(): フォームの並行配列入力を正規化する（空行除去・負数クランプ）。
+	 */
+	public function test_sanitize_price_tiers(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '一般4000・子供3000 → そのまま正規化される（正常系）',
+				'raw'                 => array(
+					'label' => array( '一般', '子供' ),
+					'price' => array( '4000', '3000' ),
+				),
+				'expected'            => array(
+					array(
+						'label' => '一般',
+						'price' => 4000,
+					),
+					array(
+						'label' => '子供',
+						'price' => 3000,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'ラベル空行は除去・負数料金は0にクランプ（異常系）',
+				'raw'                 => array(
+					'label' => array( '', '一般' ),
+					'price' => array( '1000', '-500' ),
+				),
+				'expected'            => array(
+					array(
+						'label' => '一般',
+						'price' => 0,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'label/price が無い入力 → 空配列（境界値）',
+				'raw'                 => array(),
+				'expected'            => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = $this->call_sanitize_price_tiers( $case['raw'] );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
 }

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Persists provider settings to the WordPress options table.
  *
@@ -64,10 +63,16 @@ You can use cash, credit cards, and transportation ICs.',
 			'resource_label_singular'                    => __( 'Staff', 'vk-booking-manager' ),
 			'resource_label_plural'                      => __( 'Staff', 'vk-booking-manager' ),
 			'resource_label_menu'                        => __( 'Staff available', 'vk-booking-manager' ),
+			'resource_menu_icon'                         => 'dashicons-groups',
 			'no_nomination_label'                        => __( 'No preference', 'vk-booking-manager' ),
 			'nomination_fee_label'                       => __( 'Nomination fee', 'vk-booking-manager' ),
 			'duration_label'                             => __( 'Time', 'vk-booking-manager' ),
 			'other_conditions_label'                     => __( 'Other conditions', 'vk-booking-manager' ),
+			// 数量の見出し。空文字の場合は翻訳既定（Number of guests / 人数）へフォールバックする。
+			'guests_count_label'                         => '',
+			// 数量の単位。null（未設定）はロケール既定（日本語「名」/英語「guests」相当）を意味し、
+			// 従来挙動を維持する。空文字はユーザーが意図的に単位なしにした状態を表す。
+			'guests_unit_label'                          => null,
 			'provider_business_hours'                    => '',
 			'provider_reservation_deadline_hours'        => 3,
 			'provider_max_advance_booking_days'          => 0,
@@ -176,10 +181,14 @@ Contact us: Please contact our store.",
 			'auth_rate_limit_register_max'               => 5,
 			'auth_rate_limit_login_max'                  => 10,
 			'closed_day_label'                           => '',
-			'resource_tag_display_enabled'                => false,
+			'resource_tag_display_enabled'               => false,
 			'email_log_enabled'                          => false,
 			'email_log_retention_days'                   => 1,
 			'staff_enabled'                              => true,
+			// 予約枠の定員（同一枠で複数人を受け入れる）機能の有効/無効。後方互換のため既定値は true（未保存サイトは有効）。
+			// この機能は指名機能OFF時のみ利用可能な仕様のため、両者を組み合わせて判定する。
+			// 旧キー名は multiple_guests_enabled（読み取り側で旧キーへのフォールバックを持つ）。
+			'slot_capacity_enabled'                      => true,
 		);
 	}
 

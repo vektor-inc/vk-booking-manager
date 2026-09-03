@@ -4,8 +4,12 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Bookings;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -21,6 +25,7 @@ use function remove_all_filters;
 use function remove_filter;
 use function str_repeat;
 use function update_option;
+use function update_post_meta;
 use function wp_json_encode;
 use function wp_set_current_user;
 
@@ -74,7 +79,20 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 		// テスト間でフィルタが残らないように掃除する。
 		// Clean up filters so they do not leak across test methods.
 		remove_all_filters( 'vkbm_draft_memo_max_length' );
+		// 指名機能の静的キャッシュをクリアして他テストへの影響を防ぐ。
+		Staff_Editor::clear_nomination_enabled_cache();
 		parent::tearDown();
+	}
+
+	/**
+	 * 指名機能を無効化する（複数人予約は指名OFF時のみ有効なため）。
+	 */
+	private function disable_nomination(): void {
+		$repository                = new Settings_Repository();
+		$settings                  = $repository->get_settings();
+		$settings['staff_enabled'] = false;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
 	}
 
 	public function test_logged_in_owner_can_access_and_others_cannot(): void {
@@ -525,6 +543,571 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 
 			// 次のケースに副作用が漏れないようフィルタを掃除する。
 			remove_all_filters( 'vkbm_draft_memo_max_length' );
+		}
+	}
+
+	/**
+	 * get_draft の応答で予約人数（guests）が解決され、基本料金が人数倍されることを検証する。
+	 *
+	 * 仕様（specification-multiple-guests.md §料金）:
+	 *   total_price = 表示基本料金 × 人数 + 指名料
+	 * 指名機能OFF（自動割り当て）のテスト環境では指名料は 0 になるため、
+	 * ここでは「基本料金 × 人数」が total_price に反映されることと、
+	 * resolve_guests のクランプ（1〜最大人数）を中心に検証する。
+	 *
+	 * resolve_guests は private メソッドだが、save_draft → get_draft の公開 API 経由で
+	 * 実際の料金計算パス（class-booking-draft-controller.php の get_draft）ごと検証する。
+	 */
+	public function test_resolve_guests_multiplies_base_price_in_draft_response(): void {
+		// 複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		// 複数人予約は指名OFF（自動割り当て）時のみ有効なため、指名機能を無効化する。
+		$this->disable_nomination();
+
+		// 全ケース共通の基本料金（単価）。
+		$base_price = 1000;
+
+		// 条件 → 期待値（解決後の人数・合計料金）の配列。
+		$test_cases = [
+			[
+				'test_condition_name' => '複数人予約許可・最大4・要求3 → guests=3 / 基本料金 1000×3=3000（正常系）',
+				'allow_multiple'      => true,
+				'max_guests'          => 4,
+				'requested_guests'    => 3,
+				'expected_guests'     => 3,
+				'expected_total'      => 3000,
+			],
+			[
+				// 上限超過（要求5 > 最大2）は save_draft がエラーを返すため、
+				// この応答テストではなく test_save_draft_rejects_guests_over_max で検証する。
+				'test_condition_name' => '複数人予約許可・最大2・要求2 → guests=2 / 1000×2=2000（境界値：上限ちょうど）',
+				'allow_multiple'      => true,
+				'max_guests'          => 2,
+				'requested_guests'    => 2,
+				'expected_guests'     => 2,
+				'expected_total'      => 2000,
+			],
+			[
+				'test_condition_name' => '複数人予約不許可・要求3 → guests=1 / 1000×1=1000（後方互換：常に1名）',
+				'allow_multiple'      => false,
+				'max_guests'          => 4,
+				'requested_guests'    => 3,
+				'expected_guests'     => 1,
+				'expected_total'      => 1000,
+			],
+			[
+				'test_condition_name' => '複数人予約許可・要求0 → 下限1にクランプ / 1000×1=1000（異常系：0以下）',
+				'allow_multiple'      => true,
+				'max_guests'          => 4,
+				'requested_guests'    => 0,
+				'expected_guests'     => 1,
+				'expected_total'      => 1000,
+			],
+			[
+				// guests が null のときは isset() が false となり、(int) キャストではなく既定値 1 の枝を通る。
+				'test_condition_name' => '複数人予約許可・要求null → 既定値1 / 1000×1=1000（異常系：未指定）',
+				'allow_multiple'      => true,
+				'max_guests'          => 4,
+				'requested_guests'    => null,
+				'expected_guests'     => 1,
+				'expected_total'      => 1000,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			// メニューを作成し、単価と複数人予約設定メタを付与する。
+			$menu_id = $this->create_menu();
+			update_post_meta( $menu_id, '_vkbm_base_price', $base_price );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', $case['allow_multiple'] );
+			// 1予約あたりの最大人数は「1枠あたり最大受付数（_vkbm_max_capacity）」に統一済み。
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_guests'] );
+			// 複数人予約はスタッフ割当が前提（配分先が必要）のため、スタッフを1名割り当てる。
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+			// ログインユーザーとして下書きを保存する（owner = user で get_draft 権限を満たす）。
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			// save_draft が作成する owner index/lock を tearDown で確実に掃除するため追跡する。
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			// build_payload に要求人数 guests を追加して保存する。
+			$controller = new Booking_Draft_Controller();
+			$payload    = array_merge(
+				$this->build_payload( $menu_id, '2024-11-01T10:00:00+09:00' ),
+				[ 'guests' => $case['requested_guests'] ]
+			);
+			$token = $this->save_draft( $controller, $payload );
+
+			// get_draft の応答から解決後の人数と合計料金を取り出して検証する。
+			$response = $controller->get_draft( $this->build_get_request( $token ) );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+			$data = $response->get_data();
+
+			$this->assertSame(
+				$case['expected_guests'],
+				(int) $data['guests'],
+				$case['test_condition_name'] . ' / guests'
+			);
+			$this->assertSame(
+				$case['expected_total'],
+				(int) $data['total_price'],
+				$case['test_condition_name'] . ' / total_price'
+			);
+
+			// ケースごとに後始末する。
+			delete_transient( self::TRANSIENT_PREFIX . $token );
+			$this->tokens = [];
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
+	 * get_max_guests: 複数人予約機能（全体設定）のON/OFFと指名機能の状態に応じて、
+	 * 下書き応答の人数が抑止されるかを検証する（issue #281）。
+	 *
+	 * 後方互換の核心：
+	 * - option 未設定（既存サイト相当）＝有効として複数人予約が通る。
+	 * - 明示的にOFF＝要求人数に関わらず1名へ抑止される。
+	 * - 指名ON＝従来どおり1名へ抑止される（複数人予約機能ONでも無効）。
+	 */
+	public function test_get_max_guests(): void {
+		// 複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$base_price = 1000;
+
+		// テスト配列：全体設定（複数人予約）の状態・指名状態・要求人数と期待される確定人数。
+		$test_cases = array(
+			array(
+				'test_condition_name'     => 'option未設定（既存サイト相当）・指名OFF・許可ON・要求2 → guests=2（後方互換：未設定は有効）',
+				'multiple_guests_setting' => 'unset',
+				'nomination_enabled'      => false,
+				'requested_guests'        => 2,
+				'expected_guests'         => 2,
+			),
+			array(
+				'test_condition_name'     => '複数人予約ON・指名OFF・許可ON・要求2 → guests=2（明示有効）',
+				'multiple_guests_setting' => 'enabled',
+				'nomination_enabled'      => false,
+				'requested_guests'        => 2,
+				'expected_guests'         => 2,
+			),
+			array(
+				'test_condition_name'     => '複数人予約OFF（明示無効）・指名OFF・許可ON・要求2 → guests=1（設定で抑止）',
+				'multiple_guests_setting' => 'disabled',
+				'nomination_enabled'      => false,
+				'requested_guests'        => 2,
+				'expected_guests'         => 1,
+			),
+			array(
+				'test_condition_name'     => '複数人予約ON・指名ON・許可ON・要求2 → guests=1（指名ONで従来どおり無効）',
+				'multiple_guests_setting' => 'enabled',
+				'nomination_enabled'      => true,
+				'requested_guests'        => 2,
+				'expected_guests'         => 1,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 全体設定を組み立てる。指名状態と予約枠の定員状態を1回の update_option で反映する。
+			$repository                = new Settings_Repository();
+			$settings                  = $repository->get_settings();
+			$settings['staff_enabled'] = $case['nomination_enabled'];
+			// 呼称統一（#326）で旧キー multiple_guests_enabled → slot_capacity_enabled に改名。
+			// 旧キーが混在しないよう常に除去してから新キーの状態を反映する。
+			unset( $settings['multiple_guests_enabled'] );
+			if ( 'unset' === $case['multiple_guests_setting'] ) {
+				// 既存サイト相当：キー自体を保存しない（defaults とのマージで有効扱いになる）。
+				unset( $settings['slot_capacity_enabled'] );
+			} else {
+				$settings['slot_capacity_enabled'] = ( 'enabled' === $case['multiple_guests_setting'] );
+			}
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Staff_Editor::clear_nomination_enabled_cache();
+
+			// メニューを作成し、単価・複数人一括予約許可・予約枠の定員・担当スタッフを設定する。
+			$menu_id = $this->create_menu();
+			update_post_meta( $menu_id, '_vkbm_base_price', $base_price );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', 4 );
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+			// ログインユーザーとして下書きを保存する。
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			$controller = new Booking_Draft_Controller();
+			$payload    = array_merge(
+				$this->build_payload( $menu_id, '2024-11-01T10:00:00+09:00' ),
+				array( 'guests' => $case['requested_guests'] )
+			);
+			$token = $this->save_draft( $controller, $payload );
+
+			// get_draft の応答から確定後の人数を取り出して検証する。
+			$response = $controller->get_draft( $this->build_get_request( $token ) );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+			$data = $response->get_data();
+
+			$this->assertSame(
+				$case['expected_guests'],
+				(int) $data['guests'],
+				$case['test_condition_name'] . ' / guests'
+			);
+
+			// ケースごとに後始末する。
+			delete_transient( self::TRANSIENT_PREFIX . $token );
+			$this->tokens = array();
+			wp_set_current_user( 0 );
+			// 静的キャッシュをクリアし、option はトランザクションロールバックに任せる。
+			Staff_Editor::clear_nomination_enabled_cache();
+		}
+	}
+
+	/**
+	 * save_draft / get_draft: 料金区分（大人料金・子供料金）の合計計算・人数合計・上限超過・下限を検証する。
+	 *
+	 * - 区分ごとの人数を送ると Σ(区分料金 × 区分人数) が total_price になる。
+	 * - 区分人数の合計が guests になる（特定区分が0名でも合計1名以上ならOK）。
+	 * - 合計が max_capacity を超えると guests_exceeded エラー。
+	 * - 合計0名は guests_required エラー。
+	 */
+	public function test_resolve_guest_tiers_in_draft_response(): void {
+		// 複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$this->disable_nomination();
+
+		$menu_tiers = array(
+			array(
+				'label' => '一般',
+				'price' => 4000,
+			),
+			array(
+				'label' => '子供',
+				'price' => 3000,
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '一般3名・子供2名 → guests=5 / 合計 4000×3+3000×2=18000（正常系）',
+				'max_capacity'        => 10,
+				'requested_tiers'     => array(
+					0 => 3,
+					1 => 2,
+				),
+				'expect_error'        => '',
+				'expected_guests'     => 5,
+				'expected_total'      => 18000,
+			),
+			array(
+				'test_condition_name' => '一般3名・子供0名 → guests=3 / 合計 12000（正常系・特定区分0名）',
+				'max_capacity'        => 10,
+				'requested_tiers'     => array(
+					0 => 3,
+					1 => 0,
+				),
+				'expect_error'        => '',
+				'expected_guests'     => 3,
+				'expected_total'      => 12000,
+			),
+			array(
+				'test_condition_name' => '合計6名 > 最大5 → guests_exceeded（異常系）',
+				'max_capacity'        => 5,
+				'requested_tiers'     => array(
+					0 => 4,
+					1 => 2,
+				),
+				'expect_error'        => 'guests_exceeded',
+				'expected_guests'     => null,
+				'expected_total'      => null,
+			),
+			array(
+				'test_condition_name' => '全区分0名 → guests_required（境界値）',
+				'max_capacity'        => 10,
+				'requested_tiers'     => array(
+					0 => 0,
+					1 => 0,
+				),
+				'expect_error'        => 'guests_required',
+				'expected_guests'     => null,
+				'expected_total'      => null,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$menu_id = $this->create_menu();
+			// 区分料金が基本料金より優先されることを確認するため、基本料金は別の値にする。
+			update_post_meta( $menu_id, '_vkbm_base_price', 9999 );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
+			update_post_meta( $menu_id, '_vkbm_price_tiers', $menu_tiers );
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			$controller = new Booking_Draft_Controller();
+			$payload    = array_merge(
+				$this->build_payload( $menu_id, '2024-12-01T10:00:00+09:00' ),
+				array( 'guest_tiers' => $case['requested_tiers'] )
+			);
+
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/drafts' );
+			$request->set_header( 'content-type', 'application/json' );
+			$request->set_body( wp_json_encode( $payload ) );
+			$response = $controller->save_draft( $request );
+
+			if ( '' !== $case['expect_error'] ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['expect_error'], $response->get_error_code(), $case['test_condition_name'] );
+				wp_set_current_user( 0 );
+				continue;
+			}
+
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+			$token          = (string) ( $response->get_data()['token'] ?? '' );
+			$this->tokens[] = $token;
+
+			$get_response = $controller->get_draft( $this->build_get_request( $token ) );
+			$this->assertInstanceOf( WP_REST_Response::class, $get_response, $case['test_condition_name'] );
+			$data = $get_response->get_data();
+
+			$this->assertSame( $case['expected_guests'], (int) $data['guests'], $case['test_condition_name'] . ' / guests' );
+			$this->assertSame( $case['expected_total'], (int) $data['total_price'], $case['test_condition_name'] . ' / total_price' );
+
+			// 区分内訳が応答に含まれ、ラベル・料金がサーバ保存メタと一致することを確認する。
+			$this->assertIsArray( $data['guest_tiers'] ?? null, $case['test_condition_name'] . ' / guest_tiers' );
+			$this->assertSame( '一般', $data['guest_tiers'][0]['label'] ?? '', $case['test_condition_name'] );
+			$this->assertSame( 4000, (int) ( $data['guest_tiers'][0]['price'] ?? -1 ), $case['test_condition_name'] );
+
+			delete_transient( self::TRANSIENT_PREFIX . $token );
+			$this->tokens = array();
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
+	 * save_draft / get_draft: 1枠あたりの最大予約受付数が1以下のときに料金区分・ユーザー貸切が無効化されることを検証する（#320）。
+	 *
+	 * 確定コントローラ側（Max_Capacity_Disables_Multi_Guest_Settings_Test）と対称に、下書き側でも
+	 * 保存済みメタ・改ざん経路（user_exclusive・区分人数の仕込み）に関わらずサーバ側で無効化されることを確認する。
+	 *
+	 * - max_capacity=1：料金区分は無効（空扱い）で total_price は基本料金×人数（人数は1へクランプ）。
+	 *   user_exclusive を仕込んでも貸切料金は加算されない（exclusive_fee=0・user_exclusive=false）。
+	 * - 対照 max_capacity=2：料金区分が有効になり区分料金合計、貸切料金も加算される
+	 *   （ゲートを外すと max_capacity=1 ケースと差が消え FAIL）。
+	 */
+	public function test_get_draft_disables_multi_guest_settings_when_max_capacity_le_1(): void {
+		// 複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$this->disable_nomination();
+
+		$menu_tiers = array(
+			array(
+				'label' => '大人',
+				'price' => 5000,
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '最大受付数1＋料金区分＋user_exclusive=true・区分人数2名 => 区分/貸切ともに無効・基本料金×1',
+				'max_capacity'        => 1,
+				'base_price'          => 3000,
+				'per_person'          => 1000,
+				'requested_tiers'     => array( 0 => 2 ),
+				'user_exclusive'      => true,
+				'expect_user_excl'    => false,
+				'expect_excl_fee'     => 0,
+				'expect_guests'       => 1,
+				// 区分は無効 → 基本料金3000×1。貸切料金は乗らない。
+				'expect_total'        => 3000,
+			),
+			array(
+				'test_condition_name' => '最大受付数2＋料金区分＋user_exclusive=true・区分人数2名 => 区分有効・区分料金合計＋貸切料金（対照）',
+				'max_capacity'        => 2,
+				'base_price'          => 3000,
+				'per_person'          => 1000,
+				'requested_tiers'     => array( 0 => 2 ),
+				'user_exclusive'      => true,
+				'expect_user_excl'    => true,
+				'expect_excl_fee'     => 2000,
+				'expect_guests'       => 2,
+				// 区分料金 5000×2 = 10000 ＋ 貸切 1000×2 = 2000 => 12000。
+				'expect_total'        => 12000,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$menu_id = $this->create_menu();
+			update_post_meta( $menu_id, '_vkbm_base_price', $case['base_price'] );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
+			update_post_meta( $menu_id, '_vkbm_price_tiers', $menu_tiers );
+			update_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true );
+			update_post_meta( $menu_id, '_vkbm_exclusive_fee_per_person', $case['per_person'] );
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			$controller = new Booking_Draft_Controller();
+			// 区分人数・貸切選択を改ざん経路として下書きに仕込む。
+			$payload = array_merge(
+				$this->build_payload( $menu_id, '2027-03-01T10:00:00+09:00' ),
+				array(
+					'guest_tiers'    => $case['requested_tiers'],
+					'user_exclusive' => $case['user_exclusive'],
+				)
+			);
+
+			$token        = $this->save_draft( $controller, $payload );
+			$get_response = $controller->get_draft( $this->build_get_request( $token ) );
+			$this->assertInstanceOf( WP_REST_Response::class, $get_response, $case['test_condition_name'] );
+			$data = $get_response->get_data();
+
+			$this->assertSame( $case['expect_guests'], (int) $data['guests'], $case['test_condition_name'] . ' / guests' );
+			$this->assertSame( $case['expect_total'], (int) $data['total_price'], $case['test_condition_name'] . ' / total_price' );
+			$this->assertSame( $case['expect_user_excl'], (bool) $data['user_exclusive'], $case['test_condition_name'] . ' / user_exclusive' );
+			$this->assertSame( $case['expect_excl_fee'], (int) $data['exclusive_fee'], $case['test_condition_name'] . ' / exclusive_fee' );
+
+			delete_transient( self::TRANSIENT_PREFIX . $token );
+			$this->tokens = array();
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
+	 * save_draft: 入力人数が1予約あたりの最大人数を超える場合に guests_exceeded エラーを返すことを検証する。
+	 * 黙ってクランプして人数を失わないための入口バリデーション。上限ちょうど・未満は正常に保存できる。
+	 *
+	 * save_draft: verify it returns a guests_exceeded error when the requested guests exceed the
+	 * per-booking maximum (entry-point validation that avoids silently losing the intended count).
+	 * Requests at or below the maximum are saved normally.
+	 */
+	public function test_save_draft_rejects_guests_over_max(): void {
+		// 複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		// 複数人予約は指名OFF（自動割り当て）時のみ有効なため、指名機能を無効化する。
+		$this->disable_nomination();
+
+		// 条件 → 期待値（エラーコード。空文字なら正常に保存される）の配列。
+		$test_cases = array(
+			array(
+				'test_condition_name' => '最大2・要求1 → エラーにならず保存される（正常系：上限未満）',
+				'max_guests'          => 2,
+				'requested_guests'    => 1,
+				'expected_error'      => '',
+			),
+			array(
+				'test_condition_name' => '最大2・要求2 → エラーにならず保存される（境界値：上限ちょうど）',
+				'max_guests'          => 2,
+				'requested_guests'    => 2,
+				'expected_error'      => '',
+			),
+			array(
+				'test_condition_name' => '最大2・要求3 → guests_exceeded エラー（異常系：上限超過）',
+				'max_guests'          => 2,
+				'requested_guests'    => 3,
+				'expected_error'      => 'guests_exceeded',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// メニューを作成し、複数人予約設定・単価・スタッフ1名を付与する。
+			$menu_id = $this->create_menu();
+			update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_guests'] );
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+			// ログインユーザーとして下書きを保存する（owner = user）。
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			// save_draft が作成する owner index/lock を tearDown で確実に掃除するため追跡する。
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			// guests を含む保存リクエストを直接組み立てて save_draft を呼ぶ。
+			$payload = array_merge(
+				$this->build_payload( $menu_id, '2024-11-01T10:00:00+09:00' ),
+				array( 'guests' => $case['requested_guests'] )
+			);
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/drafts' );
+			$request->set_header( 'content-type', 'application/json' );
+			$request->set_body( wp_json_encode( $payload ) );
+
+			$controller = new Booking_Draft_Controller();
+			$response   = $controller->save_draft( $request );
+
+			if ( '' !== $case['expected_error'] ) {
+				// 上限超過：WP_Error が返り、エラーコードが guests_exceeded であること。
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_error'], $response->get_error_code(), $case['test_condition_name'] );
+			} else {
+				// 上限内：正常に WP_REST_Response が返り、トークンが発行されること。
+				$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+				$data  = $response->get_data();
+				$token = isset( $data['token'] ) ? (string) $data['token'] : '';
+				$this->assertNotSame( '', $token, $case['test_condition_name'] );
+				// 発行トークンを後始末する。
+				$this->tokens[] = $token;
+				delete_transient( self::TRANSIENT_PREFIX . $token );
+				$this->tokens = array();
+			}
+
+			wp_set_current_user( 0 );
 		}
 	}
 
@@ -1597,6 +2180,60 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'post_status' => 'publish',
 			]
 		);
+	}
+
+	/**
+	 * save_draft → get_draft で slot.min_capacity / slot.booked_guests が伝搬・サニタイズされることを検証する。
+	 *
+	 * 確定画面の催行注記（未達時のみ表示）はこの2値に依存するため、保存・取得の往復で
+	 * 値が落ちず、かつ負値・不正値が0へ丸められることを担保する（実機FAIL(B)の回帰防止）。
+	 *
+	 * @group min-capacity
+	 */
+	public function test_save_draft_propagates_min_capacity(): void {
+		$menu_id  = $this->create_menu();
+		$owner_id = $this->factory()->user->create();
+		wp_set_current_user( $owner_id );
+
+		$controller = new Booking_Draft_Controller();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '最小催行人数3・合計予約1名 => そのまま伝搬（正常系：未達枠）',
+				'slot_min'            => 3,
+				'slot_booked'         => 1,
+				'expected_min'        => 3,
+				'expected_booked'     => 1,
+			],
+			[
+				'test_condition_name' => '最小催行人数0（制約なし）・合計予約2名 => そのまま伝搬（正常系：制約なし）',
+				'slot_min'            => 0,
+				'slot_booked'         => 2,
+				'expected_min'        => 0,
+				'expected_booked'     => 2,
+			],
+			[
+				'test_condition_name' => '負値（-5 / -3）=> 0へ丸める（異常系：防御的サニタイズ）',
+				'slot_min'            => -5,
+				'slot_booked'         => -3,
+				'expected_min'        => 0,
+				'expected_booked'     => 0,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$payload                          = $this->build_payload( $menu_id, '2024-07-01T10:00:00+09:00' );
+			$payload['slot']['min_capacity']  = $case['slot_min'];
+			$payload['slot']['booked_guests'] = $case['slot_booked'];
+
+			$token    = $this->save_draft( $controller, $payload );
+			$response = $controller->get_draft( $this->build_get_request( $token ) );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+
+			$data = $response->get_data();
+			$this->assertSame( $case['expected_min'], (int) $data['slot']['min_capacity'], $case['test_condition_name'] );
+			$this->assertSame( $case['expected_booked'], (int) $data['slot']['booked_guests'], $case['test_condition_name'] );
+		}
 	}
 
 	/**

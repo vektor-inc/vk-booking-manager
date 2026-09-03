@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Override oEmbed title/author for the reservation page URL.
  *

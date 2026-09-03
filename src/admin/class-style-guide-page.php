@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Development-only style guide page.
  *
@@ -122,7 +121,7 @@ class Style_Guide_Page {
 	private function enqueue_reservation_block_style(): void {
 		$style_handle = 'vkbm-style-guide-reservation';
 		// ファイルの更新日時を取得するためなので PATH で正しい
-		$style_path   = VKBM_PLUGIN_DIR_PATH . 'build/blocks/reservation/style-index.css';
+		$style_path = VKBM_PLUGIN_DIR_PATH . 'build/blocks/reservation/style-index.css';
 
 		if ( ! file_exists( $style_path ) ) {
 			return;
@@ -176,6 +175,8 @@ class Style_Guide_Page {
 			return;
 		}
 
+		// 管理画面用のローカル HTML テンプレートを読み込むため file_get_contents で問題ない。
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a bundled local HTML template file.
 		$html = (string) file_get_contents( $html_path );
 		?>
 		<div class="wrap vkbm-style-guide">

@@ -1,4 +1,4 @@
-@use '../../../assets/scss/index-blocks.scss' as *;
+@use "../../../assets/scss/index-blocks.scss" as *;
 
 .vkbm-menu-loop {
 	--vkbm-menu-loop-gap: 1.5rem;
@@ -13,7 +13,7 @@
 	font-size: 1.25rem;
 	margin: 0 0 1rem;
 	background-color: #f5f5f5;
-	border-left:3px solid var(--vkbm--color--primary, #007cba);
+	border-left: 3px solid var(--vkbm--color--primary, #007cba);
 	padding: 0.6em 0.7em;
 }
 
@@ -23,13 +23,16 @@
 
 .vkbm-menu-loop__edit-link {
 	font-size: 0.88rem;
-	font-weight: normal;
-	&:before {
+	font-weight: 400;
+
+	&::before {
 		content: "[ ";
 	}
-	&:after {
+
+	&::after {
 		content: " ]";
 	}
+
 	:is(.vkbm-menu-loop__card-title,.vkbm-menu-loop__text-title) & a {
 		color: var(--vkbm--color--link);
 	}
@@ -60,8 +63,9 @@
 	background: #fff;
 	border: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
 	border-radius: var(--vkbm--radius--md);
+
 	p {
-		text-box: trim-both text; 
+		text-box: trim-both text;
 	}
 }
 
@@ -69,14 +73,17 @@
 	flex: 0 0 auto;
 	width: 100%;
 	padding: var(--vkbm--spacing--sm);
+
 	@media (max-width: 767px) {
 		padding-bottom: 0;
 	}
+
 	@media (min-width: 768px) {
 		max-width: 240px;
 		min-width: 180px;
 		padding-right: 0;
 	}
+
 	img {
 		display: block;
 		height: 100%;
@@ -85,6 +92,7 @@
 		border-radius: var(--vkbm--radius--md);
 	}
 }
+
 .vkbm-menu-loop__card-body {
 	flex-grow: 1;
 	height: 100%;
@@ -106,18 +114,17 @@
 	font-size: 0.75rem;
 	line-height: 1;
 	padding: 3px 0.55rem;
-	background-color: color-mix(
-		in srgb,
-		var(--wp--preset--color--primary, #007cba) 15%,
-		#ffffff
-	);
+	background-color: color-mix(in srgb, var(--wp--preset--color--primary, #007cba) 15%, #fff);
 }
 
-.vkbm-menu-loop__card-title{
+.vkbm-menu-loop__card-title {
 	font-size: 1.1rem;
 	margin: 0 0 var(--vkbm--spacing--sm);
+
 	a {
 		color: inherit;
+		text-decoration: none;
+
 		&:hover {
 			text-decoration: none;
 		}
@@ -126,17 +133,19 @@
 
 .vkbm-menu-loop__card-catch {
 	color: var(--wp--preset--color--contrast, #222);
-	font-size:var(--vkbm--font-size--sm);
+	font-size: var(--vkbm--font-size--sm);
 	margin: 0 0 var(--vkbm--spacing--sm);
 }
 
 .vkbm-menu-loop__card-excerpt {
 	color: var(--wp--preset--color--contrast-2, #444);
-	font-size:var(--vkbm--font-size--sm);
+	font-size: var(--vkbm--font-size--sm);
 	margin: 0 0 var(--vkbm--spacing--sm);
+
 	p {
 		margin: 0;
 	}
+
 	p + p {
 		margin-top: var(--vkbm--spacing--xs);
 	}
@@ -149,10 +158,12 @@
 	margin: 0;
 	container-type: inline-size;
 }
+
 .vkbm-menu-loop__card-meta-main {
 	flex: 1 1 auto;
 	min-width: 0;
 }
+
 .vkbm-menu-loop__card-meta {
 	display: grid;
 	grid-template-columns: max-content 1fr;
@@ -161,6 +172,7 @@
 	font-size: 12px;
 	margin: 0;
 }
+
 .vkbm-menu-loop__card-meta-side {
 	display: flex;
 	flex-direction: column;
@@ -170,6 +182,7 @@
 }
 
 @container (max-width: 499px) {
+
 	.vkbm-menu-loop__card-meta-side {
 		flex: 0 0 100%;
 		margin-left: 0;
@@ -178,13 +191,15 @@
 
 .vkbm-menu-loop__card-meta-item {
 	display: contents;
+
 	dt {
 		white-space: nowrap;
 		background-color: #e5e5e5;
 		text-align: center;
-		padding:3px 1em;
+		padding: 3px 1em;
 		border-radius: var(--vkbm--radius--sm);
 	}
+
 	dd {
 		margin: 0;
 	}
@@ -200,8 +215,54 @@
 
 .vkbm-menu-loop__card-price-tax {
 	font-size: var(--vkbm--font-size--xs);
-	font-weight: normal;
+	font-weight: 400;
 	margin-left: 0.35em;
+}
+
+// 料金区分の一覧（区分名＝左 / 料金＝右の両端揃えリスト）。
+.vkbm-menu-loop__card-prices {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin: 0;
+}
+
+.vkbm-menu-loop__card-prices-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.7em;
+}
+
+// 区分名側は折り返しを許容し、長い名称でもレイアウトを壊さない。
+// font-size: 12px は .vkbm-menu-loop__card-meta（区分名以外のメタ表示）と
+// 意図的に揃えた値。共通トークン化は別 issue で対応する。
+.vkbm-menu-loop__card-prices-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: 12px;
+	margin: 0;
+}
+
+// 料金側は単一料金と同じトーンで強調し、絶対に折り返さない。
+// color / font-size / font-weight は .vkbm-menu-loop__card-price（単一料金表示）と
+// 意図的に同じ値にして、料金区分一覧と単一料金で見た目のトーンを揃えている。
+// これらの値の共通トークン化は別 issue で対応する。
+.vkbm-menu-loop__card-prices-value {
+	flex: 0 0 auto;
+	white-space: nowrap;
+	color: #d11c1c;
+	font-size: 1.2rem;
+	font-weight: 700;
+	margin: 0;
+}
+
+// 税込みラベルは一覧の末尾に 1 回だけ表示する。
+.vkbm-menu-loop__card-prices-tax {
+	font-size: var(--vkbm--font-size--xs);
+	font-weight: 400;
+	text-align: right;
+	margin: 0.1rem 0 0;
 }
 
 
@@ -214,13 +275,14 @@
 	width: 100%;
 }
 
- .vkbm-menu-loop__text-item {
+.vkbm-menu-loop__text-item {
 	background: transparent;
 	border: 0;
 	border-bottom: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
 	border-radius: 0;
 	padding: var(--vkbm--spacing--sm) 0;
 	width: 100%;
+
 	&:last-child {
 		border-bottom: 0;
 	}
@@ -236,9 +298,11 @@
 .vkbm-menu-loop__text-title {
 	flex: 1 1 auto;
 	min-width: 0;
+
 	a {
 		color: inherit;
 		text-decoration: underline;
+
 		&:hover {
 			text-decoration: none;
 		}

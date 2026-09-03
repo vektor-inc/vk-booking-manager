@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Handles registering and maintaining custom roles and capabilities.
  *

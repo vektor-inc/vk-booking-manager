@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Registers the Service Menu custom post type.
  *
@@ -16,6 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Price_Tiers;
+use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -46,6 +47,13 @@ class Service_Menu_Post_Type {
 	private const META_RESERVATION_DAY_TYPE        = '_vkbm_reservation_day_type';
 	private const META_DISABLE_NOMINATION_FEE      = '_vkbm_disable_nomination_fee';
 	private const META_MAX_CAPACITY                = '_vkbm_max_capacity';
+	private const META_MIN_CAPACITY                = '_vkbm_min_capacity';
+	private const META_ALLOW_MULTIPLE_GUESTS       = '_vkbm_allow_multiple_guests';
+	private const META_EXCLUSIVE_WHEN_BOOKED       = '_vkbm_exclusive_when_booked';
+	private const META_EXCLUSIVE_USER_SELECTABLE   = '_vkbm_exclusive_user_selectable';
+	private const META_EXCLUSIVE_FEE_PER_PERSON    = '_vkbm_exclusive_fee_per_person';
+	private const META_EXCLUSIVE_FEE_EXEMPT_GUESTS = '_vkbm_exclusive_fee_exempt_guests';
+	private const META_PRICE_TIERS                 = '_vkbm_price_tiers';
 
 	/**
 	 * Staff title cache.
@@ -62,6 +70,8 @@ class Service_Menu_Post_Type {
 		add_action( 'init', array( $this, 'register_taxonomy' ) );
 		add_action( 'init', array( $this, 'register_meta' ) );
 		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
+		// カスタムメタもリビジョンに保存・復元できるよう、対象メタキーを登録する。
+		add_filter( 'wp_post_revision_meta_keys', array( $this, 'filter_revision_meta_keys' ), 10, 2 );
 		add_action( self::TAXONOMY_GROUP . '_add_form_fields', array( $this, 'render_group_term_add_fields' ) );
 		add_action( self::TAXONOMY_GROUP . '_edit_form_fields', array( $this, 'render_group_term_edit_fields' ), 10, 2 );
 		add_action( 'created_' . self::TAXONOMY_GROUP, array( $this, 'save_group_term_display_mode' ) );
@@ -111,7 +121,7 @@ class Service_Menu_Post_Type {
 			'show_in_admin_bar'   => true,
 			'show_in_nav_menus'   => false,
 			'show_in_rest'        => true,
-			'supports'            => array( 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields' ),
+			'supports'            => array( 'title', 'editor', 'excerpt', 'thumbnail', 'custom-fields', 'revisions' ),
 			'has_archive'         => false,
 			'hierarchical'        => false,
 			'rewrite'             => false,
@@ -147,7 +157,7 @@ class Service_Menu_Post_Type {
 				continue;
 			}
 
-			$reordered['vkbm_price']                = __( 'Fee', 'vk-booking-manager' );
+			$reordered['vkbm_price'] = __( 'Fee', 'vk-booking-manager' );
 			// Use the configurable duration label from provider settings.
 			// 基本設定の所要時間ラベルを使用する。
 			$reordered['vkbm_duration']             = vkbm_get_duration_label();
@@ -360,15 +370,8 @@ class Service_Menu_Post_Type {
 					break;
 				}
 
-				if ( 'weekend' === $reservation_day_type ) {
-					$label = __( 'Saturdays and Sundays only', 'vk-booking-manager' );
-				} elseif ( 'weekday' === $reservation_day_type ) {
-					$label = __( 'Weekdays only', 'vk-booking-manager' );
-				} else {
-					$label = $reservation_day_type;
-				}
-
-				echo esc_html( $label );
+				// 種別→ラベルの写像は共有ヘルパーに集約している（曜日指定・日付指定にも対応）。
+				echo esc_html( Reservation_Day::label( $reservation_day_type ) );
 				break;
 		}
 	}
@@ -559,6 +562,15 @@ class Service_Menu_Post_Type {
 									<option value=""><?php esc_html_e( 'Not specified', 'vk-booking-manager' ); ?></option>
 									<option value="weekend"><?php esc_html_e( 'Saturdays and Sundays only', 'vk-booking-manager' ); ?></option>
 									<option value="weekday"><?php esc_html_e( 'Weekdays only', 'vk-booking-manager' ); ?></option>
+									<?php
+									// 曜日指定・日付指定は詳細設定が必要でクイック編集では設定できない。
+									// 既定は disabled にして新規選択を防ぎ（詳細未設定のまま選ぶと保存時に無通知で
+									// 指定なしへ戻るのを防ぐ）、現在値が custom のメニューでのみ JS で有効化して
+									// 既存値を表示・保持できるようにする。title で理由を説明する。
+									$custom_option_title = esc_attr__( 'This option requires detailed settings. Edit it in the full service menu editor.', 'vk-booking-manager' );
+									?>
+									<option value="custom_weekday" disabled title="<?php echo esc_attr( $custom_option_title ); ?>"><?php esc_html_e( 'Specified days of the week', 'vk-booking-manager' ); ?></option>
+									<option value="custom_date" disabled title="<?php echo esc_attr( $custom_option_title ); ?>"><?php esc_html_e( 'Specified dates', 'vk-booking-manager' ); ?></option>
 								</select>
 							</span>
 						</label>
@@ -637,7 +649,7 @@ class Service_Menu_Post_Type {
 		$reservation_deadline   = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ) : '' );
 		$staff_ids              = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( isset( $_POST['vkbm_service_menu_quick']['staff_ids'] ) && is_array( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ) : array() ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by array_map( 'absint' ) and sanitize_staff_ids().
 		$other_conditions       = isset( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ) : '';
-		$reservation_day_type   = $this->sanitize_reservation_day_type( isset( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ) : '' );
+		$reservation_day_type   = $this->sanitize_reservation_day_type( isset( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ) : '', $post_id );
 		$disable_nomination_fee = ! empty( $_POST['vkbm_service_menu_quick']['disable_nomination_fee'] ) ? '1' : '';
 
 		$this->update_meta_value( $post_id, '_vkbm_base_price', $base_price );
@@ -673,17 +685,31 @@ class Service_Menu_Post_Type {
 	/**
 	 * Sanitize reservation day type.
 	 *
-	 * @param mixed $raw Raw value.
+	 * 許容値への正規化は共有ヘルパーに集約している。曜日指定・日付指定はクイック編集では
+	 * 詳細設定を編集できないため、対応する詳細メタが既に保存されている場合のみ許可し、
+	 * そうでなければ「指定なし」へ戻す（詳細未設定の custom 種別で全曜日不可になるのを防ぐ）。
+	 *
+	 * @param mixed $raw     Raw value.
+	 * @param int   $post_id 対象の投稿ID（custom 種別の詳細メタ有無の確認に使用）。
 	 * @return string
 	 */
-	private function sanitize_reservation_day_type( $raw ): string {
-		$value = sanitize_text_field( wp_unslash( (string) $raw ) );
-		if ( '' === $value ) {
-			return '';
+	private function sanitize_reservation_day_type( $raw, int $post_id = 0 ): string {
+		$value = Reservation_Day::sanitize_type( sanitize_text_field( wp_unslash( (string) $raw ) ) );
+
+		if ( Reservation_Day::TYPE_CUSTOM_WEEKDAY === $value ) {
+			// メタキーは Reservation_Day を単一の定義元として参照する（保存側との drift 防止）。
+			$config = get_post_meta( $post_id, Reservation_Day::META_CUSTOM_WEEKDAYS, true );
+			if ( ! is_array( $config ) || empty( $config ) ) {
+				return Reservation_Day::TYPE_NONE;
+			}
+		} elseif ( Reservation_Day::TYPE_CUSTOM_DATE === $value ) {
+			$config = get_post_meta( $post_id, Reservation_Day::META_CUSTOM_DATES, true );
+			if ( ! is_array( $config ) || empty( $config ) ) {
+				return Reservation_Day::TYPE_NONE;
+			}
 		}
 
-		$allowed = array( 'weekend', 'weekday' );
-		return in_array( $value, $allowed, true ) ? $value : '';
+		return $value;
 	}
 
 	/**
@@ -963,6 +989,210 @@ class Service_Menu_Post_Type {
 			)
 		);
 
+		// 最小催行人数（グループ開催型）。同じ時間枠の合計予約人数がこの値に達したら開催確定とみなす表示用設定。
+		// デフォルト0は「制約なし（催行判定なし）」で従来挙動と完全互換。上限（max_capacity）との整合は
+		// 保存ゲート（Service_Menu_Editor::save_post）でクランプする（register_meta では単体メタしか参照できないため）。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_MIN_CAPACITY,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'default'           => 0,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): int {
+					// 0以上の整数に丸める（0=制約なし）。負値は0へ。
+					return max( 0, (int) $value );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 編集権限に加え、save_post() と同じ業務ゲート（Pro版 かつ 指名OFF かつ 複数人予約ON）を
+					// REST メタAPI経由の書き込みにも適用する。ゲート外で値を保持させると、後から
+					// Pro版化・複数人予約有効化した際に意図せず催行判定が効き始めてしまうため、保存経路で防ぐ。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled() && Staff_Editor::is_slot_capacity_enabled();
+				},
+			)
+		);
+
+		// 複数人予約を許可するかどうか（Pro版・指名OFF時のみ有効。既定OFF）。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_ALLOW_MULTIPLE_GUESTS,
+			array(
+				'type'              => 'boolean',
+				'single'            => true,
+				'default'           => false,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): bool {
+					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 編集権限に加え、save_post() と同じゲート（Pro版 かつ 指名OFF）をREST書き込みにも適用する。
+					// これにより REST メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
+		// 貸し切り予約（予約が入ったらその時間帯を貸し切りにする）。複数人予約ON時のみ意味を持つ（既定OFF）。
+		// ONのメニューでは予約確定時に予約レコードへ _vkbm_booking_exclusive が付与され、
+		// 1件でも予約が入ると残り枠があっても他のユーザーは予約できなくなる（#304）。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_EXCLUSIVE_WHEN_BOOKED,
+			array(
+				'type'              => 'boolean',
+				'single'            => true,
+				'default'           => false,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): bool {
+					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 複数人予約フラグ・料金区分と同じゲート（Pro版 かつ 指名OFF）を REST 書き込みに適用する。
+					// メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					//
+					// NOTE: ここでは _vkbm_allow_multiple_guests（保存済み値）は読まない。price_tiers と同様、
+					// REST で「複数人予約ON＋貸し切りON」を同一リクエストで保存する際にメタの処理順序によって
+					// stale な保存済み値で誤って拒否され得る（race）ため。複数人予約OFFのメニューに貸し切りメタが
+					// 混入しても、受付停止の判定側 is_menu_exclusive_when_booked() がフルゲート（Pro＋全体の
+					// 複数人予約ON＋指名OFF＋メニューの allow ON）を再適用して無害化する（load-bearing な主防御）。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
+		// ユーザーによる貸し切り指定を受け付けるか（#305）。複数人予約ON時のみ意味を持つ（既定OFF）。
+		// ONのメニューでは、予約者がフロントの予約画面で「この時間帯を貸切にする」を選択でき、
+		// 選択された予約には _vkbm_booking_exclusive が付与され、以降その枠は他のユーザーが予約できなくなる。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_EXCLUSIVE_USER_SELECTABLE,
+			array(
+				'type'              => 'boolean',
+				'single'            => true,
+				'default'           => false,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): bool {
+					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 複数人予約フラグ・料金区分と同じゲート（Pro版 かつ 指名OFF）を REST 書き込みに適用する。
+					// メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					// NOTE: ここでは保存済みの複数人予約フラグ（_vkbm_allow_multiple_guests）は読まない。
+					// 料金区分・貸し切り設定と同様、同一リクエストで複数メタを保存する際の stale 値による
+					// 誤拒否（race）を避けるため。複数人予約OFFのメニューにこのメタが混入しても、
+					// フロント表示・サーバ側ガード（is_user_exclusive_selectable 相当のフルゲート再適用）で無害化する。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
+		// 貸し切り料金（1人あたり・#305）。ユーザー貸し切り指定ONのメニューでのみ意味を持つ（既定0）。
+		// 実際の課金額は「per_person × 申込人数」で、サーバ側（予約確定・下書き）で権威的に再計算する。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_EXCLUSIVE_FEE_PER_PERSON,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'default'           => 0,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): int {
+					// 0以上の整数に丸める（負値は0）。
+					return max( 0, (int) $value );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
+		// 貸し切り料金を適用しない申込人数（#305）。この人数「以上」の申し込みでは貸し切り料金を加算しない。
+		// 0（または空＝デフォルト0）は「上限なし＝常に加算」を意味する。ユーザー貸し切り指定ON時のみ意味を持つ。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'default'           => 0,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): int {
+					// 0以上の整数に丸める（0=上限なし＝常に加算）。負値は0へ。
+					return max( 0, (int) $value );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
+		// 料金区分（大人料金・子供料金など）。複数人予約ON時のみ意味を持つ。
+		// 1件でも定義すると基本料金×人数ではなく区分料金で計算する（併用なし）。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_PRICE_TIERS,
+			array(
+				'type'              => 'array',
+				'single'            => true,
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type'    => 'array',
+						'items'   => array(
+							'type'       => 'object',
+							'properties' => array(
+								'label' => array( 'type' => 'string' ),
+								'price' => array( 'type' => 'integer' ),
+							),
+						),
+						'context' => array( 'view', 'edit' ),
+					),
+				),
+				'sanitize_callback' => static function ( $value ): array {
+					return Price_Tiers::sanitize_tiers( $value );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 編集権限に加え、複数人予約フラグと同じゲート（Pro版 かつ 指名OFF）を REST 書き込みに適用する。
+					// メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					//
+					// NOTE: ここで _vkbm_allow_multiple_guests（保存済み値）は読まない。
+					// REST で「複数人予約ON＋料金区分」を同一リクエストで保存する際、メタの処理順序によっては
+					// allow フラグ書き込み前に料金区分の auth が走り、stale な保存済み値で誤って拒否され得る（race）。
+					// 複数人予約OFFのメニューに区分が混入しても、料金計算側がフルゲート（allow＋指名OFF＋Pro）を
+					// 再適用して無害化するため、多層防御は計算側で担保される。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
 		register_post_meta(
 			self::POST_TYPE,
 			self::META_STAFF_IDS,
@@ -985,6 +1215,67 @@ class Service_Menu_Post_Type {
 				},
 			)
 		);
+	}
+
+	/**
+	 * リビジョンに保存・復元するメタキーの一覧を返す。
+	 *
+	 * サービスメニューの設定値（料金・所要時間・スタッフ等）はすべてカスタムメタで管理しているため、
+	 * リビジョンへ含めないとタイトル・本文のみが記録され、設定値の履歴が残らない。
+	 * ここに列挙したキーは WordPress の標準リビジョン機構（WP 6.4 以降）によって
+	 * 保存時にリビジョンへコピーされ、復元時に投稿へ書き戻される。
+	 *
+	 * 廃止済みのメタ（_vkbm_max_guests_per_booking）と旧仕様の互換用メタ（_vkbm_online_available）は
+	 * 保存時に削除されるため、リビジョン対象には含めない。
+	 *
+	 * @return array<int, string> リビジョン対象のメタキー。
+	 */
+	public function get_revisioned_meta_keys(): array {
+		return array(
+			'_vkbm_base_price',
+			self::META_DISABLE_NOMINATION_FEE,
+			self::META_MAX_CAPACITY,
+			self::META_MIN_CAPACITY,
+			self::META_ALLOW_MULTIPLE_GUESTS,
+			self::META_EXCLUSIVE_WHEN_BOOKED,
+			self::META_EXCLUSIVE_USER_SELECTABLE,
+			self::META_EXCLUSIVE_FEE_PER_PERSON,
+			self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS,
+			self::META_PRICE_TIERS,
+			self::META_STAFF_IDS,
+			'_vkbm_catch_copy',
+			'_vkbm_internal_memo',
+			'_vkbm_duration_minutes',
+			'_vkbm_buffer_after_minutes',
+			'_vkbm_reservation_deadline_hours',
+			'_vkbm_max_advance_booking_days',
+			self::META_RESERVATION_DAY_TYPE,
+			'_vkbm_online_unavailable',
+			'_vkbm_is_archived',
+			'_vkbm_use_detail_page',
+			self::META_OTHER_CONDITIONS,
+			'_vkbm_fixed_start_times',
+		);
+	}
+
+	/**
+	 * サービスメニューのカスタムメタをリビジョン対象に追加する。
+	 *
+	 * `wp_post_revision_meta_keys` フィルターのコールバック。対象投稿タイプが
+	 * サービスメニューのときのみ、このプラグインのメタキーを既存リストへ追加する。
+	 *
+	 * @param array<int, string> $keys      現在のリビジョン対象メタキー。
+	 * @param string             $post_type 対象の投稿タイプ。
+	 * @return array<int, string> 追加後のメタキー一覧（重複は排除）。
+	 */
+	public function filter_revision_meta_keys( array $keys, string $post_type ): array {
+		// 対象外の投稿タイプでは何も変更しない。
+		if ( self::POST_TYPE !== $post_type ) {
+			return $keys;
+		}
+
+		// 既存のキーと統合し、重複を除いて返す。
+		return array_values( array_unique( array_merge( $keys, $this->get_revisioned_meta_keys() ) ) );
 	}
 
 	/**

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Sanitizes provider settings form submissions.
  *
@@ -13,6 +12,8 @@ namespace VKBookingManager\ProviderSettings;
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+use function vkbm_sanitize_resource_menu_icon;
 
 /**
  * Sanitizes provider settings form submissions.
@@ -76,17 +77,22 @@ class Settings_Sanitizer {
 
 		$data = array_merge( $defaults, $input );
 
-		$data['provider_name']                                  = sanitize_text_field( $data['provider_name'] );
-		$data['provider_address']                               = sanitize_textarea_field( $data['provider_address'] );
-		$data['provider_phone']                                 = sanitize_text_field( $data['provider_phone'] );
-		$data['provider_payment_method']                        = sanitize_textarea_field( (string) ( $data['provider_payment_method'] ?? '' ) );
-		$data['resource_label_singular']                        = sanitize_text_field( (string) ( $data['resource_label_singular'] ?? '' ) );
-		$data['resource_label_plural']                          = sanitize_text_field( (string) ( $data['resource_label_plural'] ?? '' ) );
-		$data['resource_label_menu']                            = sanitize_text_field( (string) ( $data['resource_label_menu'] ?? '' ) );
-		$data['no_nomination_label']                            = sanitize_text_field( (string) ( $data['no_nomination_label'] ?? '' ) );
-		$data['nomination_fee_label']                           = sanitize_text_field( (string) ( $data['nomination_fee_label'] ?? '' ) );
-		$data['duration_label']                                = sanitize_text_field( (string) ( $data['duration_label'] ?? '' ) );
-		$data['other_conditions_label']                        = sanitize_text_field( (string) ( $data['other_conditions_label'] ?? '' ) );
+		$data['provider_name']           = sanitize_text_field( $data['provider_name'] );
+		$data['provider_address']        = sanitize_textarea_field( $data['provider_address'] );
+		$data['provider_phone']          = sanitize_text_field( $data['provider_phone'] );
+		$data['provider_payment_method'] = sanitize_textarea_field( (string) ( $data['provider_payment_method'] ?? '' ) );
+		$data['resource_label_singular'] = sanitize_text_field( (string) ( $data['resource_label_singular'] ?? '' ) );
+		$data['resource_label_plural']   = sanitize_text_field( (string) ( $data['resource_label_plural'] ?? '' ) );
+		$data['resource_label_menu']     = sanitize_text_field( (string) ( $data['resource_label_menu'] ?? '' ) );
+		$data['resource_menu_icon']      = vkbm_sanitize_resource_menu_icon( $data['resource_menu_icon'] ?? '' );
+		$data['no_nomination_label']     = sanitize_text_field( (string) ( $data['no_nomination_label'] ?? '' ) );
+		$data['nomination_fee_label']    = sanitize_text_field( (string) ( $data['nomination_fee_label'] ?? '' ) );
+		$data['duration_label']          = sanitize_text_field( (string) ( $data['duration_label'] ?? '' ) );
+		$data['other_conditions_label']  = sanitize_text_field( (string) ( $data['other_conditions_label'] ?? '' ) );
+		// 数量の見出しは既存ラベル群と同じく sanitize_text_field を適用する（空ならデフォルトへフォールバックは表示側ヘルパーが担当）。
+		$data['guests_count_label'] = sanitize_text_field( (string) ( $data['guests_count_label'] ?? '' ) );
+		// 数量の単位は null（未設定）/ ''（単位なし）を区別して保持する。
+		$data['guests_unit_label']                              = $this->sanitize_guests_unit_label( $input, $data );
 			$data['provider_business_hours']                    = sanitize_textarea_field( $data['provider_business_hours'] );
 			$data['provider_reservation_deadline_hours']        = $this->sanitize_non_negative_int(
 				$input['provider_reservation_deadline_hours'] ?? ( $data['provider_reservation_deadline_hours'] ?? 0 )
@@ -173,13 +179,31 @@ class Settings_Sanitizer {
 			$input['auth_rate_limit_login_max'] ?? ( $data['auth_rate_limit_login_max'] ?? 10 )
 		);
 		$data['auth_rate_limit_login_max']               = max( 1, $login_limit );
-		$data['closed_day_label']                       = sanitize_text_field( (string) ( $input['closed_day_label'] ?? ( $data['closed_day_label'] ?? '' ) ) );
+		$data['closed_day_label']                        = sanitize_text_field( (string) ( $input['closed_day_label'] ?? ( $data['closed_day_label'] ?? '' ) ) );
 		$data['menu_loop_reserve_button_label']          = sanitize_text_field( (string) ( $input['menu_loop_reserve_button_label'] ?? ( $data['menu_loop_reserve_button_label'] ?? '' ) ) );
 		$data['menu_loop_detail_button_label']           = sanitize_text_field( (string) ( $input['menu_loop_detail_button_label'] ?? ( $data['menu_loop_detail_button_label'] ?? '' ) ) );
 
 		$data['resource_tag_display_enabled'] = ! empty( $input['resource_tag_display_enabled'] );
 		// 指名機能の有効・無効を保存する。
 		$data['staff_enabled'] = ! empty( $input['staff_enabled'] );
+		// 無料版では指名機能は常に無効のため、送信値に関わらず保存値も無効へ強制する。
+		// 管理画面の「無効固定」表示と保存値・実挙動を一致させる。
+		if ( \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ) {
+			$data['staff_enabled'] = false;
+		}
+
+		// 予約枠の定員（同一枠で複数人を受け入れる）機能の有効/無効を保存する。
+		// 後方互換のため、フォーム未送信時はマージ済みの値（既存保存値または既定 true）を維持し、
+		// 送信されたときのみその値で更新する。「明示的にOFFを選んだとき」だけ false になるようにする。
+		$data['slot_capacity_enabled'] = $this->sanitize_slot_capacity_enabled( $input, $data );
+		// 旧キー（multiple_guests_enabled）は新キーへ集約するため保存データから除去する。
+		// これにより get_settings() の array_merge 後も旧キーが残らず、読み取り側の判定が新キー一本になる。
+		unset( $data['multiple_guests_enabled'] );
+		// 無料版ではこの機能は利用できないため、送信値に関わらず無効へ強制する。
+		// 管理画面の固定表示と保存値・実挙動を一致させる。
+		if ( \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ) {
+			$data['slot_capacity_enabled'] = false;
+		}
 
 		$data['email_log_enabled'] = ! empty( $input['email_log_enabled'] );
 
@@ -208,6 +232,75 @@ class Settings_Sanitizer {
 	 */
 	public function get_field_errors(): array {
 		return $this->field_errors;
+	}
+
+	/**
+	 * 数量の単位ラベルをサニタイズする（null / '' を保持する）。
+	 *
+	 * - フォームから送信されていない（$input にキーが無い）場合は、マージ済みの値を尊重する。
+	 *   既定値は null のため、未送信時は null（＝ロケール既定）が維持される。
+	 * - 送信されている場合は sanitize_text_field を適用した値を返す。
+	 *   ユーザーが意図的に空にしたケースを表現するため、空文字は null に潰さずそのまま保持する。
+	 *
+	 * @param array<string, mixed> $input 生の入力値。
+	 * @param array<string, mixed> $data  defaults とマージ済みの値。
+	 * @return string|null
+	 */
+	private function sanitize_guests_unit_label( array $input, array $data ): ?string {
+		// フォームに単位フィールドが存在しない場合は、マージ済みの値（通常は既定の null）をそのまま使う。
+		// これによりプログラム的な保存などでフィールド未送信時に null が維持される。
+		if ( ! array_key_exists( 'guests_unit_label', $input ) ) {
+			$merged = $data['guests_unit_label'] ?? null;
+
+			return null === $merged ? null : sanitize_text_field( (string) $merged );
+		}
+
+		$raw = $input['guests_unit_label'];
+
+		// 明示的に null が送られた場合は null（ロケール既定）として保持する。
+		if ( null === $raw ) {
+			return null;
+		}
+
+		// 空文字を含め、送信された値はサニタイズして保持する（'' は単位なしを意味する）。
+		return sanitize_text_field( (string) $raw );
+	}
+
+	/**
+	 * 予約枠の定員（同一枠で複数人を受け入れる）機能の有効/無効をサニタイズする（後方互換フォールバック付き）。
+	 *
+	 * - フォームから送信されていない（$input に新旧いずれのキーも無い）場合は、マージ済みの値を尊重する。
+	 *   既定値は true のため、未送信時は既存保存値（無ければ true）が維持される。
+	 *   これにより、指名機能ON時にセレクトが disabled で送信されないケースや、
+	 *   プログラム的な部分保存でも既存の挙動を変えない。
+	 * - 新キー（slot_capacity_enabled）が送信されていればそれを優先し、
+	 *   旧キー（multiple_guests_enabled）が送信されていれば旧キーを見る（未リリース段階の後方互換）。
+	 * - 送信されている場合は真偽値へ変換した値を返す（'0' / '' は false、'1' は true）。
+	 *
+	 * @param array<string, mixed> $input 生の入力値。
+	 * @param array<string, mixed> $data  defaults とマージ済みの値。
+	 * @return bool
+	 */
+	private function sanitize_slot_capacity_enabled( array $input, array $data ): bool {
+		// フォームに新キーが送信されていればそれを優先する。
+		if ( array_key_exists( 'slot_capacity_enabled', $input ) ) {
+			return ! empty( $input['slot_capacity_enabled'] );
+		}
+
+		// 新キーが無く旧キーが送信されている場合は旧キーを見る（後方互換）。
+		if ( array_key_exists( 'multiple_guests_enabled', $input ) ) {
+			return ! empty( $input['multiple_guests_enabled'] );
+		}
+
+		// どちらも送信されていない場合はマージ済みの値をそのまま使う。
+		// 新キー → 旧キー → 既定 true の順にフォールバックする。
+		if ( isset( $data['slot_capacity_enabled'] ) ) {
+			return (bool) $data['slot_capacity_enabled'];
+		}
+		if ( isset( $data['multiple_guests_enabled'] ) ) {
+			return (bool) $data['multiple_guests_enabled'];
+		}
+		return true;
 	}
 
 	/**

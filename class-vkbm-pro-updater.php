@@ -46,10 +46,9 @@ if ( ! class_exists( 'VKBM_Pro_Updater', false ) ) {
 			$license      = is_scalar( $license_raw ) ? sanitize_text_field( (string) $license_raw ) : '';
 			$metadata_url = add_query_arg(
 				array(
-					'action' => 'get_metadata',
-					'slug'   => self::PLUGIN_SLUG,
+					'action'                             => 'get_metadata',
+					'slug'                               => self::PLUGIN_SLUG,
 					'vk-booking-manager-pro-license-key' => $license,
-					'url'    => home_url(),
 				),
 				self::METADATA_URL
 			);

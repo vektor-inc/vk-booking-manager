@@ -14,8 +14,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Common\Weekday_Rule;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\Staff\Staff_Editor;
+use function vkbm_get_default_resource_menu_icon;
+use function vkbm_sanitize_resource_menu_icon;
 
 /**
  * Handles the provider settings admin page.
@@ -199,7 +202,7 @@ class Provider_Settings_Page {
 			delete_transient( 'vkbm_provider_settings_field_errors' );
 		}
 
-		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
+		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
 		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) && current_user_can( 'manage_options' ) ) {
 			$allowed_tabs[] = 'license';
@@ -325,8 +328,6 @@ class Provider_Settings_Page {
 			$business_hours_weekly
 		);
 
-		$frequency_options   = $this->get_regular_holiday_frequency_options();
-		$weekday_options     = $this->get_weekday_options();
 		$business_day_labels = $this->get_business_hours_day_labels();
 		$hour_options        = $this->get_hour_options();
 		$end_hour_options    = $this->get_end_hour_options();
@@ -353,16 +354,37 @@ class Provider_Settings_Page {
 		$auth_rate_limit_login_max    = isset( $settings['auth_rate_limit_login_max'] ) ? (int) $settings['auth_rate_limit_login_max'] : 10;
 		$wp_users_can_register        = (bool) get_option( 'users_can_register' );
 		$staff_enabled                = ! empty( $settings['staff_enabled'] );
-		$resource_label_singular      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
-		$resource_label_plural        = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
-		$resource_label_menu          = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : __( 'Staff available', 'vk-booking-manager' );
-		$no_nomination_label          = isset( $settings['no_nomination_label'] ) ? (string) $settings['no_nomination_label'] : __( 'No preference', 'vk-booking-manager' );
-		$nomination_fee_label         = isset( $settings['nomination_fee_label'] ) ? (string) $settings['nomination_fee_label'] : __( 'Nomination fee', 'vk-booking-manager' );
-		$duration_label               = isset( $settings['duration_label'] ) ? (string) $settings['duration_label'] : __( 'Time', 'vk-booking-manager' );
-		$other_conditions_label       = isset( $settings['other_conditions_label'] ) ? (string) $settings['other_conditions_label'] : __( 'Other conditions', 'vk-booking-manager' );
-		$locale                       = function_exists( 'get_locale' ) ? (string) get_locale() : '';
-		$no_plural_locales            = array( 'ja', 'zh', 'ko' );
-		$has_plural_forms_in_locale   = true;
+		// 予約枠の定員（同一枠で複数人を受け入れる）機能の有効/無効（初期表示用）。
+		// defaults マージ済みの $settings では新キー slot_capacity_enabled の既定 true が常に存在し、
+		// 旧キー multiple_guests_enabled=false（開発DBの既存無効設定）に到達できないため、
+		// raw option を 新→旧→既定true で判定する is_slot_capacity_enabled() に判定を委譲する。
+		// これにより旧キーの無効設定が表示にも正しく反映され、意図しない再有効化（新キーへ true 焼き付け）を防ぐ。
+		$slot_capacity_enabled   = Staff_Editor::is_slot_capacity_enabled();
+		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
+		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
+		$resource_label_menu     = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : __( 'Staff available', 'vk-booking-manager' );
+		// リソース管理メニューのアイコン（Dashicons クラス名）。未設定・不正値はデフォルトへ正規化する。
+		$resource_menu_icon         = vkbm_sanitize_resource_menu_icon( $settings['resource_menu_icon'] ?? '' );
+		$resource_menu_icon_presets = $this->get_resource_menu_icon_presets();
+		$no_nomination_label        = isset( $settings['no_nomination_label'] ) ? (string) $settings['no_nomination_label'] : __( 'No preference', 'vk-booking-manager' );
+		$nomination_fee_label       = isset( $settings['nomination_fee_label'] ) ? (string) $settings['nomination_fee_label'] : __( 'Nomination fee', 'vk-booking-manager' );
+		$duration_label             = isset( $settings['duration_label'] ) ? (string) $settings['duration_label'] : __( 'Time', 'vk-booking-manager' );
+		$other_conditions_label     = isset( $settings['other_conditions_label'] ) ? (string) $settings['other_conditions_label'] : __( 'Other conditions', 'vk-booking-manager' );
+		// 数量の見出しは保存値（空ならプレースホルダー表示用に空のまま）を表示する。
+		$guests_count_label = isset( $settings['guests_count_label'] ) ? (string) $settings['guests_count_label'] : '';
+		// 数量の単位のプリフィル値を決める。
+		// 検証エラー再表示時は old_input が $settings に上書き済みのため、送信値（空文字含む）を優先して復元する。
+		// 通常表示で未保存（null）の場合は実効値（ロケール既定。日本語「名」）をプリフィルし、
+		// アップグレード直後にそのまま保存しても従来どおり「名」が維持されるようにする。
+		if ( array_key_exists( 'guests_unit_label', $settings ) && null !== $settings['guests_unit_label'] ) {
+			$guests_unit_label = (string) $settings['guests_unit_label'];
+		} else {
+			$guests_unit_label = vkbm_get_guests_unit_label();
+		}
+
+		$locale                     = function_exists( 'get_locale' ) ? (string) get_locale() : '';
+		$no_plural_locales          = array( 'ja', 'zh', 'ko' );
+		$has_plural_forms_in_locale = true;
 		foreach ( $no_plural_locales as $prefix ) {
 			if ( '' !== $locale && 0 === strpos( $locale, $prefix ) ) {
 				$has_plural_forms_in_locale = false;
@@ -420,7 +442,7 @@ class Provider_Settings_Page {
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$reservation_menu_list_display_mode = 'card';
 		}
-		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
+		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
 		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $show_license_tab ) {
 			$allowed_tabs[] = 'license';
@@ -438,6 +460,10 @@ class Provider_Settings_Page {
 		?>
 		<div class="wrap vkbm-provider-settings" data-active-tab="<?php echo esc_attr( $active_tab ); ?>">
 			<h1><?php esc_html_e( 'Basic settings', 'vk-booking-manager' ); ?></h1>
+			<?php
+			// 無料版の場合はプロ版への誘導バナーを表示する（Pro 版では空文字）。
+			echo Pro_Upsell::get_banner_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 出力はメソッド内でエスケープ済み.
+			?>
 			<h2 class="nav-tab-wrapper vkbm-provider-settings__tabs" aria-label="<?php esc_attr_e( 'Settings tab', 'vk-booking-manager' ); ?>">
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'store', $base_url ) ); ?>"
@@ -605,8 +631,6 @@ class Provider_Settings_Page {
 											// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
 											echo $this->render_regular_holiday_row(
 												(string) $index,
-												$frequency_options,
-												$weekday_options,
 												array(
 													'frequency' => $frequency_value,
 													'weekday'   => $weekday_value,
@@ -627,8 +651,6 @@ class Provider_Settings_Page {
 									// phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
 									echo $this->render_regular_holiday_row(
 										'__INDEX__',
-										$frequency_options,
-										$weekday_options,
 										array(
 											'frequency' => 'weekly',
 											'weekday'   => 'mon',
@@ -1453,16 +1475,92 @@ class Provider_Settings_Page {
 								<label for="vkbm-staff-enabled"><?php esc_html_e( 'Nomination feature', 'vk-booking-manager' ); ?></label>
 							</th>
 							<td>
-								<select
-									id="vkbm-staff-enabled"
-									name="vkbm_provider_settings[staff_enabled]"
-								>
-									<option value="1" <?php selected( $staff_enabled, true ); ?>><?php esc_html_e( 'Enabled', 'vk-booking-manager' ); ?></option>
-									<option value="0" <?php selected( $staff_enabled, false ); ?>><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
-								</select>
+								<?php if ( Pro_Upsell::is_free_edition() ) : ?>
+									<?php
+									// 無料版では指名機能は常に無効のため、操作不可（無効固定）のセレクトを表示する。
+									?>
+									<select id="vkbm-staff-enabled" disabled>
+										<option value="0" selected><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
+									</select>
+									<?php
+									// 無料版では指名機能は常に無効のため値は送信しない。
+									// 保存値は Settings_Sanitizer 側で無効へ強制されるため、UI・保存値・実挙動が一致する。
+									?>
+								<?php else : ?>
+									<select
+										id="vkbm-staff-enabled"
+										name="vkbm_provider_settings[staff_enabled]"
+									>
+										<option value="1" <?php selected( $staff_enabled, true ); ?>><?php esc_html_e( 'Enabled', 'vk-booking-manager' ); ?></option>
+										<option value="0" <?php selected( $staff_enabled, false ); ?>><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
+									</select>
+								<?php endif; ?>
 								<p class="description">
 									<?php esc_html_e( 'When disabled, the staff nomination selection and nomination fee will be hidden from the booking form. Staff assignment and shift management features remain available.', 'vk-booking-manager' ); ?>
 								</p>
+								<?php
+								// 無料版では指名・複数スタッフ機能が利用できないため案内を表示する。
+								echo Pro_Upsell::get_feature_notice_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 出力はメソッド内でエスケープ済み.
+									__( 'Staff nomination and multiple staff registration are available in the Pro edition.', 'vk-booking-manager' )
+								);
+								?>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-slot-capacity-enabled"><?php esc_html_e( 'Time slot capacity feature', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<?php if ( Pro_Upsell::is_free_edition() ) : ?>
+									<?php
+									// 無料版では予約枠の定員機能は常に無効のため、操作不可（無効固定）のセレクトを表示する。
+									?>
+									<select id="vkbm-slot-capacity-enabled" disabled>
+										<option value="0" selected><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
+									</select>
+									<?php
+									// 無料版では値を送信しない。保存値は Settings_Sanitizer 側で無効へ強制される。
+									?>
+								<?php else : ?>
+									<select
+										id="vkbm-slot-capacity-enabled"
+										name="vkbm_provider_settings[slot_capacity_enabled]"
+										aria-describedby="<?php echo esc_attr( 'vkbm-slot-capacity-desc' ); ?>"
+										<?php disabled( $staff_enabled, true ); ?>
+									>
+										<option value="1" <?php selected( $slot_capacity_enabled, true ); ?>><?php esc_html_e( 'Enabled', 'vk-booking-manager' ); ?></option>
+										<option value="0" <?php selected( $slot_capacity_enabled, false ); ?>><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
+									</select>
+									<?php if ( $staff_enabled ) : ?>
+										<?php
+										// 指名機能ON時はセレクトが disabled となり値が送信されないため、
+										// 現在の設定値を hidden で送信して既存の保存値を維持する（意図しない無効化を防ぐ）。
+										?>
+										<input
+											type="hidden"
+											name="vkbm_provider_settings[slot_capacity_enabled]"
+											value="<?php echo esc_attr( $slot_capacity_enabled ? '1' : '0' ); ?>"
+										/>
+									<?php endif; ?>
+								<?php endif; ?>
+								<p class="description" id="<?php echo esc_attr( 'vkbm-slot-capacity-desc' ); ?>">
+									<?php esc_html_e( 'This feature is intended for use with bookings such as schools, tours, and events.', 'vk-booking-manager' ); ?>
+									<br>
+									<?php esc_html_e( 'When enabled, you can set the time slot capacity for each service menu.', 'vk-booking-manager' ); ?>
+									<br>
+									<?php esc_html_e( 'You can also allow users to book for multiple guests at once in a single booking.', 'vk-booking-manager' ); ?>
+									<?php if ( ! Pro_Upsell::is_free_edition() && $staff_enabled ) : ?>
+										<br>
+										<?php esc_html_e( 'This becomes available when the nomination feature is disabled.', 'vk-booking-manager' ); ?>
+									<?php endif; ?>
+								</p>
+								<?php
+								// 無料版では予約枠の定員機能が利用できないため案内を表示する。
+								echo Pro_Upsell::get_feature_notice_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 出力はメソッド内でエスケープ済み.
+									__( 'Time slot capacity feature is available in the Pro edition.', 'vk-booking-manager' )
+								);
+								?>
 							</td>
 						</tr>
 
@@ -1482,6 +1580,58 @@ class Provider_Settings_Page {
 									<p class="description">
 										<?php esc_html_e( 'Replaces the "staff" notation on the screen (does not change the post type name vkbm_resource).', 'vk-booking-manager' ); ?>
 									</p>
+								</td>
+							</tr>
+
+							<tr class="vkbm-provider-settings__tab-system">
+								<th scope="row">
+									<label for="vkbm-resource-menu-icon"><?php esc_html_e( 'Resource menu icon', 'vk-booking-manager' ); ?></label>
+								</th>
+								<td>
+									<div class="vkbm-icon-picker">
+										<div class="vkbm-icon-picker__presets">
+											<?php foreach ( $resource_menu_icon_presets as $preset_icon ) : ?>
+												<?php $is_selected = ( $preset_icon === $resource_menu_icon ); ?>
+												<button
+													type="button"
+													class="button vkbm-icon-picker__preset<?php echo $is_selected ? ' is-selected' : ''; ?>"
+													data-icon="<?php echo esc_attr( $preset_icon ); ?>"
+													aria-pressed="<?php echo $is_selected ? 'true' : 'false'; ?>"
+													aria-label="<?php echo esc_attr( $preset_icon ); ?>"
+												>
+													<span class="dashicons <?php echo esc_attr( $preset_icon ); ?>" aria-hidden="true"></span>
+												</button>
+											<?php endforeach; ?>
+										</div>
+										<div class="vkbm-icon-picker__field">
+											<span class="vkbm-icon-picker__preview dashicons <?php echo esc_attr( $resource_menu_icon ); ?>" aria-hidden="true"></span>
+											<input
+												type="text"
+												class="regular-text vkbm-icon-picker__input"
+												id="vkbm-resource-menu-icon"
+												name="vkbm_provider_settings[resource_menu_icon]"
+												value="<?php echo esc_attr( $resource_menu_icon ); ?>"
+											/>
+											<a
+												href="https://developer.wordpress.org/resource/dashicons/"
+												class="button"
+												target="_blank"
+												rel="noopener noreferrer"
+											><?php esc_html_e( 'Dashicons Library', 'vk-booking-manager' ); ?></a>
+										</div>
+										<p class="description">
+											<?php esc_html_e( 'Sets the icon shown next to the resource management menu in the admin sidebar.', 'vk-booking-manager' ); ?>
+										</p>
+										<p class="description">
+											<?php
+											printf(
+												/* translators: %s: default Dashicons class name. */
+												esc_html__( 'If left empty or an invalid value is entered, the default icon (%s) will be used.', 'vk-booking-manager' ),
+												esc_html( vkbm_get_default_resource_menu_icon() )
+											);
+											?>
+										</p>
+									</div>
 								</td>
 							</tr>
 
@@ -1556,6 +1706,46 @@ class Provider_Settings_Page {
 								/>
 								<p class="description">
 									<?php esc_html_e( 'Replaces the "Other conditions" notation in the menu card and notification emails.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-guests-count-label"><?php esc_html_e( 'Quantity label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-guests-count-label"
+									name="vkbm_provider_settings[guests_count_label]"
+									value="<?php echo esc_attr( $guests_count_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Replaces the "Number of guests" heading shown for multi-guest bookings on the reservation form, confirmation screen, and notification emails.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'If left empty, the default heading "Number of guests" is shown.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'The reservation target is not necessarily people (e.g. seats, rooms, items).', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row">
+								<label for="vkbm-guests-unit-label"><?php esc_html_e( 'Quantity unit', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-guests-unit-label"
+									name="vkbm_provider_settings[guests_unit_label]"
+									value="<?php echo esc_attr( $guests_unit_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'The unit shown after the quantity on the reservation form, confirmation screen, and notification emails. Examples: 名 / 台 / 室 / seats.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'If left empty, no unit is shown. To restore the default "guests", enter "guests".', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'A space is inserted between the number and the unit only when the unit begins with a single-byte letter (e.g. "5 seats"). Full-width units are placed directly after the number (e.g. "5名").', 'vk-booking-manager' ); ?>
 								</p>
 							</td>
 						</tr>
@@ -1792,9 +1982,9 @@ class Provider_Settings_Page {
 						</tr>
 					<?php if ( $show_license_tab ) : ?>
 						<?php if ( 'license' === $active_tab ) : ?>
-    					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
-    					<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
-    					<input type="hidden" name="vkbm_provider_settings[tax_label_text]" value="<?php echo esc_attr( $tax_label_text ); ?>" />
+						<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
+						<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
+						<input type="hidden" name="vkbm_provider_settings[tax_label_text]" value="<?php echo esc_attr( $tax_label_text ); ?>" />
 						<?php endif; ?>
 						<tr class="vkbm-provider-settings__tab-license">
 							<th scope="row">
@@ -1808,30 +1998,6 @@ class Provider_Settings_Page {
 									value="<?php echo esc_attr( $license_key ); ?>"
 									class="regular-text"
 								/>
-							</td>
-						</tr>
-						<tr class="vkbm-provider-settings__tab-license">
-							<th scope="row">
-								<label for="vkbm-license-url"><?php esc_html_e( 'License URL', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									id="vkbm-license-url"
-									value="<?php echo esc_attr( home_url() ); ?>"
-									class="regular-text"
-									readonly
-								/>
-								<p class="description"><?php
-									printf(
-										wp_kses(
-											/* translators: %s: URL of VWS license registration page */
-											__( 'Please <a href="%s" target="_blank" rel="noopener noreferrer">register with VWS</a> the license URL.', 'vk-booking-manager' ),
-											array( 'a' => array( 'href' => array(), 'target' => array(), 'rel' => array() ) )
-										),
-										esc_url( 'https://vws.vektor-inc.co.jp/my-account/license' )
-									);
-								?></p>
 							</td>
 						</tr>
 					<?php endif; ?>
@@ -1852,39 +2018,6 @@ class Provider_Settings_Page {
 		</div>
 		<?php
 	}
-	/**
-	 * Returns options for regular holiday frequency select.
-	 *
-	 * @return array<string, string>
-	 */
-	private function get_regular_holiday_frequency_options(): array {
-		return array(
-			'weekly' => __( 'Weekly', 'vk-booking-manager' ),
-			'nth-1'  => __( '1st', 'vk-booking-manager' ),
-			'nth-2'  => __( '2nd', 'vk-booking-manager' ),
-			'nth-3'  => __( '3rd', 'vk-booking-manager' ),
-			'nth-4'  => __( '4th', 'vk-booking-manager' ),
-			'nth-5'  => __( 'Fifth', 'vk-booking-manager' ),
-		);
-	}
-
-	/**
-	 * Returns weekday options used in regular holiday selection.
-	 *
-	 * @return array<string, string>
-	 */
-	private function get_weekday_options(): array {
-		return array(
-			'mon' => __( 'Monday', 'vk-booking-manager' ),
-			'tue' => __( 'Tuesday', 'vk-booking-manager' ),
-			'wed' => __( 'Wednesday', 'vk-booking-manager' ),
-			'thu' => __( 'Thursday', 'vk-booking-manager' ),
-			'fri' => __( 'Friday', 'vk-booking-manager' ),
-			'sat' => __( 'Saturday', 'vk-booking-manager' ),
-			'sun' => __( 'Sunday', 'vk-booking-manager' ),
-		);
-	}
-
 	/**
 	 * Day labels used for business hours table.
 	 *
@@ -2063,6 +2196,37 @@ class Provider_Settings_Page {
 	}
 
 	/**
+	 * リソースメニューアイコンのプリセット Dashicons クラス名一覧を返す。
+	 *
+	 * 「スタッフ」「ルーム」「コート」など、リソース種別として想定される用途を
+	 * カバーするアイコンを選定している。クリック選択用のグリッドに表示される。
+	 *
+	 * @return array<int, string> Dashicons クラス名の配列。
+	 */
+	private function get_resource_menu_icon_presets(): array {
+		return array(
+			'dashicons-groups',
+			'dashicons-businessperson',
+			'dashicons-businessman',
+			'dashicons-businesswoman',
+			'dashicons-admin-users',
+			'dashicons-id',
+			'dashicons-welcome-learn-more',
+			'dashicons-building',
+			'dashicons-admin-home',
+			'dashicons-admin-multisite',
+			'dashicons-store',
+			'dashicons-location',
+			'dashicons-calendar-alt',
+			'dashicons-products',
+			'dashicons-palmtree',
+			'dashicons-car',
+			'dashicons-pets',
+			'dashicons-clock',
+		);
+	}
+
+	/**
 	 * Sanitize previously submitted input for redisplay after validation errors.
 	 *
 	 * @param array<string, mixed> $input Raw input array.
@@ -2071,18 +2235,44 @@ class Provider_Settings_Page {
 	private function sanitize_old_input( array $input ): array {
 		$output = array();
 
-		$output['provider_name']                                  = sanitize_text_field( $input['provider_name'] ?? '' );
-		$output['provider_address']                               = sanitize_textarea_field( $input['provider_address'] ?? '' );
-		$output['provider_phone']                                 = sanitize_text_field( $input['provider_phone'] ?? '' );
-		$output['provider_payment_method']                        = sanitize_textarea_field( $input['provider_payment_method'] ?? '' );
-		$output['staff_enabled']                                  = ! empty( $input['staff_enabled'] );
-		$output['resource_label_singular']                        = sanitize_text_field( $input['resource_label_singular'] ?? __( 'Staff', 'vk-booking-manager' ) );
-		$output['resource_label_plural']                          = sanitize_text_field( $input['resource_label_plural'] ?? __( 'Staff', 'vk-booking-manager' ) );
-		$output['resource_label_menu']                            = sanitize_text_field( $input['resource_label_menu'] ?? __( 'Staff available', 'vk-booking-manager' ) );
-		$output['no_nomination_label']                            = sanitize_text_field( $input['no_nomination_label'] ?? '' );
-		$output['nomination_fee_label']                           = sanitize_text_field( $input['nomination_fee_label'] ?? '' );
-		$output['duration_label']                                = sanitize_text_field( $input['duration_label'] ?? __( 'Time', 'vk-booking-manager' ) );
-		$output['other_conditions_label']                        = sanitize_text_field( $input['other_conditions_label'] ?? __( 'Other conditions', 'vk-booking-manager' ) );
+		$output['provider_name']           = sanitize_text_field( $input['provider_name'] ?? '' );
+		$output['provider_address']        = sanitize_textarea_field( $input['provider_address'] ?? '' );
+		$output['provider_phone']          = sanitize_text_field( $input['provider_phone'] ?? '' );
+		$output['provider_payment_method'] = sanitize_textarea_field( $input['provider_payment_method'] ?? '' );
+		$output['staff_enabled']           = ! empty( $input['staff_enabled'] );
+		// 無料版では指名機能は常に無効のため、再表示時も無効へ強制し保存経路と一致させる。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$output['staff_enabled'] = false;
+		}
+		// 予約枠の定員（同一枠で複数人を受け入れる）機能の有効/無効を再表示用に復元する。
+		// セレクトが送信されていない（指名ON時の disabled など）場合は有効として扱い、後方互換を維持する。
+		// 新キー slot_capacity_enabled を優先し、旧キー multiple_guests_enabled の送信にもフォールバックする。
+		if ( array_key_exists( 'slot_capacity_enabled', $input ) ) {
+			$output['slot_capacity_enabled'] = ! empty( $input['slot_capacity_enabled'] );
+		} elseif ( array_key_exists( 'multiple_guests_enabled', $input ) ) {
+			$output['slot_capacity_enabled'] = ! empty( $input['multiple_guests_enabled'] );
+		} else {
+			$output['slot_capacity_enabled'] = true;
+		}
+		// 無料版では予約枠の定員機能は常に無効のため、再表示時も無効へ強制する。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$output['slot_capacity_enabled'] = false;
+		}
+		$output['resource_label_singular'] = sanitize_text_field( $input['resource_label_singular'] ?? __( 'Staff', 'vk-booking-manager' ) );
+		$output['resource_label_plural']   = sanitize_text_field( $input['resource_label_plural'] ?? __( 'Staff', 'vk-booking-manager' ) );
+		$output['resource_label_menu']     = sanitize_text_field( $input['resource_label_menu'] ?? __( 'Staff available', 'vk-booking-manager' ) );
+		$output['resource_menu_icon']      = vkbm_sanitize_resource_menu_icon( $input['resource_menu_icon'] ?? '' );
+		$output['no_nomination_label']     = sanitize_text_field( $input['no_nomination_label'] ?? '' );
+		$output['nomination_fee_label']    = sanitize_text_field( $input['nomination_fee_label'] ?? '' );
+		$output['duration_label']          = sanitize_text_field( $input['duration_label'] ?? __( 'Time', 'vk-booking-manager' ) );
+		$output['other_conditions_label']  = sanitize_text_field( $input['other_conditions_label'] ?? __( 'Other conditions', 'vk-booking-manager' ) );
+		// 数量の見出しは兄弟ラベル同様に送信値を復元する（空欄は空のまま保持し、表示側で既定へフォールバック）。
+		$output['guests_count_label'] = sanitize_text_field( $input['guests_count_label'] ?? '' );
+		// 数量の単位は送信文字列をそのまま復元する（空欄＝単位なしの意図も保持する）。
+		// フォームは実効値をプリフィルするため、検証エラー再表示時もキーは送信される想定。
+		$output['guests_unit_label']                              = array_key_exists( 'guests_unit_label', $input )
+			? sanitize_text_field( (string) $input['guests_unit_label'] )
+			: null;
 			$output['provider_business_hours']                    = sanitize_textarea_field( $input['provider_business_hours'] ?? '' );
 			$output['provider_reservation_deadline_hours']        = absint( $input['provider_reservation_deadline_hours'] ?? 0 );
 			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? 0 );
@@ -2684,45 +2874,19 @@ class Provider_Settings_Page {
 	/**
 	 * Render a regular holiday table row.
 	 *
-	 * @param string                $index             Row index.
-	 * @param array<string, string> $frequency_options Frequency options.
-	 * @param array<string, string> $weekday_options   Weekday options.
-	 * @param array<string, string> $value             Current values.
+	 * @param string                $index Row index.
+	 * @param array<string, string> $value Current values.
 	 * @return string
 	 */
-	private function render_regular_holiday_row( string $index, array $frequency_options, array $weekday_options, array $value ): string {
-		$frequency_value = $value['frequency'] ?? 'weekly';
-		$weekday_value   = $value['weekday'] ?? 'mon';
-
-		ob_start();
-		?>
-		<tr class="vkbm-regular-holiday-row" data-index="<?php echo esc_attr( $index ); ?>">
-			<td>
-				<select name="vkbm_provider_settings[provider_regular_holidays][<?php echo esc_attr( $index ); ?>][frequency]">
-					<?php foreach ( $frequency_options as $option_value => $option_label ) : ?>
-						<option value="<?php echo esc_attr( $option_value ); ?>" <?php selected( $frequency_value, $option_value ); ?>>
-							<?php echo esc_html( $option_label ); ?>
-						</option>
-					<?php endforeach; ?>
-				</select>
-			</td>
-			<td>
-				<select name="vkbm_provider_settings[provider_regular_holidays][<?php echo esc_attr( $index ); ?>][weekday]">
-					<?php foreach ( $weekday_options as $option_value => $option_label ) : ?>
-						<option value="<?php echo esc_attr( $option_value ); ?>" <?php selected( $weekday_value, $option_value ); ?>>
-							<?php echo esc_html( $option_label ); ?>
-						</option>
-					<?php endforeach; ?>
-				</select>
-			</td>
-			<td class="column-actions">
-				<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-regular-holiday-remove">
-					<?php esc_html_e( 'delete', 'vk-booking-manager' ); ?>
-				</button>
-			</td>
-		</tr>
-		<?php
-
-		return (string) ob_get_clean();
+	private function render_regular_holiday_row( string $index, array $value ): string {
+		// 行マークアップ（頻度・曜日の選択肢を含む）は共有ユーティリティに集約している。
+		// 定休日 UI 固有の name 接頭辞・JS がフックする行/削除ボタンのクラス名を引数で渡し、従来と同一の出力を維持する。
+		return Weekday_Rule::render_row(
+			'vkbm_provider_settings[provider_regular_holidays]',
+			$index,
+			$value,
+			'vkbm-regular-holiday-row',
+			'vkbm-regular-holiday-remove'
+		);
 	}
 }

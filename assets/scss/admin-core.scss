@@ -4,28 +4,34 @@
  * 管理画面専用のスタイルはここに追加してください。
  */
 
- .vkbm-booking-meta {
+.vkbm-booking-meta {
+
 	.form-table {
+
 		th {
 			white-space: nowrap;
 		}
+
 		td {
 			width: 100%;
+
 			select {
 				width: 100%;
 			}
+
 			select,
 			input[type="text"],
 			textarea {
 				min-width: 0 !important;
 			}
 		}
+
 		.vkbm-booking-meta__time-label {
 			display: inline-block;
-			margin-bottom:10px;
+			margin-bottom: 10px;
 		}
 	}
- }
+}
 
 .vkbm-booking-attachments {
 	display: flex;
@@ -40,8 +46,9 @@
 	margin: 0;
 	padding: 0;
 	list-style: none;
+
 	li {
-		text-box:none;
+		text-box: none;
 	}
 }
 
@@ -108,13 +115,15 @@
 }
 
 .vkbm-service-menu-field {
-	margin-bottom:1em;
+	margin-bottom: 1em;
+
 	label {
 		display: block;
-		margin-bottom:5px;
+		margin-bottom: 5px;
 	}
-	input:is( [type="number"],[type="text"] ){
-		margin-bottom:var(--vkbm--spacing--xs);
+
+	input:is([type="number"],[type="text"]) {
+		margin-bottom: var(--vkbm--spacing--xs);
 	}
 }
 
@@ -125,12 +134,177 @@
 	margin-bottom: var(--vkbm--spacing--xs);
 }
 
-.vkbm-booking-quick-edit {
-	#wpbody-content .inline-edit-row-page & {
-		margin-top:15px;
+/**
+ * サービスメニュー編集：予約可能日の「曜日指定／日付指定」詳細パネル。
+ * プルダウンで選んだ種別に応じて JS が出し分ける（非表示側は hidden 属性）。
+ */
+.vkbm-reservation-day-custom {
+	// プルダウンとの間に余白を取り、詳細UIが独立したグループに見えるようにする.
+	margin-top: var(--vkbm--spacing--sm);
+}
+
+.vkbm-reservation-day-fieldset {
+	margin: 0;
+	padding: 0;
+	border: 0;
+
+	> legend {
+		padding: 0;
+		margin-bottom: var(--vkbm--spacing--xs);
+		font-weight: 600;
 	}
-	.inline-edit-group label .title {
-		width:8em;
+}
+
+// 日付指定の1行（種別セレクト＋単日入力／期間入力＋削除ボタン）。
+// 狭い幅でも崩れないよう、要素間に余白を取りつつ折り返しを許可する.
+.vkbm-reservation-custom-date-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: var(--vkbm--spacing--xs);
+}
+
+// 期間指定（開始〜終了）はラベルと記号を1セットとして扱い、途中で分断させない.
+.vkbm-reservation-custom-date-range {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+/**
+ * サービスメニュー編集：料金区分（大人料金・子供料金など）リピーター。
+ */
+.vkbm-price-tiers-list {
+	margin-bottom: var(--vkbm--spacing--xs);
+}
+
+.vkbm-price-tier-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: var(--vkbm--spacing--xs);
+}
+
+// 区分料金の単位（通貨記号・税込ラベル）は入力欄に詰めて表示する.
+.vkbm-price-tier-unit,
+.vkbm-price-tier-tax {
+	white-space: nowrap;
+}
+
+// 列ヘッダ（区分名／料金）。入力列と幅を揃えて見出しとして1度だけ表示する.
+.vkbm-price-tier-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: var(--vkbm--spacing--xs);
+	font-weight: 600;
+}
+
+/**
+ * サービスメニュー編集：ユーザーによる貸し切り指定の第二段（貸切料金・適用しない申込人数）。
+ * 「予約者による貸切指定を受け付ける」ON 時のみ表示する従属フィールド群。
+ * 左に細い区切り線とインデントを付けて、親チェックボックスへの従属関係を視覚的に示す。
+ */
+.vkbm-exclusive-fee-fields {
+	margin-top: var(--vkbm--spacing--xs);
+	padding-left: var(--vkbm--spacing--sm);
+	border-left: 2px solid var(--vkbm--admin--color--border, #dcdcde);
+
+	// 各行（ラベル＋入力＋単位）の間に余白を取り、行同士がくっつかないようにする.
+	> p {
+		margin: 0 0 var(--vkbm--spacing--xs);
+	}
+}
+
+// design-rules の「1セット1行に分ける」に従い、ラベル見出しを上・入力行を下に縦積みする。
+// 2つのラベル（貸切料金／適用しない申込人数）は見出しの長さが大きく異なるため、横並びで
+// 入力欄の x 座標を揃えるより、見出しを上に置いて入力欄の左端を自然に揃える方が崩れない。
+.vkbm-exclusive-fee-label {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+
+	// 見出しは語の途中で改行されないようにする（.text-nowrap と二重でも無害）。
+	> .text-nowrap:first-child {
 		white-space: nowrap;
 	}
+
+	// 入力欄と単位（￥・/人）はひとかたまりにして、単位だけが改行で取り残されないようにする。
+	> .text-nowrap:nth-child(2) {
+		display: inline-flex;
+		align-items: center;
+		white-space: nowrap;
+	}
+
+	input {
+		margin: 0 4px;
+	}
+}
+
+.vkbm-booking-quick-edit {
+
+	#wpbody-content .inline-edit-row-page & {
+		margin-top: 15px;
+	}
+
+	.inline-edit-group label .title {
+		width: 8em;
+		white-space: nowrap;
+	}
+}
+
+/**
+ * 予約編集画面：スタッフ別人数配分リピーター。
+ */
+.vkbm-staff-distribution {
+
+	&__table {
+		// 列を内容幅に詰めて左寄せにし、削除を人数のすぐ右へ近づける。
+		width: auto;
+		margin: 0 0 8px;
+		border-collapse: collapse;
+
+		// すべてのセルを左寄せ・上下中央・左パディング0にして、
+		// 見出しとデータ（プルダウン／入力欄／削除）の左端を揃える。
+		th,
+		td {
+			padding: 4px 24px 4px 0;
+			text-align: left;
+			vertical-align: middle;
+		}
+
+		// フォーム要素の既定マージンを消して左端ずれを防ぐ。
+		select,
+		input {
+			margin: 0;
+		}
+	}
+
+	&__guests {
+		width: 5em;
+	}
+
+	&__remove {
+		// 「削除」が縦に折り返さないようにする。
+		white-space: nowrap;
+		color: #b32d2e;
+
+		&:hover,
+		&:focus {
+			color: #8a1f1f;
+		}
+	}
+
+	&__total {
+		font-weight: 600;
+	}
+}
+
+// スタッフ選択の幅を指定し、form-table の `select { width: 100% }` を上書きする。
+.vkbm-booking-meta .form-table .vkbm-staff-distribution__staff {
+	width: 14em;
+	max-width: 100%;
 }

@@ -60,7 +60,6 @@
 			{ value: STATUS.TEMPORARY_CLOSED, label: 'Temporary closure' }
 		);
 	}
-	const statusLabelText = config.strings?.statusLabel || 'operational status';
 	const closedMessage =
 		config.strings?.closedMessage ||
 		'You cannot set the time zone in this status.';
@@ -638,8 +637,10 @@
 						$slot.find( 'select[data-field="end_minute"]' ).val() ||
 						'';
 
-					const start = sanitizeTime( `${startHour}:${startMinute}` );
-					const end = sanitizeTime( `${endHour}:${endMinute}` );
+					const start = sanitizeTime(
+						`${ startHour }:${ startMinute }`
+					);
+					const end = sanitizeTime( `${ endHour }:${ endMinute }` );
 
 					if ( start && end && end > start ) {
 						slots.push( { start, end } );
@@ -768,7 +769,7 @@
 			! Array.isArray( dayData.slots ) ||
 			0 === dayData.slots.length
 		) {
-			const defaultSlots = getDefaultSlots( dayKey );
+			const defaultSlots = [ createEmptySlot() ];
 
 			if ( defaultSlots.length ) {
 				dayData.slots = cloneSlots( defaultSlots );

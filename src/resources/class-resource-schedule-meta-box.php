@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Resource schedule meta box handler.
  *

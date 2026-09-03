@@ -1,6 +1,7 @@
 .inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group {
 	margin: 12px 0;
 }
+
 .inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label {
 	display: grid;
 	grid-template-columns: 10em 1fr;
@@ -8,6 +9,7 @@
 	column-gap: 8px;
 	margin: 0 0 8px;
 }
+
 .inline-edit-row .vkbm-service-menu-quick-edit label {
 	line-height: 1.5;
 }
@@ -27,7 +29,7 @@
 	margin-left: 0;
 }
 
-.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap input:where(:not([type='checkbox'])) {
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap input:where(:not([type="checkbox"])) {
 	width: 10em;
 	max-width: 100%;
 }
@@ -40,7 +42,6 @@
 
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes {
 	margin: 0;
-	padding: 0;
 	list-style: none;
 	max-height: 10em;
 	overflow: auto;
@@ -63,6 +64,6 @@
 	gap: 6px;
 }
 
-.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes input[type='checkbox'] {
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes input[type="checkbox"] {
 	margin: 0;
 }

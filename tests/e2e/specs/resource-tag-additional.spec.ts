@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
 import {
 	wpCli,
+	wpCliArgs,
 	wpEvalPhp,
 	loginAsAdmin,
 	getStaffId,
 	setStaffEnabled,
+	resolvePluginSlug,
 } from '../utils/helpers';
 import {
 	setResourceTags,
@@ -19,10 +21,17 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 	test.beforeAll( () => {
 		// プラグインが有効であることを確認
 		// Ensure the plugin is active.
+		// プラグインスラッグは wp-env のマウント元ディレクトリ名に一致するため、
+		// CI（vk-booking-manager-pro）と worktree（agent-xxxx 等）で異なる場合がある。
+		// 動的に解決することで両環境で確実に動作させる。
+		// The plugin slug equals the wp-env mounted directory name, which differs
+		// between CI (vk-booking-manager-pro) and worktrees (agent-xxxx).
+		// Resolve it dynamically so both environments work correctly.
+		const pluginSlug = resolvePluginSlug();
 		try {
-			wpCli( 'plugin is-active vk-booking-manager-pro' );
+			wpCliArgs( [ 'plugin', 'is-active', pluginSlug ] );
 		} catch {
-			wpCli( 'plugin activate vk-booking-manager-pro' );
+			wpCliArgs( [ 'plugin', 'activate', pluginSlug ] );
 		}
 
 		// 前のテスト（staff-nomination-toggle 等）で staff_enabled が無効にされている可能性があるため、

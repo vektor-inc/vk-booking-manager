@@ -1,5 +1,4 @@
 <?php
-
 /**
  * REST controller for current user bookings.
  *
@@ -14,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -55,6 +55,8 @@ class My_Bookings_Controller {
 	private const META_NOMINATION_FEE     = '_vkbm_booking_nomination_fee';
 	private const META_BASE_PRICE         = '_vkbm_booking_service_base_price';
 	private const META_BASE_TOTAL_PRICE   = '_vkbm_booking_base_total_price';
+	private const META_GUESTS             = '_vkbm_booking_guests';
+	private const META_GUEST_TIERS        = '_vkbm_booking_guest_tiers';
 	private const META_STATUS             = '_vkbm_booking_status';
 
 	/**
@@ -144,7 +146,8 @@ class My_Bookings_Controller {
 		$cancel_hours = isset( $settings['provider_booking_cancel_deadline_hours'] ) ? (int) $settings['provider_booking_cancel_deadline_hours'] : 24;
 
 		$future_only = (bool) $request->get_param( 'future_only' );
-		$now         = (int) current_time( 'timestamp' );
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
+		$now = (int) current_time( 'timestamp' );
 
 		$query = new \WP_Query(
 			array(
@@ -198,13 +201,26 @@ class My_Bookings_Controller {
 			$end_at             = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_SERVICE_END, true ) );
 			$is_staff_preferred = '1' === (string) get_post_meta( $booking_id, self::META_IS_STAFF_PREFERRED, true );
 			$nomination_fee     = (int) get_post_meta( $booking_id, self::META_NOMINATION_FEE, true );
-			$base_price         = (int) get_post_meta( $booking_id, self::META_BASE_PRICE, true );
-			$has_base_total     = metadata_exists( 'post', $booking_id, self::META_BASE_TOTAL_PRICE );
-			$base_total         = $has_base_total ? (int) get_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, true ) : max( 0, $base_price + $nomination_fee );
+			// 基本料金スナップショット。未保存の旧予約はメニューの _vkbm_base_price をフォールバックに使う
+			// （管理画面 render_meta_box と同じ挙動。¥0 表示・合計の過小計算を防ぐ）。
+			$base_price = metadata_exists( 'post', $booking_id, self::META_BASE_PRICE )
+				? (int) get_post_meta( $booking_id, self::META_BASE_PRICE, true )
+				: ( $menu_id > 0 ? max( 0, (int) get_post_meta( $menu_id, '_vkbm_base_price', true ) ) : 0 );
+			// 予約人数（複数人予約）。未設定の既存予約は1名として扱う。
+			$guests = max( 1, (int) get_post_meta( $booking_id, self::META_GUESTS, true ) );
+			// 料金区分の人数内訳スナップショット。未設定の既存予約は空配列（従来表示）。
+			$guest_tiers    = Price_Tiers::normalize_guest_tiers( get_post_meta( $booking_id, self::META_GUEST_TIERS, true ) );
+			$has_base_total = metadata_exists( 'post', $booking_id, self::META_BASE_TOTAL_PRICE );
+			$base_total     = $has_base_total ? (int) get_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, true ) : max( 0, ( $base_price * $guests ) + $nomination_fee );
 
 			if ( ! Staff_Editor::is_nomination_enabled() ) {
 				$nomination_fee = 0;
-				$base_total     = max( 0, $base_price );
+				// 保存済みの基本料金合計があるときは、予約時に確定した（実際に請求した）金額を保持する。
+				// 指名ON時に作成され後で指名OFFになった予約で、合計が書き換わるのを防ぐ。
+				// 保存値が無い場合のみ「基本料金 × 人数」で再計算する。
+				if ( ! $has_base_total ) {
+					$base_total = max( 0, $base_price * $guests );
+				}
 			}
 			$status = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_STATUS, true ) );
 
@@ -214,6 +230,10 @@ class My_Bookings_Controller {
 				'id'                 => $booking_id,
 				'start_at'           => $start_at,
 				'end_at'             => $end_at,
+				// 過去の予約かどうか（開始日時が現在より前）。タイムゾーン依存の判定を
+				// サーバ側に寄せ、フロントの誤判定を防ぐ。「同じ内容で予約する」での
+				// 過去／今後セクションの振り分けに使う。
+				'is_past'            => ( $start_timestamp < $now ),
 				'can_cancel'         => $can_cancel,
 				'is_staff_preferred' => $is_staff_preferred,
 				'other_conditions'   => $other_conditions,
@@ -222,6 +242,8 @@ class My_Bookings_Controller {
 				'resource_id'        => $resource_id,
 				'resource_name'      => $resource_name,
 				'base_price'         => $base_price,
+				'guests'             => $guests,
+				'guest_tiers'        => $guest_tiers,
 				'nomination_fee'     => $nomination_fee,
 				'total_price'        => max( 0, $base_total ),
 				'status'             => $status,
@@ -276,6 +298,7 @@ class My_Bookings_Controller {
 			return new WP_Error( 'invalid_booking', __( 'The reservation date and time is invalid.', 'vk-booking-manager' ), array( 'status' => 400 ) );
 		}
 
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
 		$now    = (int) current_time( 'timestamp' );
 		$status = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_STATUS, true ) );
 
