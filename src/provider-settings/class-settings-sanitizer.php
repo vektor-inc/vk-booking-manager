@@ -75,7 +75,9 @@ class Settings_Sanitizer {
 		$this->errors       = array();
 		$this->field_errors = array();
 
-		$data = array_merge( $defaults, $input );
+		$data                    = array_merge( $defaults, $input );
+		$data['industry_preset'] = Industry_Presets::sanitize_preset_key( $input['industry_preset'] ?? 'custom' );
+		$data['industry_preset'] = Industry_Presets::get_current_preset( $data, $defaults );
 
 		$data['provider_name']           = sanitize_text_field( $data['provider_name'] );
 		$data['provider_address']        = sanitize_textarea_field( $data['provider_address'] );
@@ -271,8 +273,9 @@ class Settings_Sanitizer {
 	 *
 	 * - フォームから送信されていない（$input に新旧いずれのキーも無い）場合は、マージ済みの値を尊重する。
 	 *   既定値は true のため、未送信時は既存保存値（無ければ true）が維持される。
-	 *   これにより、指名機能ON時にセレクトが disabled で送信されないケースや、
-	 *   プログラム的な部分保存でも既存の挙動を変えない。
+	 *   #392 より前は指名機能ON時にこのセレクトが disabled で送信されない仕様だったため、
+	 *   このフォールバックが実質的な既定値の担保になっていた。#392 でその disabled 化を撤廃した
+	 *   後も、プログラム的な部分保存など「フォームを介さない保存」で値が来ないケースのために残す。
 	 * - 新キー（slot_capacity_enabled）が送信されていればそれを優先し、
 	 *   旧キー（multiple_guests_enabled）が送信されていれば旧キーを見る（未リリース段階の後方互換）。
 	 * - 送信されている場合は真偽値へ変換した値を返す（'0' / '' は false、'1' は true）。

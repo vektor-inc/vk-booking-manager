@@ -313,4 +313,44 @@
 		font-size: 24px;
 		color: #1d2327;
 	}
+
+	/* 業種プリセットの自動設定要約
+	   ========================================================================== */
+	.vkbm-industry-preset-summary {
+		margin-top: var(--vkbm--spacing--sm);
+		padding: var(--vkbm--spacing--sm) var(--vkbm--spacing--md);
+
+		/* 背景 #f0f6fc に対するコントラスト比は約3.75:1で、
+		   UIコンポーネント境界線に必要な WCAG 2.1 AA 基準 3:1 を満たす。 */
+		border-left: 4px solid #3582c4;
+		background: #f0f6fc;
+	}
+
+	.vkbm-industry-preset-summary__toggle {
+		font-weight: 600;
+	}
+
+	.vkbm-industry-preset-summary__content {
+		margin-top: var(--vkbm--spacing--sm);
+	}
+
+	.vkbm-industry-preset-summary__list {
+		display: grid;
+		grid-template-columns: minmax(12em, max-content) 1fr;
+		gap: var(--vkbm--spacing--xs) var(--vkbm--spacing--md);
+		margin: 0 0 var(--vkbm--spacing--sm);
+
+		dt {
+			font-weight: 600;
+		}
+
+		dd {
+			margin: 0;
+		}
+	}
+
+	.vkbm-industry-preset-applied-message {
+		margin-top: var(--vkbm--spacing--xs);
+		color: #2271b1;
+	}
 }

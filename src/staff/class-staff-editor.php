@@ -54,6 +54,45 @@ class Staff_Editor {
 	}
 
 	/**
+	 * サービスメニュー単位の指名機能有効判定（#391）。
+	 *
+	 * Free版では指名機能自体が常に無効のため、メニューIDに関わらず常に false を返す。
+	 * Pro版とのAPI互換性のために定義する。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID（Free版では未使用）。
+	 * @return bool
+	 */
+	public static function is_nomination_enabled_for_menu( int $menu_id ): bool {
+		return false;
+	}
+
+	/**
+	 * このメニューで予約枠の定員2以上・複数人一括予約・料金区分を利用できるかどうか（#412 C-3 / #392）。
+	 *
+	 * Free版ではこれらの機能自体が常に無効のため、メニューIDに関わらず常に false を返す。
+	 * Pro版とのAPI互換性のために定義する。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID（Free版では未使用）。
+	 * @return bool
+	 */
+	public static function is_multi_guest_available_for_menu( int $menu_id ): bool {
+		return false;
+	}
+
+	/**
+	 * このメニューで貸し切り予約・予約者による貸切指定・貸切料金を利用できるかどうか（#392）。
+	 *
+	 * Free版ではこれらの機能自体が常に無効のため、メニューIDに関わらず常に false を返す。
+	 * Pro版とのAPI互換性のために定義する。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID（Free版では未使用）。
+	 * @return bool
+	 */
+	public static function is_exclusive_booking_available_for_menu( int $menu_id ): bool {
+		return false;
+	}
+
+	/**
 	 * 指名機能キャッシュをクリアする（Free版では no-op）。
 	 *
 	 * Pro版とのAPI互換性のために定義する。Free版では指名機能・予約枠の定員機能とも

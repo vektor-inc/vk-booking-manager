@@ -10,6 +10,12 @@ use VariableAnalysis\Lib\EnumInfo;
 use VariableAnalysis\Lib\ScopeType;
 use VariableAnalysis\Lib\VariableInfo;
 use PHP_CodeSniffer\Util\Tokens;
+use PHPCSUtils\Utils\Conditions;
+use PHPCSUtils\Utils\Context;
+use PHPCSUtils\Utils\FunctionDeclarations;
+use PHPCSUtils\Utils\Lists;
+use PHPCSUtils\Utils\Parentheses;
+use PHPCSUtils\Utils\PassedParameters;
 
 class Helpers
 {
@@ -90,36 +96,27 @@ class Helpers
 	 */
 	public static function findContainingOpeningBracket(File $phpcsFile, $stackPtr)
 	{
-		$tokens = $phpcsFile->getTokens();
-		if (isset($tokens[$stackPtr]['nested_parenthesis'])) {
-			/**
-			 * @var list<int|string>
-			 */
-			$openPtrs = array_keys($tokens[$stackPtr]['nested_parenthesis']);
-			return (int)end($openPtrs);
-		}
-		return null;
+		// Use PHPCSUtils to get the innermost parenthesis opener
+		$result = Parentheses::getLastOpener($phpcsFile, $stackPtr);
+
+		// PHPCSUtils returns false on failure, but our code expects null
+		return $result !== false ? $result : null;
 	}
 
 	/**
-	 * @param array{conditions: (int|string)[], content: string} $token
+	 * @param File $phpcsFile
+	 * @param int  $stackPtr
 	 *
 	 * @return bool
 	 */
-	public static function areAnyConditionsAClass(array $token)
+	public static function areAnyConditionsAClass(File $phpcsFile, $stackPtr)
 	{
-		$conditions = $token['conditions'];
 		$classlikeCodes = [T_CLASS, T_ANON_CLASS, T_TRAIT];
 		if (defined('T_ENUM')) {
 			$classlikeCodes[] = T_ENUM;
 		}
 		$classlikeCodes[] = 'PHPCS_T_ENUM';
-		foreach (array_reverse($conditions, true) as $scopeCode) {
-			if (in_array($scopeCode, $classlikeCodes, true)) {
-				return true;
-			}
-		}
-		return false;
+		return Conditions::hasCondition($phpcsFile, $stackPtr, $classlikeCodes);
 	}
 
 	/**
@@ -284,17 +281,14 @@ class Helpers
 	{
 		$tokens = $phpcsFile->getTokens();
 
-		$nonUseTokenTypes = Tokens::$emptyTokens;
-		$nonUseTokenTypes[] = T_VARIABLE;
-		$nonUseTokenTypes[] = T_ELLIPSIS;
-		$nonUseTokenTypes[] = T_COMMA;
-		$nonUseTokenTypes[] = T_BITWISE_AND;
-		$openParenPtr = self::getIntOrNull($phpcsFile->findPrevious($nonUseTokenTypes, $stackPtr - 1, null, true, null, true));
-		if (! is_int($openParenPtr) || $tokens[$openParenPtr]['code'] !== T_OPEN_PARENTHESIS) {
+		$openParenPtr = self::findContainingOpeningBracket($phpcsFile, $stackPtr);
+		if (! is_int($openParenPtr)) {
 			return null;
 		}
 
-		$usePtr = self::getIntOrNull($phpcsFile->findPrevious(array_values($nonUseTokenTypes), $openParenPtr - 1, null, true, null, true));
+		$usePtr = self::getIntOrNull(
+			$phpcsFile->findPrevious(Tokens::$emptyTokens, $openParenPtr - 1, null, true, null, true)
+		);
 		if (! is_int($usePtr) || $tokens[$usePtr]['code'] !== T_USE) {
 			return null;
 		}
@@ -340,7 +334,7 @@ class Helpers
 	 * @param File $phpcsFile
 	 * @param int  $stackPtr
 	 *
-	 * @return array<int, array<int>>
+	 * @return array<int|string, array<string, int|string>>
 	 */
 	public static function findFunctionCallArguments(File $phpcsFile, $stackPtr)
 	{
@@ -355,38 +349,7 @@ class Helpers
 			}
 		}
 
-		// $stackPtr is the function name, find our brackets after it
-		$openPtr = $phpcsFile->findNext(Tokens::$emptyTokens, $stackPtr + 1, null, true, null, true);
-		if (($openPtr === false) || ($tokens[$openPtr]['code'] !== T_OPEN_PARENTHESIS)) {
-			return [];
-		}
-
-		if (!isset($tokens[$openPtr]['parenthesis_closer'])) {
-			return [];
-		}
-		$closePtr = $tokens[$openPtr]['parenthesis_closer'];
-
-		$argPtrs = [];
-		$lastPtr = $openPtr;
-		$lastArgComma = $openPtr;
-		$nextPtr = $phpcsFile->findNext([T_COMMA], $lastPtr + 1, $closePtr);
-		while (is_int($nextPtr)) {
-			if (self::findContainingOpeningBracket($phpcsFile, $nextPtr) === $openPtr) {
-				// Comma is at our level of brackets, it's an argument delimiter.
-				$range = range($lastArgComma + 1, $nextPtr - 1);
-				array_push($argPtrs, $range);
-				$lastArgComma = $nextPtr;
-			}
-			$lastPtr = $nextPtr;
-			$nextPtr = $phpcsFile->findNext([T_COMMA], $lastPtr + 1, $closePtr);
-		}
-		$range = range($lastArgComma + 1, $closePtr - 1);
-		$range = array_filter($range, function ($element) {
-			return is_int($element);
-		});
-		array_push($argPtrs, $range);
-
-		return $argPtrs;
+		return PassedParameters::getParameters($phpcsFile, $stackPtr);
 	}
 
 	/**
@@ -461,9 +424,9 @@ class Helpers
 	/**
 	 * Return the variable names and positions of each variable targetted by a `compact()` call.
 	 *
-	 * @param File                   $phpcsFile
-	 * @param int                    $stackPtr
-	 * @param array<int, array<int>> $arguments The stack pointers of each argument; see findFunctionCallArguments
+	 * @param File                                         $phpcsFile
+	 * @param int                                          $stackPtr
+	 * @param array<int|string, array<string, int|string>> $arguments The parameters from PassedParameters::getParameters()
 	 *
 	 * @return array<VariableInfo> each variable's firstRead position and its name; other VariableInfo properties are not set!
 	 */
@@ -472,36 +435,50 @@ class Helpers
 		$tokens = $phpcsFile->getTokens();
 		$variablePositionsAndNames = [];
 
-		foreach ($arguments as $argumentPtrs) {
-			$argumentPtrs = array_values(array_filter($argumentPtrs, function ($argumentPtr) use ($tokens) {
-				return isset(Tokens::$emptyTokens[$tokens[$argumentPtr]['code']]) === false;
-			}));
-			if (empty($argumentPtrs)) {
+		foreach ($arguments as $param) {
+			// Find the first non-empty token in this argument's range.
+			$firstNonEmpty = null;
+			$nonEmptyCount = 0;
+			for ($i = (int)$param['start']; $i <= (int)$param['end']; $i++) {
+				if (!isset(Tokens::$emptyTokens[$tokens[$i]['code']])) {
+					if ($firstNonEmpty === null) {
+						$firstNonEmpty = $i;
+					}
+					$nonEmptyCount++;
+				}
+			}
+
+			if ($firstNonEmpty === null) {
 				continue;
 			}
-			if (!isset($tokens[$argumentPtrs[0]])) {
-				continue;
-			}
-			$argumentFirstToken = $tokens[$argumentPtrs[0]];
+
+			$argumentFirstToken = $tokens[$firstNonEmpty];
+
 			if ($argumentFirstToken['code'] === T_ARRAY) {
 				// It's an array argument, recurse.
-				$arrayArguments = self::findFunctionCallArguments($phpcsFile, $argumentPtrs[0]);
-				$variablePositionsAndNames = array_merge($variablePositionsAndNames, self::getVariablesInsideCompact($phpcsFile, $stackPtr, $arrayArguments));
+				$arrayArguments = PassedParameters::getParameters($phpcsFile, $firstNonEmpty);
+				$variablePositionsAndNames = array_merge(
+					$variablePositionsAndNames,
+					self::getVariablesInsideCompact($phpcsFile, $stackPtr, $arrayArguments)
+				);
 				continue;
 			}
-			if (count($argumentPtrs) > 1) {
+
+			if ($nonEmptyCount > 1) {
 				// Complex argument, we can't handle it, ignore.
 				continue;
 			}
+
 			if ($argumentFirstToken['code'] === T_CONSTANT_ENCAPSED_STRING) {
 				// Single-quoted string literal, ie compact('whatever').
 				// Substr is to strip the enclosing single-quotes.
 				$varName = substr($argumentFirstToken['content'], 1, -1);
 				$variable = new VariableInfo($varName);
-				$variable->firstRead = $argumentPtrs[0];
+				$variable->firstRead = $firstNonEmpty;
 				$variablePositionsAndNames[] = $variable;
 				continue;
 			}
+
 			if ($argumentFirstToken['code'] === T_DOUBLE_QUOTED_STRING) {
 				// Double-quoted string literal.
 				$regexp = Constants::getDoubleQuotedVarRegexp();
@@ -512,9 +489,8 @@ class Helpers
 				// Substr is to strip the enclosing double-quotes.
 				$varName = substr($argumentFirstToken['content'], 1, -1);
 				$variable = new VariableInfo($varName);
-				$variable->firstRead = $argumentPtrs[0];
+				$variable->firstRead = $firstNonEmpty;
 				$variablePositionsAndNames[] = $variable;
-				continue;
 			}
 		}
 		return $variablePositionsAndNames;
@@ -649,7 +625,7 @@ class Helpers
 
 		// We found the closest arrow function before this token. If the token is
 		// within the scope of that arrow function, then return it.
-		if ($stackPtr > $arrowFunctionInfo['scope_opener'] && $stackPtr < $arrowFunctionInfo['scope_closer']) {
+		if ($stackPtr >= $arrowFunctionInfo['scope_opener'] && $stackPtr <= $arrowFunctionInfo['scope_closer']) {
 			return $arrowFunctionIndex;
 		}
 
@@ -699,28 +675,7 @@ class Helpers
 	public static function isArrowFunction(File $phpcsFile, $stackPtr)
 	{
 		$tokens = $phpcsFile->getTokens();
-		if (defined('T_FN') && $tokens[$stackPtr]['code'] === T_FN) {
-			return true;
-		}
-		if ($tokens[$stackPtr]['content'] !== 'fn') {
-			return false;
-		}
-		// Make sure next non-space token is an open parenthesis
-		$openParenIndex = $phpcsFile->findNext(Tokens::$emptyTokens, $stackPtr + 1, null, true);
-		if (! is_int($openParenIndex) || $tokens[$openParenIndex]['code'] !== T_OPEN_PARENTHESIS) {
-			return false;
-		}
-		// Find the associated close parenthesis
-		$closeParenIndex = $tokens[$openParenIndex]['parenthesis_closer'];
-		// Make sure the next token is a fat arrow
-		$fatArrowIndex = $phpcsFile->findNext(Tokens::$emptyTokens, $closeParenIndex + 1, null, true);
-		if (! is_int($fatArrowIndex)) {
-			return false;
-		}
-		if ($tokens[$fatArrowIndex]['code'] !== T_DOUBLE_ARROW && $tokens[$fatArrowIndex]['type'] !== 'T_FN_ARROW') {
-			return false;
-		}
-		return true;
+		return $tokens[$stackPtr]['code'] === T_FN;
 	}
 
 	/**
@@ -741,167 +696,19 @@ class Helpers
 	public static function getArrowFunctionOpenClose(File $phpcsFile, $stackPtr)
 	{
 		$tokens = $phpcsFile->getTokens();
-		if ($tokens[$stackPtr]['content'] !== 'fn') {
-			return null;
-		}
-		// Make sure next non-space token is an open parenthesis
-		$openParenIndex = $phpcsFile->findNext(Tokens::$emptyTokens, $stackPtr + 1, null, true);
-		if (! is_int($openParenIndex) || $tokens[$openParenIndex]['code'] !== T_OPEN_PARENTHESIS) {
-			return null;
-		}
-		// Find the associated close parenthesis
-		$closeParenIndex = $tokens[$openParenIndex]['parenthesis_closer'];
-		// Make sure the next token is a fat arrow or a return type
-		$fatArrowIndex = $phpcsFile->findNext(Tokens::$emptyTokens, $closeParenIndex + 1, null, true);
-		if (! is_int($fatArrowIndex)) {
-			return null;
-		}
-		if (
-			$tokens[$fatArrowIndex]['code'] !== T_DOUBLE_ARROW &&
-			$tokens[$fatArrowIndex]['type'] !== 'T_FN_ARROW' &&
-			$tokens[$fatArrowIndex]['code'] !== T_COLON
-		) {
+
+		if ($tokens[$stackPtr]['code'] !== T_FN) {
 			return null;
 		}
 
-		// Find the scope closer
-		$scopeCloserIndex = null;
-		$foundCurlyPairs = 0;
-		$foundArrayPairs = 0;
-		$foundParenPairs = 0;
-		$arrowBodyStart = $tokens[$stackPtr]['parenthesis_closer'] + 1;
-		$lastToken = self::getLastNonEmptyTokenIndexInFile($phpcsFile);
-		for ($index = $arrowBodyStart; $index < $lastToken; $index++) {
-			$token = $tokens[$index];
-			if (empty($token['code'])) {
-				$scopeCloserIndex = $index;
-				break;
-			}
-
-			$code = $token['code'];
-
-			// A semicolon is always a closer.
-			if ($code === T_SEMICOLON) {
-				$scopeCloserIndex = $index;
-				break;
-			}
-
-			// Track pair opening tokens.
-			if ($code === T_OPEN_CURLY_BRACKET) {
-				$foundCurlyPairs += 1;
-				continue;
-			}
-			if ($code === T_OPEN_SHORT_ARRAY || $code === T_OPEN_SQUARE_BRACKET) {
-				$foundArrayPairs += 1;
-				continue;
-			}
-			if ($code === T_OPEN_PARENTHESIS) {
-				$foundParenPairs += 1;
-				continue;
-			}
-
-			// A pair closing is only an arrow func closer if there was no matching opening token.
-			if ($code === T_CLOSE_CURLY_BRACKET) {
-				if ($foundCurlyPairs === 0) {
-					$scopeCloserIndex = $index;
-					break;
-				}
-				$foundCurlyPairs -= 1;
-				continue;
-			}
-			if ($code === T_CLOSE_SHORT_ARRAY || $code === T_CLOSE_SQUARE_BRACKET) {
-				if ($foundArrayPairs === 0) {
-					$scopeCloserIndex = $index;
-					break;
-				}
-				$foundArrayPairs -= 1;
-				continue;
-			}
-			if ($code === T_CLOSE_PARENTHESIS) {
-				if ($foundParenPairs === 0) {
-					$scopeCloserIndex = $index;
-					break;
-				}
-				$foundParenPairs -= 1;
-				continue;
-			}
-
-			// A comma is a closer only if we are not inside an opening token.
-			if ($code === T_COMMA) {
-				if (empty($foundArrayPairs) && empty($foundParenPairs) && empty($foundCurlyPairs)) {
-					$scopeCloserIndex = $index;
-					break;
-				}
-				continue;
-			}
-		}
-
-		if (! is_int($scopeCloserIndex)) {
+		if (!isset($tokens[$stackPtr]['scope_closer'])) {
 			return null;
 		}
 
 		return [
-			'scope_opener' => $stackPtr,
-			'scope_closer' => $scopeCloserIndex,
+			'scope_opener' => $tokens[$stackPtr]['scope_opener'],
+			'scope_closer' => $tokens[$stackPtr]['scope_closer'],
 		];
-	}
-
-	/**
-	 * Determine if a token is a list opener for list assignment/destructuring.
-	 *
-	 * The index provided can be either the opening square brace of a short list
-	 * assignment like the first character of `[$a] = $b;` or the `list` token of
-	 * an expression like `list($a) = $b;` or the opening parenthesis of that
-	 * expression.
-	 *
-	 * @param File $phpcsFile
-	 * @param int  $listOpenerIndex
-	 *
-	 * @return bool
-	 */
-	private static function isListAssignment(File $phpcsFile, $listOpenerIndex)
-	{
-		$tokens = $phpcsFile->getTokens();
-		// Match `[$a] = $b;` except for when the previous token is a parenthesis.
-		if ($tokens[$listOpenerIndex]['code'] === T_OPEN_SHORT_ARRAY) {
-			return true;
-		}
-		// Match `list($a) = $b;`
-		if ($tokens[$listOpenerIndex]['code'] === T_LIST) {
-			return true;
-		}
-
-		// If $listOpenerIndex is the open parenthesis of `list($a) = $b;`, then
-		// match that too.
-		if ($tokens[$listOpenerIndex]['code'] === T_OPEN_PARENTHESIS) {
-			$previousTokenPtr = $phpcsFile->findPrevious(Tokens::$emptyTokens, $listOpenerIndex - 1, null, true);
-			if (
-				isset($tokens[$previousTokenPtr])
-				&& $tokens[$previousTokenPtr]['code'] === T_LIST
-			) {
-				return true;
-			}
-			return true;
-		}
-
-		// If the list opener token is a square bracket that is preceeded by a
-		// close parenthesis that has an owner which is a scope opener, then this
-		// is a list assignment and not an array access.
-		//
-		// Match `if (true) [$a] = $b;`
-		if ($tokens[$listOpenerIndex]['code'] === T_OPEN_SQUARE_BRACKET) {
-			$previousTokenPtr = $phpcsFile->findPrevious(Tokens::$emptyTokens, $listOpenerIndex - 1, null, true);
-			if (
-				isset($tokens[$previousTokenPtr])
-				&& $tokens[$previousTokenPtr]['code'] === T_CLOSE_PARENTHESIS
-				&& isset($tokens[$previousTokenPtr]['parenthesis_owner'])
-				&& isset(Tokens::$scopeOpeners[$tokens[$tokens[$previousTokenPtr]['parenthesis_owner']]['code']])
-			) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**
@@ -919,74 +726,44 @@ class Helpers
 	 */
 	public static function getListAssignments(File $phpcsFile, $listOpenerIndex)
 	{
-		$tokens = $phpcsFile->getTokens();
-		self::debug('getListAssignments', $listOpenerIndex, $tokens[$listOpenerIndex]);
+		self::debug('getListAssignments', $listOpenerIndex, $phpcsFile->getTokens()[$listOpenerIndex]);
 
-		// First find the end of the list
-		$closePtr = null;
-		if (isset($tokens[$listOpenerIndex]['parenthesis_closer'])) {
-			$closePtr = $tokens[$listOpenerIndex]['parenthesis_closer'];
-		}
-		if (isset($tokens[$listOpenerIndex]['bracket_closer'])) {
-			$closePtr = $tokens[$listOpenerIndex]['bracket_closer'];
-		}
-		if (! $closePtr) {
+		// Use PHPCSUtils to get detailed assignment information
+		try {
+			$assignments = \PHPCSUtils\Utils\Lists::getAssignments($phpcsFile, $listOpenerIndex);
+		} catch (\PHPCSUtils\Exceptions\UnexpectedTokenType $e) {
+			// Not a list token
 			return null;
 		}
 
-		// Find the assignment (equals sign) which, if this is a list assignment, should be the next non-space token
-		$assignPtr = $phpcsFile->findNext(Tokens::$emptyTokens, $closePtr + 1, null, true);
-
-		// If the next token isn't an assignment, check for nested brackets because we might be a nested assignment
-		if (! is_int($assignPtr) || $tokens[$assignPtr]['code'] !== T_EQUAL) {
-			// Collect the enclosing list open/close tokens ($parents is an assoc array keyed by opener index and the value is the closer index)
-			$parents = isset($tokens[$listOpenerIndex]['nested_parenthesis']) ? $tokens[$listOpenerIndex]['nested_parenthesis'] : [];
-			// There's no record of nested brackets for short lists; we'll have to find the parent ourselves
-			if (empty($parents)) {
-				$parentSquareBracketPtr = self::findContainingOpeningSquareBracket($phpcsFile, $listOpenerIndex);
-				if (is_int($parentSquareBracketPtr)) {
-					// Make sure that the parent is really a parent by checking that its
-					// closing index is outside of the current bracket's closing index.
-					$parentSquareBracketToken = $tokens[$parentSquareBracketPtr];
-					$parentSquareBracketClosePtr = $parentSquareBracketToken['bracket_closer'];
-					if ($parentSquareBracketClosePtr && $parentSquareBracketClosePtr > $closePtr) {
-						self::debug("found enclosing bracket for {$listOpenerIndex}: {$parentSquareBracketPtr}");
-						// Collect the opening index, but we don't actually need the closing paren index so just make that 0
-						$parents = [$parentSquareBracketPtr => 0];
-					}
-				}
-			}
-			// If we have no parents, this is not a nested assignment and therefore is not an assignment
-			if (empty($parents)) {
-				return null;
-			}
-
-			// Recursively check to see if the parent is a list assignment (we only need to check one level due to the recursion)
-			$isNestedAssignment = null;
-			$parentListOpener = array_keys(array_reverse($parents, true))[0];
-			$isNestedAssignment = self::getListAssignments($phpcsFile, $parentListOpener);
-			if ($isNestedAssignment === null) {
-				return null;
-			}
+		if (empty($assignments)) {
+			return null;
 		}
 
+		// Extract just the variable token positions for backward compatibility
 		$variablePtrs = [];
-
-		$currentPtr = $listOpenerIndex;
-		$variablePtr = 0;
-		while ($currentPtr < $closePtr && is_int($variablePtr)) {
-			$variablePtr = $phpcsFile->findNext([T_VARIABLE], $currentPtr + 1, $closePtr);
-			if (is_int($variablePtr)) {
-				$variablePtrs[] = $variablePtr;
+		foreach ($assignments as $assignment) {
+			// Skip empty list items like in: list($a, , $b)
+			if ($assignment['is_empty']) {
+				continue;
 			}
-			++$currentPtr;
+
+			// For nested lists, recursively get the assignments
+			if ($assignment['is_nested_list'] && $assignment['assignment_token'] !== false) {
+				$nestedVars = self::getListAssignments($phpcsFile, $assignment['assignment_token']);
+				if (is_array($nestedVars)) {
+					$variablePtrs = array_merge($variablePtrs, $nestedVars);
+				}
+				continue;
+			}
+
+			// For regular variables, use the assignment_token which points to the T_VARIABLE
+			if ($assignment['assignment_token'] !== false && $assignment['variable'] !== false) {
+				$variablePtrs[] = $assignment['assignment_token'];
+			}
 		}
 
-		if (! self::isListAssignment($phpcsFile, $listOpenerIndex)) {
-			return null;
-		}
-
-		return $variablePtrs;
+		return empty($variablePtrs) ? null : $variablePtrs;
 	}
 
 	/**
@@ -1177,12 +954,6 @@ class Helpers
 	{
 		$tokens = $phpcsFile->getTokens();
 		$scopeCloserIndex = isset($tokens[$scopeStartIndex]['scope_closer']) ? $tokens[$scopeStartIndex]['scope_closer'] : 0;
-
-		if (self::isArrowFunction($phpcsFile, $scopeStartIndex)) {
-			$arrowFunctionInfo = self::getArrowFunctionOpenClose($phpcsFile, $scopeStartIndex);
-			$scopeCloserIndex = $arrowFunctionInfo ? $arrowFunctionInfo['scope_closer'] : $scopeCloserIndex;
-		}
-
 		if ($scopeStartIndex === 0) {
 			$scopeCloserIndex = self::getLastNonEmptyTokenIndexInFile($phpcsFile);
 		}
@@ -1333,22 +1104,8 @@ class Helpers
 	 */
 	public static function isVariableInsideIssetOrEmpty(File $phpcsFile, $stackPtr)
 	{
-		$functionIndex = self::getFunctionIndexForFunctionCallArgument($phpcsFile, $stackPtr);
-		if (! is_int($functionIndex)) {
-			return false;
-		}
-		$tokens = $phpcsFile->getTokens();
-		if (! isset($tokens[$functionIndex])) {
-			return false;
-		}
-		$allowedFunctionNames = [
-			'isset',
-			'empty',
-		];
-		if (in_array($tokens[$functionIndex]['content'], $allowedFunctionNames, true)) {
-			return true;
-		}
-		return false;
+		// Use PHPCSUtils which handles all edge cases across PHP/PHPCS versions
+		return Context::inIsset($phpcsFile, $stackPtr) || Context::inEmpty($phpcsFile, $stackPtr);
 	}
 
 	/**
@@ -1397,18 +1154,8 @@ class Helpers
 	 */
 	public static function isVariableInsideUnset(File $phpcsFile, $stackPtr)
 	{
-		$functionIndex = self::getFunctionIndexForFunctionCallArgument($phpcsFile, $stackPtr);
-		if (! is_int($functionIndex)) {
-			return false;
-		}
-		$tokens = $phpcsFile->getTokens();
-		if (! isset($tokens[$functionIndex])) {
-			return false;
-		}
-		if ($tokens[$functionIndex]['content'] === 'unset') {
-			return true;
-		}
-		return false;
+		// Use PHPCSUtils which handles all edge cases across PHP/PHPCS versions
+		return Context::inUnset($phpcsFile, $stackPtr);
 	}
 
 	/**
@@ -1622,31 +1369,15 @@ class Helpers
 	 */
 	public static function isConstructorPromotion(File $phpcsFile, $stackPtr)
 	{
-		// If we are not in a function's parameters, this is not promotion.
 		$functionIndex = self::getFunctionIndexForFunctionParameter($phpcsFile, $stackPtr);
 		if (! $functionIndex) {
 			return false;
 		}
-
-		$tokens = $phpcsFile->getTokens();
-
-		// Move backwards from the token, ignoring whitespace, typehints, and the
-		// 'readonly' keyword, and return true if the previous token is a
-		// visibility keyword (eg: `public`).
-		for ($i = $stackPtr - 1; $i > $functionIndex; $i--) {
-			if (in_array($tokens[$i]['code'], Tokens::$scopeModifiers, true)) {
-				return true;
+		$params = FunctionDeclarations::getParameters($phpcsFile, $functionIndex);
+		foreach ($params as $param) {
+			if ($param['token'] === $stackPtr) {
+				return isset($param['property_visibility']);
 			}
-			if (in_array($tokens[$i]['code'], Tokens::$emptyTokens, true)) {
-				continue;
-			}
-			if ($tokens[$i]['content'] === 'readonly') {
-				continue;
-			}
-			if (self::isTokenPartOfTypehint($phpcsFile, $i)) {
-				continue;
-			}
-			return false;
 		}
 		return false;
 	}
@@ -1702,85 +1433,6 @@ class Helpers
 			$functionName = "{$tokens[$i]['content']}{$functionName}";
 		}
 		return $functionName;
-	}
-
-	/**
-	 * Return false if the token is definitely not part of a typehint
-	 *
-	 * @param File $phpcsFile
-	 * @param int  $stackPtr
-	 *
-	 * @return bool
-	 */
-	private static function isTokenPossiblyPartOfTypehint(File $phpcsFile, $stackPtr)
-	{
-		$tokens = $phpcsFile->getTokens();
-		$token = $tokens[$stackPtr];
-		if ($token['code'] === 'PHPCS_T_NULLABLE') {
-			return true;
-		}
-		if ($token['code'] === T_NAME_QUALIFIED) {
-			return true;
-		}
-		if ($token['code'] === T_NAME_RELATIVE) {
-			return true;
-		}
-		if ($token['code'] === T_NAME_FULLY_QUALIFIED) {
-			return true;
-		}
-		if ($token['code'] === T_NS_SEPARATOR) {
-			return true;
-		}
-		if ($token['code'] === T_STRING) {
-			return true;
-		}
-		if ($token['code'] === T_TRUE) {
-			return true;
-		}
-		if ($token['code'] === T_FALSE) {
-			return true;
-		}
-		if ($token['code'] === T_NULL) {
-			return true;
-		}
-		if ($token['content'] === '|') {
-			return true;
-		}
-		if (in_array($token['code'], Tokens::$emptyTokens)) {
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Return true if the token is inside a typehint
-	 *
-	 * @param File $phpcsFile
-	 * @param int  $stackPtr
-	 *
-	 * @return bool
-	 */
-	public static function isTokenPartOfTypehint(File $phpcsFile, $stackPtr)
-	{
-		$tokens = $phpcsFile->getTokens();
-
-		if (! self::isTokenPossiblyPartOfTypehint($phpcsFile, $stackPtr)) {
-			return false;
-		}
-
-		// Examine every following token, ignoring everything that might be part of
-		// a typehint. If we find a variable at the end, this is part of a
-		// typehint.
-		$i = $stackPtr;
-		while (true) {
-			$i += 1;
-			if (! isset($tokens[$i])) {
-				return false;
-			}
-			if (! self::isTokenPossiblyPartOfTypehint($phpcsFile, $i)) {
-				return ($tokens[$i]['code'] === T_VARIABLE);
-			}
-		}
 	}
 
 	/**

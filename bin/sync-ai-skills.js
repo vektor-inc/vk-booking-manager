@@ -47,6 +47,16 @@ const referenceSources = [
 			'phpunit.md'
 		),
 	},
+	{
+		name: 'e2e.md',
+		sourcePath: path.join(
+			repoRoot,
+			'docs',
+			'ai-skills',
+			'skills',
+			'e2e.md'
+		),
+	},
 ];
 
 const targetSkillRoots = [

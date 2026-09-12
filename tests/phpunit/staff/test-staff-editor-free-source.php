@@ -123,6 +123,11 @@ class Staff_Editor_Free_Source_Test extends WP_UnitTestCase {
 				'should_contain'      => true,
 			),
 			array(
+				'test_condition_name' => 'Free版でも is_nomination_enabled_for_menu() が宣言されている事 (#391・Pro との API 互換)',
+				'needle'              => 'public static function is_nomination_enabled_for_menu(',
+				'should_contain'      => true,
+			),
+			array(
 				'test_condition_name' => 'Free版でも is_enabled() が宣言されている事 (Pro との API 互換)',
 				'needle'              => 'public static function is_enabled(',
 				'should_contain'      => true,
@@ -130,6 +135,16 @@ class Staff_Editor_Free_Source_Test extends WP_UnitTestCase {
 			array(
 				'test_condition_name' => 'Free版でも is_slot_capacity_enabled() が宣言されている事 (Pro との API 互換)',
 				'needle'              => 'public static function is_slot_capacity_enabled(',
+				'should_contain'      => true,
+			),
+			array(
+				'test_condition_name' => 'Free版でも is_multi_guest_available_for_menu() が宣言されている事 (#412 C-3・Pro との API 互換)',
+				'needle'              => 'public static function is_multi_guest_available_for_menu(',
+				'should_contain'      => true,
+			),
+			array(
+				'test_condition_name' => 'Free版でも is_exclusive_booking_available_for_menu() が宣言されている事 (#392・Pro との API 互換)',
+				'needle'              => 'public static function is_exclusive_booking_available_for_menu(',
 				'should_contain'      => true,
 			),
 			array(
@@ -150,6 +165,14 @@ class Staff_Editor_Free_Source_Test extends WP_UnitTestCase {
 			array(
 				'test_condition_name' => 'Free スタブには $nomination_enabled_cache 代入処理が含まれない事 (no-op を維持)',
 				'needle'              => 'self::$nomination_enabled_cache',
+				'should_contain'      => false,
+			),
+			// 境界値: is_nomination_enabled_for_menu() も no-op（get_post_meta を読まない）事の確認。
+			// Pro 実装はメニュー単位の無効化メタ（_vkbm_disable_nomination）を get_post_meta で読むが、
+			// Free 版は指名機能自体が常に無効なため、そのロジックを持ち込む必要が無い（#391）。
+			array(
+				'test_condition_name' => 'Free スタブの is_nomination_enabled_for_menu() は get_post_meta を呼ばない事 (no-op を維持・#391)',
+				'needle'              => 'get_post_meta',
 				'should_contain'      => false,
 			),
 		);

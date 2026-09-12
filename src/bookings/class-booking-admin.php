@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use DateTimeImmutable;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
+use VKBookingManager\Common\Staff_Load_Calculator;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -229,7 +230,22 @@ class Booking_Admin {
 		$start = ( '' !== $date && '' !== $start_time ) ? $this->combine_datetime( $date, $start_time ) : '';
 		$end   = ( '' !== $date && '' !== $end_time ) ? $this->combine_datetime( $date, $end_time ) : '';
 
-		$ids = $this->get_conflicting_staff_ids( $post_id, $start, $end );
+		// メニューはこの編集画面上でまだ未保存の変更（メニュー変更トグル等）を反映できないため、
+		// 保存済みのメニューIDを使う（日時・人数の変更は再判定のトリガーになっているが、
+		// メニュー変更はトリガーになっていないための制約）。
+		$service_id = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
+
+		// #394: 定員2以上・指名OFFのメニューで残数判定に使う人数。
+		// #394 レビュー対応: 料金区分が定義済みの予約は人数入力欄が無いため、JS は常に guests=1 を
+		// 送ってくる。POST 値をそのまま使うと実人数より少ない残数不足しか検出できず、保存時にだけ
+		// エラーになる誤誘導が起きるため、レンダリング側と対称に「保存済みの人数」を優先する。
+		if ( $this->has_saved_guest_tiers( $post_id ) ) {
+			$guests = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
+		} else {
+			$guests = isset( $_POST['guests'] ) ? max( 1, absint( wp_unslash( $_POST['guests'] ) ) ) : 1;
+		}
+
+		$ids = $this->get_conflicting_staff_ids( $post_id, $start, $end, $service_id, $guests );
 
 		wp_send_json_success( array( 'ids' => array_map( 'intval', $ids ) ) );
 	}
@@ -295,13 +311,15 @@ class Booking_Admin {
 		$note                    = (string) get_post_meta( $post->ID, self::META_NOTE, true );
 		$internal_note           = (string) get_post_meta( $post->ID, self::META_INTERNAL_NOTE, true );
 		$nomination_fee          = (int) get_post_meta( $post->ID, self::META_NOMINATION_FEE, true );
-		if ( ! Staff_Editor::is_nomination_enabled() ) {
+		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
+		// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
+		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $service_id ) ) {
 			$nomination_fee = 0;
 		}
 		// 予約人数（複数人予約）。未設定の既存予約は1名として扱う。
 		$guests = max( 1, (int) get_post_meta( $post->ID, self::META_GUESTS, true ) );
 		// 料金区分の人数内訳スナップショット。区分定義予約は人数編集UIの代わりに内訳を表示する。
-		$guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $post->ID, self::META_GUEST_TIERS, true ) );
+		$guest_tiers = $this->get_saved_guest_tiers( $post->ID );
 		// 保存済みの合計（META_BASE_TOTAL_PRICE）はそのまま表示し、指名機能の現在状態で上書きしない。
 		// 合計未保存の旧データのみ「単価 × 人数（＋指名料）」で再計算する（指名料は上で機能状態を反映済み）。
 		$has_base_total_price   = metadata_exists( 'post', $post->ID, self::META_BASE_TOTAL_PRICE );
@@ -402,17 +420,13 @@ class Booking_Admin {
 					<?php $vkbm_singular = vkbm_get_resource_label_singular(); ?>
 					<tr>
 						<th scope="row">
-							<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
-								<label for="vkbm-booking-resource">
-									<?php
-									printf(
-										/* translators: %s: Resource label (singular). */
-										esc_html__( 'Person in charge%s', 'vk-booking-manager' ),
-										esc_html( $vkbm_singular )
-									);
-									?>
-								</label>
-							<?php else : ?>
+							<?php
+							/*
+							 * #394: 指名の有無で見出しを出し分けていたが、人数編集の可否は料金区分の有無だけで
+							 * 決まるようになったため（下記の分岐を参照）、見出しも指名の有無に関わらず統一する。
+							 */
+							?>
+							<label for="vkbm-booking-resource">
 								<?php
 								printf(
 									/* translators: %s: Resource label (singular). */
@@ -420,16 +434,18 @@ class Booking_Admin {
 									esc_html( $vkbm_singular )
 								);
 								?>
-							<?php endif; ?>
+							</label>
 						</th>
 						<td>
 							<?php
-							// 担当スタッフは単一選択。指名OFFのときは人数入力も表示する（1予約は分割せず単一スタッフへ割り当てる）。
-							$vkbm_max_capacity = $service_id > 0 ? max( 1, (int) get_post_meta( $service_id, '_vkbm_max_capacity', true ) ) : 1;
+							// 担当スタッフは単一選択。1予約は分割せず単一スタッフへ割り当てる。
+							// #394 レビュー対応: 基本設定「予約枠の定員」機能OFF時はメニューの古い定員値を無視し1固定にする。
+							$vkbm_max_capacity = $this->get_menu_max_capacity( $service_id );
 							// 同じ時間帯に別予約があるスタッフ（保存時刻時点）を JS でプルダウンから除外するため、IDを渡す。
-							$vkbm_conflict_staff_ids = $this->get_conflicting_staff_ids( (int) $post->ID, (string) $start, (string) $end );
+							// #394: 指名OFF・定員2以上のメニューでは「残数不足」も除外条件になるため、人数も渡す。
+							$vkbm_conflict_staff_ids = $this->get_conflicting_staff_ids( (int) $post->ID, (string) $start, (string) $end, $service_id, (int) $guests );
 							?>
-							<select id="vkbm-booking-resource" class="vkbm-booking-resource" name="vkbm_booking[resource_id]" data-conflict-staff-ids="<?php echo esc_attr( implode( ',', $vkbm_conflict_staff_ids ) ); ?>">
+							<select id="vkbm-booking-resource" class="vkbm-booking-resource" name="vkbm_booking[resource_id]" data-conflict-staff-ids="<?php echo esc_attr( implode( ',', $vkbm_conflict_staff_ids ) ); ?>" aria-describedby="vkbm-booking-resource-description">
 								<option value="0">
 									<?php
 									printf(
@@ -445,16 +461,43 @@ class Booking_Admin {
 									</option>
 								<?php endforeach; ?>
 							</select>
-							<?php if ( ! Staff_Editor::is_nomination_enabled() ) : ?>
+							<p class="description" id="vkbm-booking-resource-description">
+								<?php
+								// #394 レビュー対応（項目3）: 除外理由が「同一メニュー内の残数不足」と
+								// 「別メニューでの重複」の2種類に増えたため、プルダウンの表示・非表示だけでは
+								// 管理者の直感に反するケースが起き得る（同じメニューなら相乗りできるのに、
+								// 別メニューの予約が理由で消えている等）。個別の選択肢に理由を出す新しい
+								// 見せ方までは踏み込まず、説明文を1つ添えるにとどめる。
+								printf(
+									/* translators: %s: Resource label (singular), e.g. "staff". */
+									esc_html__( 'This list does not include %s without enough remaining capacity for this menu, or already booked for another menu at this time.', 'vk-booking-manager' ),
+									esc_html( $vkbm_singular )
+								);
+								?>
+							</p>
+							<?php
+							/*
+							 * #394: 指名を使うメニューでも複数人まで予約できるようになったため、人数編集の可否は
+							 * 「指名の有無」では判断しない。「料金区分（$guest_tiers）が定義済みかどうか」（後述の
+							 * とおり、定員機能OFFによる人数ロックも同様に扱う）で判断する。料金区分が定義済みの
+							 * 予約は、指名の有無に関わらず区分ごとの内訳表示のみ（編集不可）。
+							 *
+							 * #394 レビュー対応（項目1）: 予約枠の定員機能がOFF（$vkbm_max_capacity === 1）で、
+							 * かつ保存済みの人数が2以上の予約も、料金区分ありと同じ「表示のみ・保存済み値を
+							 * 保持」に倒す。この条件を外すと <input max="1" value="3"> のような不整合な入力欄が
+							 * 描画され、ブラウザのネイティブ制約検証で保存自体がブロックされてしまう
+							 * （機能OFFは人数編集対象外として扱う。save_post() の $guests_locked_by_capacity と対称）。
+							 */
+							$vkbm_guests_locked = ! empty( $guest_tiers ) || ( 1 === $vkbm_max_capacity && (int) $guests > 1 );
+							?>
+							<?php if ( $vkbm_guests_locked ) : ?>
+								<?php $vkbm_guests_unit = vkbm_get_guests_unit_label(); ?>
+								<p class="vkbm-booking-guests">
+									<?php echo esc_html( vkbm_get_guests_count_label() ); ?>
+									<span class="vkbm-booking-meta__value"><?php echo esc_html( vkbm_format_guests_count( (int) $guests, $vkbm_guests_unit ) ); ?></span>
+								</p>
 								<?php if ( ! empty( $guest_tiers ) ) : ?>
-									<?php
-									// 料金区分が定義されている予約は、人数編集の代わりに区分ごとの内訳を表示する（編集不可）。
-									$vkbm_guests_unit = vkbm_get_guests_unit_label();
-									?>
-									<p class="vkbm-booking-guests">
-										<?php echo esc_html( vkbm_get_guests_count_label() ); ?>
-										<span class="vkbm-booking-meta__value"><?php echo esc_html( vkbm_format_guests_count( (int) $guests, $vkbm_guests_unit ) ); ?></span>
-									</p>
+									<?php // 料金区分が定義されている予約は、人数編集の代わりに区分ごとの内訳を表示する（編集不可）。 ?>
 									<ul class="vkbm-booking-guest-tiers" style="margin: 4px 0 0;">
 										<?php foreach ( $guest_tiers as $tier ) : ?>
 											<li>
@@ -473,22 +516,48 @@ class Booking_Admin {
 										<?php esc_html_e( 'This booking uses price categories. The breakdown is fixed at the time of reservation.', 'vk-booking-manager' ); ?>
 									</p>
 								<?php else : ?>
-									<p class="vkbm-booking-guests">
-										<label>
-											<?php echo esc_html( vkbm_get_guests_count_label() ); ?>
-											<input type="number" class="small-text" name="vkbm_booking[guests]" min="1" max="<?php echo esc_attr( (string) $vkbm_max_capacity ); ?>" step="1" value="<?php echo esc_attr( (string) max( 1, (int) $guests ) ); ?>" />
-										</label>
-									</p>
+									<?php
+									// #394 レビュー対応（再々レビュー・項目3）: 定員機能OFFでロックされたケース
+									// （料金区分なし）は「人数: N名」とだけ表示され、なぜ編集できないのかが
+									// 伝わらないまま残っていた（料金区分ケースの説明文との非対称）。理由を
+									// 状態説明だけで伝える（設定画面への行動喚起にはしない。行動喚起にする
+									// なら遷移導線もセットで用意する必要があり、料金区分ケースの説明文と
+									// 対称性が崩れるため。植草の判断）。
+									?>
 									<p class="description">
-										<?php
-										printf(
-											/* translators: %d: Maximum number of guests per booking. */
-											esc_html__( 'Up to %d guests can be reserved per booking. The base fee is recalculated from the number of guests on save.', 'vk-booking-manager' ),
-											(int) $vkbm_max_capacity
-										);
-										?>
+										<?php esc_html_e( "This booking's number of guests cannot be edited because the slot capacity feature is currently disabled.", 'vk-booking-manager' ); ?>
 									</p>
 								<?php endif; ?>
+							<?php else : ?>
+								<?php
+								// 人数入力欄と直下の説明文を aria-describedby で紐付ける（既存パターン踏襲: class-service-menu-editor.php）。
+								$vkbm_guests_description_id = 'vkbm-booking-guests-description';
+								?>
+								<p class="vkbm-booking-guests">
+									<label>
+										<?php echo esc_html( vkbm_get_guests_count_label() ); ?>
+										<input type="number" class="small-text" name="vkbm_booking[guests]" min="1" max="<?php echo esc_attr( (string) $vkbm_max_capacity ); ?>" step="1" value="<?php echo esc_attr( (string) max( 1, (int) $guests ) ); ?>" aria-describedby="<?php echo esc_attr( $vkbm_guests_description_id ); ?>" />
+									</label>
+								</p>
+								<p class="description" id="<?php echo esc_attr( $vkbm_guests_description_id ); ?>">
+									<?php
+									printf(
+										/* translators: %d: Maximum number of guests per booking. */
+										esc_html__( 'Up to %d guests can be reserved per booking. The base fee is recalculated from the number of guests on save.', 'vk-booking-manager' ),
+										(int) $vkbm_max_capacity
+									);
+									?>
+									<?php if ( Staff_Editor::is_nomination_enabled_for_menu( $service_id ) ) : ?>
+										<br />
+										<?php
+										printf(
+											/* translators: %s: Resource label (singular), e.g. "staff". */
+											esc_html__( 'Because this menu uses nomination, the nominated %s will take charge of this entire group, making the time slot exclusive to this booking.', 'vk-booking-manager' ),
+											esc_html( $vkbm_singular )
+										);
+										?>
+									<?php endif; ?>
+								</p>
 							<?php endif; ?>
 						</td>
 					</tr>
@@ -770,23 +839,39 @@ class Booking_Admin {
 		$attachment_ids       = $data['attachment_ids'];
 
 		// 担当スタッフと人数を確定する。1予約は分割せず単一スタッフに割り当てる。
-		// 指名機能ON：1対1・1名。指名機能OFF：単一スタッフ＋人数（1〜max_capacity）。
-		$max_capacity = $service_id > 0 ? max( 1, (int) get_post_meta( $service_id, '_vkbm_max_capacity', true ) ) : 1;
+		// #394: 指名を使うメニューでも、メニューの定員（1組の最大人数）まで複数人を申し込めるように
+		// なったため、人数編集の可否は「指名の有無」では判断しない。「料金区分（guest_tiers）の有無」、
+		// または「予約枠の定員機能OFFによる人数ロック」（下記 $guests_locked_by_capacity）で判断する。
+		// #394 レビュー対応: 基本設定「予約枠の定員」機能OFF時はメニューの古い定員値を無視し1固定にする。
+		$max_capacity = $this->get_menu_max_capacity( $service_id );
 		// 入力人数が1予約あたりの上限を超えているかどうか（超過時は後段で保存を中断するため保持）。
 		$guests_exceeded = false;
-		// 料金区分が定義されている予約は人数編集UIが無いため、既存の人数・内訳をそのまま保持する。
-		$has_saved_guest_tiers = ! empty( Price_Tiers::normalize_guest_tiers( get_post_meta( $post_id, self::META_GUEST_TIERS, true ) ) );
-		if ( $has_saved_guest_tiers ) {
-			$guests = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
-		} elseif ( Staff_Editor::is_nomination_enabled() ) {
-			// 指名ONは原則1対1だが、指名OFF時に作成された複数人予約（guests>1）の既存データは
-			// 指名UIでは表現できない。明示的な変換以外で人数を失わないよう、既存人数をそのまま保持する。
-			$existing_guests = (int) get_post_meta( $post_id, self::META_GUESTS, true );
-			$guests          = $existing_guests > 1 ? $existing_guests : 1;
+		// 料金区分が定義されている予約は人数編集UIが無いため、指名の有無に関わらず既存の人数・内訳をそのまま保持する。
+		$has_saved_guest_tiers = $this->has_saved_guest_tiers( $post_id );
+		// #394 レビュー対応（項目1）: 予約枠の定員機能がOFF（max_capacity=1）で、かつ保存済みの人数が
+		// 2以上の予約も、料金区分ありと同じ「人数の表示のみ・保存済み値を保持」に倒す。この判定を
+		// 欠くと <input max="1" value="3"> のような不整合な入力欄が描画され、ブラウザのネイティブ
+		// 制約検証で保存自体がブロックされる（あるいは通っても guests_exceeded で中断される）。
+		// render_meta_box() の $vkbm_guests_locked と対称にする。
+		//
+		// #394 レビュー対応（再々レビュー・項目1）: ロック判定は「フォームに人数入力欄が描画されたか」で
+		// 決まる必要があり、それを決めるのは常に保存済みのメニューである。ここを新メニュー基準の
+		// $max_capacity（メニュー変更時は変更後の値）で判定すると、定員5のメニューAで人数3の予約を
+		// 定員1のメニューBへ切り替えて保存したとき「1===1 && 3>1」でロックが誤って成立し、
+		// guests_exceeded の検証を素通りして人数3のまま保存されてしまう（fail-open の回帰）。
+		// クランプ・上限超過判定に使う $max_capacity は引き続き新メニュー基準のままでよい
+		// （そちらは「これから確定する値」の妥当性チェックのため）。
+		$saved_service_id          = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
+		$existing_guests           = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
+		$guests_locked_by_capacity = 1 === $this->get_menu_max_capacity( $saved_service_id ) && $existing_guests > 1;
+		if ( $has_saved_guest_tiers || $guests_locked_by_capacity ) {
+			$guests = $existing_guests;
 		} else {
-			// 指名OFF：送信された人数を 1〜max_capacity にクランプする。
+			// 料金区分未定義：指名の有無に関わらず、送信された人数を 1〜max_capacity にクランプする。
 			// 上限超過は黙ってクランプ保存せず、後段で保存を中断する（フロントの上限超過エラーと対称）。
-			$requested_guests = (int) $data['guests'];
+			// #394 レビュー対応（項目6）: 人数欄が未送信（null）の場合は、黙って1へ巻き戻さず
+			// 保存済みの人数へフォールバックする（多層防御。通常の画面操作では発火しない）。
+			$requested_guests = null === $data['guests'] ? $existing_guests : (int) $data['guests'];
 			$guests_exceeded  = $requested_guests > $max_capacity;
 			$guests           = max( 1, min( $max_capacity, $requested_guests ) );
 		}
@@ -807,7 +892,7 @@ class Booking_Admin {
 				return;
 			}
 
-			$has_conflict        = in_array( $resource_id, $this->get_conflicting_staff_ids( $post_id, $start, $end ), true );
+			$has_conflict        = in_array( $resource_id, $this->get_conflicting_staff_ids( $post_id, $start, $end, $service_id, $guests ), true );
 			$settings            = ( new Settings_Repository() )->get_settings();
 			$allow_overlap_admin = ! empty( $settings['provider_allow_staff_overlap_admin'] );
 
@@ -864,13 +949,14 @@ class Booking_Admin {
 		// ただし「合計未保存（旧データ）かつ 指名OFF」のときは、表示側（一覧列・編集画面）が指名料を
 		// 除外して再計算するのに合わせ、保存側でも指名料を含めない（表示と保存の整合）。
 		$nomination_fee_for_total = max( 0, (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
-		if ( ! metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE ) && ! Staff_Editor::is_nomination_enabled() ) {
+		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。
+		if ( ! metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE ) && ! Staff_Editor::is_nomination_enabled_for_menu( $service_id ) ) {
 			$nomination_fee_for_total = 0;
 		}
 		// 料金区分が定義されている予約は、人数編集UIが無く内訳が確定しているため、
 		// 保存済みの区分内訳（Σ 区分料金 × 区分人数）＋指名料で合計を再計算する。
 		// 区分未定義は従来どおり 基本料金スナップショット × 人数 ＋指名料。
-		$saved_guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $post_id, self::META_GUEST_TIERS, true ) );
+		$saved_guest_tiers = $this->get_saved_guest_tiers( $post_id );
 		if ( ! empty( $saved_guest_tiers ) ) {
 			$base_total_price = max( 0, Price_Tiers::total_price( $saved_guest_tiers ) + $nomination_fee_for_total );
 		} else {
@@ -967,12 +1053,13 @@ class Booking_Admin {
 			case 'vkbm_booking_billed_total':
 				// 予約人数（複数人予約）。未設定の既存予約は1名として扱う。
 				$guests = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
+				// このコラムの対象予約が紐づくサービスメニューID（#391のメニュー単位判定に使う）。
+				$service_menu_id = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
 				// 基本料金スナップショット。未保存の旧予約はメニューの _vkbm_base_price をフォールバックに使う（render_meta_box と同じ挙動）。
 				$has_base_price_snapshot = metadata_exists( 'post', $post_id, self::META_SERVICE_BASE_PRICE );
 				if ( $has_base_price_snapshot ) {
 					$service_base_price = (int) get_post_meta( $post_id, self::META_SERVICE_BASE_PRICE, true );
 				} else {
-					$service_menu_id    = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
 					$service_base_price = $service_menu_id > 0 ? max( 0, (int) get_post_meta( $service_menu_id, '_vkbm_base_price', true ) ) : 0;
 				}
 				$has_base_total = metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE );
@@ -980,8 +1067,8 @@ class Booking_Admin {
 					? (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true )
 					: ( ( $service_base_price * $guests ) + (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
 				// 保存済みの合計（META_BASE_TOTAL_PRICE）は予約確定時の金額なので上書きしない。
-				// 合計未保存の旧データのみ、指名OFF時に指名料を除いて再計算する。
-				if ( ! $has_base_total && ! Staff_Editor::is_nomination_enabled() ) {
+				// 合計未保存の旧データのみ、（このメニューで）指名OFF時に指名料を除いて再計算する（#391）。
+				if ( ! $has_base_total && ! Staff_Editor::is_nomination_enabled_for_menu( $service_menu_id ) ) {
 					$base_total = $service_base_price * $guests;
 				}
 
@@ -1125,7 +1212,7 @@ class Booking_Admin {
 	 * Sanitize raw booking POST data. All values are sanitized at read time.
 	 *
 	 * @param array<string, mixed> $raw Raw POST data.
-	 * @return array<string, mixed> Sanitized data with keys: date, start_time, end_time, resource_id, service_id, service_id_select, allow_service_change, customer, customer_tel, customer_email, billed_total_price, status, note, internal_note, is_staff_preferred, author_id, attachment_ids.
+	 * @return array<string, mixed> Sanitized data with keys: date, start_time, end_time, resource_id, service_id, service_id_select, allow_service_change, customer, customer_tel, customer_email, billed_total_price, status, note, internal_note, is_staff_preferred, author_id, attachment_ids, guests.
 	 */
 	private function sanitize_booking_post_data( array $raw ): array {
 		$date                 = isset( $raw['date'] ) ? $this->sanitize_date( sanitize_text_field( (string) $raw['date'] ) ) : '';
@@ -1146,8 +1233,11 @@ class Booking_Admin {
 		$is_staff_preferred = isset( $raw['is_staff_preferred'] ) ? '1' : '';
 		$author_id          = isset( $raw['author_id'] ) ? absint( $raw['author_id'] ) : 0;
 		$attachment_ids     = isset( $raw['attachment_ids'] ) ? $this->normalize_attachment_ids( $raw['attachment_ids'] ) : array();
-		// 予約人数（指名OFFの単一スタッフ予約）。1以上の整数にする。上限クランプは保存時に行う。
-		$guests = isset( $raw['guests'] ) ? max( 1, (int) $raw['guests'] ) : 1;
+		// 予約人数。送信されていれば1以上の整数にし、未送信なら null にする（上限クランプは保存時に行う）。
+		// #394 レビュー対応（項目6）: 「未送信」と「1を送信」を区別できるよう、未送信時は null を返す
+		// （save_post() 側で保存済みの人数へフォールバックする多層防御のため。通常の画面では人数欄が
+		// 必ず送信されるため通常は発火しない）。
+		$guests = isset( $raw['guests'] ) ? max( 1, (int) $raw['guests'] ) : null;
 
 		return array(
 			'date'                 => $date,
@@ -1475,20 +1565,76 @@ class Booking_Admin {
 	}
 
 	/**
-	 * 指定時間帯に別予約（確定・保留中）が重なっているスタッフIDの一覧を取得する。
+	 * サービスメニューの予約枠の定員（1組の最大人数）を取得する（#394 レビュー対応）。
 	 *
-	 * 現在編集中の予約は除外する。1予約は単一スタッフに割り当てられるため、
-	 * 重なる予約の担当スタッフ（resource_id）を対象とする。
+	 * 基本設定「予約枠の定員」機能（`Staff_Editor::is_slot_capacity_enabled()`）がOFFのサイトでは、
+	 * メニュー側に古い定員値（例: 3）が残っていても常に1として扱う。このゲートを通さずに
+	 * `_vkbm_max_capacity` を生で読むと、機能OFF後もメニューの残置値でスタッフの二重割り当てを
+	 * 弾かなくなってしまう（`Availability_Service::get_menu_max_capacity()` と同じ判定に揃える）。
 	 *
-	 * Get the IDs of staff that already have another (confirmed/pending) booking
-	 * overlapping the given time slot, excluding the booking being edited.
-	 *
-	 * @param int    $post_id  現在編集中の予約ID（除外）。
-	 * @param string $start_at 予約開始日時（Y-m-d H:i:s）。
-	 * @param string $end_at   予約終了日時（Y-m-d H:i:s）。
-	 * @return array<int, int> 競合しているスタッフIDの配列。
+	 * @param int $service_id サービスメニューID（0以下はメニュー未選択として1を返す）。
+	 * @return int 1以上の定員値。
 	 */
-	private function get_conflicting_staff_ids( int $post_id, string $start_at, string $end_at ): array {
+	private function get_menu_max_capacity( int $service_id ): int {
+		if ( $service_id <= 0 || ! Staff_Editor::is_slot_capacity_enabled() ) {
+			return 1;
+		}
+
+		$meta = get_post_meta( $service_id, '_vkbm_max_capacity', true );
+		return max( 1, '' === $meta ? 1 : (int) $meta );
+	}
+
+	/**
+	 * 予約投稿に保存されている料金区分（価格ティア）の内訳を取得する（#394 レビュー対応・項目4）。
+	 *
+	 * 「料金区分が定義されているか」の判定式（`Price_Tiers::normalize_guest_tiers()` +
+	 * `get_post_meta( $post_id, self::META_GUEST_TIERS, true )`）が Ajax・保存・料金再計算の
+	 * 複数箇所に写経されないよう、ここに集約する。
+	 *
+	 * @param int $post_id 予約投稿ID。
+	 * @return array<int, array{label:string,price:int,count:int}> 正規化済みの内訳配列（未定義なら空配列）。
+	 */
+	private function get_saved_guest_tiers( int $post_id ): array {
+		return Price_Tiers::normalize_guest_tiers( get_post_meta( $post_id, self::META_GUEST_TIERS, true ) );
+	}
+
+	/**
+	 * この予約が料金区分（価格ティア）の内訳を保存済みかどうかを判定する（#394 レビュー対応・項目4）。
+	 *
+	 * 料金区分が定義されている予約は、人数編集UIの代わりに内訳表示のみになる（編集不可）。
+	 *
+	 * @param int $post_id 予約投稿ID。
+	 * @return bool 料金区分の内訳が1件以上保存されていれば true。
+	 */
+	private function has_saved_guest_tiers( int $post_id ): bool {
+		return ! empty( $this->get_saved_guest_tiers( $post_id ) );
+	}
+
+	/**
+	 * 担当スタッフ候補から除外すべきスタッフIDの一覧を取得する（#394）。
+	 *
+	 * 判定方法はメニューの性質で分岐する。
+	 * - 指名を使うメニュー、または定員1のメニュー（大多数）：1枠1組（貸切）として扱い、
+	 *   時間帯が重なる別予約（メニュー問わず）が1件でもあるスタッフを除外する
+	 *   （#394 より前と完全に同じ判定。指名ONの結果は変えない＝回帰防止）。
+	 * - 指名を使わない・定員2以上のメニュー：同じメニューの重なる予約となら定員まで相乗り可能。
+	 *   除外集合は次の **和集合** にする（#394 レビュー対応）。
+	 *   1. 残り（定員 − 当該メニュー・当該スタッフの既存予約人数の合計）がこの予約の人数に満たない
+	 *      スタッフ。負荷集計はフロントの自動割当（Booking_Confirmation_Controller）と共有する
+	 *      Staff_Load_Calculator を使い、同じ判定ロジックを2箇所に写経しない。
+	 *   2. **別メニュー**で時間帯が重なる予約を持つスタッフ（従来どおり1件でもあれば除外）。
+	 *      同一メニュー内の相乗りは（1で）許可しつつ、別メニューとの重複は従来どおり止めることで、
+	 *      管理者の重複保存許可設定（`provider_allow_staff_overlap_admin`）がこのメニュー種別だけ
+	 *      事実上無効化されるのを防ぐ。
+	 *
+	 * @param int    $post_id    現在編集中の予約ID（除外）。
+	 * @param string $start_at   予約開始日時（Y-m-d H:i:s）。
+	 * @param string $end_at     予約終了日時（Y-m-d H:i:s）。
+	 * @param int    $service_id サービスメニューID（指名の有無・定員の判定に使用）。
+	 * @param int    $guests     この予約の人数（定員2以上・指名OFFの残数判定に使用）。
+	 * @return array<int, int> 除外すべきスタッフIDの配列。
+	 */
+	protected function get_conflicting_staff_ids( int $post_id, string $start_at, string $end_at, int $service_id = 0, int $guests = 1 ): array {
 		if ( '' === $start_at ) {
 			return array();
 		}
@@ -1496,7 +1642,60 @@ class Booking_Admin {
 			$end_at = $start_at;
 		}
 
+		$max_capacity = $this->get_menu_max_capacity( $service_id );
+
+		if ( 1 === $max_capacity || Staff_Editor::is_nomination_enabled_for_menu( $service_id ) ) {
+			return $this->get_overlapping_staff_ids( $post_id, $start_at, $end_at );
+		}
+
+		// 指名を使わない・定員2以上のメニュー：同じメニュー・同じ時間帯の負荷を集計し、残数不足のスタッフを除外する。
+		$guests = max( 1, $guests );
+		$loads  = Staff_Load_Calculator::get_staff_loads_for_slot( $service_id, $start_at, $end_at, $post_id );
+
+		$insufficient_remaining = array();
+		foreach ( $loads as $staff_id => $load ) {
+			$remaining = max( 0, $max_capacity - $load );
+			if ( $remaining < $guests ) {
+				$insufficient_remaining[] = (int) $staff_id;
+			}
+		}
+
+		// 別メニューで時間帯が重なる予約を持つスタッフは、同一メニュー内の相乗り許可とは別に従来どおり除外する（和集合）。
+		$other_menu_conflicts = $this->get_overlapping_staff_ids( $post_id, $start_at, $end_at, $service_id );
+
+		// #394 レビュー対応（項目7・項目6）: 和集合の2項（$insufficient_remaining と $other_menu_conflicts）は
+		// 「枠を埋めている予約」の定義がわずかに異なる（Staff_Load_Calculator と get_overlapping_staff_ids で
+		// 対象ステータスが違う。詳細は get_overlapping_staff_ids() の注記を参照）。あえて揃えていない。
+		return array_values( array_unique( array_merge( $insufficient_remaining, $other_menu_conflicts ) ) );
+	}
+
+	/**
+	 * 指定時間帯に別予約（確定・保留中）が重なっているスタッフIDの一覧を取得する。
+	 *
+	 * 現在編集中の予約は除外する。1予約は単一スタッフに割り当てられるため、
+	 * 重なる予約の担当スタッフ（resource_id）を対象とする。メニューを問わず、
+	 * その時間帯に1件でも重なる予約があるスタッフを「使用不可」として扱う
+	 * （1枠1組・貸切のメニュー、および定員1のメニュー向けの判定）。
+	 *
+	 * #394 レビュー対応：`$exclude_service_id` を指定すると、そのメニュー自身の予約は
+	 * 集計対象から除く（＝「別メニューの重なる予約」だけを対象にする）。指名OFF・定員2以上の
+	 * メニューで、同一メニュー内の相乗りは別ロジック（残数判定）に任せ、ここでは別メニューとの
+	 * 重複だけを見るために使う。0（既定）を指定した場合は #394 より前と完全に同じ挙動になる。
+	 *
+	 * @param int    $post_id            現在編集中の予約ID（除外）。
+	 * @param string $start_at           予約開始日時（Y-m-d H:i:s）。
+	 * @param string $end_at             予約終了日時（Y-m-d H:i:s）。
+	 * @param int    $exclude_service_id 集計から除くメニューID（0なら除外なし＝全メニュー対象）。
+	 * @return array<int, int> 競合しているスタッフIDの配列。
+	 */
+	private function get_overlapping_staff_ids( int $post_id, string $start_at, string $end_at, int $exclude_service_id = 0 ): array {
 		// 時間帯が重なる確定・保留中の予約を取得する（現在の予約は除外）。
+		//
+		// #394 レビュー対応（項目7）: ここは「確定・保留中」（ステータスメタが confirmed/pending）の
+		// 予約だけを対象にしており、Staff_Load_Calculator（post_status = publish|pending かつ
+		// キャンセル・無断キャンセル以外すべて）とは対象の定義がわずかに異なる。フロントの自動割当
+		// （Booking_Confirmation_Controller）が元々この経路を使っておらず、既存の管理画面の挙動
+		// （#394より前の get_conflicting_staff_ids）をそのまま踏襲するためあえて揃えていない。
 		$query = new WP_Query(
 			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
@@ -1538,8 +1737,19 @@ class Booking_Admin {
 			)
 		);
 
+		// 'fields' => 'ids' の WP_Query はメタキャッシュを自動で温めないため、ループ内で
+		// get_post_meta() を件数分呼ぶと N+1 になる。ここでまとめて1回のクエリでキャッシュへ乗せる。
+		update_meta_cache( 'post', $query->posts );
+
 		$staff_ids = array();
 		foreach ( $query->posts as $other_id ) {
+			if ( $exclude_service_id > 0 ) {
+				$other_service_id = (int) get_post_meta( (int) $other_id, self::META_SERVICE_ID, true );
+				if ( $other_service_id === $exclude_service_id ) {
+					continue;
+				}
+			}
+
 			$resource_id = (int) get_post_meta( (int) $other_id, self::META_RESOURCE_ID, true );
 			if ( $resource_id > 0 ) {
 				$staff_ids[ $resource_id ] = $resource_id;

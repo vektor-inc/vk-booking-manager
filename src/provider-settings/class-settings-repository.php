@@ -46,6 +46,7 @@ class Settings_Repository {
 		$is_japanese = $this->is_japanese_locale();
 
 		return array(
+			'industry_preset'                            => 'custom',
 			'provider_name'                              => '',
 			'provider_address'                           => '',
 			'provider_phone'                             => '',
@@ -206,6 +207,7 @@ Contact us: Please contact our store.",
 
 		$defaults = $this->get_default_settings();
 		$settings = array_merge( $defaults, $stored );
+		$settings = Industry_Presets::apply_effective_values( $settings, $defaults );
 
 		$settings['provider_business_hours_basic'] = $this->normalize_business_hours_basic(
 			$settings['provider_business_hours_basic'] ?? array()
@@ -225,6 +227,10 @@ Contact us: Please contact our store.",
 	 * @return bool True on success, false on failure.
 	 */
 	public function update_settings( array $settings ): bool {
+		// REST 等の別経路から渡された場合も非表示項目の保存値をプリセットと一致させる。
+		// 無料版では apply_effective_values() が industry_preset を書き換えないため、
+		// 保存済みの選択済みプリセットは保存経路でも失われない（#387 レビュー指摘・安藤案B）。
+		$settings = Industry_Presets::apply_effective_values( $settings, $this->get_default_settings() );
 		return update_option( $this->option_key, $settings );
 	}
 

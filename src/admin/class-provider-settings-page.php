@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Common\Weekday_Rule;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\Staff\Staff_Editor;
 use function vkbm_get_default_resource_menu_icon;
@@ -252,14 +253,47 @@ class Provider_Settings_Page {
 			$settings_js_version,
 			true
 		);
-		wp_localize_script(
-			'vkbm-provider-settings',
-			'vkbmProviderSettings',
-			array(
-				'logoFrameTitle'  => __( 'Select logo image', 'vk-booking-manager' ),
-				'logoFrameButton' => __( 'Select', 'vk-booking-manager' ),
-			)
+		$vkbm_provider_settings_l10n = array(
+			'logoFrameTitle'  => __( 'Select logo image', 'vk-booking-manager' ),
+			'logoFrameButton' => __( 'Select', 'vk-booking-manager' ),
 		);
+
+		// 無料版では業種プリセットの選択欄自体を表示しない（Pro_Upsell::get_feature_notice_html()
+		// に差し替える）ため、プリセット関連のローカライズ値も Pro 版でのみ組み立てる。
+		// get_presets() はフィルター適用・翻訳ルックアップを伴うため、使われない無料版で
+		// 無駄に呼ばない（#387 レビュー指摘・安藤 LOW-8）。
+		if ( ! Pro_Upsell::is_free_edition() ) {
+			$default_settings = $this->settings_service->get_default_settings();
+
+			$vkbm_provider_settings_l10n = array_merge(
+				$vkbm_provider_settings_l10n,
+				array(
+					'industryPresets'                   => Industry_Presets::get_presets( $default_settings ),
+					'industryDefaults'                  => array_intersect_key( $default_settings, array_flip( Industry_Presets::FIELD_KEYS ) ),
+					/* translators: %d: Number of automatically configured fields. */
+					'industrySummaryTemplate'           => __( 'Automatically configured items for this industry (%d)', 'vk-booking-manager' ),
+					'industryAppliedMessage'            => __( 'The industry preset default value has been applied.', 'vk-booking-manager' ),
+					'industryCustomMessage'             => __( 'Switched back to Custom. Values have not been changed.', 'vk-booking-manager' ),
+
+					/*
+					 * aria-live の共通リージョンへ流す1本のアナウンス用テンプレート（#387）。
+					 * 「非表示件数の確定」と「値の差し替え件数」は同じプリセット切り替えイベントで
+					 * 同時に決まるため、2回に分けて announce() を呼ばず1本のテキストにまとめる
+					 * （スクリーンリーダーによっては後勝ちで前の内容が読まれないことがあるため）。
+					 * 差し替え件数が0件のときは後半の句自体を出さない別テンプレートを使う。
+					 */
+					// translators: 1: Industry preset label. 2: Number of automatically configured fields.
+					'industryChangeTemplate'            => __( '%1$s selected. Automatically configured items: %2$d.', 'vk-booking-manager' ),
+					// translators: 1: Industry preset label. 2: Number of automatically configured fields. 3: Number of fields updated to the preset default value.
+					'industryChangeWithAppliedTemplate' => __( '%1$s selected. Automatically configured items: %2$d, items updated to default value: %3$d.', 'vk-booking-manager' ),
+					'enabledLabel'                      => __( 'Enabled', 'vk-booking-manager' ),
+					'disabledLabel'                     => __( 'Disabled', 'vk-booking-manager' ),
+					'defaultGuestsUnitLabel'            => vkbm_get_guests_unit_label(),
+				)
+			);
+		}
+
+		wp_localize_script( 'vkbm-provider-settings', 'vkbmProviderSettings', $vkbm_provider_settings_l10n );
 
 		$regular_holiday_toggle = "(function () {
 			var checkbox = document.getElementById('vkbm-regular-holiday-disabled');
@@ -286,7 +320,12 @@ class Provider_Settings_Page {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'vk-booking-manager' ) );
 		}
 
-		$settings  = $this->settings_service->get_settings();
+		$settings = $this->settings_service->get_settings();
+		$defaults = $this->settings_service->get_default_settings();
+		// 無料版では選択欄自体を表示しない（Pro_Upsell::get_feature_notice_html() に差し替える）
+		// ため、フィルター適用・翻訳ルックアップを伴う get_presets() を無駄に呼ばない
+		// （#387 レビュー指摘・安藤 LOW-8）。
+		$presets   = Pro_Upsell::is_free_edition() ? array() : Industry_Presets::get_presets( $defaults );
 		$old_input = get_transient( 'vkbm_provider_settings_previous_input' );
 		if ( is_array( $old_input ) ) {
 			foreach ( $old_input as $key => $value ) {
@@ -354,11 +393,17 @@ class Provider_Settings_Page {
 		$auth_rate_limit_login_max    = isset( $settings['auth_rate_limit_login_max'] ) ? (int) $settings['auth_rate_limit_login_max'] : 10;
 		$wp_users_can_register        = (bool) get_option( 'users_can_register' );
 		$staff_enabled                = ! empty( $settings['staff_enabled'] );
+		$industry_preset              = Industry_Presets::get_current_preset( $settings, $defaults );
+		// 業種プリセットで自動設定される項目は、最初の描画から行ごと隠す。
+		// JS（provider-settings.js）だけで隠すと、スクリプトはフッター読み込みのため
+		// ページ表示から JS 実行までの間、対象行が一瞬そのまま見えてしまう。
+		$industry_hidden_fields = self::get_industry_hidden_fields( $presets, $industry_preset );
 		// 予約枠の定員（同一枠で複数人を受け入れる）機能の有効/無効（初期表示用）。
 		// defaults マージ済みの $settings では新キー slot_capacity_enabled の既定 true が常に存在し、
 		// 旧キー multiple_guests_enabled=false（開発DBの既存無効設定）に到達できないため、
-		// raw option を 新→旧→既定true で判定する is_slot_capacity_enabled() に判定を委譲する。
-		// これにより旧キーの無効設定が表示にも正しく反映され、意図しない再有効化（新キーへ true 焼き付け）を防ぐ。
+		// 新→旧→既定true の判定に加え業種プリセットの強制値も反映する is_slot_capacity_enabled()
+		// （内部で Settings_Repository::get_settings() 経由の実効値を参照する）に判定を委譲する。
+		// これにより旧キーの無効設定・プリセットによる強制の両方が表示にも正しく反映される。
 		$slot_capacity_enabled   = Staff_Editor::is_slot_capacity_enabled();
 		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
 		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
@@ -856,6 +901,48 @@ class Provider_Settings_Page {
 									placeholder="https://"
 								/>
 								<p class="description"><?php esc_html_e( 'Use it as a link in notification emails and on the reservation completion screen.', 'vk-booking-manager' ); ?></p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-system vkbm-industry-preset-row">
+							<th scope="row">
+								<?php if ( Pro_Upsell::is_free_edition() ) : ?>
+									<?php
+									// 無料版では対応する <select> 自体を描画しないため、存在しない id を
+									// 指す for 属性を持たせない（#387 UXレビュー指摘）。
+									esc_html_e( 'Industry preset', 'vk-booking-manager' );
+									?>
+								<?php else : ?>
+									<label for="vkbm-industry-preset"><?php esc_html_e( 'Industry preset', 'vk-booking-manager' ); ?></label>
+								<?php endif; ?>
+							</th>
+							<td>
+								<?php if ( Pro_Upsell::is_free_edition() ) : ?>
+									<?php
+									// 無料版では custom 固定とし、選択欄の代わりに Pro 版への案内を表示する。
+									echo Pro_Upsell::get_feature_notice_html( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 出力はメソッド内でエスケープ済み.
+										__( 'Industry presets are available in the Pro edition.', 'vk-booking-manager' )
+									);
+									?>
+								<?php else : ?>
+									<select id="vkbm-industry-preset" name="vkbm_provider_settings[industry_preset]">
+										<?php foreach ( $presets as $preset_key => $preset ) : ?>
+											<option value="<?php echo esc_attr( (string) $preset_key ); ?>" <?php selected( $industry_preset, $preset_key ); ?>>
+												<?php echo esc_html( (string) ( $preset['label'] ?? $preset_key ) ); ?>
+											</option>
+										<?php endforeach; ?>
+									</select>
+									<p class="description"><?php esc_html_e( 'When you select an industry, only the items commonly used in that industry are displayed, with representative values entered in advance. Other items are configured automatically and are no longer displayed on this screen.', 'vk-booking-manager' ); ?></p>
+									<p class="description"><?php esc_html_e( 'Select "Custom" to configure all items individually (initial state).', 'vk-booking-manager' ); ?></p>
+									<div class="vkbm-industry-preset-summary" hidden>
+										<button type="button" class="button-link vkbm-industry-preset-summary__toggle" aria-expanded="false" aria-controls="vkbm-industry-preset-summary-content"></button>
+										<div id="vkbm-industry-preset-summary-content" class="vkbm-industry-preset-summary__content" hidden>
+											<dl class="vkbm-industry-preset-summary__list"></dl>
+											<p class="description"><?php esc_html_e( 'These items are automatically saved with these values and cannot be changed individually on this screen. Select "Custom" to configure them individually.', 'vk-booking-manager' ); ?></p>
+										</div>
+									</div>
+									<div class="screen-reader-text" id="vkbm-industry-preset-live" aria-live="polite" aria-atomic="true"></div>
+								<?php endif; ?>
 							</td>
 						</tr>
 
@@ -1470,7 +1557,8 @@ class Provider_Settings_Page {
 								</template>
 							</td>
 						</tr>
-						<tr class="vkbm-provider-settings__tab-system">
+
+						<tr class="vkbm-provider-settings__tab-system" data-industry-field="staff_enabled" data-industry-label="<?php echo esc_attr__( 'Nomination feature', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'staff_enabled' ) ); ?>>
 							<th scope="row">
 								<label for="vkbm-staff-enabled"><?php esc_html_e( 'Nomination feature', 'vk-booking-manager' ); ?></label>
 							</th>
@@ -1497,6 +1585,10 @@ class Provider_Settings_Page {
 								<?php endif; ?>
 								<p class="description">
 									<?php esc_html_e( 'When disabled, the staff nomination selection and nomination fee will be hidden from the booking form. Staff assignment and shift management features remain available.', 'vk-booking-manager' ); ?>
+									<?php if ( ! Pro_Upsell::is_free_edition() ) : ?>
+										<?php // ここから続く9項目（〜「指名料ラベル」）は業種プリセットの対象（#387・植草案）。 ?>
+										<?php esc_html_e( 'This field is affected by the industry preset selected above.', 'vk-booking-manager' ); ?>
+									<?php endif; ?>
 								</p>
 								<?php
 								// 無料版では指名・複数スタッフ機能が利用できないため案内を表示する。
@@ -1507,7 +1599,7 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 
-						<tr class="vkbm-provider-settings__tab-system">
+						<tr class="vkbm-provider-settings__tab-system" data-industry-field="slot_capacity_enabled" data-industry-label="<?php echo esc_attr__( 'Time slot capacity feature', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'slot_capacity_enabled' ) ); ?>>
 							<th scope="row">
 								<label for="vkbm-slot-capacity-enabled"><?php esc_html_e( 'Time slot capacity feature', 'vk-booking-manager' ); ?></label>
 							</th>
@@ -1523,26 +1615,20 @@ class Provider_Settings_Page {
 									// 無料版では値を送信しない。保存値は Settings_Sanitizer 側で無効へ強制される。
 									?>
 								<?php else : ?>
+									<?php
+									// #392: 以前は指名機能ONのときこのセレクトを disabled にし、hidden input で
+									// 現在値を維持していた（予約枠の定員機能は指名OFF時のみ使える仕様だったため）。
+									// 指名を使うメニューでも予約枠の定員（＝1組の最大人数）を利用できるようにしたため、
+									// 指名機能の有効/無効に関わらず常に操作可能にする。
+									?>
 									<select
 										id="vkbm-slot-capacity-enabled"
 										name="vkbm_provider_settings[slot_capacity_enabled]"
 										aria-describedby="<?php echo esc_attr( 'vkbm-slot-capacity-desc' ); ?>"
-										<?php disabled( $staff_enabled, true ); ?>
 									>
 										<option value="1" <?php selected( $slot_capacity_enabled, true ); ?>><?php esc_html_e( 'Enabled', 'vk-booking-manager' ); ?></option>
 										<option value="0" <?php selected( $slot_capacity_enabled, false ); ?>><?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?></option>
 									</select>
-									<?php if ( $staff_enabled ) : ?>
-										<?php
-										// 指名機能ON時はセレクトが disabled となり値が送信されないため、
-										// 現在の設定値を hidden で送信して既存の保存値を維持する（意図しない無効化を防ぐ）。
-										?>
-										<input
-											type="hidden"
-											name="vkbm_provider_settings[slot_capacity_enabled]"
-											value="<?php echo esc_attr( $slot_capacity_enabled ? '1' : '0' ); ?>"
-										/>
-									<?php endif; ?>
 								<?php endif; ?>
 								<p class="description" id="<?php echo esc_attr( 'vkbm-slot-capacity-desc' ); ?>">
 									<?php esc_html_e( 'This feature is intended for use with bookings such as schools, tours, and events.', 'vk-booking-manager' ); ?>
@@ -1550,10 +1636,13 @@ class Provider_Settings_Page {
 									<?php esc_html_e( 'When enabled, you can set the time slot capacity for each service menu.', 'vk-booking-manager' ); ?>
 									<br>
 									<?php esc_html_e( 'You can also allow users to book for multiple guests at once in a single booking.', 'vk-booking-manager' ); ?>
-									<?php if ( ! Pro_Upsell::is_free_edition() && $staff_enabled ) : ?>
-										<br>
-										<?php esc_html_e( 'This becomes available when the nomination feature is disabled.', 'vk-booking-manager' ); ?>
-									<?php endif; ?>
+									<br>
+									<?php
+									// #392: 指名機能との連動が生まれたため、以前の「指名OFF時のみ
+									// 使える」という注記が消えた分の不親切さを補う。指名を使うメニューでも、この
+									// スイッチが「1組の最大人数」の有効/無効を左右する親スイッチであることを明記する。
+									esc_html_e( 'This setting also controls whether the time slot capacity (maximum group size) is available for service menus that use staff nomination.', 'vk-booking-manager' );
+									?>
 								</p>
 								<?php
 								// 無料版では予約枠の定員機能が利用できないため案内を表示する。
@@ -1565,7 +1654,7 @@ class Provider_Settings_Page {
 						</tr>
 
 						<?php if ( Staff_Editor::is_enabled() ) : ?>
-							<tr class="vkbm-provider-settings__tab-system">
+							<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_label_singular" data-industry-label="<?php echo esc_attr__( 'Resource name (singular)', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_singular' ) ); ?>>
 								<th scope="row">
 									<label for="vkbm-resource-label-singular"><?php esc_html_e( 'Resource name (singular)', 'vk-booking-manager' ); ?></label>
 								</th>
@@ -1583,7 +1672,7 @@ class Provider_Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="vkbm-provider-settings__tab-system">
+							<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_menu_icon" data-industry-label="<?php echo esc_attr__( 'Resource menu icon', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_menu_icon' ) ); ?>>
 								<th scope="row">
 									<label for="vkbm-resource-menu-icon"><?php esc_html_e( 'Resource menu icon', 'vk-booking-manager' ); ?></label>
 								</th>
@@ -1635,7 +1724,7 @@ class Provider_Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="vkbm-provider-settings__tab-system">
+							<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_label_menu" data-industry-label="<?php echo esc_attr__( 'resource label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_menu' ) ); ?>>
 								<th scope="row">
 									<label for="vkbm-resource-label-menu"><?php esc_html_e( 'resource label', 'vk-booking-manager' ); ?></label>
 								</th>
@@ -1654,7 +1743,7 @@ class Provider_Settings_Page {
 							</tr>
 
 							<?php if ( $has_plural_forms_in_locale ) : ?>
-								<tr class="vkbm-provider-settings__tab-system">
+								<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_label_plural" data-industry-label="<?php echo esc_attr__( 'Resource name (multiple)', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_plural' ) ); ?>>
 									<th scope="row">
 										<label for="vkbm-resource-label-plural"><?php esc_html_e( 'Resource name (multiple)', 'vk-booking-manager' ); ?></label>
 									</th>
@@ -1672,6 +1761,98 @@ class Provider_Settings_Page {
 									</td>
 								</tr>
 							<?php endif; ?>
+						<?php endif; ?>
+
+						<tr class="vkbm-provider-settings__tab-system" data-industry-field="guests_unit_label" data-industry-label="<?php echo esc_attr__( 'Quantity unit', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_unit_label' ) ); ?>>
+							<th scope="row">
+								<label for="vkbm-guests-unit-label"><?php esc_html_e( 'Quantity unit', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-guests-unit-label"
+									name="vkbm_provider_settings[guests_unit_label]"
+									value="<?php echo esc_attr( $guests_unit_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'The unit shown after the quantity on the reservation form, confirmation screen, and notification emails. Examples: 名 / 台 / 室 / seats.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'If left empty, no unit is shown. To restore the default "guests", enter "guests".', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'A space is inserted between the number and the unit only when the unit begins with a single-byte letter (e.g. "5 seats"). Full-width units are placed directly after the number (e.g. "5名").', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<?php
+						// #391: この設定は基本設定（サイト全体）画面であり、メニューという文脈が存在しない。
+						// そのためメニュー単位判定（is_nomination_enabled_for_menu）は適用せず、
+						// 従来どおりサイト全体の指名機能スイッチのみで表示可否を判定する。
+						?>
+						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
+							<tr class="vkbm-provider-settings__tab-system" data-industry-field="no_nomination_label" data-industry-label="<?php echo esc_attr__( 'No nomination label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'no_nomination_label' ) ); ?>>
+									<th scope="row">
+										<label for="vkbm-no-nomination-label"><?php esc_html_e( 'No nomination label', 'vk-booking-manager' ); ?></label>
+									</th>
+									<td>
+										<input
+											type="text"
+											class="regular-text"
+											id="vkbm-no-nomination-label"
+											name="vkbm_provider_settings[no_nomination_label]"
+											value="<?php echo esc_attr( $no_nomination_label ); ?>"
+										/>
+										<p class="description">
+											<?php esc_html_e( 'Replaces the "No preference" notation in the pulldown (when no specific resource is selected).', 'vk-booking-manager' ); ?>
+										</p>
+									</td>
+								</tr>
+
+								<tr class="vkbm-provider-settings__tab-system" data-industry-field="nomination_fee_label" data-industry-label="<?php echo esc_attr__( 'Nomination fee label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'nomination_fee_label' ) ); ?>>
+									<th scope="row">
+										<label for="vkbm-nomination-fee-label"><?php esc_html_e( 'Nomination fee label', 'vk-booking-manager' ); ?></label>
+									</th>
+									<td>
+										<input
+											type="text"
+											class="regular-text"
+											id="vkbm-nomination-fee-label"
+											name="vkbm_provider_settings[nomination_fee_label]"
+											value="<?php echo esc_attr( $nomination_fee_label ); ?>"
+										/>
+										<p class="description">
+											<?php esc_html_e( 'Replaces the "Nomination fee" notation in the pricing display and service menu settings.', 'vk-booking-manager' ); ?>
+										</p>
+									</td>
+								</tr>
+
+								<tr class="vkbm-provider-settings__tab-system">
+									<th scope="row">
+										<?php esc_html_e( 'Resource tag display', 'vk-booking-manager' ); ?>
+									</th>
+									<td>
+										<label class="vkbm-inline-checkbox">
+											<input
+												type="checkbox"
+												id="vkbm-resource-tag-display-enabled"
+												name="vkbm_provider_settings[resource_tag_display_enabled]"
+												value="1"
+												<?php checked( ! empty( $settings['resource_tag_display_enabled'] ) ); ?>
+											/>
+											<?php esc_html_e( 'Show resource tags', 'vk-booking-manager' ); ?>
+										</label>
+										<p class="description">
+											<?php esc_html_e( 'When enabled, resource tags are displayed in parentheses after the resource name in the reservation form pulldown.', 'vk-booking-manager' ); ?>
+											<br />
+											<?php
+											printf(
+												/* translators: %s: display example */
+												esc_html__( 'Example: %s', 'vk-booking-manager' ),
+												'<code>' . esc_html__( 'Hanako Yamada ( Female, Veteran )', 'vk-booking-manager' ) . '</code>'
+											);
+											?>
+										</p>
+									</td>
+								</tr>
 						<?php endif; ?>
 
 						<tr class="vkbm-provider-settings__tab-system">
@@ -1730,92 +1911,6 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-guests-unit-label"><?php esc_html_e( 'Quantity unit', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-guests-unit-label"
-									name="vkbm_provider_settings[guests_unit_label]"
-									value="<?php echo esc_attr( $guests_unit_label ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'The unit shown after the quantity on the reservation form, confirmation screen, and notification emails. Examples: 名 / 台 / 室 / seats.', 'vk-booking-manager' ); ?><br>
-									<?php esc_html_e( 'If left empty, no unit is shown. To restore the default "guests", enter "guests".', 'vk-booking-manager' ); ?><br>
-									<?php esc_html_e( 'A space is inserted between the number and the unit only when the unit begins with a single-byte letter (e.g. "5 seats"). Full-width units are placed directly after the number (e.g. "5名").', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
-
-						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
-							<tr class="vkbm-provider-settings__tab-system">
-									<th scope="row">
-										<label for="vkbm-no-nomination-label"><?php esc_html_e( 'No nomination label', 'vk-booking-manager' ); ?></label>
-									</th>
-									<td>
-										<input
-											type="text"
-											class="regular-text"
-											id="vkbm-no-nomination-label"
-											name="vkbm_provider_settings[no_nomination_label]"
-											value="<?php echo esc_attr( $no_nomination_label ); ?>"
-										/>
-										<p class="description">
-											<?php esc_html_e( 'Replaces the "No preference" notation in the pulldown (when no specific resource is selected).', 'vk-booking-manager' ); ?>
-										</p>
-									</td>
-								</tr>
-
-								<tr class="vkbm-provider-settings__tab-system">
-									<th scope="row">
-										<label for="vkbm-nomination-fee-label"><?php esc_html_e( 'Nomination fee label', 'vk-booking-manager' ); ?></label>
-									</th>
-									<td>
-										<input
-											type="text"
-											class="regular-text"
-											id="vkbm-nomination-fee-label"
-											name="vkbm_provider_settings[nomination_fee_label]"
-											value="<?php echo esc_attr( $nomination_fee_label ); ?>"
-										/>
-										<p class="description">
-											<?php esc_html_e( 'Replaces the "Nomination fee" notation in the pricing display and service menu settings.', 'vk-booking-manager' ); ?>
-										</p>
-									</td>
-								</tr>
-
-								<tr class="vkbm-provider-settings__tab-system">
-									<th scope="row">
-										<?php esc_html_e( 'Resource tag display', 'vk-booking-manager' ); ?>
-									</th>
-									<td>
-										<label class="vkbm-inline-checkbox">
-											<input
-												type="checkbox"
-												id="vkbm-resource-tag-display-enabled"
-												name="vkbm_provider_settings[resource_tag_display_enabled]"
-												value="1"
-												<?php checked( ! empty( $settings['resource_tag_display_enabled'] ) ); ?>
-											/>
-											<?php esc_html_e( 'Show resource tags', 'vk-booking-manager' ); ?>
-										</label>
-										<p class="description">
-											<?php esc_html_e( 'When enabled, resource tags are displayed in parentheses after the resource name in the reservation form pulldown.', 'vk-booking-manager' ); ?>
-											<br />
-											<?php
-											printf(
-												/* translators: %s: display example */
-												esc_html__( 'Example: %s', 'vk-booking-manager' ),
-												'<code>' . esc_html__( 'Hanako Yamada ( Female, Veteran )', 'vk-booking-manager' ) . '</code>'
-											);
-											?>
-										</p>
-									</td>
-								</tr>
-						<?php endif; ?>
 						<tr class="vkbm-provider-settings__tab-system">
 							<th scope="row">
 								<label for="vkbm-closed-day-label"><?php esc_html_e( 'Closed day label', 'vk-booking-manager' ); ?></label>
@@ -2004,7 +2099,7 @@ class Provider_Settings_Page {
 					</tbody>
 				</table>
 
-				<?php if ( ! Staff_Editor::is_nomination_enabled() ) : ?>
+				<?php if ( Pro_Upsell::is_free_edition() && ! Staff_Editor::is_nomination_enabled() ) : ?>
 					<?php
 					// 指名機能が無効でも、ラベルの保存値を維持するために hidden フィールドで送信する。
 					// Preserve saved label values via hidden fields even when nomination is disabled.
@@ -2196,6 +2291,43 @@ class Provider_Settings_Page {
 	}
 
 	/**
+	 * 業種プリセットで自動設定される（＝設定画面に表示しない）項目のキー一覧を返す。
+	 *
+	 * provider-settings.js の update() と同じ判定をサーバー側でも行い、対象行を最初の
+	 * 描画から hidden 属性付きで出力するために使う。JS 実行前の一瞬だけ対象行が
+	 * 見えてしまう状態（#387 の実装では JS でのみ隠していた）を防ぐ。
+	 *
+	 * @param array<string, array<string, mixed>> $presets    フィルター適用済みのプリセット一覧。
+	 * @param string                              $preset_key 現在の業種プリセットキー。
+	 * @return array<int, string> 表示しない項目のキー一覧。
+	 */
+	private static function get_industry_hidden_fields( array $presets, string $preset_key ): array {
+		if ( Pro_Upsell::is_free_edition() || 'custom' === $preset_key ) {
+			return array();
+		}
+
+		$hidden = array();
+		foreach ( $presets[ $preset_key ]['fields'] ?? array() as $field_key => $field ) {
+			if ( empty( $field['display'] ) && in_array( $field_key, Industry_Presets::FIELD_KEYS, true ) ) {
+				$hidden[] = (string) $field_key;
+			}
+		}
+
+		return $hidden;
+	}
+
+	/**
+	 * 業種プリセットの対象行に付与する hidden 属性を返す。
+	 *
+	 * @param array<int, string> $hidden_fields 表示しない項目のキー一覧。
+	 * @param string             $field_key     対象行の設定キー。
+	 * @return string 非表示なら 'hidden'、表示するなら空文字列。
+	 */
+	private static function industry_row_hidden_attr( array $hidden_fields, string $field_key ): string {
+		return in_array( $field_key, $hidden_fields, true ) ? 'hidden' : '';
+	}
+
+	/**
 	 * リソースメニューアイコンのプリセット Dashicons クラス名一覧を返す。
 	 *
 	 * 「スタッフ」「ルーム」「コート」など、リソース種別として想定される用途を
@@ -2233,7 +2365,8 @@ class Provider_Settings_Page {
 	 * @return array<string, mixed>
 	 */
 	private function sanitize_old_input( array $input ): array {
-		$output = array();
+		$output                    = array();
+		$output['industry_preset'] = Industry_Presets::sanitize_preset_key( $input['industry_preset'] ?? 'custom' );
 
 		$output['provider_name']           = sanitize_text_field( $input['provider_name'] ?? '' );
 		$output['provider_address']        = sanitize_textarea_field( $input['provider_address'] ?? '' );

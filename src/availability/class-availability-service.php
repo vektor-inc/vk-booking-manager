@@ -20,6 +20,7 @@ use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
@@ -65,6 +66,7 @@ class Availability_Service {
 	private const MENU_META_FIXED_START_TIMES           = '_vkbm_fixed_start_times';
 	private const MENU_META_MAX_CAPACITY                = '_vkbm_max_capacity';
 	private const MENU_META_MIN_CAPACITY                = '_vkbm_min_capacity';
+	private const MENU_META_ALLOW_MULTIPLE_GUESTS       = '_vkbm_allow_multiple_guests';
 	private const MENU_META_EXCLUSIVE_WHEN_BOOKED       = '_vkbm_exclusive_when_booked';
 
 	private const DAY_STATUS_OPEN            = 'open';
@@ -162,7 +164,8 @@ class Availability_Service {
 			$menu->ID,
 			$staff_ids,
 			sprintf( '%04d-%02d', $year, $month ),
-			$timezone->getName()
+			$timezone->getName(),
+			$preferred_staff_id > 0
 		);
 
 		$cached = get_transient( $cache_key );
@@ -170,7 +173,7 @@ class Availability_Service {
 			return $cached;
 		}
 
-		$days_in_month = (int) wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) );
+		$days_in_month = $this->days_in_month( $year, $month );
 		$results       = array();
 
 		for ( $day = 1; $day <= $days_in_month; $day++ ) {
@@ -256,7 +259,8 @@ class Availability_Service {
 				$menu->ID,
 				$staff_ids,
 				$date->format( 'Y-m-d' ),
-				$timezone->getName()
+				$timezone->getName(),
+				$preferred_staff_id > 0
 			);
 
 			$cached = get_transient( $cache_key );
@@ -310,6 +314,379 @@ class Availability_Service {
 		}
 
 		return $payload;
+	}
+
+	/**
+	 * #411: 表示中の月に予約可能な日が1件も無い場合、管理者・サイトオーナー・サロンオーナー
+	 * 向けに「なぜ予約できないのか」の診断理由を1件だけ返す。
+	 *
+	 * 権限判定はこのメソッドの呼び出し側（REST コントローラー）で行う。このメソッド自体は
+	 * 権限に関わらず詳細な理由を返すため、呼び出し側は必ず
+	 * current_user_can( Capabilities::MANAGE_SYSTEM_SETTINGS ) を通過したユーザーにのみ
+	 * 結果をレスポンスへ含めること（非該当者にはレスポンスから理由フィールドごと省略する）。
+	 *
+	 * 優先順位（数値が小さいほど優先。複数該当しても1件だけ返す）は次のとおり。
+	 * ただし実際の評価順は「P1/P4 → P3 → P5 → P6 → P7 → P2 → P8 → P9」（下記実装を参照）。
+	 * P1（担当スタッフ0件）と P4（指名スタッフとメニューの担当設定が不一致）は
+	 * どちらも resolve_staff_ids() の結果からしか判定できないため、コード上はP3より先に
+	 * まとめて評価する。P4がP3より先に評価される実害は「非公開メニューかつ誤った指名
+	 * スタッフ指定」という稀な組み合わせに限られるため、この順序のまま許容している
+	 * （司・植草さん確認済み）。
+	 * P1 担当スタッフ0件 → P4 指名スタッフとメニューの担当設定が不一致 → P3 メニューが非公開等 →
+	 * P5 予約可能日設定に表示中の月が一致しない → P6 予約受付上限日数が短い →
+	 * P7 定休日・臨時休業で全休 → P2 勤務はあるが所要時間に足りない → P8 予約受付締切が長すぎる →
+	 * P9 貸切予約で全枠閉鎖。
+	 *
+	 * @param array<string, mixed> $args 引数（menu_id, resource_id, year, month, timezone）。
+	 * @return array{code:string, message:string}|null 予約可能日が無い場合のみ理由を返す。
+	 */
+	public function get_unavailability_reason( array $args ): ?array {
+		$menu_id = (int) ( $args['menu_id'] ?? 0 );
+		$post    = get_post( $menu_id );
+
+		if ( ! $post instanceof WP_Post || 'vkbm_service_menu' !== $post->post_type ) {
+			return null;
+		}
+
+		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+
+		// P1 / P4: 担当スタッフの解決。メニューの公開状態より根本原因として優先判定するため、
+		// validate_menu() より先に判定する（validate_menu() は最初に該当したエラーで早期returnし、
+		// 他の問題を隠してしまうため、診断では判定順序を意図的に入れ替えている）。
+		$staff_ids = $this->resolve_staff_ids( $post, $preferred_staff_id );
+		if ( is_wp_error( $staff_ids ) ) {
+			$error_code = $staff_ids->get_error_code();
+
+			if ( 'staff_not_configured' === $error_code ) {
+				// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+				// join_sentences()（#411 植草さんレビュー指摘: ハードコードの半角スペースで
+				// 連結すると、句点で終わる日本語文のあいだに不要な隙間ができるため、
+				// 文末が非ASCIIかどうかで区切り方を切り替える）。
+				$message = Nomination_Min_Guests_Message::join_sentences(
+					__( 'This menu does not have any staff members assigned to it.', 'vk-booking-manager' ),
+					__( 'Assign at least one staff member in the "In-charge staff" field on the service menu edit screen.', 'vk-booking-manager' )
+				);
+
+				return $this->build_diagnostic_reason( 'staff_not_configured', $message );
+			}
+
+			if ( 'staff_not_assigned' === $error_code ) {
+				// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+				// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+				$message = Nomination_Min_Guests_Message::join_sentences(
+					__( 'The specified staff member is not set as in charge of this menu.', 'vk-booking-manager' ),
+					__( 'Check the "In-charge staff" setting on the service menu edit screen.', 'vk-booking-manager' )
+				);
+
+				return $this->build_diagnostic_reason( 'staff_not_assigned', $message );
+			}
+
+			// 未知のエラーコードは診断対象外（バナーを出さない）。
+			return null;
+		}
+
+		// P3: メニュー自体がオンライン予約対象外（非公開／アーカイブ／オンライン掲載オフ）。
+		// validate_menu() を再利用せず個別に判定し、3つの条件をまとめて1つの理由として返す。
+		$is_menu_not_bookable = ( 'publish' !== $post->post_status && ! $this->can_book_private_menu() )
+			|| '1' === get_post_meta( $post->ID, self::MENU_META_ARCHIVED, true )
+			|| '1' === get_post_meta( $post->ID, self::MENU_META_ONLINE_DISABLED, true );
+
+		if ( $is_menu_not_bookable ) {
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'This menu is currently not eligible for online reservations (not published / archived / hidden from online listing).', 'vk-booking-manager' ),
+				__( 'Check the publication settings on the service menu edit screen.', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'menu_not_bookable', $message );
+		}
+
+		$year  = (int) ( $args['year'] ?? 0 );
+		$month = (int) ( $args['month'] ?? 0 );
+		if ( $year < 2000 || $year > 2100 || $month < 1 || $month > 12 ) {
+			return null;
+		}
+
+		$timezone      = $this->resolve_timezone( (string) ( $args['timezone'] ?? '' ) );
+		$menu_settings = $this->get_menu_settings( $post );
+		$days_in_month = $this->days_in_month( $year, $month );
+
+		$any_date_allowed                 = false;
+		$any_within_advance               = false;
+		$any_day_open                     = false;
+		$any_slots_ignoring_deadline      = false;
+		$any_slots_after_deadline         = false;
+		$any_bookable_excluding_exclusive = false;
+
+		for ( $day = 1; $day <= $days_in_month; $day++ ) {
+			$date = sprintf( '%04d-%02d-%02d', $year, $month, $day );
+
+			$date_allowed = $this->is_date_allowed_for_menu( $menu_settings, $date, $timezone );
+			if ( $date_allowed ) {
+				$any_date_allowed = true;
+			}
+
+			$within_advance = $this->is_within_max_advance_days( $menu_settings, $date, $timezone );
+			if ( $within_advance ) {
+				$any_within_advance = true;
+			}
+
+			if ( ! $date_allowed || ! $within_advance ) {
+				// P5 / P6 のいずれかで既に予約不可な日は、シフト側の分析をしても無意味なためスキップする。
+				continue;
+			}
+
+			$day_status = $this->resolve_day_status( $staff_ids, $year, $month, $day );
+			if ( $this->is_closed_status( $day_status ) ) {
+				// P7: 定休日・臨時休業。
+				continue;
+			}
+			$any_day_open = true;
+
+			list( $slots_ignoring_deadline, $slots_after_deadline ) = $this->build_diagnostic_slots_for_day(
+				$post,
+				$staff_ids,
+				$date,
+				$timezone,
+				$menu_settings
+			);
+
+			if ( ! empty( $slots_ignoring_deadline ) ) {
+				$any_slots_ignoring_deadline = true;
+			}
+
+			if ( ! empty( $slots_after_deadline ) ) {
+				$any_slots_after_deadline = true;
+
+				$bookable = array_filter(
+					$slots_after_deadline,
+					static function ( array $slot ): bool {
+						return empty( $slot['exclusive_closed'] );
+					}
+				);
+
+				if ( ! empty( $bookable ) ) {
+					// 予約可能な枠が1件でも見つかった時点で、診断は不要（早期終了）。
+					$any_bookable_excluding_exclusive = true;
+					break;
+				}
+			}
+		}
+
+		if ( $any_bookable_excluding_exclusive ) {
+			return null;
+		}
+
+		if ( ! $any_date_allowed ) {
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'There are no days in the displayed month that match this menu\'s "reservable days" setting (day of week / specific dates).', 'vk-booking-manager' ),
+				__( 'Check the setting on the service menu edit screen.', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'reservation_day_mismatch', $message );
+		}
+
+		if ( ! $any_within_advance ) {
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'Reservations are only accepted up to a certain number of days from today, and the displayed month is outside that range.', 'vk-booking-manager' ),
+				__( 'Check the "Maximum advance booking days" setting in the general settings (or this menu\'s individual setting).', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'max_advance_days_exceeded', $message );
+		}
+
+		if ( ! $any_day_open ) {
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'There are no business days in the displayed month for the in-charge staff members, due to their closed-day settings (regular holidays / temporary closures).', 'vk-booking-manager' ),
+				__( 'Check the shift settings in staff management.', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'all_days_closed', $message );
+		}
+
+		if ( ! $any_slots_ignoring_deadline ) {
+			// #411 植草さんレビュー指摘: シフト未登録月（当メソッドの評価上はこのケースも
+			// ここに含まれる）でも指す先が変わらないため、理由コードは分割せず文言のみで対応する。
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'The required working hours for this menu\'s duration (including the buffer before/after the service) have not been secured for the in-charge staff members.', 'vk-booking-manager' ),
+				__( 'Register or extend the working hours for the target month in the staff shift settings, or review the required time setting on the menu edit screen.', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'shift_too_short_for_duration', $message );
+		}
+
+		if ( ! $any_slots_after_deadline ) {
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'Because of the reservation deadline setting, all time slots for nearby dates have already closed for booking.', 'vk-booking-manager' ),
+				__( 'Check the "Reservation deadline" setting in the general settings (or this menu\'s individual setting).', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'deadline_hours_too_long', $message );
+		}
+
+		// ここまで到達した場合、生成されたスロットは全て貸し切り予約により閉鎖されている。
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+		// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
+		$message = Nomination_Min_Guests_Message::join_sentences(
+			__( 'All time slots on the remaining days are closed because of another reservation (an exclusive booking).', 'vk-booking-manager' ),
+			__( 'This is not a configuration issue -- check the reservation status for those days in the reservations screen.', 'vk-booking-manager' )
+		);
+
+		return $this->build_diagnostic_reason( 'exclusive_closed', $message );
+	}
+
+	/**
+	 * 指定した年月の日数を取得する。
+	 *
+	 * `wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) )` は、サイトTZがUTCより
+	 * マイナス側の場合に前月の日数を返しうる（#411 安藤さんレビュー指摘）。
+	 * DateTimeImmutable はタイムゾーンを持たず年月日のみで構築するため、この問題が起きない。
+	 *
+	 * @param int $year  年。
+	 * @param int $month 月（1-12）。
+	 * @return int 指定月の日数。
+	 */
+	private function days_in_month( int $year, int $month ): int {
+		return (int) ( new DateTimeImmutable( sprintf( '%04d-%02d-01', $year, $month ) ) )->format( 't' );
+	}
+
+	/**
+	 * 診断理由の配列を組み立てる。
+	 *
+	 * @param string $code    理由コード。
+	 * @param string $message 理由本文（管理者向けプレフィックスは呼び出し側／フロントで付与する）。
+	 * @return array{code:string, message:string}
+	 */
+	private function build_diagnostic_reason( string $code, string $message ): array {
+		return array(
+			'code'    => $code,
+			'message' => $message,
+		);
+	}
+
+	/**
+	 * 指定日が予約受付上限日数（max_advance_days）の範囲内かどうかを判定する。
+	 *
+	 * generate_slots_for_date() 内のインライン判定と同じロジックを共有ヘルパー化したもの。
+	 *
+	 * @param array<string, mixed> $menu_settings get_menu_settings() の戻り値。
+	 * @param string               $date          日付（Y-m-d）。
+	 * @param DateTimeZone         $timezone      タイムゾーン。
+	 * @return bool 範囲内（または上限設定なし）の場合 true。
+	 */
+	private function is_within_max_advance_days( array $menu_settings, string $date, DateTimeZone $timezone ): bool {
+		if ( $menu_settings['max_advance_days'] <= 0 ) {
+			return true;
+		}
+
+		$now = current_datetime();
+		if ( ! $now instanceof DateTimeImmutable ) {
+			return true;
+		}
+
+		$max_date = $now->setTimezone( $timezone )->modify( sprintf( '+%d days', $menu_settings['max_advance_days'] ) );
+		$target   = DateTimeImmutable::createFromFormat( 'Y-m-d', $date, $timezone );
+		if ( ! $target instanceof DateTimeImmutable ) {
+			return true;
+		}
+
+		return $target->format( 'Y-m-d' ) <= $max_date->format( 'Y-m-d' );
+	}
+
+	/**
+	 * 診断用: 指定日の候補スロットを「予約受付締切を無視した場合」「実際の締切を適用した場合」の
+	 * 2系統で構築する。P2（所要時間に対しシフトが短すぎる）と P8（締切が長すぎて全滅する）を
+	 * 切り分けるために使う。
+	 *
+	 * skip_booked_slots は常に false（自動割り当て相当）で呼び出し、予約済み・貸し切りの枠も
+	 * 残したまま返す。「満席（remaining=0だが貸切ではない）」は診断対象外という仕様のため、
+	 * 呼び出し側で exclusive_closed のみを見て判定する。
+	 *
+	 * @param WP_Post              $menu_post     メニュー投稿。
+	 * @param array<int>           $staff_ids     対象スタッフID。
+	 * @param string               $date          日付（Y-m-d）。
+	 * @param DateTimeZone         $timezone      タイムゾーン。
+	 * @param array<string, mixed> $menu_settings get_menu_settings() の戻り値。
+	 * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>}
+	 *               [締切を無視した場合の全スロット, 実際の締切を適用した場合のスロット]
+	 */
+	private function build_diagnostic_slots_for_day( WP_Post $menu_post, array $staff_ids, string $date, DateTimeZone $timezone, array $menu_settings ): array {
+		$slot_step_minutes = $this->get_slot_step_minutes();
+		$total_block_min   = max( $slot_step_minutes, $menu_settings['total_duration'] );
+		$service_minutes   = $menu_settings['duration'];
+		$fixed_start_times = $menu_settings['fixed_start_times'] ?? array();
+
+		$deadline_cutoff = null;
+		if ( $menu_settings['deadline_hours'] > 0 ) {
+			$now = current_datetime();
+			if ( $now instanceof DateTimeImmutable ) {
+				$deadline_cutoff = $now->modify( sprintf( '+%d hours', $menu_settings['deadline_hours'] ) )->setTimezone( $timezone );
+			}
+		}
+
+		$year  = (int) substr( $date, 0, 4 );
+		$month = (int) substr( $date, 5, 2 );
+		$day   = (int) substr( $date, 8, 2 );
+
+		$slots_ignoring_deadline = array();
+		$slots_after_deadline    = array();
+
+		foreach ( $staff_ids as $staff_id ) {
+			$day_entry = $this->get_shift_entry( $staff_id, $year, $month, $day );
+
+			if ( empty( $day_entry['slots'] ) || $this->is_closed_status( (string) ( $day_entry['status'] ?? '' ) ) ) {
+				continue;
+			}
+
+			$bookings = $this->get_bookings_for_staff_date( $staff_id, $date, $timezone );
+
+			$slots_ignoring_deadline = array_merge(
+				$slots_ignoring_deadline,
+				$this->build_slots_from_entry(
+					$day_entry['slots'],
+					$date,
+					$timezone,
+					$total_block_min,
+					$service_minutes,
+					null,
+					$bookings,
+					$slot_step_minutes,
+					$fixed_start_times,
+					false,
+					(int) $menu_post->ID
+				)
+			);
+
+			$slots_after_deadline = array_merge(
+				$slots_after_deadline,
+				$this->build_slots_from_entry(
+					$day_entry['slots'],
+					$date,
+					$timezone,
+					$total_block_min,
+					$service_minutes,
+					$deadline_cutoff,
+					$bookings,
+					$slot_step_minutes,
+					$fixed_start_times,
+					false,
+					(int) $menu_post->ID
+				)
+			);
+		}
+
+		return array( $slots_ignoring_deadline, $slots_after_deadline );
 	}
 
 	/**
@@ -412,16 +789,49 @@ class Availability_Service {
 	/**
 	 * Build cache key.
 	 *
-	 * @param string     $prefix   Prefix.
-	 * @param int        $menu_id  Menu ID.
-	 * @param array<int> $staff_ids Staff IDs.
-	 * @param string     $date_key Date key.
-	 * @param string     $timezone Timezone name.
+	 * キャッシュ名には Availability_Cache_Generation が管理するサイト全体の世代番号を混ぜる。
+	 * シフト・サービスメニュー・スタッフ・システム設定のいずれかが保存・削除されると
+	 * 世代番号が進み、古い世代番号で作られたキャッシュ名は二度と参照されなくなる
+	 * （#410 / #412。delete_transient() による個別削除は再検討済みで不採用）。
+	 *
+	 * 加えて、その名前が対象にしている日付・月ぶんの世代番号（Availability_Booking_Cache_Generation
+	 * が管理）も混ぜる（#417）。予約はシフト等より保存頻度が桁違いに高いため、サイト全体の
+	 * 世代番号へ混ぜてしまうと予約が1件入るたびに全メニュー・全月ぶんのキャッシュが無効化され、
+	 * 予約の多いサイトで一時保存がほとんど効かなくなる。そのため予約の変更は「その予約が
+	 * 実際に関係する日付・月」だけの世代番号を進める方式にしている。calendar（月次カレンダー、
+	 * date_key は YYYY-MM）はその月の世代番号を、daily（日別枠、date_key は YYYY-MM-DD）は
+	 * その日の世代番号を見る。
+	 *
+	 * 世代番号を含めても、options テーブルの列名上限（191文字）に対して十分な余裕がある
+	 * （既存部分が約100文字、世代番号2つを合わせても int の最大桁数でそれぞれ20文字程度）。
+	 *
+	 * $is_staff_preferred も必ずキーへ含める（安藤レビュー・MEDIUM）。担当スタッフが1人だけの
+	 * メニューでは、指名あり（resource_id 指定）と指名なし（自動割り当て）の呼び出しが
+	 * $staff_ids・$menu_id・$date_key・$timezone のすべてで一致してしまい、この引数が
+	 * 無いと同じキャッシュ名を共有してしまう。しかし generate_slots_for_date() は
+	 * $is_staff_preferred の値で collapse_slots_for_auto_assignment() を通すか・
+	 * auto_assign フラグ・予約済み枠の扱い（skip_booked_slots）を変えるため、出力は別物になる。
+	 * 区別せずキャッシュすると、先にキャッシュされた側の結果（予約済み枠を含みうる自動割り当て
+	 * 結果など）がもう一方のリクエストへ誤って返り、埋まっている枠を空きとして提示しうる。
+	 *
+	 * @param string     $prefix             Prefix.
+	 * @param int        $menu_id            Menu ID.
+	 * @param array<int> $staff_ids          Staff IDs.
+	 * @param string     $date_key           Date key.
+	 * @param string     $timezone           Timezone name.
+	 * @param bool       $is_staff_preferred 担当スタッフ指名の有無（resource_id 指定の有無）。
 	 * @return string
 	 */
-	private function build_cache_key( string $prefix, int $menu_id, array $staff_ids, string $date_key, string $timezone ): string {
+	private function build_cache_key( string $prefix, int $menu_id, array $staff_ids, string $date_key, string $timezone, bool $is_staff_preferred ): string {
 		$staff_hash = md5( implode( '-', $staff_ids ) );
-		return sprintf( 'vkbm_%s_%d_%s_%s_%s', $prefix, $menu_id, $staff_hash, $date_key, md5( $timezone ) );
+		$generation = Availability_Cache_Generation::get_generation();
+
+		// calendar（月次カレンダー）はその月ぶん、daily（日別枠）はその日ぶんの世代番号を見る（#417）。
+		$date_generation = ( 'calendar' === $prefix )
+			? Availability_Booking_Cache_Generation::get_monthly_generation( $date_key )
+			: Availability_Booking_Cache_Generation::get_daily_generation( $date_key );
+
+		return sprintf( 'vkbm_%s_g%d_bg%d_%d_%s_%s_%s_p%d', $prefix, $generation, $date_generation, $menu_id, $staff_hash, $date_key, md5( $timezone ), $is_staff_preferred ? 1 : 0 );
 	}
 
 	/**
@@ -442,15 +852,9 @@ class Availability_Service {
 
 		// 予約可能期間を超える日付はスロットを返さない。
 		// Return no slots for dates beyond the max advance booking period.
-		if ( $menu_settings['max_advance_days'] > 0 ) {
-			$now = current_datetime();
-			if ( $now instanceof DateTimeImmutable ) {
-				$max_date = $now->setTimezone( $timezone )->modify( sprintf( '+%d days', $menu_settings['max_advance_days'] ) );
-				$target   = DateTimeImmutable::createFromFormat( 'Y-m-d', $date, $timezone );
-				if ( $target instanceof DateTimeImmutable && $target->format( 'Y-m-d' ) > $max_date->format( 'Y-m-d' ) ) {
-					return array();
-				}
-			}
+		// #411: 診断用の is_within_max_advance_days() と判定ロジックを共有する（重複排除）。
+		if ( ! $this->is_within_max_advance_days( $menu_settings, $date, $timezone ) ) {
+			return array();
 		}
 
 		$slot_step_minutes = $this->get_slot_step_minutes();
@@ -514,12 +918,17 @@ class Availability_Service {
 
 			$last_index = count( $staff_slots ) - 1;
 			foreach ( $staff_slots as $index => $slot ) {
-				// スタッフ指名ありの場合は従来どおり capacity=1（1対1）。
-				// Staff-preferred slots always have capacity 1 (one-on-one).
+				// #392: スタッフ指名ありの場合、capacity はメニューの最大同時予約人数（1組の最大人数）を反映する。
+				// 予約済み（guest_count>0）のスロットは build_slots_from_entry() が既に除外しているため
+				// （skip_booked_slots=true。上のスタッフ指名スロット構築を参照）、ここに来る guest_count は
+				// 実質常に0だが、式としては max_capacity - guest_count を保持し安全側に倒す。
+				// これにより「指名を使うメニューでは1枠1組（貸切）。定員は1組の最大人数」という仕様（#392）を
+				// 満たしつつ、指名を使わないメニューで万一この経路を通っても（前提上は起きない）
+				// 従来の1対1相当の挙動から大きく外れない。
 				$guest_count = isset( $slot['guest_count'] ) ? (int) $slot['guest_count'] : 0;
 				// 貸し切り予約で閉じた枠は、残席があっても受付停止（remaining=0）にする。
 				$exclusive_closed = ! empty( $slot['exclusive_closed'] );
-				$remaining        = $exclusive_closed ? 0 : max( 0, 1 - $guest_count );
+				$remaining        = $exclusive_closed ? 0 : max( 0, $max_capacity - $guest_count );
 				$all_slots[]      = array(
 					'slot_id'          => sprintf( '%d-%s', $staff_id, gmdate( 'YmdHis', $slot['start']->getTimestamp() ) ),
 					'start_at'         => $slot['start']->format( DATE_ATOM ),
@@ -527,7 +936,7 @@ class Availability_Service {
 					'service_end_at'   => $slot['service_end']->format( DATE_ATOM ),
 					'duration_minutes' => $service_minutes,
 					'staff'            => $staff_info[ $staff_id ],
-					'capacity'         => 1,
+					'capacity'         => $max_capacity,
 					'remaining'        => $remaining,
 					'guest_count'      => $guest_count,
 					// 最小催行人数と当該枠の合計予約人数（指名枠は単一スタッフ=合計）。フロント・管理画面の催行状態表示用。
@@ -563,6 +972,10 @@ class Availability_Service {
 	 * スタッフ個別スロットを自動割り当てバケットに集約します。
 	 * capacity はメニューの最大同時予約人数を反映します。
 	 *
+	 * #392: 指名を使うメニュー（「指名なし」で申し込んだ予約も含む）は1枠1組（貸切）扱いのため、
+	 * 既に1件でも予約が入ったスタッフの残りは、定員未達でも0（相乗り不可）にする。
+	 * 指名を使わないメニューでは従来どおり max_capacity - 予約人数 の相乗りを許可する。
+	 *
 	 * @param array<int, array<string, mixed>> $slots        Slots.
 	 * @param int                              $menu_id      Menu ID.
 	 * @param int                              $max_capacity Maximum simultaneous bookings per slot.
@@ -574,9 +987,10 @@ class Availability_Service {
 			return array();
 		}
 
-		$max_capacity = max( 1, $max_capacity );
-		$min_capacity = max( 0, $min_capacity );
-		$grouped      = array();
+		$max_capacity    = max( 1, $max_capacity );
+		$min_capacity    = max( 0, $min_capacity );
+		$uses_nomination = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
+		$grouped         = array();
 
 		foreach ( $slots as $slot ) {
 			$key = $slot['start_at'] . '|' . $slot['end_at'];
@@ -660,8 +1074,11 @@ class Availability_Service {
 			$grouped[ $key ]['min_capacity']  = $min_capacity;
 			$grouped[ $key ]['booked_guests'] = (int) array_sum( $staff_loads );
 			foreach ( $grouped[ $key ]['assignable_staff_ids'] as $sid ) {
-				$load      = isset( $staff_loads[ $sid ] ) ? (int) $staff_loads[ $sid ] : 0;
-				$remaining = max( 0, $max_capacity - $load );
+				$load = isset( $staff_loads[ $sid ] ) ? (int) $staff_loads[ $sid ] : 0;
+				// #392: 指名を使うメニューは1枠1組（貸切）。既にそのスタッフへ1件でも予約が
+				// 入っていれば（load > 0）、定員未達でも相乗りさせず残りを0にする。
+				// 指名を使わないメニューは従来どおり max_capacity - load の相乗りを許可する。
+				$remaining = ( $uses_nomination && $load > 0 ) ? 0 : max( 0, $max_capacity - $load );
 				if ( $remaining > $best_remaining ) {
 					$best_remaining = $remaining;
 				}
@@ -1317,13 +1734,18 @@ class Availability_Service {
 	 * サービスメニューの最大同時予約人数を取得します。
 	 * Pro版で設定されていない場合やFree版ではデフォルト1を返します。
 	 *
+	 * #392: 指名を使うメニューを「1枠1組（貸切）」として扱う仕様変更に伴い、
+	 * 「指名ONなら1固定」の分岐を削除した。指名を使うメニューでも、この値は
+	 * 「1件の予約で申し込める（1組の）最大人数」として使われる。1枠1組の排他制御は
+	 * 予約処理側（Booking_Confirmation_Controller::select_best_fit_staff() 等の
+	 * スタッフ競合判定）が別途担うため、ここでは人数の実値解決のみを行う。
+	 *
 	 * @param WP_Post $menu_post Menu post object.
 	 * @return int
 	 */
 	public function get_menu_max_capacity( WP_Post $menu_post ): int {
-		// 複数人予約機能が無効、または指名機能が有効な場合は1対1予約のため上限を1に固定する。
-		// これによりフロントの空き枠生成・確定時の capacity チェックの双方で複数人受付を抑止する。
-		if ( ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+		// 予約枠の定員機能が無効な場合は上限を1に固定する（複数人受付を抑止）。
+		if ( ! Staff_Editor::is_slot_capacity_enabled() ) {
 			return 1;
 		}
 
@@ -1339,12 +1761,21 @@ class Availability_Service {
 	 * 0 は「制約なし（催行判定なし）」で、未設定・Free版・指名ON・複数人予約OFF時は 0 を返します。
 	 * 最大同時予約人数（get_menu_max_capacity）を上限としてクランプします。
 	 *
+	 * #392: 指名を使うメニューは常に1枠1組（貸切）のため、複数の別々の予約が相乗りして
+	 * 「催行確定」に達するという概念自体が成立しない。get_menu_max_capacity() が
+	 * 指名ONでも1より大きい値を返すようになったため（#392）、この関数では
+	 * 「max_capacity <= 1」だけに頼らず、指名ONを明示的にチェックして0（制約なし）へ倒す。
+	 *
 	 * @param WP_Post $menu_post メニューの投稿オブジェクト。
 	 * @return int 最小催行人数（0=制約なし）。
 	 */
 	public function get_menu_min_capacity( WP_Post $menu_post ): int {
-		// 最小催行人数は複数人相乗りの催行判定が前提のため、最大受付数が1（複数人予約OFF・指名ON・Free版）の場合は無効。
-		// max_capacity と同じゲートに追従し、1対1予約のメニューでは常に0（制約なし）を返す。
+		// 指名を使うメニューは1枠1組（貸切）が確定しており、催行判定の概念が無いため常に0。
+		if ( Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) ) {
+			return 0;
+		}
+
+		// 最小催行人数は複数人相乗りの催行判定が前提のため、最大受付数が1（複数人予約OFF・Free版）の場合は無効。
 		$max_capacity = $this->get_menu_max_capacity( $menu_post );
 		if ( $max_capacity <= 1 ) {
 			return 0;
@@ -1354,6 +1785,48 @@ class Availability_Service {
 		$min  = '' === $meta ? 0 : (int) $meta;
 
 		// 0未満は0へ、最大受付数を超える値は最大受付数へクランプする。
+		return max( 0, min( $max_capacity, $min ) );
+	}
+
+	/**
+	 * 指名を使うメニューの「最低申し込み人数」（受付制限）を取得する（#393）。
+	 *
+	 * get_menu_min_capacity()（催行状態の表示専用。指名を使うメニューでは常に0を返す）とは別の
+	 * 取得経路。指名を使うメニューは1件の予約が1組の貸切になるため、この値は「1組の最低人数」を
+	 * 意味する受付制限として使う。この値が1以上のとき、申込人数がこれを下回る予約は受け付けない
+	 * （Booking_Draft_Controller / Booking_Confirmation_Controller が本メソッドの値でサーバ側の
+	 * 申込を拒否する）。
+	 *
+	 * 有効になるのは「指名を使う」かつ「複数人一括予約ON」かつ「予約枠の定員2以上」のときだけで、
+	 * それ以外は実効0（制限なし）を返す。複数人一括予約OFFのメニューはフロントの人数入力欄が出ず
+	 * 申込人数が常に1名固定になるため、最低申し込み人数に2以上が保存されていると誰も予約できない
+	 * メニューになってしまう。これを避けるため既存の最少催行人数（#320）と同じ型のクランプを行う。
+	 *
+	 * @param WP_Post $menu_post メニューの投稿オブジェクト。
+	 * @return int 最低申し込み人数（0=制限なし）。
+	 */
+	public function get_menu_nomination_min_guests( WP_Post $menu_post ): int {
+		// 指名を使わないメニューではこの受付制限は無効（このメニューの最少催行人数は表示専用のまま）。
+		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) ) {
+			return 0;
+		}
+
+		// 複数人一括予約が許可されていないメニューは申込人数が常に1名固定のため、
+		// 最低申し込み人数を課すと誰も予約できなくなる。実効0（制限なし）へクランプする。
+		if ( ! (bool) get_post_meta( $menu_post->ID, self::MENU_META_ALLOW_MULTIPLE_GUESTS, true ) ) {
+			return 0;
+		}
+
+		// 予約枠の定員が1以下（予約枠の定員機能OFF・Free版相当）の場合も同様に無効。
+		$max_capacity = $this->get_menu_max_capacity( $menu_post );
+		if ( $max_capacity < 2 ) {
+			return 0;
+		}
+
+		$meta = get_post_meta( $menu_post->ID, self::MENU_META_MIN_CAPACITY, true );
+		$min  = '' === $meta ? 0 : (int) $meta;
+
+		// 0未満は0へ、予約枠の定員を超える値はその定員へクランプする。
 		return max( 0, min( $max_capacity, $min ) );
 	}
 

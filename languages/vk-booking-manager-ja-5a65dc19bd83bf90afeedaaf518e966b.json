@@ -46,8 +46,23 @@
 			"Please select at least one guest.": [
 				"1名以上を選択してください。"
 			],
+			"This menu accepts bookings from %d guests.": [
+				"このメニューは %d 名からお申し込みいただけます。"
+			],
+			"Please set the number of guests to %d or more.": [
+				"人数を %d 名以上にしてください。"
+			],
 			"Number of guests": [
 				"人数"
+			],
+			"This menu requires a minimum of %d guests.": [
+				"このメニューは最低 %d 名からのお申し込みです。"
+			],
+			"This time slot cannot accept the minimum of %d guests required for this menu.": [
+				"この時間帯は、このメニューの最低申し込み人数（%d名）を受け付けられません。"
+			],
+			"Please choose another time slot.": [
+				"別の時間帯を選択してください。"
 			],
 			"Could not get menu list.": [
 				"メニュー一覧を取得できませんでした。"
@@ -66,6 +81,9 @@
 			],
 			"Failed to retrieve menu information.": [
 				"メニュー情報の取得に失敗しました。"
+			],
+			"[Administrator diagnostic] %s": [
+				"【管理者向け診断】%s"
 			],
 			"Failed to load calendar.": [
 				"カレンダーの読み込みに失敗しました。"
@@ -316,9 +334,6 @@
 			"Your tentative reservation has been completed.": [
 				"仮予約が完了しました。"
 			],
-			"Please enter any contact information": [
-				"連絡先情報を入力してください"
-			],
 			"No entry": [
 				"記入なし"
 			],
@@ -345,9 +360,6 @@
 			],
 			"Please enter your contact phone number.": [
 				"ご連絡先の電話番号を入力してください。"
-			],
-			"Please enter any internal notes.": [
-				"社内用メモがあれば入力してください。"
 			],
 			"If the minimum number of participants is not reached, the session may not take place.": [
 				"最少催行人数に満たない場合、開催されない可能性があります。"

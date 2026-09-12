@@ -1,4 +1,6 @@
-# Enforce lowercase test names (`prefer-lowercase-title`)
+# jest/prefer-lowercase-title
+
+📝 Enforce lowercase test names.
 
 🔧 This rule is automatically fixable by the
 [`--fix` CLI option](https://eslint.org/docs/latest/user-guide/command-line-interface#--fix).
@@ -108,4 +110,19 @@ describe('MyClass', () => {
     });
   });
 });
+```
+
+### `ignoreTodos`
+
+This option is used to control whether
+[`todo`](https://jestjs.io/docs/api#testtodoname) Jest functions to be checked
+by this rule. By the default, the option is set to false.
+
+Example of **correct** code for the `{ "ignoreTodos": true }` option:
+
+```js
+/* eslint jest/prefer-lowercase-title: ["error", { "ignoreTodos": true }] */
+test.todo('Uppercase description');
+
+it.todo('Uppercase description');
 ```

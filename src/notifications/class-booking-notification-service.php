@@ -613,7 +613,9 @@ class Booking_Notification_Service {
 		$memo               = wp_strip_all_tags( (string) get_post_meta( $booking_id, '_vkbm_booking_note', true ) );
 		$status             = (string) get_post_meta( $booking_id, '_vkbm_booking_status', true );
 		$nomination_fee     = (int) get_post_meta( $booking_id, '_vkbm_booking_nomination_fee', true );
-		if ( ! Staff_Editor::is_nomination_enabled() ) {
+		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
+		// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
+		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
 			$nomination_fee = 0;
 		}
 		$has_price_snapshot = metadata_exists( 'post', $booking_id, '_vkbm_booking_service_base_price' );
@@ -626,9 +628,10 @@ class Booking_Notification_Service {
 		// 料金区分の人数内訳スナップショット。未設定の既存予約は空配列（従来表示）。
 		$guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $booking_id, self::META_GUEST_TIERS, true ) );
 
-		$menu_title         = $menu_id > 0 ? get_the_title( $menu_id ) : '';
-		$staff_title        = '';
-		$nomination_enabled = Staff_Editor::is_nomination_enabled();
+		$menu_title  = $menu_id > 0 ? get_the_title( $menu_id ) : '';
+		$staff_title = '';
+		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。
+		$nomination_enabled = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
 		if ( $nomination_enabled && $is_staff_preferred && $staff_id > 0 ) {
 			$staff_title = vkbm_get_resource_display_name( $staff_id );
 		}

@@ -7,6 +7,8 @@ import { White } from "./adapt.js";
 import { ColorConstructor, Coords, ColorTypes } from "./color.js";
 import type FormatClass from "./Format.js";
 import type { instance } from "./Format.js";
+import type { Matrix3x3 } from "./types.js";
+import RGBColorSpace from "./RGBColorSpace.js";
 
 export interface Format {
 	/** @default "function" */
@@ -75,8 +77,20 @@ export interface SpaceOptions {
 	 */
 	formats?: Record<string, Format> | undefined;
 	gamutSpace?: "self" | string | ColorSpace | null | undefined;
+	/**
+	 * Matrices relevant to this color space, keyed by a descriptive name.
+	 * Exposed on the resulting space as {@link ColorSpace.M} so that consumer
+	 * code can reuse them instead of duplicating the data.
+	 */
+	M?: Record<string, Matrix3x3> | undefined;
+	/**
+	 * Spaces to try if not natively supported, if different from base chain.
+	 */
+	displaySpaces?: (string | ColorSpace)[] | undefined;
 	aliases?: string[] | undefined;
 	ε?: number | undefined;
+	rgbGamut?: RGBColorSpace | undefined;
+	linearGamut?: RGBColorSpace | undefined;
 }
 
 export type Ref =
@@ -128,13 +142,21 @@ export default class ColorSpace {
 	id: string;
 	aliases?: string[] | undefined;
 	base: ColorSpace | null;
+	/** This space's ancestors, ordered closest first (immediate base → root), excluding this space */
+	bases: ColorSpace[];
+	/** Spaces to try when serializing for display and this space is not natively supported */
+	displaySpaces?: ColorSpace[] | undefined;
 	coords: Record<string, CoordMeta>;
-	fromBase?: ((coords: Coords) => Coords) | undefined;
-	toBase?: ((coords: Coords) => Coords) | undefined;
+	fromBase?(coords: Coords): Coords;
+	toBase?(coords: Coords): Coords;
 	formats: Record<string, Format>;
+	/** Matrices relevant to this color space, keyed by a descriptive name */
+	M: Record<string, Matrix3x3>;
 	referred?: string | undefined;
 	white: White;
 	gamutSpace: ColorSpace;
+	rgbGamut?: RGBColorSpace | undefined;
+	linearGamut?: RGBColorSpace | undefined;
 
 	from (color: ColorTypes): Coords;
 	from (space: string | ColorSpace, coords: Coords): Coords;

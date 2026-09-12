@@ -212,6 +212,11 @@ export const BookingConfirmApp = ( {
 	const draftToken = useMemo( () => getQueryParam( 'draft' ), [] );
 	const [ draft, setDraft ] = useState( null );
 	const [ menu, setMenu ] = useState( null );
+	// #391: このメニューで指名機能を使うか。サーバ（Booking_Draft_Controller::get_draft）が
+	// メニュー単位の判定結果を authoritative な値として返すため、フロント側でメニューメタから
+	// 再計算せずそのまま使う（改竄防止・二重実装防止）。draft 読込前は既定で true として扱う
+	// （読込前に指名料行等を一瞬非表示にするちらつきを避けるため。既存の staff_enabled 判定と同じ方針）。
+	const nominationEnabledForMenu = draft?.nomination_enabled !== false;
 	const [ staff, setStaff ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
 	const [ loadError, setLoadError ] = useState( '' );
@@ -249,7 +254,6 @@ export const BookingConfirmApp = ( {
 	const [ providerLogoUrl, setProviderLogoUrl ] = useState( '' );
 	const [ showProviderLogo, setShowProviderLogo ] = useState( false );
 	const [ showProviderName, setShowProviderName ] = useState( false );
-	const [ staffEnabled, setStaffEnabled ] = useState( true );
 	const [ resourceLabelSingular, setResourceLabelSingular ] = useState(
 		__( 'Staff', 'vk-booking-manager' )
 	);
@@ -314,7 +318,7 @@ export const BookingConfirmApp = ( {
 				  )
 				: '';
 
-		const nominationFee = staffEnabled
+		const nominationFee = nominationEnabledForMenu
 			? normalizePriceValue( draft?.nomination_fee ) ?? 0
 			: 0;
 		const formattedNomination =
@@ -343,7 +347,13 @@ export const BookingConfirmApp = ( {
 			nominationLabel: formattedNomination,
 			totalLabel: formattedTotal,
 		};
-	}, [ draft, menu, staffEnabled, taxLabelText, currencySymbol ] );
+	}, [
+		draft,
+		menu,
+		nominationEnabledForMenu,
+		taxLabelText,
+		currencySymbol,
+	] );
 
 	useEffect( () => {
 		if ( ! draftToken ) {
@@ -440,7 +450,8 @@ export const BookingConfirmApp = ( {
 				setShowProviderName(
 					Boolean( response?.reservation_show_provider_name )
 				);
-				setStaffEnabled( response?.staff_enabled !== false );
+				// #391: 指名の可否そのものはメニュー単位の draft.nomination_enabled を使うため、
+				// ここではサイト全体の staff_enabled を別 state に保持しない（二重管理を避ける）。
 
 				// 指名関連ラベルを設定値から取得する。空の場合は翻訳デフォルト値を使用する。
 				if (
@@ -519,7 +530,7 @@ export const BookingConfirmApp = ( {
 	}, [ draft?.menu_id ] );
 
 	useEffect( () => {
-		if ( ! draft?.resource_id || ! staffEnabled ) {
+		if ( ! draft?.resource_id || ! nominationEnabledForMenu ) {
 			setStaff( null );
 			return;
 		}
@@ -528,7 +539,7 @@ export const BookingConfirmApp = ( {
 		} )
 			.then( ( response ) => setStaff( response ) )
 			.catch( () => setStaff( null ) );
-	}, [ draft?.resource_id, staffEnabled ] );
+	}, [ draft?.resource_id, nominationEnabledForMenu ] );
 
 	useEffect( () => {
 		let isMounted = true;
@@ -893,8 +904,9 @@ export const BookingConfirmApp = ( {
 			data: {
 				menu_id: favoriteMenuId,
 				// 実際に指名した予約（is_staff_preferred=true）のときだけスタッフIDを送る。
-				// おまかせ・指名なし・無料版は is_staff_preferred=false のため 0 を送る。
-				// 設定読込前に true になりうる staffEnabled には依存しない。
+				// おまかせ・指名なし・無料版・メニュー単位で指名OFFのときは is_staff_preferred=false のため 0 を送る。
+				// サーバ側（draft.is_staff_preferred）で既に確定済みの値なので、フロント側で
+				// 指名可否（nominationEnabledForMenu）を重ねて判定する必要はない。
 				resource_id: draft?.is_staff_preferred
 					? Number( draft?.resource_id ) || 0
 					: 0,
@@ -1683,7 +1695,7 @@ export const BookingConfirmApp = ( {
 								/>
 							)
 						) }
-						{ staffEnabled && (
+						{ nominationEnabledForMenu && (
 							<SummaryRow
 								label={ resourceLabelSingular }
 								value={ staffName }
@@ -1699,8 +1711,8 @@ export const BookingConfirmApp = ( {
 								value={ pricingSummary.baseLabel }
 							/>
 						) }
-						{ /* 指名料は指名機能 ON のときのみ表示する。 */ }
-						{ staffEnabled && (
+						{ /* 指名料はこのメニューで指名機能 ON のときのみ表示する（#391）。 */ }
+						{ nominationEnabledForMenu && (
 							<SummaryRow
 								label={ nominationFeeLabel }
 								value={

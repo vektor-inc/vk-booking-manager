@@ -111,7 +111,9 @@ class Settings_Service {
 	 */
 	public function save_settings( array $raw_settings ) {
 		$defaults  = $this->repository->get_default_settings();
+		$current   = $this->repository->get_settings();
 		$sanitized = $this->sanitizer->sanitize( $raw_settings, $defaults );
+		$sanitized = Industry_Presets::apply_transition( $current, $sanitized, $raw_settings, $defaults );
 
 		$errors       = $this->sanitizer->get_errors();
 		$field_errors = $this->sanitizer->get_field_errors();

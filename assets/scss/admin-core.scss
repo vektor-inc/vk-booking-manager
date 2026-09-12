@@ -218,6 +218,18 @@
 	}
 }
 
+/**
+ * 「貸し切り予約」ON時に「予約者による貸切指定」を排他で無効化した見た目（#388）。
+ * JS（service-menu-editor.js の syncExclusiveWhenBookedExclusivity）が付け外しする。
+ * input の disabled だけでは隣接するラベル文言・貸切料金欄の見出しや単位が通常色のまま
+ * 残ってしまうため、opacity を下げて「ここは無効」と一見して分かるようにする
+ * （.vkbm-button.is-disabled と同じ opacity 値・.is-using-basic と同じ考え方に揃える）。
+ */
+.vkbm-exclusive-user-selectable-label.is-disabled,
+.vkbm-exclusive-fee-fields.is-disabled {
+	opacity: 0.5;
+}
+
 // design-rules の「1セット1行に分ける」に従い、ラベル見出しを上・入力行を下に縦積みする。
 // 2つのラベル（貸切料金／適用しない申込人数）は見出しの長さが大きく異なるため、横並びで
 // 入力欄の x 座標を揃えるより、見出しを上に置いて入力欄の左端を自然に揃える方が崩れない。

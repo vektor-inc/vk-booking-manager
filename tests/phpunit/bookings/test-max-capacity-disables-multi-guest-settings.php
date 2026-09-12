@@ -110,51 +110,58 @@ class Max_Capacity_Disables_Multi_Guest_Settings_Test extends WP_UnitTestCase {
 	 *   => 貸切無効・通常予約成立・_vkbm_booking_exclusive 無し・貸切料金0。
 	 *      最少催行人数の判定も効かない（人数不足でも拒否されず成立する）。
 	 * - 改ざん：max_capacity=1＋user_exclusive=true => 貸切は成立せず exclusive_unavailable(409) で拒否される（防御）。
-	 * - 対照：max_capacity=2＋自動貸切ON＋user_exclusive=true・申込2名（最少催行2）
+	 * - 対照：max_capacity=2＋user_exclusive=true・申込2名（最少催行2）
 	 *   => 貸切が有効になり _vkbm_booking_exclusive=true・貸切料金が合計へ乗る（ゲートを外すと max_capacity=1 ケースと差が消え FAIL）。
+	 *   この対照ケースは「自動貸切（_vkbm_exclusive_when_booked）」をOFFにする。ONのままだと#388の排他ガードにより
+	 *   max_capacity の値に関わらずユーザー貸切が常に無効化されてしまい、本テストが検証したい
+	 *   max_capacity ゲート単体の効果が確認できなくなるため。
 	 */
 	public function test_is_user_exclusive_selectable(): void {
 		$test_cases = array(
 			array(
-				'test_condition_name' => '最大受付数1＋自動貸切ON＋最少催行3・申込2名（貸切非選択） => 貸切無効・最少催行無効・通常予約成立・貸切料金0（防御）',
-				'max_capacity'        => 1,
-				'min_capacity'        => 3,
-				'per_person'          => 1000,
-				'base_price'          => 3000,
-				'requested_guests'    => 2,
-				'user_exclusive'      => false,
-				'expect_error'        => null,
-				'expect_exclusive'    => false,
-				'expect_fee'          => 0,
+				'test_condition_name'   => '最大受付数1＋自動貸切ON＋最少催行3・申込2名（貸切非選択） => 貸切無効・最少催行無効・通常予約成立・貸切料金0（防御）',
+				'max_capacity'          => 1,
+				'min_capacity'          => 3,
+				'per_person'            => 1000,
+				'base_price'            => 3000,
+				'requested_guests'      => 2,
+				'user_exclusive'        => false,
+				'exclusive_when_booked' => true,
+				'expect_error'          => null,
+				'expect_exclusive'      => false,
+				'expect_fee'            => 0,
 				// max_capacity=1 のため人数は1へクランプされる。貸切料金は乗らない => 3000*1。
-				'expect_base_total'   => 3000,
+				'expect_base_total'     => 3000,
 			),
 			array(
-				'test_condition_name' => '最大受付数1＋user_exclusive=true（改ざん） => 貸切成立せず exclusive_unavailable(409) で拒否（防御）',
-				'max_capacity'        => 1,
-				'min_capacity'        => 0,
-				'per_person'          => 1000,
-				'base_price'          => 3000,
-				'requested_guests'    => 1,
-				'user_exclusive'      => true,
-				'expect_error'        => 'exclusive_unavailable',
-				'expect_exclusive'    => false,
-				'expect_fee'          => 0,
-				'expect_base_total'   => 0,
+				'test_condition_name'   => '最大受付数1＋user_exclusive=true（改ざん） => 貸切成立せず exclusive_unavailable(409) で拒否（防御）',
+				'max_capacity'          => 1,
+				'min_capacity'          => 0,
+				'per_person'            => 1000,
+				'base_price'            => 3000,
+				'requested_guests'      => 1,
+				'user_exclusive'        => true,
+				'exclusive_when_booked' => true,
+				'expect_error'          => 'exclusive_unavailable',
+				'expect_exclusive'      => false,
+				'expect_fee'            => 0,
+				'expect_base_total'     => 0,
 			),
 			array(
-				'test_condition_name' => '最大受付数2＋自動貸切ON＋user_exclusive=true・申込2名（最少催行2） => 貸切有効・貸切料金が合計へ加算（対照）',
-				'max_capacity'        => 2,
-				'min_capacity'        => 2,
-				'per_person'          => 1000,
-				'base_price'          => 3000,
-				'requested_guests'    => 2,
-				'user_exclusive'      => true,
-				'expect_error'        => null,
-				'expect_exclusive'    => true,
-				'expect_fee'          => 2000,
+				'test_condition_name'   => '最大受付数2＋自動貸切OFF＋user_exclusive=true・申込2名（最少催行2） => 貸切有効・貸切料金が合計へ加算（対照）',
+				'max_capacity'          => 2,
+				'min_capacity'          => 2,
+				'per_person'            => 1000,
+				'base_price'            => 3000,
+				'requested_guests'      => 2,
+				'user_exclusive'        => true,
+				// #388：自動貸切（exclusive_when_booked）とユーザー貸切指定は排他のため、この対照ケースはOFFにする。
+				'exclusive_when_booked' => false,
+				'expect_error'          => null,
+				'expect_exclusive'      => true,
+				'expect_fee'            => 2000,
 				// 人数2・基本3000・貸切1000/人 => 3000*2 + 1000*2 = 8000。
-				'expect_base_total'   => 8000,
+				'expect_base_total'     => 8000,
 			),
 		);
 
@@ -167,7 +174,9 @@ class Max_Capacity_Disables_Multi_Guest_Settings_Test extends WP_UnitTestCase {
 			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
 			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 			update_post_meta( $menu_id, '_vkbm_base_price', $case['base_price'] );
-			update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
+			if ( $case['exclusive_when_booked'] ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
+			}
 			update_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true );
 			update_post_meta( $menu_id, '_vkbm_exclusive_fee_per_person', $case['per_person'] );
 			if ( $case['min_capacity'] > 0 ) {
@@ -343,12 +352,12 @@ class Max_Capacity_Disables_Multi_Guest_Settings_Test extends WP_UnitTestCase {
 	/**
 	 * 予約一時データ（下書き transient）を保存する。
 	 *
-	 * @param int                          $menu_id        メニューID。
-	 * @param int                          $staff_id       スタッフID。
-	 * @param string                       $start_at       スロット開始（ISO8601）。
-	 * @param string                       $end_at         スロット終了（ISO8601）。
-	 * @param int                          $guests         申込人数。
-	 * @param bool                         $user_exclusive ユーザー貸切選択フラグ。
+	 * @param int                              $menu_id        メニューID。
+	 * @param int                              $staff_id       スタッフID。
+	 * @param string                           $start_at       スロット開始（ISO8601）。
+	 * @param string                           $end_at         スロット終了（ISO8601）。
+	 * @param int                              $guests         申込人数。
+	 * @param bool                             $user_exclusive ユーザー貸切選択フラグ。
 	 * @param array<int, array<string, mixed>> $guest_tiers 料金区分の人数内訳（区分未使用なら空配列）。
 	 * @return string トークン。
 	 */

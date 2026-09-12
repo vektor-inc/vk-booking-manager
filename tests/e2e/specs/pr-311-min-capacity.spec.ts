@@ -23,6 +23,7 @@ import {
 	getServiceMenuId,
 	getStaffId,
 	loginAsAdmin,
+	extractOpeningTagById,
 } from '../utils/helpers';
 
 /**
@@ -82,23 +83,33 @@ function setProviderGates(
  * 管理ユーザーになりすまし・正しい nonce を作成・$_POST を組み立ててから実行する。
  * 入力値はすべて整数化して PHP リテラルに埋め込む（PHP 脱出リスクを排除）。
  *
- * @param menuId      サービスメニューの投稿ID（数値文字列）
- * @param maxCapacity 最大受付数（入力値）
- * @param minCapacity 最小催行人数（クランプ前の入力値）
- * @param allowMulti  メニュー個別の複数人予約許可フラグ
+ * @param menuId        サービスメニューの投稿ID（数値文字列）
+ * @param maxCapacity   最大受付数（入力値）
+ * @param minCapacity   最小催行人数（クランプ前の入力値）
+ * @param allowMulti    メニュー個別の複数人一括予約許可フラグ
+ * @param useNomination このメニューで指名を使うか（チェックボックス相当）。
+ *                      save_post は未送信を「使わない」として解釈し
+ *                      _vkbm_disable_nomination を立てるため、指名ONの状態を
+ *                      検証したい呼び出し側は明示的に true を渡すこと。
  * @return 保存後の _vkbm_min_capacity の値（数値文字列）
  */
 function savePostViaEditor(
 	menuId: string,
 	maxCapacity: number,
 	minCapacity: number,
-	allowMulti: boolean
+	allowMulti: boolean,
+	useNomination: boolean
 ): string {
 	const max = Number.parseInt( String( maxCapacity ), 10 );
 	const min = Number.parseInt( String( minCapacity ), 10 );
 	const id = Number.parseInt( menuId, 10 );
 	const allowLine = allowMulti
 		? "$_POST['vkbm_service_menu']['allow_multiple_guests'] = '1';"
+		: '';
+	// サイト全体の指名機能がOFFのときはこのフィールド自体がフォームに存在せず
+	// save_post 側もこの値を読まないため、site全体OFFの呼び出しでは無害。
+	const nominationLine = useNomination
+		? "$_POST['vkbm_service_menu']['use_nomination'] = '1';"
 		: '';
 	const phpCode = `
 		// 管理ユーザーになりすまし（current_user_can チェックを満たす）。
@@ -125,6 +136,7 @@ function savePostViaEditor(
 			'staff_ids'    => array_map( 'strval', $existing_staff_ids ),
 		);
 		${ allowLine }
+		${ nominationLine }
 
 		$post   = get_post( ${ id } );
 		$editor = new \\VKBookingManager\\Admin\\Service_Menu_Editor();
@@ -179,7 +191,10 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		setProviderGates( false, true );
 		const menuId = getServiceMenuId();
 
-		const saved = savePostViaEditor( menuId, 5, 3, true );
+		// 指名機能は site 全体で OFF（setProviderGates( false, true )）のため
+		// use_nomination はこの save_post 呼び出しに影響しないが、呼び出し規約を
+		// 統一するため明示的に指定する。
+		const saved = savePostViaEditor( menuId, 5, 3, true, true );
 		// クランプされず 3 がそのまま保存される
 		expect( saved ).toBe( '3' );
 
@@ -194,7 +209,10 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		setProviderGates( false, true );
 		const menuId = getServiceMenuId();
 
-		const saved = savePostViaEditor( menuId, 5, 10, true );
+		// 指名機能は site 全体で OFF（setProviderGates( false, true )）のため
+		// use_nomination はこの save_post 呼び出しに影響しないが、呼び出し規約を
+		// 統一するため明示的に指定する。
+		const saved = savePostViaEditor( menuId, 5, 10, true, true );
 		// 最大受付数 5 を上限にクランプされる
 		expect( saved ).toBe( '5' );
 
@@ -204,21 +222,83 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		);
 	} );
 
-	test( '指名ON のとき: 最小催行人数欄が出ない（最大受付数欄も非表示の案内に変わる）', () => {
-		// --- 準備: 指名ON（最大受付数・最小催行人数ともに無効化される構成） ---
+	test( '指名ON・複数人一括予約ON・定員2以上のとき: 最少催行人数／最低申し込み人数欄が表示される（#393）', () => {
+		// --- 準備: 指名ON・複数人一括予約ON・定員3（#393の受付制限が有効になる構成） ---
+		// #393: この欄は、指名を使うメニューでは「1組の最低人数（受付制限）」として意味を持つため、
+		// #392時点の「指名ONなら常にhidden」という挙動は変わった。表示条件は指名の有無ではなく
+		// 「複数人一括予約ON かつ 定員2以上」のみになった（class-service-menu-editor.php の
+		// $show_min_capacity_field を参照）。
 		setProviderGates( true, true );
 		const menuId = getServiceMenuId();
+		// このテストの前提は「指名ON」なので、use_nomination を明示的に送る。
+		// save_post は未送信を「使わない」と解釈して _vkbm_disable_nomination を
+		// 立ててしまうため、送らないとこのメニュー自身は指名OFF扱いになり、
+		// 「指名ONのラベル」を検証しているつもりが実際は指名OFF状態を検証して
+		// しまう（実装漏れ。麗美の e2e で判明）。
+		savePostViaEditor( menuId, 3, 0, true, true );
 
 		const html = getConditionsMetaboxHtml( menuId );
 
-		// 最小催行人数欄が出力されないこと
-		expect( html ).not.toContain( 'id="vkbm_service_menu_min_capacity"' );
-		// 最大受付数欄も出ない（指名ON時は案内メッセージに置き換わる既存仕様）
-		expect( html ).not.toContain( 'id="vkbm_service_menu_max_capacity"' );
+		// #393: 最少催行人数／最低申し込み人数欄は、指名の有無に関わらず
+		// 「複数人一括予約ON かつ 定員2以上」なら表示される（hidden が付かない）。
+		expect(
+			extractOpeningTagById( html, 'vkbm-min-capacity-field' )
+		).not.toContain( 'hidden' );
+
+		// #393: 指名を使うメニューではラベルが「最低申し込み人数」に切り替わる
+		// （id="vkbm-min-capacity-label" の中身。テストサイトは日本語ロケールのため、
+		// __() の翻訳後テキストで検証する。指名OFF用ラベル「最少催行人数」が
+		// 出ていないことも合わせて確認する）。
+		expect( html ).toContain( '最低申し込み人数' );
+		expect( html ).not.toContain( '最少催行人数' );
+
+		// #392: 最大受付数（予約枠の定員）欄は、指名を使うメニューでも「1組の最大人数」として
+		// 使われるため、指名ONでも hidden が付かず表示される（#392より前は hidden が付いていた）。
+		// #392: the max capacity (time slot capacity) field is now used as the
+		// "max group size per booking" even for nomination-enabled menus, so it
+		// is no longer hidden when nomination is on (unlike before #392).
+		const maxCapacityTag = extractOpeningTagById(
+			html,
+			'vkbm-max-capacity-field'
+		);
+		expect( maxCapacityTag ).not.toBe( '' );
+		expect( maxCapacityTag ).not.toContain( 'hidden' );
+
+		// #392: 旧仕様（PR #163・#412）の案内メッセージ要素（vkbm-nomination-enabled-notice）は
+		// 撤去済みで、DOM に存在しない。
+		// #392: the old guidance message element has been removed entirely and
+		// is absent from the DOM.
+		expect(
+			extractOpeningTagById( html, 'vkbm-nomination-enabled-notice' )
+		).toBe( '' );
 	} );
 
-	test( '複数人予約OFF のとき: 最小催行人数欄が出ない', () => {
-		// --- 準備: 指名OFF・複数人予約OFF（最小催行人数が無効になる構成） ---
+	test( '指名ON・複数人一括予約OFF のとき: 最少催行人数／最低申し込み人数欄は非表示のまま（#393）', () => {
+		// #393: 複数人一括予約OFFのメニューは申込人数が常に1名固定になるため、指名の有無に
+		// 関わらずこの欄は表示しない（表示条件「複数人一括予約ON かつ 定員2以上」が未達のため）。
+		setProviderGates( true, true );
+		const menuId = getServiceMenuId();
+		// このテストの前提も「指名ON」なので use_nomination を明示的に送る
+		// （このテストの hidden 判定自体は allowMulti=false による「複数人一括予約OFF」
+		// が理由で、指名の有無では変わらないため、送らなくても本テストは偶然通って
+		// しまう。ただしタイトルどおり「指名ON」を実際に検証する状態にするため
+		// 明示する）。
+		savePostViaEditor( menuId, 3, 0, false, true );
+
+		const html = getConditionsMetaboxHtml( menuId );
+
+		expect(
+			extractOpeningTagById( html, 'vkbm-min-capacity-field' )
+		).toContain( 'hidden' );
+	} );
+
+	test( '予約枠の定員機能（サイト全体の親スイッチ）OFF のとき: 最小催行人数欄が出ない', () => {
+		// #412 F-6: このテストは _vkbm_allow_multiple_guests（メニュー単位）ではなく、
+		// setProviderGates() 第2引数＝サイト全体の親スイッチ slot_capacity_enabled を
+		// OFF にする構成。この場合はフィールドが「常時描画+hidden」方式の対象外の分岐
+		// （render_conditions_meta_box() の外側のif）に入り、フィールド自体が DOM から
+		// 完全に消えるため、他の hidden 属性ベースの検証とは異なり not.toContain のままでよい。
+		// --- 準備: 指名OFF・予約枠の定員機能OFF（最小催行人数が無効になる構成） ---
 		setProviderGates( false, false );
 		const menuId = getServiceMenuId();
 

@@ -99,10 +99,91 @@
 		$( this ).closest( '.vkbm-price-tier-row' ).remove();
 	} );
 
-	// 「複数人予約を許可」チェックと「最大予約受付数」入力に連動して、
-	// 複数人予約相乗りが前提の欄（最少催行人数・貸し切り予約・料金区分）の表示を切り替える（#320）。
-	// 表示条件は「複数人予約 ON かつ 最大受付数が2以上」。これ以外（OFF または 最大受付数1以下）は
-	// 欄ごと隠す。条件未達のまま入力 → 保存で値が削除され入力が消える事故を防ぐため。
+	// 「このメニューで指名を使う」チェックボックスが指名を使う状態かどうかを返す。
+	// チェックボックス自体が画面に無い（サイト全体の指名機能OFF・無料版など）場合は
+	// 判定材料が無いため false（指名を使わない扱い）を返し、複数人一括予約系の表示制御に
+	// 影響させない（#412 B-4）。
+	function isMenuNominationInUse() {
+		const $useNomination = $( '#vkbm_service_menu_use_nomination' );
+		return $useNomination.length > 0 && $useNomination.prop( 'checked' );
+	}
+
+	// 「このメニューで指名を使う」チェックの切り替えに連動して、「Nomination fee」欄の表示を
+	// 即座に切り替える（#412 B-4）。
+	// #392: 予約枠の定員（vkbm-max-capacity-field）・複数人一括予約（vkbm-allow-multiple-guests-field）は
+	// 指名を使うメニューでも利用できるようになったため、この関数では表示を切り替えなくなった
+	// （常に表示。PHP側も同様に hidden 属性を付けない）。
+	// #393: 最少催行人数（指名を使うメニューでは「最低申し込み人数」という意味に変わる）も、
+	// 指名を使うメニューで引き続き意味を持つため表示を切り替えない。一方、複数の別々の予約が
+	// 相乗りする前提の「貸し切り予約・予約者による貸切指定・貸切料金」は指名を使うメニューでは
+	// 意味を持たないため、引き続き syncMultipleGuestsDependentFields() で再評価する。
+	function syncNominationDependentFields() {
+		const $useNomination = $( '#vkbm_service_menu_use_nomination' );
+		if ( $useNomination.length === 0 ) {
+			return;
+		}
+		const inUse = $useNomination.prop( 'checked' );
+
+		// 「Nomination fee」欄：指名を使う間だけ表示する。
+		$( '#vkbm-disable-nomination-fee-field' ).prop( 'hidden', ! inUse );
+
+		// #393: 最少催行人数（指名を使うメニューでは「最低申し込み人数」）は表示条件が変わらないが、
+		// 複数人一括予約系の従属欄のうち「指名を使わない」も表示条件に加わる貸し切り予約・料金区分は
+		// 再評価が必要なため、まとめて syncMultipleGuestsDependentFields() を呼ぶ。
+		syncMultipleGuestsDependentFields();
+	}
+
+	// 最少催行人数／最低申し込み人数欄のラベル・説明文を「このメニューで指名を使う」チェックの
+	// 状態に合わせて即時切り替える（#393）。PHP 初期描画（class-service-menu-editor.php）と
+	// 同じ文言を wp_localize_script 経由の i18n オブジェクトから取得して差し替える。
+	function syncMinCapacityFieldCopy() {
+		const $label = $( '#vkbm-min-capacity-label' );
+		const $description = $( '#vkbm-min-capacity-description' );
+		if ( $label.length === 0 || $description.length === 0 ) {
+			return;
+		}
+		const isNomination = isMenuNominationInUse();
+
+		const labelText = isNomination
+			? i18n.minCapacityNominationLabel
+			: i18n.minCapacityDefaultLabel;
+		if ( labelText ) {
+			$label.text( labelText );
+		}
+
+		const lines = isNomination
+			? [
+					i18n.minCapacityNominationDescription1,
+					i18n.minCapacityNominationDescription2,
+					i18n.minCapacityNominationDescription3,
+					i18n.minCapacityNominationDescription4,
+			  ]
+			: [
+					i18n.minCapacityDefaultDescription1,
+					i18n.minCapacityDefaultDescription2,
+					i18n.minCapacityDefaultDescription3,
+			  ];
+
+		$description.empty();
+		let isFirstLine = true;
+		lines.forEach( function ( line ) {
+			if ( ! line ) {
+				return;
+			}
+			if ( ! isFirstLine ) {
+				$description.append( '<br>' );
+			}
+			$description.append( document.createTextNode( line ) );
+			isFirstLine = false;
+		} );
+	}
+
+	// 「複数人予約を許可」チェックと「最大予約受付数」入力、および「このメニューで指名を使う」
+	// チェックに連動して、複数人一括予約に関連する欄（最少催行人数・貸し切り予約・料金区分）の
+	// 表示を切り替える（#320・#412 B-4）。#393: このうち最少催行人数（指名を使うメニューでは
+	// 「最低申し込み人数」）は、他の2欄と異なり「指名を使わない」を表示条件に含めない
+	// （詳細は関数内のコメントを参照）。
+	// これ以外は欄ごと隠す。条件未達のまま入力 → 保存で値が削除され入力が消える事故を防ぐため。
 	function syncMultipleGuestsDependentFields() {
 		const $checkbox = $( '#vkbm_service_menu_allow_multiple_guests' );
 		if ( $checkbox.length === 0 ) {
@@ -115,18 +196,29 @@
 			const parsed = parseInt( $maxCapacity.val(), 10 );
 			maxCapacity = isNaN( parsed ) ? 1 : parsed;
 		}
-		// 複数人予約 ON かつ 最大受付数2以上のときだけ表示する。
-		const show = $checkbox.prop( 'checked' ) && maxCapacity >= 2;
-		const hidden = ! show;
+		const allowMultipleGuests = $checkbox.prop( 'checked' );
+		const meetsCapacity = maxCapacity >= 2;
+
+		// #393: 最少催行人数／最低申し込み人数欄は、指名を使うメニューでも意味を持つ（催行状態の
+		// 表示用しきい値 → 1組の最低人数の受付制限に切り替わるだけ）ため、「指名を使わない」を
+		// 表示条件に含めない。表示条件は「複数人予約 ON かつ 最大受付数が2以上」の2つだけ。
+		const showMinCapacity = allowMultipleGuests && meetsCapacity;
+		$( '#vkbm-min-capacity-field' ).prop( 'hidden', ! showMinCapacity );
+		syncMinCapacityFieldCopy();
+
+		// 貸し切り予約・予約者による貸切指定・料金区分は、複数の別々の予約が相乗りする前提の機能の
+		// ため、引き続き「指名を使わない かつ 複数人予約 ON かつ 最大受付数2以上」を表示条件とする。
+		const showExclusiveGroup =
+			! isMenuNominationInUse() && allowMultipleGuests && meetsCapacity;
+		const hiddenExclusiveGroup = ! showExclusiveGroup;
 		[
-			'#vkbm-min-capacity-field',
 			'#vkbm-price-tiers-field',
 			'#vkbm-exclusive-when-booked-field',
 			'#vkbm-exclusive-user-selectable-field',
 		].forEach( function ( selector ) {
 			const $field = $( selector );
 			if ( $field.length > 0 ) {
-				$field.prop( 'hidden', hidden );
+				$field.prop( 'hidden', hiddenExclusiveGroup );
 			}
 		} );
 	}
@@ -140,6 +232,48 @@
 			return;
 		}
 		$fields.prop( 'hidden', ! $checkbox.prop( 'checked' ) );
+	}
+
+	// 「貸し切り予約」ONのときは「予約者による貸切指定」と、その配下の貸し切り料金・適用外人数の
+	// 入力欄を操作不可（disabled）にする（#388）。両方ONで保存されると、予約者の指定有無に関わらず
+	// 枠全体が貸切扱いになるのに、指定した予約者だけ貸し切り料金を負担する不整合が起きるため、
+	// 管理画面の時点で片方しか選べないようにする。保存側（class-service-menu-editor.php）にも
+	// 同じ排他のガードがあり、こちらはその事故を未然に防ぐための表示側の対策。
+	// disabled にした input はフォーム送信されないため、保存側の削除処理と矛盾なく揃う。
+	//
+	// input の disabled だけではラベルの文言や貸切料金欄の見出し・単位（通貨記号／人）は通常色の
+	// ままになり、どこまで無効化されているか一見して分からない。そのため、チェックボックスを囲む
+	// ラベルと貸切料金欄のコンテナに .is-disabled を付け外しし、SCSS（admin-core.scss）側で
+	// opacity を下げて見た目も揃える（.vkbm-button.is-disabled 等の既存パターンに合わせる）。
+	function syncExclusiveWhenBookedExclusivity() {
+		const $exclusiveWhenBooked = $(
+			'#vkbm_service_menu_exclusive_when_booked'
+		);
+		const $userSelectable = $(
+			'#vkbm_service_menu_exclusive_user_selectable'
+		);
+		const $userSelectableLabel = $(
+			'.vkbm-exclusive-user-selectable-label'
+		);
+		const $feeFields = $( '#vkbm-exclusive-fee-fields' );
+		if (
+			$exclusiveWhenBooked.length === 0 ||
+			$userSelectable.length === 0
+		) {
+			return;
+		}
+		const disable = $exclusiveWhenBooked.prop( 'checked' );
+		$userSelectable.prop( 'disabled', disable );
+		$( '#vkbm_service_menu_exclusive_fee_per_person' ).prop(
+			'disabled',
+			disable
+		);
+		$( '#vkbm_service_menu_exclusive_fee_exempt_guests' ).prop(
+			'disabled',
+			disable
+		);
+		$userSelectableLabel.toggleClass( 'is-disabled', disable );
+		$feeFields.toggleClass( 'is-disabled', disable );
 	}
 
 	$( document ).on(
@@ -162,9 +296,27 @@
 		syncExclusiveFeeFields
 	);
 
+	$( document ).on(
+		'change',
+		'#vkbm_service_menu_exclusive_when_booked',
+		syncExclusiveWhenBookedExclusivity
+	);
+
+	// 「このメニューで指名を使う」チェックの切り替えに連動させる（#412 B-4）。
+	$( document ).on(
+		'change',
+		'#vkbm_service_menu_use_nomination',
+		syncNominationDependentFields
+	);
+
 	// 初期表示時にも現在のチェック状態へ揃える（PHP 側の初期 hidden と二重化しても無害）。
+	// syncNominationDependentFields が内部で syncMultipleGuestsDependentFields も呼ぶため、
+	// 単独の syncMultipleGuestsDependentFields 呼び出しは不要（チェックボックス自体が無い
+	// 画面では syncNominationDependentFields は何もしないため、念のため両方呼んでおく）。
+	$( syncNominationDependentFields );
 	$( syncMultipleGuestsDependentFields );
 	$( syncExclusiveFeeFields );
+	$( syncExclusiveWhenBookedExclusivity );
 
 	// ── 予約可能日：曜日指定／日付指定 ──────────────────────────────
 	// プルダウンの選択に応じて、曜日指定・日付指定の詳細パネルを排他で出し分ける。

@@ -14,11 +14,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Availability\Availability_Service;
+use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 use function __;
+use function current_user_can;
 
 /**
  * REST controller for availability endpoints.
@@ -86,21 +89,134 @@ class Availability_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function handle_calendar_meta( WP_REST_Request $request ) {
-		$data = $this->service->get_calendar_meta(
-			array(
-				'menu_id'     => (int) $request['menu_id'],
-				'resource_id' => isset( $request['resource_id'] ) ? (int) $request['resource_id'] : null,
-				'year'        => (int) $request['year'],
-				'month'       => (int) $request['month'],
-				'timezone'    => (string) $request['timezone'],
-			)
+		$args = array(
+			'menu_id'     => (int) $request['menu_id'],
+			'resource_id' => isset( $request['resource_id'] ) ? (int) $request['resource_id'] : null,
+			'year'        => (int) $request['year'],
+			'month'       => (int) $request['month'],
+			'timezone'    => (string) $request['timezone'],
 		);
 
+		$data = $this->service->get_calendar_meta( $args );
+
+		$can_diagnose = current_user_can( Capabilities::MANAGE_SYSTEM_SETTINGS );
+
 		if ( is_wp_error( $data ) ) {
-			return $data;
+			// #411 麗美さん確認（PR #414 差し戻し）: get_calendar_meta() が validate_menu() /
+			// resolve_staff_ids() の時点で WP_Error を返して早期returnすると、下の成功時パスの
+			// 診断処理（get_unavailability_reason）に到達できず、担当スタッフ0件などで
+			// 完了条件1の診断バナーがまったく出ない配線漏れがあった。
+			// エラーコードごとに分岐せず、この経路でも同じ get_unavailability_reason() を必ず
+			// 呼ぶことで、validate_menu() 由来（メニュー非公開等）・resolve_staff_ids() 由来
+			// （担当スタッフ0件・指名不一致）のどちらの早期returnでも取りこぼさない。
+			// get_unavailability_reason() 自身が年月・投稿の妥当性を再検証して該当しなければ
+			// null を返すため、ここでは呼び出すだけでよい。
+			$reason = null;
+			if ( $can_diagnose ) {
+				$reason = $this->service->get_unavailability_reason( $args );
+			}
+
+			$masked = $this->mask_error_for_public_visitors( $data );
+
+			// #411 安藤さんレビュー指摘（LOW・PR #414 再差し戻し）: 診断理由の付与は
+			// mask_error_for_public_visitors() の**後**に行う。以前は先に $data へ付与してから
+			// マスク処理へ渡していたため、「マスク側が権限の無いユーザー向けには必ず
+			// 新しい WP_Error を作り直して返す（付随データを丸ごと置き換える）」という
+			// mask_error_for_public_visitors() の実装詳細に安全性が依存していた。将来そちらが
+			// 付随データをマージする実装に変わると、その瞬間に非該当者へ内部理由が漏れる。
+			// ここでは「マスクされずに元のオブジェクトのまま返ってきたか」を同一性（===）で
+			// 判定してから付与するため、mask_error_for_public_visitors() の実装に依存しない。
+			// 非該当者には必ず新しい WP_Error インスタンスが返る（$masked !== $data）ため、
+			// このブロックは権限のあるユーザーにしか実行されない。
+			if ( null !== $reason && $masked === $data ) {
+				// get_error_data() はデータ未設定時 null を返す（(array) キャストすると
+				// array(0 => null) になってしまうため、明示的に空配列へフォールバックする）。
+				$existing_data = $masked->get_error_data();
+				$existing_data = is_array( $existing_data ) ? $existing_data : array();
+
+				$masked->add_data(
+					array_merge( $existing_data, array( 'unavailability_reason' => $reason ) )
+				);
+			}
+
+			return $masked;
+		}
+
+		// #411: 表示中の月に予約可能日が1件も無い場合の診断理由。管理者・サイトオーナー・
+		// サロンオーナー（vkbm_manage_system_settings）にのみレスポンスへ含める。
+		// 非該当者にはフィールド自体を出力しない（CSSで隠す・フロント側だけの分岐は不可）。
+		//
+		// 診断処理（get_unavailability_reason）は日数×スタッフ数ぶんの WP_Query を発行しうるため、
+		// 予約可能日が1件でもある通常時は絶対に呼ばない（安藤さんレビュー指摘）。
+		// get_calendar_meta() がキャッシュ（transient）から返った場合、Availability_Service の
+		// インスタンス内 booking_cache は空になるため、門番を置かないと診断ループのたびに
+		// 同じクエリを再発行してしまう。
+		if ( $can_diagnose && ! $this->has_bookable_day( $data ) ) {
+			$reason = $this->service->get_unavailability_reason( $args );
+			if ( null !== $reason ) {
+				$data['unavailability_reason'] = $reason;
+			}
 		}
 
 		return new WP_REST_Response( $data );
+	}
+
+	/**
+	 * カレンダーレスポンスに、選択可能な日（is_disabled === false）が1件でも含まれるかを判定する。
+	 *
+	 * #411: 診断処理（get_unavailability_reason）は「予約可能日が1件も無いとき」だけに
+	 * 呼び出す門番として使う。1件でも予約可能日があれば、その時点で false を返し診断をスキップする。
+	 *
+	 * @param array<string, mixed> $data get_calendar_meta() が返した正常時のレスポンス配列。
+	 * @return bool 予約可能日が1件でもあれば true。
+	 */
+	private function has_bookable_day( array $data ): bool {
+		foreach ( (array) ( $data['days'] ?? array() ) as $day ) {
+			if ( empty( $day['is_disabled'] ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * 公開エンドポイントが返す WP_Error を、権限に応じてマスクする。
+	 *
+	 * `/calendar-meta` `/availabilities` は permission_callback => '__return_true' の公開APIのため、
+	 * 「担当スタッフが未設定」等の内部設定を示すエラーメッセージをそのまま一般訪問者へ返すと、
+	 * 管理者だけに見せたい情報が漏えいする（#411で確認された既存の不具合）。
+	 * vkbm_manage_system_settings を持つユーザーには従来通り詳細なメッセージを返し、
+	 * それ以外には識別子（error code）・メッセージ・data のすべてを固定の汎用値へ置換する。
+	 * 元のエラーコード・data をそのまま返すと、メッセージだけ差し替えても識別子から
+	 * 内部設定が伝わってしまうため（安藤さんレビュー指摘）、素通しにしない。
+	 *
+	 * @param WP_Error $error 元のエラー。
+	 * @return WP_Error 権限に応じたエラー。権限のあるユーザーには引数 $error をそのまま返す
+	 *                   （呼び出し側が `$masked === $error` の同一性でマスクの有無を判定しているため、
+	 *                   ここで clone や別インスタンスを返さないこと）。
+	 */
+	private function mask_error_for_public_visitors( WP_Error $error ): WP_Error {
+		if ( current_user_can( Capabilities::MANAGE_SYSTEM_SETTINGS ) ) {
+			return $error;
+		}
+
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+		// join_sentences()（#411 植草さんレビュー指摘: ハードコードの半角スペースで連結すると、
+		// 句点で終わる日本語文のあいだに不要な隙間ができるため、文末が非ASCIIかどうかで
+		// 区切り方を切り替える。この文言は一般訪問者全員が目にするため、診断バナー側と
+		// 同じロジック（src/common/class-nomination-min-guests-message.php の
+		// join_sentences()）を再利用して揃える）。
+		$message = Nomination_Min_Guests_Message::join_sentences(
+			__( 'We are not currently accepting reservations for this content.', 'vk-booking-manager' ),
+			__( 'Please choose a different menu, or contact the site administrator for assistance.', 'vk-booking-manager' )
+		);
+
+		return new WP_Error(
+			'reservation_unavailable',
+			$message,
+			array( 'status' => 400 )
+		);
 	}
 
 	/**
@@ -120,7 +236,7 @@ class Availability_Controller {
 		);
 
 		if ( is_wp_error( $data ) ) {
-			return $data;
+			return $this->mask_error_for_public_visitors( $data );
 		}
 
 		return new WP_REST_Response( $data );

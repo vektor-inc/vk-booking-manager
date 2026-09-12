@@ -113,15 +113,35 @@ async function gotoMenuEditor( page: Page ) {
 	await page.waitForLoadState( 'domcontentloaded' );
 
 	// 「エディターへようこそ」モーダルが出たら閉じる（操作の妨げになるため）。
+	//
+	// モーダルは React が domcontentloaded の"後"に非同期で描画するため、
+	// waitForLoadState 直後に count() で存在確認すると 0 件のまま素通りし、
+	// この後の操作中に不意にモーダルが現れてクリックを遮ることがあった
+	// （components-modal__screen-overlay が pointer events を intercept する）。
+	// count() による即時判定ではなく、短いタイムアウト付きで「出るなら出る」のを
+	// 待ってから閉じ、出なければ（タイムアウトしても）握りつぶして先に進む。
+	//
+	// The modal renders asynchronously via React *after* domcontentloaded, so
+	// checking with count() right after waitForLoadState raced past it (0 at
+	// that instant), only for the modal to appear later and intercept pointer
+	// events (`components-modal__screen-overlay`). Wait briefly for it to
+	// become visible if it's going to appear at all, and swallow the timeout
+	// if it never does, rather than deciding based on an instantaneous count().
 	const welcomeClose = page.locator(
 		'.components-modal__frame .components-modal__header button[aria-label="閉じる"], .components-modal__frame .components-modal__header button[aria-label="Close"]'
 	);
-	if ( await welcomeClose.count() ) {
-		await welcomeClose
-			.first()
-			.click()
-			.catch( () => {} );
+	try {
+		await welcomeClose.first().waitFor( {
+			state: 'visible',
+			timeout: 3000,
+		} );
+		await welcomeClose.first().click();
+		// モーダルのオーバーレイが完全に消えるまで（フェードアウト等）少し待つ。
+		// Give the overlay a brief moment to fully disappear (fade-out, etc.).
 		await page.waitForTimeout( 200 );
+	} catch {
+		// タイムアウト＝そもそもモーダルが出なかった。何もせず先に進む。
+		// Timeout means the modal never appeared. Proceed without action.
 	}
 
 	// 最大受付数 input が DOM に存在するまで待つ（hidden でもよい＝メタボックス内）。

@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -26,6 +27,7 @@ use WP_Post;
 use function add_action;
 use function current_user_can;
 use function get_current_screen;
+use function get_post;
 use function get_term_meta;
 use function get_the_terms;
 use function is_wp_error;
@@ -46,6 +48,8 @@ class Service_Menu_Post_Type {
 	private const META_STAFF_IDS                   = '_vkbm_staff_ids';
 	private const META_RESERVATION_DAY_TYPE        = '_vkbm_reservation_day_type';
 	private const META_DISABLE_NOMINATION_FEE      = '_vkbm_disable_nomination_fee';
+	// メニュー単位で指名機能を無効化するメタキー（#391）。既定（未設定）は「指名を使う」。
+	private const META_DISABLE_NOMINATION          = '_vkbm_disable_nomination';
 	private const META_MAX_CAPACITY                = '_vkbm_max_capacity';
 	private const META_MIN_CAPACITY                = '_vkbm_min_capacity';
 	private const META_ALLOW_MULTIPLE_GUESTS       = '_vkbm_allow_multiple_guests';
@@ -61,6 +65,19 @@ class Service_Menu_Post_Type {
 	 * @var array<int, string>
 	 */
 	private array $staff_title_cache = array();
+
+	/**
+	 * Availability service（遅延生成）。
+	 *
+	 * get_nomination_min_guests_rest_field() が REST レスポンスのメニュー1件ごとに
+	 * 呼ばれるため、その都度 `new Availability_Service()`（内部で `new Settings_Repository()`
+	 * も生成）していると、予約ブロックの `per_page: 100` 取得で1リクエストあたり最大100個
+	 * 生成されてしまう（安藤レビュー指摘）。get_availability_service() で1個だけ生成して
+	 * 使い回す。
+	 *
+	 * @var Availability_Service|null
+	 */
+	private ?Availability_Service $availability_service = null;
 
 	/**
 	 * Hook registrations for the post type and taxonomy.
@@ -497,6 +514,12 @@ class Service_Menu_Post_Type {
 								<input type="number" name="vkbm_service_menu_quick[base_price]" class="vkbm-qe-base-price" min="0" step="1" value="" />
 							</span>
 						</label>
+						<?php
+						// #391: クイック編集はテンプレートを一覧ページに1回だけ描画し、JS側で行ごとの
+						// データ属性を差し込む方式のため、この時点では対象の特定メニューIDが無い
+						// （どの行に適用されるか未確定）。メニュー単位の判定はできないため、
+						// サイト全体の指名機能スイッチのみで表示可否を決める（従来どおり）。
+						?>
 						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
 						<label>
 							<span class="title"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></span>
@@ -505,6 +528,12 @@ class Service_Menu_Post_Type {
 									<input type="checkbox" name="vkbm_service_menu_quick[disable_nomination_fee]" class="vkbm-qe-disable-nomination-fee" value="1" />
 									<?php esc_html_e( 'Disable for this service menu', 'vk-booking-manager' ); ?>
 								</label>
+								<?php
+								// #412 B-5: クイック編集はメニュー単位で指名を無効化しているかどうかを
+								// 判定できないため（上記コメント参照）、このチェックはメニュー単位で
+								// 指名を使っていない場合は意味を持たないことを注記する。
+								?>
+								<p class="description"><?php esc_html_e( 'Ignored if this service menu does not use staff nomination.', 'vk-booking-manager' ); ?></p>
 							</span>
 						</label>
 						<?php endif; ?>
@@ -969,6 +998,46 @@ class Service_Menu_Post_Type {
 			)
 		);
 
+		// メニュー単位で指名機能を無効化するかどうか（#391）。既定OFF（＝指名を使う）。
+		// サイト全体の指名機能スイッチがONのときだけ管理画面に入力欄が現れる（サイト全体OFF時は
+		// メニュー単位の判定 is_nomination_enabled_for_menu() が常に false を返すため無意味になる）。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_DISABLE_NOMINATION,
+			array(
+				'type'              => 'boolean',
+				'single'            => true,
+				'default'           => false,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): bool {
+					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 編集権限に加え、Pro版 かつ サイト全体の指名機能がON のときのみREST書き込みを許可する。
+					// このメタ自体が「このメニューで指名機能を使うか」を決めるため、判定にメニュー単位の
+					// is_nomination_enabled_for_menu()（このメタを読む関数）を使うと自己参照になる。
+					// そのためサイト全体の設定（is_nomination_enabled()）だけをゲートに使う
+					// （別データソースのサイト全体オプションを見るため、本メタ自身の自己参照は起きない）。
+					//
+					// 注意（#412 A-3）: 本メタ自身のゲートは上記の理由で安全だが、他のメニューメタ
+					// （_vkbm_allow_multiple_guests・_vkbm_price_tiers・_vkbm_exclusive_* 等）の
+					// auth_callback は本メタの保存済み値を is_nomination_enabled_for_menu() 経由で
+					// 読むように変更済みである。そのため同一 REST リクエストで本メタと他のメニューメタを
+					// 同時に送ると、WordPress がメタを処理する順序次第で他メタ側が stale な本メタの値を
+					// 読んでしまい得る（＝順序依存）。権限昇格ではない（edit_post は既存の
+					// _vkbm_disable_nomination_fee と同じ権限マッピングで、本メタのゲートは
+					// それより厳しい「Pro版 かつ サイト全体の指名機能ON」を要求する）ため、
+					// 許容する設計判断とする。順序に依存させたくないクライアントは、本メタを
+					// 別リクエストで先に確定させてから他のメニューメタを送ること。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+					return $is_pro && Staff_Editor::is_nomination_enabled();
+				},
+			)
+		);
+
 		// 最大同時予約人数（デフォルト1。Pro版で2以上に設定可能）。
 		// Maximum simultaneous bookings per slot (default 1, configurable in Pro edition).
 		register_post_meta(
@@ -1005,19 +1074,30 @@ class Service_Menu_Post_Type {
 					return max( 0, (int) $value );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
-					// 編集権限に加え、save_post() と同じ業務ゲート（Pro版 かつ 指名OFF かつ 複数人予約ON）を
+					// 編集権限に加え、save_post() と同じ業務ゲート（Pro版 かつ 予約枠の定員機能ON）を
 					// REST メタAPI経由の書き込みにも適用する。ゲート外で値を保持させると、後から
-					// Pro版化・複数人予約有効化した際に意図せず催行判定が効き始めてしまうため、保存経路で防ぐ。
+					// Pro版化・予約枠の定員機能を有効化した際に意図せず催行判定・受付制限が
+					// 効き始めてしまうため、保存経路で防ぐ。
+					//
+					// #393（安藤レビュー指摘）: 以前はここに「指名OFF」条件も含めていたが、
+					// Service_Menu_Editor::save_post() は #392 で「指名OFF」条件を外しており
+					// （min_capacity は指名ONのメニューでも保存される）、この auth_callback だけが
+					// 古いゲートのまま取り残されていた（指名を使うメニューでは REST 経由の
+					// min_capacity 書き込みだけが拒否される不整合。管理画面の保存はクラシックな
+					// $_POST 経由で auth_callback を通らないため実害はなかったが、save_post() 側の
+					// ゲートと完全に一致させる）。
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
 					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled() && Staff_Editor::is_slot_capacity_enabled();
+					return $is_pro && Staff_Editor::is_slot_capacity_enabled();
 				},
 			)
 		);
 
-		// 複数人予約を許可するかどうか（Pro版・指名OFF時のみ有効。既定OFF）。
+		// 複数人予約を許可するかどうか（Pro版・予約枠の定員機能ON時のみ有効。既定OFF）。
+		// #392: 指名を使うメニューでも「1件の予約で申し込める人数」を定員まで受け付けられるようにするため、
+		// 「指名OFF」条件は表示／保存条件から外した（このメニューで指名を使うか否かに関わらず設定できる）。
 		register_post_meta(
 			self::POST_TYPE,
 			self::META_ALLOW_MULTIPLE_GUESTS,
@@ -1030,13 +1110,14 @@ class Service_Menu_Post_Type {
 					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
-					// 編集権限に加え、save_post() と同じゲート（Pro版 かつ 指名OFF）をREST書き込みにも適用する。
+					// 編集権限に加え、save_post() と同じゲート（Pro版 かつ 予約枠の定員機能ON）をREST書き込みにも適用する。
 					// これにより REST メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					// #392: 以前は「指名OFF」も条件に含めていたが、指名を使うメニューでも複数人一括予約を
+					// 利用できるようにするため外した（Staff_Editor::is_multi_guest_available_for_menu() 参照）。
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
-					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+					return Staff_Editor::is_multi_guest_available_for_menu( $post_id );
 				},
 			)
 		);
@@ -1056,8 +1137,12 @@ class Service_Menu_Post_Type {
 					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
-					// 複数人予約フラグ・料金区分と同じゲート（Pro版 かつ 指名OFF）を REST 書き込みに適用する。
-					// メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					// #392: 以前は複数人予約フラグ・料金区分と同じゲート（Pro版 かつ 指名OFF）を共有していたが、
+					// 複数人予約フラグ・料金区分は指名OFF条件を外したため（is_multi_guest_available_for_menu()
+					// 参照）、貸切系の3設定（本メタもその1つ）は専用の
+					// Staff_Editor::is_exclusive_booking_available_for_menu()（Pro版 かつ 予約枠の定員機能ON
+					// かつ 指名OFF）を使う。REST メタAPI経由で業務ロジック制約を迂回されるのを防ぐ
+					// （読み取りは show_in_rest で別途許可）。
 					//
 					// NOTE: ここでは _vkbm_allow_multiple_guests（保存済み値）は読まない。price_tiers と同様、
 					// REST で「複数人予約ON＋貸し切りON」を同一リクエストで保存する際にメタの処理順序によって
@@ -1067,8 +1152,7 @@ class Service_Menu_Post_Type {
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
-					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+					return Staff_Editor::is_exclusive_booking_available_for_menu( $post_id );
 				},
 			)
 		);
@@ -1088,8 +1172,10 @@ class Service_Menu_Post_Type {
 					return filter_var( $value, FILTER_VALIDATE_BOOLEAN );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
-					// 複数人予約フラグ・料金区分と同じゲート（Pro版 かつ 指名OFF）を REST 書き込みに適用する。
-					// メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
+					// #392: 貸切系の3設定（本メタもその1つ）専用のゲート
+					// Staff_Editor::is_exclusive_booking_available_for_menu()（Pro版 かつ 予約枠の定員機能ON
+					// かつ 指名OFF）を REST 書き込みに適用する。メタAPI経由で業務ロジック制約を
+					// 迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
 					// NOTE: ここでは保存済みの複数人予約フラグ（_vkbm_allow_multiple_guests）は読まない。
 					// 料金区分・貸し切り設定と同様、同一リクエストで複数メタを保存する際の stale 値による
 					// 誤拒否（race）を避けるため。複数人予約OFFのメニューにこのメタが混入しても、
@@ -1097,8 +1183,7 @@ class Service_Menu_Post_Type {
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
-					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+					return Staff_Editor::is_exclusive_booking_available_for_menu( $post_id );
 				},
 			)
 		);
@@ -1118,11 +1203,11 @@ class Service_Menu_Post_Type {
 					return max( 0, (int) $value );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// #392: 貸切系の3設定専用のゲート（Staff_Editor::is_exclusive_booking_available_for_menu()）を適用する。
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
-					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+					return Staff_Editor::is_exclusive_booking_available_for_menu( $post_id );
 				},
 			)
 		);
@@ -1142,17 +1227,19 @@ class Service_Menu_Post_Type {
 					return max( 0, (int) $value );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// #392: 貸切系の3設定専用のゲート（Staff_Editor::is_exclusive_booking_available_for_menu()）を適用する。
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
-					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+					return Staff_Editor::is_exclusive_booking_available_for_menu( $post_id );
 				},
 			)
 		);
 
 		// 料金区分（大人料金・子供料金など）。複数人予約ON時のみ意味を持つ。
 		// 1件でも定義すると基本料金×人数ではなく区分料金で計算する（併用なし）。
+		// #392: 指名を使うメニューでも料金区分を利用できるようにするため、「指名OFF」条件は
+		// 表示／保存条件から外した。
 		register_post_meta(
 			self::POST_TYPE,
 			self::META_PRICE_TIERS,
@@ -1176,19 +1263,20 @@ class Service_Menu_Post_Type {
 					return Price_Tiers::sanitize_tiers( $value );
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
-					// 編集権限に加え、複数人予約フラグと同じゲート（Pro版 かつ 指名OFF）を REST 書き込みに適用する。
+					// 編集権限に加え、複数人予約フラグと同じゲート（Pro版 かつ 予約枠の定員機能ON）を REST 書き込みに適用する。
 					// メタAPI経由で業務ロジック制約を迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
 					//
 					// NOTE: ここで _vkbm_allow_multiple_guests（保存済み値）は読まない。
 					// REST で「複数人予約ON＋料金区分」を同一リクエストで保存する際、メタの処理順序によっては
 					// allow フラグ書き込み前に料金区分の auth が走り、stale な保存済み値で誤って拒否され得る（race）。
-					// 複数人予約OFFのメニューに区分が混入しても、料金計算側がフルゲート（allow＋指名OFF＋Pro）を
-					// 再適用して無害化するため、多層防御は計算側で担保される。
+					// 複数人予約OFFのメニューに区分が混入しても、料金計算側がフルゲート（allow＋Pro＋予約枠の
+					// 定員機能ON）を再適用して無害化するため、多層防御は計算側で担保される。
+					// #392: 以前は「指名OFF」も条件に含めていたが、指名を使うメニューでも料金区分を
+					// 利用できるようにするため外した（Staff_Editor::is_multi_guest_available_for_menu() 参照）。
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
-					$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-					return $is_pro && ! Staff_Editor::is_nomination_enabled();
+					return Staff_Editor::is_multi_guest_available_for_menu( $post_id );
 				},
 			)
 		);
@@ -1234,6 +1322,7 @@ class Service_Menu_Post_Type {
 		return array(
 			'_vkbm_base_price',
 			self::META_DISABLE_NOMINATION_FEE,
+			self::META_DISABLE_NOMINATION,
 			self::META_MAX_CAPACITY,
 			self::META_MIN_CAPACITY,
 			self::META_ALLOW_MULTIPLE_GUESTS,
@@ -1299,6 +1388,67 @@ class Service_Menu_Post_Type {
 				),
 			)
 		);
+
+		// 指名を使うメニューの最低申し込み人数（受付制限、#393）を読み取り専用フィールドとして公開する。
+		// フロント（app.js）は自前で適用条件（指名可否・複数人一括予約・予約枠の定員機能ON・定員2以上）を
+		// 再計算せず、この値をそのまま使う。これにより、フロントがサイト全体の「予約枠の定員機能」
+		// スイッチ（Staff_Editor::is_slot_capacity_enabled()）を見落として、サーバー側では実効0のはずの
+		// 下限がフロントにだけ残り予約できなくなる不整合（安藤レビュー指摘）を防ぐ。判定条件は
+		// Availability_Service::get_menu_nomination_min_guests() の1箇所に集約する。
+		register_rest_field(
+			self::POST_TYPE,
+			'vkbm_nomination_min_guests',
+			array(
+				'get_callback' => array( $this, 'get_nomination_min_guests_rest_field' ),
+				'schema'       => array(
+					'description' => __( 'Minimum number of guests required to book this menu when staff nomination is used (0 = no restriction).', 'vk-booking-manager' ),
+					'type'        => 'integer',
+					'context'     => array( 'view', 'edit' ),
+					'default'     => 0,
+					'minimum'     => 0,
+				),
+			)
+		);
+	}
+
+	/**
+	 * REST レスポンス用に、指名を使うメニューの最低申し込み人数を解決する。
+	 *
+	 * 指名を使うメニューの最低申し込み人数（受付制限）を Availability_Service に委譲して返す。
+	 * 表示専用の最少催行人数（get_menu_min_capacity）とは別の取得経路であることに注意。
+	 *
+	 * @param array<string, mixed> $post REST post data.
+	 * @return int 最低申し込み人数（0=制限なし）。
+	 */
+	public function get_nomination_min_guests_rest_field( array $post ): int {
+		$post_id = isset( $post['id'] ) ? (int) $post['id'] : 0;
+		if ( $post_id <= 0 ) {
+			return 0;
+		}
+
+		$menu_post = get_post( $post_id );
+		if ( ! $menu_post instanceof WP_Post ) {
+			return 0;
+		}
+
+		return $this->get_availability_service()->get_menu_nomination_min_guests( $menu_post );
+	}
+
+	/**
+	 * Availability_Service のインスタンスを遅延生成して返す。
+	 *
+	 * 初回呼び出し時にのみ生成し、以降は使い回す（安藤レビュー指摘：REST レスポンスの
+	 * メニュー1件ごとに新規生成すると、予約ブロックの `per_page: 100` 取得で
+	 * 1リクエストあたり最大100個生成されてしまうため）。
+	 *
+	 * @return Availability_Service
+	 */
+	private function get_availability_service(): Availability_Service {
+		if ( null === $this->availability_service ) {
+			$this->availability_service = new Availability_Service();
+		}
+
+		return $this->availability_service;
 	}
 
 	/**

@@ -1,4 +1,6 @@
-# Disallow use of deprecated functions (`no-deprecated-functions`)
+# jest/no-deprecated-functions
+
+📝 Disallow use of deprecated functions.
 
 💼 This rule is enabled in the ✅ `recommended`
 [config](https://github.com/jest-community/eslint-plugin-jest/blob/main/README.md#shareable-configurations).
@@ -53,5 +55,5 @@ Jest 27.
 
 ### `jest.genMockFromModule`
 
-This function was renamed to `createMockFromModule` in Jest 26, and is scheduled
-for removal in Jest 30.
+This function was renamed to `createMockFromModule` in Jest 26, and removed in
+Jest 30.

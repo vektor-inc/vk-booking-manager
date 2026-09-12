@@ -1,3 +1,10 @@
+/**
+ * @file
+ * 予約フロント e2e で実機検証済みの恒久的な注意点（セレクタ・トランジェントキャッシュ・
+ * シフト seeding 範囲・nonce 必須の落とし穴など）は `docs/ai-skills/skills/e2e.md` に
+ * まとめてある。新しく予約フロント e2e を書く前に必ず参照すること。
+ */
+
 import { execFileSync, ExecFileSyncOptions } from 'child_process';
 import type { Page } from '@playwright/test';
 
@@ -473,4 +480,34 @@ export const resolvePluginSlug = (): string => {
 	// 見つからない場合は従来の固定スラッグにフォールバック（CI の通常ケース）。
 	// Fall back to the conventional hardcoded slug (covers normal CI checkout).
 	return 'vk-booking-manager-pro';
+};
+
+/**
+ * HTML 文字列から、指定 id を持つ最初の要素の開始タグを抜き出す（簡易パーサ）。
+ * hidden 属性の有無を確認する用途に限定する。
+ *
+ * Extracts the opening tag of the first element with the given id from an HTML
+ * string (a minimal parser scoped to checking for the `hidden` attribute).
+ *
+ * #412 A-1/A-4/B-4 以降、指名可否や複数人一括予約の可否で出し分けるフィールド群は
+ * 「常に DOM に描画し、hidden 属性のみで表示/非表示を切り替える」方式になったため、
+ * 各 spec で「フィールドが DOM に無いこと」ではなく「hidden 属性が付いていること」を
+ * 検証する必要がある。この用途で複数の spec ファイルから共有して使う。
+ *
+ * Since #412 A-1/A-4/B-4, fields that toggle based on nomination or multi-guest
+ * settings are always rendered in the DOM and only the `hidden` attribute
+ * controls visibility. Specs must therefore assert on the `hidden` attribute
+ * rather than on the field's absence from the DOM. Shared across multiple spec
+ * files for this purpose.
+ *
+ * @param html HTML 文字列。 / HTML string.
+ * @param id   対象要素の id 属性値。 / The target element's id attribute value.
+ * @return 開始タグの文字列（`<tr id="...">` 等）。見つからなければ空文字。
+ *         The opening tag string (e.g. `<tr id="...">`). Empty string if not found.
+ */
+export const extractOpeningTagById = ( html: string, id: string ): string => {
+	const match = html.match(
+		new RegExp( `<[a-zA-Z]+[^>]*\\bid="${ id }"[^>]*>` )
+	);
+	return match ? match[ 0 ] : '';
 };

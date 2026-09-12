@@ -3,8 +3,14 @@
  * _vkbm_min_capacity メタの auth_callback テスト。
  *
  * 最小催行人数メタの REST 書き込み認可（auth_callback）が、save_post() と同じ業務ゲート
- * （Pro版 ＋ 指名OFF ＋ 複数人予約ON）に従うことを検証する。ゲート外で REST 経由の
+ * （Pro版 ＋ 予約枠の定員機能ON）に従うことを検証する。ゲート外で REST 経由の
  * 書き込みをバイパスされないことを担保する（#311 CodeRabbit 指摘 #4）。
+ *
+ * #393（安藤レビュー指摘）: 以前は「指名OFF」もゲートに含めていたが、
+ * Service_Menu_Editor::save_post() が #392 で「指名OFF」条件を外したことに
+ * auth_callback 側が追従しておらず、指名を使うメニューでは REST 経由の
+ * min_capacity 書き込みだけが拒否される不整合があった。save_post() のゲートと
+ * 完全に一致させたため、指名ONでも Pro版・予約枠の定員機能ONなら許可する。
  *
  * @package VKBookingManager
  */
@@ -65,16 +71,21 @@ class Service_Menu_Min_Capacity_Auth_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 指名機能・複数人予約機能の有効/無効を全体設定へ反映する。
+	 * 指名機能・予約枠の定員機能の有効/無効を全体設定へ反映する。
 	 *
-	 * @param bool $nomination       指名機能を有効にする場合は true。
-	 * @param bool $multiple_guests  複数人予約機能を有効にする場合は true。
+	 * #393（安藤レビュー指摘）: 第2引数は実際にはサイト全体の「予約枠の定員機能」スイッチ
+	 * （slot_capacity_enabled）を設定するものであり、メニュー単位の複数人一括予約
+	 * （_vkbm_allow_multiple_guests）とは別の設定である。この auth_callback の権限判定から
+	 * メニュー単位の複数人一括予約の条件は含まれていないため、引数名を実態に合わせる。
+	 *
+	 * @param bool $nomination           指名機能を有効にする場合は true。
+	 * @param bool $slot_capacity_enabled 予約枠の定員機能を有効にする場合は true。
 	 */
-	private function set_settings( bool $nomination, bool $multiple_guests ): void {
+	private function set_settings( bool $nomination, bool $slot_capacity_enabled ): void {
 		$repository                        = new Settings_Repository();
 		$settings                          = $repository->get_settings();
 		$settings['staff_enabled']         = $nomination;
-		$settings['slot_capacity_enabled'] = $multiple_guests;
+		$settings['slot_capacity_enabled'] = $slot_capacity_enabled;
 		update_option( Settings_Repository::OPTION_KEY, $settings );
 		Staff_Editor::clear_nomination_enabled_cache();
 	}
@@ -97,10 +108,14 @@ class Service_Menu_Min_Capacity_Auth_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * auth_callback が save_post() と同じ業務ゲート（Pro＋指名OFF＋複数人予約ON）に従うことを検証する。
+	 * auth_callback が save_post() と同じ業務ゲート（Pro＋予約枠の定員機能ON）に従うことを検証する。
 	 *
 	 * Pro版テスト環境前提（is_pro_edition=true）。編集権限を持つ管理者でログインした上で、
 	 * 指名・複数人予約の各状態でゲートが効くことを確認する。編集権限が無い場合は常に拒否。
+	 *
+	 * #393: 指名ONでも予約枠の定員機能さえONなら許可される（save_post() と同じゲートに一致）。
+	 * 指名を使うメニューでは _vkbm_min_capacity が「最低申し込み人数」（受付制限）として
+	 * 実際に保存・適用されるため、REST 経由の書き込みだけを拒否する理由が無い。
 	 */
 	public function test_auth_callback(): void {
 		$auth_callback = $this->get_min_capacity_auth_callback();
@@ -115,32 +130,32 @@ class Service_Menu_Min_Capacity_Auth_Test extends WP_UnitTestCase {
 
 		$test_cases = array(
 			array(
-				'test_condition_name' => '編集権限＋指名OFF＋複数人予約ON => 許可（正常系：保存ゲートと一致）',
-				'logged_in'           => true,
-				'nomination'          => false,
-				'multiple_guests'     => true,
-				'expected'            => true,
+				'test_condition_name'   => '編集権限＋指名OFF＋予約枠の定員機能ON => 許可（正常系：保存ゲートと一致）',
+				'logged_in'             => true,
+				'nomination'            => false,
+				'slot_capacity_enabled' => true,
+				'expected'              => true,
 			),
 			array(
-				'test_condition_name' => '編集権限＋指名ON => 拒否（1対1予約のため催行判定なし）',
-				'logged_in'           => true,
-				'nomination'          => true,
-				'multiple_guests'     => true,
-				'expected'            => false,
+				'test_condition_name'   => '編集権限＋指名ON＋予約枠の定員機能ON => 許可（#393：指名を使うメニューでも受付制限として保存されるため許可）',
+				'logged_in'             => true,
+				'nomination'            => true,
+				'slot_capacity_enabled' => true,
+				'expected'              => true,
 			),
 			array(
-				'test_condition_name' => '編集権限＋複数人予約OFF => 拒否（最大受付数1固定で催行判定なし）',
-				'logged_in'           => true,
-				'nomination'          => false,
-				'multiple_guests'     => false,
-				'expected'            => false,
+				'test_condition_name'   => '編集権限＋予約枠の定員機能OFF => 拒否（最大受付数1固定で催行判定・受付制限とも無効）',
+				'logged_in'             => true,
+				'nomination'            => false,
+				'slot_capacity_enabled' => false,
+				'expected'              => false,
 			),
 			array(
-				'test_condition_name' => '未ログイン（編集権限なし）＋指名OFF＋複数人予約ON => 拒否（境界値：権限チェック）',
-				'logged_in'           => false,
-				'nomination'          => false,
-				'multiple_guests'     => true,
-				'expected'            => false,
+				'test_condition_name'   => '未ログイン（編集権限なし）＋指名OFF＋予約枠の定員機能ON => 拒否（境界値：権限チェック）',
+				'logged_in'             => false,
+				'nomination'            => false,
+				'slot_capacity_enabled' => true,
+				'expected'              => false,
 			),
 		);
 
@@ -152,7 +167,7 @@ class Service_Menu_Min_Capacity_Auth_Test extends WP_UnitTestCase {
 				wp_set_current_user( 0 );
 			}
 
-			$this->set_settings( $case['nomination'], $case['multiple_guests'] );
+			$this->set_settings( $case['nomination'], $case['slot_capacity_enabled'] );
 
 			$actual = (bool) call_user_func( $auth_callback, false, '_vkbm_min_capacity', $menu_id );
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );

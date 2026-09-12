@@ -72,3 +72,41 @@
 .vkbm-alert--compact {
 	margin: 0;
 }
+
+/* ==========================================================================
+   管理者向け診断バナー（#411）
+   一般の warning/danger アラートと視覚的に混ざらないよう、破線枠とアイコンで区別する。
+   ========================================================================== */
+.vkbm-alert--admin-diagnostic {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5rem;
+	border-style: dashed;
+	border-width: 2px;
+	// #411 麗美さん確認（PR #414 差し戻し）: .vkbm-alert__warning の既定の border-color
+	// （--vkbm--color--warning-border, #ffecb5）は背景（--vkbm--color--warning-bg, #fff3cd）と
+	// ほぼ同色で、破線でも視認できないほどコントラストが不足していた（実測コントラスト比 約1.2:1）。
+	// 一般利用者向けアラートと視覚的に見分けがつくことが狙いの破線のため、既存の警告色パレット内で
+	// 十分なコントラストを持つ --vkbm--color--warning-text（#664d03、本文色と同じ変数を再利用）を
+	// 枠線色にあてる。背景 #fff3cd に対するコントラスト比は約7.2:1で、WCAG 2.1 AA の
+	// UIコンポーネント基準（3:1）を満たす。
+	border-color: var(--vkbm--color--warning-text, #664d03);
+
+	// hidden 属性で表示切替する（コンテナは常時マウント。詳細は app.js のコメント参照）。
+	// display: flex がブラウザ既定の [hidden] { display: none } に勝ってしまうため、
+	// 明示的に上書きする（#411 安藤さんレビュー指摘）。
+	&[hidden] {
+		display: none;
+	}
+
+	p {
+		margin: 0;
+	}
+}
+
+.vkbm-alert--admin-diagnostic__icon {
+	flex: 0 0 auto;
+	width: 1.1em;
+	height: 1.1em;
+	margin-top: 0.15em;
+}

@@ -17,7 +17,9 @@
 
 		// 担当スタッフ単一選択：同じ時間帯に別予約があるスタッフを候補から除外する。
 		// 1予約は分割せず単一スタッフに割り当てるため、リピーターではなく単一の select を扱う。
-		const resourceSelect = document.querySelector( '.vkbm-booking-resource' );
+		const resourceSelect = document.querySelector(
+			'.vkbm-booking-resource'
+		);
 		if ( resourceSelect ) {
 			// 競合スタッフIDはサーバー側が data 属性で渡す（保存時刻時点の判定）。
 			let conflictIds = new Set(
@@ -56,6 +58,12 @@
 			const endField = document.querySelector(
 				'input[name="vkbm_booking[end_time]"]'
 			);
+			// #394: 指名OFF・定員2以上のメニューでは「残数不足」も候補除外の条件になるため、
+			// 人数入力欄が表示されていればその時点の値を Ajax に含める。
+			// #394 レビュー対応: 人数欄の変更自体も再判定のトリガーに含める（後述）。
+			const guestsField = document.querySelector(
+				'input[name="vkbm_booking[guests]"]'
+			);
 
 			// 競合スタッフ取得リクエストの世代管理。デバウンス後でも応答が前後する可能性があるため、
 			// 最新リクエストの応答のみを反映して古い応答による上書きを防ぐ。
@@ -75,14 +83,17 @@
 				body.set( 'date', dateField ? dateField.value : '' );
 				body.set( 'start_time', startField ? startField.value : '' );
 				body.set( 'end_time', endField ? endField.value : '' );
+				body.set(
+					'guests',
+					guestsField && guestsField.value ? guestsField.value : '1'
+				);
 
 				window
 					.fetch( ajaxConfig.ajaxUrl, {
 						method: 'POST',
 						credentials: 'same-origin',
 						headers: {
-							'Content-Type':
-								'application/x-www-form-urlencoded',
+							'Content-Type': 'application/x-www-form-urlencoded',
 						},
 						body: body.toString(),
 					} )
@@ -137,14 +148,18 @@
 				);
 			};
 
-			[ dateField, startField, endField ].forEach( function ( field ) {
-				if ( field ) {
-					field.addEventListener(
-						'change',
-						debouncedRefreshConflicts
-					);
+			// #394 レビュー対応: 指名OFF・定員2以上のメニューでは人数が候補判定に効くため、
+			// 人数欄の変更も再判定のトリガーに含める（指名ONを前提にした当初の判断を撤回）。
+			[ dateField, startField, endField, guestsField ].forEach(
+				function ( field ) {
+					if ( field ) {
+						field.addEventListener(
+							'change',
+							debouncedRefreshConflicts
+						);
+					}
 				}
-			} );
+			);
 
 			updateStaffOptions();
 		}

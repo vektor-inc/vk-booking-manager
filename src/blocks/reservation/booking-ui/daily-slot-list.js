@@ -17,6 +17,12 @@ export const DailySlotList = ( {
 	selectedStaffLabel = '',
 	showStaffLabel = true,
 	noNominationLabel = '',
+	// #392: 指名を使うメニューか。true のときは残数（「残 X / 満 Y」の数値バッジ）・催行状態
+	// （「開催決定」「あとN名で開催」）を表示しない。指名を使うメニューは1枠1組（貸切）扱いのため、
+	// これらの「複数の別々の予約が相乗りする」ことを前提にした表示が成立しないため。
+	// 満枠かどうかの二値表示（「Fully booked」ラベル・disabled 状態）は、指名を使うメニューでも
+	// 従来どおり表示する（#392: 理由なく押せないボタンにしないため）。
+	isNominationMenu = false,
 } ) => {
 	if ( error ) {
 		return (
@@ -73,11 +79,23 @@ export const DailySlotList = ( {
 				// Slot closed because an exclusive (private) booking was placed.
 				const isExclusiveClosed = Boolean( slot.exclusive_closed );
 				// capacity > 1 の場合のみ残り枠数を表示する。
-				// Show remaining count only when capacity is greater than 1.
+				// #392: 指名を使うメニュー（1枠1組＝貸切）では、capacity（定員＝1組の最大人数）が
+				// 2以上でも「残 X / 満 Y」の数値バッジは表示しない（相乗りの概念が無いため）。
+				// Show remaining count only when capacity is greater than 1 and the menu is not a
+				// nomination (private-per-group) menu.
 				const showRemaining =
+					! isNominationMenu &&
 					slot.capacity > 1 &&
 					slot.remaining > 0 &&
 					! isExclusiveClosed;
+				// 満枠かどうかの判定は指名メニューでも従来どおり行い、ボタンを disabled にするだけでなく
+				// 「Fully booked」ラベルも表示する（#392）。
+				// issue が求めているのは「残数（残X/満Yの数値）」と「催行状態（あとN人で開催確定）」を
+				// 出さないことであり、満席かどうかの二値表示まで消す指示ではない。ここを隠すと、
+				// 指名を使うメニューで「指名なし」を選び候補スタッフが全員埋まっている時間帯では、
+				// 時間とスタッフ名だけの空欄ボタンが理由も分からず灰色で押せない状態になってしまう
+				// （バックエンドの collapse_slots_for_auto_assignment() も「満枠スロットもフロントエンド側で
+				// 『満枠』表示するため除外しない」という前提でそのスロットを残している）。
 				const isFull =
 					! isExclusiveClosed &&
 					slot.capacity > 1 &&
@@ -86,7 +104,12 @@ export const DailySlotList = ( {
 				const isDisabled = isFull || isExclusiveClosed;
 
 				// 最小催行人数（グループ開催型）。0以下は制約なしのため催行状態は表示しない。
-				const minCapacity = Number( slot.min_capacity ) || 0;
+				// #392: 指名を使うメニューはバックエンド（Availability_Service::get_menu_min_capacity()）が
+				// 常に min_capacity=0 を返すため通常はここで自動的に非表示になるが、念のため
+				// isNominationMenu でも明示的に除外する（多層防御）。
+				const minCapacity = isNominationMenu
+					? 0
+					: Number( slot.min_capacity ) || 0;
 				const bookedGuests = Math.max(
 					0,
 					Number( slot.booked_guests ) || 0

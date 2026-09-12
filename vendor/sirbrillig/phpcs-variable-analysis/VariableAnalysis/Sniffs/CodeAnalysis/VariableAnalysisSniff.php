@@ -170,6 +170,7 @@ class VariableAnalysisSniff implements Sniff
 	 *
 	 * @return (int|string)[]
 	 */
+	#[\Override]
 	public function register()
 	{
 		$types = [
@@ -240,6 +241,7 @@ class VariableAnalysisSniff implements Sniff
 	 *
 	 * @return void
 	 */
+	#[\Override]
 	public function process(File $phpcsFile, $stackPtr)
 	{
 		$tokens = $phpcsFile->getTokens();
@@ -890,7 +892,7 @@ class VariableAnalysisSniff implements Sniff
 		/** @var array{conditions?: (int|string)[], content?: string}|null */
 		$token = $tokens[$stackPtr];
 		if ($token && !empty($token['conditions']) && !empty($token['content']) && !Helpers::areConditionsWithinFunctionBeforeClass($token)) {
-			return Helpers::areAnyConditionsAClass($token);
+			return Helpers::areAnyConditionsAClass($phpcsFile, $stackPtr);
 		}
 		return false;
 	}
@@ -1103,7 +1105,7 @@ class VariableAnalysisSniff implements Sniff
 		}
 		$errorClass = $code === T_SELF ? 'SelfOutsideClass' : 'StaticOutsideClass';
 		$staticRefType = $code === T_SELF ? 'self::' : 'static::';
-		if (!empty($token['conditions']) && !empty($token['content']) && Helpers::areAnyConditionsAClass($token)) {
+		if ($token && !empty($token['content']) && Helpers::areAnyConditionsAClass($phpcsFile, $stackPtr)) {
 			return false;
 		}
 		$phpcsFile->addError(
@@ -1547,9 +1549,9 @@ class VariableAnalysisSniff implements Sniff
 
 		// We're within a function call arguments list, find which arg we are.
 		$argPos = false;
-		foreach ($argPtrs as $idx => $ptrs) {
-			if (in_array($stackPtr, $ptrs)) {
-				$argPos = $idx + 1;
+		foreach ($argPtrs as $idx => $param) {
+			if ($stackPtr >= $param['start'] && $stackPtr <= $param['end']) {
+				$argPos = $idx;
 				break;
 			}
 		}
@@ -1570,7 +1572,8 @@ class VariableAnalysisSniff implements Sniff
 
 		// Our argument position matches that of a pass-by-ref argument,
 		// check that we're the only part of the argument expression.
-		foreach ($argPtrs[$argPos - 1] as $ptr) {
+		$param = $argPtrs[$argPos];
+		for ($ptr = (int)$param['start']; $ptr <= (int)$param['end']; $ptr++) {
 			if ($ptr === $stackPtr) {
 				continue;
 			}

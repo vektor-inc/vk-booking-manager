@@ -28,7 +28,7 @@ final class ResourceHelper {
 	 *
 	 * @return bool
 	 */
-	public static function isResource( $actual ) {
+	public static function isResource( $actual ): bool {
 		return ( $actual !== null
 			&& \is_scalar( $actual ) === false
 			&& \is_array( $actual ) === false
@@ -42,7 +42,7 @@ final class ResourceHelper {
 	 *
 	 * @return bool
 	 */
-	public static function isClosedResource( $actual ) {
+	public static function isClosedResource( $actual ): bool {
 		$type = \gettype( $actual );
 
 		/*
@@ -92,7 +92,7 @@ final class ResourceHelper {
 	 *
 	 * @return bool
 	 */
-	public static function isResourceStateReliable( $actual ) {
+	public static function isResourceStateReliable( $actual ): bool {
 		try {
 			$type = @\get_resource_type( $actual );
 
@@ -114,15 +114,11 @@ final class ResourceHelper {
 	 * correctly.
 	 *
 	 * Version ranges based on {@link https://3v4l.org/tc4fE}.
-	 * 7.0.8 - 7.0.33, 7.1.0 - 7.1.33, 7.2.0 - 7.2.34, 7.3.0 - 7.3.21, 7.4.0 - 7.4.9
+	 * 7.1.0 - 7.1.33, 7.2.0 - 7.2.34, 7.3.0 - 7.3.21, 7.4.0 - 7.4.9
 	 *
 	 * @return bool
 	 */
-	public static function isIncompatiblePHPForLibXMLResources() {
-		if ( \PHP_VERSION_ID >= 70008 && \PHP_VERSION_ID < 70034 ) {
-			return true;
-		}
-
+	public static function isIncompatiblePHPForLibXMLResources(): bool {
 		if ( \PHP_VERSION_ID >= 70100 && \PHP_VERSION_ID < 70134 ) {
 			return true;
 		}

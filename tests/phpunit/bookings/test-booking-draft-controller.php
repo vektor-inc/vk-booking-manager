@@ -678,7 +678,9 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 	 * 後方互換の核心：
 	 * - option 未設定（既存サイト相当）＝有効として複数人予約が通る。
 	 * - 明示的にOFF＝要求人数に関わらず1名へ抑止される。
-	 * - 指名ON＝従来どおり1名へ抑止される（複数人予約機能ONでも無効）。
+	 * - 指名ON＝#392 より前は従来どおり1名へ抑止されていたが、指名を使うメニューを
+	 *   「1枠1組（貸切）」として扱う仕様変更に伴い、複数人予約機能ONなら要求人数まで受け付ける
+	 *   （予約枠の定員＝1組の最大人数として使う）。
 	 */
 	public function test_get_max_guests(): void {
 		// 複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
@@ -713,11 +715,11 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'expected_guests'         => 1,
 			),
 			array(
-				'test_condition_name'     => '複数人予約ON・指名ON・許可ON・要求2 → guests=1（指名ONで従来どおり無効）',
+				'test_condition_name'     => '複数人予約ON・指名ON・許可ON・要求2 → guests=2（#392：指名を使うメニューでも1組の最大人数まで受け付ける）',
 				'multiple_guests_setting' => 'enabled',
 				'nomination_enabled'      => true,
 				'requested_guests'        => 2,
-				'expected_guests'         => 1,
+				'expected_guests'         => 2,
 			),
 		);
 
@@ -779,6 +781,104 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			$this->tokens = array();
 			wp_set_current_user( 0 );
 			// 静的キャッシュをクリアし、option はトランザクションロールバックに任せる。
+			Staff_Editor::clear_nomination_enabled_cache();
+		}
+	}
+
+	/**
+	 * save_draft / get_draft: メニュー単位の指名機能設定（_vkbm_disable_nomination、#391）を検証する。
+	 *
+	 * サイト全体の指名機能はON（既定値）のまま、メニュー単位の設定だけを切り替える。
+	 * - メニュー単位の設定が無い（既定＝使う）場合は、#391導入前と同じくサイト全体の設定どおり
+	 *   指名フラグ・指名料が保持される。
+	 * - メニュー単位で指名を無効化したメニューは、送信された is_staff_preferred=true が
+	 *   サーバ側で強制的に false へ書き換えられ、指名料も発生しない。
+	 * - get_draft() レスポンスの nomination_enabled フィールドが、メニュー単位の判定結果を
+	 *   正しく反映する（booking-confirm-app.js が参照する authoritative な値）。
+	 */
+	public function test_save_draft_respects_menu_level_nomination_toggle(): void {
+		// メニュー単位の指名機能設定は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより
+		// 検証対象の挙動が無効になる。無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( 'メニュー単位の指名機能設定は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$test_cases = array(
+			array(
+				'test_condition_name'         => 'メニュー単位の指名設定なし（既定＝使う） => 指名フラグ・指名料とも保持される（#391導入前と同じ挙動）',
+				'menu_disable_nomination'     => false,
+				'expected_is_staff_preferred' => true,
+				'expected_nomination_enabled' => true,
+				'expected_nomination_fee'     => 1000,
+			),
+			array(
+				'test_condition_name'         => 'サイト全体は指名ONだがこのメニューは指名を無効化 => 指名フラグが強制的にfalseになり指名料も0（#391・本機能の本体）',
+				'menu_disable_nomination'     => true,
+				'expected_is_staff_preferred' => false,
+				'expected_nomination_enabled' => false,
+				'expected_nomination_fee'     => 0,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// サイト全体の指名機能はON（既定値）のまま検証する。
+			$repository                = new Settings_Repository();
+			$settings                  = $repository->get_settings();
+			$settings['staff_enabled'] = true;
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Staff_Editor::clear_nomination_enabled_cache();
+
+			$menu_id  = $this->create_menu();
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $staff_id, Staff_Editor::META_NOMINATION_FEE, 1000 );
+
+			if ( $case['menu_disable_nomination'] ) {
+				update_post_meta( $menu_id, '_vkbm_disable_nomination', true );
+			}
+
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			$controller = new Booking_Draft_Controller();
+			$payload    = array_merge(
+				$this->build_payload( $menu_id, '2024-11-15T10:00:00+09:00' ),
+				array(
+					'resource_id'         => $staff_id,
+					'is_staff_preferred'  => true,
+				)
+			);
+			$token = $this->save_draft( $controller, $payload );
+
+			$response = $controller->get_draft( $this->build_get_request( $token ) );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+			$data = $response->get_data();
+
+			$this->assertSame(
+				$case['expected_is_staff_preferred'],
+				(bool) ( $data['is_staff_preferred'] ?? false ),
+				$case['test_condition_name'] . ' / is_staff_preferred'
+			);
+			$this->assertSame(
+				$case['expected_nomination_enabled'],
+				(bool) ( $data['nomination_enabled'] ?? false ),
+				$case['test_condition_name'] . ' / nomination_enabled'
+			);
+			$this->assertSame(
+				$case['expected_nomination_fee'],
+				(int) ( $data['nomination_fee'] ?? -1 ),
+				$case['test_condition_name'] . ' / nomination_fee'
+			);
+
+			// ケースごとに後始末する。
+			delete_transient( self::TRANSIENT_PREFIX . $token );
+			$this->tokens = array();
+			wp_set_current_user( 0 );
 			Staff_Editor::clear_nomination_enabled_cache();
 		}
 	}
@@ -1109,6 +1209,227 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 
 			wp_set_current_user( 0 );
 		}
+	}
+
+	/**
+	 * save_draft: 指名を使うメニューの最低申し込み人数（受付制限。#393）をサーバ側で
+	 * 権威的に検証することを確認する。フロントの入力欄下限・警告表示は迂回可能なため、
+	 * 下書き保存時にもサーバ側で申込人数不足を拒否する必要がある。
+	 *
+	 * - 指名を使う・複数人一括予約ON・予約枠の定員2以上・最低申し込み人数2で1名 => 拒否（異常系）
+	 * - 同条件で2名・3名 => 保存できる（正常系：ちょうど／上回る）
+	 * - 指名を使わないメニューでは最低申し込み人数の設定に関わらず1名でも保存できる
+	 *   （正常系：従来どおり最少催行人数は表示専用のまま変わらない）
+	 * - 複数人一括予約OFFのメニューでは最低申し込み人数に2以上が保存されていても1名で保存できる
+	 *   （境界値：実効0へのクランプ。複数人一括予約OFFのメニューは申込人数が常に1名固定のため）
+	 */
+	public function test_save_draft_rejects_nomination_min_guests(): void {
+		// 指名機能・複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '指名機能・複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$test_cases = array(
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員3・最低2・申込1名 => nomination_min_guests（異常系）',
+				'nomination_enabled'    => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'requested_guests'      => 1,
+				'expected_error'        => 'nomination_min_guests',
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員3・最低2・申込2名 => 保存できる（正常系：ちょうど）',
+				'nomination_enabled'    => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'requested_guests'      => 2,
+				'expected_error'        => '',
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員3・最低2・申込3名 => 保存できる（正常系：上回る）',
+				'nomination_enabled'    => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'requested_guests'      => 3,
+				'expected_error'        => '',
+			),
+			array(
+				'test_condition_name'   => '指名OFF・複数人予約ON・定員3・最低2・申込1名 => 保存できる（正常系：指名を使わないメニューは従来どおり表示専用）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'requested_guests'      => 1,
+				'expected_error'        => '',
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人予約OFF・定員3・最低2・申込1名 => 保存できる（境界値：複数人予約OFFで実効0へクランプ）',
+				'nomination_enabled'    => true,
+				'allow_multiple_guests' => false,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'requested_guests'      => 1,
+				'expected_error'        => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 全体設定（指名・予約枠の定員機能）を組み立てる。
+			$repository                        = new Settings_Repository();
+			$settings                          = $repository->get_settings();
+			$settings['staff_enabled']         = $case['nomination_enabled'];
+			$settings['slot_capacity_enabled'] = true;
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Staff_Editor::clear_nomination_enabled_cache();
+
+			$menu_id = $this->create_menu();
+			update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
+			update_post_meta( $menu_id, '_vkbm_min_capacity', $case['min_capacity'] );
+			if ( $case['allow_multiple_guests'] ) {
+				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+			// 複数人一括予約はスタッフ割当が前提のため、メニューにスタッフを割り当てる。
+			$staff_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+			// ログインユーザーとして下書きを保存する（owner = user）。
+			$owner_id = $this->factory()->user->create();
+			wp_set_current_user( $owner_id );
+			$this->owner_ids[] = 'user:' . $owner_id;
+
+			$payload = array_merge(
+				$this->build_payload( $menu_id, '2026-08-01T10:00:00+09:00' ),
+				array( 'guests' => $case['requested_guests'] )
+			);
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/drafts' );
+			$request->set_header( 'content-type', 'application/json' );
+			$request->set_body( wp_json_encode( $payload ) );
+
+			$controller = new Booking_Draft_Controller();
+			$response   = $controller->save_draft( $request );
+
+			if ( '' !== $case['expected_error'] ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_error'], $response->get_error_code(), $case['test_condition_name'] );
+			} else {
+				$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+				$data  = $response->get_data();
+				$token = isset( $data['token'] ) ? (string) $data['token'] : '';
+				$this->assertNotSame( '', $token, $case['test_condition_name'] );
+				$this->tokens[] = $token;
+				delete_transient( self::TRANSIENT_PREFIX . $token );
+				$this->tokens = array();
+			}
+
+			wp_set_current_user( 0 );
+			Staff_Editor::clear_nomination_enabled_cache();
+		}
+	}
+
+	/**
+	 * save_draft: 指名を使うメニューの最低申し込み人数（受付制限。#393）が、
+	 * 料金区分（guest_tiers）経路の合計人数に対しても効くことを検証する（安藤レビュー指摘）。
+	 *
+	 * #392 で指名を使うメニューでも料金区分が使えるようになったため、実際にサーバへ届く
+	 * 人数は `guests` ではなく guest_tiers の合計人数になる経路がある。この判定
+	 * （$this->get_menu_nomination_min_guests()）は guests/guest_tiers の合流後
+	 * （resolve_guests() でクランプした $guests）に置かれているため、単一の guests 経路
+	 * だけをテストしていると、将来この判定位置が動いても気づけない。区分内訳の合計が
+	 * 最低申し込み人数を下回るケースを明示的に検証する。
+	 */
+	public function test_save_draft_rejects_nomination_min_guests_via_price_tiers(): void {
+		// 指名機能・複数人予約は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '指名機能・複数人予約は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$repository                        = new Settings_Repository();
+		$settings                          = $repository->get_settings();
+		$settings['staff_enabled']         = true;
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$menu_id = $this->create_menu();
+		update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+		update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
+		update_post_meta( $menu_id, '_vkbm_min_capacity', 2 );
+		update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+		update_post_meta(
+			$menu_id,
+			'_vkbm_price_tiers',
+			array(
+				array(
+					'label' => 'Adult',
+					'price' => 1000,
+				),
+			)
+		);
+		$staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+		$owner_id = $this->factory()->user->create();
+		wp_set_current_user( $owner_id );
+		$this->owner_ids[] = 'user:' . $owner_id;
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '区分合計1名（最低2未満） => nomination_min_guests（異常系）',
+				'requested_tiers'     => array( 0 => 1 ),
+				'expected_error'      => 'nomination_min_guests',
+			),
+			array(
+				'test_condition_name' => '区分合計2名（最低2ちょうど） => 保存できる（正常系）',
+				'requested_tiers'     => array( 0 => 2 ),
+				'expected_error'      => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$controller = new Booking_Draft_Controller();
+			$payload    = array_merge(
+				$this->build_payload( $menu_id, '2026-08-02T10:00:00+09:00' ),
+				array( 'guest_tiers' => $case['requested_tiers'] )
+			);
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/drafts' );
+			$request->set_header( 'content-type', 'application/json' );
+			$request->set_body( wp_json_encode( $payload ) );
+
+			$response = $controller->save_draft( $request );
+
+			if ( '' !== $case['expected_error'] ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_error'], $response->get_error_code(), $case['test_condition_name'] );
+			} else {
+				$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+				$data  = $response->get_data();
+				$token = isset( $data['token'] ) ? (string) $data['token'] : '';
+				$this->assertNotSame( '', $token, $case['test_condition_name'] );
+				$this->tokens[] = $token;
+				delete_transient( self::TRANSIENT_PREFIX . $token );
+				$this->tokens = array();
+			}
+		}
+
+		wp_set_current_user( 0 );
+		Staff_Editor::clear_nomination_enabled_cache();
 	}
 
 	/**

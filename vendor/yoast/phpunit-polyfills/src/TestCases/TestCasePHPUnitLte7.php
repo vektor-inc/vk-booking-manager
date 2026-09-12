@@ -3,20 +3,19 @@
 namespace Yoast\PHPUnitPolyfills\TestCases;
 
 use PHPUnit\Framework\TestCase as PHPUnit_TestCase;
-use Yoast\PHPUnitPolyfills\Helpers\AssertAttributeHelper;
+use Yoast\PHPUnitPolyfills\Polyfills\AssertArrayWithListKeys;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertClosedResource;
-use Yoast\PHPUnitPolyfills\Polyfills\AssertEqualsSpecializations;
+use Yoast\PHPUnitPolyfills\Polyfills\AssertContainsOnly;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertFileEqualsSpecializations;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertIgnoringLineEndings;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertionRenames;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertIsList;
-use Yoast\PHPUnitPolyfills\Polyfills\AssertIsType;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertObjectEquals;
+use Yoast\PHPUnitPolyfills\Polyfills\AssertObjectNotEquals;
 use Yoast\PHPUnitPolyfills\Polyfills\AssertObjectProperty;
-use Yoast\PHPUnitPolyfills\Polyfills\AssertStringContains;
 use Yoast\PHPUnitPolyfills\Polyfills\EqualToSpecializations;
 use Yoast\PHPUnitPolyfills\Polyfills\ExpectExceptionMessageMatches;
-use Yoast\PHPUnitPolyfills\Polyfills\ExpectExceptionObject;
+use Yoast\PHPUnitPolyfills\Polyfills\ExpectUserDeprecation;
 
 /**
  * Basic test case for use with PHPUnit <= 7.
@@ -31,20 +30,19 @@ use Yoast\PHPUnitPolyfills\Polyfills\ExpectExceptionObject;
  */
 abstract class TestCase extends PHPUnit_TestCase {
 
-	use AssertAttributeHelper;
+	use AssertArrayWithListKeys;
 	use AssertClosedResource;
-	use AssertEqualsSpecializations;
+	use AssertContainsOnly;
 	use AssertFileEqualsSpecializations;
 	use AssertIgnoringLineEndings;
 	use AssertionRenames;
 	use AssertIsList;
-	use AssertIsType;
 	use AssertObjectEquals;
+	use AssertObjectNotEquals;
 	use AssertObjectProperty;
-	use AssertStringContains;
 	use EqualToSpecializations;
 	use ExpectExceptionMessageMatches;
-	use ExpectExceptionObject;
+	use ExpectUserDeprecation;
 
 	/**
 	 * This method is called before the first test of this test class is run.

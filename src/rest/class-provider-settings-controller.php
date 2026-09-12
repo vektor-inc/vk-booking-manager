@@ -122,6 +122,11 @@ class Provider_Settings_Controller {
 		// 単位ヘルパーは null（未設定）をロケール既定へ解決するため、フロントは受け取った値をそのまま使える。
 		$guests_count_label = vkbm_get_guests_count_label();
 		$guests_unit_label  = vkbm_get_guests_unit_label();
+		// #391: このエンドポイントはサイト全体の設定を返すもので、特定のメニューという文脈を持たない
+		// （フロントは複数のメニューを横断して同じレスポンスを参照する）。そのためここではメニュー単位判定
+		// （is_nomination_enabled_for_menu）は使わず、従来どおりサイト全体の指名機能スイッチを返す。
+		// メニュー単位の実際の判定は、選択中メニューの meta（_vkbm_disable_nomination）と
+		// この staff_enabled を掛け合わせてフロント側（app.js）で行う。
 		$nomination_enabled = Staff_Editor::is_nomination_enabled();
 
 		// 無料版ではデフォルトスタッフのIDを取得する.

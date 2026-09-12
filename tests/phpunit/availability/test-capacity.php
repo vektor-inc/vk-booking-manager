@@ -205,6 +205,10 @@ class Capacity_Test extends WP_UnitTestCase {
 	 *
 	 * メニューに最大受付数5が設定されていても、複数人予約が利用できない状態（複数人予約OFF／指名ON）では
 	 * 1対1予約のため上限1に固定される。option 未設定（既存サイト相当）かつ指名OFFのときは従来どおり設定値を返す。
+	 *
+	 * #391 でメニュー単位の指名機能設定（`_vkbm_disable_nomination`）を追加したため、`disable_nomination` を
+	 * 明示指定するケース（サイト全体は指名ONのままメニュー単位で自動割り当てへ切り替える／メニュー単位で
+	 * 明示的に「使う」を選ぶ）を追加し、両方とも従来どおりサイト全体の判定と等価になることを検証する。
 	 */
 	public function test_get_menu_max_capacity_gated_by_settings(): void {
 		// 複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
@@ -218,25 +222,43 @@ class Capacity_Test extends WP_UnitTestCase {
 				'test_condition_name' => 'option未設定（既存サイト相当）・指名OFF → 設定値5（後方互換：未設定は有効）',
 				'multiple_guests'     => 'unset',
 				'nomination_enabled'  => false,
+				'disable_nomination'  => null,
 				'expected'            => 5,
 			),
 			array(
 				'test_condition_name' => '複数人予約ON・指名OFF → 設定値5（明示有効）',
 				'multiple_guests'     => 'enabled',
 				'nomination_enabled'  => false,
+				'disable_nomination'  => null,
 				'expected'            => 5,
 			),
 			array(
 				'test_condition_name' => '複数人予約OFF（明示無効）・指名OFF → 上限1に固定（設定で抑止）',
 				'multiple_guests'     => 'disabled',
 				'nomination_enabled'  => false,
+				'disable_nomination'  => null,
 				'expected'            => 1,
 			),
 			array(
-				'test_condition_name' => '複数人予約ON・指名ON → 上限1に固定（指名ONで1対1）',
+				'test_condition_name' => '複数人予約ON・指名ON（メニュー単位設定なし） → 設定値5（#392：指名ONでも1組の最大人数として使う。1枠1組・貸切扱い）',
 				'multiple_guests'     => 'enabled',
 				'nomination_enabled'  => true,
-				'expected'            => 1,
+				'disable_nomination'  => null,
+				'expected'            => 5,
+			),
+			array(
+				'test_condition_name' => '複数人予約ON・サイト全体は指名ONだがメニュー単位で指名を無効化 → 設定値5（#391：メニュー単位で自動割り当てに切替）',
+				'multiple_guests'     => 'enabled',
+				'nomination_enabled'  => true,
+				'disable_nomination'  => true,
+				'expected'            => 5,
+			),
+			array(
+				'test_condition_name' => '複数人予約ON・サイト全体は指名ONでメニュー単位も明示的に「使う」(false) → 設定値5（#392：指名を使うメニューでも定員は1組の最大人数として使う）',
+				'multiple_guests'     => 'enabled',
+				'nomination_enabled'  => true,
+				'disable_nomination'  => false,
+				'expected'            => 5,
 			),
 		);
 
@@ -263,6 +285,11 @@ class Capacity_Test extends WP_UnitTestCase {
 				)
 			);
 			update_post_meta( $menu_id, '_vkbm_max_capacity', 5 );
+
+			// メニュー単位の指名機能設定（#391）。null は「未設定（既定＝使う）」を意味するため触らない。
+			if ( null !== $case['disable_nomination'] ) {
+				update_post_meta( $menu_id, '_vkbm_disable_nomination', $case['disable_nomination'] );
+			}
 
 			$menu_post = get_post( $menu_id );
 			$this->assertInstanceOf( \WP_Post::class, $menu_post, $case['test_condition_name'] );
@@ -482,8 +509,15 @@ class Capacity_Test extends WP_UnitTestCase {
 	 * collapse_slots_for_auto_assignment で全スタッフに予約がある場合、
 	 * remaining は最も空きの大きい単一スタッフの残りになることを検証する。
 	 * Verify that when all staff have bookings, remaining = max single-staff remaining.
+	 *
+	 * #392: このテストは「指名を使わないメニューの複数人相乗り」を検証する趣旨のため、
+	 * サイト全体の指名機能をOFFにしてから実行する。指名機能の既定値は true（is_nomination_enabled_for_menu()
+	 * は実在しないメニューIDに対しても既定で「使う」を返す）のため、明示しないと #392 の1枠1組（貸切）判定が
+	 * 効いてしまい、複数人相乗りではなく「予約が1件でもあれば残り0」という別の仕様を検証してしまう。
 	 */
 	public function test_collapse_slots_all_staff_booked(): void {
+		$this->enable_multiple_guests_context();
+
 		$service    = new Availability_Service();
 		$reflection = new ReflectionClass( $service );
 		$method     = $reflection->getMethod( 'collapse_slots_for_auto_assignment' );
@@ -541,6 +575,175 @@ class Capacity_Test extends WP_UnitTestCase {
 		// 予約済みスタッフも assignable_staff_ids に含まれる。
 		// Booked staff are also included in assignable_staff_ids.
 		$this->assertCount( 2, $result[0]['assignable_staff_ids'], '予約済みスタッフも含め2人が割り当て候補 / Both staff should be assignable.' );
+	}
+
+	/**
+	 * #392: 指名を使うメニューでは「指名なし」（自動割り当て）の予約も1枠1組（貸切）扱いになり、
+	 * 既に1件でも予約があるスタッフには相乗りさせない（max_capacity 未達でも remaining=0）ことを検証する。
+	 * test_collapse_slots_all_staff_booked（指名を使わないメニュー）との対比：
+	 * 同じ「全スタッフに1名ずつ予約済み・max_capacity=3」の状況でも、
+	 * 指名を使わない場合は remaining=2（相乗り可）、指名を使う場合は remaining=0（相乗り不可）になる。
+	 */
+	public function test_collapse_slots_exclusive_when_menu_uses_nomination(): void {
+		// 複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		// このメニューで指名を使う状態（サイト全体ON・メニュー単位も明示的に無効化しない＝既定で使う）にする。
+		$repository                        = new Settings_Repository();
+		$settings                          = $repository->get_settings();
+		$settings['staff_enabled']         = true;
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$menu_id = $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+
+		$service    = new Availability_Service();
+		$reflection = new ReflectionClass( $service );
+		$method     = $reflection->getMethod( 'collapse_slots_for_auto_assignment' );
+		$method->setAccessible( true );
+
+		// 2人のスタッフが同じ時間帯にそれぞれ1件ずつ予約済み（合計2件）。max_capacity=3 のため
+		// 「指名を使わない」なら本来まだ2名分の相乗り余地があるが、指名を使うメニューでは
+		// 1枠1組（貸切）のためこの余地を使わせない。
+		$slots = array(
+			array(
+				'slot_id'          => '1-20260401100000',
+				'start_at'         => '2026-04-01T10:00:00+09:00',
+				'end_at'           => '2026-04-01T11:00:00+09:00',
+				'service_end_at'   => '2026-04-01T10:50:00+09:00',
+				'duration_minutes' => 50,
+				'staff'            => array(
+					'id'   => 1,
+					'name' => 'Staff A',
+				),
+				'capacity'         => 1,
+				'remaining'        => 0,
+				'guest_count'      => 1,
+				'flags'            => array(
+					'is_last_slot_of_day'   => false,
+					'requires_confirmation' => false,
+				),
+				'auto_assign'      => true,
+			),
+			array(
+				'slot_id'          => '2-20260401100000',
+				'start_at'         => '2026-04-01T10:00:00+09:00',
+				'end_at'           => '2026-04-01T11:00:00+09:00',
+				'service_end_at'   => '2026-04-01T10:50:00+09:00',
+				'duration_minutes' => 50,
+				'staff'            => array(
+					'id'   => 2,
+					'name' => 'Staff B',
+				),
+				'capacity'         => 1,
+				'remaining'        => 0,
+				'guest_count'      => 1,
+				'flags'            => array(
+					'is_last_slot_of_day'   => false,
+					'requires_confirmation' => false,
+				),
+				'auto_assign'      => true,
+			),
+		);
+
+		$result = $method->invoke( $service, $slots, $menu_id, 3 );
+
+		$this->assertCount( 1, $result, 'スロットは1つに集約されるべき' );
+		$this->assertSame( 3, $result[0]['capacity'], 'capacity は max_capacity(3) であるべき' );
+		$this->assertSame(
+			0,
+			$result[0]['remaining'],
+			'指名を使うメニューは1枠1組のため、既に予約があるスタッフは相乗り不可＝remainingは0であるべき'
+		);
+
+		Staff_Editor::clear_nomination_enabled_cache();
+	}
+
+	/**
+	 * #392: 指名を使うメニューでも、まだ予約が入っていない別のスタッフには「指名なし」で新規に
+	 * 1組を割り当てられることを検証する（定員はスタッフ1人あたりのため、スタッフの人数分だけ組が入る）。
+	 */
+	public function test_collapse_slots_allows_new_group_on_free_staff_when_menu_uses_nomination(): void {
+		$repository                        = new Settings_Repository();
+		$settings                          = $repository->get_settings();
+		$settings['staff_enabled']         = true;
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$menu_id = $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+
+		$service    = new Availability_Service();
+		$reflection = new ReflectionClass( $service );
+		$method     = $reflection->getMethod( 'collapse_slots_for_auto_assignment' );
+		$method->setAccessible( true );
+
+		// スタッフA：既に1名の予約あり（占有済み）。スタッフB：予約なし（空き）。
+		$slots = array(
+			array(
+				'slot_id'          => '1-20260401100000',
+				'start_at'         => '2026-04-01T10:00:00+09:00',
+				'end_at'           => '2026-04-01T11:00:00+09:00',
+				'service_end_at'   => '2026-04-01T10:50:00+09:00',
+				'duration_minutes' => 50,
+				'staff'            => array(
+					'id'   => 1,
+					'name' => 'Staff A',
+				),
+				'capacity'         => 1,
+				'remaining'        => 0,
+				'guest_count'      => 1,
+				'flags'            => array(
+					'is_last_slot_of_day'   => false,
+					'requires_confirmation' => false,
+				),
+				'auto_assign'      => true,
+			),
+			array(
+				'slot_id'          => '2-20260401100000',
+				'start_at'         => '2026-04-01T10:00:00+09:00',
+				'end_at'           => '2026-04-01T11:00:00+09:00',
+				'service_end_at'   => '2026-04-01T10:50:00+09:00',
+				'duration_minutes' => 50,
+				'staff'            => array(
+					'id'   => 2,
+					'name' => 'Staff B',
+				),
+				'capacity'         => 1,
+				'remaining'        => 1,
+				'guest_count'      => 0,
+				'flags'            => array(
+					'is_last_slot_of_day'   => false,
+					'requires_confirmation' => false,
+				),
+				'auto_assign'      => true,
+			),
+		);
+
+		$result = $method->invoke( $service, $slots, $menu_id, 3 );
+
+		$this->assertCount( 1, $result, 'スロットは1つに集約されるべき' );
+		$this->assertSame(
+			3,
+			$result[0]['remaining'],
+			'空いているスタッフBがいるため、remainingはmax_capacity(3)のまま新規1組を受け付けられるべき'
+		);
+
+		Staff_Editor::clear_nomination_enabled_cache();
 	}
 
 	/**
@@ -674,7 +877,7 @@ class Capacity_Test extends WP_UnitTestCase {
 				'expected'            => 0,
 			),
 			array(
-				'test_condition_name' => '複数人予約ON・指名ON・最大5・最小3 => 0（指名ONで1対1のため制約なし＝ゲート）',
+				'test_condition_name' => '複数人予約ON・指名ON・最大5・最小3 => 0（#392：指名を使うメニューは1枠1組のため催行判定の概念が無く、常に制約なし）',
 				'multiple_guests'     => true,
 				'nomination_enabled'  => true,
 				'max_capacity'        => 5,
@@ -709,6 +912,125 @@ class Capacity_Test extends WP_UnitTestCase {
 			$this->assertSame(
 				$case['expected'],
 				$service->get_menu_min_capacity( $menu_post ),
+				$case['test_condition_name']
+			);
+
+			Staff_Editor::clear_nomination_enabled_cache();
+		}
+	}
+
+	/**
+	 * get_menu_nomination_min_guests が指名を使うメニューの最低申し込み人数（受付制限。#393）を
+	 * 返すこと、および各種ゲート・クランプが効くことを検証する。
+	 *
+	 * get_menu_min_capacity()（催行状態の表示専用）とは別の取得経路であり、
+	 * 「指名を使う かつ 複数人一括予約ON かつ 予約枠の定員2以上」のときだけ値を返し、
+	 * それ以外は実効0（制限なし）を返す。
+	 */
+	public function test_get_menu_nomination_min_guests(): void {
+		// 複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
+		// 無料版で実行された場合はこのテストをスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$service = new Availability_Service();
+
+		$test_cases = array(
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員5・最低3 => 3（正常系）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'expected'              => 3,
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員3・最低未設定 => 0（正常系：制約なし＝後方互換）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => null,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員3・最低5（定員超過） => 3にクランプ（境界値）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 5,
+				'expected'              => 3,
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人一括予約OFF・定員5・最低3 => 0（条件2未達：申込人数が常に1名固定になるため実効0）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => false,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'   => '指名ON・複数人予約ON・定員1（未設定扱い）・最低3 => 0（条件3未達：定員2未満）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 1,
+				'min_capacity'          => 3,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・複数人予約ON・定員5・最低3 => 0（条件1未達：指名を使わないメニューは受付制限が無効）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'   => '指名ON・予約枠の定員機能OFF（サイト全体）・複数人予約ON・定員5・最低3 => 0（定員機能OFFで実効定員1固定）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'expected'              => 0,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 全体設定（指名・予約枠の定員機能）を組み立てる。
+			$repository                        = new Settings_Repository();
+			$settings                          = $repository->get_settings();
+			$settings['staff_enabled']         = $case['nomination_enabled'];
+			$settings['slot_capacity_enabled'] = $case['slot_capacity_enabled'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Staff_Editor::clear_nomination_enabled_cache();
+
+			$menu_id = $this->factory()->post->create(
+				array(
+					'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
+			if ( null !== $case['min_capacity'] ) {
+				update_post_meta( $menu_id, '_vkbm_min_capacity', $case['min_capacity'] );
+			}
+			if ( $case['allow_multiple_guests'] ) {
+				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+
+			$menu_post = get_post( $menu_id );
+			$this->assertInstanceOf( \WP_Post::class, $menu_post, $case['test_condition_name'] );
+
+			$this->assertSame(
+				$case['expected'],
+				$service->get_menu_nomination_min_guests( $menu_post ),
 				$case['test_condition_name']
 			);
 

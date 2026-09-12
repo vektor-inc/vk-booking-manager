@@ -914,9 +914,9 @@ class Menu_Loop_Block {
 			);
 		}
 
-		// 指名機能が無効の場合、担当可能スタッフの表示をスキップする。
-		// Skip staff display when nomination feature is disabled.
-		if ( ! empty( $staff_ids ) && Staff_Editor::is_nomination_enabled() ) {
+		// このメニューで指名機能が無効の場合、担当可能スタッフの表示をスキップする。
+		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。
+		if ( ! empty( $staff_ids ) && Staff_Editor::is_nomination_enabled_for_menu( $post->ID ) ) {
 			$staff_posts = get_posts(
 				array(
 					'post_type'      => Resource_Post_Type::POST_TYPE,
@@ -983,13 +983,59 @@ class Menu_Loop_Block {
 		// 1枠あたりの最大予約受付数が 2 以上の複数人前提のメニューのときだけ、
 		// 最少催行人数の直前にメタ項目を追加する。max が 1 または未設定（実質 1）の
 		// 単独予約前提のメニューでは従来どおり表示しない。
-		$max_capacity = (int) get_post_meta( $post->ID, '_vkbm_max_capacity', true );
-		$min_capacity = (int) get_post_meta( $post->ID, '_vkbm_min_capacity', true );
-		if ( $max_capacity >= 2 ) {
-			// 値は数量整形ヘルパーで「整数＋単位」（例: 6名 / 6 guests）に揃える。
+		//
+		// #392: 指名を使うメニューを「1枠1組（貸切）」として扱う仕様変更に伴い、定員（＝1組の最大人数）
+		// は指名を使うメニューでも意味のある値になったため、is_multi_guest_available_for_menu() から
+		// 「指名OFF」条件を外した（#412 A-1 時点の「指名ONでは常に1対1へ無視される」という前提は
+		// もう成り立たない）。一方、最少催行人数（複数の別々の予約が相乗りして「催行確定」に達するという
+		// 概念）は指名を使うメニュー（常に1枠1組）では成立しないため、$min_capacity_available で
+		// 明示的に指名OFFを条件に加え、定員・料金区分とは別ゲートにしている。
+		//
+		// 予約枠の定員の実際の値は Availability_Service::get_menu_max_capacity() が
+		// 「Pro版・予約枠の定員機能ON」のみで決定しており、_vkbm_allow_multiple_guests
+		// （1予約あたりの人数入力欄の可否）には依存しない（同一枠に複数の別々の予約が入る「相乗り」
+		// 自体は、1予約で複数人を指定できるかとは独立した機能のため）。よって定員の表示ゲートも
+		// 同じ条件に揃える……が、指名を使うメニューだけは例外（#392）。指名を使う
+		// メニューの定員は「1件の予約で申し込める人数」の意味に変わり、実際に申し込める人数は
+		// resolve_guests() / get_max_guests() 経由で _vkbm_allow_multiple_guests に完全従属する
+		// （このメタがOFFなら実際には1名しか申し込めない）。そのため指名を使うメニューに限り、
+		// $slot_capacity_displayable でこのメタも要求し、「定員3名」と表示されるのに実際は
+		// 1名しか申し込めないという食い違いを防ぐ。指名を使わないメニューでは定員＝相乗り人数
+		// そのものでありこのメタとは独立のため、この追加条件は課さない（従来どおり）。
+		// 一方、料金区分（_vkbm_price_tiers）の実際の適用は resolve_menu_price_tiers() が
+		// 上記に加えて _vkbm_allow_multiple_guests と「実効定員が2以上」（#320）も必須にしているため、
+		// 表示側もそれに揃える（#412 F-1: 定員条件が抜けていると、定員を2以上→1へ戻す保存だけで
+		// 料金区分が基本料金へフォールバックしたにもかかわらず、カードには区分表が残ってしまう）。
+		// なお resolve_menu_price_tiers() のもう1条件（count_menu_staff >= 1）は、スタッフ未割当の
+		// メニューはそもそも予約できないため表示ゲートには揃えない（安藤さんの判断）。
+		$max_capacity            = (int) get_post_meta( $post->ID, '_vkbm_max_capacity', true );
+		$min_capacity            = (int) get_post_meta( $post->ID, '_vkbm_min_capacity', true );
+		$slot_capacity_available = Staff_Editor::is_multi_guest_available_for_menu( $post->ID );
+		$is_nomination_menu      = Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
+		// #392: 指名を使うメニューは、複数人一括予約の許可フラグ（_vkbm_allow_multiple_guests）が
+		// OFFなら実際には1名しか申し込めないため、定員表示自体を出さない。指名を使わないメニューは
+		// このメタと独立（定員＝相乗り人数）のため、従来どおり $slot_capacity_available のみで判定する。
+		$slot_capacity_displayable = $slot_capacity_available
+			&& (
+				! $is_nomination_menu
+				|| (bool) get_post_meta( $post->ID, '_vkbm_allow_multiple_guests', true )
+			);
+		// #392: 最少催行人数は指名を使うメニューでは意味を持たないため、定員・料金区分とは別に
+		// 「指名OFF」を明示的に要求する（残数・催行状態をフロントで表示しない要件と同じ理由）。
+		$min_capacity_available = $slot_capacity_available && ! $is_nomination_menu;
+		$price_tiers_available  = $slot_capacity_available
+			&& $max_capacity >= 2
+			&& (bool) get_post_meta( $post->ID, '_vkbm_allow_multiple_guests', true );
+		if ( $slot_capacity_displayable && $max_capacity >= 2 ) {
+			// #392: 指名を使うメニューは「1組の最大人数」、使わないメニューは従来どおり
+			// 「予約枠の定員」とラベルを出し分ける。同じ数値でも「相乗りできる人数」なのか
+			// 「1組（貸切）の最大人数」なのかは意味が異なるため、利用者が見分けられるようにする。
+			// 管理画面（Service_Menu_Editor）の説明文と言い回しを揃えている。
 			$items[] = sprintf(
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
-				esc_html__( 'Time slot capacity', 'vk-booking-manager' ),
+				$is_nomination_menu
+					? esc_html__( 'Maximum group size', 'vk-booking-manager' )
+					: esc_html__( 'Time slot capacity', 'vk-booking-manager' ),
 				esc_html( vkbm_format_guests_count( $max_capacity ) )
 			);
 		}
@@ -998,7 +1044,8 @@ class Menu_Loop_Block {
 		// 1枠あたりの最大予約受付数（_vkbm_max_capacity）が 2 以上、かつ最少催行人数が 2 以上の
 		// 複数人前提のメニューのときだけ、定員の直後に項目を追加する。
 		// max が 1 または未設定（実質 1）、min が 0/1（制約なし or 単独でも催行）の場合は従来どおり表示しない。
-		if ( $max_capacity >= 2 && $min_capacity >= 2 ) {
+		// #392: 指名を使うメニューでは常に非表示にする（$min_capacity_available 参照）。
+		if ( $min_capacity_available && $max_capacity >= 2 && $min_capacity >= 2 ) {
 			// 値は数量整形ヘルパーで「整数＋単位」（例: 2名 / 2 guests）に揃える。
 			$items[] = sprintf(
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
@@ -1010,7 +1057,7 @@ class Menu_Loop_Block {
 		// 料金区分（_vkbm_price_tiers）が設定されていれば、単一料金ではなく区分一覧を表示する（排他）。
 		// 区分が無い場合のみ従来どおり基本料金の単一表示にフォールバックする。
 		$price_tiers_raw = get_post_meta( $post->ID, '_vkbm_price_tiers', true );
-		if ( Price_Tiers::has_tiers( $price_tiers_raw ) ) {
+		if ( $price_tiers_available && Price_Tiers::has_tiers( $price_tiers_raw ) ) {
 			$price_markup = $this->render_price_tiers( Price_Tiers::normalize_tiers( $price_tiers_raw ) );
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			$price_markup = sprintf(

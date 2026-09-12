@@ -19,8 +19,10 @@ use Exception;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Exclusive_Fee;
+use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
+use VKBookingManager\Common\Staff_Load_Calculator;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -268,9 +270,33 @@ class Booking_Confirmation_Controller {
 					array( 'status' => 400 )
 				);
 			}
+			// #392: 区分内訳の合計人数は resolve_guests() のクランプ（1〜max_capacity）を
+			// 通らない経路のため、ここで確定時点の定員（get_menu_max_capacity()）を明示的に
+			// 再検証する。下書き作成後に管理者が予約枠の定員を引き下げた場合、区分内訳のままだと
+			// 定員超過の人数で確定できてしまう（#392より前は指名予約＝必ず1名だったため
+			// 存在しなかった穴）。
+			if ( $guests > $this->get_menu_max_capacity( $menu_id ) ) {
+				return new WP_Error(
+					'guests_exceeded',
+					__( 'The number of guests exceeds the maximum that can be booked.', 'vk-booking-manager' ),
+					array( 'status' => 400 )
+				);
+			}
 		} else {
 			// 予約人数（複数人一括予約）を確定する。メニュー設定に応じて 1〜最大人数にクランプする。
 			$guests = $this->resolve_guests( $menu_id, isset( $draft['guests'] ) ? (int) $draft['guests'] : 1 );
+		}
+
+		// 指名を使うメニューの最低申し込み人数（受付制限。#393）。
+		// フロントの入力欄下限・警告表示は迂回可能なため、確定時にサーバ側でも権威的に再判定する。
+		// get_menu_min_capacity()（催行状態の表示専用、常に指名メニューで0）とは別の取得経路。
+		$nomination_min_guests = $this->get_menu_nomination_min_guests( $menu_id );
+		if ( $nomination_min_guests > 0 && $guests < $nomination_min_guests ) {
+			return new WP_Error(
+				'nomination_min_guests',
+				Nomination_Min_Guests_Message::build_message( $nomination_min_guests ),
+				array( 'status' => 400 )
+			);
 		}
 
 		// ユーザーによる貸し切り指定（#305）。下書きに保存されたユーザー選択フラグを取得する。
@@ -571,14 +597,16 @@ class Booking_Confirmation_Controller {
 			update_post_meta( $booking_id, '_vkbm_booking_agreed_cancellation_policy', $agree_cancellation ? '1' : '' );
 			update_post_meta( $booking_id, '_vkbm_booking_agreed_terms_of_service', $agree_tos ? '1' : '' );
 			$nomination_fee = isset( $draft['nomination_fee'] ) ? (int) $draft['nomination_fee'] : 0;
-			if ( ! Staff_Editor::is_nomination_enabled() ) {
+			// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
+			// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
+			if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
 				$nomination_fee = 0;
 			}
 			$disable_nomination_fee = (string) get_post_meta( $menu_id, '_vkbm_disable_nomination_fee', true );
 			if ( '1' === $disable_nomination_fee ) {
 				$nomination_fee = 0;
 			} elseif ( $nomination_fee <= 0 && $is_staff_preferred && $staff_id > 0 ) {
-				$nomination_fee = $this->get_staff_nomination_fee( $staff_id );
+				$nomination_fee = $this->get_staff_nomination_fee( $menu_id, $staff_id );
 			}
 
 			if ( $nomination_fee > 0 ) {
@@ -670,6 +698,10 @@ class Booking_Confirmation_Controller {
 	/**
 	 * スロット内の各スタッフの担当人数を集計する（既存予約の配分から）。
 	 *
+	 * #394: クエリ本体は Staff_Load_Calculator（管理画面の担当スタッフ候補絞り込みと共通）へ集約し、
+	 * ここでは ISO8601 → サイトのタイムゾーンの 'Y-m-d H:i:s' への変換のみを担う薄いラッパーにする
+	 * （同じ判定ロジックを2箇所に写経しない）。
+	 *
 	 * @param int    $menu_id  サービスメニューID。
 	 * @param string $start_at スロット開始（ISO8601）。
 	 * @param string $end_at   スロット終了（ISO8601）。
@@ -685,62 +717,7 @@ class Booking_Confirmation_Controller {
 			$end_for_storage = $start_for_storage;
 		}
 
-		$query = new WP_Query(
-			array(
-				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => array( 'publish', 'pending' ),
-				'posts_per_page' => -1,
-				'no_found_rows'  => true,
-				'fields'         => 'ids',
-				'meta_query'     => array(
-					'relation' => 'AND',
-					array(
-						'key'     => self::META_SERVICE_ID,
-						'value'   => $menu_id,
-						'compare' => '=',
-					),
-					array(
-						'key'     => self::META_DATE_START,
-						'value'   => $end_for_storage,
-						'compare' => '<',
-						'type'    => 'DATETIME',
-					),
-					array(
-						'relation' => 'OR',
-						array(
-							'key'     => self::META_DATE_TOTAL_END,
-							'value'   => $start_for_storage,
-							'compare' => '>',
-							'type'    => 'DATETIME',
-						),
-						array(
-							'key'     => self::META_DATE_END,
-							'value'   => $start_for_storage,
-							'compare' => '>',
-							'type'    => 'DATETIME',
-						),
-					),
-				),
-			)
-		);
-
-		$loads = array();
-		foreach ( $query->posts as $post_id ) {
-			$status = (string) get_post_meta( (int) $post_id, self::META_STATUS, true );
-			if ( self::BOOKING_STATUS_CANCELLED === $status || self::BOOKING_STATUS_NO_SHOW === $status ) {
-				continue;
-			}
-
-			// 1予約 = 単一スタッフ。担当スタッフの予約人数を加算する（未設定は1名・後方互換）。
-			$sid = (int) get_post_meta( (int) $post_id, self::META_RESOURCE_ID, true );
-			if ( $sid > 0 ) {
-				$guests_raw    = get_post_meta( (int) $post_id, self::META_GUESTS, true );
-				$g             = '' === $guests_raw ? 1 : max( 1, (int) $guests_raw );
-				$loads[ $sid ] = ( $loads[ $sid ] ?? 0 ) + $g;
-			}
-		}
-
-		return $loads;
+		return Staff_Load_Calculator::get_staff_loads_for_slot( $menu_id, $start_for_storage, $end_for_storage );
 	}
 
 	/**
@@ -890,15 +867,18 @@ class Booking_Confirmation_Controller {
 	/**
 	 * Retrieve nomination fee for staff.
 	 *
+	 * #391: このメニューで指名機能が無効なら常に0を返す（メニュー単位の判定）。
+	 *
+	 * @param int $menu_id  Service menu post ID.
 	 * @param int $staff_id Staff ID.
 	 * @return int
 	 */
-	private function get_staff_nomination_fee( int $staff_id ): int {
+	private function get_staff_nomination_fee( int $menu_id, int $staff_id ): int {
 		if ( $staff_id <= 0 ) {
 			return 0;
 		}
 
-		if ( ! Staff_Editor::is_nomination_enabled() ) {
+		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
 			return 0;
 		}
 
@@ -1181,9 +1161,22 @@ class Booking_Confirmation_Controller {
 		);
 
 		if ( is_wp_error( $availability ) ) {
+			// #411 安藤さんレビュー指摘: get_daily_slots() のエラー識別子・メッセージ（担当スタッフ
+			// 未設定等の内部設定を示す）をそのまま返すと、/bookings はログイン必須とはいえ
+			// 一般の予約者にまで内部設定の詳細が伝わってしまう。/calendar-meta /availabilities で
+			// 塞いだのと同じ原因のため、権限が無いユーザーには既存の slot_unavailable 相当の
+			// 汎用エラーへ寄せる（新規の翻訳文字列を増やさないよう、下記の既存メッセージを再利用する）。
+			if ( current_user_can( Capabilities::MANAGE_SYSTEM_SETTINGS ) ) {
+				return new WP_Error(
+					$availability->get_error_code(),
+					$availability->get_error_message(),
+					array( 'status' => 409 )
+				);
+			}
+
 			return new WP_Error(
-				$availability->get_error_code(),
-				$availability->get_error_message(),
+				'slot_unavailable',
+				__( 'The selected slot is no longer available. Please choose another slot.', 'vk-booking-manager' ),
 				array( 'status' => 409 )
 			);
 		}
@@ -1328,6 +1321,9 @@ class Booking_Confirmation_Controller {
 	 * 人数を収容できる単一スタッフをベストフィットで確定します（分割しない）。
 	 * transient を使った簡易排他制御で同時リクエストによる超過予約を防止します。
 	 *
+	 * #392: 指名を使うメニューは指名予約（1対1）・自動割当（指名なし）のいずれも1枠1組（貸切）扱いのため、
+	 * 自動割当側は max_capacity が2以上でも1対1判定（既に予約があるスタッフを候補から除外）を適用する。
+	 *
 	 * @param int        $menu_id            Service menu ID.
 	 * @param int        $staff_id           Assigned staff ID (designated booking). Auto-assign では候補からベストフィットで確定する。
 	 * @param string     $start_at           Slot start (ISO8601).
@@ -1453,7 +1449,9 @@ class Booking_Confirmation_Controller {
 			$loads = $this->get_staff_loads_for_slot( $menu_id, $start_at, $end_at );
 
 			// max_capacity = 1 は1スタッフ1対1。メニューをまたいだ競合（同一スタッフが別メニューで予約済み）も除外する。
-			if ( 1 === $max_capacity ) {
+			// #392: 指名を使うメニューは「指名なし」の自動割当でも1枠1組（貸切）扱いのため、max_capacity が
+			// 2以上でも同じ1対1判定（既にそのスタッフへ他メニュー含め予約があれば候補から除外）を適用する。
+			if ( 1 === $max_capacity || Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
 				$candidates = array_values(
 					array_filter(
 						$candidates,
@@ -1589,13 +1587,32 @@ class Booking_Confirmation_Controller {
 	}
 
 	/**
+	 * 指名を使うメニューの、予約を受け付けるために必要な実効の最低申し込み人数を返す。
+	 *
+	 * Availability_Service 側の正規メソッドに委譲する（#393）。get_menu_min_capacity()（催行状態の
+	 * 表示専用）とは別の取得経路で、指名を使うメニューの「最低申し込み人数」（受付制限）を返す。
+	 *
+	 * @param int $menu_id Service menu ID.
+	 * @return int 実効の最低申し込み人数（0=制限なし）。
+	 */
+	private function get_menu_nomination_min_guests( int $menu_id ): int {
+		$menu_post = get_post( $menu_id );
+		if ( ! $menu_post instanceof \WP_Post ) {
+			return 0;
+		}
+		return $this->availability_service->get_menu_nomination_min_guests( $menu_post );
+	}
+
+	/**
 	 * メニューが「予約が入ったら貸し切りにする」設定として有効かどうかを返す。
 	 *
 	 * 貸し切り予約は複数人一括予約の文脈でのみ意味を持つため、メタ値だけでなくフルゲートを
 	 * 再適用する（load-bearing な主防御）。Pro でなくなった／予約枠の定員機能が無効化された／
 	 * 指名がONになった／メニューの複数人一括予約許可がOFFになった等で条件が崩れた場合は、
 	 * 保存済みメタ（stale）が残っていても false を返し、無効な貸し切り設定が
-	 * 実際の受付停止として効かないようにする。save 側の delete と多層で防ぐ。
+	 * 実際の受付停止として効かないようにする。
+	 * 保存側（Service_Menu_Editor::save_post）はこれらのメタを削除せず保持する方針（#412 A-1）のため、
+	 * ここでの再判定が唯一の防御になる。
 	 *
 	 * @param int $menu_id サービスメニューID。
 	 * @return bool 貸し切り設定が有効なら true。
@@ -1610,9 +1627,12 @@ class Booking_Confirmation_Controller {
 			return false;
 		}
 
-		// フルゲート（Pro版・予約枠の定員ON・指名OFF）を再適用する。
-		$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		if ( ! $is_pro || ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+		// フルゲート（Pro版・予約枠の定員ON・このメニューで指名OFF）を再適用する（#391: メニュー単位の判定へ置き換え）。
+		// #412 C-3: 判定を Staff_Editor::is_multi_guest_available_for_menu() へ集約していたが、#392 で
+		// そのメソッドから「指名OFF」条件を外したため、貸切系の3設定（本メソッドが担う「貸し切り予約」も
+		// その1つ）は専用の Staff_Editor::is_exclusive_booking_available_for_menu()
+		// （指名OFF条件を維持したまま判定する）へ切り替えた。
+		if ( ! Staff_Editor::is_exclusive_booking_available_for_menu( $menu_id ) ) {
 			return false;
 		}
 
@@ -1646,14 +1666,25 @@ class Booking_Confirmation_Controller {
 			return false;
 		}
 
+		// 「貸し切り予約」ONのメニューでは、予約者の指定に関わらず既に枠全体が貸切扱いになるため、
+		// ユーザーによる貸し切り指定は受け付けない（#388）。両方ONで保存されると、指定した予約者だけ
+		// 貸し切り料金を負担する不整合（払った人が損をする）が起きるため排他にする。
+		// 下書きコントローラ（Booking_Draft_Controller::is_user_exclusive_selectable）と同型の判定。
+		if ( get_post_meta( $menu_id, self::MENU_META_EXCLUSIVE_WHEN_BOOKED, true ) ) {
+			return false;
+		}
+
 		// メタが立っていなければ対象外。
 		if ( ! get_post_meta( $menu_id, self::MENU_META_EXCLUSIVE_USER_SELECTABLE, true ) ) {
 			return false;
 		}
 
-		// フルゲート（Pro版・予約枠の定員ON・指名OFF）を再適用する。
-		$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		if ( ! $is_pro || ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+		// フルゲート（Pro版・予約枠の定員ON・このメニューで指名OFF）を再適用する（#391: メニュー単位の判定へ置き換え）。
+		// #412 C-3: 判定を Staff_Editor::is_multi_guest_available_for_menu() へ集約していたが、#392 で
+		// そのメソッドから「指名OFF」条件を外したため、貸切系の3設定（本メソッドが担う「予約者による
+		// 貸切指定」もその1つ）は専用の Staff_Editor::is_exclusive_booking_available_for_menu()
+		// （指名OFF条件を維持したまま判定する）へ切り替えた。
+		if ( ! Staff_Editor::is_exclusive_booking_available_for_menu( $menu_id ) ) {
 			return false;
 		}
 
@@ -1910,16 +1941,22 @@ class Booking_Confirmation_Controller {
 	/**
 	 * メニューに有効な料金区分が定義されている場合に、その正規化済み区分を返す。
 	 *
-	 * 料金区分は複数人一括予約が適用される場面（Pro版・指名OFF・複数人一括予約許可・スタッフ割当あり）でのみ意味を持つ。
-	 * resolve_guests と同じゲートを通し、適用外なら空配列を返す（区分未定義として従来計算に倒す）。
+	 * 料金区分は複数人一括予約が適用される場面（Pro版・予約枠の定員機能ON・複数人一括予約許可・
+	 * スタッフ割当あり）でのみ意味を持つ。resolve_guests と同じゲートを通し、適用外なら空配列を
+	 * 返す（区分未定義として従来計算に倒す）。
+	 *
+	 * #392: 以前はこのゲートに「指名OFF」も含めていたが、指名を使うメニューでも料金区分を
+	 * 利用できるようにするため外した（Staff_Editor::is_multi_guest_available_for_menu() 側の変更）。
 	 *
 	 * @param int $menu_id サービスメニューID。
 	 * @return array<int, array{label: string, price: int}>
 	 */
 	private function resolve_menu_price_tiers( int $menu_id ): array {
-		// 複数人一括予約のゲート（Pro版・予約枠の定員機能ON・指名OFF・許可フラグON・スタッフ割当あり）を満たさない場合は区分を使わない。
-		$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		if ( $menu_id <= 0 || ! $is_pro || ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+		// 複数人一括予約のゲート（Pro版・予約枠の定員機能ON・許可フラグON・スタッフ割当あり）を満たさない場合は区分を使わない。
+		// #412 C-3: 判定を Staff_Editor::is_multi_guest_available_for_menu() へ集約。
+		// #392: 上記メソッドから「指名OFF」条件を外したため、指名を使うメニューでもこの判定を通る。
+		// $menu_id <= 0 の早期リターンは元の条件をそのまま維持する（メニュー文脈が無い呼び出しを弾く）。
+		if ( $menu_id <= 0 || ! Staff_Editor::is_multi_guest_available_for_menu( $menu_id ) ) {
 			return array();
 		}
 
@@ -1941,8 +1978,11 @@ class Booking_Confirmation_Controller {
 	 * Resolve the number of guests for a booking against the menu's multi-guest settings.
 	 *
 	 * メニューの複数人一括予約設定に基づいて予約人数を確定する。
-	 * 複数人一括予約が無効、または指名機能が有効な場合は常に1名を返す。
-	 * 有効な場合は 1〜最大人数の範囲にクランプする。
+	 * 複数人一括予約が無効な場合は常に1名を返す。有効な場合は 1〜最大人数の範囲にクランプする。
+	 *
+	 * #392: 指名を使うメニューでも、複数人一括予約が許可されていれば（予約枠の定員＝1組の最大人数までの）
+	 * 人数を受け付ける。指名を使うメニューの1件の予約は必ず単一スタッフを占有する（1枠1組）ため、
+	 * 「1予約は分割せず単一スタッフに割り当てる」という上限の考え方自体は指名の有無で変わらない。
 	 *
 	 * NOTE: 同等のロジックを Booking_Draft_Controller::resolve_guests にも意図的に複製している。
 	 * 下書きと確定の2つの REST コントローラは独立しており、共有トレイト化すると両者を不要に結合させるため、
@@ -1953,10 +1993,12 @@ class Booking_Confirmation_Controller {
 	 * @return int
 	 */
 	private function resolve_guests( int $menu_id, int $requested ): int {
-		// 複数人一括予約は Pro 版 かつ 予約枠の定員機能ON かつ 指名機能OFF（自動割り当て）のときのみ有効。
+		// 複数人一括予約は Pro 版 かつ 予約枠の定員機能ONのときのみ有効。
 		// Pro から無料版へダウングレードしてもメタが残る可能性があるため、確定時に Pro 版を再確認する。
-		$is_pro = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		if ( $menu_id <= 0 || ! $is_pro || ! Staff_Editor::is_slot_capacity_enabled() || Staff_Editor::is_nomination_enabled() ) {
+		// #412 C-3: 判定を Staff_Editor::is_multi_guest_available_for_menu() へ集約。
+		// #392: 上記メソッドから「指名OFF」条件を外したため、指名を使うメニューでもこの判定を通る。
+		// $menu_id <= 0 の早期リターンは元の条件をそのまま維持する（メニュー文脈が無い呼び出しを弾く）。
+		if ( $menu_id <= 0 || ! Staff_Editor::is_multi_guest_available_for_menu( $menu_id ) ) {
 			return 1;
 		}
 

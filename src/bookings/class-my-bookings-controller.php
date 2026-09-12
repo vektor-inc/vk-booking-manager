@@ -213,7 +213,9 @@ class My_Bookings_Controller {
 			$has_base_total = metadata_exists( 'post', $booking_id, self::META_BASE_TOTAL_PRICE );
 			$base_total     = $has_base_total ? (int) get_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, true ) : max( 0, ( $base_price * $guests ) + $nomination_fee );
 
-			if ( ! Staff_Editor::is_nomination_enabled() ) {
+			// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
+			// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
+			if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
 				$nomination_fee = 0;
 				// 保存済みの基本料金合計があるときは、予約時に確定した（実際に請求した）金額を保持する。
 				// 指名ON時に作成され後で指名OFFになった予約で、合計が書き換わるのを防ぐ。

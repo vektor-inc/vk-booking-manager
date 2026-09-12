@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     2.0.0
+ * Version:     2.1.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -61,6 +61,8 @@ require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
 require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
 require_once __DIR__ . '/src/common/class-price-tiers.php';
 require_once __DIR__ . '/src/common/class-exclusive-fee.php';
+require_once __DIR__ . '/src/common/class-nomination-min-guests-message.php';
+require_once __DIR__ . '/src/common/class-staff-load-calculator.php';
 require_once __DIR__ . '/src/assets/class-common-styles.php';
 require_once __DIR__ . '/src/term-order/class-term-order-manager.php';
 require_once __DIR__ . '/src/blocks/class-block-category.php';
@@ -71,6 +73,8 @@ require_once __DIR__ . '/src/blocks/class-menu-card-block.php';
 require_once __DIR__ . '/src/blocks/class-reservation-block.php';
 require_once __DIR__ . '/src/blocks/class-reservation-button-block.php';
 require_once __DIR__ . '/src/availability/class-availability-service.php';
+require_once __DIR__ . '/src/availability/class-availability-cache-generation.php';
+require_once __DIR__ . '/src/availability/class-availability-booking-cache-generation.php';
 require_once __DIR__ . '/src/rest/class-availability-controller.php';
 require_once __DIR__ . '/src/rest/class-menu-preview-controller.php';
 require_once __DIR__ . '/src/rest/class-auth-form-controller.php';
@@ -92,6 +96,7 @@ require_once __DIR__ . '/src/admin/class-email-log-repository.php';
 require_once __DIR__ . '/src/admin/class-email-log-page.php';
 require_once __DIR__ . '/src/oembed/class-oembed-override.php';
 require_once __DIR__ . '/src/resources/resource-labels.php';
+require_once __DIR__ . '/src/provider-settings/class-industry-presets.php';
 require_once __DIR__ . '/src/provider-settings/class-settings-repository.php';
 require_once __DIR__ . '/src/provider-settings/class-settings-sanitizer.php';
 require_once __DIR__ . '/src/provider-settings/class-settings-service.php';
@@ -107,6 +112,8 @@ use VKBookingManager\Admin\Setup_Notices;
 use VKBookingManager\Admin\User_Profile_Fields;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
+use VKBookingManager\Availability\Availability_Booking_Cache_Generation;
+use VKBookingManager\Availability\Availability_Cache_Generation;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\REST\Auth_Form_Controller;
 use VKBookingManager\REST\Current_User_Controller;
@@ -189,8 +196,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$booking_notification_service    = new Booking_Notification_Service( $settings_repository );
 		$oembed_override                 = new OEmbed_Override();
 		$booking_admin                   = new Booking_Admin( $booking_notification_service );
-		$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository );
 		$availability_service            = new Availability_Service( $settings_repository );
+		$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository, $availability_service );
 		$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service );
 		$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
 		$user_favorites_controller       = new User_Favorites_Controller();
@@ -223,6 +230,15 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// リソースタグタクソノミーを登録（Pro版のみの機能）
 		// Register the resource tag taxonomy (Pro edition only).
 		$resource_tag_taxonomy->register();
+
+		// シフト・サービスメニュー・スタッフ・システム設定の保存/削除で
+		// 空き状況キャッシュ（transient）の世代番号を進める（#410 / #412）。
+		Availability_Cache_Generation::register();
+
+		// 予約（Booking_Post_Type）の保存/キャンセル/削除では、サイト全体の世代番号ではなく
+		// その予約が関係する日付・月だけの世代番号を進める（#417。予約は他の投稿タイプより
+		// 保存頻度が桁違いに高く、サイト全体の世代番号へ混ぜると一時保存がほとんど効かなくなるため）。
+		Availability_Booking_Cache_Generation::register();
 
 		// Register development-only style guide page (menu appears only when docs/ui/style-guide.html exists).
 		$style_guide_page->register();

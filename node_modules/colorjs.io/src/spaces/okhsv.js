@@ -22,19 +22,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 import ColorSpace from "../ColorSpace.js";
+import RGBColorSpace from "../RGBColorSpace.js";
+import HSL from "./hsl.js";
 import Oklab from "./oklab.js";
 import { spow, multiply_v3_m3x3 } from "../util.js";
 import { constrain } from "../angles.js";
-import {
-	tau,
-	toe,
-	toeInv,
-	findCusp,
-	toSt,
-	oklabToLinearRGB,
-	toSRGBLinear,
-	RGBCoeff,
-} from "./okhsl.js";
+import Okhsl, { tau, toe, toeInv, findCusp, toSt, oklabToLinearRGB, RGBCoeff } from "./okhsl.js";
+
+/**
+ * Matrices used by this color space (reused from Okhsl), also available as `Okhsv.M`
+ * @type {Record<string, Matrix3x3>}
+ */
+export const M = { toSRGBLinear: Okhsl.M.toSRGBLinear };
 
 /** @import { Coords, Matrix3x3, OKCoeff, Vector3 } from "../types.js" */
 
@@ -157,7 +156,7 @@ function oklabToOkhsv (lab, lmsToRgb, okCoeff) {
 	return [h, s, v];
 }
 
-export default new ColorSpace({
+const Okhsv = new ColorSpace({
 	id: "okhsv",
 	name: "Okhsv",
 	coords: {
@@ -179,14 +178,16 @@ export default new ColorSpace({
 	base: Oklab,
 	gamutSpace: "self",
 
+	M,
+
 	// Convert Oklab to Okhsl
 	fromBase (lab) {
-		return oklabToOkhsv(lab, toSRGBLinear, RGBCoeff);
+		return oklabToOkhsv(lab, M.toSRGBLinear, RGBCoeff);
 	},
 
 	// Convert Okhsl to Oklab
 	toBase (hsl) {
-		return okhsvToOklab(hsl, toSRGBLinear, RGBCoeff);
+		return okhsvToOklab(hsl, M.toSRGBLinear, RGBCoeff);
 	},
 
 	formats: {
@@ -196,3 +197,21 @@ export default new ColorSpace({
 		},
 	},
 });
+
+Okhsv.rgbGamut = new RGBColorSpace({
+	id: "okhsv-prism",
+	cssId: "--okhsv-prism",
+	name: "Okhsv Prism",
+	base: Okhsv,
+	fromBase (hsl) {
+		return HSL.toBase([hsl[0], hsl[1] * 100, hsl[2] * 100]);
+	},
+	toBase (rgb) {
+		const hsl = HSL.fromBase(rgb);
+		hsl[1] /= 100;
+		hsl[2] /= 100;
+		return hsl;
+	},
+});
+
+export default Okhsv;

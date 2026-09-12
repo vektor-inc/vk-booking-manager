@@ -95,6 +95,229 @@
 			} );
 	}
 
+	/**
+	 * 業種プリセットの値をフォーム用の文字列へ変換する。
+	 *
+	 * @param {*} value プリセット値。
+	 * @return {string} フォームへ設定する値。
+	 */
+	function getIndustryFormValue( value ) {
+		if ( typeof value === 'boolean' ) {
+			return value ? '1' : '0';
+		}
+		if ( value === null ) {
+			return settings.defaultGuestsUnitLabel || '';
+		}
+		return String( value === undefined ? '' : value );
+	}
+
+	/**
+	 * 業種プリセットの要約に表示する値を返す。
+	 *
+	 * @param {*} value プリセット値。
+	 * @return {string} 読み取り専用プレビュー文字列。
+	 */
+	function getIndustryPreviewValue( value ) {
+		if ( typeof value === 'boolean' ) {
+			return value ? settings.enabledLabel : settings.disabledLabel;
+		}
+		return getIndustryFormValue( value );
+	}
+
+	/**
+	 * 入力欄の直後にプリセット反映メッセージを一時表示する。
+	 *
+	 * @param {HTMLElement} input 値を反映した入力欄。
+	 */
+	function showIndustryAppliedMessage( input ) {
+		const message = document.createElement( 'p' );
+		message.className = 'description vkbm-industry-preset-applied-message';
+		message.textContent = settings.industryAppliedMessage || '';
+		input.insertAdjacentElement( 'afterend', message );
+	}
+
+	/**
+	 * 業種プリセット選択と対象行の表示状態を初期化する。
+	 */
+	function initIndustryPreset() {
+		const select = document.getElementById( 'vkbm-industry-preset' );
+		if ( ! select || ! settings.industryPresets ) {
+			return;
+		}
+
+		const summary = document.querySelector(
+			'.vkbm-industry-preset-summary'
+		);
+		const toggle = document.querySelector(
+			'.vkbm-industry-preset-summary__toggle'
+		);
+		const content = document.querySelector(
+			'.vkbm-industry-preset-summary__content'
+		);
+		const list = document.querySelector(
+			'.vkbm-industry-preset-summary__list'
+		);
+		const live = document.getElementById( 'vkbm-industry-preset-live' );
+		let previousPreset = select.value;
+
+		const announce = function ( message ) {
+			if ( live ) {
+				live.textContent = '';
+				window.setTimeout( function () {
+					live.textContent = message;
+				}, 20 );
+			}
+		};
+
+		// PHP 側で正規化済みだが、`vkbm_industry_presets` フィルターが想定外の形を返す
+		// 可能性を排除できないため、JS 側でも構造欠落で例外にならないよう防御する（#387 レビュー指摘・安藤案）。
+		const emptyPreset = { fields: {} };
+
+		const update = function ( initial ) {
+			const presetKey = select.value;
+			const preset =
+				settings.industryPresets[ presetKey ] ||
+				settings.industryPresets.custom ||
+				emptyPreset;
+			const previous =
+				settings.industryPresets[ previousPreset ] ||
+				settings.industryPresets.custom ||
+				emptyPreset;
+			const hiddenFields = [];
+			// 値がプリセットの初期値へ差し替わった項目数（aria-live の1本のアナウンスに含める）。
+			let appliedCount = 0;
+
+			document
+				.querySelectorAll( '.vkbm-industry-preset-applied-message' )
+				.forEach( function ( message ) {
+					message.remove();
+				} );
+
+			document
+				.querySelectorAll( '[data-industry-field]' )
+				.forEach( function ( row ) {
+					const fieldKey = row.getAttribute( 'data-industry-field' );
+					const field = preset.fields[ fieldKey ];
+					if ( ! field ) {
+						return;
+					}
+
+					const controls = row.querySelectorAll(
+						'input, select, textarea, button'
+					);
+					const shouldHide =
+						presetKey !== 'custom' && ! field.display;
+					row.hidden = shouldHide;
+					controls.forEach( function ( control ) {
+						control.disabled = shouldHide;
+					} );
+
+					if ( shouldHide ) {
+						hiddenFields.push( {
+							label:
+								row.getAttribute( 'data-industry-label' ) ||
+								fieldKey,
+							value: field.value,
+						} );
+						return;
+					}
+
+					if ( initial || presetKey === 'custom' ) {
+						return;
+					}
+
+					const input = row.querySelector(
+						'[name="vkbm_provider_settings[' + fieldKey + ']"]'
+					);
+					if ( ! input ) {
+						return;
+					}
+
+					const previousField = previous.fields[ fieldKey ];
+					// previousField が無い（フィルターが項目を削っていた等）場合は、
+					// 一致判定ができないため書き換えを見送る（安全側に倒す）。
+					if ( previousPreset !== 'custom' && ! previousField ) {
+						return;
+					}
+					const previousValue =
+						previousPreset === 'custom'
+							? settings.industryDefaults[ fieldKey ]
+							: previousField.value;
+					if (
+						input.value === getIndustryFormValue( previousValue )
+					) {
+						input.value = getIndustryFormValue( field.value );
+						input.dispatchEvent(
+							new Event( 'input', { bubbles: true } )
+						);
+						showIndustryAppliedMessage( input );
+						appliedCount += 1;
+					}
+				} );
+
+			if ( summary && toggle && content && list ) {
+				summary.hidden = hiddenFields.length === 0;
+				toggle.textContent = (
+					settings.industrySummaryTemplate || '%d'
+				).replace( '%d', String( hiddenFields.length ) );
+				list.replaceChildren();
+				hiddenFields.forEach( function ( item ) {
+					const term = document.createElement( 'dt' );
+					const description = document.createElement( 'dd' );
+					term.textContent = item.label;
+					description.textContent = getIndustryPreviewValue(
+						item.value
+					);
+					list.append( term, description );
+				} );
+				if ( hiddenFields.length === 0 ) {
+					toggle.setAttribute( 'aria-expanded', 'false' );
+					content.hidden = true;
+				}
+			}
+
+			if ( ! initial ) {
+				if ( presetKey === 'custom' ) {
+					announce( settings.industryCustomMessage || '' );
+				} else {
+					// 「非表示件数の確定」と「値の差し替え件数」は同じ切り替えイベントで
+					// 同時に決まるため、announce() を2回に分けず1本のテキストにまとめる
+					// （後勝ちで前の内容が読まれない実装があるため。#387・植草案）。
+					const presetLabel = preset.label || presetKey;
+					const template =
+						appliedCount > 0
+							? settings.industryChangeWithAppliedTemplate
+							: settings.industryChangeTemplate;
+					announce(
+						( template || '' )
+							.replace( '%1$s', presetLabel )
+							.replace( '%2$d', String( hiddenFields.length ) )
+							.replace( '%3$d', String( appliedCount ) )
+					);
+				}
+			}
+
+			previousPreset = presetKey;
+		};
+
+		if ( toggle && content ) {
+			toggle.addEventListener( 'click', function () {
+				const expanded =
+					toggle.getAttribute( 'aria-expanded' ) === 'true';
+				toggle.setAttribute(
+					'aria-expanded',
+					expanded ? 'false' : 'true'
+				);
+				content.hidden = expanded;
+			} );
+		}
+
+		select.addEventListener( 'change', function () {
+			update( false );
+		} );
+		update( true );
+	}
+
 	function updateBookingCancelModeState() {
 		const $mode = $( '#vkbm-provider-booking-cancel-mode' );
 		const $hoursField = $( '#vkbm-provider-booking-cancel-hours-field' );
@@ -581,5 +804,6 @@
 		updatePrivacyPolicyModeState();
 		initColorPicker();
 		initIconPickers();
+		initIndustryPreset();
 	} );
 } )( jQuery );

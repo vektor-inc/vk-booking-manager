@@ -78,7 +78,7 @@ export function steps (c1, c2, options = {}) {
 		colorRange = range(c1, c2, rangeOptions);
 	}
 
-	let totalDelta = deltaE(c1, c2);
+	let totalDelta = deltaE(c1, c2, deltaEMethod);
 	let actualSteps =
 		maxDeltaE > 0 ? Math.max(steps, Math.ceil(totalDelta / maxDeltaE) + 1) : steps;
 	let ret = [];
@@ -120,7 +120,11 @@ export function steps (c1, c2, options = {}) {
 
 				let p = (cur.p + prev.p) / 2;
 				let color = colorRange(p);
-				maxDelta = Math.max(maxDelta, deltaE(color, prev.color), deltaE(color, cur.color));
+				maxDelta = Math.max(
+					maxDelta,
+					deltaE(color, prev.color, deltaEMethod),
+					deltaE(color, cur.color, deltaEMethod),
+				);
 				ret.splice(i, 0, { p, color: colorRange(p) });
 				i++;
 			}
@@ -184,12 +188,16 @@ export function range (color1, color2, options = {}) {
 	color1 = toGamut(color1);
 	color2 = toGamut(color2);
 
+	// The hue coordinate is not always called "h" (e.g. it's "hz" in Jzczhz)
+	let hueId = space.hueId;
+	let hueIndex = space.hueIndex;
+
 	// Handle hue interpolation
 	// See https://github.com/w3c/csswg-drafts/issues/4735#issuecomment-635741840
-	if (space.coords.h && space.coords.h.type === "angle") {
+	if (hueId) {
 		let arc = (options.hue = options.hue || "shorter");
 
-		let /** @type {Ref} */ hue = [space, "h"];
+		let /** @type {Ref} */ hue = [space, hueId];
 		let [θ1, θ2] = [get(color1, hue), get(color2, hue)];
 		// Undefined hues must be evaluated before hue fix-up to properly
 		// calculate hue arcs between undefined and defined hues.
@@ -205,14 +213,20 @@ export function range (color1, color2, options = {}) {
 		set(color2, hue, θ2);
 	}
 
+	// An undefined alpha takes the other color's alpha, and premultiplication must use
+	// that carried forward value, rather than the zero it would otherwise be treated as.
+	// If both alphas are undefined, they stay that way, and no premultiplication happens.
+	// See https://drafts.csswg.org/css-color-4/#interpolation-missing
+	if (isNone(color1.alpha) && !isNone(color2.alpha)) {
+		color1.alpha = color2.alpha;
+	}
+	else if (isNone(color2.alpha) && !isNone(color1.alpha)) {
+		color2.alpha = color1.alpha;
+	}
+
 	if (premultiplied) {
-		// not coping with polar spaces yet
-		color1.coords = /** @type {[number, number, number]} */ (
-			color1.coords.map(c => c * color1.alpha)
-		);
-		color2.coords = /** @type {[number, number, number]} */ (
-			color2.coords.map(c => c * color2.alpha)
-		);
+		color1.coords = premultiply(color1.coords, color1.alpha, hueIndex);
+		color2.coords = premultiply(color2.coords, color2.alpha, hueIndex);
 	}
 
 	return Object.assign(
@@ -227,8 +241,8 @@ export function range (color1, color2, options = {}) {
 			let ret = { space, coords, alpha };
 
 			if (premultiplied) {
-				// undo premultiplication
-				ret.coords = ret.coords.map(c => c / alpha);
+				// Undo premultiplication, again leaving any hue angle untouched
+				ret.coords = premultiply(ret.coords, alpha, hueIndex, true);
 			}
 
 			if (outputSpace !== space) {
@@ -240,6 +254,35 @@ export function range (color1, color2, options = {}) {
 		{
 			rangeArgs,
 		},
+	);
+}
+
+/**
+ * Premultiply a color's coordinates by its alpha, or undo premultiplication by dividing by it.
+ * Per CSS Color 4, the hue angle of a polar space is never premultiplied,
+ * `none` components stay `none`, a `none` alpha means no (un)premultiplication happens at all,
+ * and un-premultiplying by a zero alpha leaves the coords as they are, rather than dividing by zero.
+ * See https://drafts.csswg.org/css-color-4/#interpolation-alpha
+ * @param {(number | null)[]} coords
+ * @param {number | null} alpha
+ * @param {number} hueIndex - Index of the hue coordinate, or -1 if the space has none
+ * @param {boolean} [undo=false] - Divide by alpha instead of multiplying by it
+ * @returns {[number, number, number]}
+ */
+function premultiply (coords, alpha, hueIndex, undo = false) {
+	if (isNone(alpha) || (undo && alpha === 0)) {
+		// The (un-)premultiplied value is the value itself
+		return /** @type {[number, number, number]} */ (coords);
+	}
+
+	return /** @type {[number, number, number]} */ (
+		coords.map((c, i) => {
+			if (i === hueIndex || isNone(c)) {
+				return c;
+			}
+
+			return undo ? c / alpha : c * alpha;
+		})
 	);
 }
 

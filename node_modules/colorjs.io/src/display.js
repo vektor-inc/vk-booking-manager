@@ -10,7 +10,7 @@ import Lab from "./spaces/lab.js";
 import sRGB from "./spaces/srgb.js";
 
 /** @import ColorSpace from "./ColorSpace.js" */
-/** @import { ColorTypes, PlainColorObject } from "./types.js" */
+/** @import { ColorTypes, PlainColorObject, DisplayOptions } from "./types.js" */
 
 // Type re-exports
 /** @typedef {import("./types.js").Display} Display */
@@ -37,24 +37,25 @@ if (typeof CSS !== "undefined" && CSS.supports) {
 /**
  * Returns a serialization of the color that can actually be displayed in the browser.
  * If the default serialization can be displayed, it is returned.
- * Otherwise, the color is converted to Lab, REC2020, or P3, whichever is the widest supported.
+ * Otherwise, if a `space` is given, the color is converted directly to it.
+ * If not, the color is converted to the first supported of its space's `displaySpaces` (if any),
+ * else the closest supported space in its base color space chain (which preserves its gamut),
+ * else the default fallback space (Lab, REC2020, or P3, whichever is the widest supported).
  * In Node.js, this is basically equivalent to `serialize()` but returns a `String` object instead.
  * @param {ColorTypes} color
- * @param {{ space?: string | ColorSpace | undefined } & Record<string, any>} param1
- * Options to be passed to `serialize()`
+ * @param {DisplayOptions} [options] Options. Any properties beyond `space` and `supports` are passed to `serialize()`.
  * @returns {Display} String object containing the serialized color
  * with a color property containing the converted color (or the original, if no conversion was necessary)
  */
-export default function display (color, { space = defaults.display_space, ...options } = {}) {
+export default function display (
+	color,
+	{ space, supports = globalThis.CSS?.supports, ...options } = {},
+) {
 	color = getColor(color);
 
 	let ret = /** @type {Display} */ (serialize(color, options));
 
-	if (
-		typeof CSS === "undefined" ||
-		CSS.supports("color", /** @type {string} */ (ret)) ||
-		!defaults.display_space
-	) {
+	if (!supports || supports("color", /** @type {string} */ (ret)) || !defaults.display_space) {
 		ret = /** @type {Display} */ (new String(ret));
 		ret.color = /** @type {PlainColorObject} */ (color);
 	}
@@ -67,7 +68,7 @@ export default function display (color, { space = defaults.display_space, ...opt
 
 		if (hasNone) {
 			// Does the browser support none values?
-			if (!(supportsNone ??= CSS.supports("color", "hsl(none 50% 50%)"))) {
+			if (!(supportsNone ??= supports("color", "hsl(none 50% 50%)"))) {
 				// Nope, try again without none
 				fallbackColor = clone(/** @type {PlainColorObject} */ (color));
 				fallbackColor.coords = /** @type {[number, number, number]} */ (
@@ -78,7 +79,7 @@ export default function display (color, { space = defaults.display_space, ...opt
 				// @ts-expect-error This is set to the correct type later
 				ret = serialize(fallbackColor, options);
 
-				if (CSS.supports("color", /** @type {string} */ (ret))) {
+				if (supports("color", /** @type {string} */ (ret))) {
 					// We're done, now it's supported
 					ret = /** @type {Display} */ (new String(ret));
 					ret.color = fallbackColor;
@@ -87,9 +88,35 @@ export default function display (color, { space = defaults.display_space, ...opt
 			}
 		}
 
-		// If we're here, the color function is not supported
+		// If we're here, the color function is not supported.
+		// With no explicit space, try the color's own `displaySpaces`, or else walk up its base
+		// color space chain (closest first, skipping XYZ connection spaces), and use the first
+		// space the browser supports, before falling back to the default space.
+		if (space === undefined) {
+			space = fallbackColor.space;
+			let candidates = space.displaySpaces ?? space.bases;
+
+			// Skip XYZ connection spaces (unless the space itself is one, so it still has a fallback).
+			if (!space.displaySpaces && !space.id.startsWith("xyz-")) {
+				candidates = candidates.filter(space => !space.id.startsWith("xyz-"));
+			}
+
+			for (let candidate of candidates) {
+				let candidateColor = to(fallbackColor, candidate);
+				let str = serialize(candidateColor, options);
+
+				if (supports("color", /** @type {string} */ (str))) {
+					ret = /** @type {Display} */ (new String(str));
+					ret.color = candidateColor;
+					return ret;
+				}
+			}
+
+			space = defaults.display_space;
+		}
+
 		// Fall back to fallback space
-		fallbackColor = to(fallbackColor, space);
+		fallbackColor = to(fallbackColor, /** @type {string | ColorSpace} */ (space));
 		ret = /** @type {Display} */ (new String(serialize(fallbackColor, options)));
 		ret.color = fallbackColor;
 	}

@@ -14,6 +14,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Frontend;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_UnitTestCase;
@@ -55,6 +56,13 @@ class Menu_Loop_Card_Min_Capacity_Test extends WP_UnitTestCase {
 
 		// 基本料金を設定しておく（カード自体が空にならないようにするため）。
 		update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
+		// #412 C-2 / #392: 最少催行人数の表示は「このメニューで指名機能を使っていない」ことが
+		// 前提（Menu_Loop_Block の $min_capacity_available）のままだが、定員自体の表示は #392 で
+		// 指名条件が外れた（Staff_Editor::is_multi_guest_available_for_menu()）。このテストは
+		// 「定員・最少催行人数の値（2以上か等）による表示分岐」だけを検証したいため、指名の影響を
+		// 切り離す目的で明示的に指名を無効化する。指名ONメニューでの表示分岐は
+		// test-menu-loop-card-nomination-gating.php で別途検証している。
+		update_post_meta( $menu_id, '_vkbm_disable_nomination', true );
 		// null の場合はメタ未設定の状態を表現するため update しない。
 		if ( null !== $max_capacity ) {
 			update_post_meta( $menu_id, '_vkbm_max_capacity', $max_capacity );
@@ -70,6 +78,14 @@ class Menu_Loop_Card_Min_Capacity_Test extends WP_UnitTestCase {
 	 * 最大受付数・最少催行人数の組み合わせに応じて、最少催行人数項目の表示・非表示が切り替わることを確認する。
 	 */
 	public function test_render_menu_card(): void {
+		// #412 F-2: このテストは「表示される」ケース（Pro 版限定機能）と「表示されない」ケースを
+		// 同一ループ内で混在検証しているため、Pro 限定ケースだけを個別にスキップできない。
+		// 無料版では常に「表示されない」側になり expect_label => true のケースが失敗するため、
+		// メソッド全体をスキップする。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '定員2以上での最少催行人数表示は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
 		// 「最少催行人数」ラベル。実装側と同じ翻訳関数で組み立て、ロケールが ja などに
 		// 切り替わっても期待値が実装の出力文言と一致するようにする。
 		$min_capacity_label = __( 'Minimum participants to confirm', 'vk-booking-manager' );

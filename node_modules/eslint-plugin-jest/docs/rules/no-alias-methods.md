@@ -1,8 +1,8 @@
-# Disallow alias methods (`no-alias-methods`)
+# jest/no-alias-methods
 
-💼⚠️ This rule is enabled in the ✅ `recommended`
-[config](https://github.com/jest-community/eslint-plugin-jest/blob/main/README.md#shareable-configurations).
-This rule _warns_ in the 🎨 `style`
+📝 Disallow alias methods.
+
+💼 This rule is enabled in the ✅ `recommended`
 [config](https://github.com/jest-community/eslint-plugin-jest/blob/main/README.md#shareable-configurations).
 
 🔧 This rule is automatically fixable by the
@@ -10,7 +10,7 @@ This rule _warns_ in the 🎨 `style`
 
 <!-- end auto-generated rule header -->
 
-> These aliases are going to be removed in the next major version of Jest - see
+> These aliases have been removed in Jest v30 - see
 > <https://github.com/jestjs/jest/issues/13164> for more
 
 Several Jest methods have alias names, such as `toThrow` having the alias of

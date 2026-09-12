@@ -87,7 +87,9 @@ class Service_Menu_Price_Tiers_Auth_Test extends WP_UnitTestCase {
 	 * auth_callback: 複数人予約ON＋料金区分を同一REST更新する際、保存済み allow フラグに依存せず認可する。
 	 *
 	 * stale read 依存（保存済み _vkbm_allow_multiple_guests を読む）を撤去したため、
-	 * allow フラグがまだ保存されていない（=false 相当）状態でも、編集権限＋Pro＋指名OFF なら許可される。
+	 * allow フラグがまだ保存されていない（=false 相当）状態でも、編集権限＋Pro＋予約枠の定員機能ON なら
+	 * 許可される。#392 でこの auth_callback から「指名OFF」条件を除去したため、指名ONのメニューでも
+	 * 許可される（指名を使うメニューでも料金区分を利用できるようにするため）。
 	 */
 	public function test_auth_callback_does_not_depend_on_stored_allow_flag(): void {
 		$auth_callback = $this->get_price_tiers_auth_callback();
@@ -119,9 +121,9 @@ class Service_Menu_Price_Tiers_Auth_Test extends WP_UnitTestCase {
 				'expected'            => true,
 			),
 			array(
-				'test_condition_name' => '指名ON => 拒否（複数人予約が成立しないため）',
+				'test_condition_name' => '指名ON => 許可（#392：指名を使うメニューでも料金区分を利用できるようにするため、指名OFF条件を除去した）',
 				'nomination'          => true,
-				'expected'            => false,
+				'expected'            => true,
 			),
 		);
 

@@ -89,99 +89,127 @@ class Service_Menu_Editor_Exclusive_When_Booked_Persistence_Test extends WP_Unit
 	}
 
 	/**
-	 * save_post: 予約枠の定員機能OFF分岐で、非表示の従属メタ（貸し切り予約・ユーザー貸し切り指定・料金区分・複数人一括予約・予約枠の定員）が保持される。
+	 * save_post: 予約枠の定員機能OFF分岐で、非表示の従属メタ（貸し切り予約・ユーザー貸し切り指定・料金区分・複数人一括予約）が保持される。
 	 *
-	 * - 予約枠の定員機能ON時に一通り設定を保存 → 予約枠の定員機能OFFで再保存 → 従属メタが全て残ること。
-	 *   特に貸し切り予約メタ（_vkbm_exclusive_when_booked）が削除されず保持されること（#330 懸念2の主眼）。
-	 * - 対照として、ユーザー貸し切り指定・料金区分・予約枠の定員・複数人一括予約も同じく保持されること。
+	 * - 予約枠の定員機能ON時に一通り設定を保存 → 予約枠の定員機能OFFで再保存 → 従属メタが全て残ること
+	 *   （特に貸し切り予約メタ _vkbm_exclusive_when_booked が削除されず保持されること。#330 懸念2の主眼）。
+	 * - 対照として、貸し切り予約のみ保存し兄弟メタ（ユーザー貸し切り指定・料金区分）は保存していないメニューでも、
+	 *   保持ロジックが「元々無いもの」を新たに作り出さないことを確認する。
+	 * - 境界値として、貸切関連の設定を何も保存していないメニューでも同様に何も生成されないことを確認する
+	 *   （保持ロジックが誤って値を作り出す回帰を防ぐ）。
+	 *
+	 * どのケースも _vkbm_max_capacity（min_capacity と同時に常に送信）は予約枠の定員機能OFF分岐が
+	 * 一切触れないため常に保持される。
 	 */
 	public function test_save_post(): void {
-		// Pro版・指名OFF・予約枠の定員ON でメニューを作成し、従属設定を一通り保存する。
-		$this->set_settings( false, true );
-
-		$admin   = new Service_Menu_Editor();
-		$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
-		wp_set_current_user( $user_id );
-
-		$menu_id = (int) $this->factory()->post->create(
-			array(
-				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
-				'post_status' => 'publish',
-			)
-		);
-		$post = get_post( $menu_id );
-
-		// 予約枠の定員機能ON状態で、複数人一括予約と従属設定（貸切・ユーザー貸切・料金区分）を保存する。
-		$_POST = array(
-			self::NONCE_NAME       => wp_create_nonce( self::NONCE_ACTION ),
-			'vkbm_service_menu'    => array(
-				'max_capacity'                => '4',
-				'min_capacity'                => '2',
-				'allow_multiple_guests'       => '1',
-				'exclusive_when_booked'       => '1',
-				'exclusive_user_selectable'   => '1',
-				'exclusive_fee_per_person'    => '1000',
-				'exclusive_fee_exempt_guests' => '1',
-				// 料金区分フォームは label[]・price[] の並列配列で送られる（sanitize_price_tiers の期待形式）。
-				'price_tiers'                 => array(
-					'label' => array( '大人' ),
-					'price' => array( '5000' ),
-				),
-			),
-		);
-		$admin->save_post( $menu_id, $post );
-
-		// 前提が正しく保存されていることを確認する（この段階で貸切メタが立っている）。
-		$this->assertTrue( metadata_exists( 'post', $menu_id, '_vkbm_exclusive_when_booked' ), '前提：予約枠の定員ON時に貸し切り予約メタが保存されている' );
-
-		// 予約枠の定員機能（親スイッチ）をOFFにして再保存する。
-		// このときフォームには従属フィールドが描画されないため、$_POST には従属設定を含めない。
-		$this->set_settings( false, false );
-		$_POST = array(
-			self::NONCE_NAME    => wp_create_nonce( self::NONCE_ACTION ),
-			'vkbm_service_menu' => array(
-				'base_price' => '3000',
-			),
-		);
-		$admin->save_post( $menu_id, $post );
-
-		// 予約枠の定員機能OFF時、従属メタは「非表示時は保持」方針で残る（再有効化で復帰できる後方互換）。
 		$test_cases = array(
 			array(
-				'test_condition_name' => '予約枠の定員機能OFF再保存後 => 貸し切り予約メタが保持される（#330 懸念2）',
-				'meta_key'            => '_vkbm_exclusive_when_booked',
-				'expect_exists'       => true,
+				'test_condition_name'   => '複数人一括予約・貸し切り予約・ユーザー貸切指定・料金区分を一通り保存 → 予約枠の定員機能OFFで再保存 => 全て保持される（正常系・#330懸念2の主眼）',
+				'allow_multiple_guests' => true,
+				'exclusive_when_booked' => true,
+				'user_selectable'       => true,
+				'price_tiers'           => true,
 			),
 			array(
-				'test_condition_name' => '予約枠の定員機能OFF再保存後 => ユーザー貸し切り指定メタが保持される（兄弟メタと揃う）',
-				'meta_key'            => '_vkbm_exclusive_user_selectable',
-				'expect_exists'       => true,
+				'test_condition_name'   => '「貸し切り予約」のみ保存（ユーザー貸切指定・料金区分は未保存）→ 予約枠の定員機能OFFで再保存 => 貸し切り予約メタのみ保持され、他は元から無いまま（正常系・対照）',
+				'allow_multiple_guests' => true,
+				'exclusive_when_booked' => true,
+				'user_selectable'       => false,
+				'price_tiers'           => false,
 			),
 			array(
-				'test_condition_name' => '予約枠の定員機能OFF再保存後 => 貸し切り料金（1人あたり）メタが保持される',
-				'meta_key'            => '_vkbm_exclusive_fee_per_person',
-				'expect_exists'       => true,
-			),
-			array(
-				'test_condition_name' => '予約枠の定員機能OFF再保存後 => 料金区分メタが保持される',
-				'meta_key'            => '_vkbm_price_tiers',
-				'expect_exists'       => true,
-			),
-			array(
-				'test_condition_name' => '予約枠の定員機能OFF再保存後 => 複数人一括予約許可メタが保持される',
-				'meta_key'            => '_vkbm_allow_multiple_guests',
-				'expect_exists'       => true,
-			),
-			array(
-				'test_condition_name' => '予約枠の定員機能OFF再保存後 => 予約枠の定員メタが保持される',
-				'meta_key'            => '_vkbm_max_capacity',
-				'expect_exists'       => true,
+				'test_condition_name'   => '貸切関連の設定を何も保存していないメニュー → 予約枠の定員機能OFFで再保存 => 何も生成されない（境界値・保持ロジックが値を作り出さないことの確認）',
+				'allow_multiple_guests' => false,
+				'exclusive_when_booked' => false,
+				'user_selectable'       => false,
+				'price_tiers'           => false,
 			),
 		);
 
 		foreach ( $test_cases as $case ) {
-			$actual = metadata_exists( 'post', $menu_id, $case['meta_key'] );
-			$this->assertSame( $case['expect_exists'], $actual, $case['test_condition_name'] );
+			// Pro版・指名OFF・予約枠の定員ON でメニューを作成し、ケースごとの従属設定を保存する。
+			$this->set_settings( false, true );
+
+			$admin   = new Service_Menu_Editor();
+			$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+			wp_set_current_user( $user_id );
+
+			$menu_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			$post    = get_post( $menu_id );
+
+			// 予約枠の定員機能ON状態で、ケースごとの従属設定を保存する（管理画面フォーム経由）。
+			$service_menu = array(
+				'max_capacity' => '4',
+				'min_capacity' => '2',
+			);
+			if ( $case['allow_multiple_guests'] ) {
+				$service_menu['allow_multiple_guests'] = '1';
+			}
+			if ( $case['exclusive_when_booked'] ) {
+				$service_menu['exclusive_when_booked'] = '1';
+			}
+			if ( $case['price_tiers'] ) {
+				// 料金区分フォームは label[]・price[] の並列配列で送られる（sanitize_price_tiers の期待形式）。
+				$service_menu['price_tiers'] = array(
+					'label' => array( '大人' ),
+					'price' => array( '5000' ),
+				);
+			}
+			$_POST = array(
+				self::NONCE_NAME    => wp_create_nonce( self::NONCE_ACTION ),
+				'vkbm_service_menu' => $service_menu,
+			);
+			$admin->save_post( $menu_id, $post );
+
+			if ( $case['user_selectable'] ) {
+				// ユーザー貸し切り指定・貸し切り料金は「貸し切り予約」（exclusive_when_booked）と排他のため（#388）、
+				// 通常の管理画面フォーム経由では同時に保存できない。
+				// #388 修正前に両方ONで保存されてしまった過去のメニューが存在する前提を再現する必要があるため、
+				// ここでは直接 update_post_meta() で「既に両方ONで保存済みの過去データ」を模す。
+				update_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true );
+				update_post_meta( $menu_id, '_vkbm_exclusive_fee_per_person', 1000 );
+				update_post_meta( $menu_id, '_vkbm_exclusive_fee_exempt_guests', 1 );
+			}
+
+			// 予約枠の定員機能（親スイッチ）をOFFにして再保存する。
+			// このときフォームには従属フィールドが描画されないため、$_POST には従属設定を含めない。
+			$this->set_settings( false, false );
+			$_POST = array(
+				self::NONCE_NAME    => wp_create_nonce( self::NONCE_ACTION ),
+				'vkbm_service_menu' => array(
+					'base_price' => '3000',
+				),
+			);
+			$admin->save_post( $menu_id, $post );
+
+			// 予約枠の定員機能OFF時、従属メタは「非表示時は保持」方針で残る（再有効化で復帰できる後方互換）。
+			// ケースごとに事前に保存した分だけが保持され、保存していない分は「無いまま」であることを検証する。
+			$meta_expectations = array(
+				'_vkbm_exclusive_when_booked'       => $case['exclusive_when_booked'],
+				'_vkbm_exclusive_user_selectable'   => $case['user_selectable'],
+				'_vkbm_exclusive_fee_per_person'    => $case['user_selectable'],
+				'_vkbm_exclusive_fee_exempt_guests' => $case['user_selectable'],
+				'_vkbm_price_tiers'                 => $case['price_tiers'],
+				'_vkbm_allow_multiple_guests'       => $case['allow_multiple_guests'],
+				// 予約枠の定員機能OFF分岐は max_capacity/min_capacity を一切触れないため、
+				// 常に送信している本テストでは全ケースで保持される。
+				'_vkbm_max_capacity'                => true,
+			);
+
+			foreach ( $meta_expectations as $meta_key => $expect_exists ) {
+				$this->assertSame(
+					$expect_exists,
+					metadata_exists( 'post', $menu_id, $meta_key ),
+					$case['test_condition_name'] . ' / ' . $meta_key
+				);
+			}
+
+			wp_set_current_user( 0 );
 		}
 	}
 }

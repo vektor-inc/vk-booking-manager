@@ -218,6 +218,111 @@ const extractAssignableStaffIds = ( meta ) => {
 	);
 };
 
+/**
+ * 翻訳済みの2文を、文末が非 ASCII（日本語の句点「。」等）のときは半角スペース無しで、
+ * 文末が ASCII のとき（英語など）は半角スペース区切りで連結する（#393）。
+ *
+ * 個別の記号を列挙する方式（句点・感嘆符・閉じ括弧…）だと、想定していない記号終わりの文で
+ * 一貫しない挙動になる（例: 半角の閉じ括弧を列挙に含めると `…(bar)Please set…` のように
+ * スペース無しで連結されてしまう）ため、末尾1文字が ASCII かどうかだけで判定する
+ * （安藤レビュー指摘）。
+ *
+ * 翻訳済み文字列そのものに前後の空白を含めると
+ * `@wordpress/i18n-no-flanking-whitespace` の ESLint ルールに反するため、
+ * 結合はコード側（翻訳を通さない箇所）で行う。PHP側
+ * （src/common/class-nomination-min-guests-message.php の join_sentences()）と同型のロジック。
+ *
+ * @param {string} sentenceA 1文目（すでに翻訳・sprintf済み）。
+ * @param {string} sentenceB 2文目（すでに翻訳・sprintf済み）。
+ * @return {string} 連結後の文字列。
+ */
+const joinSentences = ( sentenceA, sentenceB ) => {
+	const endsWithAscii = /[\x00-\x7F]$/.test( sentenceA );
+	return endsWithAscii ? sentenceA + ' ' + sentenceB : sentenceA + sentenceB;
+};
+
+/**
+ * 指名を使うメニューの最低申し込み人数（受付制限。#393）の、実際のエラー・警告表示専用の
+ * 文言（原因＋対処のセット）を組み立てる。
+ *
+ * PHP側（Booking_Draft_Controller / Booking_Confirmation_Controller が委譲する
+ * src/common/class-nomination-min-guests-message.php の build_message()）と同じ2文を
+ * 同じ結合方法で使う。同じ概念を指す英文が複数（警告・エラー）に分かれていたのを
+ * 1種類へ統一し、料金区分側の警告にも「どうすればよいか」の文を必ず添える
+ * （安藤レビュー指摘）。
+ *
+ * 人数入力欄の下の**常時表示**の案内文にはこの関数を使わない。常時表示は既に条件を
+ * 満たしている状態でも表示されるため、命令形の「〜以上にしてください」が出続けるのは
+ * 不自然（植草レビュー指摘）。常時案内には状態に依存しない buildNominationMinGuestsHint()
+ * を使う。
+ *
+ * @param {number} minGuests 最低申し込み人数。
+ * @return {string} エラー・警告文言。
+ */
+const buildNominationMinGuestsMessage = ( minGuests ) =>
+	joinSentences(
+		sprintf(
+			/* translators: %d: minimum number of guests required to book this menu. */
+			__(
+				'This menu accepts bookings from %d guests.',
+				'vk-booking-manager'
+			),
+			minGuests
+		),
+		sprintf(
+			/* translators: %d: minimum number of guests required to book this menu. */
+			__(
+				'Please set the number of guests to %d or more.',
+				'vk-booking-manager'
+			),
+			minGuests
+		)
+	);
+
+/**
+ * 指名を使うメニューの最低申し込み人数（受付制限。#393）の**常時表示**の案内文を組み立てる。
+ *
+ * 人数入力欄の初期値は既に最低申し込み人数へクランプされているため、条件を満たしている
+ * 状態でも表示され続ける。buildNominationMinGuestsMessage()（原因＋対処のセット、命令形）を
+ * 常時表示に使うと、満たしている状態でも「〜以上にしてください」という指示が出続けて
+ * 不自然になるため、状態に依存しない中立の文言を別に用意する（植草レビュー指摘）。
+ *
+ * @param {number} minGuests 最低申し込み人数。
+ * @return {string} 常時案内文。
+ */
+const buildNominationMinGuestsHint = ( minGuests ) =>
+	sprintf(
+		/* translators: %d: minimum number of guests required to book this menu. */
+		__(
+			'This menu requires a minimum of %d guests.',
+			'vk-booking-manager'
+		),
+		minGuests
+	);
+
+/**
+ * 選択中スロットの残り人数が指名を使うメニューの最低申し込み人数に満たない場合の
+ * 案内文を組み立てる（#393）。
+ *
+ * 単一の人数入力欄・料金区分の両方で共有する（安藤/司レビュー指摘：料金区分側だけ
+ * この案内が無いのは不揃い）。
+ *
+ * @param {number} minGuests 最低申し込み人数。
+ * @return {string} 案内文。
+ */
+const buildSlotBelowNominationMinGuestsMessage = ( minGuests ) =>
+	joinSentences(
+		sprintf(
+			/* translators: %d: minimum number of guests required to book this menu. */
+			__(
+				'This time slot cannot accept the minimum of %d guests required for this menu.',
+				'vk-booking-manager'
+			),
+			minGuests
+		),
+		__( 'Please choose another time slot.', 'vk-booking-manager' )
+	);
+
 const formatBookingDateTimeParts = ( startAt, endAt ) => {
 	if ( ! startAt ) {
 		return { date: '', time: '' };
@@ -323,6 +428,25 @@ export const ReservationApp = ( {
 		// 数量の単位。REST が実効値（null はロケール既定に解決済み）を返す。空文字は単位なし。
 		guestsUnitLabel: '',
 	} );
+
+	// 現在選択中のメニュー（メタ情報を含む）。以降の指名可否判定などに使うため早い段階で確定する。
+	const currentMenu = useMemo(
+		() => menus.find( ( menu ) => menu.id === menuId ),
+		[ menus, menuId ]
+	);
+	// #391: このメニューで指名機能を使うか。
+	// サイト全体の指名機能スイッチ（providerSettings.staffEnabled）がONで、かつ
+	// メニュー単位の無効化メタ（_vkbm_disable_nomination）が立っていない場合のみ true。
+	// メニュー未選択（currentMenu が無い）ときは、メタを読めないためサイト全体の設定にそのまま従う。
+	const menuNominationEnabled = useMemo(
+		() =>
+			providerSettings.staffEnabled &&
+			! Boolean( currentMenu?.meta?._vkbm_disable_nomination ),
+		[ providerSettings.staffEnabled, currentMenu ]
+	);
+	// スタッフ選択UI（プルダウン等）自体を表示してよいか。
+	const staffSelectionEnabled = allowStaffSelection && menuNominationEnabled;
+
 	const [ menuList, setMenuList ] = useState( {
 		html: '',
 		isLoading: true,
@@ -372,6 +496,18 @@ export const ReservationApp = ( {
 	const [ calendarData, setCalendarData ] = useState( null );
 	const [ calendarLoading, setCalendarLoading ] = useState( false );
 	const [ calendarError, setCalendarError ] = useState( null );
+	// #411 植草さん・安藤さんレビュー指摘（PR #414 再差し戻し）: 診断理由は成功応答
+	// （calendarData.unavailability_reason）とエラー応答（error.data.unavailability_reason）の
+	// 2箇所から来うるが、以前は両方を別々の state に持ち calendarData 優先で OR 結合していたため、
+	// 古い成功時の理由が新しいエラーの理由より優先されて表示され続ける不具合があった
+	// （安藤さんMEDIUM指摘）。fetchCalendar() の .then / .catch のどちらで確定した結果でも
+	// 必ずこの1つの state だけを更新する設計にし、二重管理・優先順位のバグ自体を無くす。
+	// フェッチ開始時にはリセットしない（植草さん中〜高指摘: 月送りのたびに一旦 null を経由すると
+	// 診断バナーが hidden 属性で消えてから再び現れることになり、同じ理由が続く月をまたぐ場合でも
+	// aria-live のコンテナが一度非表示→表示を繰り返し、スクリーンリーダーに再アナウンスされてしまう。
+	// 前の結果を「次の結果が確定するまで保持する」ことで、同じ理由が続く限り表示が途切れない）。
+	const [ calendarUnavailabilityReason, setCalendarUnavailabilityReason ] =
+		useState( null );
 
 	const [ slotData, setSlotData ] = useState( [] );
 	const [ slotLoading, setSlotLoading ] = useState( false );
@@ -387,8 +523,8 @@ export const ReservationApp = ( {
 	const actionSectionRef = useRef( null );
 	const [ providerSettingsLoaded, setProviderSettingsLoaded ] =
 		useState( false );
-	const staffSelectionEnabled =
-		allowStaffSelection && providerSettings.staffEnabled;
+	// staffSelectionEnabled はメニュー選択後（currentMenu 確定後）に定義する。
+	// #391 でメニュー単位の指名可否（menuNominationEnabled）に依存するようになったため。
 	useEffect( () => {
 		let isMounted = true;
 
@@ -495,7 +631,9 @@ export const ReservationApp = ( {
 			return;
 		}
 
-		if ( ! providerSettings.staffEnabled ) {
+		// #391: サイト全体ではなくこのメニューで指名を使わない場合（無料版、または
+		// Pro版でメニュー単位に指名OFFにした場合）に自動割り当て向けの初期化を行う。
+		if ( ! menuNominationEnabled ) {
 			// 無料版ではデフォルトスタッフIDを設定
 			if (
 				providerSettings.defaultStaffId > 0 &&
@@ -511,7 +649,7 @@ export const ReservationApp = ( {
 		}
 	}, [
 		providerSettingsLoaded,
-		providerSettings.staffEnabled,
+		menuNominationEnabled,
 		providerSettings.defaultStaffId,
 		staffId,
 	] );
@@ -844,23 +982,41 @@ export const ReservationApp = ( {
 			isMounted = false;
 		};
 	}, [ authMode, isLoggedIn ] );
-	const currentMenu = useMemo(
-		() => menus.find( ( menu ) => menu.id === menuId ),
-		[ menus, menuId ]
-	);
 	const currentStaff = useMemo(
 		() => staffOptions.find( ( staff ) => staff.id === staffId ),
 		[ staffOptions, staffId ]
 	);
 
 	// メニューが複数人一括予約に対応しているかを判定する。
-	// 複数人一括予約は指名機能OFF（staffEnabled=false）のときのみ有効。指名ONへ切り替えた場合に
-	// 古いメタフラグで人数セレクタが残らないよう、現在の指名設定でもゲートする。
+	// #392: 指名を使うメニュー（1枠1組＝貸切）でも、定員（1組の最大人数）までの人数を1件の予約で
+	// 受け付けられるようにするため、以前あった「指名機能OFF（menuNominationEnabled=false）のときのみ
+	// 有効」というゲートは外した。サーバ側（Staff_Editor::is_multi_guest_available_for_menu()）も
+	// 同様に指名条件を外しているため、_vkbm_allow_multiple_guests の値だけで判定できる。
 	const allowMultipleGuests = useMemo(
+		() => Boolean( currentMenu?.meta?._vkbm_allow_multiple_guests ),
+		[ currentMenu ]
+	);
+	// #393: 指名を使うメニューの最低申し込み人数（受付制限）。
+	// 1件の予約が1組の貸切になる指名メニューで、1名の予約に定員2以上の枠を占有されるのを
+	// 避けるための下限。入力欄の下限・常時案内文・送信抑止に使う。
+	//
+	// 適用条件（指名可否・複数人一括予約・サイト全体の「予約枠の定員機能」スイッチ・定員2以上）は
+	// クライアントで再計算しない。以前はここでメニューのメタから再計算していたが、サイト全体の
+	// 予約枠の定員機能スイッチ（Staff_Editor::is_slot_capacity_enabled()）をフロントが見ておらず、
+	// その機能がOFFのサイトではサーバー側は実効0（制限なし）になるのにフロントだけ下限が残って
+	// 予約できなくなる不整合があった（安藤レビュー指摘）。判定条件は
+	// Availability_Service::get_menu_nomination_min_guests() の1箇所に集約し、その結果を
+	// Service_Menu_Post_Type の読み取り専用RESTフィールド（vkbm_nomination_min_guests）経由で
+	// 受け取るだけにする。
+	const nominationMinGuests = useMemo(
 		() =>
-			! providerSettings.staffEnabled &&
-			Boolean( currentMenu?.meta?._vkbm_allow_multiple_guests ),
-		[ currentMenu, providerSettings.staffEnabled ]
+			Math.max(
+				0,
+				Math.floor(
+					Number( currentMenu?.vkbm_nomination_min_guests ) || 0
+				)
+			),
+		[ currentMenu ]
 	);
 	// 選択可能な人数の上限は、選択中スロットの残り（= 最も空きの大きい単一スタッフの残り）。
 	// 楽観的に最大人数を許可するとサーバー側で予約が失敗するため、不明時は安全側に倒す。
@@ -877,16 +1033,32 @@ export const ReservationApp = ( {
 		return 0;
 	}, [ allowMultipleGuests, selectedSlot ] );
 
-	// 選択可能上限が変わった場合に人数を範囲内へ補正する。
+	// #393: 選択中スロットの残り人数が最低申し込み人数に満たないか（安藤/司レビュー指摘）。
+	// 更新前から残っている予約などで、まれにこの状態になり得る。この状態のまま人数入力欄を
+	// 出すと min 属性が max を超えた矛盾した入力欄になり、案内文と裏腹に人数を上げられず
+	// 「予約へ進む」が無言で disabled になるため、入力欄自体を出さず理由を明示する。
+	// maxSelectableGuests が 0（満枠）のときは別途「満枠」表示があるため対象外とする。
+	const slotBelowNominationMinGuests = useMemo(
+		() =>
+			allowMultipleGuests &&
+			nominationMinGuests > 0 &&
+			maxSelectableGuests >= 1 &&
+			maxSelectableGuests < nominationMinGuests,
+		[ allowMultipleGuests, nominationMinGuests, maxSelectableGuests ]
+	);
+
+	// 選択可能上限・最低申し込み人数が変わった場合に人数を範囲内へ補正する（#393）。
+	// 下限は最低申し込み人数（未適用なら1）、上限は選択可能上限。
 	useEffect( () => {
 		setGuests( ( current ) => {
+			const lowerBound = Math.max( 1, nominationMinGuests );
 			const next = Math.min(
-				Math.max( 1, current ),
+				Math.max( lowerBound, current ),
 				maxSelectableGuests
 			);
 			return next === current ? current : next;
 		} );
-	}, [ maxSelectableGuests ] );
+	}, [ maxSelectableGuests, nominationMinGuests ] );
 
 	// メニューに定義された料金区分（[ { label, price }, ... ]）。
 	// 複数人一括予約ONかつ区分が1件以上ある場合のみ、人数を区分ごとに入力する。
@@ -952,11 +1124,19 @@ export const ReservationApp = ( {
 	}, [ hasPriceTiers, guestTiersTotalCount, allowMultipleGuests, guests ] );
 
 	// メニューが「ユーザーによる貸し切り指定を受け付ける」設定か（#305）。複数人一括予約ON時のみ意味を持つ。
+	// 「貸し切り予約」（_vkbm_exclusive_when_booked）がONのメニューでは、予約者の指定に関わらず
+	// 既に枠全体が貸切扱いになるため、ユーザーによる貸し切り指定チェックボックス自体を出さない（#388）。
+	// 両方ONで保存されていた過去のメニューでも、指定した予約者だけ貸し切り料金を負担する不整合を防ぐ。
+	// #392: 指名を使うメニューは常に1枠1組（貸切）で、貸し切り予約・予約者による貸切指定・貸切料金の
+	// 3設定自体を編集画面に出さない（サーバ側も Staff_Editor::is_exclusive_booking_available_for_menu()
+	// で指名OFFを要求する）。ここでも念のため menuNominationEnabled で明示的に除外しておく（多層防御）。
 	const exclusiveSelectable = useMemo(
 		() =>
+			! menuNominationEnabled &&
 			allowMultipleGuests &&
+			! currentMenu?.meta?._vkbm_exclusive_when_booked &&
 			Boolean( currentMenu?.meta?._vkbm_exclusive_user_selectable ),
-		[ allowMultipleGuests, currentMenu ]
+		[ menuNominationEnabled, allowMultipleGuests, currentMenu ]
 	);
 	// 貸し切り料金（1人あたり単価）と適用外人数（0=上限なし＝常に加算）。
 	const exclusiveFeePerPerson = useMemo(
@@ -1048,8 +1228,8 @@ export const ReservationApp = ( {
 	}, [ currentMenu ] );
 
 	const availableStaffOptions = useMemo( () => {
-		// 無料版では選択可能スタッフの制限を解除
-		if ( ! providerSettings.staffEnabled ) {
+		// 無料版、またはこのメニューで指名機能OFFのときは選択可能スタッフの制限を解除する（#391）。
+		if ( ! menuNominationEnabled ) {
 			return staffOptions;
 		}
 
@@ -1059,19 +1239,19 @@ export const ReservationApp = ( {
 
 		const allowedIds = new Set( assignableStaffIds );
 		return staffOptions.filter( ( staff ) => allowedIds.has( staff.id ) );
-	}, [ assignableStaffIds, staffOptions, providerSettings.staffEnabled ] );
+	}, [ assignableStaffIds, staffOptions, menuNominationEnabled ] );
 	const shouldLockStaffSelection = assignableStaffIds.length === 1;
 
-	// 指名OFF かつ複数スタッフが対応可能なメニューは「おまかせ自動分配」とする。
+	// このメニューで指名OFF かつ複数スタッフが対応可能なメニューは「おまかせ自動分配」とする（#391）。
 	// この場合は resource_id=0 / is_staff_preferred=false で送信し、サーバー側で
-	// 複数スタッフへ人数を配分させる（単一スタッフ・無料版では従来どおり staffId を使う）。
+	// 複数スタッフへ人数を配分させる（単一スタッフ・無料版・メニュー単位で指名ONのときは従来どおり staffId を使う）。
 	const autoDistribute =
-		! providerSettings.staffEnabled && assignableStaffIds.length > 1;
+		! menuNominationEnabled && assignableStaffIds.length > 1;
 	const effectiveResourceId = autoDistribute ? 0 : staffId;
 
 	useEffect( () => {
-		// 無料版では assignableStaffIds のチェックをスキップ
-		if ( ! providerSettings.staffEnabled ) {
+		// 無料版、またはこのメニューで指名機能OFFのときは assignableStaffIds のチェックをスキップする（#391）。
+		if ( ! menuNominationEnabled ) {
 			return;
 		}
 
@@ -1090,7 +1270,7 @@ export const ReservationApp = ( {
 		if ( staffId && ! assignableStaffIds.includes( staffId ) ) {
 			setStaffId( 0 );
 		}
-	}, [ menuId, assignableStaffIds, staffId, providerSettings.staffEnabled ] );
+	}, [ menuId, assignableStaffIds, staffId, menuNominationEnabled ] );
 	const isNominationFeeDisabled = useMemo( () => {
 		const meta = currentMenu?.meta;
 		if ( ! meta ) {
@@ -1149,7 +1329,8 @@ export const ReservationApp = ( {
 	}, [ applyTax, basePriceRaw ] );
 
 	const staffNominationFeeRaw = useMemo( () => {
-		if ( ! providerSettings.staffEnabled ) {
+		// #391: サイト全体ではなくこのメニューの指名可否で判定する。
+		if ( ! menuNominationEnabled ) {
 			return 0;
 		}
 		if ( ! staffId ) {
@@ -1176,7 +1357,7 @@ export const ReservationApp = ( {
 		currentStaff,
 		staffId,
 		isNominationFeeDisabled,
-		providerSettings.staffEnabled,
+		menuNominationEnabled,
 	] );
 
 	const staffNominationFee = useMemo( () => {
@@ -1201,9 +1382,9 @@ export const ReservationApp = ( {
 			return [];
 		}
 
-		// 指名機能が無効の場合は料金サマリーを表示しない
-		// （指名料行がなく基本料金＝合計となり冗長なため）。
-		if ( ! providerSettings.staffEnabled ) {
+		// このメニューで指名機能が無効の場合は料金サマリーを表示しない
+		// （指名料行がなく基本料金＝合計となり冗長なため）（#391）。
+		if ( ! menuNominationEnabled ) {
 			return [];
 		}
 
@@ -1263,13 +1444,15 @@ export const ReservationApp = ( {
 		totalPrice,
 		providerSettings,
 		providerSettingsLoaded,
+		menuNominationEnabled,
 	] );
 
 	const menuCollectionPath = useMemo(
 		() =>
 			buildApiPath( '/wp/v2/vkbm_service_menu', {
 				per_page: 100,
-				_fields: 'id,title,meta,menu_order,vkbm_menu_group',
+				_fields:
+					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests',
 				status: canViewPrivateMenus ? 'publish,private' : undefined,
 			} ),
 		[ canViewPrivateMenus ]
@@ -1330,6 +1513,11 @@ export const ReservationApp = ( {
 			isMounted = false;
 		};
 	}, [ menuId ] );
+	// #391: このコレクションはサイト全体のスタッフ一覧であり、特定のメニューに紐づかない
+	// （お気に入り・マイ予約タブなど、他メニューの過去の指名スタッフ名を表示する場面もある）。
+	// そのためここは意図的にメニュー単位（menuNominationEnabled）ではなくサイト全体の
+	// 指名機能スイッチのままにする。サイト全体でOFFなら、どのメニューも指名を使えないため
+	// スタッフ一覧を取得する意味自体が無い。
 	const staffCollectionPath = useMemo( () => {
 		if ( ! providerSettingsLoaded || ! providerSettings.staffEnabled ) {
 			return '';
@@ -1349,14 +1537,49 @@ export const ReservationApp = ( {
 		}, {} );
 	}, [ calendarData ] );
 
+	// #411: 表示中の月に予約可能日が1件も無い場合の管理者向け診断メッセージ。
+	// unavailability_reason は current_user_can( vkbm_manage_system_settings ) を満たすユーザーの
+	// レスポンスにのみサーバー側で付与される（サーバー側で理由フィールドごと省略済み。CSSで隠しているのではない）。
+	// calendarUnavailabilityReason は成功時・エラー時のどちらでも fetchCalendar() の確定時に
+	// 一本化して更新される（上の state 宣言のコメント参照）ため、ここでは単純にその値だけを見る。
+	// 同じ理由が続く月をまたいでも state が変化しない（≒同じ文字列が渡り続ける）限り React は
+	// DOM を更新しないため、aria-live で再アナウンスされることはない（コンテナ自体は常時マウントし、
+	// hidden 属性で表示切替する）。
+	// プレフィックスと本文の間の区切り（スペース等）は翻訳者が %s 側で調整できるよう、
+	// 文字列連結ではなく sprintf のプレースホルダーで結合する（安藤さん・植草さんレビュー指摘）。
+	const adminDiagnosticMessage = calendarUnavailabilityReason?.message
+		? sprintf(
+				/* translators: %s: 診断理由の本文。 */
+				__( '[Administrator diagnostic] %s', 'vk-booking-manager' ),
+				calendarUnavailabilityReason.message
+		  )
+		: '';
+
+	// #411 植草さんレビュー指摘（PR #414 再差し戻し・高）: 診断バナー（adminDiagnosticMessage、
+	// 丁寧な対処法つき・role="status"）が出ているときに、DailySlotList 側の危険アラート
+	// （calendarError の生の内部エラー文言・role="alert"）まで重ねて出すと、同じ原因を
+	// 書き方も読み上げの緊急度も違う2枚の札で説明してしまう。診断バナーがあるときは
+	// calendarError 由来の表示を抑制する（一般訪問者には adminDiagnosticMessage 自体が
+	// 空文字のため、この抑制は効かず従来どおり calendarError が表示される＝非該当者への
+	// 表示は変更なし）。slotError（選択日の空き枠取得エラー）は月単位の診断とは別要因のため
+	// 抑制しない。
+	const slotListError = adminDiagnosticMessage
+		? slotError
+		: calendarError || slotError;
+
 	const fetchCalendar = useCallback( () => {
 		if ( ! menuId || ! monthCursor.year || ! monthCursor.month ) {
 			setCalendarData( null );
+			setCalendarUnavailabilityReason( null );
 			return;
 		}
 
 		setCalendarLoading( true );
 		setCalendarError( null );
+		// #411 植草さんレビュー指摘（PR #414 再差し戻し）: calendarUnavailabilityReason は
+		// ここ（フェッチ開始時）ではリセットしない。.then / .catch の確定時にだけ更新することで、
+		// 同じ理由が続く月への移動では診断バナーが一度も消えずに表示され続ける
+		// （state 宣言のコメント参照）。
 
 		const path = buildApiPath( '/vkbm/v1/calendar-meta', {
 			menu_id: menuId,
@@ -1368,11 +1591,22 @@ export const ReservationApp = ( {
 		apiFetch( { path } )
 			.then( ( response ) => {
 				setCalendarData( response );
+				// 成功応答でも、has_bookable_day() が false のときだけサーバー側で
+				// unavailability_reason が付与される（無ければ null）。
+				setCalendarUnavailabilityReason(
+					response?.unavailability_reason ?? null
+				);
 			} )
 			.catch( ( error ) => {
 				setCalendarError(
 					error?.message ||
 						__( 'Failed to load calendar.', 'vk-booking-manager' )
+				);
+				// #411 麗美さん確認（PR #414 差し戻し）: エラー経路（担当スタッフ0件等）でも
+				// 管理者向けには unavailability_reason が error.data に付与される
+				// （src/rest/class-availability-controller.php handle_calendar_meta() 参照）。
+				setCalendarUnavailabilityReason(
+					error?.data?.unavailability_reason ?? null
 				);
 			} )
 			.finally( () => {
@@ -1477,9 +1711,16 @@ export const ReservationApp = ( {
 	const handleMenuChange = ( nextMenuId ) => {
 		const nextMenu = menus.find( ( menu ) => menu.id === nextMenuId );
 		const nextMeta = nextMenu?.meta;
+		// #391: これから切り替える「次のメニュー」自身の指名可否で判定する必要があるため、
+		// （まだ state に反映されていない）nextMeta から個別に算出する。
+		// menuNominationEnabled（現在のメニュー用）をここで使うと、切替前のメニューの
+		// 指名設定のままスタッフIDの処理が行われてしまう。
+		const nextMenuNominationEnabled =
+			providerSettings.staffEnabled &&
+			! Boolean( nextMeta?._vkbm_disable_nomination );
 
-		// 無料版では staffEnabled が false なので、スタッフIDの処理をスキップ
-		if ( providerSettings.staffEnabled ) {
+		// 無料版、または次のメニューで指名機能OFFのときはスタッフIDの処理をスキップ
+		if ( nextMenuNominationEnabled ) {
 			const nextAssignableStaffIds =
 				extractAssignableStaffIds( nextMeta );
 
@@ -1534,11 +1775,15 @@ export const ReservationApp = ( {
 
 		// handleMenuChange が指名を再計算するため、お気に入りの指名はその後に上書きする。
 		const favoriteResourceId = Number( favorite?.resource_id ) || 0;
-		if ( providerSettings.staffEnabled ) {
+		const favoriteMenu = menus.find(
+			( menu ) => menu.id === favoriteMenuId
+		);
+		// #391: お気に入り先のメニュー自身の指名可否で判定する。
+		const favoriteMenuNominationEnabled =
+			providerSettings.staffEnabled &&
+			! Boolean( favoriteMenu?.meta?._vkbm_disable_nomination );
+		if ( favoriteMenuNominationEnabled ) {
 			if ( favoriteResourceId > 0 ) {
-				const favoriteMenu = menus.find(
-					( menu ) => menu.id === favoriteMenuId
-				);
 				const assignable = extractAssignableStaffIds(
 					favoriteMenu?.meta
 				);
@@ -1636,13 +1881,15 @@ export const ReservationApp = ( {
 
 	// 複数人一括予約メニューで満枠（選択可能人数が0）のスロットは予約へ進めない。
 	// 料金区分メニューは合計人数が 1〜選択可能上限の範囲にある場合のみ進める。
+	// #393: 指名を使うメニューの最低申し込み人数（受付制限）を満たさない場合も進めない。
 	const canProceed = Boolean(
 		menuId &&
 			selectedSlot &&
 			( ! allowMultipleGuests || maxSelectableGuests >= 1 ) &&
 			( ! hasPriceTiers ||
 				( guestTiersTotalCount >= 1 &&
-					guestTiersTotalCount <= maxSelectableGuests ) )
+					guestTiersTotalCount <= maxSelectableGuests ) ) &&
+			currentGuestCount >= nominationMinGuests
 	);
 
 	const handleProceed = useCallback( () => {
@@ -1679,6 +1926,18 @@ export const ReservationApp = ( {
 		if ( hasPriceTiers && guestTiersTotalCount < 1 ) {
 			setSubmitError(
 				__( 'Please select at least one guest.', 'vk-booking-manager' )
+			);
+			return;
+		}
+
+		// #393: 指名を使うメニューの最低申し込み人数（受付制限）を満たさない場合は送信しない。
+		// canProceed 側のロジックにバグがあっても不正な人数をサーバーへ送らないための保険。
+		if (
+			nominationMinGuests > 0 &&
+			currentGuestCount < nominationMinGuests
+		) {
+			setSubmitError(
+				buildNominationMinGuestsMessage( nominationMinGuests )
 			);
 			return;
 		}
@@ -1826,10 +2085,12 @@ export const ReservationApp = ( {
 		userExclusive,
 		exclusiveCheckEnabled,
 		calendarData?.meta?.timezone,
+		currentGuestCount,
 		currentMenu,
 		currentStaff,
 		isEditor,
 		menuId,
+		nominationMinGuests,
 		providerSettings,
 		selectedDate,
 		selectedSlot,
@@ -2266,7 +2527,7 @@ export const ReservationApp = ( {
 							onMenuChange={ handleMenuChange }
 							onStaffChange={ handleStaffChange }
 							allowStaffSelection={ staffSelectionEnabled }
-							showStaffField={ providerSettings.staffEnabled }
+							showStaffField={ menuNominationEnabled }
 							lockStaffSelection={ shouldLockStaffSelection }
 							pricingRows={ pricingRows }
 							menuPreviewLoading={ menuPreview.isLoading }
@@ -2283,6 +2544,32 @@ export const ReservationApp = ( {
 
 					{ hasMenuSelection && (
 						<div className="vkbm-reservation-content__body">
+							{ /* #411: 管理者・サイトオーナー・サロンオーナー向けの診断バナー。
+							     一般訪問者にはサーバー側でフィールド自体が付与されないため、
+							     常に空文字になり hidden のまま何も表示されない。
+							     role="status" + aria-live="polite" は、利用者の操作結果ではなく
+							     月表示時に受動的に現れる情報のため（role="alert" は使わない）。 */ }
+							<div
+								className="vkbm-alert vkbm-alert__warning vkbm-alert--compact vkbm-alert--admin-diagnostic"
+								role="status"
+								aria-live="polite"
+								hidden={ ! adminDiagnosticMessage }
+							>
+								<svg
+									className="vkbm-alert--admin-diagnostic__icon"
+									viewBox="0 0 24 24"
+									width="18"
+									height="18"
+									aria-hidden="true"
+									focusable="false"
+								>
+									<path
+										fill="currentColor"
+										d="M12 2 1 21h22L12 2Zm0 5.5 7.53 12.5H4.47L12 7.5ZM11 10v5h2v-5h-2Zm0 6.5v2h2v-2h-2Z"
+									/>
+								</svg>
+								<p>{ adminDiagnosticMessage }</p>
+							</div>
 							<CalendarGrid
 								year={ monthCursor.year }
 								month={ monthCursor.month }
@@ -2306,10 +2593,9 @@ export const ReservationApp = ( {
 									}
 									selectedSlotId={ selectedSlot?.slot_id }
 									isLoading={ slotLoading }
-									error={ calendarError || slotError }
-									showStaffLabel={
-										providerSettings.staffEnabled
-									}
+									error={ slotListError }
+									showStaffLabel={ menuNominationEnabled }
+									isNominationMenu={ menuNominationEnabled }
 									selectedStaffLabel={
 										staffId
 											? currentStaff?.title?.rendered ??
@@ -2366,11 +2652,28 @@ export const ReservationApp = ( {
 									</span>
 								) }
 							</div>
+							{ /* #393: 残り人数が最低申し込み人数に満たない枠は、料金区分側でも単一入力欄側と
+								対称に「この時間帯は最低人数を受け付けられません」を明示する
+								（安藤/司レビュー指摘）。区分ごとの入力欄と「もっと増やして」「もう十分」の
+								矛盾した警告が同時に出る状態を避けるため、通常の区分入力欄は出さない。 */ }
+							{ allowMultipleGuests &&
+								selectedSlot &&
+								hasPriceTiers &&
+								slotBelowNominationMinGuests && (
+									<div className="vkbm-plan-summary__guest-tiers">
+										<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
+											{ buildSlotBelowNominationMinGuestsMessage(
+												nominationMinGuests
+											) }
+										</p>
+									</div>
+								) }
 							{ /* 料金区分メニュー: 区分ごとに人数を入力する。 */ }
 							{ allowMultipleGuests &&
 								selectedSlot &&
 								maxSelectableGuests >= 1 &&
-								hasPriceTiers && (
+								hasPriceTiers &&
+								! slotBelowNominationMinGuests && (
 									<div className="vkbm-plan-summary__guest-tiers">
 										<span className="vkbm-plan-summary__guests-label">
 											{
@@ -2499,12 +2802,39 @@ export const ReservationApp = ( {
 												) }
 											</p>
 										) }
+										{ /* #393: 合計人数が指名メニューの最低申し込み人数に満たない場合の警告。 */ }
+										{ /* どの区分に何名を入れるかは予約者が決めるため、区分ごとに下限は割り振らず、警告表示と送信抑止に留める。 */ }
+										{ nominationMinGuests > 0 &&
+											guestTiersTotalCount <
+												nominationMinGuests && (
+												<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
+													{ buildNominationMinGuestsMessage(
+														nominationMinGuests
+													) }
+												</p>
+											) }
+									</div>
+								) }
+							{ /* #393: 残り人数が最低申し込み人数に満たない枠は、下限だけを引き上げた矛盾した
+								入力欄（min が max を超える）を出さず、その枠では申し込めないことと
+								理由を明示する（安藤/司レビュー指摘）。 */ }
+							{ allowMultipleGuests &&
+								selectedSlot &&
+								! hasPriceTiers &&
+								slotBelowNominationMinGuests && (
+									<div className="vkbm-plan-summary__guests">
+										<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
+											{ buildSlotBelowNominationMinGuestsMessage(
+												nominationMinGuests
+											) }
+										</p>
 									</div>
 								) }
 							{ /* 通常の複数人一括予約メニュー: 単一の人数入力。 */ }
 							{ allowMultipleGuests &&
 								selectedSlot &&
 								! hasPriceTiers &&
+								! slotBelowNominationMinGuests &&
 								maxSelectableGuests > 1 && (
 									<div className="vkbm-plan-summary__guests">
 										<label
@@ -2521,16 +2851,31 @@ export const ReservationApp = ( {
 											type="number"
 											id="vkbm-reservation-guests"
 											className="vkbm-plan-summary__guests-select"
-											min="1"
+											min={ Math.max(
+												1,
+												nominationMinGuests
+											) }
 											max={ maxSelectableGuests }
 											step="1"
 											value={ guests }
+											// #393: 説明文（案内文）と入力欄を関連付け、スクリーンリーダー利用者にも
+											// フォーカス時に読み上げられるようにする（植草レビュー指摘）。
+											// 案内文が出ない（最低申し込み人数0または1）のときは付けない。
+											aria-describedby={
+												nominationMinGuests > 1
+													? 'vkbm-reservation-guests-hint'
+													: undefined
+											}
 											onChange={ ( event ) =>
 												// 手入力で小数が入る可能性があるため整数へ正規化してから範囲内にクランプする。
+												// #393: 下限は最低申し込み人数（未適用なら1）。
 												setGuests(
 													Math.min(
 														Math.max(
-															1,
+															Math.max(
+																1,
+																nominationMinGuests
+															),
 															Math.floor(
 																Number(
 																	event.target
@@ -2543,6 +2888,23 @@ export const ReservationApp = ( {
 												)
 											}
 										/>
+										{ /* #393: 指名を使うメニューの最低申し込み人数を常時案内する。状態に依存しない
+											中立の文言（buildNominationMinGuestsHint()）を使う。既に条件を満たして
+											いる状態でも表示され続けるため、命令形のエラー・警告文言
+											（buildNominationMinGuestsMessage()）は使わない（植草レビュー指摘）。
+											最低申し込み人数が1のときは実質何も制限していないため表示しない
+											（安藤レビュー指摘。サーバー側の判定は `>0 && guests<min` のため、
+											1では常に偽になり挙動は変わらない）。 */ }
+										{ nominationMinGuests > 1 && (
+											<p
+												className="vkbm-plan-summary__hint"
+												id="vkbm-reservation-guests-hint"
+											>
+												{ buildNominationMinGuestsHint(
+													nominationMinGuests
+												) }
+											</p>
+										) }
 									</div>
 								) }
 							{ /* ユーザーによる貸し切り指定（#305）。人数入力の直下に表示する。 */ }
