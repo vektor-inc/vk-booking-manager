@@ -3,7 +3,7 @@
 	align-items: center;
 	appearance: none;
 	border: 1px solid transparent;
-	border-radius: var(--vkbm--radius--sm, 6px);
+	border-radius: var(--vkbm--radius--sm, 4px);
 	cursor: pointer;
 	display: inline-flex;
 	font: inherit;
@@ -54,13 +54,13 @@
 .vkbm-button__xs {
 	padding: 3px 0.8rem;
 	font-size: 0.75rem;
-	border-radius: var(--vkbm--radius--sm, 3px);
+	border-radius: var(--vkbm--radius--sm, 4px);
 }
 
 .vkbm-button__sm {
 	padding: 0.4rem 1rem;
 	font-size: 0.88rem;
-	border-radius: var(--vkbm--radius--sm, 3px);
+	border-radius: var(--vkbm--radius--sm, 4px);
 }
 
 .vkbm-button__lg {

@@ -2,7 +2,7 @@
 	margin: 0 0 1.25rem;
 	padding: 0.85rem 1rem;
 	border: 1px solid transparent;
-	border-radius: var(--vkbm--radius--md);
+	border-radius: var(--vkbm--radius--md, 8px);
 	background: #f8fafc;
 	color: #0f172a;
 	font-size: 0.95rem;

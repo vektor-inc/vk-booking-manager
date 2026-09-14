@@ -1,4 +1,15 @@
-@forward "variables";
+// 角丸・色・余白などの CSS カスタムプロパティ定義（variables.scss の :root ブロック）は
+// ここで @forward しない。各ブロックの style.scss は webpack 経由で個別にビルドされるため、
+// @forward してしまうとブロックごとのビルド成果物（build/blocks/*/style-index.css）に
+// :root{...} が重複出力される。同じ :root への CSS カスタムプロパティ宣言は「後から
+// 読み込まれた方が勝つ」ため、ブロック CSS の重複した既定値（8px 等）が、基本設定
+// （プロバイダー設定）で指定した値を上書きしてしまう不具合の原因になっていた
+// （issue #420）。:root の実体は bin/build-css-bundles.js の vkbm-variables バンドル
+// （variables.scss のみを含む）に一元化し、Common_Styles::enqueue_variables() が
+// enqueue_block_assets（フロント・管理画面・ブロックエディターのキャンバス iframe の
+// いずれでも発火する）でこれを読み込んだうえで設定値をインライン CSS として付与する。
+// ブロック側は var(--vkbm--radius--md, ...) のようにフォールバック値付きで参照するだけ
+// でよい（フォールバック値は、vkbm-variables が万一読み込まれていない状況での保険）。
 @forward "common";
 @forward "alert";
 @forward "utility";

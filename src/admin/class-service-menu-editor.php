@@ -274,7 +274,20 @@ class Service_Menu_Editor {
 			</th>
 			<td>
 				<input type="number" id="vkbm_service_menu_reservation_deadline" name="vkbm_service_menu[reservation_deadline_hours]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $reservation_deadline ); ?>" /> <?php esc_html_e( 'hours ago', 'vk-booking-manager' ); ?>
-				<p class="description"><?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?></p>
+				<p class="description">
+					<?php
+					// 未記入の場合の説明（基本設定画面の該当欄へのリンク付き）。
+					printf(
+						/* translators: %s: link to the reservation deadline setting on the provider settings page. */
+						esc_html__( 'If not filled in, the information entered on %s will be reflected.', 'vk-booking-manager' ),
+						sprintf(
+							'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+							esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-provider-reservation-deadline' ) ),
+							esc_html__( 'Reservation deadline on the General Settings page', 'vk-booking-manager' )
+						)
+					);
+					?>
+				</p>
 			</td>
 		</tr>
 		<tr>
@@ -285,7 +298,18 @@ class Service_Menu_Editor {
 				<input type="number" id="vkbm_service_menu_max_advance_booking_days" name="vkbm_service_menu[max_advance_booking_days]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $max_advance_days ); ?>" /> <?php esc_html_e( 'days', 'vk-booking-manager' ); ?>
 				<p class="description">
 					<?php esc_html_e( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ); ?><br>
-					<?php esc_html_e( 'If not filled in, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?>
+					<?php
+					// 未記入の場合の説明（基本設定画面の該当欄へのリンク付き）。
+					printf(
+						/* translators: %s: link to the max advance booking period setting on the provider settings page. */
+						esc_html__( 'If not filled in, the information entered on %s will be reflected.', 'vk-booking-manager' ),
+						sprintf(
+							'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+							esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-provider-max-advance-booking-days' ) ),
+							esc_html__( 'Max advance booking period on the General Settings page', 'vk-booking-manager' )
+						)
+					);
+					?>
 				</p>
 			</td>
 		</tr>
@@ -369,7 +393,7 @@ class Service_Menu_Editor {
 				</label>
 			</th>
 			<td>
-				<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
+				<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text vkbm-price-input" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
 			</td>
 		</tr>
 		<?php
@@ -401,10 +425,13 @@ class Service_Menu_Editor {
 						// 「外さないと設定できない」と誤解して意図せず指名をOFFにしてしまうのを防ぐため、
 						// 「予約枠の定員・複数人一括予約はこのチェックの状態に関わらず常に表示される」という
 						// 新しい事実に置き換える。
+						// #440: 以前はこの下に「このチェックを外すと貸し切り予約系の設定が現れる」という
+						// 説明文があった。最少催行人数・料金区分・貸し切り予約・予約者による貸切指定の
+						// 4欄はすべて指名の有無に関わらず表示されるようになったため
+						// （$show_multi_guest_dependent_fields を参照）、このチェックを外すことで新たに
+						// 現れる設定は無くなった。実態に合わせて説明文自体を削除する。
 						esc_html_e( 'The time slot capacity and multi-guest booking settings below are shown regardless of this checkbox.', 'vk-booking-manager' );
 						?>
-						<br>
-						<?php esc_html_e( 'Unchecking this also reveals additional settings, such as minimum participants, private booking, and price categories, when multi-guest booking is enabled.', 'vk-booking-manager' ); ?>
 					</p>
 				</td>
 			</tr>
@@ -458,7 +485,18 @@ class Service_Menu_Editor {
 				<input type="number" id="vkbm_service_menu_buffer_after" name="vkbm_service_menu[buffer_after_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $buffer_after_minutes ); ?>" />
 				<p class="description">
 					<?php esc_html_e( 'During the service time plus the buffer time, new reservations will not be accepted.', 'vk-booking-manager' ); ?><br>
-					<?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?>
+					<?php
+					// 未記入の場合の説明（基本設定画面の該当欄へのリンク付き）。
+					printf(
+						/* translators: %s: link to the post-service buffer setting on the provider settings page. */
+						esc_html__( 'If it is left blank, the information entered on %s will be reflected.', 'vk-booking-manager' ),
+						sprintf(
+							'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+							esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-service-menu-buffer-after-default' ) ),
+							esc_html__( 'Post-service buffer on the General Settings page', 'vk-booking-manager' )
+						)
+					);
+					?>
 				</p>
 			</td>
 		</tr>
@@ -517,11 +555,19 @@ class Service_Menu_Editor {
 				// 複数人一括予約の2フィールドは「Staff nomination」チェックボックスの状態に関わらず
 				// 常に表示する（以前はここに「指名ONなら案内メッセージのみ、指名OFFなら実フィールド」
 				// という出し分けがあったが、指名を使うメニューでも定員＝1組の最大人数として使うため撤去した）。
-				// 一方、複数の別々の予約が相乗りする前提の「貸し切り予約・予約者による貸切指定・
-				// 貸切料金」は、指名を使うメニュー（常に1枠1組）では意味を持たないため、引き続き
-				// 「指名を使わない」を表示条件に含める（$show_multi_guest_fields）。最少催行人数
-				// （指名を使うメニューでは「最低申し込み人数」）は #393 でこのグループから外れ、
-				// 別ゲート（$show_min_capacity_field。後述）へ切り出した。
+				//
+				// #393・#440: 最少催行人数（指名を使うメニューでは「最低申し込み人数」）・料金区分・
+				// 貸し切り予約・予約者による貸切指定の4欄はすべて「複数人一括予約ON かつ 予約枠の定員
+				// 2以上」の2条件のみで出し分ける（指名の有無を問わない）。以前は貸切系2欄だけ
+				// 「指名を使わない」も条件に含めていたが、指名を使うメニューでも貸切設定を編集・
+				// 利用できるようにする仕様変更でこの区別を撤廃し、$show_multi_guest_dependent_fields
+				// 1つに統一した。
+				//
+				// #440: 料金区分は元々「指名を使わない」を条件に含めていなかった。予約画面・予約確定処理
+				// （Booking_Confirmation_Controller::resolve_menu_price_tiers()）は #392 の時点で
+				// 「指名を使わない」条件を外しており、指名を使うメニューでも料金区分を適用している。
+				// 編集画面だけ「指名を使わない」で隠していたため、指名を使うメニューでは保存済みの
+				// 料金区分を確認・変更できない不整合があった。
 				//
 				// #412 A-1/A-4/B-4: 実フィールドは保存前後で表示条件が変わると保存事故（値の消失・
 				// 初期化）が起きるため、表示の出し分けは常に hidden 属性のみで行う（保存側は
@@ -533,15 +579,10 @@ class Service_Menu_Editor {
 				// 実効の予約枠の定員（未設定は既定1）。最少催行人数・貸切・料金区分は
 				// 複数人一括予約の相乗りが前提のため、ここが2以上のときだけ意味を持つ（#320）。
 				$max_capacity_value = '' === $max_capacity ? 1 : max( 1, (int) $max_capacity );
-				// 複数人一括予約系の追加設定（貸切・料金区分）を初期表示するか。
-				// 「指名を使わない かつ 複数人一括予約ON かつ 予約枠の定員2以上」のときだけ表示する。
-				// それ以外は hidden で隠し、JS でも連動させる。
-				$show_multi_guest_fields = ! $is_nomination_enabled && $allow_multi_guests && $max_capacity_value >= 2;
-				// #393: 最少催行人数／最低申し込み人数の欄は、指名を使うメニューでは意味が
-				// 「催行状態の表示用しきい値」から「1組の最低人数（受付制限）」に変わるだけで、
-				// 引き続き意味を持つ。そのため他の3設定と異なり「指名を使わない」を表示条件に含めない
-				// （複数人一括予約ON かつ 予約枠の定員2以上、の2条件のみ）。
-				$show_min_capacity_field = $allow_multi_guests && $max_capacity_value >= 2;
+				// 最少催行人数（最低申し込み人数）・料金区分・貸し切り予約・予約者による貸切指定の
+				// 4欄を初期表示するか。「複数人一括予約ON かつ 予約枠の定員2以上」のときだけ表示し、
+				// それ以外は hidden で隠す（JS でも連動させる）。指名の有無はこの表示条件に含めない。
+				$show_multi_guest_dependent_fields = $allow_multi_guests && $max_capacity_value >= 2;
 				?>
 				<tr id="vkbm-max-capacity-field">
 					<th scope="row">
@@ -561,7 +602,7 @@ class Service_Menu_Editor {
 						</p>
 					</td>
 				</tr>
-				<tr id="vkbm-min-capacity-field" <?php echo $show_min_capacity_field ? '' : 'hidden'; ?>>
+				<tr id="vkbm-min-capacity-field" <?php echo $show_multi_guest_dependent_fields ? '' : 'hidden'; ?>>
 					<th scope="row">
 						<label for="vkbm_service_menu_min_capacity" id="vkbm-min-capacity-label">
 							<?php
@@ -612,20 +653,23 @@ class Service_Menu_Editor {
 								'<a href="' . esc_url( admin_url( 'admin.php?page=vkbm-provider-settings' ) ) . '">' . esc_html__( 'Basic settings', 'vk-booking-manager' ) . '</a>'
 							);
 							?>
-							<?php if ( ! $is_nomination_enabled ) : ?>
-								<br>
-								<?php
-								// 「消えた」誤解の予防：追加設定が現れる条件を一行で案内する（#320）。
-								// 指名を使うメニューではこれらの設定自体を表示しないため、この案内も出さない。
-								esc_html_e( 'When this is enabled and the time slot capacity is 2 or more, settings such as minimum participants, private booking, and price categories are shown.', 'vk-booking-manager' );
-								?>
-							<?php endif; ?>
+							<br>
+							<?php
+							// 「消えた」誤解の予防：追加設定が現れる条件を一行で案内する（#320）。
+							// #440: 画面を開いた時点の指名の有無で文言が固定され、保存せず
+							// 「このメニューで指名を使う」を切り替えると実際に出る欄と説明文がずれるため、
+							// 指名の有無で文言を出し分けず1本の文言に統一した。「貸し切り予約」系の設定も
+							// 指名の有無に関わらず表示されるため（$show_multi_guest_dependent_fields を
+							// 参照）、最少催行人数・料金区分・貸し切り予約系設定をまとめて1文で言い切る
+							// （「など」は使わず、実際に表示される設定をすべて列挙する）。
+							esc_html_e( 'When this is enabled and the time slot capacity is 2 or more, the minimum participants (labeled "minimum guests to accept a booking" for menus that use staff nomination), price category, and private booking settings are shown.', 'vk-booking-manager' );
+							?>
 						</p>
 					</td>
 				</tr>
-				<?php $this->render_exclusive_when_booked_field( $post, $show_multi_guest_fields ); ?>
-				<?php $this->render_exclusive_user_selectable_field( $post, $show_multi_guest_fields ); ?>
-				<?php $this->render_price_tiers_field( $post, $show_multi_guest_fields ); ?>
+				<?php $this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields ); ?>
+				<?php $this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields ); ?>
+				<?php $this->render_price_tiers_field( $post, $show_multi_guest_dependent_fields ); ?>
 			<?php endif; ?>
 		<?php else : ?>
 			<?php
@@ -858,6 +902,7 @@ class Service_Menu_Editor {
 	 * 「貸し切り予約」設定の行を出力する。
 	 *
 	 * ONにすると、1件でも予約が入った時間帯は残り枠があっても他のユーザーが予約できなくなる。
+	 * 指名を使うメニューでは、この排他は担当スタッフ単位（その予約の担当者の時間帯のみ）で効く。
 	 * 複数人一括予約の相乗り（複数人一括予約ON かつ 予約枠の定員2以上）のときだけ意味を持つ設定のため、
 	 * 料金区分欄と同じく条件未達時は hidden で隠し、JS（service-menu-editor.js）で
 	 * 複数人一括予約チェック・予約枠の定員の変更と表示を連動させる（#320）。
@@ -880,6 +925,12 @@ class Service_Menu_Editor {
 				</label>
 				<p class="description" id="<?php echo esc_attr( $description_id ); ?>">
 					<?php esc_html_e( 'When enabled, once even a single booking is placed in a time slot, other users can no longer book that slot even if seats remain.', 'vk-booking-manager' ); ?><br>
+					<?php
+					// 編集画面は保存せずに「このメニューで指名を使う」を切り替えられるため、
+					// この文言も指名の有無で出し分けず1本の文言に統一し、両方の動きを1文で説明する。
+					esc_html_e( 'For menus that use staff nomination, this only closes that booking\'s staff member for the time slot, and other staff members remain bookable.', 'vk-booking-manager' );
+					?>
+					<br>
 					<?php esc_html_e( 'This is intended for tours where strangers should not share the same slot (e.g. SUP, diving).', 'vk-booking-manager' ); ?>
 				</p>
 			</td>
@@ -891,7 +942,8 @@ class Service_Menu_Editor {
 	 * 「ユーザーによる貸し切り指定」設定の行を出力する（#305）。
 	 *
 	 * ONにすると、予約者がフロントの予約画面で「この時間帯を貸切にする」を選択できるようになる。
-	 * チェックON時のみ第二段（貸し切り料金・適用しない申込人数）を表示する。
+	 * チェックON時のみ第二段（貸し切り料金・適用しない申込人数）を表示する。指名を使うメニューでは、
+	 * 「最初の予約者のみ」の判定・排他とも担当スタッフ単位（その予約の担当者の時間帯のみ）で効く。
 	 * 複数人一括予約の相乗り（複数人一括予約ON かつ 予約枠の定員2以上）のときだけ意味を持つ設定のため、
 	 * 貸し切り予約・料金区分欄と同じく条件未達時は hidden で隠し、
 	 * JS（service-menu-editor.js）で複数人一括予約チェック・予約枠の定員の変更と表示を連動させる（#320）。
@@ -917,7 +969,22 @@ class Service_Menu_Editor {
 				</label>
 				<p class="description" id="<?php echo esc_attr( $description_id ); ?>">
 					<?php esc_html_e( 'Only the first person to book the same date and time can choose this.', 'vk-booking-manager' ); ?><br>
-					<?php esc_html_e( 'It can be chosen only when the number of guests meets the minimum participants to confirm.', 'vk-booking-manager' ); ?><br>
+					<?php
+					// 編集画面は保存せずに「このメニューで指名を使う」を切り替えられるため、
+					// この文言も指名の有無で出し分けず1本の文言に統一し、両方の動きを1文で説明する。
+					esc_html_e( 'For menus that use staff nomination, this is judged per staff member, not for the whole time slot.', 'vk-booking-manager' );
+					?>
+					<br>
+					<?php
+					// #440: 「最低人数」が画面の正式ラベル（指名を使わないメニューは「最少催行人数」、
+					// 指名を使うメニューは「最低申し込み人数」）のどちらとも異なる表記だったため、
+					// 上の「複数人一括予約を許可する」の説明文と同じ「the minimum participants
+					// （指名を使うメニューでは "minimum guests to accept a booking"）」という
+					// 言い回しに揃えた。ラベル違いをこの1文で説明できるため、重複していた
+					// 「指名を使うメニューでは…最低申し込み人数です」という別文は削除した。
+					esc_html_e( 'It can be chosen only when the number of guests meets this menu\'s minimum participants (labeled "minimum guests to accept a booking" for menus that use staff nomination).', 'vk-booking-manager' );
+					?>
+					<br>
 					<?php esc_html_e( 'This setting cannot be used together with "Private booking" for this menu.', 'vk-booking-manager' ); ?><br>
 					<?php esc_html_e( 'While "Private booking" is on, this setting is ignored.', 'vk-booking-manager' ); ?>
 				</p>
@@ -925,7 +992,7 @@ class Service_Menu_Editor {
 					<p>
 						<label for="vkbm_service_menu_exclusive_fee_per_person" class="vkbm-exclusive-fee-label">
 							<span class="text-nowrap"><?php esc_html_e( 'Private booking fee', 'vk-booking-manager' ); ?></span>
-							<span class="text-nowrap"><?php echo esc_html( $currency_symbol ); ?><input type="number" id="vkbm_service_menu_exclusive_fee_per_person" name="vkbm_service_menu[exclusive_fee_per_person]" class="small-text" min="0" step="1" value="<?php echo esc_attr( (string) $fee_per_person ); ?>" /> 
+							<span class="text-nowrap"><?php echo esc_html( $currency_symbol ); ?><input type="number" id="vkbm_service_menu_exclusive_fee_per_person" name="vkbm_service_menu[exclusive_fee_per_person]" class="small-text vkbm-price-input" min="0" step="1" value="<?php echo esc_attr( (string) $fee_per_person ); ?>" /> 
 							<?php
 								/* translators: per one guest unit suffix shown after the private booking fee input. */
 								esc_html_e( '/ per guest', 'vk-booking-manager' );
@@ -995,7 +1062,7 @@ class Service_Menu_Editor {
 							<input
 								type="number"
 								name="vkbm_service_menu[price_tiers][price][]"
-								class="small-text vkbm-price-tier-price"
+								class="small-text vkbm-price-input vkbm-price-tier-price"
 								min="0"
 								step="1"
 								value="<?php echo esc_attr( (string) $tier['price'] ); ?>"
@@ -1245,9 +1312,12 @@ class Service_Menu_Editor {
 		// として扱う仕様変更に伴い、予約枠の定員・複数人一括予約・料金区分は
 		// `Staff_Editor::is_multi_guest_available_for_menu()` から「指名OFF」条件を除去したため、
 		// ここで保存された値は指名ON中も実際に適用される（=「保持していても無害」ではなく
-		// 「意図どおり効く値」に変わった）。一方、貸し切り予約・予約者による貸切指定・貸切料金の
-		// 3設定は引き続き `Staff_Editor::is_exclusive_booking_available_for_menu()`（指名OFF条件を
-		// 維持）が判定するため、指名ONメニューでは無効のまま抑止される（多層防御はこの3設定のみ）。
+		// 「意図どおり効く値」に変わった）。#440で「貸し切り予約・予約者による貸切指定・
+		// 貸切料金」3設定も `Staff_Editor::is_exclusive_booking_available_for_menu()`
+		// から「指名OFF」条件を除去したため、指名を使うメニューでも保存した値がそのまま適用される
+		// （3設定だけを別扱いにしていた以前の多層防御は無くなった。ただし予約時の排他制御は
+		// 「メニュー全体」ではなく「担当スタッフ単位」に変わる。実装は
+		// Booking_Draft_Controller / Booking_Confirmation_Controller 側）。
 		if ( $is_pro_edition && Staff_Editor::is_slot_capacity_enabled() ) {
 			$this->update_meta_value( $post_id, self::META_MAX_CAPACITY, $max_capacity );
 			// 最小催行人数を保存。0（制約なし）はメタを削除して従来挙動へ戻す。

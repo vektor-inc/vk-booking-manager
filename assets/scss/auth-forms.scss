@@ -1,7 +1,7 @@
 .vkbm-auth-card {
 	max-width: 520px;
 	border: 1px solid var(--vkbm--color--border);
-	border-radius: var(--vkbm--radius--md);
+	border-radius: var(--vkbm--radius--md, 8px);
 	background-color: var(--vkbm--color--bg-primary);
 	padding: var(--vkbm--spacing--lg);
 	margin: var(--vkbm--spacing--md) auto 0;

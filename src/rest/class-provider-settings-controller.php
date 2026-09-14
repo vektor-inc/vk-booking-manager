@@ -89,15 +89,20 @@ class Provider_Settings_Controller {
 		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
 
 		// 指名関連ラベルを取得する（ヘルパー関数がフォールバックを処理）。
-		$no_nomination_label    = vkbm_get_no_nomination_label();
-		$nomination_fee_label   = vkbm_get_nomination_fee_label();
-		$provider_name          = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
-		$provider_logo_id       = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
-		$reservation            = $this->normalize_reservation_page_url(
+		$no_nomination_label  = vkbm_get_no_nomination_label();
+		$nomination_fee_label = vkbm_get_nomination_fee_label();
+		$provider_name        = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
+		$provider_logo_id     = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
+		$reservation          = $this->normalize_reservation_page_url(
 			isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : ''
 		);
-		$show_menu_list         = ! empty( $settings['reservation_show_menu_list'] );
-		$menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
+		$show_menu_search     = ! empty( $settings['reservation_show_menu_search'] );
+		// #431: 「リソースタグ検索」。タクソノミー自体が Pro 版でしか登録されないため、
+		// 万一 Free 版で設定値が残っていても taxonomy_exists() で実効的に無効化する。
+		$resource_tag_search_enabled = ! empty( $settings['resource_tag_search_enabled'] )
+			&& taxonomy_exists( \VKBookingManager\Resources\Resource_Tag_Taxonomy::TAXONOMY );
+		$show_menu_list              = ! empty( $settings['reservation_show_menu_list'] );
+		$menu_list_display_mode      = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
 		if ( ! in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$menu_list_display_mode = 'card';
 		}
@@ -146,6 +151,8 @@ class Provider_Settings_Controller {
 				'provider_name'                      => $provider_name,
 				'provider_logo_url'                  => $provider_logo_url,
 				'reservation_page_url'               => $reservation,
+				'reservation_show_menu_search'       => $show_menu_search,
+				'resource_tag_search_enabled'        => $resource_tag_search_enabled,
 				'reservation_show_menu_list'         => $show_menu_list,
 				'reservation_menu_list_display_mode' => $menu_list_display_mode,
 				'reservation_show_provider_logo'     => $show_provider_logo,

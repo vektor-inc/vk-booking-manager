@@ -62,7 +62,7 @@
 .vkbm-menu-loop__card-item {
 	background: #fff;
 	border: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
-	border-radius: var(--vkbm--radius--md);
+	border-radius: var(--vkbm--radius--md, 8px);
 
 	p {
 		text-box: trim-both text;
@@ -89,7 +89,7 @@
 		height: 100%;
 		object-fit: cover;
 		width: 100%;
-		border-radius: var(--vkbm--radius--md);
+		border-radius: var(--vkbm--radius--md, 8px);
 	}
 }
 
@@ -109,7 +109,7 @@
 
 .vkbm-menu-loop__card-categories li {
 	// border: 1px solid var(--wp--preset--color--primary, #007cba);
-	border-radius: var(--vkbm--radius--sm);
+	border-radius: var(--vkbm--radius--sm, 4px);
 	color: var(--wp--preset--color--primary, #007cba);
 	font-size: 0.75rem;
 	line-height: 1;
@@ -197,7 +197,7 @@
 		background-color: #e5e5e5;
 		text-align: center;
 		padding: 3px 1em;
-		border-radius: var(--vkbm--radius--sm);
+		border-radius: var(--vkbm--radius--sm, 4px);
 	}
 
 	dd {

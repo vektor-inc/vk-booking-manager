@@ -351,6 +351,30 @@
 		}
 	}
 
+	// #431: 「リソースタグ検索」は「絞り込み検索」の子項目。親（絞り込み検索）のチェックが
+	// 外れたら、子（リソースタグ検索）のチェックも自動的に外す（updateReservationMenuListModeState
+	// と同じ流儀）。Free版・非Pro版では子チェックボックス自体が描画されないため、
+	// $child.length が0のときは何もしない。
+	function updateResourceTagSearchState() {
+		const $parent = $( '#vkbm-reservation-show-menu-search' );
+		const $child = $( '#vkbm-resource-tag-search-enabled' );
+		if ( ! $parent.length || ! $child.length ) {
+			return;
+		}
+
+		const parentChecked = $parent.is( ':checked' );
+
+		if ( ! parentChecked ) {
+			$child.prop( 'checked', false );
+		}
+
+		// #431: updateReservationMenuListModeState() と同じ流儀で、
+		// 親（絞り込み検索）がOFFの間は子（リソースタグ検索）を disabled にする。
+		// disabled の input はフォーム送信時に送られないため、サーバー側
+		// （Settings_Sanitizer）の「親OFFなら強制OFF」判定と結果が一致することを確認済み。
+		$child.prop( 'disabled', ! parentChecked );
+	}
+
 	function updatePrivacyPolicyModeState() {
 		const $select = $( '#vkbm-provider-privacy-policy-mode' );
 		const $urlField = $( '#vkbm-provider-privacy-policy-url-field' );
@@ -762,6 +786,14 @@
 
 	$( document ).on(
 		'change',
+		'#vkbm-reservation-show-menu-search',
+		function () {
+			updateResourceTagSearchState();
+		}
+	);
+
+	$( document ).on(
+		'change',
 		'#vkbm-provider-privacy-policy-mode',
 		function () {
 			updatePrivacyPolicyModeState();
@@ -801,6 +833,7 @@
 
 		updateBookingCancelModeState();
 		updateReservationMenuListModeState();
+		updateResourceTagSearchState();
 		updatePrivacyPolicyModeState();
 		initColorPicker();
 		initIconPickers();

@@ -1,13 +1,21 @@
 <?php
 /**
- * Staff_Editor::is_multi_guest_available_for_menu() / is_exclusive_booking_available_for_menu() のテスト（#392）。
+ * Staff_Editor::is_multi_guest_available_for_menu() / is_exclusive_booking_available_for_menu() のテスト（#392・#440）。
  *
- * 指名を使うメニューを「1枠1組（貸切）」として扱う仕様変更に伴い、
+ * 指名を使うメニューを「1枠1組（貸切）」として扱う仕様変更（#392）に伴い、
  * - 予約枠の定員・複数人一括予約・料金区分のゲート（is_multi_guest_available_for_menu）から
  *   「このメニューで指名機能を使っていないこと」を外した
  * - 貸し切り予約・予約者による貸切指定・貸切料金のゲート（is_exclusive_booking_available_for_menu）は
- *   引き続き「指名OFF」を要求する（新設メソッド）
- * という2つのメソッドに分岐したことを検証する。
+ *   当初、引き続き「指名OFF」を要求していた（新設メソッド）
+ * という2つのメソッドに分岐した。
+ *
+ * #440: 指名を使うメニューでも貸切系3設定（貸し切り予約・予約者による
+ * 貸切指定・貸切料金）を編集画面で設定・予約時に適用できるようにする仕様変更に伴い、
+ * is_exclusive_booking_available_for_menu() からも「指名OFF」条件を外した。予約時の排他制御は
+ * 「メニュー全体」ではなく「担当スタッフ単位」に変わる（実装は
+ * Booking_Draft_Controller / Booking_Confirmation_Controller 側で、別テストファイルで検証する）。
+ * その結果、両メソッドの判定結果は同じ（Pro版であること・予約枠の定員機能ON）になったが、
+ * 呼び出し元が意味する対象を区別できるよう別名のまま維持されているため、引き続き両方をテストする。
  *
  * @package VKBookingManager
  */
@@ -142,8 +150,11 @@ class Staff_Editor_Multi_Guest_And_Exclusive_Booking_Gates_Test extends WP_UnitT
 	}
 
 	/**
-	 * is_exclusive_booking_available_for_menu() が、is_multi_guest_available_for_menu() と異なり
-	 * 「このメニューで指名機能を使っていないこと」を引き続き要求することを検証する（#392）。
+	 * is_exclusive_booking_available_for_menu() が、#440により
+	 * 「このメニューで指名機能を使っていないこと」を条件にしなくなり、
+	 * is_multi_guest_available_for_menu() と同じ2条件（Pro版・予約枠の定員機能ON）で
+	 * 判定されることを検証する。指名を使うメニューの貸切は「担当スタッフ単位」で排他制御する
+	 * ため、本メソッド自体は指名の有無で結果を変えない。
 	 *
 	 * Pro版であることが前提のため、無料版ビルドでは常に false になりスキップする。
 	 */
@@ -161,11 +172,11 @@ class Staff_Editor_Multi_Guest_And_Exclusive_Booking_Gates_Test extends WP_UnitT
 				'expected'            => true,
 			),
 			array(
-				'test_condition_name' => '予約枠の定員機能ON・指名ON（メニュー単位設定なし＝既定で使う） => false（指名を使うメニューは貸切系設定を利用不可）',
+				'test_condition_name' => '予約枠の定員機能ON・指名ON（メニュー単位設定なし＝既定で使う） => true（#440：指名を使うメニューでも貸切系設定を利用可能。排他はスタッフ単位）',
 				'slot_capacity'       => true,
 				'staff_enabled'       => true,
 				'disable_nomination'  => null,
-				'expected'            => false,
+				'expected'            => true,
 			),
 			array(
 				'test_condition_name' => '予約枠の定員機能ON・サイト全体は指名ONだがメニュー単位で指名を無効化 => true（自動割り当てに切替）',

@@ -23,6 +23,7 @@ use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 use WP_Query;
@@ -41,9 +42,11 @@ class Booking_Admin {
 	private const NONCE_ACTION = 'vkbm_booking_meta';
 	private const NONCE_NAME   = '_vkbm_booking_meta_nonce';
 
-	private const META_DATE_START             = '_vkbm_booking_service_start';
-	private const META_DATE_END               = '_vkbm_booking_service_end';
-	private const META_RESOURCE_ID            = '_vkbm_booking_resource_id';
+	private const META_DATE_START  = '_vkbm_booking_service_start';
+	private const META_DATE_END    = '_vkbm_booking_service_end';
+	private const META_RESOURCE_ID = '_vkbm_booking_resource_id';
+	// #431: 予約時に指定したリソースタグ（希望タグ）のターム ID 配列。
+	private const META_RESOURCE_TAG_IDS       = '_vkbm_booking_resource_tag_ids';
 	private const META_SERVICE_ID             = '_vkbm_booking_service_id';
 	private const META_CUSTOMER               = '_vkbm_booking_customer_name';
 	private const META_CUSTOMER_TEL           = '_vkbm_booking_customer_tel';
@@ -296,9 +299,13 @@ class Booking_Admin {
 	public function render_meta_box( WP_Post $post ): void {
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
-		$start                   = get_post_meta( $post->ID, self::META_DATE_START, true );
-		$end                     = get_post_meta( $post->ID, self::META_DATE_END, true );
-		$resource_id             = (int) get_post_meta( $post->ID, self::META_RESOURCE_ID, true );
+		$start       = get_post_meta( $post->ID, self::META_DATE_START, true );
+		$end         = get_post_meta( $post->ID, self::META_DATE_END, true );
+		$resource_id = (int) get_post_meta( $post->ID, self::META_RESOURCE_ID, true );
+		// #431: 予約時に指定したリソースタグ（希望タグ）。タグ未指定の予約はメタ自体が無い。
+		$resource_tag_ids        = get_post_meta( $post->ID, self::META_RESOURCE_TAG_IDS, true );
+		$resource_tag_ids        = is_array( $resource_tag_ids ) ? array_map( 'intval', $resource_tag_ids ) : array();
+		$resource_tag_labels     = Resource_Tag_Taxonomy::get_labels_for_tag_ids( $resource_tag_ids );
 		$service_id              = (int) get_post_meta( $post->ID, self::META_SERVICE_ID, true );
 		$has_base_price_snapshot = metadata_exists( 'post', $post->ID, self::META_SERVICE_BASE_PRICE );
 		$service_base_price      = $has_base_price_snapshot
@@ -444,8 +451,76 @@ class Booking_Admin {
 							// 同じ時間帯に別予約があるスタッフ（保存時刻時点）を JS でプルダウンから除外するため、IDを渡す。
 							// #394: 指名OFF・定員2以上のメニューでは「残数不足」も除外条件になるため、人数も渡す。
 							$vkbm_conflict_staff_ids = $this->get_conflicting_staff_ids( (int) $post->ID, (string) $start, (string) $end, $service_id, (int) $guests );
+							// #446 安藤さんレビュー対応: 選択肢として実際に存在するリソースID一覧。競合警告の
+							// 「選択肢に無い担当なら出さない」判定（is_selected_resource_conflicting）と、除外の注記の
+							// 隠れ件数判定（count_hidden_resource_options）の両方で、同じ配列を使って基準を揃える。
+							$vkbm_resource_option_ids = wp_list_pluck( $resources, 'ID' );
+
+							/*
+							 * #446: 選択中の担当者が、この日時では担当できない（除外一覧に含まれる）ときに出す警告の
+							 * class・role・文言を、基本設定「同じスタッフの重複予約」(provider_allow_staff_overlap_admin)
+							 * の設定値で決める（司の決定: https://github.com/vektor-inc/vk-booking-manager-pro/pull/448#issuecomment-5659254607）。
+							 * 設定は描画時点の値を使う。保存時の動作（save_post の中断・admin_notices）は
+							 * この設定値をそのまま使っており変更しない。
+							 */
+							$vkbm_provider_settings   = ( new Settings_Repository() )->get_settings();
+							$vkbm_allow_overlap_admin = ! empty( $vkbm_provider_settings['provider_allow_staff_overlap_admin'] );
+							if ( $vkbm_allow_overlap_admin ) {
+								// 重複予約を許可する設定のため、このまま保存できる。危険度は「注意」（黄色・role=status）。
+								$vkbm_conflict_warning_class = 'vkbm-alert vkbm-alert__warning vkbm-alert--compact';
+								$vkbm_conflict_warning_role  = 'status';
+								/* translators: %1$s: Resource label (singular), e.g. "staff". */
+								$vkbm_conflict_warning_text = __( 'The selected %1$s cannot take this booking at this date and time (not enough remaining capacity, or another booking at the same time). You can still save because duplicate bookings are allowed in the settings.', 'vk-booking-manager' );
+							} else {
+								// 重複予約を許可しない設定のため、このままでは保存できない。危険度は「エラー」（赤・role=alert）。
+								$vkbm_conflict_warning_class = 'vkbm-alert vkbm-alert__danger vkbm-alert--compact';
+								$vkbm_conflict_warning_role  = 'alert';
+								/* translators: %1$s: Resource label (singular), e.g. "staff". */
+								$vkbm_conflict_warning_text = __( 'The selected %1$s cannot take this booking at this date and time (not enough remaining capacity, or another booking at the same time). You cannot save as is, so select another %1$s or change the date, time, or number of guests.', 'vk-booking-manager' );
+							}
+							// #446 安藤さんレビュー対応: 選択中の担当者そのものが、この日時では担当できない
+							// （除外一覧に含まれる）状態かどうか。次のいずれかに該当する場合は判定対象外とする:
+							// 未選択（0）／選択肢に存在しない担当（削除・非公開等）／キャンセル・無断キャンセル
+							// （is_staff_check_target_status() が false を返すステータス。save_post() の保存時
+							// チェックと同じ基準で、キャンセル・無断キャンセルは枠を消費しないため対象外）。
+							// プルダウン直下に出す vkbm-booking-resource-conflict-warning の表示・非表示に使う。
+							$vkbm_show_conflict_warning = self::is_staff_check_target_status( $status )
+								&& self::is_selected_resource_conflicting( $resource_id, $vkbm_conflict_staff_ids, $vkbm_resource_option_ids );
+							// #446: 除外一覧のうち、実際にプルダウンから隠される（選択肢として存在し、かつ選択中でない）
+							// スタッフが1件以上いるかどうかで、注記（vkbm-booking-resource-description）の
+							// 表示・非表示を決める。選択中のスタッフは除外一覧に含まれていても常に表示されるため、
+							// 除外一覧の件数そのものではなく、実際に隠れる件数で判定する。安藤さんレビュー対応:
+							// こちらはステータスによる出し分けをしない（除外の注記・選択肢の隠し方は今回の対応
+							// より前と同じ挙動のまま。警告（vkbm-booking-resource-conflict-warning）だけが対象）。
+							$vkbm_hidden_resource_option_count = self::count_hidden_resource_options(
+								$vkbm_conflict_staff_ids,
+								$vkbm_resource_option_ids,
+								$resource_id
+							);
+							$vkbm_show_resource_notice         = $vkbm_hidden_resource_option_count > 0;
+							// #446 安藤さんレビュー対応: 希望タグ警告（vkbm-booking-resource-tag-warning）は、
+							// 希望タグの有無に関わらず描画時点では常に hidden（担当変更後の判定結果を JS が
+							// その都度反映する警告のため、初期状態は必ず非表示）。そのため PHP 側では
+							// aria-describedby へ常に含めてはならない（含めると、非表示の要素を常時参照する
+							// ことになり、#431 が避けたかった状態に逆戻りする）。表示状態が変わるたびに
+							// JS（updateResourceTagWarning）が setResourceDescribedBy() で自分の ID を
+							// 足し引きする。選択中担当者の競合警告（vkbm-booking-resource-conflict-warning）と
+							// 除外の注記（vkbm-booking-resource-description）は、初期描画時点で表示状態が
+							// 確定しているため、ここで含める。並び順は「競合警告 → 除外の注記」で固定する
+							// （JS 側の RESOURCE_DESCRIBED_BY_ORDER と同じ順序）。
+							$vkbm_resource_described_by = array();
+							if ( $vkbm_show_conflict_warning ) {
+								$vkbm_resource_described_by[] = 'vkbm-booking-resource-conflict-warning';
+							}
+							if ( $vkbm_show_resource_notice ) {
+								$vkbm_resource_described_by[] = 'vkbm-booking-resource-description';
+							}
 							?>
-							<select id="vkbm-booking-resource" class="vkbm-booking-resource" name="vkbm_booking[resource_id]" data-conflict-staff-ids="<?php echo esc_attr( implode( ',', $vkbm_conflict_staff_ids ) ); ?>" aria-describedby="vkbm-booking-resource-description">
+							<select id="vkbm-booking-resource" class="vkbm-booking-resource" name="vkbm_booking[resource_id]" data-conflict-staff-ids="<?php echo esc_attr( implode( ',', $vkbm_conflict_staff_ids ) ); ?>" data-required-tag-ids="<?php echo esc_attr( implode( ',', $resource_tag_ids ) ); ?>"
+							<?php
+							if ( ! empty( $vkbm_resource_described_by ) ) :
+								?>
+								aria-describedby="<?php echo esc_attr( implode( ' ', $vkbm_resource_described_by ) ); ?>"<?php endif; ?>>
 								<option value="0">
 									<?php
 									printf(
@@ -456,25 +531,60 @@ class Booking_Admin {
 									?>
 								</option>
 								<?php foreach ( $resources as $resource ) : ?>
-									<option value="<?php echo esc_attr( (string) $resource->ID ); ?>" <?php selected( $resource_id, $resource->ID ); ?>>
+									<?php // #431: 担当変更時のタグ照合用に、リソースごとの保有タグ ID を data 属性で渡す。 ?>
+									<option value="<?php echo esc_attr( (string) $resource->ID ); ?>" data-tag-ids="<?php echo esc_attr( implode( ',', Resource_Tag_Taxonomy::get_tag_ids( (int) $resource->ID ) ) ); ?>" <?php selected( $resource_id, $resource->ID ); ?>>
 										<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
 									</option>
 								<?php endforeach; ?>
 							</select>
-							<p class="description" id="vkbm-booking-resource-description">
+							<?php // #446 安藤さんレビュー対応: 設定ON/OFFで class・role・文言を変数化し、<p> は1つにまとめる（要素は常に出力し hidden 属性で出し分け。ノードの出し入れはしない）。 ?>
+							<p id="vkbm-booking-resource-conflict-warning" class="<?php echo esc_attr( $vkbm_conflict_warning_class ); ?>" role="<?php echo esc_attr( $vkbm_conflict_warning_role ); ?>"<?php echo $vkbm_show_conflict_warning ? '' : ' hidden'; ?>>
+								<?php
+								printf(
+									esc_html( $vkbm_conflict_warning_text ),
+									esc_html( $vkbm_singular )
+								);
+								?>
+							</p>
+							<?php // #446: 除外という動作が起きていることを伝える注記。エラー・警告ではなく情報のため vkbm-alert__info を使う（除外0件では hidden）。 ?>
+							<p class="vkbm-alert vkbm-alert__info vkbm-alert--compact" id="vkbm-booking-resource-description" role="status"<?php echo $vkbm_show_resource_notice ? '' : ' hidden'; ?>>
 								<?php
 								// #394 レビュー対応（項目3）: 除外理由が「同一メニュー内の残数不足」と
 								// 「別メニューでの重複」の2種類に増えたため、プルダウンの表示・非表示だけでは
 								// 管理者の直感に反するケースが起き得る（同じメニューなら相乗りできるのに、
 								// 別メニューの予約が理由で消えている等）。個別の選択肢に理由を出す新しい
 								// 見せ方までは踏み込まず、説明文を1つ添えるにとどめる。
+								// #446: 「表示されません」は選択肢が欠けているように読めるため、「除外されています」の
+								// 意味へ見直す。あわせて、隠れている選択肢が0件のときはこの注記自体を hidden にする。
 								printf(
 									/* translators: %s: Resource label (singular), e.g. "staff". */
-									esc_html__( 'This list does not include %s without enough remaining capacity for this menu, or already booked for another menu at this time.', 'vk-booking-manager' ),
+									esc_html__( 'Any %s who cannot take this booking (not enough remaining capacity for this menu, or already booked for another menu at this time) are excluded from the options.', 'vk-booking-manager' ),
 									esc_html( $vkbm_singular )
 								);
 								?>
 							</p>
+							<?php if ( ! empty( $resource_tag_labels ) ) : ?>
+								<?php // #431: 予約時にユーザーが指定したリソースタグ（希望タグ）を表示する。 ?>
+								<p class="description vkbm-booking-resource-tag">
+									<?php
+									printf(
+										/* translators: %s: Comma-separated resource tag names requested by the customer. */
+										esc_html__( 'Requested tag: %s', 'vk-booking-manager' ),
+										esc_html( implode( ', ', $resource_tag_labels ) )
+									);
+									?>
+								</p>
+								<?php // #431: 担当変更時、変更先のリソースが希望タグを持っていない場合に JS で表示する警告（保存自体はブロックしない）。 ?>
+								<p id="vkbm-booking-resource-tag-warning" class="vkbm-alert vkbm-alert__warning vkbm-alert--compact" role="status" hidden>
+									<?php
+									printf(
+										/* translators: %s: Resource label (singular), e.g. "staff". */
+										esc_html__( 'The selected %s does not have the requested resource tag.', 'vk-booking-manager' ),
+										esc_html( $vkbm_singular )
+									);
+									?>
+								</p>
+							<?php endif; ?>
 							<?php
 							/*
 							 * #394: 指名を使うメニューでも複数人まで予約できるようになったため、人数編集の可否は
@@ -675,7 +785,7 @@ class Booking_Admin {
 								type="number"
 								id="vkbm-booking-billed-total-price"
 								name="vkbm_booking[billed_total_price]"
-								class="small-text"
+								class="small-text vkbm-price-input"
 								min="0"
 								step="1"
 								value="<?php echo esc_attr( '' === $billed_total_price ? '' : (string) max( 0, (int) $billed_total_price ) ); ?>"
@@ -725,7 +835,7 @@ class Booking_Admin {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="vkbm-booking-attachments"><?php esc_html_e( 'Treatment image', 'vk-booking-manager' ); ?></label></th>
+						<th scope="row"><label for="vkbm-booking-attachments"><?php esc_html_e( 'History image', 'vk-booking-manager' ); ?></label></th>
 						<td>
 							<div class="vkbm-booking-attachments">
 								<ul class="vkbm-booking-attachments__list" data-remove-label="<?php esc_attr_e( 'delete', 'vk-booking-manager' ); ?>">
@@ -878,7 +988,9 @@ class Booking_Admin {
 
 		// 担当スタッフをサーバー側で競合判定する。
 		// キャンセル・無断キャンセルは枠を消費しないため競合判定を行わない（他の集計と同じ扱い）。
-		if ( self::STATUS_CANCELLED !== $status && self::STATUS_NO_SHOW !== $status ) {
+		// #446 安藤さんレビュー対応: 判定を is_staff_check_target_status() に切り出し、
+		// プルダウン直下の競合警告の表示条件（render_meta_box）・JS再判定と基準を揃える。
+		if ( self::is_staff_check_target_status( $status ) ) {
 			// 入力人数が1予約あたりの上限を超えている場合は、黙ってクランプ保存せずに中断する。
 			// 競合判定より前に弾くことで、無駄な競合クエリも避ける。
 			if ( $guests_exceeded ) {
@@ -1029,6 +1141,18 @@ class Booking_Admin {
 					echo esc_html( $resource ? $resource->post_title : __( 'Not clear', 'vk-booking-manager' ) );
 				} else {
 					esc_html_e( 'Not set', 'vk-booking-manager' );
+				}
+
+				// #431: 予約一覧にも希望タグを表示する（担当名の付近）。
+				$column_tag_ids    = get_post_meta( $post_id, self::META_RESOURCE_TAG_IDS, true );
+				$column_tag_ids    = is_array( $column_tag_ids ) ? array_map( 'intval', $column_tag_ids ) : array();
+				$column_tag_labels = Resource_Tag_Taxonomy::get_labels_for_tag_ids( $column_tag_ids );
+				if ( ! empty( $column_tag_labels ) ) {
+					printf(
+						'<br /><span class="vkbm-booking-resource-tag-column">%1$s: %2$s</span>',
+						esc_html__( 'Requested tag', 'vk-booking-manager' ),
+						esc_html( implode( ', ', $column_tag_labels ) )
+					);
 				}
 				break;
 			case 'vkbm_booking_service':
@@ -1667,6 +1791,91 @@ class Booking_Admin {
 		// 「枠を埋めている予約」の定義がわずかに異なる（Staff_Load_Calculator と get_overlapping_staff_ids で
 		// 対象ステータスが違う。詳細は get_overlapping_staff_ids() の注記を参照）。あえて揃えていない。
 		return array_values( array_unique( array_merge( $insufficient_remaining, $other_menu_conflicts ) ) );
+	}
+
+	/**
+	 * プルダウンで実際に隠される選択肢の数を数える（#446）。
+	 *
+	 * 除外一覧（$conflict_staff_ids）に含まれていても、選択肢として存在しない（既に削除・非公開等の
+	 * リソース）IDや、現在選択中のIDは実際には隠れない（選択中のスタッフは常に表示される）。
+	 * 注記（vkbm-booking-resource-description）の表示・非表示は「実際にプルダウンから消える選択肢が
+	 * 1件以上あるか」で判定するため、この3条件（除外対象・選択肢として存在・非選択中）をすべて
+	 * 満たす件数のみを数える。PHP初期描画・JS再判定（Ajax・担当変更）の両方で同じ考え方を使う。
+	 *
+	 * @param array<int, int> $conflict_staff_ids   除外すべきスタッフID一覧（get_conflicting_staff_ids() の結果）。
+	 * @param array<int, int> $resource_option_ids  プルダウンの選択肢として実際に存在するリソースID一覧。
+	 * @param int             $selected_resource_id 現在選択中のリソースID（0は未選択）。
+	 * @return int 実際に隠される選択肢の数。
+	 */
+	public static function count_hidden_resource_options( array $conflict_staff_ids, array $resource_option_ids, int $selected_resource_id ): int {
+		$conflict_staff_ids  = array_unique( array_map( 'intval', $conflict_staff_ids ) );
+		$resource_option_ids = array_map( 'intval', $resource_option_ids );
+
+		$hidden = array_filter(
+			$conflict_staff_ids,
+			static function ( int $staff_id ) use ( $resource_option_ids, $selected_resource_id ): bool {
+				return $staff_id !== $selected_resource_id && in_array( $staff_id, $resource_option_ids, true );
+			}
+		);
+
+		return count( $hidden );
+	}
+
+	/**
+	 * 選択中の担当者が、除外一覧に含まれているかどうかを判定する（#446）。
+	 *
+	 * 除外一覧（$conflict_staff_ids）は get_conflicting_staff_ids() の結果で、この日時・メニュー・
+	 * 人数では担当できない担当者の一覧を表す。選択中のIDがこの一覧に含まれる場合、その担当者は
+	 * 選択されたまま「担当できない」状態になっているため、プルダウン直下の警告
+	 * （vkbm-booking-resource-conflict-warning）を表示する。未選択（0）のときは判定対象外とし、
+	 * 常に false を返す（担当未定は別の保存時チェック（set_staff_required_notice）が扱うため）。
+	 * PHP初期描画・JS再判定（Ajax・担当変更）の両方で同じ考え方を使う。
+	 *
+	 * #446 安藤さんレビュー対応: 選択中IDが、選択肢として実際に存在する（$resource_option_ids に
+	 * 含まれる）ことも条件に加える。保存済みの担当が削除・非公開等でプルダウンの選択肢から
+	 * 消えている場合、ブラウザは一致する <option> が無いため実際には先頭（未選択）が選択された
+	 * 状態で表示される。この関数への引数（$selected_resource_id）は保存済みメタの値をそのまま
+	 * 渡す設計のため、この条件が無いと「表示上は未選択なのに警告は出る」という食い違いが起き、
+	 * JS の初期化（updateStaffOptions）が走った直後に警告が消える一瞬のちらつきが発生していた。
+	 * 除外の注記（count_hidden_resource_options）と同じ $resource_option_ids を渡すことで、
+	 * 「選択肢として存在するか」の判定基準を両者で揃える。
+	 *
+	 * @param int             $selected_resource_id 現在選択中のリソースID（0は未選択）。
+	 * @param array<int, int> $conflict_staff_ids    除外すべきスタッフID一覧（get_conflicting_staff_ids() の結果）。
+	 * @param array<int, int> $resource_option_ids   プルダウンの選択肢として実際に存在するリソースID一覧。
+	 * @return bool 選択中の担当者がこの日時を担当できない状態なら true。
+	 */
+	public static function is_selected_resource_conflicting( int $selected_resource_id, array $conflict_staff_ids, array $resource_option_ids ): bool {
+		if ( $selected_resource_id <= 0 ) {
+			return false;
+		}
+
+		$resource_option_ids = array_map( 'intval', $resource_option_ids );
+		if ( ! in_array( $selected_resource_id, $resource_option_ids, true ) ) {
+			return false;
+		}
+
+		$conflict_staff_ids = array_map( 'intval', $conflict_staff_ids );
+
+		return in_array( $selected_resource_id, $conflict_staff_ids, true );
+	}
+
+	/**
+	 * 指定ステータスが、担当スタッフの競合チェック・競合警告の対象かどうかを判定する（#446 安藤さんレビュー対応）。
+	 *
+	 * キャンセル・無断キャンセルの予約は枠を消費しないため、save_post() の保存時チェック
+	 * （担当スタッフの競合判定）は元々この2ステータスを対象外にしていた。今回追加した
+	 * プルダウン直下の警告（vkbm-booking-resource-conflict-warning）もこの判定を使わずに
+	 * 実装したため、キャンセル・無断キャンセルの予約を開くと「保存できない」という赤い警告が
+	 * 誤って表示される不具合があった（実際には競合チェック自体が行われないため保存できる）。
+	 * この判定を1箇所にまとめ、save_post() の保存時チェック・PHP初期描画の警告表示・
+	 * JS再判定（ステータス変更時）のすべてが同じ基準を使うようにする。
+	 *
+	 * @param string $status 予約ステータス（STATUS_* 定数のいずれか）。
+	 * @return bool 担当スタッフの競合チェック・競合警告の対象なら true。
+	 */
+	public static function is_staff_check_target_status( string $status ): bool {
+		return self::STATUS_CANCELLED !== $status && self::STATUS_NO_SHOW !== $status;
 	}
 
 	/**

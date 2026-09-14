@@ -23,6 +23,20 @@ const staffSourcePath = path.join(
 );
 const staffTargetPath = path.join( staffDir, 'class-staff-editor.php' );
 
+// #431: リソースタグタクソノミー（Free/Proでロジックが異なる）も、dist向けスクリプト
+// （bin/switch-resource-config.js）と同じくここで生成する。以前はこのファイルだけ
+// dev向けスクリプトの対象外になっており、`npm run build:pro` / `build:free` を実行しても
+// class-resource-tag-taxonomy.php が更新されない不整合があったため合わせる。
+const resourcesDir = path.join( repoRoot, 'src', 'resources' );
+const resourceTagSourcePath = path.join(
+	resourcesDir,
+	`class-resource-tag-taxonomy-${ edition }.php`
+);
+const resourceTagTargetPath = path.join(
+	resourcesDir,
+	'class-resource-tag-taxonomy.php'
+);
+
 if ( ! fs.existsSync( sourcePath ) ) {
 	console.error( `Config source not found: ${ sourcePath }` );
 	process.exit( 1 );
@@ -33,6 +47,13 @@ if ( ! fs.existsSync( staffSourcePath ) ) {
 	process.exit( 1 );
 }
 
+if ( ! fs.existsSync( resourceTagSourcePath ) ) {
+	console.error(
+		`Resource tag taxonomy source not found: ${ resourceTagSourcePath }`
+	);
+	process.exit( 1 );
+}
+
 fs.copyFileSync( sourcePath, targetPath );
 // コピー直後に「直接編集禁止」バナーを注入する（冪等）。
 injectGeneratedFileBanner( targetPath );
@@ -40,3 +61,7 @@ injectGeneratedFileBanner( targetPath );
 fs.copyFileSync( staffSourcePath, staffTargetPath );
 // コピー直後に「直接編集禁止」バナーを注入する（冪等）。
 injectGeneratedFileBanner( staffTargetPath );
+
+fs.copyFileSync( resourceTagSourcePath, resourceTagTargetPath );
+// コピー直後に「直接編集禁止」バナーを注入する（冪等）。
+injectGeneratedFileBanner( resourceTagTargetPath );

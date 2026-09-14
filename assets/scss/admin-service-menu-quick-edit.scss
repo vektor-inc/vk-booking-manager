@@ -40,6 +40,15 @@
 	height: 8em;
 }
 
+/**
+ * サービス後バッファの説明文（label の外に配置している）。
+ * label 内にあった頃と同じ見た目（入力欄の列に揃った位置）を保つため、
+ * grid の1列目幅（10em）+ 列間（8px）分を左マージンとして再現する。
+ */
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-buffer-after-description {
+	margin: 0 0 8px calc(10em + 8px);
+}
+
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes {
 	margin: 0;
 	list-style: none;

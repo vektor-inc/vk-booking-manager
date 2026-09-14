@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\Common\Resource_Tag_Id_List;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -81,6 +82,34 @@ class Menu_Preview_Controller {
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_menu_loop' ),
 				'permission_callback' => '__return_true',
+				'args'                => array(
+					// #429: 絞り込み検索でスタッフが選択されているときに、そのスタッフが
+					// 対応できるメニューだけへ一覧を絞り込むための任意パラメータ。
+					// 0（既定値）または未指定は絞り込みなし（指名なし）を意味する。
+					'staff'            => array(
+						'required'          => false,
+						'type'              => 'integer',
+						'default'           => 0,
+						'minimum'           => 0,
+						'description'       => __( 'Staff member post ID to filter the returned service menus by. 0 means no filtering.', 'vk-booking-manager' ),
+						'sanitize_callback' => 'absint',
+						'validate_callback' => 'rest_validate_request_arg',
+					),
+					// #431: リソースタグ絞り込み（ターム ID配列・AND条件）。空配列（既定値）は絞り込みなし。
+					// パラメーター名は他エンドポイント（calendar-meta / availabilities）と
+					// 揃えて resource_tag_ids に統一する（未リリースのため互換対応は不要）。
+					'resource_tag_ids' => array(
+						'required'    => false,
+						'type'        => 'array',
+						'items'       => array(
+							'type'    => 'integer',
+							'minimum' => 1,
+						),
+						'maxItems'    => Resource_Tag_Id_List::MAX_COUNT,
+						'default'     => array(),
+						'description' => __( 'Resource tag term IDs to filter the returned service menus by (AND condition).', 'vk-booking-manager' ),
+					),
+				),
 			)
 		);
 	}
@@ -129,10 +158,18 @@ class Menu_Preview_Controller {
 	/**
 	 * Return rendered menu loop markup for the reservation page.
 	 *
+	 * @param WP_REST_Request $request リクエスト（staff / resource_tag_ids パラメータを含む）。
 	 * @return WP_REST_Response
 	 */
-	public function get_menu_loop(): WP_REST_Response {
-		$html = $this->menu_loop_block->render_menu_selection_list();
+	public function get_menu_loop( WP_REST_Request $request ): WP_REST_Response {
+		// #429: 絞り込み検索で選択されているスタッフID（0は指名なし＝絞り込みなし）。
+		$staff_id = (int) $request->get_param( 'staff' );
+
+		// #431: 絞り込み検索で選択されているリソースタグのターム ID配列（AND条件）。
+		// 正規化ルールは Resource_Tag_Id_List::normalize() に一元化している（同じ処理を複数箇所へ重複させないため）。
+		$tag_ids = Resource_Tag_Id_List::normalize( $request->get_param( 'resource_tag_ids' ) );
+
+		$html = $this->menu_loop_block->render_menu_selection_list( $staff_id, $tag_ids );
 
 		return new WP_REST_Response(
 			array(

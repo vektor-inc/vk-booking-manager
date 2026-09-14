@@ -165,6 +165,13 @@ Contact us: Please contact our store.",
 					'vk-booking-manager'
 				),
 			'reservation_page_url'                       => '',
+			// #427: 「絞り込み検索」（メニュー／スタッフのプルダウン選択 UI）の表示設定。
+			// 既定は false。未保存の既存サイトでも、これまでどおり「サービスメニュー一覧」の
+			// 設定だけで表示（一覧のみ／一覧なし＝絞り込み検索）が決まるようにするため。
+			'reservation_show_menu_search'               => false,
+			// #431: 「リソースタグ検索」。絞り込み検索（reservation_show_menu_search）の子項目。
+			// Pro版限定・既定は false（未保存の既存サイトでは表示しない）。
+			'resource_tag_search_enabled'                => false,
 			'reservation_show_menu_list'                 => true,
 			'reservation_menu_list_display_mode'         => 'card',
 			'reservation_show_provider_logo'             => false,

@@ -552,12 +552,31 @@ class Service_Menu_Post_Type {
 						<label>
 							<span class="title"><?php esc_html_e( 'Post-service buffer', 'vk-booking-manager' ); ?></span>
 							<span class="input-text-wrap">
-								<input type="number" name="vkbm_service_menu_quick[buffer_after_minutes]" class="vkbm-qe-buffer-after-minutes" min="0" step="1" value="" /> <?php esc_html_e( 'minutes', 'vk-booking-manager' ); ?>
+								<input type="number" name="vkbm_service_menu_quick[buffer_after_minutes]" class="vkbm-qe-buffer-after-minutes" min="0" step="1" value="" aria-describedby="vkbm-qe-buffer-after-minutes-description" /> <?php esc_html_e( 'minutes', 'vk-booking-manager' ); ?>
 							</span>
-							<p class="description">
-								<?php esc_html_e( 'If it is left blank, the information entered on the basic settings screen will be reflected.', 'vk-booking-manager' ); ?>
-							</p>
 						</label>
+						<?php
+						/**
+						 * この説明文（リンク付き）は input と紐付く label の内側には置かない。
+						 * label 内に置くと、スクリーンリーダーが入力欄の名前としてリンク文言まで
+						 * 連結して読み上げてしまう。
+						 * label の外に出しつつ、aria-describedby で入力欄と説明文の関連付けを保つ。
+						 */
+						?>
+						<p class="description vkbm-qe-buffer-after-description" id="vkbm-qe-buffer-after-minutes-description">
+							<?php
+							// 未記入の場合の説明（基本設定画面の該当欄へのリンク付き）。
+							printf(
+								/* translators: %s: link to the post-service buffer setting on the provider settings page. */
+								esc_html__( 'If it is left blank, the information entered on %s will be reflected.', 'vk-booking-manager' ),
+								sprintf(
+									'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+									esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-service-menu-buffer-after-default' ) ),
+									esc_html__( 'Post-service buffer on the General Settings page', 'vk-booking-manager' )
+								)
+							);
+							?>
+						</p>
 						<?php if ( Staff_Editor::is_enabled() ) : ?>
 							<label>
 								<span class="title"><?php esc_html_e( 'Staff available', 'vk-booking-manager' ); ?></span>
@@ -1140,15 +1159,18 @@ class Service_Menu_Post_Type {
 					// #392: 以前は複数人予約フラグ・料金区分と同じゲート（Pro版 かつ 指名OFF）を共有していたが、
 					// 複数人予約フラグ・料金区分は指名OFF条件を外したため（is_multi_guest_available_for_menu()
 					// 参照）、貸切系の3設定（本メタもその1つ）は専用の
-					// Staff_Editor::is_exclusive_booking_available_for_menu()（Pro版 かつ 予約枠の定員機能ON
-					// かつ 指名OFF）を使う。REST メタAPI経由で業務ロジック制約を迂回されるのを防ぐ
-					// （読み取りは show_in_rest で別途許可）。
+					// Staff_Editor::is_exclusive_booking_available_for_menu()（Pro版 かつ 予約枠の定員機能ON）を
+					// 使う。#440でこちらのゲートからも「指名OFF」条件を外し、指名を使う
+					// メニューでもこの3設定を保存できるようにした（予約時の排他は「メニュー全体」ではなく
+					// 「担当スタッフ単位」になる。実装は Booking_Draft_Controller /
+					// Booking_Confirmation_Controller 側）。REST メタAPI経由で業務ロジック制約を
+					// 迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
 					//
 					// NOTE: ここでは _vkbm_allow_multiple_guests（保存済み値）は読まない。price_tiers と同様、
 					// REST で「複数人予約ON＋貸し切りON」を同一リクエストで保存する際にメタの処理順序によって
 					// stale な保存済み値で誤って拒否され得る（race）ため。複数人予約OFFのメニューに貸し切りメタが
 					// 混入しても、受付停止の判定側 is_menu_exclusive_when_booked() がフルゲート（Pro＋全体の
-					// 複数人予約ON＋指名OFF＋メニューの allow ON）を再適用して無害化する（load-bearing な主防御）。
+					// 複数人予約ON＋メニューの allow ON）を再適用して無害化する（load-bearing な主防御）。
 					if ( ! current_user_can( 'edit_post', $post_id ) ) {
 						return false;
 					}
@@ -1173,8 +1195,9 @@ class Service_Menu_Post_Type {
 				},
 				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
 					// #392: 貸切系の3設定（本メタもその1つ）専用のゲート
-					// Staff_Editor::is_exclusive_booking_available_for_menu()（Pro版 かつ 予約枠の定員機能ON
-					// かつ 指名OFF）を REST 書き込みに適用する。メタAPI経由で業務ロジック制約を
+					// Staff_Editor::is_exclusive_booking_available_for_menu()（Pro版 かつ 予約枠の定員機能ON）を
+					// REST 書き込みに適用する。#440でこのゲートから「指名OFF」条件を外し、
+					// 指名を使うメニューでも保存できるようにした。メタAPI経由で業務ロジック制約を
 					// 迂回されるのを防ぐ（読み取りは show_in_rest で別途許可）。
 					// NOTE: ここでは保存済みの複数人予約フラグ（_vkbm_allow_multiple_guests）は読まない。
 					// 料金区分・貸し切り設定と同様、同一リクエストで複数メタを保存する際の stale 値による

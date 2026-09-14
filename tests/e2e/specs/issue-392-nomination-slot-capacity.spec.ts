@@ -469,3 +469,123 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		expect( autoNineOClockAfter?.remaining ).toBe( 0 );
 	} );
 } );
+
+/**
+ * issue #440 完了条件5：指名を使うメニューでも、複数人一括予約が無効な場合は
+ * 予約画面に人数入力欄（#vkbm-reservation-guests）が表示されない。
+ *
+ * app.js の allowMultipleGuests 判定（currentMenu.meta._vkbm_allow_multiple_guests の
+ * 真偽値のみ）は #392 の時点で指名可否を条件に含めておらず、この完了条件自体は
+ * 本 issue の修正対象ではない（既存の正しい挙動の回帰確認）。
+ */
+test.describe( 'issue #440: 指名を使うメニューで複数人一括予約が無効なとき', () => {
+	let originalStaffEnabledForGuestsInput = true;
+	let noMultiGuestMenuId = '';
+
+	/**
+	 * 指名を使い、複数人一括予約を許可しない検証用メニューを作成する（冪等）。
+	 * グローバルセットアップで用意済みのスタッフ（既にシフトが入っている）を割り当てる。
+	 *
+	 * @param staffId 割り当てるスタッフの post ID（数値文字列）
+	 * @return 作成したサービスメニューの post ID（数値文字列）
+	 */
+	function seedNominationMenuWithoutMultiGuests( staffId: string ): string {
+		const title = 'Nomination No Multi Guests Menu';
+		const phpCode = `
+			$existing = get_posts( array(
+				'post_type'   => 'vkbm_service_menu',
+				'post_status' => 'any',
+				'title'       => '${ title }',
+				'fields'      => 'ids',
+				'numberposts' => -1,
+			) );
+			foreach ( $existing as $eid ) {
+				wp_delete_post( $eid, true );
+			}
+			$menu_id = wp_insert_post( array(
+				'post_type'   => 'vkbm_service_menu',
+				'post_status' => 'publish',
+				'post_title'  => '${ title }',
+			) );
+			if ( is_wp_error( $menu_id ) || ! $menu_id ) {
+				echo 'Error: failed to create menu';
+				return;
+			}
+			// このメニューでは指名を使う（既定＝使う。_vkbm_disable_nomination は保存しない）。
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( ${ Number.parseInt(
+				staffId,
+				10
+			) } ) );
+			update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+			update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+			// 複数人一括予約は許可しない（メタ自体を保存しない＝既定 false）。
+			echo $menu_id;
+		`;
+		const result = wpEvalPhp( phpCode ).trim();
+		if ( ! /^\d+$/.test( result ) || Number( result ) <= 0 ) {
+			throw new Error( `Menu seeding failed: "${ result }"` );
+		}
+		return result;
+	}
+
+	test.beforeAll( () => {
+		originalStaffEnabledForGuestsInput = getStaffEnabled();
+		setStaffEnabled( true );
+		wpEvalPhp( `
+			$s = get_option( 'vkbm_provider_settings', array() );
+			$s['slot_capacity_enabled'] = 1;
+			unset( $s['multiple_guests_enabled'] );
+			update_option( 'vkbm_provider_settings', $s );
+		` );
+		// グローバルセットアップ済みのスタッフ（当月・翌月分のシフト入り）を再利用する。
+		const staffId = getStaffId();
+		noMultiGuestMenuId = seedNominationMenuWithoutMultiGuests( staffId );
+	} );
+
+	test.afterAll( () => {
+		if ( noMultiGuestMenuId ) {
+			wpCliArgs( [ 'post', 'delete', noMultiGuestMenuId, '--force' ], {
+				stdio: 'ignore',
+			} );
+			noMultiGuestMenuId = '';
+		}
+		setStaffEnabled( originalStaffEnabledForGuestsInput );
+	} );
+
+	test( 'フロント: 指名を使うメニューでも複数人一括予約が無効なら人数入力欄が表示されない', async ( {
+		page,
+	} ) => {
+		await page.goto( `/booking/?menu_id=${ noMultiGuestMenuId }` );
+		await page.waitForLoadState( 'networkidle' );
+
+		// このメニューは指名を使うため、スタッフ選択欄が表示される（自動割当＋指名スタッフ分）。
+		const staffSelect = page.locator(
+			'.vkbm-plan-summary__selectors select'
+		);
+		await expect
+			.poll( async () => staffSelect.count(), { timeout: 10000 } )
+			.toBeGreaterThan( 0 );
+
+		const calendarMetaResponse = page.waitForResponse(
+			( res ) => /calendar-meta/.test( res.url() ),
+			{ timeout: 15000 }
+		);
+		// 指名なし（自動割当）のまま進め、空いている日を選ぶ。
+		await selectAvailableCalendarDay( page, calendarMetaResponse );
+		await page.waitForTimeout( 1000 );
+
+		const slots = page.locator( '.vkbm-slot-list__item' );
+		await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
+		await slots.first().click();
+		await page.waitForTimeout( 1000 );
+
+		// 複数人一括予約が無効なため、人数入力欄自体が存在しない。
+		await expect( page.locator( '#vkbm-reservation-guests' ) ).toHaveCount(
+			0
+		);
+
+		// 予約内容確認へ進める（人数=1名固定として扱われる）。
+		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
+		await expect( proceed ).toBeEnabled();
+	} );
+} );

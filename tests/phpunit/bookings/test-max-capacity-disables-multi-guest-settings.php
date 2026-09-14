@@ -323,6 +323,109 @@ class Max_Capacity_Disables_Multi_Guest_Settings_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * create_booking: 複数人一括予約が無効なメニューでは、料金区分が保存済みでも無視され、
+	 * 基本料金×1名で計算される（#440）。指名を使うメニュー・使わないメニューの両方で確認する。
+	 *
+	 * 予約画面・予約確定処理（resolve_menu_price_tiers/resolve_guests）は元々「複数人一括予約の
+	 * 許可フラグ（_vkbm_allow_multiple_guests）」だけを必須条件にしており、指名の有無では
+	 * 分岐しない（#392 で `Staff_Editor::is_multi_guest_available_for_menu()` から「指名OFF」を
+	 * 除去済み）。編集画面側の表示条件は #440 でこれに揃えたが、計算側の挙動自体は本 issue の
+	 * 修正対象ではなく既存のまま変わらないため、このテストは指名を使うメニューのケースを
+	 * 新たに追加してリグレッションを防止する（既存の test_resolve_menu_price_tiers() は
+	 * max_capacity=1 のケースのみを見ており、複数人一括予約OFFのケースが無かった）。
+	 */
+	public function test_resolve_menu_price_tiers_when_multi_guest_disabled(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '指名を使わないメニュー：複数人一括予約OFF＋料金区分保存済み => 区分無効・基本料金×1名',
+				'nomination_enabled'  => false,
+				'tier_count'          => 2,
+				'expect_has_tiers'    => false,
+				'expect_base_total'   => 3000,
+			),
+			array(
+				'test_condition_name' => '指名を使うメニュー：複数人一括予約OFF＋料金区分保存済み => 区分無効・基本料金×1名（#440）',
+				'nomination_enabled'  => true,
+				'tier_count'          => 2,
+				'expect_has_tiers'    => false,
+				'expect_base_total'   => 3000,
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			// サイト全体の指名機能を各ケースの前提に合わせて切り替える（setUp() は既定OFF）。
+			$repository                = new Settings_Repository();
+			$settings                  = $repository->get_settings();
+			$settings['staff_enabled'] = $case['nomination_enabled'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Staff_Editor::clear_nomination_enabled_cache();
+
+			$staff_id = $this->create_staff();
+			$menu_id  = $this->create_menu();
+
+			// 複数人一括予約は明示的に許可しない（_vkbm_allow_multiple_guests は保存しない＝既定false）。
+			// このメニューでは指名を使う／使わないの切り替えは _vkbm_disable_nomination を保存せず、
+			// サイト全体の staff_enabled 設定のみで制御する（既定＝使う）。
+			update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+			update_post_meta( $menu_id, '_vkbm_base_price', 3000 );
+			// 料金区分（大人）を保存済みにしておく（複数人一括予約を後からOFFにした・改ざん経路の再現）。
+			update_post_meta(
+				$menu_id,
+				'_vkbm_price_tiers',
+				array(
+					array(
+						'label' => '大人',
+						'price' => 5000,
+					),
+				)
+			);
+
+			$date  = sprintf( '2027-03-%02d', $index + 1 );
+			$start = $date . 'T10:00:00+09:00';
+			$end   = $date . 'T11:00:00+09:00';
+
+			$user_id = $this->factory()->user->create();
+			wp_set_current_user( $user_id );
+			$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+
+			// 下書きに区分人数の内訳（大人2名）を仕込む（複数人一括予約OFFでもクライアントが
+			// guest_tiers を送ってくるケースを再現する。改ざん経路）。
+			$guest_tiers = array(
+				array(
+					'label' => '大人',
+					'price' => 5000,
+					'count' => $case['tier_count'],
+				),
+			);
+			$token      = $this->store_draft( $menu_id, $staff_id, $start, $end, $case['tier_count'], false, $guest_tiers );
+			$controller = $this->build_controller( $staff_id, $start, $end );
+			$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+
+			$response = $controller->create_booking( $request );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] . ' / 予約成立' );
+
+			$booking_id = (int) ( $response->get_data()['booking_id'] ?? 0 );
+			$this->assertGreaterThan( 0, $booking_id, $case['test_condition_name'] . ' / 予約ID' );
+
+			// 料金区分は無効（複数人一括予約OFFのため）、区分内訳スナップショットは保存されない。
+			$tiers_exists = metadata_exists( 'post', $booking_id, '_vkbm_booking_guest_tiers' );
+			$this->assertSame( $case['expect_has_tiers'], $tiers_exists, $case['test_condition_name'] . ' / 区分内訳の保存有無' );
+
+			$base_total = (int) get_post_meta( $booking_id, '_vkbm_booking_base_total_price', true );
+			$this->assertSame( $case['expect_base_total'], $base_total, $case['test_condition_name'] . ' / 合計金額' );
+
+			// 保存された人数も複数人一括予約OFFのため1名にクランプされている。
+			$saved_guests = (int) get_post_meta( $booking_id, '_vkbm_booking_guests', true );
+			$this->assertSame( 1, $saved_guests, $case['test_condition_name'] . ' / 保存された人数' );
+
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
 	 * 確定コントローラ（貸切判定・空き再検証が実DBで効く）を組み立てる。
 	 *
 	 * @param int    $staff_id スタッフID。

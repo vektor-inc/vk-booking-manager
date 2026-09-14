@@ -22,17 +22,25 @@ use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Reservation_Day;
+use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 use WP_Query;
 use WP_Error;
 use function __;
+use function array_filter;
+use function array_intersect;
+use function array_map;
+use function array_unique;
+use function array_values;
 use function esc_url_raw;
 use function current_datetime;
 use function current_user_can;
 use function get_current_user_id;
 use function is_user_logged_in;
+use function vkbm_get_resource_label_plural;
 
 /**
  * Provides calculated availability data for menus and staff resources.
@@ -140,8 +148,10 @@ class Availability_Service {
 		}
 
 		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		// #431: リソースタグ絞り込み（ターム ID・AND条件）。
+		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
-		$staff_ids = $this->resolve_staff_ids( $menu, $preferred_staff_id );
+		$staff_ids = $this->resolve_staff_ids( $menu, $preferred_staff_id, $tag_ids );
 		if ( is_wp_error( $staff_ids ) ) {
 			return $staff_ids;
 		}
@@ -165,7 +175,8 @@ class Availability_Service {
 			$staff_ids,
 			sprintf( '%04d-%02d', $year, $month ),
 			$timezone->getName(),
-			$preferred_staff_id > 0
+			$preferred_staff_id > 0,
+			$tag_ids
 		);
 
 		$cached = get_transient( $cache_key );
@@ -245,8 +256,10 @@ class Availability_Service {
 		$timezone = $this->resolve_timezone( (string) ( $args['timezone'] ?? '' ) );
 
 		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		// #431: リソースタグ絞り込み（ターム ID・AND条件）。
+		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
-		$staff_ids = $this->resolve_staff_ids( $menu, $preferred_staff_id );
+		$staff_ids = $this->resolve_staff_ids( $menu, $preferred_staff_id, $tag_ids );
 		if ( is_wp_error( $staff_ids ) ) {
 			return $staff_ids;
 		}
@@ -260,7 +273,8 @@ class Availability_Service {
 				$staff_ids,
 				$date->format( 'Y-m-d' ),
 				$timezone->getName(),
-				$preferred_staff_id > 0
+				$preferred_staff_id > 0,
+				$tag_ids
 			);
 
 			$cached = get_transient( $cache_key );
@@ -349,11 +363,13 @@ class Availability_Service {
 		}
 
 		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		// #431: リソースタグ絞り込み（ターム ID・AND条件）。診断も同じ候補集合で判定する。
+		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
 		// P1 / P4: 担当スタッフの解決。メニューの公開状態より根本原因として優先判定するため、
 		// validate_menu() より先に判定する（validate_menu() は最初に該当したエラーで早期returnし、
 		// 他の問題を隠してしまうため、診断では判定順序を意図的に入れ替えている）。
-		$staff_ids = $this->resolve_staff_ids( $post, $preferred_staff_id );
+		$staff_ids = $this->resolve_staff_ids( $post, $preferred_staff_id, $tag_ids );
 		if ( is_wp_error( $staff_ids ) ) {
 			$error_code = $staff_ids->get_error_code();
 
@@ -379,6 +395,19 @@ class Availability_Service {
 				);
 
 				return $this->build_diagnostic_reason( 'staff_not_assigned', $message );
+			}
+
+			if ( 'resource_tag_no_match' === $error_code ) {
+				// #431: 選択されたリソースタグ（すべて）を持つ担当が1人もいない。
+				// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
+				// このファイルの他の分岐と同じ join_sentences() を使う（半角スペース等の
+				// ハードコードを避け、結合方法を1箇所にまとめるため）。
+				$message = Nomination_Min_Guests_Message::join_sentences(
+					__( 'No one in charge matches all of the selected resource tags.', 'vk-booking-manager' ),
+					__( 'Assign the resource tag to at least one staff member, or change the selected tags.', 'vk-booking-manager' )
+				);
+
+				return $this->build_diagnostic_reason( 'resource_tag_no_match', $message );
 			}
 
 			// 未知のエラーコードは診断対象外（バナーを出さない）。
@@ -735,11 +764,17 @@ class Availability_Service {
 	/**
 	 * Resolve target staff IDs.
 	 *
-	 * @param WP_Post $menu_post Menu post.
-	 * @param int     $preferred_staff Preferred staff ID.
+	 * #431: 候補リソースの絞り込みはこのメソッドに集約する。リソースタグ（$tag_ids）による
+	 * 絞り込みも、指名の有無に関わらずここで一元的に適用することで、空き枠計算（calendar-meta /
+	 * availabilities）・予約下書き・予約確定の再検証のすべてに同じ候補集合を通す
+	 * （ロジックを二重に持たない）。
+	 *
+	 * @param WP_Post    $menu_post       Menu post.
+	 * @param int        $preferred_staff Preferred staff ID.
+	 * @param array<int> $tag_ids         必須のリソースタグターム ID（AND条件・#431）。空配列は絞り込みなし。
 	 * @return array<int>|WP_Error
 	 */
-	private function resolve_staff_ids( WP_Post $menu_post, int $preferred_staff ) {
+	private function resolve_staff_ids( WP_Post $menu_post, int $preferred_staff, array $tag_ids = array() ) {
 		$staff_ids = get_post_meta( $menu_post->ID, self::MENU_META_STAFF_IDS, true );
 		$staff_ids = is_array( $staff_ids ) ? array_values( array_unique( array_map( 'intval', $staff_ids ) ) ) : array();
 
@@ -765,7 +800,61 @@ class Availability_Service {
 			return new WP_Error( 'staff_not_configured', __( 'No staff members have been set up to be in charge.', 'vk-booking-manager' ) );
 		}
 
+		// #431: リソースタグによる絞り込み（AND条件）。候補が0件になった場合は、
+		// 「担当スタッフ自体が未設定」とは別のエラーとして返す（メッセージにはリソース名称の
+		// 設定値を使う。issue #431 完了条件）。
+		if ( ! empty( $tag_ids ) ) {
+			$filtered = $this->filter_staff_ids_by_tags( $staff_ids, $tag_ids );
+			if ( empty( $filtered ) ) {
+				return new WP_Error(
+					'resource_tag_no_match',
+					sprintf(
+						/* translators: %s: resource label (plural), e.g. "Staff". */
+						__( 'There are no %s matching the selected conditions.', 'vk-booking-manager' ),
+						vkbm_get_resource_label_plural()
+					)
+				);
+			}
+			$staff_ids = $filtered;
+		}
+
 		return $staff_ids;
+	}
+
+	/**
+	 * 候補リソースIDを、指定したリソースタグをすべて持つものだけへ絞り込む（AND条件、#431）。
+	 *
+	 * @param array<int> $staff_ids 絞り込み対象の候補リソースID。
+	 * @param array<int> $tag_ids   必須のリソースタグターム ID。
+	 * @return array<int> 絞り込み後の候補リソースID（該当なしは空配列）。
+	 */
+	private function filter_staff_ids_by_tags( array $staff_ids, array $tag_ids ): array {
+		if ( empty( $tag_ids ) || empty( $staff_ids ) ) {
+			return $staff_ids;
+		}
+
+		// タグを「すべて」持つリソースの全体集合を求め、候補リソースIDと積を取る。
+		// タグと担当リソースの逆引きロジックを Resource_Tag_Taxonomy 側の1メソッドに集約し、
+		// フロント（メニュー逆引き）・サーバー（この絞り込み）で二重実装しない（issue #431 実装メモ）。
+		$resource_ids_with_tags = Resource_Tag_Taxonomy::get_resource_ids_for_tags( $tag_ids );
+
+		if ( empty( $resource_ids_with_tags ) ) {
+			return array();
+		}
+
+		return array_values( array_intersect( $staff_ids, $resource_ids_with_tags ) );
+	}
+
+	/**
+	 * REST引数のリソースタグターム ID を正規化する（#431）。
+	 *
+	 * 正規化ルールは Resource_Tag_Id_List::normalize() に一元化している（同じ処理を複数箇所へ重複させないため）。
+	 *
+	 * @param mixed $raw_tag_ids REST引数由来の生の値（配列以外は空配列扱い）。
+	 * @return array<int>
+	 */
+	private function normalize_tag_ids( $raw_tag_ids ): array {
+		return Resource_Tag_Id_List::normalize( $raw_tag_ids );
 	}
 
 	/**
@@ -820,9 +909,11 @@ class Availability_Service {
 	 * @param string     $date_key           Date key.
 	 * @param string     $timezone           Timezone name.
 	 * @param bool       $is_staff_preferred 担当スタッフ指名の有無（resource_id 指定の有無）。
+	 * @param array<int> $tag_ids            #431: リソースタグ絞り込みのターム ID。キーへ含めないと
+	 *                                        タグ絞り込み前の結果が別条件のリクエストへ誤って返る。
 	 * @return string
 	 */
-	private function build_cache_key( string $prefix, int $menu_id, array $staff_ids, string $date_key, string $timezone, bool $is_staff_preferred ): string {
+	private function build_cache_key( string $prefix, int $menu_id, array $staff_ids, string $date_key, string $timezone, bool $is_staff_preferred, array $tag_ids = array() ): string {
 		$staff_hash = md5( implode( '-', $staff_ids ) );
 		$generation = Availability_Cache_Generation::get_generation();
 
@@ -831,7 +922,13 @@ class Availability_Service {
 			? Availability_Booking_Cache_Generation::get_monthly_generation( $date_key )
 			: Availability_Booking_Cache_Generation::get_daily_generation( $date_key );
 
-		return sprintf( 'vkbm_%s_g%d_bg%d_%d_%s_%s_%s_p%d', $prefix, $generation, $date_generation, $menu_id, $staff_hash, $date_key, md5( $timezone ), $is_staff_preferred ? 1 : 0 );
+		// #431: リソースタグの組み合わせごとにキャッシュを分ける（ソートしてから結合し、
+		// チェック順序違いを同一キーへ集約する）。
+		$sorted_tag_ids = $tag_ids;
+		sort( $sorted_tag_ids );
+		$tag_hash = md5( implode( '-', $sorted_tag_ids ) );
+
+		return sprintf( 'vkbm_%s_g%d_bg%d_%d_%s_%s_%s_p%d_t%s', $prefix, $generation, $date_generation, $menu_id, $staff_hash, $date_key, md5( $timezone ), $is_staff_preferred ? 1 : 0, $tag_hash );
 	}
 
 	/**
@@ -976,6 +1073,13 @@ class Availability_Service {
 	 * 既に1件でも予約が入ったスタッフの残りは、定員未達でも0（相乗り不可）にする。
 	 * 指名を使わないメニューでは従来どおり max_capacity - 予約人数 の相乗りを許可する。
 	 *
+	 * 貸し切り予約（exclusive_closed）の集約は、指名を使うメニューかどうかで扱いを変える。
+	 * 指名を使うメニューは担当ごとに独立した時間帯を持つため、ある担当の貸切予約は
+	 * その担当の枠だけを閉じ、他の担当が空いていればこの時間帯は引き続き受付可能とする
+	 * （候補の担当が全員 exclusive_closed のときだけ、この時間帯全体を受付停止にする）。
+	 * 指名を使わないメニューは従来どおり、いずれかの担当の貸切予約でこの時間帯全体を閉じる
+	 * （複数の担当が同じ物理的な枠を共有する前提のため）。
+	 *
 	 * @param array<int, array<string, mixed>> $slots        Slots.
 	 * @param int                              $menu_id      Menu ID.
 	 * @param int                              $max_capacity Maximum simultaneous bookings per slot.
@@ -1007,7 +1111,10 @@ class Availability_Service {
 					'assignable_staff_ids' => array(),
 					'capacity'             => 1,
 					'remaining'            => 1,
-					// 貸し切り予約で閉じた枠かどうか。同一時間帯のどのスタッフ枠に貸し切り予約があっても閉じる。
+					// 貸し切り予約で閉じた枠かどうかの暫定値（いずれかの担当が貸切なら true）。
+					// 指名を使わないメニューはこの値をそのまま使う。指名を使うメニューでは、下の
+					// 確定処理で「候補の担当が全員 exclusive_closed」のときだけ true へ計算し直す
+					// （担当ごとの状態は staff_exclusive_closed に保持する）。
 					'exclusive_closed'     => ! empty( $slot['exclusive_closed'] ),
 					'flags'                => array(
 						'is_last_slot_of_day'   => ! empty( $slot['flags']['is_last_slot_of_day'] ),
@@ -1018,25 +1125,31 @@ class Availability_Service {
 			} else {
 				$grouped[ $key ]['flags']['is_last_slot_of_day']   = $grouped[ $key ]['flags']['is_last_slot_of_day'] || ! empty( $slot['flags']['is_last_slot_of_day'] );
 				$grouped[ $key ]['flags']['requires_confirmation'] = $grouped[ $key ]['flags']['requires_confirmation'] || ! empty( $slot['flags']['requires_confirmation'] );
-				// 同一時間帯のいずれかのスタッフ枠が貸し切りで閉じていれば、その枠は受付停止にする。
-				$grouped[ $key ]['exclusive_closed'] = $grouped[ $key ]['exclusive_closed'] || ! empty( $slot['exclusive_closed'] );
+				$grouped[ $key ]['exclusive_closed']               = $grouped[ $key ]['exclusive_closed'] || ! empty( $slot['exclusive_closed'] );
 			}
 
-			$staff_id    = isset( $slot['staff']['id'] ) ? (int) $slot['staff']['id'] : 0;
-			$guest_count = isset( $slot['guest_count'] ) ? (int) $slot['guest_count'] : 0;
+			$staff_id         = isset( $slot['staff']['id'] ) ? (int) $slot['staff']['id'] : 0;
+			$guest_count      = isset( $slot['guest_count'] ) ? (int) $slot['guest_count'] : 0;
+			$exclusive_closed = ! empty( $slot['exclusive_closed'] );
 
 			// シフトに入っているスタッフはすべて割り当て候補に追加する。
-			// 1予約は分割せず単一スタッフへ割り当てるため、各スタッフの負荷（予約人数）を個別に保持する。
+			// 1予約は分割せず単一スタッフへ割り当てるため、各スタッフの負荷（予約人数）・
+			// 貸し切り予約の有無を個別に保持する（指名を使うメニューの担当スタッフ単位の判定に使う）。
 			if ( $staff_id > 0 ) {
 				$grouped[ $key ]['assignable_staff_ids'][] = $staff_id;
 				if ( ! isset( $grouped[ $key ]['staff_loads'] ) ) {
 					$grouped[ $key ]['staff_loads'] = array();
 				}
-				// 同一スタッフが重複して現れた場合は最大の負荷を採用する（防御的）。
-				$grouped[ $key ]['staff_loads'][ $staff_id ] = max(
+				if ( ! isset( $grouped[ $key ]['staff_exclusive_closed'] ) ) {
+					$grouped[ $key ]['staff_exclusive_closed'] = array();
+				}
+				// 同一スタッフが重複して現れた場合は最大の負荷・OR判定を採用する（防御的）。
+				$grouped[ $key ]['staff_loads'][ $staff_id ]            = max(
 					isset( $grouped[ $key ]['staff_loads'][ $staff_id ] ) ? (int) $grouped[ $key ]['staff_loads'][ $staff_id ] : 0,
 					$guest_count
 				);
+				$grouped[ $key ]['staff_exclusive_closed'][ $staff_id ] =
+					! empty( $grouped[ $key ]['staff_exclusive_closed'][ $staff_id ] ) || $exclusive_closed;
 			}
 		}
 
@@ -1085,6 +1198,22 @@ class Availability_Service {
 			}
 			$grouped[ $key ]['remaining'] = empty( $grouped[ $key ]['assignable_staff_ids'] ) ? 0 : $best_remaining;
 
+			// 指名を使うメニューは担当ごとに独立した時間帯を持つため、候補の担当が全員
+			// exclusive_closed のときだけ、この時間帯全体を受付停止にする（1人でも空いていれば
+			// 引き続き受付可能）。指名を使わないメニューは、いずれかの担当の貸切予約で全体を
+			// 閉じる従来どおりの exclusive_closed（グループ化時に OR で集約済み）をそのまま使う。
+			if ( $uses_nomination ) {
+				$staff_exclusive_closed = ( isset( $slot['staff_exclusive_closed'] ) && is_array( $slot['staff_exclusive_closed'] ) ) ? $slot['staff_exclusive_closed'] : array();
+				$all_candidates_closed  = ! empty( $grouped[ $key ]['assignable_staff_ids'] );
+				foreach ( $grouped[ $key ]['assignable_staff_ids'] as $sid ) {
+					if ( empty( $staff_exclusive_closed[ $sid ] ) ) {
+						$all_candidates_closed = false;
+						break;
+					}
+				}
+				$grouped[ $key ]['exclusive_closed'] = $all_candidates_closed;
+			}
+
 			// 貸し切り予約で閉じた枠は、残席があっても受付停止（remaining=0）に上書きする。
 			// スロット自体は消さず、フロントが「満席」と区別して「予約受付終了」を表示できるよう exclusive_closed を残す。
 			if ( ! empty( $grouped[ $key ]['exclusive_closed'] ) ) {
@@ -1093,6 +1222,7 @@ class Availability_Service {
 
 			// 内部集計用キーは出力に含めない。
 			unset( $grouped[ $key ]['staff_loads'] );
+			unset( $grouped[ $key ]['staff_exclusive_closed'] );
 		}
 
 		// 満枠スロットもフロントエンド側で「満枠」表示するため除外しない。

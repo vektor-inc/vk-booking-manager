@@ -19,6 +19,16 @@ use function vkbm_sanitize_resource_menu_icon;
  * Sanitizes provider settings form submissions.
  */
 class Settings_Sanitizer {
+	/**
+	 * 「角丸の基本サイズ」（design_radius_md）の上限値（px）。
+	 *
+	 * この値に追従する要素のうち最も背の低い時間枠カード（.vkbm-slot-list__item）の
+	 * 内側余白が --vkbm--spacing--xs（0.5rem = 8px）のため、これを大きく超えると
+	 * 角丸が内容領域へ食い込み始める。管理画面の入力欄の max 属性
+	 * （class-provider-settings-page.php）もこの定数を参照する。
+	 */
+	public const DESIGN_RADIUS_MD_MAX = 32;
+
 	private const HOLIDAY_FREQUENCIES = array(
 		'weekly',
 		'nth-1',
@@ -115,14 +125,24 @@ class Settings_Sanitizer {
 		$data['provider_allow_staff_overlap_admin']     = ! empty( $input['provider_allow_staff_overlap_admin'] );
 			$data['provider_website_url']               = $this->sanitize_url( $data['provider_website_url'] );
 			$data['reservation_page_url']               = $this->sanitize_url( $data['reservation_page_url'] );
-		$data['reservation_show_menu_list']             = ! empty( $input['reservation_show_menu_list'] );
-		$menu_list_display_mode                         = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? ( $data['reservation_menu_list_display_mode'] ?? 'card' ) ) );
-		$data['reservation_menu_list_display_mode']     = in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ? $menu_list_display_mode : 'card';
-		$data['reservation_show_provider_logo']         = ! empty( $input['reservation_show_provider_logo'] );
-		$data['reservation_show_provider_name']         = ! empty( $input['reservation_show_provider_name'] );
-		$currency_symbol_raw                            = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
-		$data['currency_symbol']                        = sanitize_text_field( $currency_symbol_raw );
-		$tax_label_raw                                  = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
+		// #427: 「絞り込み検索」チェックボックス。未送信＝チェック無しとして扱う（他のチェックボックス項目と同様）。
+		$data['reservation_show_menu_search'] = ! empty( $input['reservation_show_menu_search'] );
+		// #431: 「リソースタグ検索」チェックボックス。「絞り込み検索」の子項目のため、
+		// 親（reservation_show_menu_search）がOFFなら送信値に関わらず強制的にOFFにする
+		// （画面側JS の自動オフ挙動をサーバー側でも保証し、フォーム直接送信での不整合を防ぐ）。
+		$data['resource_tag_search_enabled'] = ! empty( $input['resource_tag_search_enabled'] ) && $data['reservation_show_menu_search'];
+		// リソースタグ機能自体が Pro 版限定のため、無料版では送信値に関わらず無効へ強制する。
+		if ( \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ) {
+			$data['resource_tag_search_enabled'] = false;
+		}
+		$data['reservation_show_menu_list']         = ! empty( $input['reservation_show_menu_list'] );
+		$menu_list_display_mode                     = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? ( $data['reservation_menu_list_display_mode'] ?? 'card' ) ) );
+		$data['reservation_menu_list_display_mode'] = in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ? $menu_list_display_mode : 'card';
+		$data['reservation_show_provider_logo']     = ! empty( $input['reservation_show_provider_logo'] );
+		$data['reservation_show_provider_name']     = ! empty( $input['reservation_show_provider_name'] );
+		$currency_symbol_raw                        = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
+		$data['currency_symbol']                    = sanitize_text_field( $currency_symbol_raw );
+		$tax_label_raw                              = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
 		// Allow leading/trailing spaces, while stripping tags.
 		// 先頭・末尾の空白は維持しつつ、タグは除去します.
 		$data['tax_label_text'] = wp_kses( $tax_label_raw, array() );
@@ -142,7 +162,9 @@ class Settings_Sanitizer {
 			$input['design_reservation_button_color'] ?? ( $data['design_reservation_button_color'] ?? '' )
 		);
 		$design_radius_raw                       = $input['design_radius_md'] ?? ( $data['design_radius_md'] ?? 8 );
-		$data['design_radius_md']                = '' === $design_radius_raw ? '' : $this->sanitize_non_negative_int( $design_radius_raw );
+		$data['design_radius_md']                = '' === $design_radius_raw
+			? ''
+			: min( self::DESIGN_RADIUS_MD_MAX, $this->sanitize_non_negative_int( $design_radius_raw ) );
 		$data['provider_logo_id']                = absint( $data['provider_logo_id'] );
 		$data['provider_cancellation_policy']    = sanitize_textarea_field( $data['provider_cancellation_policy'] );
 		$data['provider_terms_of_service']       = sanitize_textarea_field( $data['provider_terms_of_service'] );

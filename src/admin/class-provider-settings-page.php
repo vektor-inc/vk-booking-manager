@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Common\Weekday_Rule;
 use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\Staff\Staff_Editor;
 use function vkbm_get_default_resource_menu_icon;
@@ -313,6 +314,63 @@ class Provider_Settings_Page {
 	}
 
 	/**
+	 * 「角丸の基本サイズ」（design_radius_md）の表示値を上限でクランプする。
+	 *
+	 * 上限追加（issue #420）以前に保存された超過値（例: 50）を持つサイトでも、
+	 * 表示値を上限でクランプすることで入力欄の value が max 属性を超えないようにする。
+	 * これを怠ると、超過値のまま value に出た状態で保存しようとした際に
+	 * ブラウザの HTML5 検証（max="32"）がフォーム送信自体をブロックし、
+	 * 他の項目も含めて保存できなくなる。
+	 *
+	 * @param array<string, mixed> $settings 保存済みの設定値配列。
+	 * @return int クランプ済みの表示値（未設定・空文字の場合は既定値 8）。
+	 */
+	private static function clamp_design_radius_md_for_display( array $settings ): int {
+		if ( ! isset( $settings['design_radius_md'] ) || '' === $settings['design_radius_md'] ) {
+			return 8;
+		}
+
+		return min( Settings_Sanitizer::DESIGN_RADIUS_MD_MAX, max( 0, (int) $settings['design_radius_md'] ) );
+	}
+
+	/**
+	 * 保存済みの design_radius_md が上限を超えている場合、settings_errors() の仕組みで
+	 * 警告バナーを表示する。
+	 *
+	 * 上限（Settings_Sanitizer::DESIGN_RADIUS_MD_MAX = 32px）追加以前から、この設定項目
+	 * 自体はリリース済みだった。旧 UI には max 属性が無かったため、既に 32px を超える値
+	 * （例: 50）を保存済みのサイトが実在しうる。そのようなサイトでは、
+	 * clamp_design_radius_md_for_display() が入力欄の表示値を、
+	 * Common_Styles::get_custom_properties() がフロントの描画値をそれぞれ黙って 32px へ
+	 * 縮小するため、利用者が気づけないまま見た目が変わって見える。add_settings_error() は
+	 * 保存を伴わない、この pageload 限りのメモリ内リストへの追加のため、保存済みの値
+	 * そのものは変更しない。次回保存時に Settings_Sanitizer 側のクランプで自動的に
+	 * 32px 以下へ収まり、以降はこの通知も出なくなる。
+	 *
+	 * @param array<string, mixed> $settings 保存済みの設定値配列（get_settings() の生の戻り値）。
+	 */
+	private static function maybe_notify_design_radius_md_clamped( array $settings ): void {
+		if ( ! isset( $settings['design_radius_md'] ) || '' === $settings['design_radius_md'] ) {
+			return;
+		}
+
+		if ( (int) $settings['design_radius_md'] <= Settings_Sanitizer::DESIGN_RADIUS_MD_MAX ) {
+			return;
+		}
+
+		add_settings_error(
+			self::MENU_SLUG,
+			'vkbm_design_radius_md_clamped',
+			sprintf(
+				/* translators: %d: Maximum allowed value in pixels. */
+				__( 'The "Base corner radius" was set to a value larger than the current maximum and has been adjusted to %dpx. Save the settings to persist this value.', 'vk-booking-manager' ),
+				Settings_Sanitizer::DESIGN_RADIUS_MD_MAX
+			),
+			'warning'
+		);
+	}
+
+	/**
 	 * Render the settings page.
 	 */
 	public function render_page(): void {
@@ -321,6 +379,7 @@ class Provider_Settings_Page {
 		}
 
 		$settings = $this->settings_service->get_settings();
+		self::maybe_notify_design_radius_md_clamped( $settings );
 		$defaults = $this->settings_service->get_default_settings();
 		// 無料版では選択欄自体を表示しない（Pro_Upsell::get_feature_notice_html() に差し替える）
 		// ため、フィルター適用・翻訳ルックアップを伴う get_presets() を無駄に呼ばない
@@ -477,7 +536,7 @@ class Provider_Settings_Page {
 		}
 		$design_primary_color            = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
 		$design_reservation_button_color = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
-		$design_radius_md                = isset( $settings['design_radius_md'] ) ? (int) $settings['design_radius_md'] : 8;
+		$design_radius_md                = self::clamp_design_radius_md_for_display( $settings );
 		$currency_symbol                 = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
 		$tax_label_text                  = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
 		$currency_placeholder            = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
@@ -992,6 +1051,29 @@ class Provider_Settings_Page {
 										<label class="vkbm-inline-checkbox">
 											<input
 												type="checkbox"
+												id="vkbm-reservation-show-menu-search"
+												name="vkbm_provider_settings[reservation_show_menu_search]"
+												value="1"
+												<?php checked( ! empty( $settings['reservation_show_menu_search'] ) ); ?>
+											/>
+											<?php esc_html_e( 'Filter search', 'vk-booking-manager' ); ?>
+										</label>
+										<?php if ( $is_pro_edition ) : ?>
+											<?php // #431: 「リソースタグ検索」は「絞り込み検索」の子項目のため、インデントして表示する。 ?>
+											<label class="vkbm-inline-checkbox vkbm-inline-checkbox--child">
+												<input
+													type="checkbox"
+													id="vkbm-resource-tag-search-enabled"
+													name="vkbm_provider_settings[resource_tag_search_enabled]"
+													value="1"
+													<?php checked( ! empty( $settings['resource_tag_search_enabled'] ) ); ?>
+												/>
+												<?php esc_html_e( 'Resource tag search', 'vk-booking-manager' ); ?>
+											</label>
+										<?php endif; ?>
+										<label class="vkbm-inline-checkbox">
+											<input
+												type="checkbox"
 												id="vkbm-reservation-show-menu-list"
 												name="vkbm_provider_settings[reservation_show_menu_list]"
 												value="1"
@@ -1000,6 +1082,9 @@ class Provider_Settings_Page {
 											<?php esc_html_e( 'Service menu list', 'vk-booking-manager' ); ?>
 										</label>
 									</div>
+									<p class="description">
+										<?php esc_html_e( 'If neither "Filter search" nor "Service menu list" is checked, only the filter search (selecting the menu, etc. from dropdowns) will be displayed.', 'vk-booking-manager' ); ?>
+									</p>
 							</td>
 						</tr>
 
@@ -2012,10 +2097,11 @@ class Provider_Settings_Page {
 									id="vkbm-design-radius-md"
 									name="vkbm_provider_settings[design_radius_md]"
 									min="0"
+									max="<?php echo esc_attr( (string) Settings_Sanitizer::DESIGN_RADIUS_MD_MAX ); ?>"
 									step="1"
 									value="<?php echo esc_attr( (string) $design_radius_md ); ?>"
 								/> px
-								<p class="description"><?php esc_html_e( 'Applies to rounded corners (--vkbm--radius--md) in the main component.', 'vk-booking-manager' ); ?></p>
+								<p class="description"><?php esc_html_e( 'Applies to the rounded corners of buttons, cards, and time slots on the booking page. Set to 0 for square corners (no rounding).', 'vk-booking-manager' ); ?></p>
 							</td>
 						</tr>
 						<tr class="vkbm-provider-settings__tab-advanced">
@@ -2415,6 +2501,7 @@ class Provider_Settings_Page {
 		$output['provider_booking_cancel_deadline_hours']         = absint( $input['provider_booking_cancel_deadline_hours'] ?? 24 );
 		$output['provider_website_url']                           = sanitize_text_field( $input['provider_website_url'] ?? '' );
 		$output['reservation_page_url']                           = sanitize_text_field( $input['reservation_page_url'] ?? '' );
+		$output['reservation_show_menu_search']                   = ! empty( $input['reservation_show_menu_search'] );
 		$output['reservation_show_menu_list']                     = ! empty( $input['reservation_show_menu_list'] );
 		$output['reservation_menu_list_display_mode']             = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? 'card' ) );
 		$output['reservation_show_provider_logo']                 = ! empty( $input['reservation_show_provider_logo'] );

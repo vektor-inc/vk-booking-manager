@@ -9,15 +9,19 @@ const SOURCE_DIR = path.join( ROOT, 'assets', 'scss' );
 const OUTPUT_DIR = path.join( ROOT, 'build', 'assets', 'css' );
 
 const BUNDLES = {
-	'vkbm-frontend.min.css': [ 'variables.scss', 'common.scss' ],
+	// --vkbm--* カスタムプロパティの既定値（:root ブロック）はここだけに出力する。
+	// 他のバンドルから variables.scss を外し、この1本にまとめることで :root の重複出力を
+	// 防ぐ（issue #420）。Common_Styles::register_styles() が他バンドルの $deps にこの
+	// ハンドルを指定し、enqueue_block_assets（フロント・管理画面・ブロックエディターの
+	// キャンバス iframe いずれでも発火する）で確実に読み込ませる。
+	'vkbm-variables.min.css': [ 'variables.scss' ],
+	'vkbm-frontend.min.css': [ 'common.scss' ],
 	'vkbm-auth.min.css': [
-		'variables.scss',
 		'buttons.scss',
 		'alert.scss',
 		'auth-forms.scss',
 	],
 	'vkbm-editor.min.css': [
-		'variables.scss',
 		'utility.scss',
 		'buttons.scss',
 		'alert.scss',
@@ -26,7 +30,6 @@ const BUNDLES = {
 		'common.scss',
 	],
 	'vkbm-admin.min.css': [
-		'variables.scss',
 		'variables-admin.scss',
 		'utility.scss',
 		'buttons.scss',

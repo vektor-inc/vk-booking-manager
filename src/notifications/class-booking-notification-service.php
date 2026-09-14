@@ -18,6 +18,7 @@ use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 use WP_User;
@@ -666,6 +667,19 @@ class Booking_Notification_Service {
 			$edit_url = admin_url( sprintf( 'post.php?post=%d&action=edit', $booking_id ) );
 		}
 
+		// #431: 予約時に指定したリソースタグ（希望タグ）。店舗向け通知メールにのみ記載する。
+		// タグ名に「&」等が含まれる場合、REST 経由と同じく
+		// HTMLエンティティエンコード済みの状態で保存されている可能性があるため、
+		// サイト名（provider_name / site_name）と同じ扱いで wp_specialchars_decode() を通す。
+		$resource_tag_ids    = get_post_meta( $booking_id, '_vkbm_booking_resource_tag_ids', true );
+		$resource_tag_ids    = is_array( $resource_tag_ids ) ? array_map( 'intval', $resource_tag_ids ) : array();
+		$resource_tag_labels = array_map(
+			static function ( string $label ): string {
+				return wp_specialchars_decode( $label, ENT_QUOTES );
+			},
+			Resource_Tag_Taxonomy::get_labels_for_tag_ids( $resource_tag_ids )
+		);
+
 		return array(
 			'booking_id'                   => $booking_id,
 			'menu_title'                   => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
@@ -693,6 +707,8 @@ class Booking_Notification_Service {
 			'is_staff_preferred'           => $is_staff_preferred,
 			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'edit_url'                     => $edit_url,
+			// #431: 店舗向け通知メールにのみ記載する希望タグ（利用者向けメールには含めない）。
+			'resource_tag_labels'          => $resource_tag_labels,
 		);
 	}
 
@@ -779,11 +795,13 @@ class Booking_Notification_Service {
 	/**
 	 * Build shared reservation information lines.
 	 *
-	 * @param array<string,mixed> $payload      Booking payload.
-	 * @param string              $status_label Status label.
+	 * @param array<string,mixed> $payload           Booking payload.
+	 * @param string              $status_label      Status label.
+	 * @param bool                $show_resource_tag #431: 希望タグ行（担当者名の行の直後）を含めるか。
+	 *                                                店舗向け通知メールのみ true にする。
 	 * @return array<int,string>
 	 */
-	private function get_reservation_information_lines( array $payload, string $status_label = '' ): array {
+	private function get_reservation_information_lines( array $payload, string $status_label = '', bool $show_resource_tag = false ): array {
 		$lines   = array();
 		$lines[] = __( '--- Reservation information ---', 'vk-booking-manager' );
 		/* translators: %d: Booking ID. */
@@ -798,6 +816,14 @@ class Booking_Notification_Service {
 		if ( ! empty( $payload['staff_enabled'] ) ) {
 			/* translators: 1: Resource label, 2: Staff name. */
 			$lines[] = sprintf( __( '%1$s: %2$s', 'vk-booking-manager' ), $payload['resource_label_singular'], $payload['staff_title'] );
+		}
+		// #431: 予約時に指定したリソースタグ（希望タグ）を、
+		// 担当者名の行の直後に表示する。$show_resource_tag は店舗向け通知メールのみ true にし、
+		// 利用者向けメールには含めない（担当変更時にタグを見落として付け替えないようにするための
+		// 情報のため、利用者側には不要）。
+		if ( $show_resource_tag && ! empty( $payload['resource_tag_labels'] ) && is_array( $payload['resource_tag_labels'] ) ) {
+			/* translators: %s: Comma-separated resource tag names requested by the customer. */
+			$lines[] = sprintf( __( 'Requested tag: %s', 'vk-booking-manager' ), implode( ', ', $payload['resource_tag_labels'] ) );
 		}
 		/* translators: %s: Reservation datetime range. */
 		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
@@ -917,7 +943,9 @@ class Booking_Notification_Service {
 			$lines[] = sprintf( __( 'A new %s has been registered.', 'vk-booking-manager' ), $status_label );
 		}
 		$lines[] = '';
-		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload, $status_label ) );
+		// #431: 希望タグは店舗向け通知メールにのみ含める（$show_resource_tag = true）。
+		// 表示位置（担当者名の行の直後）は get_reservation_information_lines() 側で制御する。
+		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload, $status_label, true ) );
 		$lines[] = '';
 		$lines[] = __( '--- Customer information ---', 'vk-booking-manager' );
 		/* translators: %s: Customer name. */

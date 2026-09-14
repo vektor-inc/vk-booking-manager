@@ -194,6 +194,47 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		}
 	}
 
+	/**
+	 * design_radius_md（角丸の基本サイズ）が Settings_Sanitizer::DESIGN_RADIUS_MD_MAX を
+	 * 上限にクランプされることを検証する。
+	 *
+	 * 上限を超える値を保存できると、時間枠カード（.vkbm-slot-list__item）のような
+	 * 内側余白の小さい要素で角丸が内容領域へ食い込み、四隅が破綻して見える
+	 * （差し戻し #420 の植草指摘）。
+	 */
+	public function test_sanitize_clamps_design_radius_md_to_maximum(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '上限値ちょうどの場合はそのまま保持される',
+				'input'               => Settings_Sanitizer::DESIGN_RADIUS_MD_MAX,
+				'expected'            => Settings_Sanitizer::DESIGN_RADIUS_MD_MAX,
+			),
+			array(
+				'test_condition_name' => '上限値を超える場合は上限値にクランプされる',
+				'input'               => Settings_Sanitizer::DESIGN_RADIUS_MD_MAX + 100,
+				'expected'            => Settings_Sanitizer::DESIGN_RADIUS_MD_MAX,
+			),
+			array(
+				'test_condition_name' => '0 の場合は下限クランプ（既存仕様）によりそのまま 0 になる',
+				'input'               => 0,
+				'expected'            => 0,
+			),
+			array(
+				'test_condition_name' => '空文字の場合は未指定として空文字のまま保持される（既存仕様）',
+				'input'               => '',
+				'expected'            => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( array( 'design_radius_md' => $case['input'] ), $defaults );
+			$this->assertSame( $case['expected'], $result['design_radius_md'], $case['test_condition_name'] );
+		}
+	}
+
 	public function test_sanitize_discards_invalid_email(): void {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
@@ -439,6 +480,115 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 			foreach ( $case['expected'] as $key => $value ) {
 				$this->assertSame( $value, $result[ $key ], $case['test_condition_name'] . " (key: {$key})" );
 			}
+		}
+	}
+
+	/**
+	 * #427: 「予約ページの表示要素」の「絞り込み検索」「サービスメニュー一覧」は、それぞれ
+	 * 独立したチェックボックスとして送信値どおりに保存されることを検証する
+	 * （どちらか一方が未送信でも、もう一方の値に引きずられて変わらないこと）。
+	 */
+	public function test_sanitize_reservation_show_menu_search_and_list_are_independent(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '両方チェックなし（未送信）=> 両方 false',
+				'input'               => array(),
+				'expected'            => array(
+					'reservation_show_menu_search' => false,
+					'reservation_show_menu_list'   => false,
+				),
+			),
+			array(
+				'test_condition_name' => '絞り込み検索のみチェック => search=true / list=false',
+				'input'               => array(
+					'reservation_show_menu_search' => '1',
+				),
+				'expected'            => array(
+					'reservation_show_menu_search' => true,
+					'reservation_show_menu_list'   => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'サービスメニュー一覧のみチェック => search=false / list=true',
+				'input'               => array(
+					'reservation_show_menu_list' => '1',
+				),
+				'expected'            => array(
+					'reservation_show_menu_search' => false,
+					'reservation_show_menu_list'   => true,
+				),
+			),
+			array(
+				'test_condition_name' => '両方チェック => 両方 true',
+				'input'               => array(
+					'reservation_show_menu_search' => '1',
+					'reservation_show_menu_list'   => '1',
+				),
+				'expected'            => array(
+					'reservation_show_menu_search' => true,
+					'reservation_show_menu_list'   => true,
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+
+			foreach ( $case['expected'] as $key => $value ) {
+				$this->assertSame( $value, $result[ $key ], $case['test_condition_name'] . " (key: {$key})" );
+			}
+		}
+	}
+
+	/**
+	 * #431: 「リソースタグ検索」（resource_tag_search_enabled）は「絞り込み検索」
+	 * （reservation_show_menu_search）の子項目のため、親がOFFなら送信値に関わらず
+	 * 強制的にOFFになることを検証する。また、リソースタグ機能自体が Pro 版限定のため、
+	 * 無料版では親がONでも常に false へ強制されることを確認する。
+	 */
+	public function test_sanitize_resource_tag_search_enabled_requires_parent_checkbox(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+		$is_free   = Pro_Upsell::is_free_edition();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '親（絞り込み検索）ON・子（リソースタグ検索）ON送信 => Pro版はON、無料版は強制OFF',
+				'input'               => array(
+					'reservation_show_menu_search' => '1',
+					'resource_tag_search_enabled'  => '1',
+				),
+				'expected_pro'        => true,
+			),
+			array(
+				'test_condition_name' => '親（絞り込み検索）OFF・子（リソースタグ検索）ON送信 => 親がOFFのため強制OFF（正常系）',
+				'input'               => array(
+					'reservation_show_menu_search' => '',
+					'resource_tag_search_enabled'  => '1',
+				),
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => '親・子ともに未送信（両方未チェック相当） => OFF（境界値）',
+				'input'               => array(),
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => '親ON・子未送信（子だけ未チェック） => OFF（正常系）',
+				'input'               => array(
+					'reservation_show_menu_search' => '1',
+				),
+				'expected_pro'        => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result   = $sanitizer->sanitize( $case['input'], $defaults );
+			$expected = $is_free ? false : $case['expected_pro'];
+			$this->assertSame( $expected, $result['resource_tag_search_enabled'], $case['test_condition_name'] );
 		}
 	}
 }

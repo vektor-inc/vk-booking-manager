@@ -34,6 +34,9 @@
 			"I agree to the terms of use": [
 				"利用規約に同意します"
 			],
+			"There are no %s matching the selected conditions.": [
+				"条件に該当する%sがいません。"
+			],
 			"Proceed to Reservation": [
 				"予約に進む"
 			],
@@ -63,6 +66,15 @@
 			],
 			"Please choose another time slot.": [
 				"別の時間帯を選択してください。"
+			],
+			"There are no service menus available for the selected %s.": [
+				"選択した%sで予約できるサービスメニューがありません。"
+			],
+			"Choose %s to show all service menus.": [
+				"全メニューを表示するには「%s」を選択してください。"
+			],
+			"There are no service menus to display.": [
+				"表示するサービスメニューはありません。"
 			],
 			"Could not get menu list.": [
 				"メニュー一覧を取得できませんでした。"
@@ -163,9 +175,6 @@
 			"Loading service menu…": [
 				"サービスメニューを読み込み中"
 			],
-			"There are no service menus to display.": [
-				"表示するサービスメニューはありません。"
-			],
 			"Not selected": [
 				"未選択"
 			],
@@ -175,6 +184,9 @@
 			"You can book up to %d more.": [
 				"残り%d名まで予約できます。"
 			],
+			"Make this staff member's time slot private (no other bookings for that staff member will be accepted)": [
+				"この時間帯の担当スタッフを貸切にする（その担当スタッフへの他の方の予約を受け付けません）"
+			],
 			"Make this time slot private (no other bookings will be accepted)": [
 				"この時間帯を貸切にする（他の方の予約を受け付けません）"
 			],
@@ -183,6 +195,9 @@
 			],
 			"A private booking requires at least %d guests.": [
 				"貸切にするには %d 名以上のお申し込みが必要です。"
+			],
+			"Making it private means no one else can book this staff member for this time slot.": [
+				"貸切にすると、この時間帯の担当スタッフへの予約を他の方が入れられなくなります。"
 			],
 			"Making it private means no one else can book this time slot.": [
 				"貸切にすると、この枠は他の方が予約できなくなります。"
@@ -258,6 +273,9 @@
 			],
 			"Select menu": [
 				"メニューを選択"
+			],
+			"%s Resource Tag": [
+				"%s リソースタグ"
 			],
 			"Please select a menu.": [
 				"メニューを選択してください。"

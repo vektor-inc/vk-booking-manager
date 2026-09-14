@@ -132,7 +132,7 @@ class Shift_Editor {
 				<span class="description"><?php esc_html_e( 'In the free version, the staff is fixed.', 'vk-booking-manager' ); ?></span>
 			<?php endif; ?>
 		</p>
-		<p class="vkbm-shift-period">
+		<div class="vkbm-shift-period">
 			<label class="screen-reader-text" for="vkbm-shift-year"><?php esc_html_e( 'year', 'vk-booking-manager' ); ?></label>
 			<select id="vkbm-shift-year" name="vkbm_shift[year]">
 				<?php foreach ( $year_options as $option_year ) : ?>
@@ -151,7 +151,7 @@ class Shift_Editor {
 				<?php endfor; ?>
 			</select>
 			<span class="vkbm-shift-period-suffix"><?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?></span>
-		</p>
+		</div>
 
 		<input type="hidden" id="vkbm-shift-days-json" name="vkbm_shift[days_json]" value="<?php echo esc_attr( (string) $days_json ); ?>" />
 

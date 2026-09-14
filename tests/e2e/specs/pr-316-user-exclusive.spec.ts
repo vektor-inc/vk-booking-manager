@@ -25,6 +25,7 @@ import {
 	wpCliArgs,
 	getStaffId,
 	getServiceMenuId,
+	getCurrentAndNextTokyoMonths,
 } from '../utils/helpers';
 
 // 貸切料金・適用外人数の検証用パラメータ（PR 本文の確認手順に準拠）。
@@ -436,7 +437,9 @@ function restoreShiftForMonth(): void {
 			`update_post_meta( ${ Number.parseInt(
 				snap.postId,
 				10
-			) }, '_vkbm_shift_days', maybe_unserialize( base64_decode( '${ snap.daysB64 }' ) ) );`
+			) }, '_vkbm_shift_days', maybe_unserialize( base64_decode( '${
+				snap.daysB64
+			}' ) ) );`
 		);
 	} else {
 		// spec が新規作成したシフトを削除する（対象スタッフ・年月で検索して force delete）。
@@ -495,9 +498,11 @@ async function goToNextMonthLoaded( page: Page ): Promise< void > {
 		} );
 	// 空き枠のある日が出現する（= 月のデータがロード済み）まで待つ。
 	await expect
-		.poll( async () =>
-			page.locator( '.vkbm-calendar__day--available' ).count()
-		, { timeout: 15000 } )
+		.poll(
+			async () =>
+				page.locator( '.vkbm-calendar__day--available' ).count(),
+			{ timeout: 15000 }
+		)
 		.toBeGreaterThan( 0 );
 }
 
@@ -505,11 +510,11 @@ async function goToNextMonthLoaded( page: Page ): Promise< void > {
  * 本物の Service_Menu_Editor::save_post() を経由してメニュー設定を保存する。
  * テスト側でクランプ・保存ロジックを再現せず、製品の保存実装を検証するため本物を呼ぶ。
  *
- * @param menuId           サービスメニューの投稿ID（数値文字列）
- * @param allowMulti       メニュー個別の複数人予約許可フラグ
- * @param userSelectable   ユーザー貸切指定チェック
- * @param feePerPerson     貸切料金（1人あたり）
- * @param feeExemptGuests  貸切料金を適用しない申込人数
+ * @param menuId          サービスメニューの投稿ID（数値文字列）
+ * @param allowMulti      メニュー個別の複数人予約許可フラグ
+ * @param userSelectable  ユーザー貸切指定チェック
+ * @param feePerPerson    貸切料金（1人あたり）
+ * @param feeExemptGuests 貸切料金を適用しない申込人数
  */
 function savePostViaEditor(
 	menuId: string,
@@ -638,7 +643,13 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 		// Pro版・指名OFF・複数人予約ON の構成にする。
 		setProviderGates( false, true );
 		// 本物の save_post で「複数人予約ON・ユーザー貸切ON・単価・適用外」を保存する。
-		savePostViaEditor( menuId, true, true, FEE_PER_PERSON, FEE_EXEMPT_GUESTS );
+		savePostViaEditor(
+			menuId,
+			true,
+			true,
+			FEE_PER_PERSON,
+			FEE_EXEMPT_GUESTS
+		);
 
 		const html = getConditionsMetaboxHtml( menuId );
 
@@ -674,16 +685,31 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 
 	test( 'メタが保存・復元される（_vkbm_exclusive_user_selectable / 単価 / 適用外人数）', () => {
 		setProviderGates( false, true );
-		savePostViaEditor( menuId, true, true, FEE_PER_PERSON, FEE_EXEMPT_GUESTS );
+		savePostViaEditor(
+			menuId,
+			true,
+			true,
+			FEE_PER_PERSON,
+			FEE_EXEMPT_GUESTS
+		);
 
 		const selectable = wpEvalPhp(
-			`echo get_post_meta( ${ Number.parseInt( menuId, 10 ) }, '_vkbm_exclusive_user_selectable', true ) ? '1' : '0';`
+			`echo get_post_meta( ${ Number.parseInt(
+				menuId,
+				10
+			) }, '_vkbm_exclusive_user_selectable', true ) ? '1' : '0';`
 		);
 		const fee = wpEvalPhp(
-			`echo (int) get_post_meta( ${ Number.parseInt( menuId, 10 ) }, '_vkbm_exclusive_fee_per_person', true );`
+			`echo (int) get_post_meta( ${ Number.parseInt(
+				menuId,
+				10
+			) }, '_vkbm_exclusive_fee_per_person', true );`
 		);
 		const exempt = wpEvalPhp(
-			`echo (int) get_post_meta( ${ Number.parseInt( menuId, 10 ) }, '_vkbm_exclusive_fee_exempt_guests', true );`
+			`echo (int) get_post_meta( ${ Number.parseInt(
+				menuId,
+				10
+			) }, '_vkbm_exclusive_fee_exempt_guests', true );`
 		);
 		expect( selectable ).toBe( '1' );
 		expect( fee ).toBe( String( FEE_PER_PERSON ) );
@@ -693,7 +719,13 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 	test( '複数人予約 OFF で保存すると貸切系メタが削除される', () => {
 		setProviderGates( false, true );
 		// まずON状態で保存しておく。
-		savePostViaEditor( menuId, true, true, FEE_PER_PERSON, FEE_EXEMPT_GUESTS );
+		savePostViaEditor(
+			menuId,
+			true,
+			true,
+			FEE_PER_PERSON,
+			FEE_EXEMPT_GUESTS
+		);
 		// 複数人予約 OFF（フィールドは描画されるが未チェック送信）で保存する。
 		savePostViaEditor( menuId, false, false, 0, 0 );
 
@@ -718,7 +750,13 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 		page,
 	} ) => {
 		setProviderGates( false, true );
-		savePostViaEditor( menuId, true, true, FEE_PER_PERSON, FEE_EXEMPT_GUESTS );
+		savePostViaEditor(
+			menuId,
+			true,
+			true,
+			FEE_PER_PERSON,
+			FEE_EXEMPT_GUESTS
+		);
 
 		await loginAsAdmin( page );
 		await page.goto(
@@ -945,9 +983,7 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 			'.vkbm-plan-summary__exclusive-note--disabled'
 		);
 		await expect( disabledNote ).toBeVisible();
-		await expect( disabledNote ).toContainText(
-			'既にご予約があるため'
-		);
+		await expect( disabledNote ).toContainText( '既にご予約があるため' );
 
 		await page.screenshot( {
 			path: 'tests/e2e/screenshots/pr-316/after-front-exclusive-occupied.png',
@@ -1038,3 +1074,347 @@ async function gotoFrontSlotSummaryUntilSlots( page: Page ): Promise< void > {
 		.first()
 		.waitFor( { state: 'visible', timeout: 15000 } );
 }
+
+// =====================================================================
+// #440: 指名を使うメニューの「指名なし」枠における
+// 「予約者による貸切指定」チェックの有効/無効判定（#440）。
+//
+// 担当A・Bがいる指名メニューで、Aにだけ貸切予約が入っている「指名なし」枠は、
+// Bが空いているため引き続き選択・貸切指定できるはず（remaining ベースの判定）。
+// booked_guests（全担当合計）で判定すると、Aの1件だけで貸切チェックが無効化されてしまう
+// 不具合があった。
+//
+// 担当A・Bともに貸切予約で埋まった枠は、指名なしでも受付停止（カレンダー日単位で
+// disabled）になることも回帰確認する。
+// =====================================================================
+test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」枠での貸切指定チェック', () => {
+	const MENU_TITLE = 'Nomination Exclusive Checkbox Menu';
+	const STAFF_A_TITLE = 'Nomination Exclusive Checkbox Staff A';
+	const STAFF_B_TITLE = 'Nomination Exclusive Checkbox Staff B';
+	// 他 spec のシフト・予約と衝突しないよう、月の後半の固定日を使う。
+	const TARGET_DAY = 22;
+	const SLOT_START = '10:00';
+	const SLOT_END = '11:00';
+
+	let staffAId = '';
+	let staffBId = '';
+	let menuId = '';
+	let dateStr = '';
+
+	/**
+	 * 検証用スタッフを作成する（同名の既存スタッフがあれば作り直す。冪等）。
+	 *
+	 * @param title スタッフのタイトル
+	 * @return 作成したスタッフの post ID（数値文字列）
+	 */
+	function seedExclusiveCheckboxStaff( title: string ): string {
+		const phpCode = `
+				$existing = get_posts( array(
+					'post_type'   => 'vkbm_resource',
+					'post_status' => 'any',
+					'title'       => '${ title }',
+					'fields'      => 'ids',
+					'numberposts' => -1,
+				) );
+				foreach ( $existing as $eid ) {
+					wp_delete_post( $eid, true );
+				}
+				$staff_id = wp_insert_post( array(
+					'post_type'   => 'vkbm_resource',
+					'post_status' => 'publish',
+					'post_title'  => '${ title }',
+				) );
+				if ( is_wp_error( $staff_id ) || ! $staff_id ) {
+					echo 'Error: failed to create staff';
+					return;
+				}
+				echo $staff_id;
+			`;
+		const result = wpEvalPhp( phpCode ).trim();
+		if ( ! /^\d+$/.test( result ) || Number( result ) <= 0 ) {
+			throw new Error( `Staff seeding failed: "${ result }"` );
+		}
+		return result;
+	}
+
+	/**
+	 * 指名を使う検証用メニュー（担当A・B、複数人一括予約ON、予約者による貸切指定ON）を
+	 * 作成する（同名の既存メニューがあれば作り直す。冪等）。最少催行人数は未設定（0＝制約なし）
+	 * のまま残し、貸切指定チェックの有効/無効判定が人数条件に左右されないようにする。
+	 *
+	 * @return 作成したサービスメニューの post ID（数値文字列）
+	 */
+	function seedExclusiveCheckboxMenu(): string {
+		const staffAInt = Number.parseInt( staffAId, 10 );
+		const staffBInt = Number.parseInt( staffBId, 10 );
+		const phpCode = `
+				$staff_a = ${ staffAInt };
+				$staff_b = ${ staffBInt };
+
+				$existing = get_posts( array(
+					'post_type'   => 'vkbm_service_menu',
+					'post_status' => 'any',
+					'title'       => '${ MENU_TITLE }',
+					'fields'      => 'ids',
+					'numberposts' => -1,
+				) );
+				foreach ( $existing as $eid ) {
+					wp_delete_post( $eid, true );
+				}
+				$menu_id = wp_insert_post( array(
+					'post_type'   => 'vkbm_service_menu',
+					'post_status' => 'publish',
+					'post_title'  => '${ MENU_TITLE }',
+				) );
+				if ( is_wp_error( $menu_id ) || ! $menu_id ) {
+					echo 'Error: failed to create menu';
+					return;
+				}
+				// このメニューは指名を使う（既定＝使う。_vkbm_disable_nomination は保存しない）。
+				update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_a, $staff_b ) );
+				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+				update_post_meta( $menu_id, '_vkbm_max_capacity', 2 );
+				update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+				update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+				update_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true );
+				delete_post_meta( $menu_id, '_vkbm_exclusive_when_booked' );
+				delete_post_meta( $menu_id, '_vkbm_min_capacity' );
+				echo $menu_id;
+			`;
+		const result = wpEvalPhp( phpCode ).trim();
+		if ( ! /^\d+$/.test( result ) || Number( result ) <= 0 ) {
+			throw new Error( `Menu seeding failed: "${ result }"` );
+		}
+		return result;
+	}
+
+	/**
+	 * 対象日1日だけ、1スロット（SLOT_START〜SLOT_END）だけのシフトを作成する（冪等）。
+	 * `createShiftForMonth`（終日営業）を使うと、その日の候補スロットが複数になり
+	 * 「10:00」のスロットを一意に掴めなくなるため、日・スロットを絞った専用シフトにする。
+	 *
+	 * @param staffId 対象スタッフの post ID（数値文字列）
+	 * @param year    対象年
+	 * @param month   対象月（1-12）
+	 * @param day     対象日
+	 */
+	function seedNarrowDayShift(
+		staffId: string,
+		year: number,
+		month: number,
+		day: number
+	): void {
+		const sid = Number.parseInt( staffId, 10 );
+		const phpCode = `
+				$resource_id = ${ sid };
+				$year = ${ year };
+				$month = ${ month };
+				$day = ${ day };
+				$days = array(
+					$day => array(
+						'status' => 'open',
+						'slots'  => array( array( 'start' => '${ SLOT_START }', 'end' => '${ SLOT_END }' ) ),
+					),
+				);
+				$existing = get_posts( array(
+					'post_type'   => 'vkbm_shift',
+					'post_status' => 'any',
+					'meta_query'  => array(
+						array( 'key' => '_vkbm_shift_resource_id', 'value' => $resource_id ),
+						array( 'key' => '_vkbm_shift_year', 'value' => $year ),
+						array( 'key' => '_vkbm_shift_month', 'value' => $month ),
+					),
+					'fields'      => 'ids',
+				) );
+				if ( ! empty( $existing ) ) {
+					update_post_meta( $existing[0], '_vkbm_shift_days', $days );
+				} else {
+					$post_id = wp_insert_post( array(
+						'post_type'   => 'vkbm_shift',
+						'post_status' => 'publish',
+						'post_title'  => sprintf( '%d-%02d Staff %d (exclusive checkbox)', $year, $month, $resource_id ),
+					) );
+					update_post_meta( $post_id, '_vkbm_shift_resource_id', $resource_id );
+					update_post_meta( $post_id, '_vkbm_shift_year', $year );
+					update_post_meta( $post_id, '_vkbm_shift_month', $month );
+					update_post_meta( $post_id, '_vkbm_shift_days', $days );
+				}
+			`;
+		wpEvalPhp( phpCode );
+	}
+
+	test.beforeAll( () => {
+		// 共有の provider 設定を変更前に全退避する（他 spec を汚染しない）。
+		snapshotProviderSettings();
+		wpEvalPhp( `
+				$s = get_option( 'vkbm_provider_settings', array() );
+				$s['staff_enabled'] = 1;
+				$s['slot_capacity_enabled'] = 1;
+				unset( $s['multiple_guests_enabled'] );
+				update_option( 'vkbm_provider_settings', $s );
+			` );
+
+		staffAId = seedExclusiveCheckboxStaff( STAFF_A_TITLE );
+		staffBId = seedExclusiveCheckboxStaff( STAFF_B_TITLE );
+		menuId = seedExclusiveCheckboxMenu();
+
+		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
+		dateStr = `${ nextTokyoMonth.year }-${ String(
+			nextTokyoMonth.month
+		).padStart( 2, '0' ) }-${ String( TARGET_DAY ).padStart( 2, '0' ) }`;
+		seedNarrowDayShift(
+			staffAId,
+			nextTokyoMonth.year,
+			nextTokyoMonth.month,
+			TARGET_DAY
+		);
+		seedNarrowDayShift(
+			staffBId,
+			nextTokyoMonth.year,
+			nextTokyoMonth.month,
+			TARGET_DAY
+		);
+	} );
+
+	test.afterAll( () => {
+		deleteAllBookings();
+		if ( menuId ) {
+			wpCliArgs( [ 'post', 'delete', menuId, '--force' ], {
+				stdio: 'ignore',
+			} );
+		}
+		if ( staffAId ) {
+			wpCliArgs( [ 'post', 'delete', staffAId, '--force' ], {
+				stdio: 'ignore',
+			} );
+		}
+		if ( staffBId ) {
+			wpCliArgs( [ 'post', 'delete', staffBId, '--force' ], {
+				stdio: 'ignore',
+			} );
+		}
+		// シフト投稿はスタッフ削除後に孤児として残るが、既存 spec
+		// （issue-392-nomination-slot-capacity.spec.ts 等）と同じ慣習で明示削除はしない。
+		restoreProviderSettings();
+	} );
+
+	test( '担当Aが貸切予約で埋まっていても、Bが空いていれば「指名なし」枠は選択可能で貸切指定チェックも有効になる（#440）', async ( {
+		page,
+	} ) => {
+		deleteAllBookings();
+		// 担当Aにだけ、対象スロットの貸切予約を入れる（担当Bは空きのまま）。
+		createBooking(
+			menuId,
+			staffAId,
+			dateStr,
+			SLOT_START,
+			SLOT_END,
+			1,
+			true
+		);
+		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
+
+		await page.goto( `/booking/?menu_id=${ menuId }` );
+		await page.waitForLoadState( 'networkidle' );
+		await page.waitForSelector( '.vkbm-calendar', {
+			state: 'visible',
+			timeout: 15000,
+		} );
+
+		// 対象日は翌月のため「次の月」を1回送る。スタッフ選択欄には触れず
+		// 「指名なし」（自動割当）のまま進める。
+		await goToNextMonthLoaded( page );
+		await page
+			.locator( '.vkbm-calendar__day', {
+				hasText: new RegExp( `^${ TARGET_DAY }$` ),
+			} )
+			.first()
+			.click();
+
+		// #440: 担当Aの貸切予約だけで枠全体が受付停止になっていた不具合の修正確認。
+		// 担当Bが空いているため、この時間枠は選択可能なまま。
+		const slot = page
+			.locator( '.vkbm-slot-list__item' )
+			.filter( { hasText: SLOT_START } )
+			.first();
+		await slot.waitFor( { state: 'visible', timeout: 15000 } );
+		await expect( slot ).toBeEnabled();
+		await slot.click();
+
+		// #440: 貸切チェックの無効化判定を booked_guests（全担当合計）ではなく
+		// remaining（担当Bの空き）で行うよう修正したことの確認。
+		const checkbox = page.locator(
+			'.vkbm-plan-summary__exclusive-checkbox'
+		);
+		await expect( checkbox ).toBeVisible();
+		await expect( checkbox ).toBeEnabled();
+	} );
+
+	test( '担当A・Bとも貸切予約で埋まっていれば「指名なし」ではその日が選べなくなる（回帰）', async ( {
+		page,
+	} ) => {
+		deleteAllBookings();
+		// 担当A・Bの両方に、対象スロットの貸切予約を入れる（候補が全員貸切）。
+		createBooking(
+			menuId,
+			staffAId,
+			dateStr,
+			SLOT_START,
+			SLOT_END,
+			1,
+			true
+		);
+		createBooking(
+			menuId,
+			staffBId,
+			dateStr,
+			SLOT_START,
+			SLOT_END,
+			1,
+			true
+		);
+		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
+
+		await page.goto( `/booking/?menu_id=${ menuId }` );
+		await page.waitForLoadState( 'networkidle' );
+		await page.waitForSelector( '.vkbm-calendar', {
+			state: 'visible',
+			timeout: 15000,
+		} );
+
+		// この spec 専用のシフトは対象日1日だけのため、月全体では
+		// 「空き枠のある日」が0件になりうる。goToNextMonthLoaded の
+		// available 件数待ちには依存せず、月送り→スピナー消滅だけを待つ。
+		const metaResponse = page
+			.waitForResponse(
+				( res ) =>
+					/calendar-meta/.test( res.url() ) && res.status() === 200,
+				{ timeout: 15000 }
+			)
+			.catch( () => null );
+		await page.locator( '.vkbm-calendar__nav' ).last().click();
+		await metaResponse;
+		await page
+			.locator( '.vkbm-calendar__spinner' )
+			.waitFor( { state: 'detached', timeout: 15000 } )
+			.catch( () => {
+				// 既に detach 済み・未出現でも次のアサーションで判定する。
+			} );
+
+		// #440回帰確認: 候補の担当（A・B）が全員貸切のときだけ、指名を使うメニューの
+		// 「指名なし」枠は受付停止になる（カレンダー日単位で disabled・--available 無し）。
+		const targetDayButton = page
+			.locator( '.vkbm-calendar__day', {
+				hasText: new RegExp( `^${ TARGET_DAY }$` ),
+			} )
+			.first();
+		await targetDayButton.waitFor( {
+			state: 'visible',
+			timeout: 15000,
+		} );
+		await expect( targetDayButton ).toBeDisabled();
+		await expect( targetDayButton ).not.toHaveClass(
+			/vkbm-calendar__day--available/
+		);
+	} );
+} );

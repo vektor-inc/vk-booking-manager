@@ -247,6 +247,12 @@
 		gap: 6px;
 	}
 
+	// #431: 親チェックボックス（例: 「絞り込み検索」）に属する子項目（例: 「リソースタグ検索」）を
+	// インデントして親子関係を視覚的に示す。
+	.vkbm-inline-checkbox--child {
+		margin-left: 1.5em;
+	}
+
 	.vkbm-reminder-hours__list {
 		display: flex;
 		flex-direction: column;

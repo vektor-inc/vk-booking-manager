@@ -440,6 +440,80 @@ export const getStaffEnabled = (): boolean => {
 };
 
 /**
+ * プロバイダー設定で「予約ページの表示要素」の「サービスメニュー一覧」
+ * （reservation_show_menu_list）を切り替えるヘルパー（issue #435）。
+ *
+ * @param enabled true で有効、false で無効
+ */
+export const setMenuListDisplayEnabled = ( enabled: boolean ): void => {
+	const val = enabled ? 'true' : 'false';
+	wpEvalPhp(
+		`
+			$s = get_option( 'vkbm_provider_settings', array() );
+			$s['reservation_show_menu_list'] = ${ val };
+			update_option( 'vkbm_provider_settings', $s );
+		`
+	);
+};
+
+/**
+ * プロバイダー設定の現在の reservation_show_menu_list 値を取得するヘルパー。
+ *
+ * テストで元の状態を保存し、後片付けで正確に復元するために使用する。
+ *
+ * 保存済みオプションを直接 empty() 判定すると、キー未保存時（既定値 true）を
+ * false と誤判定する（アプリ側は Settings_Repository::get_settings() で
+ * 既定値を補ってから判定している）。同じ既定値解決を経由させるため、
+ * アプリと同じ Settings_Repository::get_settings() 経由で判定する。
+ *
+ * @return true で有効、false で無効
+ */
+export const getMenuListDisplayEnabled = (): boolean => {
+	const phpCode = `
+		$repository = new \\VKBookingManager\\ProviderSettings\\Settings_Repository();
+		$s = $repository->get_settings();
+		echo empty( $s['reservation_show_menu_list'] ) ? '0' : '1';
+	`;
+	return wpEvalPhp( phpCode ).trim() === '1';
+};
+
+/**
+ * プロバイダー設定で「予約ページの表示要素」の「絞り込み検索」
+ * （reservation_show_menu_search）を切り替えるヘルパー（issue #435）。
+ *
+ * @param enabled true で有効、false で無効
+ */
+export const setMenuSearchDisplayEnabled = ( enabled: boolean ): void => {
+	const val = enabled ? 'true' : 'false';
+	wpEvalPhp(
+		`
+			$s = get_option( 'vkbm_provider_settings', array() );
+			$s['reservation_show_menu_search'] = ${ val };
+			update_option( 'vkbm_provider_settings', $s );
+		`
+	);
+};
+
+/**
+ * プロバイダー設定の現在の reservation_show_menu_search 値を取得するヘルパー。
+ *
+ * テストで元の状態を保存し、後片付けで正確に復元するために使用する。
+ *
+ * getMenuListDisplayEnabled と同様、既定値解決を Settings_Repository に揃える
+ * （reservation_show_menu_search の既定値は false のため実害は無いが、取得方法を統一する）。
+ *
+ * @return true で有効、false で無効
+ */
+export const getMenuSearchDisplayEnabled = (): boolean => {
+	const phpCode = `
+		$repository = new \\VKBookingManager\\ProviderSettings\\Settings_Repository();
+		$s = $repository->get_settings();
+		echo empty( $s['reservation_show_menu_search'] ) ? '0' : '1';
+	`;
+	return wpEvalPhp( phpCode ).trim() === '1';
+};
+
+/**
  * このプラグインの実在スラッグ（= マウント元フォルダ名）を解決する。
  * Resolve this plugin's actual slug (= the wp-env mounted directory name).
  *
@@ -510,4 +584,45 @@ export const extractOpeningTagById = ( html: string, id: string ): string => {
 		new RegExp( `<[a-zA-Z]+[^>]*\\bid="${ id }"[^>]*>` )
 	);
 	return match ? match[ 0 ] : '';
+};
+
+/**
+ * id 属性を持つ要素の中身（開始タグと終了タグの間のテキスト）を取り出すヘルパー。
+ *
+ * 見出し・説明文などの周辺にも同じ語（別条件用のラベル名など）が出てくる要素は、
+ * HTML 全体に対する含む/含まないの判定では周辺の文言まで拾ってしまい、対象要素
+ * 自体の中身とは無関係に結果がぶれる。対象要素の中身だけに絞って判定するために使う。
+ * ネストした同名タグが無い単純な要素（label・span 等の見出し要素）を対象にした
+ * 実装で、入れ子構造までは解決しない。
+ *
+ * Extracts the text content of an element identified by its id attribute
+ * (the text between its opening and closing tags). Useful when other text
+ * near the element (e.g. a label used under a different condition) contains
+ * the same words, so asserting against the whole HTML would be unreliable.
+ * Intended for simple, non-nested elements (labels, spans, etc.).
+ *
+ * @param html HTML 文字列。 / HTML string.
+ * @param id   対象要素の id 属性値。 / The target element's id attribute value.
+ * @return 要素の中身の文字列（前後の空白はトリム）。見つからなければ空文字。
+ *         The element's text content (surrounding whitespace trimmed). Empty string if not found.
+ */
+export const extractElementTextById = ( html: string, id: string ): string => {
+	const openingTag = extractOpeningTagById( html, id );
+	if ( ! openingTag ) {
+		return '';
+	}
+
+	const tagNameMatch = openingTag.match( /^<([a-zA-Z]+)/ );
+	if ( ! tagNameMatch ) {
+		return '';
+	}
+
+	const startIndex = html.indexOf( openingTag ) + openingTag.length;
+	const closeTag = `</${ tagNameMatch[ 1 ] }>`;
+	const endIndex = html.indexOf( closeTag, startIndex );
+	if ( endIndex === -1 ) {
+		return '';
+	}
+
+	return html.slice( startIndex, endIndex ).trim();
 };

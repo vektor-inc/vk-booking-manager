@@ -72,7 +72,7 @@
 
 		$( '<input type="number" min="0" step="1" />' )
 			.attr( 'name', 'vkbm_service_menu[price_tiers][price][]' )
-			.addClass( 'small-text vkbm-price-tier-price' )
+			.addClass( 'small-text vkbm-price-input vkbm-price-tier-price' )
 			.attr( 'aria-label', priceAria )
 			.appendTo( row );
 
@@ -113,10 +113,11 @@
 	// #392: 予約枠の定員（vkbm-max-capacity-field）・複数人一括予約（vkbm-allow-multiple-guests-field）は
 	// 指名を使うメニューでも利用できるようになったため、この関数では表示を切り替えなくなった
 	// （常に表示。PHP側も同様に hidden 属性を付けない）。
-	// #393: 最少催行人数（指名を使うメニューでは「最低申し込み人数」という意味に変わる）も、
-	// 指名を使うメニューで引き続き意味を持つため表示を切り替えない。一方、複数の別々の予約が
-	// 相乗りする前提の「貸し切り予約・予約者による貸切指定・貸切料金」は指名を使うメニューでは
-	// 意味を持たないため、引き続き syncMultipleGuestsDependentFields() で再評価する。
+	// #393: 最少催行人数（指名を使うメニューでは「最低申し込み人数」という意味に変わる）・
+	// 料金区分・貸し切り予約・予約者による貸切指定はいずれも指名を使うメニューで引き続き
+	// 意味を持つため、表示の切り替えは行わない。ただし最少催行人数欄のラベル・説明文
+	// （syncMinCapacityFieldCopy）は指名の有無で文言そのものが変わるため、引き続き
+	// syncMultipleGuestsDependentFields() 経由で再評価する。
 	function syncNominationDependentFields() {
 		const $useNomination = $( '#vkbm_service_menu_use_nomination' );
 		if ( $useNomination.length === 0 ) {
@@ -127,9 +128,9 @@
 		// 「Nomination fee」欄：指名を使う間だけ表示する。
 		$( '#vkbm-disable-nomination-fee-field' ).prop( 'hidden', ! inUse );
 
-		// #393: 最少催行人数（指名を使うメニューでは「最低申し込み人数」）は表示条件が変わらないが、
-		// 複数人一括予約系の従属欄のうち「指名を使わない」も表示条件に加わる貸し切り予約・料金区分は
-		// 再評価が必要なため、まとめて syncMultipleGuestsDependentFields() を呼ぶ。
+		// #393: 表示・非表示の切り替えは不要だが、最少催行人数欄のラベル・説明文
+		// （syncMinCapacityFieldCopy）は指名の有無で文言が変わるため、それを含む
+		// syncMultipleGuestsDependentFields() を呼んで即時反映する。
 		syncMultipleGuestsDependentFields();
 	}
 
@@ -178,12 +179,12 @@
 		} );
 	}
 
-	// 「複数人予約を許可」チェックと「最大予約受付数」入力、および「このメニューで指名を使う」
-	// チェックに連動して、複数人一括予約に関連する欄（最少催行人数・貸し切り予約・料金区分）の
-	// 表示を切り替える（#320・#412 B-4）。#393: このうち最少催行人数（指名を使うメニューでは
-	// 「最低申し込み人数」）は、他の2欄と異なり「指名を使わない」を表示条件に含めない
-	// （詳細は関数内のコメントを参照）。
-	// これ以外は欄ごと隠す。条件未達のまま入力 → 保存で値が削除され入力が消える事故を防ぐため。
+	// 「複数人予約を許可」チェックと「最大予約受付数」入力に連動して、複数人一括予約に関連する欄
+	// （最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）の表示を切り替える
+	// （#320・#412 B-4）。#393・#440: これら4欄はすべて「複数人予約 ON かつ 最大受付数が2以上」の
+	// 同じ2条件だけで出し分ける。指名の有無は表示条件に含めない（指名を使うメニューでも
+	// 貸切設定を利用できるようにする仕様変更のため）。これ以外は欄ごと隠す。条件未達のまま
+	// 入力 → 保存で値が削除され入力が消える事故を防ぐため。
 	function syncMultipleGuestsDependentFields() {
 		const $checkbox = $( '#vkbm_service_menu_allow_multiple_guests' );
 		if ( $checkbox.length === 0 ) {
@@ -199,26 +200,34 @@
 		const allowMultipleGuests = $checkbox.prop( 'checked' );
 		const meetsCapacity = maxCapacity >= 2;
 
-		// #393: 最少催行人数／最低申し込み人数欄は、指名を使うメニューでも意味を持つ（催行状態の
-		// 表示用しきい値 → 1組の最低人数の受付制限に切り替わるだけ）ため、「指名を使わない」を
-		// 表示条件に含めない。表示条件は「複数人予約 ON かつ 最大受付数が2以上」の2つだけ。
-		const showMinCapacity = allowMultipleGuests && meetsCapacity;
-		$( '#vkbm-min-capacity-field' ).prop( 'hidden', ! showMinCapacity );
+		// #393・#440: 最少催行人数／最低申し込み人数欄・料金区分欄・貸し切り予約・予約者による
+		// 貸切指定は、指名を使うメニューでも意味を持つ（予約画面・予約確定処理は #392／#440の
+		// 時点で「指名を使わない」条件を外して適用済みのため、編集画面もそれに合わせる）ため、
+		// 「指名を使わない」を表示条件に含めない。表示条件は「複数人予約 ON かつ 最大受付数が
+		// 2以上」の2つだけ。
+		const showMultiGuestDependentFields =
+			allowMultipleGuests && meetsCapacity;
+		const hiddenMultiGuestDependentFields = ! showMultiGuestDependentFields;
+		$( '#vkbm-min-capacity-field' ).prop(
+			'hidden',
+			hiddenMultiGuestDependentFields
+		);
 		syncMinCapacityFieldCopy();
+		$( '#vkbm-price-tiers-field' ).prop(
+			'hidden',
+			hiddenMultiGuestDependentFields
+		);
 
-		// 貸し切り予約・予約者による貸切指定・料金区分は、複数の別々の予約が相乗りする前提の機能の
-		// ため、引き続き「指名を使わない かつ 複数人予約 ON かつ 最大受付数2以上」を表示条件とする。
-		const showExclusiveGroup =
-			! isMenuNominationInUse() && allowMultipleGuests && meetsCapacity;
-		const hiddenExclusiveGroup = ! showExclusiveGroup;
+		// 貸し切り予約・予約者による貸切指定も、最少催行人数・料金区分と同じ条件で出し分ける
+		// （以前は「指名を使わない」も条件に加えていたが、指名を使うメニューでも貸切設定を
+		// 利用できるようにする仕様変更で撤廃した）。
 		[
-			'#vkbm-price-tiers-field',
 			'#vkbm-exclusive-when-booked-field',
 			'#vkbm-exclusive-user-selectable-field',
 		].forEach( function ( selector ) {
 			const $field = $( selector );
 			if ( $field.length > 0 ) {
-				$field.prop( 'hidden', hiddenExclusiveGroup );
+				$field.prop( 'hidden', hiddenMultiGuestDependentFields );
 			}
 		} );
 	}

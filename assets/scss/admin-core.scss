@@ -114,6 +114,21 @@
 	gap: 0.5rem;
 }
 
+/**
+ * 管理画面の金額入力欄（基本料金・区分料金・貸切料金・指名料・合計請求額）。
+ *
+ * WordPress コアの `.small-text` は type="number" で 65px 固定のため、
+ * 14800 のような 5 桁以上の金額を入れると数値が右端で見切れて読めなくなる。
+ * 金額は所要時間や人数より桁が伸びやすいので、7 桁（100万円台）まで
+ * スピナー込みで収まる幅を与える。
+ *
+ * コア側の `input[type="number"].small-text`（詳細度 (0,2,1)）を上書きする必要があるため、
+ * 同じ詳細度まで要素＋属性セレクタで合わせている（本スタイルはコア CSS より後に読み込まれる）。
+ */
+input[type="number"].vkbm-price-input {
+	width: 8em;
+}
+
 .vkbm-service-menu-field {
 	margin-bottom: 1em;
 
@@ -254,6 +269,55 @@
 	input {
 		margin: 0 4px;
 	}
+}
+
+/**
+ * 予約編集画面：担当欄の下に表示する「希望タグ」表示（#431）。
+ *
+ * WordPress コアの `.form-table td p { margin-top: 4px; margin-bottom: 0; }`
+ * （詳細度 (0,1,2)）が効いているため、直後の人数入力欄（.vkbm-booking-guests）との間が
+ * 4px しか空かず、担当が希望タグを持っていて担当変更の警告
+ * （vkbm-booking-resource-tag-warning）が表示されないときに詰まって見える。
+ * 警告表示時は .vkbm-alert の背景・パディングで視覚的に区切られるため発生しない。
+ * 担当欄の説明群（希望タグ表示）と、次の情報グループ（人数入力）の境界を独立した
+ * グループとして見せるため、グループ間の余白を追加する（.vkbm-reservation-day-custom と
+ * 同じ考え方）。隣接する要素の margin は既定で collapse するため、次要素側の
+ * margin-top（4px）より大きい値を指定すれば実際の間隔として反映される。
+ * この指定の詳細度は (0,2,2)（クラス2つ: .form-table, .vkbm-booking-resource-tag／
+ * 要素2つ: td, p）で、上書き対象のコア指定 `.form-table td p`（(0,1,2)）を上回るため
+ * `!important` なしで上書きできる。`.form-table td p` を要素セレクタごと明示しているのは
+ * 詳細度を合わせるためではなく、上書き対象のコア指定をそのまま書き写して分かりやすくする
+ * ため（input[type="number"].vkbm-price-input と同じ考え方）。
+ */
+.form-table td p.vkbm-booking-resource-tag {
+	margin-bottom: var(--vkbm--spacing--sm);
+}
+
+/**
+ * 予約編集画面：担当欄の下に表示する人数の行（#446 / 安藤さん・植草さん再レビュー対応）。
+ *
+ * 重なりの本当の原因は common.scss の `*[class*="vkbm-"]:where(:is(h1,…,p,li,dt,dd))
+ * { text-box: trim-both text; }` だった。この指定が `<p class="vkbm-booking-guests">`
+ * にも当たり、`<p>` の高さが文字の高さ（約17px）まで切り詰められるため、入力欄
+ * ケースでは `<label>` 内の入力欄（WordPress コアの `label input.small-text {
+ * margin-top: -4px; }` 込みの実効高さ約36px）が `<p>` の範囲から大きくはみ出し、
+ * 直後の説明文と重なっていた（実測: 約7.3px）。この段落だけ `text-box: none` で
+ * trim を解除すると `<p>` の高さが本来の36pxに戻り、入力欄が収まって重ならなく
+ * なる（安藤さんの再計測・こちらの実測で確認）。入力欄の上端はコアの
+ * `margin-top: -4px` 分だけ `<p>` よりわずかにはみ出すが、上の注記・下の説明文の
+ * どちらとも重ならない。
+ * 「人数: N名」のテキスト表示ケース（$vkbm_guests_locked）にも同じ理由で trim が
+ * 当たっており、`text-box: none` は入力欄の有無で分岐せず同じルールを当ててよい
+ * （表示順・空白の扱いに影響しないため）。
+ * あわせて、担当欄の説明群（注記・希望タグ表示）と人数入力という別々の情報グループの
+ * 境界が分かるよう、前後に独立した余白も追加する（.vkbm-booking-resource-tag と同じ
+ * 考え方。隣接する要素の margin は既定で collapse するため、値が大きい側がそのまま
+ * 間隔になる）。
+ */
+.form-table td p.vkbm-booking-guests {
+	text-box: none;
+	margin-top: var(--vkbm--spacing--xs);
+	margin-bottom: var(--vkbm--spacing--xs);
 }
 
 .vkbm-booking-quick-edit {

@@ -54,4 +54,47 @@ class Resource_Tag_Taxonomy {
 	public static function get_tag_labels( int $post_id ): array {
 		return array();
 	}
+
+	/**
+	 * 指定リソースのリソースタグターム ID 配列を取得する（Free版では常に空配列、#431）。
+	 *
+	 * @param int $post_id リソース投稿ID。
+	 * @return int[] 常に空配列。
+	 */
+	public static function get_tag_ids( int $post_id ): array {
+		return array();
+	}
+
+	/**
+	 * 指定タグ ID をすべて持つリソースを返す（Free版ではタグ機能自体が無いため常に空配列、#431）。
+	 *
+	 * @param array<int> $tag_ids リソースタグのターム ID 配列。
+	 * @return int[] 常に空配列。
+	 */
+	public static function get_resource_ids_for_tags( array $tag_ids ): array {
+		return array();
+	}
+
+	/**
+	 * リソースが指定タグをすべて持つかを判定する（Free版、#431）。
+	 *
+	 * Free版にはタグ機能自体が無いため、$tag_ids が空（＝制約なし）のときのみ true を返す。
+	 *
+	 * @param int        $resource_id リソース投稿ID。
+	 * @param array<int> $tag_ids     必須のリソースタグターム ID 配列。
+	 * @return bool
+	 */
+	public static function resource_has_all_tags( int $resource_id, array $tag_ids ): bool {
+		return empty( $tag_ids );
+	}
+
+	/**
+	 * 指定したターム ID 配列に対応するリソースタグ名を返す（Free版では常に空配列、#431）。
+	 *
+	 * @param array<int> $tag_ids リソースタグのターム ID 配列。
+	 * @return string[] 常に空配列。
+	 */
+	public static function get_labels_for_tag_ids( array $tag_ids ): array {
+		return array();
+	}
 }

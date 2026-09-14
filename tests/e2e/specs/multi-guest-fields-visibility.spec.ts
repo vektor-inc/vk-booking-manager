@@ -108,8 +108,11 @@ function seedMenu(): string {
 // vkbm_service_menu はブロックエディタ（Gutenberg）を使うため、
 // クラシックメタボックスは画面下部の「メタボックス」パネルに折りたたまれて出る。
 // ウェルカムモーダルを閉じ、メタボックス領域へスクロールして対象 input を可視化する。
-async function gotoMenuEditor( page: Page ) {
-	await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
+//
+// @param page   Playwright の Page
+// @param postId 開くサービスメニューの post ID。省略時はモジュール変数 menuId を使う（#440）。
+async function gotoMenuEditor( page: Page, postId: string = menuId ) {
+	await page.goto( `/wp-admin/post.php?post=${ postId }&action=edit` );
 	await page.waitForLoadState( 'domcontentloaded' );
 
 	// 「エディターへようこそ」モーダルが出たら閉じる（操作の妨げになるため）。
@@ -340,5 +343,326 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 		await expect(
 			page.locator( '#vkbm_service_menu_min_capacity' )
 		).toHaveValue( '2' );
+	} );
+
+	// 完了条件2（issue #440）：複数人一括予約チェックの OFF→ON（未保存）で、
+	// 料金区分欄の入力値（区分名・料金）が残ることを確認する。
+	// 最少催行人数と同様、hidden で隠すだけで DOM から値を消さない実装のため、
+	// OFF→ON を往復しても入力値は保持されるはずである。
+	test( '複数人一括予約 OFF→ON（未保存）で料金区分の値（区分名・料金）が残る', async ( {
+		page,
+	} ) => {
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page );
+
+		// 前提: 料金区分は seedMenu() で「一般 5000」「子供 3000」を保存済み。
+		await expectAllRowsVisible( page );
+		const labelInputs = page.locator( '.vkbm-price-tier-label' );
+		const priceInputs = page.locator( '.vkbm-price-tier-price' );
+		await expect( labelInputs.nth( 0 ) ).toHaveValue( '一般' );
+		await expect( priceInputs.nth( 0 ) ).toHaveValue( '5000' );
+		await expect( labelInputs.nth( 1 ) ).toHaveValue( '子供' );
+		await expect( priceInputs.nth( 1 ) ).toHaveValue( '3000' );
+
+		// 複数人一括予約チェックを OFF にする（未保存）→ 料金区分欄は非表示になる。
+		await page.locator( ALLOW_MULTI ).uncheck();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
+
+		// 再度 ON にする → 料金区分欄が再表示され、入力値は消えずに残っている。
+		await page.locator( ALLOW_MULTI ).check();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
+		await expect( labelInputs.nth( 0 ) ).toHaveValue( '一般' );
+		await expect( priceInputs.nth( 0 ) ).toHaveValue( '5000' );
+		await expect( labelInputs.nth( 1 ) ).toHaveValue( '子供' );
+		await expect( priceInputs.nth( 1 ) ).toHaveValue( '3000' );
+	} );
+} );
+
+/**
+ * issue #440：指名を使うメニューでも、編集画面の表示条件を予約画面の判定に揃える。
+ *
+ * 料金区分の欄は「指名を使わない」を表示条件から外し、最少催行人数と同じ
+ * 「複数人一括予約ON かつ 予約枠の定員2以上」の2条件だけで出し入れする。
+ *
+ * #440（PR #447）：貸し切り予約・予約者による貸切指定の2欄も、
+ * 指名を使うメニューでも表示・利用できるように仕様変更した（以前は「指名を使わない」も
+ * 表示条件に含めており、指名を使うメニューでは常に非表示だった）。表示条件は最少催行人数・
+ * 料金区分と同じ「複数人一括予約ON かつ 予約枠の定員2以上」の2条件のみ（指名の有無は問わない）。
+ * 予約時の排他制御は「メニュー全体」ではなく「担当スタッフ単位」になる（PHPUnit側で検証。
+ * `tests/phpunit/bookings/test-nomination-staff-scoped-exclusive-booking.php`）。
+ *
+ * 前提: Pro版有効・指名機能（サイト全体）ON・対象メニューは「このメニューで指名を使う」が
+ * 既定（未設定＝使う）のまま。
+ */
+test.describe( '複数人予約系設定の表示制御（指名を使うメニュー） / issue #440', () => {
+	let originalStaffEnabledForNomination = true;
+	let nominationMenuId = '';
+
+	/**
+	 * 指名を使う検証用メニューを作成する（_vkbm_disable_nomination は保存しない＝指名を使う）。
+	 * 同名メニューがあれば作り直す（冪等）。
+	 *
+	 * @param allowMultipleGuests 複数人一括予約を許可するか
+	 * @return 作成したサービスメニューの post ID（数値文字列）
+	 */
+	function seedNominationMenuForPriceTiers(
+		allowMultipleGuests: boolean
+	): string {
+		const title = `Nomination Price Tiers Menu ${
+			allowMultipleGuests ? 'On' : 'Off'
+		}`;
+		const phpCode = `
+			$existing = get_posts( array(
+				'post_type'   => 'vkbm_service_menu',
+				'post_status' => 'any',
+				'title'       => '${ title }',
+				'fields'      => 'ids',
+				'numberposts' => -1,
+			) );
+			foreach ( $existing as $eid ) {
+				wp_delete_post( $eid, true );
+			}
+
+			$menu_id = wp_insert_post( array(
+				'post_type'   => 'vkbm_service_menu',
+				'post_status' => 'publish',
+				'post_title'  => '${ title }',
+			) );
+			if ( is_wp_error( $menu_id ) || ! $menu_id ) {
+				echo 'Error: failed to create menu';
+				return;
+			}
+			update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', ${
+				allowMultipleGuests ? 'true' : 'false'
+			} );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
+			update_post_meta( $menu_id, '_vkbm_price_tiers', array(
+				array( 'label' => '一般', 'price' => 5000 ),
+				array( 'label' => '子供', 'price' => 3000 ),
+			) );
+			echo $menu_id;
+		`;
+		const result = wpEvalPhp( phpCode ).trim();
+		if ( ! /^\d+$/.test( result ) || Number( result ) <= 0 ) {
+			throw new Error( `Nomination menu seeding failed: "${ result }"` );
+		}
+		return result;
+	}
+
+	test.afterEach( () => {
+		if ( nominationMenuId ) {
+			wpCliArgs( [ 'post', 'delete', nominationMenuId, '--force' ], {
+				stdio: 'ignore',
+			} );
+			nominationMenuId = '';
+		}
+	} );
+
+	test.beforeAll( () => {
+		// 指名機能（サイト全体）ON・予約枠の定員機能ONが前提。
+		originalStaffEnabledForNomination = getStaffEnabled();
+		setStaffEnabled( true );
+		wpEvalPhp( `
+			$s = get_option( 'vkbm_provider_settings', array() );
+			$s['slot_capacity_enabled'] = 1;
+			unset( $s['multiple_guests_enabled'] );
+			update_option( 'vkbm_provider_settings', $s );
+		` );
+	} );
+
+	test.afterAll( () => {
+		setStaffEnabled( originalStaffEnabledForNomination );
+	} );
+
+	// 完了条件1（issue #440）：指名を使うメニューでも、複数人一括予約チェックの有無で
+	// 料金区分の入力欄の表示が切り替わる。
+	test( '指名を使うメニューでも複数人一括予約ON＋定員2以上なら料金区分欄が表示される', async ( {
+		page,
+	} ) => {
+		nominationMenuId = seedNominationMenuForPriceTiers( true );
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page, nominationMenuId );
+
+		// 「このメニューで指名を使う」チェックは既定でONのまま（メタ未設定）。
+		await expect(
+			page.locator( '#vkbm_service_menu_use_nomination' )
+		).toBeChecked();
+
+		// 修正前は「指名を使わない」が条件に含まれていたため、この状態でも
+		// 料金区分欄は非表示のままだった（このテストは修正前は FAIL する）。
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
+
+		// 複数人一括予約チェックを OFF にすると非表示になる。
+		await page.locator( ALLOW_MULTI ).uncheck();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
+
+		// 再度 ON にすると表示に戻る。
+		await page.locator( ALLOW_MULTI ).check();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
+	} );
+
+	// 完了条件4（issue #440）：指名を使うメニューでも、複数人一括予約が無効な場合は
+	// 編集画面に料金区分の入力欄が表示されない。
+	test( '指名を使うメニューでも複数人一括予約が無効なら料金区分欄が表示されない', async ( {
+		page,
+	} ) => {
+		nominationMenuId = seedNominationMenuForPriceTiers( false );
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page, nominationMenuId );
+
+		await expect(
+			page.locator( '#vkbm_service_menu_use_nomination' )
+		).toBeChecked();
+		await expect( page.locator( ALLOW_MULTI ) ).not.toBeChecked();
+
+		// 料金区分は保存済み（_vkbm_price_tiers）だが、複数人一括予約が無効なため非表示。
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
+	} );
+
+	// 完了条件3（issue #440）の e2e 側確認：編集画面から複数人一括予約を OFF にして保存する
+	// 実際の操作フローを確認する。保存すると料金区分メタは save_post() の既存挙動
+	// （#330 と同じ「明示的にOFFにした＝従属設定を破棄する意思表示」）で削除され、
+	// 保存済みの区分値に関係なく基本料金だけで計算される状態になる。
+	// 計算式そのもの（基本料金×1名になること）は PHPUnit 側
+	// （test-max-capacity-disables-multi-guest-settings.php）で確認する。
+	test( '編集画面で複数人一括予約を OFF にして保存すると、料金区分メタが破棄され再読込後も非表示のまま', async ( {
+		page,
+	} ) => {
+		nominationMenuId = seedNominationMenuForPriceTiers( true );
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page, nominationMenuId );
+
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
+		await page.locator( ALLOW_MULTI ).uncheck();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
+
+		// ブロックエディタの更新ボタン（クラスはロケールに関わらず安定）をクリックすると、
+		// (1) REST 保存リクエスト（api-fetch は更新でも POST /wp/v2/vkbm_service_menu/<id> を送る）と
+		// (2) クラシックメタボックス（料金区分欄を含む）の保存リクエスト（POST .../post.php?…
+		// meta-box-loader=1…）が順に飛ぶ。料金区分メタを実際に削除するのは (2) の save_post() 側の
+		// ため、(1) だけを待つと (2) が終わる前にメタを読みに行ってしまう競合があった。
+		// 固定の待機時間に頼らず、両方の応答完了を待つ。
+		const saveResponse = page.waitForResponse(
+			( res ) =>
+				new RegExp(
+					`/wp/v2/vkbm_service_menu/${ nominationMenuId }`
+				).test( res.url() ) && res.request().method() === 'POST',
+			{ timeout: 20000 }
+		);
+		const metaBoxSaveResponse = page.waitForResponse(
+			( res ) =>
+				res.url().includes( 'meta-box-loader=1' ) &&
+				res.request().method() === 'POST',
+			{ timeout: 20000 }
+		);
+		await page.locator( '.editor-post-publish-button__button' ).click();
+		await saveResponse;
+		await metaBoxSaveResponse;
+
+		// 保存済みの料金区分メタは、複数人一括予約OFFでの保存によって削除される。
+		const savedTiers = wpEvalPhp( `
+			$v = get_post_meta( ${ nominationMenuId }, '_vkbm_price_tiers', true );
+			echo empty( $v ) ? 'empty' : 'not-empty';
+		` ).trim();
+		expect( savedTiers ).toBe( 'empty' );
+
+		// 再読込しても複数人一括予約OFF・料金区分欄は非表示のまま。
+		await gotoMenuEditor( page, nominationMenuId );
+		await expect( page.locator( ALLOW_MULTI ) ).not.toBeChecked();
+		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
+	} );
+
+	// #440：指名を使うメニューでも、複数人一括予約ON＋定員2以上なら
+	// 貸し切り予約・予約者による貸切指定の2欄が表示される（修正前は指名を使うメニューでは
+	// 常に非表示だったため、このテストは修正前は FAIL する）。
+	test( '指名を使うメニューでも複数人一括予約ON＋定員2以上なら貸し切り予約・予約者による貸切指定の欄が表示される', async ( {
+		page,
+	} ) => {
+		nominationMenuId = seedNominationMenuForPriceTiers( true );
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page, nominationMenuId );
+
+		await expect(
+			page.locator( '#vkbm_service_menu_use_nomination' )
+		).toBeChecked();
+
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeVisible();
+
+		// 複数人一括予約チェックを OFF にすると非表示になる。
+		await page.locator( ALLOW_MULTI ).uncheck();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeHidden();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeHidden();
+
+		// 再度 ON にすると表示に戻る。
+		await page.locator( ALLOW_MULTI ).check();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeVisible();
+	} );
+
+	// #440：指名を使うメニューでも、複数人一括予約が無効なら貸し切り予約・
+	// 予約者による貸切指定の欄は表示されない（他の3欄と同じ条件で揃っていることの確認）。
+	test( '指名を使うメニューでも複数人一括予約が無効なら貸し切り予約・予約者による貸切指定の欄が表示されない', async ( {
+		page,
+	} ) => {
+		nominationMenuId = seedNominationMenuForPriceTiers( false );
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page, nominationMenuId );
+
+		await expect(
+			page.locator( '#vkbm_service_menu_use_nomination' )
+		).toBeChecked();
+		await expect( page.locator( ALLOW_MULTI ) ).not.toBeChecked();
+
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeHidden();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeHidden();
+	} );
+
+	// #440：保存せず「このメニューで指名を使う」チェックを切り替えても、貸し切り予約・
+	// 予約者による貸切指定の表示は変わらない（指名の有無を表示条件に含めなくなったため。
+	// 修正前は、指名OFFへ切り替えた瞬間に貸切2欄が現れてしまっていた＝表示条件が指名依存だった名残）。
+	test( '指名を使うメニューで保存せず「このメニューで指名を使う」を切り替えても貸し切り予約・予約者による貸切指定の表示は変わらない', async ( {
+		page,
+	} ) => {
+		nominationMenuId = seedNominationMenuForPriceTiers( true );
+		await loginAsAdmin( page );
+		await gotoMenuEditor( page, nominationMenuId );
+
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeVisible();
+
+		// 「このメニューで指名を使う」を保存せずに OFF へ切り替える。
+		await page.locator( '#vkbm_service_menu_use_nomination' ).uncheck();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeVisible();
+
+		// 再度 ON へ戻しても表示は変わらない。
+		await page.locator( '#vkbm_service_menu_use_nomination' ).check();
+		await page.waitForTimeout( 200 );
+		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
+		await expect(
+			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
+		).toBeVisible();
 	} );
 } );

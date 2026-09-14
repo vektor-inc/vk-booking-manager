@@ -183,12 +183,66 @@
 	}
 }
 
+// #431: リソースタグ検索（サービスメニュー・リソースの絞り込みプルダウン直下のチェックボックス群）。
+// 選択肢群と隣接グループ（プルダウン欄・0件メッセージ等）との余白は、親 .vkbm-plan-summary の
+// flex gap（1rem）に委ね、ここでは margin を追加しない（余白階層の最上位＝最も広い間隔）。
+.vkbm-plan-summary__tag-filter {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	// fieldset 既定の min-width（コンテンツ幅に依存）を解除し、flex 親の中で崩れないようにする。
+	min-width: 0;
+
+	// #436: 見出し（legend）は視覚的には非表示にする。ただし display: none にすると
+	// fieldset のアクセシブルネーム（チェックボックス群の見出しとしての読み上げ）まで
+	// 失われるため、screen-reader-text と同じ「視覚的にのみ隠す」手法を使う。
+	// テーマ側で screen-reader-text が未定義の場合にも確実に隠れるよう、
+	// assets/scss/buttons.scss の .vkbm-button .screen-reader-text と同じ手法を、
+	// 影響範囲をこの legend だけに絞って適用する（共用クラス vkbm-plan-summary__label
+	// 自体は他の見出し（メニュー／スタッフ）で引き続き使うため変更しない）。
+	// !important を避けるため、最後の行は word-wrap ではなく white-space: nowrap にしている。
+	> legend.vkbm-plan-summary__label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		padding: 0;
+		overflow: hidden;
+		border: 0;
+		clip: rect(1px, 1px, 1px, 1px);
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}
+
+.vkbm-plan-summary__tag-filter-options {
+	display: flex;
+	flex-wrap: wrap;
+	// 選択肢（チェックボックス1つぶん）どうしの余白。親の flex gap（1rem）より狭く、
+	// コントロール＋ラベル間（下記 gap: 0.35em）より広くする（余白階層の中間）。
+	gap: 0.35rem 0.75rem;
+}
+
+.vkbm-plan-summary__tag-filter-option {
+	display: inline-flex;
+	align-items: center;
+	// コントロール（チェックボックス）とラベルの間隔。余白階層の最小単位のため、
+	// 選択肢どうしの間隔（.vkbm-plan-summary__tag-filter-options の gap）より狭くする。
+	gap: 0.35em;
+	font-size: 0.875rem;
+}
+
+.vkbm-plan-summary__tag-filter-label {
+	// #431: リソースタグの文字の途中で改行しない（issue #431 完了条件）。
+	white-space: nowrap;
+}
+
 .vkbm-plan-summary__pricing {
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
 	border: 1px solid var(--vkbm--color--border);
-	border-radius: 6px;
+	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 0.75rem 1rem;
 	background: #f9fafb;
 }
@@ -242,7 +296,7 @@
 	gap: 1rem;
 	padding: 0.75rem 1rem;
 	border: 1px dashed var(--vkbm--color--border);
-	border-radius: 6px;
+	border-radius: var(--vkbm--radius--md, 8px);
 }
 
 .vkbm-plan-summary__status-label {
@@ -285,7 +339,7 @@
 	min-width: 4rem;
 	padding: 0.35rem 0.5rem;
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
-	border-radius: var(--vkbm--radius--md, 4px);
+	border-radius: var(--vkbm--radius--md, 8px);
 	font-size: 0.95rem;
 }
 
@@ -304,15 +358,24 @@
 	gap: 0.5rem;
 }
 
+// #430: ラベルを行内で伸縮させ、区分名は左端・料金は入力欄の直前（右端）に固定する。
+// これにより区分名の文字数が行ごとに違っても、金額の右端が縦に揃う。
+// 区分名・金額とも極端に長い場合は flex-wrap で折り返し、入力欄側へのはみ出しを防ぐ。
 .vkbm-plan-summary__guest-tier-label {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: baseline;
+	flex: 1 1 auto;
 	gap: 0.5rem;
 	font-size: 0.875rem;
 }
 
-// 区分料金は補足情報として弱めの色で示す.
+// 区分料金は補足情報として弱めの色で示す。
+// margin-left:auto でラベル行内の右端（入力欄の直前）に固定する。折り返して単独行になった場合も
+// justify-content ではなく margin の auto で寄せているため、右揃えが崩れない。
 .vkbm-plan-summary__guest-tier-price {
+	margin-left: auto;
+	flex-shrink: 0; // 意図の明示（金額が縮んで折り返し先で潰れないようにする）
 	font-size: 0.8125rem;
 	color: var(--vkbm--color--text-secondary, #666);
 	white-space: nowrap;
@@ -469,7 +532,7 @@
 
 .vkbm-calendar {
 	border: 1px solid var(--vkbm--color--border);
-	border-radius: var(--vkbm--radius--md, 6px);
+	border-radius: var(--vkbm--radius--md, 8px);
 }
 
 .vkbm-calendar__header {
@@ -549,7 +612,7 @@
 
 .vkbm-slot-list__item {
 	border: 1px solid var(--vkbm--color--border);
-	border-radius: 6px;
+	border-radius: var(--vkbm--radius--md, 8px);
 	padding: var(--vkbm--spacing--xs);
 	text-align: left;
 	background: #fff;
@@ -620,7 +683,7 @@
 .vkbm-slot-list--placeholder {
 	padding: 1rem;
 	border: 1px dashed var(--vkbm--color--border);
-	border-radius: 6px;
+	border-radius: var(--vkbm--radius--md, 8px);
 	color: #666;
 }
 
@@ -676,7 +739,7 @@
 
 .vkbm-confirm__summary {
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
-	border-radius: var(--vkbm--radius--md, 6px);
+	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 1rem;
 	background: #fff;
 	container-type: inline-size;
@@ -688,7 +751,7 @@
 
 .vkbm-confirm__summary-title {
 	background: #f3f4f6;
-	border-radius: var(--vkbm--radius--md, 6px);
+	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 0.5rem 0.75rem;
 	margin-bottom: 0.5rem;
 	display: flex;
@@ -740,7 +803,7 @@
 	margin-bottom: 1.25rem;
 	padding: 0.75rem 1rem;
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
-	border-radius: var(--vkbm--radius--md, 6px);
+	border-radius: var(--vkbm--radius--md, 8px);
 	background: #f9fafb;
 }
 
@@ -912,7 +975,7 @@
 	}
 
 	.vkbm-confirm__auth {
-		border-radius: var(--vkbm--radius--md, 6px);
+		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 2rem;
 		background-color: var(--vkbm--color--bg-secondary);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
@@ -945,7 +1008,7 @@
 	.vkbm-confirm__form textarea {
 		width: 100%;
 		min-height: 120px;
-		border-radius: var(--vkbm--radius--md, 4px);
+		border-radius: var(--vkbm--radius--md, 8px);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		padding: 0.75rem;
 		font-size: 0.95rem;
@@ -953,7 +1016,7 @@
 
 	.vkbm-confirm__admin-fields {
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
-		border-radius: var(--vkbm--radius--md, 4px);
+		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 1rem;
 		background: #fff;
 		display: flex;
@@ -970,7 +1033,7 @@
 
 	.vkbm-confirm__admin-field input,
 	.vkbm-confirm__admin-field textarea {
-		border-radius: var(--vkbm--radius--md, 4px);
+		border-radius: var(--vkbm--radius--md, 8px);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		padding: 0.5rem 0.75rem;
 		font-size: 0.95rem;

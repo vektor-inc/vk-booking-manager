@@ -24,6 +24,7 @@ import {
 	getStaffId,
 	loginAsAdmin,
 	extractOpeningTagById,
+	extractElementTextById,
 } from '../utils/helpers';
 
 /**
@@ -247,10 +248,16 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 
 		// #393: 指名を使うメニューではラベルが「最低申し込み人数」に切り替わる
 		// （id="vkbm-min-capacity-label" の中身。テストサイトは日本語ロケールのため、
-		// __() の翻訳後テキストで検証する。指名OFF用ラベル「最少催行人数」が
-		// 出ていないことも合わせて確認する）。
-		expect( html ).toContain( '最低申し込み人数' );
-		expect( html ).not.toContain( '最少催行人数' );
+		// __() の翻訳後テキストで検証する）。
+		// 同欄の説明文には両方のラベル名（「最少催行人数」「最低申し込み人数」）が
+		// 出るため、HTML 全体ではなく見出し要素（id="vkbm-min-capacity-label"）の
+		// 中身だけに絞って判定する。
+		const minCapacityLabel = extractElementTextById(
+			html,
+			'vkbm-min-capacity-label'
+		);
+		expect( minCapacityLabel ).toContain( '最低申し込み人数' );
+		expect( minCapacityLabel ).not.toContain( '最少催行人数' );
 
 		// #392: 最大受付数（予約枠の定員）欄は、指名を使うメニューでも「1組の最大人数」として
 		// 使われるため、指名ONでも hidden が付かず表示される（#392より前は hidden が付いていた）。

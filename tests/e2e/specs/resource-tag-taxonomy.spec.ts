@@ -159,4 +159,31 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 		const data = await response.json();
 		expect( data.resource_tags ).toEqual( [] );
 	} );
+
+	// #431: 絞り込みはタグ名ではなくターム ID で照合する仕様のため、
+	// resource_tag_ids は表示設定（resource_tag_display_enabled）に関わらず常に返す必要がある。
+	test( '13. REST API に resource_tag_ids フィールドが含まれ、表示設定に関わらずターム ID を返す', async ( {
+		request,
+	} ) => {
+		setResourceTags( staffId, [ 'male' ] );
+		// 「表示」設定をOFFにしても resource_tag_ids は絞り込み専用のため空にならないことを確認する。
+		setTagDisplayEnabled( false );
+
+		const response = await request.get(
+			`/wp-json/wp/v2/vkbm_resource/${ staffId }`
+		);
+		expect( response.ok() ).toBeTruthy();
+		const data = await response.json();
+		expect( data ).toHaveProperty( 'resource_tag_ids' );
+		expect( Array.isArray( data.resource_tag_ids ) ).toBe( true );
+		expect( data.resource_tag_ids.length ).toBeGreaterThan( 0 );
+		expect(
+			data.resource_tag_ids.every( ( id: unknown ) =>
+				Number.isInteger( id )
+			)
+		).toBe( true );
+
+		// 元に戻す（後続テストへの影響を避ける）。
+		setTagDisplayEnabled( true );
+	} );
 } );

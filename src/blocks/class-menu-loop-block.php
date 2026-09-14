@@ -20,10 +20,13 @@ use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Block;
 use WP_Post;
 use WP_Query;
+use function array_intersect;
+use function array_map;
 use function current_user_can;
 use function generate_block_asset_handle;
 use function sanitize_key;
@@ -38,6 +41,23 @@ class Menu_Loop_Block {
 	private const META_USE_DETAIL_PAGE             = '_vkbm_use_detail_page';
 	private const TERM_ORDER_META_KEY              = 'vkbm_term_order';
 	private const TERM_GROUP_DISPLAY_MODE_META_KEY = 'vkbm_menu_group_display_mode';
+
+	/**
+	 * カード表示のアイキャッチ画像に付けるクラス名。
+	 *
+	 * 本文のタグ処理（the_content など）でコアが sizes="auto" を付け直したときに、対象の画像を見分けるために使う。
+	 */
+	public const CARD_IMAGE_CLASS = 'vkbm-menu-loop__card-image';
+
+	/**
+	 * カード表示のアイキャッチ画像の sizes 属性。
+	 *
+	 * 767px 以下はカードが縦積みになり、画像は横幅いっぱい・高さは画像の縦横比のままになるため 100vw を指定する。
+	 * 768px 以上は画像枠が幅 240px 以下で、高さはカード本文に合わせて伸びる。
+	 * object-fit: cover で縦長の枠を埋めても画質が落ちないよう、枠の幅より大きい 480px を指定する。
+	 */
+	private const CARD_IMAGE_SIZES = '(max-width: 767px) 100vw, 480px';
+
 	/**
 	 * Settings repository.
 	 *
@@ -82,6 +102,30 @@ class Menu_Loop_Block {
 	 */
 	public function register(): void {
 		add_action( 'init', array( $this, 'register_block' ) );
+		add_filter( 'wp_content_img_tag', array( $this, 'filter_card_image_tag' ) );
+	}
+
+	/**
+	 * 本文のタグ処理でカード画像に付け直された sizes="auto" を取り除く。
+	 *
+	 * ブロックの出力は the_content などの本文のタグ処理（wp_filter_content_tags）を通る。
+	 * その処理でコアが遅延読み込みの画像に sizes="auto" を付け直すため、カード画像に限って取り除く。
+	 *
+	 * @param mixed $filtered_image img タグの HTML。
+	 * @return mixed カード画像なら auto を取り除いた img タグの HTML。それ以外は受け取った値をそのまま返す。
+	 */
+	public function filter_card_image_tag( $filtered_image ) {
+		// 他のフィルターで文字列以外に変えられている場合は触らない。
+		if ( ! is_string( $filtered_image ) ) {
+			return $filtered_image;
+		}
+
+		// 本文中のすべての画像で呼ばれるため、クラス名を含まない画像は文字列の判定だけで早めに返す。
+		if ( ! str_contains( $filtered_image, self::CARD_IMAGE_CLASS ) ) {
+			return $filtered_image;
+		}
+
+		return VKBM_Helper::remove_img_auto_sizes( $filtered_image );
 	}
 
 	/**
@@ -554,7 +598,7 @@ class Menu_Loop_Block {
 		if ( ! empty( $attributes['showImage'] ) && VKBM_Helper::has_thumbnail( $post, 'direct' ) ) {
 			$parts[] = sprintf(
 				'<div class="vkbm-menu-loop__card-media">%s</div>',
-				VKBM_Helper::get_thumbnail_html( $post, 'large', 'direct' )
+				$this->get_card_image_html( $post )
 			);
 		}
 
@@ -567,6 +611,30 @@ class Menu_Loop_Block {
 			(int) $post->ID,
 			implode( '', $parts )
 		);
+	}
+
+	/**
+	 * カード表示のアイキャッチ画像の img タグを生成する。
+	 *
+	 * 画像枠を埋められる解像度の画像が選ばれるよう、sizes 属性を指定したうえで、コアが付ける sizes="auto" を取り除く。
+	 *
+	 * @param WP_Post $post サービスメニューの投稿。
+	 * @return string img タグの HTML。アイキャッチ画像が無い場合は空文字。
+	 */
+	private function get_card_image_html( WP_Post $post ): string {
+		// 既定のクラスを残しつつ、カード画像を見分けるクラスと sizes 属性を指定する。
+		$image = VKBM_Helper::get_thumbnail_html(
+			$post,
+			'large',
+			'direct',
+			array(
+				'class' => 'attachment-large size-large ' . self::CARD_IMAGE_CLASS,
+				'sizes' => self::CARD_IMAGE_SIZES,
+			)
+		);
+
+		// wp_get_attachment_image() が遅延読み込みの画像に付けた sizes="auto" を取り除く。
+		return VKBM_Helper::remove_img_auto_sizes( $image );
 	}
 
 	/**
@@ -668,9 +736,18 @@ class Menu_Loop_Block {
 	/**
 	 * Render a selection list for the reservation page.
 	 *
+	 * @param int        $staff_id 絞り込み検索で選択されているスタッフの投稿ID（#429）。
+	 *                             0（指名なし）のときは絞り込みを行わず全メニューを表示する。
+	 * @param array<int> $tag_ids  絞り込み検索で選択されているリソースタグのターム ID配列（#431・AND条件）。
+	 *                             空配列のときは絞り込みを行わず全メニューを表示する。
 	 * @return string
 	 */
-	public function render_menu_selection_list(): string {
+	public function render_menu_selection_list( int $staff_id = 0, array $tag_ids = array() ): string {
+		// #431: タグを「すべて」持つリソースの投稿ID集合を先に1回だけ求め、ループ内で使い回す。
+		// タグ未指定（$tag_ids が空）のときは null にし、絞り込みを行わない扱いにする
+		// （空配列だと「該当リソース0件」と区別できないため）。
+		$resource_ids_for_tags = empty( $tag_ids ) ? null : Resource_Tag_Taxonomy::get_resource_ids_for_tags( $tag_ids );
+
 		$query = new WP_Query(
 			array(
 				'post_type'           => Service_Menu_Post_Type::POST_TYPE,
@@ -708,11 +785,23 @@ class Menu_Loop_Block {
 		while ( $query->have_posts() ) {
 			$query->the_post();
 			$post = get_post();
-			if ( $post instanceof WP_Post ) {
+			// #429: スタッフ絞り込みは meta の LIKE 一致（シリアライズ値の部分一致）に頼らず、
+			// 取得済みの投稿ごとに配列化した対応スタッフIDで判定する。
+			// #431: リソースタグ絞り込みも同様に、投稿ごとの対応スタッフIDと
+			// タグを持つリソースID集合の積で判定する（AND条件）。
+			if (
+				$post instanceof WP_Post
+				&& $this->is_menu_visible_for_staff_filter( $post, $staff_id )
+				&& $this->is_menu_visible_for_tag_filter( $post, $resource_ids_for_tags )
+			) {
 				$posts[] = $post;
 			}
 		}
 		wp_reset_postdata();
+
+		if ( empty( $posts ) ) {
+			return '';
+		}
 
 		$attributes = array_merge(
 			$this->get_default_attributes(),
@@ -736,6 +825,96 @@ class Menu_Loop_Block {
 			$items_markup,
 			esc_attr( $mode )
 		);
+	}
+
+	/**
+	 * 絞り込み検索でスタッフが選択されているとき、そのメニューを一覧に表示してよいかを判定する（#429）。
+	 *
+	 * サーバ側（本メソッド）とフロント（app.js の extractAssignableStaffIds を使った判定）とで
+	 * 判定基準を一致させている。基準は以下のとおり。
+	 * - $staff_id が0（指名なし）のとき、またはスタッフ機能（指名機能）自体がサイト全体で無効
+	 *   （無料版、または基本設定でOFF）のときは、絞り込みを行わず常に表示する（staff パラメータを無視する）。
+	 * - メニュー単位で指名を使わない設定（Staff_Editor::is_nomination_enabled_for_menu() が false）の
+	 *   メニューは、スタッフ選択中は一覧から外す（そのメニューはそもそも指名という概念を持たないため）。
+	 * - メニューの対応スタッフ（_vkbm_staff_ids）が未登録（空）のメニューは表示する
+	 *   （Availability_Service::resolve_staff_ids() が対応スタッフ未設定のメニューを
+	 *   指名スタッフでそのまま受け付ける仕様と一致させるため）。
+	 * - 対応スタッフが設定されている場合は、その中に $staff_id が含まれるときだけ表示する。
+	 *
+	 * @param WP_Post $post      サービスメニュー投稿。
+	 * @param int     $staff_id  絞り込み対象スタッフの投稿ID。0は絞り込みなし（指名なし）を表す。
+	 * @return bool 一覧に表示してよい場合は true。
+	 */
+	private function is_menu_visible_for_staff_filter( WP_Post $post, int $staff_id ): bool {
+		if ( $staff_id <= 0 ) {
+			return true;
+		}
+
+		// スタッフ機能（指名機能）自体がサイト全体で無効な場合は staff パラメータを無視し、
+		// 絞り込みを行わない（無料版・基本設定でOFFのときの安全側フォールバック）。
+		if ( ! Staff_Editor::is_nomination_enabled() ) {
+			return true;
+		}
+
+		// メニュー単位で指名を使わない設定のメニューは、スタッフ選択中は一覧から外す。
+		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $post->ID ) ) {
+			return false;
+		}
+
+		$staff_ids = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
+		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+
+		// 対応スタッフが未登録のメニューは、指名スタッフでそのまま受け付ける
+		// （Availability_Service::resolve_staff_ids() と同じ扱い）。
+		if ( empty( $staff_ids ) ) {
+			return true;
+		}
+
+		return in_array( $staff_id, $staff_ids, true );
+	}
+
+	/**
+	 * 絞り込み検索でリソースタグが選択されているとき、そのメニューを一覧に表示してよいかを判定する（#431）。
+	 *
+	 * $staff_id と異なり、タグ検索は指名機能（staff_enabled）の ON/OFF に関係なく機能させる
+	 * 仕様（issue #431 完了条件）のため、is_menu_visible_for_staff_filter() と違って
+	 * Staff_Editor::is_nomination_enabled() 等のチェックは行わない。
+	 *
+	 * 判定基準（以下の順で評価する。上の条件に当てはまった時点で以降は評価しない）:
+	 * 1. $resource_ids_for_tags が null（タグ未選択）のときは絞り込みを行わず常に表示する。
+	 * 2. $resource_ids_for_tags が空配列（選択したタグを「すべて」持つリソースが1件も無い）の
+	 *    ときは、対応スタッフ未登録のメニューを含め、どのメニューも表示しない
+	 *    （issue #431 完了条件「該当するリソースが0件になった場合はメニュー一覧を空にする」）。
+	 * 3. ここまでに該当せず（＝該当リソースが1件以上ある）、かつメニューの対応スタッフ
+	 *    （_vkbm_staff_ids）が未登録（空）のときは表示する
+	 *    （is_menu_visible_for_staff_filter() と判定基準を揃える）。
+	 * 4. 対応スタッフが設定されている場合は、その中にタグを持つリソースが1人でも含まれるときだけ表示する。
+	 *
+	 * @param WP_Post         $post                  サービスメニュー投稿。
+	 * @param array<int>|null $resource_ids_for_tags  選択中のタグを「すべて」持つリソースの投稿ID配列。
+	 *                                                 null は絞り込みなし（タグ未選択）を表す。
+	 * @return bool 一覧に表示してよい場合は true。
+	 */
+	private function is_menu_visible_for_tag_filter( WP_Post $post, ?array $resource_ids_for_tags ): bool {
+		if ( null === $resource_ids_for_tags ) {
+			return true;
+		}
+
+		if ( empty( $resource_ids_for_tags ) ) {
+			return false;
+		}
+
+		$staff_ids = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
+		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+
+		// ここに到達するのは該当リソースが1件以上あるときだけ（0件は直前のreturn falseで
+		// 抜けている）。対応スタッフが未登録のメニューは、is_menu_visible_for_staff_filter()
+		// と同じく表示する。
+		if ( empty( $staff_ids ) ) {
+			return true;
+		}
+
+		return ! empty( array_intersect( $staff_ids, $resource_ids_for_tags ) );
 	}
 
 	/**

@@ -2,6 +2,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import {
 	useCallback,
 	useEffect,
+	useId,
 	useMemo,
 	useRef,
 	useState,
@@ -390,6 +391,8 @@ export const ReservationApp = ( {
 
 	const [ menuId, setMenuId ] = useState( initialMenuId );
 	const [ staffId, setStaffId ] = useState( initialStaffId );
+	// #431: リソースタグ検索で選択中のタグ（タームID配列）。複数選択時は AND 条件。
+	const [ selectedTagIds, setSelectedTagIds ] = useState( [] );
 	const [ selectedDate, setSelectedDate ] = useState( initialDate );
 	const [ selectedSlot, setSelectedSlot ] = useState( null );
 	// 予約人数（複数人一括予約）。複数人一括予約に対応したメニューでのみ使用する。既定は1。
@@ -411,6 +414,9 @@ export const ReservationApp = ( {
 		taxLabelText: '',
 		reservationPageUrl: '',
 		showMenuList: true,
+		showMenuSearch: false,
+		// #431: 「リソースタグ検索」。指名機能（staffEnabled）の ON/OFF とは独立に判定する。
+		resourceTagSearchEnabled: false,
 		staffEnabled: false,
 		defaultStaffId: 0,
 		resourceLabelSingular: __( 'Staff', 'vk-booking-manager' ),
@@ -446,6 +452,235 @@ export const ReservationApp = ( {
 	);
 	// スタッフ選択UI（プルダウン等）自体を表示してよいか。
 	const staffSelectionEnabled = allowStaffSelection && menuNominationEnabled;
+
+	// #429 安藤レビュー指摘（低・再レビュー）: 絞り込み検索で「スタッフによるメニュー絞り込み」
+	// （staffFilteredMenus・menuOptionsHiddenByStaffFilter・menuListEmptyMessage・
+	// menuListStaffId）を行ってよいか。allowStaffSelection が false（古いブロックに残った
+	// data-allow-staff-selection="0" 属性等で、スタッフ欄が ReadOnlyField 表示になっている場合を
+	// 含む）のときは、利用者がスタッフ選択を変更できず「指名なしに戻せば全件表示に戻る」という
+	// 案内も実行できないため、絞り込み自体を行わない。
+	// staffSelectionEnabled はメニュー単位の指名無効（_vkbm_disable_nomination）も条件に含むが、
+	// この4箇所はいずれもメニュー未選択時（currentMenu 未確定）にしか意味を持たないため、
+	// 意味が混ざらないよう別の変数として定義する。
+	const staffFilterAllowed =
+		allowStaffSelection && providerSettings.staffEnabled;
+
+	// #429 安藤レビュー指摘（低・2回目再レビュー）: URL の resource_id 等で staffId に
+	// 非公開・削除済みスタッフの投稿IDが入っていると、staffOptions（読み込み済みのスタッフ
+	// 選択肢）に該当が無いためスタッフ欄には選択中のスタッフ名が表示できず「指名なし」に
+	// 見える。それにもかかわらず絞り込みだけは staffId を使って効いてしまうと、利用者からは
+	// 「指名なしのはずなのに絞り込まれている／指名なしに戻しても変わらない」状態になり、
+	// 案内文が実行不能になる。そのため絞り込みに使う id は、staffOptions に実在する場合の
+	// みへ限定する。staffOptions は非同期取得のため、読み込み前（空配列）は一致せず絞り込みが
+	// 一時的に掛からない状態になるが、読み込み完了後に staffOptions が更新されると
+	// このメモも再計算され、正しく絞り込みが掛かる（許容範囲としてレビューで合意済み）。
+	const staffFilterId = useMemo(
+		() =>
+			staffId > 0 &&
+			staffOptions.some( ( staff ) => staff.id === staffId )
+				? staffId
+				: 0,
+		[ staffId, staffOptions ]
+	);
+
+	// #431: リソースタグ検索が有効か（設定でON、かつ絞り込み検索自体を表示する構成）。
+	// 指名機能（staffEnabled）の ON/OFF には依存しない仕様（issue #431 完了条件）。
+	const resourceTagSearchAllowed = providerSettings.resourceTagSearchEnabled;
+	// 実際にタグで絞り込み中か（1件以上選択されている）。
+	const tagFilterActive =
+		resourceTagSearchAllowed && selectedTagIds.length > 0;
+	// 選択中のタグを「すべて」持つリソースの投稿ID配列（AND条件）。
+	// サーバー側 Resource_Tag_Taxonomy::get_resource_ids_for_tags() と同じロジックを
+	// クライアント側でも再現する（staffOptions が resource_tag_ids フィールドを持つ前提）。
+	// タグ未選択（tagFilterActive が false）のときは null（絞り込みなし）にする。
+	const resourceIdsForTagFilter = useMemo( () => {
+		if ( ! tagFilterActive ) {
+			return null;
+		}
+
+		return staffOptions
+			.filter( ( staff ) => {
+				const tagIds = Array.isArray( staff?.resource_tag_ids )
+					? staff.resource_tag_ids
+					: [];
+				return selectedTagIds.every( ( tagId ) =>
+					tagIds.includes( tagId )
+				);
+			} )
+			.map( ( staff ) => staff.id );
+	}, [ tagFilterActive, staffOptions, selectedTagIds ] );
+
+	// #427: メニュー未選択時に「絞り込み検索」（メニュー／スタッフのプルダウン選択 UI。
+	// SelectedPlanSummary を流用する）を表示するかどうか。
+	// 「絞り込み検索」がチェックされている場合、または「サービスメニュー一覧」がチェックされて
+	// いない場合（両方未チェックの場合を含む）に表示する。これにより、新設定の既定値 false の
+	// まま「サービスメニュー一覧」だけ ON/OFF していた既存サイトの表示は変わらない
+	// （一覧ON→一覧のみ、一覧OFF→絞り込み検索のみ、という従来どおりの2択が保たれる）。
+	const shouldShowMenuSearch =
+		providerSettings.showMenuSearch || ! providerSettings.showMenuList;
+
+	// #429: 絞り込み検索でスタッフを選択している間（メニュー未選択時）、
+	// 「メニュー」プルダウンの選択肢を、そのスタッフが対応できるメニューだけに絞り込む。
+	// サーバ側（Menu_Loop_Block::is_menu_visible_for_staff_filter()）と判定基準を一致させる：
+	// - スタッフ機能自体がOFF、staffId が指名なし（0）、既にメニュー選択済み、または
+	//   絞り込み検索自体を表示しない構成（shouldShowMenuSearch が false）のときは絞り込まない
+	//  （メニュー選択済みのときに絞り込むと、選択中のメニューが選択肢から消えてしまうため。
+	//   絞り込み検索を表示しない構成では、URLのresource_idやブロック属性の既定スタッフだけで
+	//   一覧が絞られてしまうと利用者が気づけないため。安藤レビュー指摘 LOW）。
+	// - メニュー単位で指名を使わない設定（_vkbm_disable_nomination）のメニューは、
+	//   スタッフ選択が有効なときのみ除外する（#431: タグのみでの絞り込みは指名の有無と無関係に
+	//   自動割当へ効くため、この除外は適用しない）。
+	// - 対応スタッフ（_vkbm_staff_ids）が未登録のメニューは残す（スタッフ絞り込みのみが有効なとき）。
+	// - 対応スタッフが設定されている場合は、その中に staffId が含まれるメニューだけ残す（スタッフ絞り込み）。
+	// - #431: タグ絞り込みが有効な場合、選択したタグを「すべて」持つリソースが1件も無いときは
+	//   対応スタッフ未登録のメニューも含めて全て除外する（issue #431 完了条件）。1件以上あるときは
+	//   対応スタッフの中にタグを持つリソースが1人でも含まれるメニューだけ残す（AND条件）。
+	//   いずれもサーバー側 Menu_Loop_Block::is_menu_visible_for_tag_filter() と同じ判定に揃える。
+	const staffActive = staffFilterAllowed && staffFilterId > 0;
+	const staffFilteredMenus = useMemo( () => {
+		if (
+			menuId ||
+			! shouldShowMenuSearch ||
+			( ! staffActive && ! tagFilterActive )
+		) {
+			return menus;
+		}
+
+		return menus.filter( ( menu ) => {
+			if ( staffActive && menu?.meta?._vkbm_disable_nomination ) {
+				return false;
+			}
+
+			const assignableStaffIds = extractAssignableStaffIds( menu?.meta );
+
+			if (
+				staffActive &&
+				assignableStaffIds.length &&
+				! assignableStaffIds.includes( staffFilterId )
+			) {
+				return false;
+			}
+
+			if ( tagFilterActive ) {
+				// 選択したタグを「すべて」持つリソースが1件も無いときは、対応スタッフ
+				// 未登録のメニューも含めて全て除外する（サーバー側 is_menu_visible_for_tag_filter()
+				// と同じ判定。issue #431 完了条件「該当するリソースが0件になった場合は
+				// メニュー一覧を空にする」）。
+				if ( resourceIdsForTagFilter.length === 0 ) {
+					return false;
+				}
+
+				if (
+					assignableStaffIds.length &&
+					! assignableStaffIds.some( ( id ) =>
+						resourceIdsForTagFilter.includes( id )
+					)
+				) {
+					return false;
+				}
+			}
+
+			return true;
+		} );
+	}, [
+		menus,
+		menuId,
+		shouldShowMenuSearch,
+		staffActive,
+		staffFilterId,
+		tagFilterActive,
+		resourceIdsForTagFilter,
+	] );
+
+	// #429 植草レビュー指摘（低）: 「メニュー」プルダウンの選択肢が、絞り込み検索の
+	// スタッフ選択が原因で0件になっているかどうか。メニュー自体が1件も無いサイト
+	// （スタッフ選択と無関係）まで理由文言の対象にしないよう、menus.length > 0 も条件に含める。
+	// #431: タグ絞り込みが原因で0件になっている場合も同様に扱う。
+	const menuOptionsHiddenByStaffFilter =
+		! menuId &&
+		shouldShowMenuSearch &&
+		( staffActive || tagFilterActive ) &&
+		menus.length > 0 &&
+		staffFilteredMenus.length === 0;
+
+	// #429: 絞り込み検索でスタッフを選択している間にサービスメニュー一覧が0件になった場合は、
+	// 「メニュー自体が存在しない」のではなく「そのスタッフで予約できるメニューが無い」ことが
+	// 伝わるよう、通常の0件メッセージとは別の文言を表示する。
+	// 絞り込み検索自体を表示しない構成（shouldShowMenuSearch が false）では絞り込みを行わない
+	// ため、この専用メッセージも出さない（安藤レビュー指摘 LOW。上記 staffFilteredMenus と条件を揃える）。
+	// 植草レビュー指摘（低）: 「指名なし」に戻せば全件表示に戻せることが伝わるよう、
+	// 案内文を1文追加する。「指名なし」の表示名は基本設定
+	// （providerSettings.noNominationLabel。未設定時は既定の "No preference"）で変わるため、
+	// 固定文言にせずその設定値を使う。2文の結合は joinSentences()（#393）に揃える。
+	const menuListEmptyMessage = useMemo( () => {
+		// #431: 選択したタグを「すべて」持つリソースが1件も無い場合は、リソース名称の設定値を
+		// 使った専用メッセージを優先する（issue #431 完了条件：「条件に該当する○○がいません」）。
+		if (
+			shouldShowMenuSearch &&
+			tagFilterActive &&
+			resourceIdsForTagFilter &&
+			resourceIdsForTagFilter.length === 0
+		) {
+			return sprintf(
+				/* translators: %s: resource label (plural), customizable via basic settings. */
+				__(
+					'There are no %s matching the selected conditions.',
+					'vk-booking-manager'
+				),
+				providerSettings.resourceLabelPlural
+			);
+		}
+
+		if ( shouldShowMenuSearch && staffFilterAllowed && staffFilterId > 0 ) {
+			/* translators: %s: resource label (e.g. "Staff"), customizable via basic settings. */
+			const message = __(
+				'There are no service menus available for the selected %s.',
+				'vk-booking-manager'
+			);
+			const baseMessage = message.includes( '%s' )
+				? sprintf( message, providerSettings.resourceLabelSingular )
+				: message;
+
+			const hintMessage = sprintf(
+				/* translators: %s: "No preference" label, customizable via basic settings. */
+				__(
+					'Choose %s to show all service menus.',
+					'vk-booking-manager'
+				),
+				providerSettings.noNominationLabel
+			);
+
+			return joinSentences( baseMessage, hintMessage );
+		}
+
+		return __(
+			'There are no service menus to display.',
+			'vk-booking-manager'
+		);
+	}, [
+		shouldShowMenuSearch,
+		staffFilterAllowed,
+		providerSettings.resourceLabelSingular,
+		providerSettings.resourceLabelPlural,
+		providerSettings.noNominationLabel,
+		staffFilterId,
+		tagFilterActive,
+		resourceIdsForTagFilter,
+	] );
+
+	// #429 安藤・植草レビュー指摘（低・再レビュー）: 絞り込み検索とサービスメニュー一覧を
+	// 両方表示する構成で0件になると、SelectedPlanSummary 側のヒントとこの一覧側の0件
+	// メッセージ（下記 JSX の <p>）に同じ文言が2か所出て、どちらも role="status" で
+	// 二重に読み上げられてしまう。一覧側の要素にこの一意な id を付与し、
+	// SelectedPlanSummary の aria-describedby からこの id を参照させることで、
+	// 一覧を表示する構成では SelectedPlanSummary 側の重複ヒントを出さずに済ませる
+	// （同じページに予約ブロックが複数あっても衝突しないよう useId を使う）。
+	// 安藤レビュー指摘（低・2回目再レビュー）: 以前は @wordpress/compose の useInstanceId を
+	// 使っていたが、公開側の予約ページに wp-compose の追加読み込みが発生していたため、
+	// 既に読み込み済みの @wordpress/element（React 18 の useId をそのまま再エクスポートした
+	// もの。readme.txt の Requires at least 6.8 で利用可能）へ差し替えた。
+	const menuListEmptyMessageIdSuffix = useId();
+	const menuListEmptyMessageId = `vkbm-menu-list-empty-message-${ menuListEmptyMessageIdSuffix }`;
 
 	const [ menuList, setMenuList ] = useState( {
 		html: '',
@@ -548,6 +783,16 @@ export const ReservationApp = ( {
 					reservationPageUrl: settings?.reservation_page_url || '',
 					showMenuList:
 						settings?.reservation_show_menu_list !== false,
+					// #427: 「絞り込み検索」（メニュー／スタッフのプルダウン選択 UI）表示設定。
+					// 未保存（レスポンスに含まれない・false）の場合は非表示。
+					showMenuSearch: Boolean(
+						settings?.reservation_show_menu_search
+					),
+					// #431: 指名機能（staff_enabled）の ON/OFF に関係なく機能させるため、
+					// staffEnabled とは別のフラグとして保持する。
+					resourceTagSearchEnabled: Boolean(
+						settings?.resource_tag_search_enabled
+					),
 					staffEnabled: Boolean( settings?.staff_enabled ),
 					defaultStaffId: Number( settings?.default_staff_id ) || 0,
 					showProviderLogo: Boolean(
@@ -654,6 +899,25 @@ export const ReservationApp = ( {
 		staffId,
 	] );
 
+	// #429: 絞り込み検索でスタッフが選択されているときだけ一覧取得へ反映する staffId。
+	// スタッフ機能自体がサイト全体でOFF（無料版・基本設定でOFF）、絞り込み検索自体を
+	// 表示しない構成（shouldShowMenuSearch が false。URLのresource_id等で初期スタッフが
+	// 入っていても、利用者に見えない絞り込み検索の値だけで一覧が絞られるのを防ぐ。
+	// 安藤レビュー指摘 LOW）、スタッフ選択欄自体が読み取り専用で変更できない構成
+	// （staffFilterAllowed が false。安藤レビュー指摘 LOW・再レビュー）、または staffId が
+	// staffOptions に存在しない（非公開・削除済み等）構成（staffFilterId が0。
+	// 安藤レビュー指摘 LOW・2回目再レビュー）のときは常に0にする。
+	// この場合は staffId が変化してもこの値が変わらないため、下記 useEffect も再実行されない。
+	const menuListStaffId =
+		shouldShowMenuSearch && staffFilterAllowed ? staffFilterId : 0;
+	// #431: 一覧取得へ反映するリソースタグ選択（絞り込み検索を表示しない構成では反映しない。
+	// 上記 menuListStaffId と同じ考え方）。useMemo で空配列の参照を安定させ、
+	// 依存配列に使う下記 useEffect が毎レンダー再実行されないようにする。
+	const menuListTagIds = useMemo(
+		() => ( shouldShowMenuSearch && tagFilterActive ? selectedTagIds : [] ),
+		[ shouldShowMenuSearch, tagFilterActive, selectedTagIds ]
+	);
+
 	useEffect( () => {
 		let isMounted = true;
 
@@ -680,7 +944,18 @@ export const ReservationApp = ( {
 			error: '',
 		} );
 
-		apiFetch( { path: '/vkbm/v1/menu-loop' } )
+		apiFetch( {
+			path: buildApiPath( '/vkbm/v1/menu-loop', {
+				// 0（指名なし）は絞り込み無しのため、パラメーター自体を付与しない。
+				staff: menuListStaffId > 0 ? menuListStaffId : undefined,
+				// #431: 配列はカンマ区切りへ自動変換される（buildApiPath → URLSearchParams）。
+				// 未選択（空配列）時はパラメーター自体を付与しない。パラメーター名は他エンドポイント
+				// （calendar-meta / availabilities）と揃えて resource_tag_ids に統一する。
+				resource_tag_ids: menuListTagIds.length
+					? menuListTagIds
+					: undefined,
+			} ),
+		} )
 			.then( ( response ) => {
 				if ( ! isMounted ) {
 					return;
@@ -709,7 +984,13 @@ export const ReservationApp = ( {
 		return () => {
 			isMounted = false;
 		};
-	}, [ providerSettingsLoaded, providerSettings.showMenuList, menuId ] );
+	}, [
+		providerSettingsLoaded,
+		providerSettings.showMenuList,
+		menuId,
+		menuListStaffId,
+		menuListTagIds,
+	] );
 
 	useEffect( () => {
 		let isMounted = true;
@@ -1127,16 +1408,19 @@ export const ReservationApp = ( {
 	// 「貸し切り予約」（_vkbm_exclusive_when_booked）がONのメニューでは、予約者の指定に関わらず
 	// 既に枠全体が貸切扱いになるため、ユーザーによる貸し切り指定チェックボックス自体を出さない（#388）。
 	// 両方ONで保存されていた過去のメニューでも、指定した予約者だけ貸し切り料金を負担する不整合を防ぐ。
-	// #392: 指名を使うメニューは常に1枠1組（貸切）で、貸し切り予約・予約者による貸切指定・貸切料金の
-	// 3設定自体を編集画面に出さない（サーバ側も Staff_Editor::is_exclusive_booking_available_for_menu()
-	// で指名OFFを要求する）。ここでも念のため menuNominationEnabled で明示的に除外しておく（多層防御）。
+	// #392 時点では、指名を使うメニューは常に1枠1組（貸切）とみなし、貸し切り予約・予約者による
+	// 貸切指定・貸切料金の3設定自体を編集画面にも出さず（サーバ側も
+	// Staff_Editor::is_exclusive_booking_available_for_menu() で指名OFFを要求していた）、ここでも
+	// menuNominationEnabled で明示的に除外していた。#440: 指名を使うメニューでもこの3設定を
+	// 編集画面で設定でき、予約時にも効くように変更した（貸切の排他はメニュー全体ではなく
+	// 担当スタッフ単位。サーバ側の判定は Booking_Draft_Controller / Booking_Confirmation_Controller の
+	// slot_has_exclusive_booking_for_menu() 等を参照）。そのため menuNominationEnabled による除外は撤廃する。
 	const exclusiveSelectable = useMemo(
 		() =>
-			! menuNominationEnabled &&
 			allowMultipleGuests &&
 			! currentMenu?.meta?._vkbm_exclusive_when_booked &&
 			Boolean( currentMenu?.meta?._vkbm_exclusive_user_selectable ),
-		[ menuNominationEnabled, allowMultipleGuests, currentMenu ]
+		[ allowMultipleGuests, currentMenu ]
 	);
 	// 貸し切り料金（1人あたり単価）と適用外人数（0=上限なし＝常に加算）。
 	const exclusiveFeePerPerson = useMemo(
@@ -1175,16 +1459,28 @@ export const ReservationApp = ( {
 		[ currentMenu ]
 	);
 	// 選択中スロットが既に予約済み（貸切受付終了 or 1件以上予約あり）か。貸切指定はこの場合 disabled。
+	// 指名を使うメニューの「指名なし」枠は、booked_guests が全担当スタッフの合計になっており、
+	// 空いている担当がいても booked_guests>0 になり得る。そのため remaining（最も空きの大きい
+	// 単一担当の残り人数。担当ごとに exclusive_closed を反映済み）で「この枠へ新規に割り当てられる
+	// 余地があるか」を判定する。指名を使わないメニューは、物理的に同じ枠を複数担当で共有する
+	// 前提のため、従来どおり枠全体の合計人数（booked_guests）で判定する。
 	const slotIsOccupied = useMemo( () => {
 		if ( ! selectedSlot ) {
 			return false;
+		}
+		if ( Boolean( selectedSlot.exclusive_closed ) ) {
+			return true;
+		}
+		if ( menuNominationEnabled ) {
+			const remaining = Number( selectedSlot.remaining );
+			return Number.isFinite( remaining ) && remaining <= 0;
 		}
 		const booked = Math.max(
 			0,
 			Math.floor( Number( selectedSlot.booked_guests ) || 0 )
 		);
-		return booked > 0 || Boolean( selectedSlot.exclusive_closed );
-	}, [ selectedSlot ] );
+		return booked > 0;
+	}, [ selectedSlot, menuNominationEnabled ] );
 	// 申込人数が最小催行人数を満たすか（minCapacity=0 のときは常に満たす）。
 	const meetsMinCapacity = useMemo(
 		() => minCapacity <= 0 || currentGuestCount >= minCapacity,
@@ -1228,18 +1524,30 @@ export const ReservationApp = ( {
 	}, [ currentMenu ] );
 
 	const availableStaffOptions = useMemo( () => {
+		let options = staffOptions;
+
 		// 無料版、またはこのメニューで指名機能OFFのときは選択可能スタッフの制限を解除する（#391）。
-		if ( ! menuNominationEnabled ) {
-			return staffOptions;
+		if ( menuNominationEnabled && assignableStaffIds.length > 0 ) {
+			const allowedIds = new Set( assignableStaffIds );
+			options = options.filter( ( staff ) => allowedIds.has( staff.id ) );
 		}
 
-		if ( assignableStaffIds.length === 0 ) {
-			return staffOptions;
+		// #431: リソースタグ検索は指名機能の ON/OFF と無関係に機能させる仕様のため、
+		// 上記の指名可否分岐とは独立にタグ絞り込みを適用する。
+		if ( tagFilterActive ) {
+			options = options.filter( ( staff ) =>
+				resourceIdsForTagFilter.includes( staff.id )
+			);
 		}
 
-		const allowedIds = new Set( assignableStaffIds );
-		return staffOptions.filter( ( staff ) => allowedIds.has( staff.id ) );
-	}, [ assignableStaffIds, staffOptions, menuNominationEnabled ] );
+		return options;
+	}, [
+		assignableStaffIds,
+		staffOptions,
+		menuNominationEnabled,
+		tagFilterActive,
+		resourceIdsForTagFilter,
+	] );
 	const shouldLockStaffSelection = assignableStaffIds.length === 1;
 
 	// このメニューで指名OFF かつ複数スタッフが対応可能なメニューは「おまかせ自動分配」とする（#391）。
@@ -1248,6 +1556,16 @@ export const ReservationApp = ( {
 	const autoDistribute =
 		! menuNominationEnabled && assignableStaffIds.length > 1;
 	const effectiveResourceId = autoDistribute ? 0 : staffId;
+	// #431: 空き枠計算・予約下書き・予約確定へ渡すリソースタグ（AND条件）。
+	// 絞り込み検索の表示可否に関わらず、選択中のタグはそのまま候補の絞り込みに反映する
+	// （menu_id をURL指定して開いた場合でもタグ検索欄は表示され続けるため、常時反映してよい。
+	// docs/specification-resource-tag.md 参照）。
+	// useMemo で空配列の参照を安定させ、これに依存する useCallback / useEffect の
+	// 不要な再生成・再実行を防ぐ。
+	const effectiveResourceTagIds = useMemo(
+		() => ( tagFilterActive ? selectedTagIds : [] ),
+		[ tagFilterActive, selectedTagIds ]
+	);
 
 	useEffect( () => {
 		// 無料版、またはこのメニューで指名機能OFFのときは assignableStaffIds のチェックをスキップする（#391）。
@@ -1518,13 +1836,44 @@ export const ReservationApp = ( {
 	// そのためここは意図的にメニュー単位（menuNominationEnabled）ではなくサイト全体の
 	// 指名機能スイッチのままにする。サイト全体でOFFなら、どのメニューも指名を使えないため
 	// スタッフ一覧を取得する意味自体が無い。
+	// #431: リソースタグ検索は指名機能（staffEnabled）と独立に機能させる仕様のため、
+	// staffEnabled が OFF でも resourceTagSearchEnabled が ON なら取得する
+	// （スタッフ選択プルダウンには使わず、タグによる絞り込み判定にのみ使う）。
 	const staffCollectionPath = useMemo( () => {
-		if ( ! providerSettingsLoaded || ! providerSettings.staffEnabled ) {
+		if (
+			! providerSettingsLoaded ||
+			( ! providerSettings.staffEnabled &&
+				! providerSettings.resourceTagSearchEnabled )
+		) {
 			return '';
 		}
-		return '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee,resource_tags';
-	}, [ providerSettingsLoaded, providerSettings.staffEnabled ] );
+		// resource_tag_ids: #431 の絞り込み判定に使うタームID配列（タグ名ではなくIDで照合する）。
+		return '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee,resource_tags,resource_tag_ids';
+	}, [
+		providerSettingsLoaded,
+		providerSettings.staffEnabled,
+		providerSettings.resourceTagSearchEnabled,
+	] );
 	useCollection( staffCollectionPath, setStaffOptions );
+
+	// #431: リソースタグ検索のチェックボックス一覧。リソースが1件も紐づいていないタグは
+	// 表示しない（hide_empty=true を明示指定。WP REST の hide_empty は
+	// タクソノミーの階層有無に関わらず既定値が false のため、指定しないと
+	// 空タグまで一覧に出てしまう）。
+	// なお count はリソース投稿が publish のときだけ数える（WP_Term_Query の既定挙動）ため、
+	// 下書き・非公開状態のリソースにしか付いていないタグは hide_empty=true で
+	// 除外される（docs/specification-resource-tag.md 参照）。
+	const [ resourceTagOptions, setResourceTagOptions ] = useState( [] );
+	const resourceTagCollectionPath = useMemo( () => {
+		if (
+			! providerSettingsLoaded ||
+			! providerSettings.resourceTagSearchEnabled
+		) {
+			return '';
+		}
+		return '/wp/v2/vkbm_resource_tag?per_page=100&hide_empty=true&_fields=id,name,count';
+	}, [ providerSettingsLoaded, providerSettings.resourceTagSearchEnabled ] );
+	useCollection( resourceTagCollectionPath, setResourceTagOptions );
 
 	const dayMetaMap = useMemo( () => {
 		if ( ! calendarData?.days ) {
@@ -1586,6 +1935,10 @@ export const ReservationApp = ( {
 			resource_id: effectiveResourceId || undefined,
 			year: monthCursor.year,
 			month: monthCursor.month,
+			// #431: リソースタグ絞り込み（配列はカンマ区切りへ自動変換される）。
+			resource_tag_ids: effectiveResourceTagIds.length
+				? effectiveResourceTagIds
+				: undefined,
 		} );
 
 		apiFetch( { path } )
@@ -1612,7 +1965,7 @@ export const ReservationApp = ( {
 			.finally( () => {
 				setCalendarLoading( false );
 			} );
-	}, [ menuId, effectiveResourceId, monthCursor ] );
+	}, [ menuId, effectiveResourceId, effectiveResourceTagIds, monthCursor ] );
 
 	useEffect( () => {
 		fetchCalendar();
@@ -1631,6 +1984,10 @@ export const ReservationApp = ( {
 			menu_id: menuId,
 			resource_id: effectiveResourceId || undefined,
 			date: selectedDate,
+			// #431: リソースタグ絞り込み（配列はカンマ区切りへ自動変換される）。
+			resource_tag_ids: effectiveResourceTagIds.length
+				? effectiveResourceTagIds
+				: undefined,
 		} );
 
 		apiFetch( { path } )
@@ -1674,7 +2031,14 @@ export const ReservationApp = ( {
 			.finally( () => {
 				setSlotLoading( false );
 			} );
-	}, [ menuId, staffId, effectiveResourceId, selectedDate, currentStaff ] );
+	}, [
+		menuId,
+		staffId,
+		effectiveResourceId,
+		effectiveResourceTagIds,
+		selectedDate,
+		currentStaff,
+	] );
 
 	useEffect( () => {
 		setSubmitError( '' );
@@ -1727,7 +2091,13 @@ export const ReservationApp = ( {
 			if ( nextAssignableStaffIds.length === 1 ) {
 				setStaffId( nextAssignableStaffIds[ 0 ] );
 			} else if (
+				// #429 安藤レビュー指摘（MEDIUM）: 対応スタッフ未登録
+				// （nextAssignableStaffIds.length === 0）のメニューは、
+				// applyFavorite・対応スタッフの useEffect（1339行目付近）・
+				// PHP側 Availability_Service::resolve_staff_ids() と同じく
+				// 「指名スタッフでそのまま受け付ける」ため、staffId を外してはいけない。
 				staffId &&
+				nextAssignableStaffIds.length > 0 &&
 				! nextAssignableStaffIds.includes( staffId )
 			) {
 				setStaffId( 0 );
@@ -1761,6 +2131,61 @@ export const ReservationApp = ( {
 		setStaffId( nextStaffId );
 		setSelectedSlot( null );
 	};
+
+	// #431: リソースタグ検索のチェックボックスを切り替える。
+	// タグ選択でスタッフ・メニューの絞り込み対象外になった選択済み値は、下の useEffect で
+	// リセットする（選んだ直後に見えなくなった選択肢を残さない）。
+	const handleTagToggle = ( tagId, checked ) => {
+		setSelectedTagIds( ( current ) => {
+			if ( checked ) {
+				return current.includes( tagId )
+					? current
+					: [ ...current, tagId ];
+			}
+			return current.filter( ( id ) => id !== tagId );
+		} );
+		setSelectedSlot( null );
+	};
+
+	// #431: タグ絞り込みで選択中のスタッフ・メニューが対象外になった場合、選択をリセットする
+	// （issue #431 実装メモ「タグをチェックしたときの選択状態の整合」）。
+	// 該当リソースが1件以上あるときに限り、対応スタッフ未登録のメニューは絞り込み対象外
+	// （選択を維持）として扱う。該当リソースが0件になったときは対応スタッフ未登録の
+	// メニューも含めて対象外にする（サーバー側 Menu_Loop_Block::is_menu_visible_for_tag_filter()、
+	// および staffFilteredMenus の判定と揃える）。
+	// staffOptions（リソース一覧）の非同期取得が完了する前は resourceIdsForTagFilter が
+	// 常に空配列になり、「該当リソース無し」と誤判定して選択済みのスタッフ・メニューを
+	// 毎回解除してしまう。staffOptions の読み込み完了（1件以上取得できている状態）までは
+	// このリセット処理自体を動かさない。
+	useEffect( () => {
+		if ( ! tagFilterActive || staffOptions.length === 0 ) {
+			return;
+		}
+
+		if ( staffId && ! resourceIdsForTagFilter.includes( staffId ) ) {
+			setStaffId( 0 );
+		}
+
+		if ( menuId ) {
+			const assignable = extractAssignableStaffIds( currentMenu?.meta );
+			const menuStillMatches =
+				resourceIdsForTagFilter.length > 0 &&
+				( assignable.length === 0 ||
+					assignable.some( ( id ) =>
+						resourceIdsForTagFilter.includes( id )
+					) );
+			if ( ! menuStillMatches ) {
+				setMenuId( 0 );
+			}
+		}
+	}, [
+		tagFilterActive,
+		resourceIdsForTagFilter,
+		staffOptions,
+		staffId,
+		menuId,
+		currentMenu,
+	] );
 
 	// お気に入り（いつもの）を選んでフォームに反映する。
 	// メニューを切り替え、指名スタッフはメニューに紐づく対応スタッフに含まれる場合のみ適用する。
@@ -1951,6 +2376,9 @@ export const ReservationApp = ( {
 			// おまかせ自動分配時は resource_id=0 で送り、サーバーで複数スタッフへ配分する。
 			// effectiveResourceId は常に数値（autoDistribute なら 0、それ以外は staffId）のため || 0 は不要。
 			resource_id: effectiveResourceId,
+			// #431: 予約時に指定したリソースタグ（ターム ID配列・AND条件）。予約確定時の
+			// 再検証・最終チェック・予約メタ保存（希望タグ）まで同じ配列が使われる。
+			resource_tag_ids: effectiveResourceTagIds,
 			menu_label:
 				currentMenu?.title?.rendered ??
 				currentMenu?.title ??
@@ -2284,6 +2712,22 @@ export const ReservationApp = ( {
 		);
 	};
 
+	// #429 植草・安藤レビュー指摘（低・2回目再レビュー）: 一覧（サービスメニュー一覧）を
+	// 表示する構成でも、一覧が読み込み中（menuList.isLoading）や取得失敗
+	// （menuList.error）のときは、下記 JSX の一覧側0件メッセージ <p id={menuListEmptyMessageId}>
+	// が実際には描画されない。この状態のまま SelectedPlanSummary へ menuListVisible=true を
+	// 渡すと、プルダウン側の自前ヒントも一覧側のヒントも両方出ない（aria-describedby が
+	// 存在しない id を指すだけになる）ため、一覧側0件メッセージが実際に描画される条件と
+	// 完全に一致させる。この条件を満たさないときは SelectedPlanSummary 側の自前ヒントに戻す。
+	const menuListEmptyMessageRendered =
+		! menuId &&
+		providerSettings.showMenuList &&
+		providerSettingsLoaded &&
+		! menuList.isLoading &&
+		! menuList.error &&
+		! menuList.html &&
+		Boolean( menuListEmptyMessage );
+
 	return (
 		<div className="vkbm-reservation" ref={ layoutRef }>
 			<ReservationHeader
@@ -2468,78 +2912,128 @@ export const ReservationApp = ( {
 						>
 							{ __( 'Loading…', 'vk-booking-manager' ) }
 						</p>
-					) : providerSettings.showMenuList && ! menuId ? (
-						menuList.html ? (
-							<section
-								className="vkbm-reservation-content__menu-list"
-								aria-live="polite"
-								onClick={ handleMenuLoopClick }
-								dangerouslySetInnerHTML={ {
-									__html: menuList.html,
-								} }
-							/>
-						) : (
-							<section
-								className="vkbm-reservation-content__menu-list"
-								aria-live="polite"
-							>
-								{ menuList.isLoading && (
-									<p
-										className="vkbm-alert vkbm-alert__info"
-										role="status"
-									>
-										{ __(
-											'Loading service menu…',
-											'vk-booking-manager'
-										) }
-									</p>
-								) }
-								{ menuList.error && (
-									<p
-										className="vkbm-alert vkbm-alert__danger"
-										role="alert"
-									>
-										{ menuList.error }
-									</p>
-								) }
-								{ providerSettingsLoaded &&
-									! menuList.isLoading &&
-									! menuList.error &&
-									! menuList.html && (
-										<p
-											className="vkbm-alert vkbm-alert__warning"
-											role="status"
-										>
-											{ __(
-												'There are no service menus to display.',
-												'vk-booking-manager'
-											) }
-										</p>
-									) }
-							</section>
-						)
 					) : (
-						<SelectedPlanSummary
-							menuId={ menuId }
-							staffId={ staffId }
-							menus={ menus }
-							staffOptions={ availableStaffOptions }
-							onMenuChange={ handleMenuChange }
-							onStaffChange={ handleStaffChange }
-							allowStaffSelection={ staffSelectionEnabled }
-							showStaffField={ menuNominationEnabled }
-							lockStaffSelection={ shouldLockStaffSelection }
-							pricingRows={ pricingRows }
-							menuPreviewLoading={ menuPreview.isLoading }
-							menuPreviewError={ menuPreview.error }
-							menuPreviewHtml={ menuPreview.html }
-							resourceLabelSingular={
-								providerSettings.resourceLabelSingular
-							}
-							noNominationLabel={
-								providerSettings.noNominationLabel
-							}
-						/>
+						// #427: SelectedPlanSummary は「選択前」「選択後」で分岐を分けず、
+						// 常に同じ位置（フラグメント内の1つ目）に1つだけ描画する。
+						// menuId の有無で別ブロックに分けると React ツリー上の位置・親の型が
+						// 変わり、プルダウンでメニューを選んだ瞬間に部品ごと作り直されて
+						// フォーカスとスクリーンリーダーの読み上げ位置が失われるため（安藤レビュー指摘）。
+						// 表示条件は「選択済み（menuId あり）」または「絞り込み検索が有効」。
+						// 一覧全体は menuId が無い（未選択）ときだけ表示する。
+						<>
+							{ ( menuId || shouldShowMenuSearch ) && (
+								<SelectedPlanSummary
+									menuId={ menuId }
+									staffId={ staffId }
+									menus={ staffFilteredMenus }
+									staffOptions={ availableStaffOptions }
+									onMenuChange={ handleMenuChange }
+									onStaffChange={ handleStaffChange }
+									allowStaffSelection={
+										staffSelectionEnabled
+									}
+									showStaffField={ menuNominationEnabled }
+									lockStaffSelection={
+										shouldLockStaffSelection
+									}
+									pricingRows={ pricingRows }
+									menuPreviewLoading={ menuPreview.isLoading }
+									menuPreviewError={ menuPreview.error }
+									menuPreviewHtml={ menuPreview.html }
+									resourceLabelSingular={
+										providerSettings.resourceLabelSingular
+									}
+									noNominationLabel={
+										providerSettings.noNominationLabel
+									}
+									menuUnavailableMessage={
+										menuOptionsHiddenByStaffFilter
+											? menuListEmptyMessage
+											: ''
+									}
+									// #429 安藤・植草レビュー指摘（低・再レビュー、2回目再レビューで
+									// 判定条件を修正）: 一覧側の0件メッセージが実際に描画されている
+									// ときだけ、SelectedPlanSummary 側の自前ヒントを省略して
+									// 一覧側の要素を aria-describedby で参照させる。一覧が読み込み中・
+									// 取得失敗などで0件メッセージ自体が出ていないときは、従来どおり
+									// SelectedPlanSummary 側の自前ヒントを出す。
+									menuListVisible={
+										menuListEmptyMessageRendered
+									}
+									menuListEmptyMessageId={
+										menuListEmptyMessageId
+									}
+									// #431: リソースタグ検索。指名機能（staffEnabled）の
+									// ON/OFF に関係なく表示・機能させる仕様のため、
+									// showStaffField（menuNominationEnabled）とは
+									// 独立した props として渡す。
+									showResourceTagSearch={
+										resourceTagSearchAllowed &&
+										resourceTagOptions.length > 0
+									}
+									resourceTagOptions={ resourceTagOptions }
+									selectedTagIds={ selectedTagIds }
+									onTagToggle={ handleTagToggle }
+									// #435: 「サービスメニュー一覧」を表示する設定のときは、
+									// SelectedPlanSummary 側の「メニューを選択してください。」の
+									// アラートを出さない（下に一覧のカードが並ぶため二重案内になる）。
+									showMenuList={
+										providerSettings.showMenuList
+									}
+								/>
+							) }
+							{ ! menuId &&
+								providerSettings.showMenuList &&
+								( menuList.html ? (
+									<section
+										className="vkbm-reservation-content__menu-list"
+										aria-live="polite"
+										onClick={ handleMenuLoopClick }
+										dangerouslySetInnerHTML={ {
+											__html: menuList.html,
+										} }
+									/>
+								) : (
+									<section
+										className="vkbm-reservation-content__menu-list"
+										aria-live="polite"
+									>
+										{ menuList.isLoading && (
+											<p
+												className="vkbm-alert vkbm-alert__info"
+												role="status"
+											>
+												{ __(
+													'Loading service menu…',
+													'vk-booking-manager'
+												) }
+											</p>
+										) }
+										{ menuList.error && (
+											<p
+												className="vkbm-alert vkbm-alert__danger"
+												role="alert"
+											>
+												{ menuList.error }
+											</p>
+										) }
+										{ providerSettingsLoaded &&
+											! menuList.isLoading &&
+											! menuList.error &&
+											! menuList.html && (
+												<p
+													id={
+														menuListEmptyMessageId
+													}
+													className="vkbm-alert vkbm-alert__warning"
+													role="status"
+												>
+													{ menuListEmptyMessage }
+												</p>
+											) }
+									</section>
+								) ) }
+						</>
 					) }
 
 					{ hasMenuSelection && (
@@ -2926,10 +3420,18 @@ export const ReservationApp = ( {
 											}
 										/>
 										<span>
-											{ __(
-												'Make this time slot private (no other bookings will be accepted)',
-												'vk-booking-manager'
-											) }
+											{ /* 予約時点でメニューの指名の有無は既に確定しているため、フロントは
+											menuNominationEnabled で文言を出し分けてよい（担当スタッフ単位で
+											閉じることが伝わる文言にする）。 */ }
+											{ menuNominationEnabled
+												? __(
+														"Make this staff member's time slot private (no other bookings for that staff member will be accepted)",
+														'vk-booking-manager'
+												  )
+												: __(
+														'Make this time slot private (no other bookings will be accepted)',
+														'vk-booking-manager'
+												  ) }
 										</span>
 									</label>
 									{ /* 既に予約がある枠は非表示にせず disabled + 理由表示（色だけに頼らずテキスト併記）。 */ }
@@ -2956,10 +3458,15 @@ export const ReservationApp = ( {
 												</p>
 											) }
 											<p className="vkbm-plan-summary__exclusive-note">
-												{ __(
-													'Making it private means no one else can book this time slot.',
-													'vk-booking-manager'
-												) }
+												{ menuNominationEnabled
+													? __(
+															'Making it private means no one else can book this staff member for this time slot.',
+															'vk-booking-manager'
+													  )
+													: __(
+															'Making it private means no one else can book this time slot.',
+															'vk-booking-manager'
+													  ) }
 											</p>
 											{ exclusiveFeePerPerson > 0 &&
 												( exclusiveFeeExempted ? (

@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use WP_HTML_Tag_Processor;
 use WP_Post;
 use WP_User;
 
@@ -180,6 +181,49 @@ class VKBM_Helper {
 		}
 
 		return (string) wp_get_attachment_image( $thumbnail_id, $size, false, $attr );
+	}
+
+	/**
+	 * img タグの sizes 属性の先頭にある auto を取り除く。
+	 *
+	 * WordPress 6.7 以降のコアは、遅延読み込み（loading="lazy"）の画像の sizes 属性の先頭に auto を付ける。
+	 * sizes="auto" のとき、ブラウザは表示幅だけを基準に srcset から画像を選ぶ。
+	 * そのため object-fit: cover で縦長の枠を埋める画像では、解像度の足りない画像が選ばれて引き伸ばされる。
+	 * そうした画像で、指定した sizes 属性どおりに画像を選ばせるために使う。
+	 *
+	 * @param string $image img タグの HTML。
+	 * @return string auto を取り除いた img タグの HTML。img タグが無い・先頭が auto でない場合は受け取った HTML をそのまま返す。
+	 */
+	public static function remove_img_auto_sizes( string $image ): string {
+		$processor = new WP_HTML_Tag_Processor( $image );
+
+		// img タグが無ければ何もしない。
+		if ( ! $processor->next_tag( array( 'tag_name' => 'IMG' ) ) ) {
+			return $image;
+		}
+
+		// sizes 属性が無ければ何もしない。
+		$sizes = $processor->get_attribute( 'sizes' );
+		if ( ! is_string( $sizes ) ) {
+			return $image;
+		}
+
+		// HTML の仕様では auto は先頭の項目にしか置けないため、先頭の項目だけを判定する。
+		$entries    = explode( ',', $sizes, 2 );
+		$whitespace = " \t\f\r\n";
+		if ( 'auto' !== strtolower( trim( $entries[0], $whitespace ) ) ) {
+			return $image;
+		}
+
+		// auto 以降の指定を残す。auto しか無い場合は sizes 属性ごと削除し、ブラウザ既定の 100vw に任せる。
+		$rest = isset( $entries[1] ) ? trim( $entries[1], $whitespace ) : '';
+		if ( '' === $rest ) {
+			$processor->remove_attribute( 'sizes' );
+		} else {
+			$processor->set_attribute( 'sizes', $rest );
+		}
+
+		return $processor->get_updated_html();
 	}
 
 	/**
