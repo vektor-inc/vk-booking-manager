@@ -136,12 +136,14 @@ class Reservation_Button_Renderer {
 	 *
 	 * オンライン予約不可の場合は無効状態の span を、可能な場合はリンクを返す。
 	 * 予約ページが未設定でリンク先が決められない場合は空文字を返す。
+	 * オンライン予約不可の場合、可視ラベルは $args['label'] や基本設定の値に
+	 * かかわらず「ウェブ予約不可」（Online reservation unavailable）に固定される。
 	 *
 	 * @param WP_Post              $post  サービスメニュー投稿。
 	 * @param array<string,string> $args {
 	 *     描画オプション。
 	 *
-	 *     @type string $label             ボタンラベル。空なら既定ラベルを使う。
+	 *     @type string $label             ボタンラベル。空なら既定ラベルを使う（オンライン予約不可の場合は無視される）。
 	 *     @type string $extra_classes     追加するクラス名（スペース区切り）。
 	 *     @type string $fallback_url      予約ページ未設定時に使う代替URL。
 	 *     @type string $accessible_suffix アクセシブルネームに追記するプラン名等。
@@ -178,21 +180,20 @@ class Reservation_Button_Renderer {
 
 		// オンライン予約が無効の場合はグレーアウトした非活性ボタンを表示する。
 		if ( $this->is_online_unavailable( $post ) ) {
-			// 無効理由（オンライン予約不可）。
+			// 可視ラベルを「ウェブ予約不可」に固定する。ブロック属性や基本設定で
+			// 独自ラベルが指定されていても、予約不可のメニューではボタンが押せない
+			// 理由がラベル自体から伝わるよう、こちらを優先する（issue #451）。
+			$disabled_label = __( 'Online reservation unavailable', 'vk-booking-manager' );
+
+			// 無効理由（ホバー時の補助として title に残す）。
 			$disabled_reason = __( 'This menu does not accept online reservations.', 'vk-booking-manager' );
 
-			// 無効理由とプラン名を、視覚的に隠したテキスト（screen-reader-text）として
-			// 要素内に含める。これにより role/aria-label に頼らずとも、要素のアクセシブル
-			// ネーム（＝可視ラベル＋隠しテキスト）にプラン名・無効理由が含まれ、
-			// SR 利用者へ確実に届く。title はホバー時の補助として残す。
-			$hidden_parts = array_filter(
-				array( $accessible_suffix, $disabled_reason ),
-				static function ( string $part ): bool {
-					return '' !== trim( $part );
-				}
-			);
-			$hidden_text  = '' !== implode( '', $hidden_parts )
-				? sprintf( '<span class="screen-reader-text"> %s</span>', esc_html( implode( ' ', $hidden_parts ) ) )
+			// 読み上げ用の隠しテキスト（screen-reader-text）にはプラン名のみを含める。
+			// 可視ラベル自体が「ウェブ予約不可」＝無効理由を表すようになったため、
+			// 同じ意味の理由文をここでも重ねて読み上げると冗長になるため含めない。
+			// ただしプラン名（accessible_suffix）は、どのプランのボタンかを伝えるために残す。
+			$hidden_text = '' !== trim( $accessible_suffix )
+				? sprintf( '<span class="screen-reader-text"> %s</span>', esc_html( $accessible_suffix ) )
 				: '';
 
 			// role="link" は「たどれるリンク」を意味し aria-disabled と衝突するため付けない。
@@ -201,7 +202,7 @@ class Reservation_Button_Renderer {
 				'<span class="%1$s is-disabled" aria-disabled="true" title="%2$s">%3$s%4$s</span>',
 				esc_attr( $class_attr ),
 				esc_attr( $disabled_reason ),
-				esc_html( $label ),
+				esc_html( $disabled_label ),
 				$hidden_text
 			);
 		}

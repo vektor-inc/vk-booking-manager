@@ -106,6 +106,9 @@ export declare function _e164<T extends schemas.$ZodE164>(Class: util.SchemaClas
 export type $ZodCreditCardParams = StringFormatParams<schemas.$ZodCreditCard, "pattern" | "when">;
 export type $ZodCheckCreditCardParams = CheckStringFormatParams<schemas.$ZodCreditCard, "pattern" | "when">;
 export declare function _creditCard<T extends schemas.$ZodCreditCard>(Class: util.SchemaClass<T>, params?: string | $ZodCreditCardParams | $ZodCheckCreditCardParams): T;
+export type $ZodIBANParams = StringFormatParams<schemas.$ZodIBAN, "pattern" | "when">;
+export type $ZodCheckIBANParams = CheckStringFormatParams<schemas.$ZodIBAN, "pattern" | "when">;
+export declare function _iban<T extends schemas.$ZodIBAN>(Class: util.SchemaClass<T>, params?: string | $ZodIBANParams | $ZodCheckIBANParams): T;
 export type $ZodJWTParams = StringFormatParams<schemas.$ZodJWT, "pattern" | "when">;
 export type $ZodCheckJWTParams = CheckStringFormatParams<schemas.$ZodJWT, "pattern" | "when">;
 export declare function _jwt<T extends schemas.$ZodJWT>(Class: util.SchemaClass<T>, params?: string | $ZodJWTParams | $ZodCheckJWTParams): T;
@@ -211,11 +214,10 @@ export type $ZodCheckEndsWithParams = CheckParams<checks.$ZodCheckEndsWith, "suf
 export declare function _endsWith(suffix: string, params?: string | $ZodCheckEndsWithParams): checks.$ZodCheckEndsWith;
 export type $ZodCheckPropertyParams = CheckParams<checks.$ZodCheckProperty, "property" | "schema" | "when">;
 export declare function _property<K extends string, T extends schemas.$ZodType>(property: K, schema: T, params?: string | $ZodCheckPropertyParams): checks.$ZodCheckProperty<{
-    [k in K]: core.output<T>;
+    [k in K]: util.Widen<core.input<T>>;
 }>;
-export declare function _properties<Shape extends schemas.$ZodShape>(shape: Shape): checks.$ZodCheckProperty<{
-    -readonly [k in keyof Shape]: core.output<Shape[k]>;
-}>[];
+export type $ZodPropertiesParams = CheckTypeParams<schemas.$ZodProperties, "shape" | "when">;
+export declare function _properties<Shape extends schemas.$ZodShape>(Class: util.SchemaClass<schemas.$ZodProperties>, shape: Shape, params?: string | $ZodPropertiesParams): schemas.$ZodProperties<Shape>;
 export type $ZodCheckMimeTypeParams = CheckParams<checks.$ZodCheckMimeType, "mime" | "when">;
 export declare function _mime(types: util.MimeTypes[], params?: string | $ZodCheckMimeTypeParams): checks.$ZodCheckMimeType;
 export declare function _overwrite<T>(tx: (input: T) => T): checks.$ZodCheckOverwrite<T>;

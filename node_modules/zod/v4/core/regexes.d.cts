@@ -46,6 +46,7 @@ export declare const domain: RegExp;
 export declare const httpProtocol: RegExp;
 export declare const e164: RegExp;
 export declare const creditCard: RegExp;
+export declare const iban: RegExp;
 export declare const date: RegExp;
 export declare function time(args: {
     precision?: number | null;
@@ -55,6 +56,7 @@ export declare function datetime(args: {
     offset?: boolean;
     local?: boolean;
 }): RegExp;
+export declare const anyString: RegExp;
 export declare const string: (params?: {
     minimum?: number | undefined;
     maximum?: number | undefined;

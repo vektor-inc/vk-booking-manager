@@ -2,7 +2,7 @@
 
 Fast CSS Selectors API Engine
 
-![](https://img.shields.io/npm/v/nwsapi.svg?colorB=orange&style=flat) ![](https://img.shields.io/github/tag/dperini/nwsapi.svg?style=flat) ![](https://img.shields.io/npm/dw/nwsapi.svg?style=flat) ![](https://img.shields.io/github/issues/dperini/nwsapi.svg?style=flat)
+![](https://img.shields.io/npm/v/nwsapi.svg?colorB=orange&style=flat) ![](https://img.shields.io/github/tag/dperini/nwsapi.svg?style=flat) ![](https://img.shields.io/npm/dw/nwshttps://ko-fi.com/dperiniapi.svg?style=flat) ![](https://img.shields.io/github/issues/dperini/nwsapi.svg?style=flat)
 
 NWSAPI is the development progress of [NWMATCHER](https://github.com/dperini/nwmatcher) aiming at [Selectors Level 4](https://www.w3.org/TR/selectors-4/) conformance. It has been completely reworked to be easily extended and maintained. It is a right-to-left selector parser and compiler written in pure Javascript with no external dependencies. It was initially thought as a cross browser library to improve event delegation and web page scraping in various frameworks but it has become a popular replacement of the native CSS selection and matching functionality in newer browsers and headless environments.
 
@@ -130,3 +130,28 @@ NW.Dom.registerSelector('Controls', /^\:(control)(.*)/i,
     };
   })(this));
 ```
+
+## 💖 Support & Sponsoring
+
+**NWSAPI** powers millions of builds, web scrapers, and testing suites every single day—including key infrastructure like [jsdom](https://github.com/jsdom/jsdom).
+
+Maintaining a zero-dependency, ultra-fast CSS engine that strictly adheres to evolving W3C Selectors specifications takes significant time, research, and testing. If NWSAPI helps your company save time, build features, or run reliable tests, **please consider supporting its ongoing maintenance!**
+
+### Why Sponsor?
+* **For Developers:** Keep the project actively maintained, bug-free, and ahead of new browser standard updates.
+* **For Businesses:** Ensure the stability and long-term security of a critical dependency in your toolchain.
+
+### 💳 Ways to Contribute
+
+Choose the platform that works best for you or your organization:
+
+* **[GitHub Sponsors](https://github.com/sponsors/dperini):** Monthly tier-based sponsorship directly on GitHub.
+* **[Open Collective](https://opencollective.com/nwsapi):** Transparent funding for open-source projects, ideal for corporate backing.
+* **[Patreon](https://www.patreon.com/dperini):** Recurring monthly support with backer rewards.
+* **[Ko-fi](https://ko-fi.com/dperini):** Fast one-time tips or recurring micro-donations.
+* **[Buy Me a Coffee](https://www.buymeacoffee.com/dperini):** Quick, casual one-time donations.
+* **[Liberapay](https://liberapay.com/dperini):** Recurrent, zero-fee open-source support.
+* **[IssueHunt](https://issuehunt.io/r/dperini/nwsapi):** Fund specific features or bug bounties.
+
+---
+*Custom licensing, dedicated support, or priority bug fixes are also available for corporate sponsors. Feel free to reach out!*

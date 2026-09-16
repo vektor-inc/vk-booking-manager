@@ -22,8 +22,6 @@ use WP_REST_Server;
 use function __;
 use function add_action;
 use function esc_url_raw;
-use function get_posts;
-use function get_post;
 use function home_url;
 use function is_ssl;
 use function str_starts_with;
@@ -135,9 +133,10 @@ class Provider_Settings_Controller {
 		$nomination_enabled = Staff_Editor::is_nomination_enabled();
 
 		// 無料版ではデフォルトスタッフのIDを取得する.
+		// 解決ロジックは Resource_Post_Type::get_default_staff_id() に集約している（issue #465）。
 		$default_staff_id = 0;
 		if ( ! Staff_Editor::is_enabled() ) {
-			$default_staff_id = $this->get_default_staff_id();
+			$default_staff_id = Resource_Post_Type::get_default_staff_id();
 		}
 
 		return new WP_REST_Response(
@@ -172,44 +171,6 @@ class Provider_Settings_Controller {
 				'guests_unit_label'                  => $guests_unit_label,
 			)
 		);
-	}
-
-	/**
-	 * Get default staff ID for Free edition.
-	 *
-	 * 無料版のデフォルトスタッフIDを取得します。
-	 *
-	 * @return int Default staff ID, or 0 if not found.
-	 */
-	private function get_default_staff_id(): int {
-		if ( ! post_type_exists( Resource_Post_Type::POST_TYPE ) ) {
-			return 0;
-		}
-
-		$title = __( 'Default Staff', 'vk-booking-manager' );
-
-		$published_staff = get_posts(
-			array(
-				'post_type'      => Resource_Post_Type::POST_TYPE,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'fields'         => 'ids',
-				'no_found_rows'  => true,
-			)
-		);
-
-		foreach ( $published_staff as $staff_id ) {
-			$post = get_post( $staff_id );
-			if ( ! $post ) {
-				continue;
-			}
-
-			if ( $title === $post->post_title ) {
-				return (int) $post->ID;
-			}
-		}
-
-		return 0;
 	}
 
 	/**

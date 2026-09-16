@@ -142,13 +142,15 @@ class Provider_Settings_Page {
 		if ( ! is_array( $payload ) ) {
 			$payload = array();
 		}
-		$license_key_raw = null;
+		$license_key_raw    = null;
+		$delete_license_key = false;
 		if ( class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) && current_user_can( 'manage_options' ) ) {
-			$license_key_raw = ( array_key_exists( 'license_key', $payload ) && is_scalar( $payload['license_key'] ) )
+			$license_key_raw    = ( array_key_exists( 'license_key', $payload ) && is_scalar( $payload['license_key'] ) )
 					? sanitize_text_field( (string) $payload['license_key'] )
 					: null;
+			$delete_license_key = ! empty( $payload['delete_license_key'] );
 		}
-		unset( $payload['license_key'] );
+		unset( $payload['license_key'], $payload['delete_license_key'] );
 		$result       = $this->settings_service->save_settings( $payload );
 		$saved        = true;
 		$field_errors = array();
@@ -184,7 +186,16 @@ class Provider_Settings_Page {
 			$old_input = $this->sanitize_old_input( $payload );
 			set_transient( 'vkbm_provider_settings_previous_input', $old_input, 30 );
 		} else {
-			if ( null !== $license_key_raw ) {
+			// 削除指定を新しいキーより優先し、空欄または未送信なら保存済みキーを維持する。
+			if ( $delete_license_key ) {
+				delete_option( 'vk-booking-manager-pro-license-key' );
+				add_settings_error(
+					self::MENU_SLUG,
+					'vkbm_provider_settings_license_key_deleted',
+					__( 'License key deleted.', 'vk-booking-manager' ),
+					'updated'
+				);
+			} elseif ( null !== $license_key_raw && '' !== $license_key_raw ) {
 				update_option( 'vk-booking-manager-pro-license-key', $license_key_raw );
 			}
 			add_settings_error(
@@ -309,6 +320,20 @@ class Provider_Settings_Page {
 			toggle();
 		})();";
 		wp_add_inline_script( 'vkbm-provider-settings', $regular_holiday_toggle, 'after' );
+
+		$license_key_delete_toggle = "(function () {
+			var checkbox = document.getElementById('vkbm-delete-license-key');
+			var input = document.getElementById('vkbm-license-key');
+			if (!checkbox || !input) {
+				return;
+			}
+			var toggle = function () {
+				input.disabled = checkbox.checked;
+			};
+			checkbox.addEventListener('change', toggle);
+			toggle();
+		})();";
+		wp_add_inline_script( 'vkbm-provider-settings', $license_key_delete_toggle, 'after' );
 
 		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 	}
@@ -540,7 +565,7 @@ class Provider_Settings_Page {
 		$currency_symbol                 = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
 		$tax_label_text                  = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
 		$currency_placeholder            = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
-		$license_key                     = (string) get_option( 'vk-booking-manager-pro-license-key', '' );
+		$has_saved_license_key           = '' !== (string) get_option( 'vk-booking-manager-pro-license-key', '' );
 		$is_pro_edition                  = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
 		$show_license_tab                = $is_pro_edition && current_user_can( 'manage_options' );
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
@@ -2172,13 +2197,38 @@ class Provider_Settings_Page {
 								<label for="vkbm-license-key"><?php esc_html_e( 'License key', 'vk-booking-manager' ); ?></label>
 							</th>
 							<td>
+								<?php if ( $has_saved_license_key ) : ?>
+									<p id="vkbm-license-key-status" class="description">
+										<?php esc_html_e( 'License key is saved.', 'vk-booking-manager' ); ?>
+									</p>
+								<?php endif; ?>
 								<input
-									type="text"
+									type="password"
 									id="vkbm-license-key"
 									name="vkbm_provider_settings[license_key]"
-									value="<?php echo esc_attr( $license_key ); ?>"
+									value=""
 									class="regular-text"
+									autocomplete="new-password"
+									<?php if ( $has_saved_license_key ) : ?>
+										aria-describedby="vkbm-license-key-status vkbm-license-key-description"
+									<?php endif; ?>
 								/>
+								<?php if ( $has_saved_license_key ) : ?>
+									<p id="vkbm-license-key-description" class="description">
+										<?php esc_html_e( 'Leave empty if you do not want to change it.', 'vk-booking-manager' ); ?>
+									</p>
+									<p>
+										<label for="vkbm-delete-license-key">
+											<input
+												type="checkbox"
+												id="vkbm-delete-license-key"
+												name="vkbm_provider_settings[delete_license_key]"
+												value="1"
+											/>
+											<?php esc_html_e( 'Delete the saved license key', 'vk-booking-manager' ); ?>
+										</label>
+									</p>
+								<?php endif; ?>
 							</td>
 						</tr>
 					<?php endif; ?>

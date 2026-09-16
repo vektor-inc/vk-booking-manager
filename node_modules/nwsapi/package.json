@@ -1,6 +1,6 @@
 {
   "name": "nwsapi",
-  "version": "2.2.24",
+  "version": "2.2.27",
   "description": "Fast CSS Selectors API Engine",
   "homepage": "https://javascript.nwbox.com/nwsapi/",
   "main": "./src/nwsapi",
@@ -35,7 +35,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/dperini/nwsapi.git"
+    "url": "https://github.com/dperini/nwsapi.git"
   },
   "scripts": {
     "lint": "eslint ./src/nwsapi.js"

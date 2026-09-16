@@ -135,6 +135,16 @@ class Get_Unavailability_Reason_Test extends WP_UnitTestCase {
 				continue;
 			}
 
+			// #466 差し戻し（安藤さんレビュー指摘）: 無料版の resolve_staff_ids() は常に
+			// Resource_Post_Type::get_default_staff_id() へフォールバックする（issue #465）。
+			// この判定は「公開中の resource がちょうど1件ならそれを使う」ことを前提にしており、
+			// 実運用では Plugin::maybe_create_default_staff() が常にその状態を保つ。
+			// このテストは build_scenario() 呼び出しのたびに create_staff() で公開状態の resource
+			// を積み増していくため（前のケースの分が残ったまま）、ケースを跨ぐと公開中の resource
+			// が2件以上になり、上記の前提が崩れて無料版だけ誤判定になる（実運用では起きない状態）。
+			// 各ケースの直前に前のケースの resource を片付け、実運用の前提と揃える。
+			$this->trash_all_resources();
+
 			list( $menu_id, $preferred_staff_id ) = $this->build_scenario( $case['setup'], $year, $month );
 
 			$service = new Availability_Service();
@@ -491,6 +501,26 @@ class Get_Unavailability_Reason_Test extends WP_UnitTestCase {
 				'post_status' => 'publish',
 			)
 		);
+	}
+
+	/**
+	 * 公開中の resource（スタッフ）投稿を全て削除する。
+	 *
+	 * test_get_unavailability_reason() の各ケースの前に呼び、無料版の
+	 * 「公開中の resource は常に1件」という実運用の前提とテスト内の状態を揃える（#466 差し戻し）。
+	 */
+	private function trash_all_resources(): void {
+		$existing = get_posts(
+			array(
+				'post_type'      => Resource_Post_Type::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			)
+		);
+		foreach ( $existing as $resource_id ) {
+			wp_delete_post( (int) $resource_id, true );
+		}
 	}
 
 	/**

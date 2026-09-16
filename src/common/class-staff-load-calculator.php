@@ -2,10 +2,8 @@
 /**
  * 指定スロット（メニュー・時間帯）内のスタッフ別予約人数（負荷）を集計するユーティリティ。
  *
- * フロントの自動割当（Booking_Confirmation_Controller::select_best_fit_staff() が使う
- * 負荷集計）と、管理画面の担当スタッフ候補の絞り込み（Booking_Admin::get_conflicting_staff_ids()）が
- * 「同じメニュー・同じ時間帯に、このスタッフは既に何名担当しているか」という同一の判定ロジックを
- * 必要とするため、写経を避けてここに集約する（#394）。
+ * フロントの自動割当（Booking_Confirmation_Controller::select_best_fit_staff()）が使う負荷集計。
+ * 管理画面の判定は Staff_Conflict_Detector が同じ数え方で行う（#394 / #449）。
  *
  * @package VKBookingManager
  */
@@ -24,8 +22,8 @@ use WP_Query;
 /**
  * スタッフ別の予約人数（負荷）集計ロジックをまとめたユーティリティクラス。
  *
- * 状態を持たない静的メソッドのみで構成し、フロント・管理画面のどちらからも
- * 同じ判定ロジックを再利用できるようにする。
+ * 状態を持たない静的メソッドのみで構成し、フロントの自動割当から再利用できるようにする。
+ * Staff_Conflict_Detector と同じ予約負荷の数え方を使うため、判定仕様を変更する場合は両方を一緒に直すこと。
  */
 class Staff_Load_Calculator {
 	private const META_SERVICE_ID  = '_vkbm_booking_service_id';
@@ -105,8 +103,8 @@ class Staff_Load_Calculator {
 
 		// 'fields' => 'ids' の WP_Query はメタキャッシュを自動で温めないため、ループ内で
 		// get_post_meta() を件数分（本メソッドは1件につき最大3回）呼ぶと N+1 になる。
-		// 3経路（管理画面の候補絞り込み・保存時の競合判定・フロントの自動割当）から呼ばれるため、
-		// ここでまとめて1回のクエリでメタキャッシュへ乗せる（#394 レビュー対応）。
+		// フロントの自動割当から呼ばれるため、ここでまとめて1回のクエリで
+		// メタキャッシュへ乗せる（#394 レビュー対応）。
 		update_meta_cache( 'post', $query->posts );
 
 		$loads = array();

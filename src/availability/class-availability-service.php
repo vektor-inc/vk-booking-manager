@@ -17,6 +17,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Exception;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Capabilities\Capabilities;
@@ -147,7 +148,7 @@ class Availability_Service {
 			return $menu;
 		}
 
-		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		$preferred_staff_id = $this->resolve_preferred_staff_id( $args );
 		// #431: リソースタグ絞り込み（ターム ID・AND条件）。
 		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
@@ -167,7 +168,14 @@ class Availability_Service {
 
 		$timezone = $this->resolve_timezone( (string) ( $args['timezone'] ?? '' ) );
 
-		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		// 枠生成・キャッシュキーへ渡す「スタッフを指名している」状態は、resource_id の
+		// 有無（$preferred_staff_id > 0）とは別に判定する（安藤さんレビュー・HIGH是正）。
+		// 無料版は担当が常に基本スタッフ1名固定で、そのスタッフに対する予約は常に
+		// 「指名あり」と同じ扱い（skip_booked_slots・枠の非集約）で予約済み枠を除外しないと、
+		// origin/main と比べて予約済みの時間帯が「押せる枠」として表示されてしまう
+		// （$preferred_staff_id 自体は resolve_preferred_staff_id() により無料版では常に0へ
+		// 正規化されるため、resource_id の有無で結果が変わることは無い＝CodeRabbit指摘は解消済み）。
+		$is_staff_preferred = ! Staff_Editor::is_enabled() || $preferred_staff_id > 0;
 
 		$cache_key = $this->build_cache_key(
 			'calendar',
@@ -175,7 +183,7 @@ class Availability_Service {
 			$staff_ids,
 			sprintf( '%04d-%02d', $year, $month ),
 			$timezone->getName(),
-			$preferred_staff_id > 0,
+			$is_staff_preferred,
 			$tag_ids
 		);
 
@@ -189,7 +197,7 @@ class Availability_Service {
 
 		for ( $day = 1; $day <= $days_in_month; $day++ ) {
 			$date       = sprintf( '%04d-%02d-%02d', $year, $month, $day );
-			$slots      = $this->generate_slots_for_date( $menu, $staff_ids, $date, $timezone, $preferred_staff_id > 0 );
+			$slots      = $this->generate_slots_for_date( $menu, $staff_ids, $date, $timezone, $is_staff_preferred );
 			$status_key = $this->resolve_day_status( $staff_ids, $year, $month, $day );
 			$status     = $this->map_status_to_calendar_label( $status_key );
 			$is_holiday = in_array( $status, array( 'holiday', 'off', 'special_close' ), true );
@@ -224,7 +232,10 @@ class Availability_Service {
 			'days'  => $results,
 			'meta'  => array(
 				'menu_id'      => $menu->ID,
-				'resource_id'  => isset( $args['resource_id'] ) ? (int) $args['resource_id'] : null,
+				// $preferred_staff_id は resolve_preferred_staff_id() で正規化済みの値（無料版は常に0）。
+				// レスポンスへ raw な $args['resource_id'] をそのまま返すと、無料版で resource_id の
+				// 有無だけでレスポンスが変わってしまう（CodeRabbit 指摘、PR #466）。
+				'resource_id'  => $preferred_staff_id > 0 ? $preferred_staff_id : null,
 				'timezone'     => $timezone->getName(),
 				'generated_at' => $this->current_timestamp_iso( $timezone ),
 			),
@@ -255,7 +266,7 @@ class Availability_Service {
 
 		$timezone = $this->resolve_timezone( (string) ( $args['timezone'] ?? '' ) );
 
-		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		$preferred_staff_id = $this->resolve_preferred_staff_id( $args );
 		// #431: リソースタグ絞り込み（ターム ID・AND条件）。
 		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
@@ -263,6 +274,15 @@ class Availability_Service {
 		if ( is_wp_error( $staff_ids ) ) {
 			return $staff_ids;
 		}
+
+		// 枠生成・キャッシュキーへ渡す「スタッフを指名している」状態は、resource_id の
+		// 有無（$preferred_staff_id > 0）とは別に判定する（安藤さんレビュー・HIGH是正）。
+		// 無料版は担当が常に基本スタッフ1名固定で、そのスタッフに対する予約は常に
+		// 「指名あり」と同じ扱い（skip_booked_slots・枠の非集約）で予約済み枠を除外しないと、
+		// origin/main と比べて予約済みの時間帯が「押せる枠」として表示されてしまう
+		// （$preferred_staff_id 自体は resolve_preferred_staff_id() により無料版では常に0へ
+		// 正規化されるため、resource_id の有無で結果が変わることは無い＝CodeRabbit指摘は解消済み）。
+		$is_staff_preferred = ! Staff_Editor::is_enabled() || $preferred_staff_id > 0;
 
 		$current_user_id   = get_current_user_id();
 		$apply_user_filter = $current_user_id > 0 && ! current_user_can( Capabilities::MANAGE_RESERVATIONS );
@@ -273,7 +293,7 @@ class Availability_Service {
 				$staff_ids,
 				$date->format( 'Y-m-d' ),
 				$timezone->getName(),
-				$preferred_staff_id > 0,
+				$is_staff_preferred,
 				$tag_ids
 			);
 
@@ -288,7 +308,7 @@ class Availability_Service {
 			$staff_ids,
 			$date->format( 'Y-m-d' ),
 			$timezone,
-			$preferred_staff_id > 0
+			$is_staff_preferred
 		);
 
 		if ( $apply_user_filter && ! empty( $slots ) ) {
@@ -319,7 +339,10 @@ class Availability_Service {
 			'meta'     => array(
 				'generated_at' => $this->current_timestamp_iso( $timezone ),
 				'menu_id'      => $menu->ID,
-				'resource_id'  => isset( $args['resource_id'] ) ? (int) $args['resource_id'] : null,
+				// $preferred_staff_id は resolve_preferred_staff_id() で正規化済みの値（無料版は常に0）。
+				// レスポンスへ raw な $args['resource_id'] をそのまま返すと、無料版で resource_id の
+				// 有無だけでレスポンスが変わってしまう（CodeRabbit 指摘、PR #466）。
+				'resource_id'  => $preferred_staff_id > 0 ? $preferred_staff_id : null,
 			),
 		);
 
@@ -362,7 +385,7 @@ class Availability_Service {
 			return null;
 		}
 
-		$preferred_staff_id = isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
+		$preferred_staff_id = $this->resolve_preferred_staff_id( $args );
 		// #431: リソースタグ絞り込み（ターム ID・AND条件）。診断も同じ候補集合で判定する。
 		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
@@ -775,24 +798,34 @@ class Availability_Service {
 	 * @return array<int>|WP_Error
 	 */
 	private function resolve_staff_ids( WP_Post $menu_post, int $preferred_staff, array $tag_ids = array() ) {
-		$staff_ids = get_post_meta( $menu_post->ID, self::MENU_META_STAFF_IDS, true );
-		$staff_ids = is_array( $staff_ids ) ? array_values( array_unique( array_map( 'intval', $staff_ids ) ) ) : array();
-
 		// 無料版では選択可能スタッフの制限を解除.
 		$is_staff_enabled = Staff_Editor::is_enabled();
 
-		if ( $preferred_staff > 0 ) {
-			if ( empty( $staff_ids ) ) {
-				$staff_ids = array( $preferred_staff );
-			} elseif ( ! in_array( $preferred_staff, $staff_ids, true ) ) {
-				// 無料版ではスタッフ制限チェックをスキップ.
-				if ( $is_staff_enabled ) {
+		if ( ! $is_staff_enabled ) {
+			// 無料版はスタッフが常に基本スタッフ1名固定で、スタッフ指名機能自体が常に無効
+			// （Staff_Editor::is_nomination_enabled() は無料版では常に false）。そのため
+			// メニュー側の担当設定（_vkbm_staff_ids）はそもそも参照せず、$preferred_staff
+			// （resource_id）の値も信用しない。$preferred_staff は URL クエリや予約データに
+			// 保存された値をそのまま渡ってくることがあり（例: 過去の予約を再利用する導線）、
+			// Pro版時代の古い／実在しないIDや下書きに落ちたIDが渡っても、そのIDをそのまま
+			// 使ってしまうと (a) 全日程予約不可になる #465 と同じ症状が別経路で再発する、
+			// (b) get_staff_snapshot() が post_type／公開状態を確認せず get_post() するだけの
+			// ため非公開スタッフの情報を返しうる、という2つの問題がある（安藤さん・植草さん
+			// レビュー指摘）。常に現在の基本スタッフへ解決することでどちらも防ぐ。
+			$default_staff_id = Resource_Post_Type::get_default_staff_id();
+			$staff_ids        = $default_staff_id > 0 ? array( $default_staff_id ) : array();
+		} else {
+			$staff_ids = get_post_meta( $menu_post->ID, self::MENU_META_STAFF_IDS, true );
+			$staff_ids = is_array( $staff_ids ) ? array_values( array_unique( array_map( 'intval', $staff_ids ) ) ) : array();
+
+			if ( $preferred_staff > 0 ) {
+				if ( empty( $staff_ids ) ) {
+					$staff_ids = array( $preferred_staff );
+				} elseif ( ! in_array( $preferred_staff, $staff_ids, true ) ) {
 					return new WP_Error( 'staff_not_assigned', __( 'The specified staff member cannot be in charge of this menu.', 'vk-booking-manager' ) );
+				} else {
+					$staff_ids = array( $preferred_staff );
 				}
-				// 無料版では preferred_staff を使用.
-				$staff_ids = array( $preferred_staff );
-			} else {
-				$staff_ids = array( $preferred_staff );
 			}
 		}
 
@@ -855,6 +888,33 @@ class Availability_Service {
 	 */
 	private function normalize_tag_ids( $raw_tag_ids ): array {
 		return Resource_Tag_Id_List::normalize( $raw_tag_ids );
+	}
+
+	/**
+	 * REST引数から指名スタッフID（resource_id）を読み取り、無料版では常に0へ正規化する。
+	 *
+	 * 無料版はスタッフ指名機能自体が存在しない（担当は常に基本スタッフ1名固定）ため、
+	 * resource_id が0より大きい値で渡ってきても「指名あり」として扱わない。
+	 * resolve_staff_ids() 内の正規化だけでは戻り値（候補スタッフの配列）しか正規化できず、
+	 * 呼び出し元がキャッシュキーの組み立てや generate_slots_for_date() の自動割当無効化
+	 * フラグへそのまま渡している $preferred_staff_id 自体は直せない。そのため、REST引数から
+	 * 読み取る時点でこのメソッドを経由して正規化し、無料版では resource_id の有無に関わらず
+	 * 同じ結果（自動割当・キャッシュキー・レスポンス）になるようにする
+	 * （CodeRabbit 指摘、PR #466、issue #465）。
+	 *
+	 * 無料版の予約フロント（src/blocks/reservation/app.js）は「無料版では常にデフォルトスタッフID
+	 * を送る」実装になっており、resource_id が0より大きい値でリクエストされることが通常フローで
+	 * 実際に起こる（机上の経路ではない）。
+	 *
+	 * @param array<string, mixed> $args REST引数（resource_id を含む）。
+	 * @return int 指名スタッフID（無料版・未指定時は0）。
+	 */
+	private function resolve_preferred_staff_id( array $args ): int {
+		if ( ! Staff_Editor::is_enabled() ) {
+			return 0;
+		}
+
+		return isset( $args['resource_id'] ) ? (int) $args['resource_id'] : 0;
 	}
 
 	/**

@@ -243,8 +243,13 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-		$menu_id  = isset( $draft['menu_id'] ) ? (int) $draft['menu_id'] : 0;
-		$staff_id = isset( $draft['resource_id'] ) ? (int) $draft['resource_id'] : 0;
+		$menu_id = isset( $draft['menu_id'] ) ? (int) $draft['menu_id'] : 0;
+		// #465 レビュー指摘: 無料版はスタッフ指名機能自体が常に無効なため、下書きに
+		// 保存された resource_id の値によらず常に 0（自動割当）へ正規化する。
+		// resolve_staff_ids() の無料版分岐と同じ「無料版では resource_id を信用しない」
+		// 方針をここでも揃えることで、下書き生成経路が将来変わっても後段（定員判定・
+		// META_RESOURCE_ID 保存）が無料版で古い／改竄された resource_id を受け取らない。
+		$staff_id = Staff_Editor::is_enabled() ? (int) ( $draft['resource_id'] ?? 0 ) : 0;
 		// #431: 予約時に指定されたリソースタグ（ターム ID配列・AND条件）。下書きに保存済みの値をそのまま使う
 		// （利用者からの改竄を受け付けない。空配列はタグ絞り込みなしを意味する）。
 		// 正規化ルールは Resource_Tag_Id_List::normalize() に一元化している（同じ処理を複数箇所へ重複させないため）。
@@ -367,7 +372,10 @@ class Booking_Confirmation_Controller {
 
 		$assignable_staff = $this->normalize_assignable_staff_ids( $available_slot['assignable_staff_ids'] ?? array() );
 
-		$is_staff_preferred = ! empty( $draft['is_staff_preferred'] );
+		// #466 差し戻し（安藤さんレビュー指摘）: 無料版はスタッフ指名機能自体が常に無効なため、
+		// 下書きの is_staff_preferred フラグも $staff_id 同様に信用しない。改竄された指名フラグで
+		// 自動割当（ベストフィット判定）をバイパスされることを防ぐ。
+		$is_staff_preferred = Staff_Editor::is_enabled() && ! empty( $draft['is_staff_preferred'] );
 
 		// 自動割当スロットでは、確定直前のロック保持下で単一スタッフへベストフィット割り当てする（分割しない）。
 		$is_auto_assign = ! empty( $available_slot['auto_assign'] );
@@ -378,7 +386,14 @@ class Booking_Confirmation_Controller {
 		} elseif ( ! empty( $assignable_staff ) ) {
 			// 自動割当：スタッフの確定はロック保持下のベストフィット判定（check_capacity_with_mutex）で行う。
 			$is_staff_preferred = false;
-		} elseif ( $staff_id <= 0 && isset( $slot['staff']['id'] ) ) {
+		}
+
+		// 自動割当でスタッフがまだ未確定（$staff_id <= 0）の場合は、直前の空き枠再検証が返した
+		// スタッフ（$slot['staff']['id']）を単一候補として確定処理へ渡す。
+		// 無料版で resource_id を 0 へ正規化したケースもここを通るため、上の elseif chain を独立させて
+		// おかないと候補ゼロのまま check_capacity_with_mutex() へ渡り、capacity_exceeded を誤って
+		// 返してしまう（無料版の予約確定が失敗する回帰）。
+		if ( $staff_id <= 0 && isset( $slot['staff']['id'] ) ) {
 			$staff_id = (int) $slot['staff']['id'];
 		}
 

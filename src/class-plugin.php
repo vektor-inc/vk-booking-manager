@@ -42,6 +42,7 @@ use VKBookingManager\REST\Menu_Preview_Controller;
 use VKBookingManager\REST\Provider_Settings_Controller;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Front_Redirect;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Resources\Resource_Schedule_Meta_Box;
@@ -136,6 +137,13 @@ class Plugin {
 	 * @var Service_Menu_Post_Type
 	 */
 	private $service_menu_post_type;
+
+	/**
+	 * 詳細ページを使用しないサービスメニューのリダイレクト処理ハンドラ。
+	 *
+	 * @var Service_Menu_Front_Redirect
+	 */
+	private $service_menu_front_redirect;
 
 	/**
 	 * Booking post type handler.
@@ -306,6 +314,7 @@ class Plugin {
 	 * @param Resource_Post_Type              $resource_post_type     Resource post type handler.
 	 * @param Shift_Post_Type                 $shift_post_type        Shift post type handler.
 	 * @param Service_Menu_Post_Type          $service_menu_post_type Service menu post type handler.
+	 * @param Service_Menu_Front_Redirect     $service_menu_front_redirect 詳細ページを使用しないサービスメニューのリダイレクト処理ハンドラ。
 	 * @param Booking_Post_Type               $booking_post_type      Booking post type handler.
 	 * @param Booking_Admin                   $booking_admin          Booking admin UI handler.
 	 * @param Booking_Draft_Controller        $booking_draft_controller Temporary reservation data persistence handler.
@@ -342,6 +351,7 @@ class Plugin {
 		Resource_Post_Type $resource_post_type,
 		Shift_Post_Type $shift_post_type,
 		Service_Menu_Post_Type $service_menu_post_type,
+		Service_Menu_Front_Redirect $service_menu_front_redirect,
 		Booking_Post_Type $booking_post_type,
 		Booking_Admin $booking_admin,
 		Booking_Draft_Controller $booking_draft_controller,
@@ -377,6 +387,7 @@ class Plugin {
 		$this->resource_post_type              = $resource_post_type;
 		$this->shift_post_type                 = $shift_post_type;
 		$this->service_menu_post_type          = $service_menu_post_type;
+		$this->service_menu_front_redirect     = $service_menu_front_redirect;
 		$this->booking_post_type               = $booking_post_type;
 		$this->booking_admin                   = $booking_admin;
 		$this->booking_draft_controller        = $booking_draft_controller;
@@ -422,6 +433,7 @@ class Plugin {
 		$this->staff_editor->register();
 		$this->service_menu_editor->register();
 		$this->service_menu_post_type->register();
+		$this->service_menu_front_redirect->register();
 		$this->booking_post_type->register();
 		$this->booking_admin->register();
 		$this->booking_draft_controller->register();
@@ -752,18 +764,13 @@ class Plugin {
 			)
 		);
 
-		$keep_id = 0;
-		foreach ( $published_staff as $staff_id ) {
-			$post = get_post( $staff_id );
-			if ( ! $post ) {
-				continue;
-			}
-
-			if ( $title === $post->post_title ) {
-				$keep_id = (int) $post->ID;
-				break;
-			}
-		}
+		// どの投稿を基本スタッフとして残すかは Resource_Post_Type::resolve_default_staff_from_published_ids()
+		// に判定を委譲する（issue #465）。この関数は毎リクエスト（'init'）走るため、以前の
+		// post_title 一致だけの判定では、公開中の resource が1件だけでも管理者がその名前を
+		// 「Default Staff」以外に変更していると毎回ここで下書きに落とされ、新規の
+		// 「Default Staff」投稿が作り直されてしまっていた（#465 レビュー指摘）。公開中が
+		// ちょうど1件ならその名前に関わらずそれを残すことで、この事故を防ぐ。
+		$keep_id = Resource_Post_Type::resolve_default_staff_from_published_ids( $published_staff );
 
 		if ( 0 === $keep_id ) {
 			$default_id = wp_insert_post(

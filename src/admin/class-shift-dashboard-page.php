@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Common\Staff_Conflict_Detector;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -203,6 +204,7 @@ class Shift_Dashboard_Page {
 		$bookings_map          = $this->get_bookings_for_day( $selected_date );
 		$month_bookings        = $this->get_bookings_for_month( $year, $month );
 		$pending_notifications = $this->get_pending_booking_notifications();
+		$staff_conflicts       = $this->get_staff_conflict_notifications();
 
 		$day_view   = $this->build_day_view_data( $resources, $shift_map, $bookings_map, $selected_date );
 		$month_view = $this->build_month_view_data( $shift_map, $year, $month, count( $resources ), $resource_names, $month_bookings );
@@ -554,7 +556,7 @@ class Shift_Dashboard_Page {
 							</div>
 						</div>
 					</section>
-					<?php $this->render_pending_notifications_panel( $pending_notifications ); ?>
+					<?php $this->render_pending_notifications_panel( $pending_notifications, $staff_conflicts ); ?>
 				</div>
 			</div>
 
@@ -671,7 +673,7 @@ class Shift_Dashboard_Page {
 							</div>
 						</div>
 					</section>
-					<?php $this->render_pending_notifications_panel( $pending_notifications ); ?>
+					<?php $this->render_pending_notifications_panel( $pending_notifications, $staff_conflicts ); ?>
 				</div>
 			</div>
 		</div>
@@ -1545,6 +1547,91 @@ class Shift_Dashboard_Page {
 	}
 
 	/**
+	 * 今後30日以内に開始する、担当スタッフが対応できない予約を一括収集する。
+	 *
+	 * @return array{items:array<int, array<string, string>>,total:int,allow_overlap:bool} 通知表示データ。
+	 */
+	private function get_staff_conflict_notifications(): array {
+		// この通知区画は複数スタッフ管理を含む Pro 版だけで提供する。
+		if ( ! class_exists( 'Free_Version_Deactivator' ) || ! \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) ) {
+			return array(
+				'items'         => array(),
+				'total'         => 0,
+				'allow_overlap' => false,
+			);
+		}
+		$timezone    = wp_timezone();
+		$range_start = ( new DateTimeImmutable( 'now', $timezone ) )->setTime( 0, 0 );
+		$display_end = $range_start->modify( '+30 days' )->setTime( 23, 59, 59 );
+		// 30日後の予約と翌日開始の予約の重なりも判定できるよう、比較対象の取得期間だけを1日広げる。
+		$query_end   = $range_start->modify( '+31 days' )->setTime( 23, 59, 59 );
+		$bookings    = Staff_Conflict_Detector::get_bookings_intersecting_range( $range_start->format( 'Y-m-d H:i:s' ), $query_end->format( 'Y-m-d H:i:s' ) );
+		$bookings    = array_values(
+			array_filter(
+				$bookings,
+				static fn( array $booking ): bool => ! in_array( (string) $booking['status'], array( 'cancelled', 'no_show' ), true )
+			)
+		);
+		$capacities  = array();
+		$nominations = array();
+		$service_ids = array_values( array_unique( array_map( static fn( array $booking ): int => (int) $booking['service_id'], $bookings ) ) );
+		$service_ids = array_values( array_filter( $service_ids ) );
+		update_meta_cache( 'post', $service_ids );
+
+		foreach ( $service_ids as $service_id ) {
+			$capacities[ $service_id ]  = Staff_Conflict_Detector::get_menu_capacity( $service_id );
+			$nominations[ $service_id ] = \VKBookingManager\Staff\Staff_Editor::is_nomination_enabled_for_menu( $service_id );
+		}
+
+		$bookings_by_staff = array();
+		foreach ( $bookings as $booking ) {
+			$bookings_by_staff[ (int) $booking['resource_id'] ][] = $booking;
+		}
+		foreach ( $bookings_by_staff as &$staff_bookings ) {
+			usort( $staff_bookings, static fn( array $a, array $b ): int => strcmp( (string) $a['start'], (string) $b['start'] ) );
+		}
+		unset( $staff_bookings );
+
+		$conflicts = array();
+		foreach ( $bookings as $booking ) {
+			$status = (string) $booking['status'];
+			$start  = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', (string) $booking['start'], $timezone );
+			if ( 'publish' !== (string) $booking['post_status'] || ! in_array( $status, array( self::BOOKING_STATUS_CONFIRMED, self::BOOKING_STATUS_PENDING ), true ) || ! $start || $start < $range_start || $start > $display_end ) {
+				continue;
+			}
+			$resource_id = (int) $booking['resource_id'];
+			$reasons     = Staff_Conflict_Detector::detect_reasons( $booking, $bookings_by_staff[ $resource_id ] ?? array(), $capacities, $nominations, true );
+			if ( empty( $reasons ) ) {
+				continue;
+			}
+			$post_id       = (int) $booking['id'];
+			$customer_name = trim( (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true ) );
+			$end_raw       = max( (string) $booking['total_end'], (string) $booking['service_end'] );
+			$end           = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $end_raw, $timezone );
+			$edit_url      = get_edit_post_link( $post_id, '', true );
+			$staff_name    = vkbm_get_resource_display_name( $resource_id );
+			$conflicts[]   = array(
+				'id'         => (string) $post_id,
+				'start_raw'  => (string) $booking['start'],
+				'time_label' => sprintf( '%s - %s', wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $start->getTimestamp() ), $end ? wp_date( get_option( 'time_format' ), $end->getTimestamp() ) : '' ),
+				'customer'   => '' !== $customer_name ? $customer_name : __( 'Name not entered', 'vk-booking-manager' ),
+				'staff'      => $staff_name ? $staff_name : __( 'Person in charge undecided', 'vk-booking-manager' ),
+				'url'        => $edit_url ? $edit_url : admin_url( sprintf( 'post.php?post=%d&action=edit', $post_id ) ),
+				'status'     => $status,
+				'reason'     => in_array( Staff_Conflict_Detector::REASON_OVERLAP, $reasons, true ) ? Staff_Conflict_Detector::REASON_OVERLAP : Staff_Conflict_Detector::REASON_INSUFFICIENT_CAPACITY,
+			);
+		}
+
+		usort( $conflicts, static fn( array $a, array $b ): int => strcmp( $a['start_raw'], $b['start_raw'] ) );
+		$settings = ( new Settings_Repository() )->get_settings();
+		return array(
+			'items'         => array_slice( $conflicts, 0, 10 ),
+			'total'         => count( $conflicts ),
+			'allow_overlap' => ! empty( $settings['provider_allow_staff_overlap_admin'] ),
+		);
+	}
+
+	/**
 	 * Build data required to render the monthly overview grid.
 	 *
 	 * @param array<int, array>  $shift_map         Month shift map keyed by resource.
@@ -1691,15 +1778,80 @@ class Shift_Dashboard_Page {
 	/**
 	 * Render the notifications panel shown alongside the dashboard views.
 	 *
-	 * @param array<int, array<string, string>> $notifications Pending booking data.
+	 * @param array<int, array<string, string>>                                           $notifications Pending booking data.
+	 * @param array{items:array<int, array<string, string>>,total:int,allow_overlap:bool} $staff_conflicts Staff conflict data.
 	 */
-	private function render_pending_notifications_panel( array $notifications ): void {
-		$has_pending = ! empty( $notifications );
+	private function render_pending_notifications_panel( array $notifications, array $staff_conflicts = array() ): void {
+		$has_pending    = ! empty( $notifications );
+		$conflict_items = $staff_conflicts['items'] ?? array();
+		$has_conflicts  = ! empty( $conflict_items );
+		$allow_overlap  = ! empty( $staff_conflicts['allow_overlap'] );
 		?>
-		<aside class="vkbm-shift-dashboard__panel vkbm-notification-panel" aria-label="<?php esc_attr_e( 'Pending booking notifications', 'vk-booking-manager' ); ?>">
+		<aside class="vkbm-shift-dashboard__panel vkbm-notification-panel" aria-label="<?php esc_attr_e( 'Booking notifications', 'vk-booking-manager' ); ?>">
 			<div class="vkbm-notification-panel__inner">
 				<h2 class="vkbm-notification-panel__title"><?php esc_html_e( 'Notice', 'vk-booking-manager' ); ?></h2>
-				<p class="vkbm-notification-panel__lead">
+				<?php if ( $has_conflicts ) : ?>
+					<section class="vkbm-notification-panel__section vkbm-alert vkbm-alert__<?php echo $allow_overlap ? 'warning' : 'danger'; ?>" role="<?php echo $allow_overlap ? 'status' : 'alert'; ?>">
+						<h3><?php esc_html_e( 'Bookings the assigned staff cannot accommodate', 'vk-booking-manager' ); ?></h3>
+						<p>
+							<?php
+							if ( $allow_overlap ) {
+								esc_html_e( 'There are bookings the assigned staff cannot accommodate.', 'vk-booking-manager' );
+								echo ' ';
+								esc_html_e( 'They were saved because overlapping bookings are allowed, but we recommend reviewing the details.', 'vk-booking-manager' );
+							} else {
+								esc_html_e( 'There are bookings the assigned staff cannot accommodate.', 'vk-booking-manager' );
+								echo ' ';
+								esc_html_e( 'Please review the details and reassign the staff.', 'vk-booking-manager' );
+							}
+							?>
+						</p>
+						<ul class="vkbm-notification-panel__list">
+							<?php foreach ( $conflict_items as $notification ) : ?>
+								<li class="vkbm-notification-panel__item">
+									<div class="vkbm-notification-card">
+									<div class="vkbm-notification-card__details">
+										<div class="vkbm-notification-card__time"><?php echo esc_html( $notification['time_label'] ); ?>
+										<?php
+										if ( self::BOOKING_STATUS_PENDING === $notification['status'] ) :
+											?>
+											<small><?php esc_html_e( 'Pending', 'vk-booking-manager' ); ?></small><?php endif; ?></div>
+										<div class="vkbm-notification-card__user">
+											<?php
+											printf(
+												/* translators: 1: Customer name, 2: Staff name */
+												esc_html__( '%1$s / %2$s', 'vk-booking-manager' ),
+												esc_html( $notification['customer'] ),
+												esc_html( $notification['staff'] )
+											);
+											?>
+										</div>
+										<div class="vkbm-notification-card__reason"><?php echo esc_html( Staff_Conflict_Detector::REASON_OVERLAP === $notification['reason'] ? __( 'There is another booking in the same time period.', 'vk-booking-manager' ) : __( 'There is not enough remaining capacity.', 'vk-booking-manager' ) ); ?></div>
+									</div>
+									<div class="vkbm-notification-card__actions"><a class="button button-secondary button-small" href="<?php echo esc_url( $notification['url'] ); ?>"><?php esc_html_e( 'Detail', 'vk-booking-manager' ); ?></a></div>
+									</div>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+						<?php
+						if ( (int) $staff_conflicts['total'] > 10 ) :
+							?>
+								<p>
+									<?php
+									printf(
+										/* translators: %d: Number of additional bookings */
+										esc_html__( 'There are %d more.', 'vk-booking-manager' ),
+										(int) $staff_conflicts['total'] - 10
+									);
+									echo ' ';
+									esc_html_e( 'Please review them starting with the nearest date and time.', 'vk-booking-manager' );
+									?>
+								</p>
+							<?php endif; ?>
+					</section>
+				<?php endif; ?>
+				<section class="vkbm-notification-panel__section">
+					<p class="vkbm-notification-panel__lead">
 					<?php
 					if ( $has_pending ) {
 						esc_html_e( 'I have an unconfirmed "tentative reservation". Please check and confirm the contents.', 'vk-booking-manager' );
@@ -1754,6 +1906,7 @@ class Shift_Dashboard_Page {
 						<?php endforeach; ?>
 					</ul>
 				<?php endif; ?>
+				</section>
 			</div>
 		</aside>
 		<?php

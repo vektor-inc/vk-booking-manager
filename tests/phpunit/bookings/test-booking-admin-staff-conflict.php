@@ -392,7 +392,7 @@ class Booking_Admin_Staff_Conflict_Test extends WP_UnitTestCase {
 	 * メニューに残った古い定員値（例: 3）を無視して常に定員1として扱うことを検証する。
 	 *
 	 * 定員1扱いになれば get_conflicting_staff_ids() は「1件でも重なる予約があれば除外」の
-	 * 判定（get_overlapping_staff_ids）へ分岐するため、残数（定員3−負荷1=2）があっても
+	 * 判定（Staff_Conflict_Detector::detect_reasons()）へ分岐するため、残数（定員3−負荷1=2）があっても
 	 * 除外されることで、機能OFFが正しく効いていることを確認する。
 	 */
 	public function test_get_conflicting_staff_ids_ignores_stale_max_capacity_when_slot_capacity_disabled(): void {
@@ -430,7 +430,7 @@ class Booking_Admin_Staff_Conflict_Test extends WP_UnitTestCase {
 	 * #394 レビュー対応（項目5）: 指名OFF・定員1のメニューでも、別メニューの重なる予約を持つ
 	 * スタッフは除外されることを検証する（項目1・2の回帰テストを兼ねる）。
 	 *
-	 * 定員1のメニューは get_conflicting_staff_ids() が get_overlapping_staff_ids() の
+	 * 定員1のメニューは get_conflicting_staff_ids() が Staff_Conflict_Detector::detect_reasons() の
 	 * 「メニュー問わず1件でも重なれば除外」判定へそのまま分岐するため、#394 より前の
 	 * 挙動と変わらないことを確認する。
 	 */

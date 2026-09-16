@@ -257,6 +257,14 @@ export const ZodMiniCreditCard = /*@__PURE__*/ core.$constructor("ZodMiniCreditC
 export function creditCard(params) {
     return core._creditCard(ZodMiniCreditCard, params);
 }
+export const ZodMiniIBAN = /*@__PURE__*/ core.$constructor("ZodMiniIBAN", (inst, def) => {
+    core.$ZodIBAN.init(inst, def);
+    ZodMiniStringFormat.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+export function iban(params) {
+    return core._iban(ZodMiniIBAN, params);
+}
 export const ZodMiniJWT = /*@__PURE__*/ core.$constructor("ZodMiniJWT", (inst, def) => {
     core.$ZodJWT.init(inst, def);
     ZodMiniStringFormat.init(inst, def);
@@ -511,7 +519,8 @@ export function required(schema, mask) {
 }
 // @__NO_SIDE_EFFECTS__
 export function catchall(inst, catchall) {
-    return inst.clone({ ...inst._zod.def, catchall: catchall });
+    // `mergeDefs` rather than a spread: spreading reads `shape`, and resolving it can mint a whole fresh subtree
+    return inst.clone(util.mergeDefs(inst._zod.def, { catchall: catchall }));
 }
 export const ZodMiniUnion = /*@__PURE__*/ core.$constructor("ZodMiniUnion", (inst, def) => {
     core.$ZodUnion.init(inst, def);
@@ -650,7 +659,8 @@ export function set(valueType, params) {
 export const ZodMiniEnum = /*@__PURE__*/ core.$constructor("ZodMiniEnum", (inst, def) => {
     core.$ZodEnum.init(inst, def);
     ZodMiniType.init(inst, def);
-    inst.options = Object.values(def.entries);
+    // reuse the parsed value set so a numeric TS enum's reverse-mapping keys stay out
+    inst.options = [...inst._zod.values];
 });
 // @__NO_SIDE_EFFECTS__
 function _enum(values, params) {
@@ -908,6 +918,13 @@ export const ZodMiniCustom = /*@__PURE__*/ core.$constructor("ZodMiniCustom", (i
     core.$ZodCustom.init(inst, def);
     ZodMiniType.init(inst, def);
 });
+export const ZodMiniProperties = /*@__PURE__*/ core.$constructor("ZodMiniProperties", (inst, def) => {
+    core.$ZodProperties.init(inst, def);
+    ZodMiniType.init(inst, def);
+});
+export function properties(shape, params) {
+    return core._properties(ZodMiniProperties, shape, params);
+}
 // custom checks
 // @__NO_SIDE_EFFECTS__
 export function check(fn, params) {

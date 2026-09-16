@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use WP_Error;
+use WP_Meta_Query;
 use WP_Taxonomy;
 
 use function __;
@@ -34,9 +35,12 @@ use function get_term_meta;
 use function get_terms;
 use function is_admin;
 use function is_array;
+use function is_numeric;
 use function is_wp_error;
 use function plugins_url;
+use function register_rest_field;
 use function sanitize_key;
+use function trim;
 use function update_option;
 use function update_term_meta;
 use function wp_create_nonce;
@@ -80,6 +84,67 @@ class Term_Order_Manager {
 		add_action( 'created_term', array( $this, 'ensure_created_term_order' ), 10, 3 );
 		add_action( 'wp_ajax_' . self::AJAX_ACTION, array( $this, 'handle_update_order' ) );
 		add_action( 'pre_get_terms', array( $this, 'apply_default_order' ) );
+		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
+	}
+
+	/**
+	 * REST レスポンスに並び順を返すフィールドを登録する（#463）。
+	 *
+	 * 公開画面（フロント）で REST 経由にタームを取得する箇所は、この並び順フィールドを
+	 * 取得後に自前で並べ替える。`pre_get_terms` による並び替え（このクラスの
+	 * apply_default_order()）は管理画面向けの実装であり、REST クエリの ORDER BY までは
+	 * 変更しないため、REST レスポンス側には別途フィールドを足す必要がある。
+	 *
+	 * 投稿の並び順を REST の 'order' フィールドとして返す
+	 * Post_Order_Manager::register_rest_fields() と対称的な実装にしている。
+	 */
+	public function register_rest_fields(): void {
+		foreach ( $this->taxonomies as $taxonomy ) {
+			register_rest_field(
+				$taxonomy,
+				'order',
+				array(
+					'get_callback' => array( $this, 'get_order_value_for_rest' ),
+					'schema'       => array(
+						'description' => __( 'Term order', 'vk-booking-manager' ),
+						'type'        => 'integer',
+						'context'     => array( 'view', 'edit' ),
+					),
+				)
+			);
+		}
+	}
+
+	/**
+	 * REST フィールド 'order' の値を取得するコールバック（#463）。
+	 *
+	 * 並び順メタが未設定・不正な値のタームは 0 として扱う。内部結合（JOIN）で
+	 * 並び順メタが無いタームを弾く方式ではなく、取得後の並べ替えで欠損値を
+	 * デフォルト値扱いする方式にしているため、並び順メタが無いタームも
+	 * 一覧から消えない。既存の usort 実装
+	 * （Resource_Tag_Taxonomy::get_tag_labels()）と同じ欠損値の扱いに揃えている。
+	 *
+	 * $object['id'] に依存するため、REST リクエストの `_fields` に `id` が
+	 * 含まれない場合はターム ID を特定できず、常に 0 を返す
+	 * （#463 安藤さんレビュー指摘。register_rest_field の仕様上の制約）。
+	 *
+	 * @param array $object REST タームオブジェクト（配列）。`id` を含む `_fields` が前提。
+	 * @return int 並び順（未設定・不正値の場合は 0）。
+	 */
+	public function get_order_value_for_rest( array $object ): int {
+		$term_id = isset( $object['id'] ) ? (int) $object['id'] : 0;
+
+		if ( $term_id <= 0 ) {
+			return 0;
+		}
+
+		$value = trim( (string) get_term_meta( $term_id, self::META_KEY, true ) );
+
+		if ( '' === $value || ! is_numeric( $value ) ) {
+			return 0;
+		}
+
+		return (int) $value;
 	}
 
 	/**
@@ -163,6 +228,19 @@ class Term_Order_Manager {
 		$query->query_vars['meta_key'] = self::META_KEY;
 		$query->query_vars['orderby']  = 'meta_value_num';
 		$query->query_vars['order']    = 'ASC';
+
+		// WP_Term_Query は 'pre_get_terms' の発火後（ここに到達した時点）にならないと
+		// $query->meta_query を再構築しないが、ORDER BY 句を組み立てる parse_orderby() は
+		// その再構築より先に実行される。そのため meta_key をここで設定しただけでは
+		// ORDER BY に反映されず、並び順メタを無視して既定（名前順）のまま返ってしまう
+		// （#452: 保存メッセージは出るのに再読み込みすると元の順序に戻る不具合の原因）。
+		// parse_orderby() が正しい JOIN 情報を参照できるよう、meta_query をここで
+		// 前倒しで再構築しておく（WP_Meta_Query::parse_query_vars() は呼び直しても
+		// 安全な作り＝毎回 $this->queries を組み直すだけなので、後続の WP_Term_Query
+		// 側の再構築と二重に呼んでも副作用はない）。
+		if ( $query->meta_query instanceof WP_Meta_Query ) {
+			$query->meta_query->parse_query_vars( $query->query_vars );
+		}
 	}
 
 	/**

@@ -1,5 +1,5 @@
 import type { OnRequireFn } from 'require-in-the-middle';
-export declare type Hooked = {
+export type Hooked = {
     moduleName: string;
     onRequire: OnRequireFn;
 };

@@ -957,7 +957,7 @@ class Booking_Draft_Controller {
 	 * それ以外は保存メタを 1 以上にクランプ）を、確定/下書きの2コントローラで対称に保つために複製する。
 	 * 下書きコントローラは Availability_Service を保持しないため、ここに閉じた実装とする。
 	 * 仕様変更時は確定コントローラ側（get_menu_max_capacity）と Availability_Service 側、および
-	 * 管理画面側（Booking_Admin::get_menu_max_capacity()。#394 で追加した4箇所目の複製）も合わせて更新すること。
+	 * 管理画面側（Staff_Conflict_Detector::get_menu_capacity()）も合わせて更新すること。
 	 *
 	 * #392: 指名を使うメニューを「1枠1組（貸切）」として扱う仕様変更に伴い、「指名ONなら1固定」の
 	 * 分岐を削除した。指名を使うメニューでも、この値は「1件の予約で申し込める（1組の）最大人数」

@@ -256,6 +256,16 @@ export function _creditCard(Class, params) {
     });
 }
 // @__NO_SIDE_EFFECTS__
+export function _iban(Class, params) {
+    return new Class({
+        type: "string",
+        format: "iban",
+        check: "string_format",
+        abort: false,
+        ...util.normalizeParams(params),
+    });
+}
+// @__NO_SIDE_EFFECTS__
 export function _jwt(Class, params) {
     return new Class({
         type: "string",
@@ -678,8 +688,13 @@ export function _property(property, schema, params) {
     });
 }
 // @__NO_SIDE_EFFECTS__
-export function _properties(shape) {
-    return Object.entries(shape).map(([property, schema]) => new checks.$ZodCheckProperty({ check: "property", property, schema }));
+export function _properties(Class, shape, params) {
+    return new Class({
+        type: "properties",
+        check: "properties",
+        shape,
+        ...util.normalizeParams(params),
+    });
 }
 // @__NO_SIDE_EFFECTS__
 export function _mime(types, params) {

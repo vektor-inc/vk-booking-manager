@@ -39,6 +39,7 @@ const error = () => {
         json_string: "рядок JSON",
         e164: "номер E.164",
         credit_card: "номер кредитної картки",
+        iban: "IBAN",
         jwt: "JWT",
         template_literal: "вхідні дані",
     };

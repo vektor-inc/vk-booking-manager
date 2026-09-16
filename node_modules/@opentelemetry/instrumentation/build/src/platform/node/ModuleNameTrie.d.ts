@@ -1,6 +1,6 @@
 import type { Hooked } from './RequireInTheMiddleSingleton';
 export declare const ModuleNameSeparator = "/";
-declare type ModuleNameTrieSearchOptions = {
+type ModuleNameTrieSearchOptions = {
     /**
      * Whether to return the results in insertion order
      */

@@ -20,6 +20,7 @@ import { BookingConfirmApp } from './booking-confirm-app';
 import { BookingSummaryItems } from './components/booking-summary-items';
 import { ReservationHeader } from './components/reservation-header';
 import { sanitizeDraftToken } from '../shared/draft-token';
+import { sortTermsByOrder } from '../shared/term-order';
 const parseQueryParams = () => {
 	if ( typeof window === 'undefined' ) {
 		return {};
@@ -1871,9 +1872,16 @@ export const ReservationApp = ( {
 		) {
 			return '';
 		}
-		return '/wp/v2/vkbm_resource_tag?per_page=100&hide_empty=true&_fields=id,name,count';
+		// order: 管理画面で保存した並び順（Term_Order_Manager が REST に足すフィールド）。
+		// 取得後に sortTermsByOrder() で並べ替える（#463。REST クエリ自体は名前順のまま）。
+		return '/wp/v2/vkbm_resource_tag?per_page=100&hide_empty=true&_fields=id,name,count,order';
 	}, [ providerSettingsLoaded, providerSettings.resourceTagSearchEnabled ] );
-	useCollection( resourceTagCollectionPath, setResourceTagOptions );
+	// #463: REST から取得したタグは名前順で返るため、管理画面で保存した並び順
+	// （order フィールド）で並べ替えてから state へ反映する。
+	const handleResourceTagOptions = useCallback( ( terms ) => {
+		setResourceTagOptions( sortTermsByOrder( terms ) );
+	}, [] );
+	useCollection( resourceTagCollectionPath, handleResourceTagOptions );
 
 	const dayMetaMap = useMemo( () => {
 		if ( ! calendarData?.days ) {

@@ -1699,6 +1699,96 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			wp_set_current_user( 0 );
 		}
 	}
+
+	/**
+	 * issue #465 レビュー指摘の回帰テスト。
+	 *
+	 * 無料版はスタッフ指名機能自体が常に無効なため、create_booking()（confirm）は下書きに
+	 * 保存された resource_id の値を信用せず、常に 0（自動割当）へ正規化する
+	 * （src/bookings/class-booking-confirmation-controller.php の $staff_id 算出）。
+	 * これにより、下書きに古い resource_id（例: 過去の予約を再利用する導線・ブックマーク経由で
+	 * 渡ってくる Pro版時代の ID）が残っていても、revalidate_draft_slot() の担当一致チェックへは
+	 * 常に 0 が渡るため、issue #15 と同じ「予約時にエラーになる」症状が別経路で再発することはない。
+	 * 一方 Pro版では下書きの resource_id をそのまま使うため、この一致チェックは従来どおり
+	 * 機能し、再検証で確保できなかった担当への予約は拒否される。
+	 *
+	 * 本番の入口である create_booking() を通して検証する（revalidate_draft_slot() を
+	 * ReflectionMethod で直接叩く合成状態ではなく、下書き生成〜確定までの実経路と対応させるため）。
+	 */
+	public function test_confirm_normalizes_stale_draft_resource_id_by_edition(): void {
+		$menu_id = $this->create_menu();
+		$this->disable_nomination();
+		update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+
+		// 実際に確保できる担当（空き枠再検証が返す基本スタッフ）。
+		$resolved_staff_id = $this->create_staff();
+		// 下書きに残っている古い／改竄された resource_id を想定した別スタッフ。
+		$stale_staff_id = $this->create_staff();
+
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+
+		$start = '2026-08-01T10:00:00+09:00';
+		$end   = '2026-08-01T11:00:00+09:00';
+
+		$token   = 'token_' . strtolower( wp_generate_password( 8, false, false ) );
+		$payload = array(
+			'menu_id'            => $menu_id,
+			'resource_id'        => $stale_staff_id,
+			'is_staff_preferred' => true,
+			'guests'             => 1,
+			'slot'               => array(
+				'slot_id'  => 'slot-1',
+				'start_at' => $start,
+				'end_at'   => $end,
+			),
+			'meta'               => array( 'timezone' => 'Asia/Tokyo' ),
+		);
+		set_transient( self::TRANSIENT_PREFIX . $token, $payload );
+		$this->tokens[] = $token;
+
+		// 空き枠再検証は、実際に確保できる担当（$resolved_staff_id）を返す。
+		$availability = new Availability_Service_Test_Double(
+			array(
+				'slot_id'        => 'slot-1',
+				'start_at'       => $start,
+				'end_at'         => $end,
+				'service_end_at' => $end,
+				'staff'          => array( 'id' => $resolved_staff_id ),
+			)
+		);
+		$controller   = new Booking_Confirmation_Controller(
+			new Booking_Notification_Service_Test_Double(),
+			new Settings_Repository(),
+			$availability
+		);
+
+		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+		$request->set_param( 'token', $token );
+		$request->set_param( 'agree_terms', true );
+
+		$response = $controller->create_booking( $request );
+
+		if ( Staff_Editor::is_enabled() ) {
+			// Pro版: 下書きの resource_id（$stale_staff_id）をそのまま信用するため、
+			// 実際に確保できる担当（$resolved_staff_id）と不一致であれば従来どおり拒否される。
+			$this->assertInstanceOf( WP_Error::class, $response, 'Pro版は従来どおり担当スタッフの不一致を拒否すべき' );
+			$this->assertSame( 'staff_unavailable', $response->get_error_code() );
+		} else {
+			// 無料版: 下書きの resource_id を信用せず 0 に正規化するため、一致チェックに
+			// 阻まれず、実際に確保できた担当（$resolved_staff_id）へ割り当てられて予約が成立する
+			// （issue #465 再発防止）。
+			$this->assertInstanceOf( WP_REST_Response::class, $response, '無料版は古い resource_id との不一致で拒否してはならない' );
+			$booking_id = (int) ( $response->get_data()['booking_id'] ?? 0 );
+			$this->assertGreaterThan( 0, $booking_id );
+			$this->assertSame(
+				$resolved_staff_id,
+				(int) get_post_meta( $booking_id, '_vkbm_booking_resource_id', true ),
+				'実際に確保できた担当（$resolved_staff_id）へ割り当てられるべき'
+			);
+		}
+	}
 }
 
 class Booking_Notification_Service_Test_Double extends Booking_Notification_Service {

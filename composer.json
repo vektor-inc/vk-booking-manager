@@ -9,6 +9,10 @@
 	"autoload": {
 		"classmap": [
 			"src/"
+		],
+		"exclude-from-classmap": [
+			"src/**/*-free.php",
+			"src/**/*-pro.php"
 		]
 	},
 	"require-dev": {

@@ -5,9 +5,9 @@
  * nwsapi.js - Fast CSS Selectors API Engine
  *
  * Author: Diego Perini <diego.perini at gmail com>
- * Version: 2.2.24
+ * Version: 2.2.27
  * Created: 20070722
- * Release: 20260606
+ * Release: 20260830
  *
  * License:
  *  https://javascript.nwbox.com/nwsapi/MIT-LICENSE
@@ -30,7 +30,7 @@
 
 })(this, function Factory(global, Export) {
 
-  var version = 'nwsapi-2.2.24',
+  var version = 'nwsapi-2.2.27',
 
   doc = global.document,
   root = doc.documentElement,
@@ -77,9 +77,9 @@
 
   GROUPS = {
     // pseudo-classes requiring parameters
-    linguistic: '(dir|lang)(?:\\x28\\s?([-\\w]{2,})\\s?(?:\\x29|$))',
-    logicalsel: '(is|where|matches|not|has)(?:\\x28\\s?(' + '[^()]*|.*' + ')\\s?(?:\\x29|$))',
-    treestruct: '(nth(?:-last)?(?:-child|-of\\-type))(?:\\x28\\s?(even|odd|(?:[-+]?\\d*)(?:n\\s?[-+]?\\s?\\d*)?)\\s?(?:\\x29|$))',
+    linguistic: '(dir|lang)(?:\\x28\\s?([-\\w]{2,})\\s?\\x29)',
+    logicalsel: '(is|where|matches|not|has)(?:\\x28\\s?(' + '[^()]*|.*' + ')\\s?\\x29)',
+    treestruct: '(nth(?:-last)?(?:-child|-of\\-type))(?:\\x28\\s?(even|odd|(?:[-+]?\\d*)(?:n\\s?[-+]?\\s?\\d*)?)\\s?\\x29)',
     // pseudo-classes not requiring parameters
     locationpc: '(any\\-link|link|visited|target|defined)\\b',
     useraction: '(hover|active|focus\\-within|focus\\-visible|focus)\\b',
@@ -87,8 +87,8 @@
     inputstate: '(enabled|disabled|read\\-only|read\\-write|placeholder\\-shown|default)\\b',
     inputvalue: '(checked|indeterminate|required|optional|valid|invalid|in\\-range|out\\-of\\-range)\\b',
     // pseudo-classes not requiring parameters and describing functional state
-    rsrc_state: '(playing|paused|seeking|buffering|stalled|muted|volume-locked)\\b',
-    disp_state: '(open|closed|modal|fullscreen|picture-in-picture)\\b',
+    rsrc_state: '(playing|paused|seeking|buffering|stalled|muted|volume\\-locked)\\b',
+    disp_state: '(open|closed|modal|fullscreen|picture\\-in\\-picture|popover\\-open|popover)\\b',
     time_state: '(current|past|future)\\b',
     // pseudo-classes for parsing only selectors
     pseudo_nop: '(autofill|-webkit\\-autofill)\\b',
@@ -124,8 +124,13 @@
    namespace: RegExp('^(\\*|[\\w-]+)?\\|(.*)')
   },
 
-  // regexp to better aproximate detection of RTL languages (Arabic)
-  RTL = RegExp('^(?:[\\u0627-\\u064a]|[\\u0591-\\u08ff]|[\\ufb1d-\\ufdfd]|[\\ufe70-\\ufefc])+$'),
+  // regular expression to better aproximate
+  // detection of RTL languages (like Arabic)
+  RTL = RegExp('^(?:' +
+    '[\\u0627-\\u064a]|' +
+    '[\\u0591-\\u08ff]|' +
+    '[\\ufb1d-\\ufdfd]|' +
+    '[\\ufe70-\\ufefc])+$'),
 
   // emulate firefox error strings
   qsNotArgs = 'Not enough arguments',
@@ -209,6 +214,75 @@
       while (l--) { list[list.length] = nodes[++i]; }
       return list;
     },
+
+  // caching limit for compiled resolver functions
+  CACHE_LIMIT = 1000,
+
+  // ES5 bounded LRU cache. It stores query plans (compiled resolvers),
+  // never DOM result sets. A prefixed dictionary avoids user-key collisions
+  // and a doubly linked list keeps the least-recently-used entry at the head.
+  createCache = function(limit) {
+    var cache = { }, head = null, tail = null, size = 0,
+      prefix = '\x01', has = function(key) {
+        return Object.prototype.hasOwnProperty.call(cache, prefix + key);
+      }, unlink = function(entry) {
+        entry.prev ? entry.prev.next = entry.next : head = entry.next;
+        entry.next ? entry.next.prev = entry.prev : tail = entry.prev;
+      }, link = function(entry) {
+        entry.prev = tail;
+        entry.next = null;
+        tail ? tail.next = entry : head = entry;
+        tail = entry;
+      }, promote = function(entry) {
+        if (entry !== tail) {
+          unlink(entry);
+          link(entry);
+        }
+      }, remove = function(entry) {
+        unlink(entry);
+        delete cache[entry.key];
+        --size;
+      };
+
+    limit || (limit = CACHE_LIMIT);
+
+    return {
+      clear: function() {
+        cache = { };
+        head = tail = null;
+        size = 0;
+      },
+      get: function(key) {
+        var entry;
+        if (!has(key)) return undefined;
+        entry = cache[prefix + key];
+        promote(entry);
+        return entry.value;
+      },
+      has: function(key) {
+        return has(key);
+      },
+      set: function(key, value) {
+        var entry, entryKey = prefix + key;
+
+        if (has(key)) {
+          entry = cache[entryKey];
+          entry.value = value;
+          promote(entry);
+        } else {
+          size >= limit && remove(head);
+          entry = { key: entryKey, value: value, prev: null, next: null };
+          cache[entryKey] = entry;
+          link(entry);
+          ++size;
+        }
+        return value;
+      },
+      size: function() {
+        return size;
+      }
+    };
+  },
 
   // only define the toNodeList helper if explicitly enabled in Config,
   // a safety measure for headless hosts missing feature/implementation
@@ -333,10 +407,6 @@
   // convert escape sequence in a CSS string or identifier
   // to javascript string with javascript escape sequences
   escapeIdentifier =
-//    global.CSS && typeof global.CSS.escape == 'function' ?
-//    function(str) {
-//      return global.CSS.escape(str);
-//    } :
     function(str) {
       return REX.HasEscapes.test(str) ?
         str.replace(REX.FixEscapes,
@@ -596,20 +666,6 @@
           doc.createElement('DiV').localName == 'div';
     },
 
-  // return node if node is focusable
-  // or false if node isn't focusable
-  isFocusable =
-    function(node) {
-      var doc = node.ownerDocument;
-       if (node.contentDocument&&node.localName== 'iframe') { return false; }
-       if (doc.hasFocus() && node === doc.activeElement) {
-        if (node.type || node.href || typeof node.tabIndex == 'number') {
-          return node;
-        }
-      }
-      return false;
-    },
-
   // check if node content is editable
   isContentEditable =
     function(node) {
@@ -632,6 +688,81 @@
       }
     },
 
+  // return node if node is focusable
+  // or false if node isn't focusable
+  isFocusable =
+    function(node) {
+      var doc = node.ownerDocument;
+       if (node.contentDocument&&node.localName== 'iframe') { return false; }
+       if (doc.hasFocus() && node === doc.activeElement) {
+        if (node.type || node.href || typeof node.tabIndex == 'number') {
+          return node;
+        }
+      }
+      return false;
+    },
+
+  // use the native selector state when it is available; when NWSAPI has
+  // installed itself, _matches retains the native implementation
+  matchesNative =
+    function(node, selector) {
+      var matcher = _matches || node.matches || node.webkitMatchesSelector ||
+        node.mozMatchesSelector || node.msMatchesSelector;
+      if (!matcher) return false;
+      try {
+        return matcher.call(node, selector);
+      } catch (e) {
+        return false;
+      }
+    },
+
+  // :open and :closed have a portable DOM state for details and dialog.
+  // Native matching extends support to host-language states such as pickers.
+  isOpen =
+    function(node) {
+      return (/^(details|dialog)$/i.test(node.localName) && node.open === true) ||
+        matchesNative(node, ':open');
+    },
+
+  isClosed =
+    function(node) {
+      return (/^(details|dialog)$/i.test(node.localName) && node.open === false) ||
+        matchesNative(node, ':closed');
+    },
+
+  isFullscreen =
+    function(node) {
+      var doc = node.ownerDocument;
+      return matchesNative(node, ':fullscreen') || !!(doc && (
+        doc.fullscreenElement === node ||
+        doc.webkitFullscreenElement === node ||
+        doc.mozFullScreenElement === node ||
+        doc.msFullscreenElement === node));
+    },
+
+  // A modal dialog cannot be distinguished from dialog.show() without the
+  // native :modal state. Fullscreen is explicitly modal per the WPT suite.
+  isModal =
+    function(node) {
+      return matchesNative(node, ':modal') || isFullscreen(node);
+    },
+
+  isPictureInPicture =
+    function(node) {
+      var doc = node.ownerDocument;
+      return matchesNative(node, ':picture-in-picture') || !!(doc && (
+        doc.pictureInPictureElement === node ||
+        node.webkitPresentationMode === 'picture-in-picture'));
+    },
+
+  // The popover attribute declares capability, not the showing state. The
+  // native pseudo-class is therefore required until an explicit state API is
+  // available. :popover is retained as an alias for existing callers.
+  isPopoverOpen =
+    function(node) {
+      return node.hasAttribute('popover') && matchesNative(node, ':popover-open');
+    },
+
   // check media resources is playing
   isPlaying =
     function(media) {
@@ -652,8 +783,10 @@
       }
       // clear lambda cache
       if (clear) {
-        matchResolvers = { };
-        selectResolvers = { };
+        matchLambdas.clear();
+        selectLambdas.clear();
+        matchResolvers.clear();
+        selectResolvers.clear();
       }
       setIdentifierSyntax();
       return true;
@@ -797,9 +930,12 @@
       Patterns.attribute = RegExp('^(?:' + attrmatcher + ')(.*)');
     },
 
-  F_INIT = '"use strict";return function Resolver(c,f,x,r)',
-
   /*
+  //
+  // Resolver Compiler Functions
+  //
+  // Type of operations
+  //
   // S - M - N
   //
   // SELECT
@@ -807,6 +943,8 @@
   // NONE
   //
   */
+
+  F_INIT = '"use strict";return function Resolver(c,f,x,r)',
 
   S_HEAD = 'var e,n,o,j=r.length-1,k=-1',
   M_HEAD = 'var e,n,o',
@@ -834,39 +972,28 @@
 
   // compile groups or single selector strings into
   // executable functions for matching or selecting
-
-  S_TEST = 'if(f(c[k])){break main;}',
-  M_TEST = 'f(c);',
-  N_TEST = 'if(f(c.item(k))){break main;}',
-
-  S_VARS = [ ],
-  M_VARS = [ ],
-  N_VARS = [ ],
-
-  // compile groups or single selector strings into
-  // executable functions for matching or selecting
   compile =
     function(selector, mode, callback) {
-      var factory, token, head = '', loop = '', macro = '', source = '', vars = '';
+      var factory, head = '', loop = '', macro = '', source = '', vars = '';
 
       // 'mode' can be boolean or null
       // true = select / false = match
       // null to use collection.item()
       switch (mode) {
         case true:
-          if (selectLambdas[selector]) { return selectLambdas[selector]; }
+          if ((factory = selectLambdas.get(selector))) { return factory; }
           macro = S_BODY + (callback ? S_TEST : '') + S_TAIL;
           head = S_HEAD;
           loop = S_LOOP;
           break;
         case false:
-          if (matchLambdas[selector]) { return matchLambdas[selector]; }
+          if ((factory = matchLambdas.get(selector))) { return factory; }
           macro = M_BODY + (callback ? M_TEST : '') + M_TAIL;
           head = M_HEAD;
           loop = M_LOOP;
           break;
         case null:
-          if (selectLambdas[selector]) { return selectLambdas[selector]; }
+          if ((factory = selectLambdas.get(selector))) { return factory; }
           macro = N_BODY + (callback ? N_TEST : '') + N_TAIL;
           head = N_HEAD;
           loop = N_LOOP;
@@ -893,16 +1020,22 @@
 
       factory = Function('s', F_INIT + '{' + head + vars + ';' + loop + 'return r;}')(Snapshot);
 
-      return mode || mode === null ? (selectLambdas[selector] = factory) : (matchLambdas[selector] = factory);
+      if (mode || mode === null) {
+        selectLambdas.set(selector, factory);
+      } else {
+        matchLambdas.set(selector, factory);
+      }
+
+      return factory;
     },
 
   // build conditional code to check components of selector strings
   compileSelector =
     function(expression, source, mode, callback) {
 
-      var a, b, n, f, k = 0, name, NS, referenceElement,
-      compat, expr, match, result, status, symbol, test,
-      type, selector = expression, vars;
+      var a, b, n, f, k = 0, compat, name,
+      NS, expr, match, result, status, symbol,
+      test, type, selector = expression, vars;
 
       // isolate selector combinators
       selector = selector.replace(STD.combinator, '$1');
@@ -913,7 +1046,7 @@
 
       while (selector) {
 
-	++k;
+        ++k;
 
         // get namespace prefix if present or get first char of selector
         symbol = STD.apimethods.test(selector) ? '|' : selector[0];
@@ -1132,8 +1265,8 @@
             else if ((match = selector.match(Patterns.logicalsel))) {
               match[1] = match[1].toLowerCase();
               expr = match[2]
-                .replace(REX.CommaGroup, ',')
-                .replace(REX.TrimSpaces, '')
+//                .replace(REX.CommaGroup, ',')
+//                .replace(REX.TrimSpaces, '')
                 .replace(/\x22/g, '\\"');
               switch (match[1]) {
                 case 'is':
@@ -1154,13 +1287,25 @@
                   source = 'if(!s.match("' + expr + '",e)){' + source + '}';
                   break;
                 case 'has':
-                  if (/^\s*(\+|\~)/.test(match[2])) {
-                    source = 'if(e.parentElement&&Array.from(e.parentElement' +
-                      (/^\s*[+]/.test(match[2]) ?
-                        '.querySelectorAll("*' + expr + '")' : '.children') +
-                        ').includes(e.nextElementSibling)){' + source + '}';
-                  } else {
-                    source = 'if(s.first(":scope ' + expr + '",e)){' + source + '}';
+                  if (expr == ':scope') {
+                    source = 'if(s.has("' + expr + '",e)){' + source + '}';
+                    break;
+                  }
+
+                  // combinators having mangled context
+                  switch (expr.charAt(0)) {
+                    case '+':
+                      source = 'if(e.parentElement&&s.select("*' + expr + '",e.parentElement).includes(e.nextElementSibling)){' + source + '}';
+                      break;
+                    case '~':
+                      source = 'if(e.parentElement&&Array.from(e.parentElement.children).includes(e.nextElementSibling)){' + source + '}';
+                      break;
+                    case '>':
+                      source = 'if(s.first(":scope ' + expr + '",e)){' + source + '}';
+                      break;
+                     default:
+                      source = 'if(s.has(":scope ' + expr + '",e)){' + source + '}';
+                      break;
                   }
                   break;
                 default:
@@ -1235,14 +1380,13 @@
                   source = 'if(s.isFocusable(e)){' + source + '}';
                   break;
                 case 'focus-visible':
-                  source = 'if(n=s.isFocusable(e)){' +
-                    'if(e!==n){while(e){e=e.parentElement;if(e===n)break;}}}' +
-                    'if((e===n||e.autofocus)){' + source + '}';
+                  // The v2.x branch has no reliable keyboard-modality state.
+                  // An element with observable input focus is the conservative
+                  // behavior shared by focus and focus-visible in this line.
+                  source = 'if(s.isFocusable(e)){' + source + '}';
                   break;
                 case 'focus-within':
-                  source = 'if(n=s.isFocusable(e)){' +
-                    'if(n!==e){while(n){n=n.parentElement;if(n===e)break;}}}' +
-                    'if((n===e||n.autofocus)){' + source + '}';
+                  source = 'if(e.contains(s.doc.activeElement)){' + source + '}';
                   break;
                 default:
                   emit('\'' + expression + '\'' + qsInvalid);
@@ -1287,6 +1431,7 @@
                     'if(e.disabled===true||(F&&!L)){' + source + '}}';
                   break;
                 case 'read-only':
+                case '-moz-read-only':
                   source =
                     'if(' +
                       '(/^textarea$/i.test(e.localName)&&(e.readOnly||e.disabled))||' +
@@ -1295,12 +1440,17 @@
                     '){' + source + '}';
                   break;
                 case 'read-write':
+                case '-moz-read-write':
                   source =
                     'if(' +
                       '(/^textarea$/i.test(e.localName)&&!e.readOnly&&!e.disabled)||' +
                       '(/^input$/i.test(e.localName)&&"|date|datetime-local|email|month|number|password|search|tel|text|time|url|week|".includes("|"+e.type+"|")&&!e.readOnly&&!e.disabled)||' +
                       '(!/^(?:input|textarea)$/i.test(e.localName) && s.isContentEditable(e))' +
                     '){' + source + '}';
+                  break;
+                case 'autofill':
+                case '-webkit-autofill':
+                  source = 'if(e.matches&&e.matches(":-webkit-autofill,:autofill")){' + source + '}';
                   break;
                 case 'placeholder-shown':
                   source =
@@ -1429,6 +1579,36 @@
               }
             }
 
+            // display state pseudo-classes. Helpers use native matching when
+            // available and otherwise only properties observable from the DOM.
+            else if ((match = selector.match(Patterns.disp_state))) {
+              match[1] = match[1].toLowerCase();
+              switch (match[1]) {
+                case 'open':
+                  source = 'if(s.isOpen(e)){' + source + '}';
+                  break;
+                case 'closed':
+                  source = 'if(s.isClosed(e)){' + source + '}';
+                  break;
+                case 'modal':
+                  source = 'if(s.isModal(e)){' + source + '}';
+                  break;
+                case 'fullscreen':
+                  source = 'if(s.isFullscreen(e)){' + source + '}';
+                  break;
+                case 'picture-in-picture':
+                  source = 'if(s.isPictureInPicture(e)){' + source + '}';
+                  break;
+                case 'popover':
+                case 'popover-open':
+                  source = 'if(s.isPopoverOpen(e)){' + source + '}';
+                  break;
+                default:
+                  emit('\'' + expression + '\'' + qsInvalid);
+                  break;
+              }
+            }
+
             // placeholder for parse only no-op selectors
             else if ((match = selector.match(Patterns.pseudo_nop))) {
               break;
@@ -1443,7 +1623,8 @@
             }
 
             // allow pseudo-elements starting with double colon (::)
-            // ::after, ::before, ::marker, ::placeholder, ::inactive-selection, ::selection, ::-webkit-<foo-bar>
+            // ::after, ::before, ::marker, ::placeholder, ::selection,
+            // ::inactive-selection, ::-webkit-<foo-bar>
             // assert: e.type is in double-colon format, like ::after
             else if ((match = selector.match(Patterns.pseudo_dbl))) {
               source = 'if(e.element&&e.type.toLowerCase()=="' +
@@ -1480,7 +1661,7 @@
 
               if (!status) {
                 if (Config.FORGIVING &&
-                  selector.match(/(:(?:is|where)\x28)/)) {
+                  selector.match(/(:(?:is|where)\\x28)/)) {
                   return '';
                 }
                 emit('unknown pseudo-class selector \'' + selector + '\'');
@@ -1508,7 +1689,7 @@
 
         if (!match) {
           if (Config.FORGIVING &&
-            selector.match(/(:(?:is|where)\x28)/)) {
+            selector.match(/(:(?:is|where)\\x28)/)) {
             return '';
           }
           emit('\'' + expression + '\'' + qsInvalid);
@@ -1620,13 +1801,22 @@
   match =
     function _matches(selectors, element, callback) {
 
-      if (element && matchResolvers[selectors]) {
-        return match_assert(matchResolvers[selectors].factory, element, callback);
+      var resolver;
+
+      if (element && (resolver = matchResolvers.get(selectors))) {
+        return match_assert(resolver.factory, element, callback);
       }
 
-      matchResolvers[selectors] = match_collect(parse(selectors, false), callback);
+      resolver = match_collect(parse(selectors, false), callback);
+      matchResolvers.set(selectors, resolver);
 
-      return match_assert(matchResolvers[selectors].factory, element, callback);
+      return match_assert(resolver.factory, element, callback);
+    },
+
+  // true if element matches the selector
+  has =
+    function(selector, context, callback) {
+      return collect(parse(selector, true), context, callback).results.length > 0;
     },
 
   // equivalent of w3c 'querySelector' method
@@ -1658,7 +1848,7 @@
           (lastContext = switchContext(context));
 
       if (selectors) {
-        if ((resolver = selectResolvers[selectors])) {
+        if ((resolver = selectResolvers.get(selectors))) {
           if (resolver.context === context &&
             resolver.callback === callback) {
             var i, l, list,
@@ -1696,9 +1886,9 @@
       }
 
       // save/reuse factory and closure collection
-      selectResolvers[selectors] = collect(parse(selectors, true), context, callback);
+      selectResolvers.set(selectors, collect(parse(selectors, true), context, callback));
 
-      nodes = selectResolvers[selectors].results;
+      nodes = selectResolvers.get(selectors).results;
 
       if (typeof callback == 'function') {
         nodes = concatCall(nodes, callback);
@@ -1739,7 +1929,7 @@
         }
 
         nodeset[i] = token[1] + token[2];
-	token[2] = unescapeIdentifier(token[2]);
+        token[2] = unescapeIdentifier(token[2]);
         htmlset[i] = compat[token[1]](context, token[2]);
         factory[i] = compile(optimized[i], true, null);
 
@@ -1883,12 +2073,12 @@
   lastContext,
 
   // cached lambdas
-  matchLambdas = { },
-  selectLambdas = { },
+  matchLambdas = createCache(),
+  selectLambdas = createCache(),
 
   // cached resolvers
-  matchResolvers = { },
-  selectResolvers = { },
+  matchResolvers = createCache(),
+  selectResolvers = createCache(),
 
   // passed to resolvers
   Snapshot = {
@@ -1899,6 +2089,7 @@
 
     byTag: byTag,
 
+    has: has,
     first: first,
     match: match,
     select: select,
@@ -1908,6 +2099,12 @@
     nthOfType: nthOfType,
     nthElement: nthElement,
 
+    isOpen: isOpen,
+    isClosed: isClosed,
+    isModal: isModal,
+    isFullscreen: isFullscreen,
+    isPictureInPicture: isPictureInPicture,
+    isPopoverOpen: isPopoverOpen,
     isFocusable: isFocusable,
     isContentEditable: isContentEditable,
     hasAttributeNS: hasAttributeNS
@@ -2015,4 +2212,5 @@
   initialize(doc);
 
   return Dom;
+
 });

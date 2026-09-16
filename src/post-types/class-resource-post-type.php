@@ -139,4 +139,71 @@ class Resource_Post_Type {
 			'create_posts'           => Capabilities::MANAGE_STAFF,
 		);
 	}
+
+	/**
+	 * Resolve the Free edition's single default staff (resource) ID.
+	 *
+	 * Free版では担当スタッフを指名する概念自体が無く、常に「基本スタッフ」1名だけを使う
+	 * 設計になっている（Plugin::maybe_create_default_staff() が公開状態の resource を常に
+	 * 1件に保つ）。この読み取り側の解決ロジックは元々 Provider_Settings_Controller に
+	 * post_title 一致（`__( 'Default Staff', ... )`）で重複実装されていたが、翻訳言語の
+	 * 切り替えやスタッフ名の変更で post_title 一致が壊れるため（issue #465）、ここへ集約した。
+	 *
+	 * 「どの投稿を基本スタッフとみなすか」の判定アルゴリズム自体は
+	 * self::resolve_default_staff_from_published_ids() に切り出してあり、書き込み側の
+	 * Plugin::maybe_create_default_staff()（公開状態を1件に保つ・#465でこちらも同じ判定へ揃えた）
+	 * とも共有している。読み取り・書き込みで判定基準がずれることを防ぐため。
+	 *
+	 * @return int Default staff (resource) post ID、解決できない場合は 0。
+	 */
+	public static function get_default_staff_id(): int {
+		if ( ! post_type_exists( self::POST_TYPE ) ) {
+			return 0;
+		}
+
+		$published_staff = get_posts(
+			array(
+				'post_type'      => self::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+			)
+		);
+
+		return self::resolve_default_staff_from_published_ids( $published_staff );
+	}
+
+	/**
+	 * 公開中の resource ID 一覧から、基本スタッフとみなす1件を判定する（issue #465）。
+	 *
+	 * 「公開中の resource がちょうど1件ならそれを使う」を優先する。翻訳言語の切り替えや
+	 * スタッフ名の変更に影響されないため。0件または複数件（初回起動直後・Pro版からの
+	 * 切り替え直後などで、まだ公開状態の整理が済んでいない一時的な状態）のときだけ、
+	 * 後方互換として従来の post_title 一致にフォールバックする。
+	 *
+	 * 呼び出し元は既に公開中の resource ID 一覧を持っている（get_default_staff_id() は
+	 * 読み取りのためだけに、Plugin::maybe_create_default_staff() は「公開状態を1件に保つ」
+	 * ために別の目的でも同じ一覧を必要とする）ため、ここでは自前でクエリを発行しない。
+	 *
+	 * @param array<int> $published_ids 公開中（post_status = publish）の resource 投稿ID一覧。
+	 * @return int 基本スタッフとみなす投稿ID。判定できない場合は 0。
+	 */
+	public static function resolve_default_staff_from_published_ids( array $published_ids ): int {
+		// 公開中の resource がちょうど1件なら、それを基本スタッフとして扱う（最も頑健）。
+		if ( 1 === count( $published_ids ) ) {
+			return (int) reset( $published_ids );
+		}
+
+		// 0件または複数件の場合は、後方互換のため従来の post_title 一致にフォールバックする。
+		$title = __( 'Default Staff', 'vk-booking-manager' );
+		foreach ( $published_ids as $staff_id ) {
+			$post = get_post( $staff_id );
+			if ( $post && $title === $post->post_title ) {
+				return (int) $post->ID;
+			}
+		}
+
+		return 0;
+	}
 }

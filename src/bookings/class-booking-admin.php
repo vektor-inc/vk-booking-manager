@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use DateTimeImmutable;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
-use VKBookingManager\Common\Staff_Load_Calculator;
+use VKBookingManager\Common\Staff_Conflict_Detector;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -447,7 +447,7 @@ class Booking_Admin {
 							<?php
 							// 担当スタッフは単一選択。1予約は分割せず単一スタッフへ割り当てる。
 							// #394 レビュー対応: 基本設定「予約枠の定員」機能OFF時はメニューの古い定員値を無視し1固定にする。
-							$vkbm_max_capacity = $this->get_menu_max_capacity( $service_id );
+							$vkbm_max_capacity = Staff_Conflict_Detector::get_menu_capacity( $service_id );
 							// 同じ時間帯に別予約があるスタッフ（保存時刻時点）を JS でプルダウンから除外するため、IDを渡す。
 							// #394: 指名OFF・定員2以上のメニューでは「残数不足」も除外条件になるため、人数も渡す。
 							$vkbm_conflict_staff_ids = $this->get_conflicting_staff_ids( (int) $post->ID, (string) $start, (string) $end, $service_id, (int) $guests );
@@ -953,7 +953,7 @@ class Booking_Admin {
 		// なったため、人数編集の可否は「指名の有無」では判断しない。「料金区分（guest_tiers）の有無」、
 		// または「予約枠の定員機能OFFによる人数ロック」（下記 $guests_locked_by_capacity）で判断する。
 		// #394 レビュー対応: 基本設定「予約枠の定員」機能OFF時はメニューの古い定員値を無視し1固定にする。
-		$max_capacity = $this->get_menu_max_capacity( $service_id );
+		$max_capacity = Staff_Conflict_Detector::get_menu_capacity( $service_id );
 		// 入力人数が1予約あたりの上限を超えているかどうか（超過時は後段で保存を中断するため保持）。
 		$guests_exceeded = false;
 		// 料金区分が定義されている予約は人数編集UIが無いため、指名の有無に関わらず既存の人数・内訳をそのまま保持する。
@@ -973,7 +973,7 @@ class Booking_Admin {
 		// （そちらは「これから確定する値」の妥当性チェックのため）。
 		$saved_service_id          = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
 		$existing_guests           = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
-		$guests_locked_by_capacity = 1 === $this->get_menu_max_capacity( $saved_service_id ) && $existing_guests > 1;
+		$guests_locked_by_capacity = 1 === Staff_Conflict_Detector::get_menu_capacity( $saved_service_id ) && $existing_guests > 1;
 		if ( $has_saved_guest_tiers || $guests_locked_by_capacity ) {
 			$guests = $existing_guests;
 		} else {
@@ -1689,26 +1689,6 @@ class Booking_Admin {
 	}
 
 	/**
-	 * サービスメニューの予約枠の定員（1組の最大人数）を取得する（#394 レビュー対応）。
-	 *
-	 * 基本設定「予約枠の定員」機能（`Staff_Editor::is_slot_capacity_enabled()`）がOFFのサイトでは、
-	 * メニュー側に古い定員値（例: 3）が残っていても常に1として扱う。このゲートを通さずに
-	 * `_vkbm_max_capacity` を生で読むと、機能OFF後もメニューの残置値でスタッフの二重割り当てを
-	 * 弾かなくなってしまう（`Availability_Service::get_menu_max_capacity()` と同じ判定に揃える）。
-	 *
-	 * @param int $service_id サービスメニューID（0以下はメニュー未選択として1を返す）。
-	 * @return int 1以上の定員値。
-	 */
-	private function get_menu_max_capacity( int $service_id ): int {
-		if ( $service_id <= 0 || ! Staff_Editor::is_slot_capacity_enabled() ) {
-			return 1;
-		}
-
-		$meta = get_post_meta( $service_id, '_vkbm_max_capacity', true );
-		return max( 1, '' === $meta ? 1 : (int) $meta );
-	}
-
-	/**
 	 * 予約投稿に保存されている料金区分（価格ティア）の内訳を取得する（#394 レビュー対応・項目4）。
 	 *
 	 * 「料金区分が定義されているか」の判定式（`Price_Tiers::normalize_guest_tiers()` +
@@ -1737,19 +1717,7 @@ class Booking_Admin {
 	/**
 	 * 担当スタッフ候補から除外すべきスタッフIDの一覧を取得する（#394）。
 	 *
-	 * 判定方法はメニューの性質で分岐する。
-	 * - 指名を使うメニュー、または定員1のメニュー（大多数）：1枠1組（貸切）として扱い、
-	 *   時間帯が重なる別予約（メニュー問わず）が1件でもあるスタッフを除外する
-	 *   （#394 より前と完全に同じ判定。指名ONの結果は変えない＝回帰防止）。
-	 * - 指名を使わない・定員2以上のメニュー：同じメニューの重なる予約となら定員まで相乗り可能。
-	 *   除外集合は次の **和集合** にする（#394 レビュー対応）。
-	 *   1. 残り（定員 − 当該メニュー・当該スタッフの既存予約人数の合計）がこの予約の人数に満たない
-	 *      スタッフ。負荷集計はフロントの自動割当（Booking_Confirmation_Controller）と共有する
-	 *      Staff_Load_Calculator を使い、同じ判定ロジックを2箇所に写経しない。
-	 *   2. **別メニュー**で時間帯が重なる予約を持つスタッフ（従来どおり1件でもあれば除外）。
-	 *      同一メニュー内の相乗りは（1で）許可しつつ、別メニューとの重複は従来どおり止めることで、
-	 *      管理者の重複保存許可設定（`provider_allow_staff_overlap_admin`）がこのメニュー種別だけ
-	 *      事実上無効化されるのを防ぐ。
+	 * 共通の Staff_Conflict_Detector に委譲し、予約編集画面とダッシュボードの判定を揃える。
 	 *
 	 * @param int    $post_id    現在編集中の予約ID（除外）。
 	 * @param string $start_at   予約開始日時（Y-m-d H:i:s）。
@@ -1759,38 +1727,7 @@ class Booking_Admin {
 	 * @return array<int, int> 除外すべきスタッフIDの配列。
 	 */
 	protected function get_conflicting_staff_ids( int $post_id, string $start_at, string $end_at, int $service_id = 0, int $guests = 1 ): array {
-		if ( '' === $start_at ) {
-			return array();
-		}
-		if ( '' === $end_at ) {
-			$end_at = $start_at;
-		}
-
-		$max_capacity = $this->get_menu_max_capacity( $service_id );
-
-		if ( 1 === $max_capacity || Staff_Editor::is_nomination_enabled_for_menu( $service_id ) ) {
-			return $this->get_overlapping_staff_ids( $post_id, $start_at, $end_at );
-		}
-
-		// 指名を使わない・定員2以上のメニュー：同じメニュー・同じ時間帯の負荷を集計し、残数不足のスタッフを除外する。
-		$guests = max( 1, $guests );
-		$loads  = Staff_Load_Calculator::get_staff_loads_for_slot( $service_id, $start_at, $end_at, $post_id );
-
-		$insufficient_remaining = array();
-		foreach ( $loads as $staff_id => $load ) {
-			$remaining = max( 0, $max_capacity - $load );
-			if ( $remaining < $guests ) {
-				$insufficient_remaining[] = (int) $staff_id;
-			}
-		}
-
-		// 別メニューで時間帯が重なる予約を持つスタッフは、同一メニュー内の相乗り許可とは別に従来どおり除外する（和集合）。
-		$other_menu_conflicts = $this->get_overlapping_staff_ids( $post_id, $start_at, $end_at, $service_id );
-
-		// #394 レビュー対応（項目7・項目6）: 和集合の2項（$insufficient_remaining と $other_menu_conflicts）は
-		// 「枠を埋めている予約」の定義がわずかに異なる（Staff_Load_Calculator と get_overlapping_staff_ids で
-		// 対象ステータスが違う。詳細は get_overlapping_staff_ids() の注記を参照）。あえて揃えていない。
-		return array_values( array_unique( array_merge( $insufficient_remaining, $other_menu_conflicts ) ) );
+		return Staff_Conflict_Detector::get_conflicting_staff_ids( $post_id, $start_at, $end_at, $service_id, $guests );
 	}
 
 	/**
@@ -1876,96 +1813,6 @@ class Booking_Admin {
 	 */
 	public static function is_staff_check_target_status( string $status ): bool {
 		return self::STATUS_CANCELLED !== $status && self::STATUS_NO_SHOW !== $status;
-	}
-
-	/**
-	 * 指定時間帯に別予約（確定・保留中）が重なっているスタッフIDの一覧を取得する。
-	 *
-	 * 現在編集中の予約は除外する。1予約は単一スタッフに割り当てられるため、
-	 * 重なる予約の担当スタッフ（resource_id）を対象とする。メニューを問わず、
-	 * その時間帯に1件でも重なる予約があるスタッフを「使用不可」として扱う
-	 * （1枠1組・貸切のメニュー、および定員1のメニュー向けの判定）。
-	 *
-	 * #394 レビュー対応：`$exclude_service_id` を指定すると、そのメニュー自身の予約は
-	 * 集計対象から除く（＝「別メニューの重なる予約」だけを対象にする）。指名OFF・定員2以上の
-	 * メニューで、同一メニュー内の相乗りは別ロジック（残数判定）に任せ、ここでは別メニューとの
-	 * 重複だけを見るために使う。0（既定）を指定した場合は #394 より前と完全に同じ挙動になる。
-	 *
-	 * @param int    $post_id            現在編集中の予約ID（除外）。
-	 * @param string $start_at           予約開始日時（Y-m-d H:i:s）。
-	 * @param string $end_at             予約終了日時（Y-m-d H:i:s）。
-	 * @param int    $exclude_service_id 集計から除くメニューID（0なら除外なし＝全メニュー対象）。
-	 * @return array<int, int> 競合しているスタッフIDの配列。
-	 */
-	private function get_overlapping_staff_ids( int $post_id, string $start_at, string $end_at, int $exclude_service_id = 0 ): array {
-		// 時間帯が重なる確定・保留中の予約を取得する（現在の予約は除外）。
-		//
-		// #394 レビュー対応（項目7）: ここは「確定・保留中」（ステータスメタが confirmed/pending）の
-		// 予約だけを対象にしており、Staff_Load_Calculator（post_status = publish|pending かつ
-		// キャンセル・無断キャンセル以外すべて）とは対象の定義がわずかに異なる。フロントの自動割当
-		// （Booking_Confirmation_Controller）が元々この経路を使っておらず、既存の管理画面の挙動
-		// （#394より前の get_conflicting_staff_ids）をそのまま踏襲するためあえて揃えていない。
-		$query = new WP_Query(
-			array(
-				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => array( 'publish' ),
-				'posts_per_page' => -1,
-				'no_found_rows'  => true,
-				'fields'         => 'ids',
-				'post__not_in'   => array( $post_id ),
-				'meta_query'     => array(
-					'relation' => 'AND',
-					array(
-						'key'     => self::META_STATUS,
-						'value'   => array( self::STATUS_CONFIRMED, self::STATUS_PENDING ),
-						'compare' => 'IN',
-					),
-					array(
-						// 既存の予約開始が、現在の予約終了より前なら時間帯が重なる可能性がある。
-						'key'     => self::META_DATE_START,
-						'value'   => $end_at,
-						'compare' => '<',
-						'type'    => 'DATETIME',
-					),
-					array(
-						'relation' => 'OR',
-						array(
-							'key'     => self::META_TOTAL_END,
-							'value'   => $start_at,
-							'compare' => '>',
-							'type'    => 'DATETIME',
-						),
-						array(
-							'key'     => self::META_DATE_END,
-							'value'   => $start_at,
-							'compare' => '>',
-							'type'    => 'DATETIME',
-						),
-					),
-				),
-			)
-		);
-
-		// 'fields' => 'ids' の WP_Query はメタキャッシュを自動で温めないため、ループ内で
-		// get_post_meta() を件数分呼ぶと N+1 になる。ここでまとめて1回のクエリでキャッシュへ乗せる。
-		update_meta_cache( 'post', $query->posts );
-
-		$staff_ids = array();
-		foreach ( $query->posts as $other_id ) {
-			if ( $exclude_service_id > 0 ) {
-				$other_service_id = (int) get_post_meta( (int) $other_id, self::META_SERVICE_ID, true );
-				if ( $other_service_id === $exclude_service_id ) {
-					continue;
-				}
-			}
-
-			$resource_id = (int) get_post_meta( (int) $other_id, self::META_RESOURCE_ID, true );
-			if ( $resource_id > 0 ) {
-				$staff_ids[ $resource_id ] = $resource_id;
-			}
-		}
-
-		return array_values( $staff_ids );
 	}
 
 	/**

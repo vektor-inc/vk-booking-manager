@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     2.2.0
+ * Version:     2.3.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -63,6 +63,7 @@ require_once __DIR__ . '/src/common/class-price-tiers.php';
 require_once __DIR__ . '/src/common/class-exclusive-fee.php';
 require_once __DIR__ . '/src/common/class-nomination-min-guests-message.php';
 require_once __DIR__ . '/src/common/class-staff-load-calculator.php';
+require_once __DIR__ . '/src/common/class-staff-conflict-detector.php';
 require_once __DIR__ . '/src/assets/class-common-styles.php';
 require_once __DIR__ . '/src/term-order/class-term-order-manager.php';
 require_once __DIR__ . '/src/blocks/class-block-category.php';
@@ -138,6 +139,7 @@ use VKBookingManager\TermOrder\Term_Order_Manager;
 use VKBookingManager\Plugin;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Front_Redirect;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -192,6 +194,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$owner_admin_menu_filter         = new Owner_Admin_Menu_Filter();
 		$shift_post_type                 = new Shift_Post_Type();
 		$service_menu_post_type          = new Service_Menu_Post_Type();
+		$service_menu_front_redirect     = new Service_Menu_Front_Redirect( $settings_repository );
 		$booking_post_type               = new Booking_Post_Type();
 		$booking_notification_service    = new Booking_Notification_Service( $settings_repository );
 		$oembed_override                 = new OEmbed_Override();
@@ -264,6 +267,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 			$resource_post_type,
 			$shift_post_type,
 			$service_menu_post_type,
+			$service_menu_front_redirect,
 			$booking_post_type,
 			$booking_admin,
 			$booking_draft_controller,

@@ -158,6 +158,15 @@
 	line-height: 1.6;
 }
 
+.vkbm-notification-panel__section {
+	margin-bottom: 20px;
+}
+
+.vkbm-notification-panel__section h3 {
+	margin: 0 0 8px;
+	font-size: var(--vkbm--admin--font-size--base);
+}
+
 .vkbm-notification-panel__list {
 	list-style: none;
 	margin: 0;
@@ -165,6 +174,11 @@
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+}
+
+// 共通アラートの連続リスト余白を打ち消し、通知カードの gap だけを使う。
+.vkbm-notification-panel__section.vkbm-alert .vkbm-notification-panel__item + .vkbm-notification-panel__item {
+	margin-top: 0;
 }
 
 .vkbm-notification-card {
@@ -193,6 +207,11 @@
 .vkbm-notification-card__user {
 	font-size: var(--vkbm--admin--font-size--sm);
 	color: var(--vkbm--admin--color--text-secondary);
+}
+
+.vkbm-notification-card__reason {
+	font-size: var(--vkbm--admin--font-size--sm);
+	font-weight: 600;
 }
 
 .vkbm-notification-card__actions {

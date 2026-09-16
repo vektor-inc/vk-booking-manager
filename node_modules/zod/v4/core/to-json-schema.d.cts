@@ -101,7 +101,7 @@ export interface ToJSONSchemaContext {
      * covers both passes in `finalize`: the ref flattening and the `$defs` build.
      *
      * The passes are valid only while nothing they read has changed, so both are cleared in
-     * `process()` when the map grows, and in `JSONSchemaGenerator.emit()`, which can also change
+     * `processSchema()` when the map grows, and in `JSONSchemaGenerator.emit()`, which can also change
      * the `cycles` and `reused` they branch on.
      *
      * One case is deliberately not covered: an `override` callback that writes to
@@ -132,9 +132,14 @@ export declare function initializeContext(params: JSONSchemaGeneratorParams): To
  * custom JSON Schema was written into `json`, in which case the caller must not write its own.
  */
 export declare function handleUnrepresentable(schema: schemas.$ZodType, ctx: ToJSONSchemaContext, json: JSONSchema.BaseSchema, params: ProcessParams, message: string): boolean;
-export declare function process<T extends schemas.$ZodType>(schema: T, ctx: ToJSONSchemaContext, _params?: ProcessParams): JSONSchema.BaseSchema;
+export declare function processSchema<T extends schemas.$ZodType>(schema: T, ctx: ToJSONSchemaContext, _params?: ProcessParams): JSONSchema.BaseSchema;
+/** @deprecated Renamed to `processSchema`. An export alias declares no binding, so it is safe to keep. */
+export { processSchema as process };
 export declare function extractDefs<T extends schemas.$ZodType>(ctx: ToJSONSchemaContext, schema: T): void;
 export declare function finalize<T extends schemas.$ZodType>(ctx: ToJSONSchemaContext, schema: T): ZodStandardJSONSchemaPayload<T>;
+export declare function isTransforming(_schema: schemas.$ZodType, _ctx?: {
+    seen: Set<schemas.$ZodType>;
+}): boolean;
 export type ZodStandardSchemaWithJSON<T> = StandardSchemaWithJSONProps<core.input<T>, core.output<T>>;
 export interface ZodStandardJSONSchemaPayload<T> extends JSONSchema.BaseSchema {
     "~standard": ZodStandardSchemaWithJSON<T>;
@@ -150,4 +155,3 @@ export declare const createToJSONSchemaMethod: <T extends schemas.$ZodType>(sche
  */
 type StandardJSONSchemaMethodParams = Parameters<StandardJSONSchemaV1["~standard"]["jsonSchema"]["input"]>[0];
 export declare const createStandardJSONSchemaMethod: <T extends schemas.$ZodType>(schema: T, io: "input" | "output", processors?: Record<string, Processor>) => (params?: StandardJSONSchemaMethodParams) => JSONSchema.BaseSchema;
-export {};

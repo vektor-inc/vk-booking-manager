@@ -28,6 +28,8 @@ export interface ZodType<out Output = unknown, out Input = unknown, out Internal
     parseAsync(data: unknown, params?: core.ParseContext<core.$ZodIssue>): Promise<core.output<this>>;
     safeParseAsync(data: unknown, params?: core.ParseContext<core.$ZodIssue>): Promise<parse.ZodSafeParseResult<core.output<this>>>;
     spa: (data: unknown, params?: core.ParseContext<core.$ZodIssue>) => Promise<parse.ZodSafeParseResult<core.output<this>>>;
+    validate(data: unknown, params?: core.ParseContext<core.$ZodIssue>): data is core.input<this>;
+    validateAsync(data: unknown, params?: core.ParseContext<core.$ZodIssue>): Promise<boolean>;
     encode(data: core.output<this>, params?: core.ParseContext<core.$ZodIssue>): core.input<this>;
     decode(data: core.input<this>, params?: core.ParseContext<core.$ZodIssue>): core.output<this>;
     encodeAsync(data: core.output<this>, params?: core.ParseContext<core.$ZodIssue>): Promise<core.input<this>>;
@@ -310,6 +312,11 @@ export interface ZodCreditCard extends ZodStringFormat<"credit_card"> {
 }
 export declare const ZodCreditCard: core.$constructor<ZodCreditCard>;
 export declare function creditCard(params?: string | core.$ZodCreditCardParams): ZodCreditCard;
+export interface ZodIBAN extends ZodStringFormat<"iban"> {
+    _zod: core.$ZodIBANInternals;
+}
+export declare const ZodIBAN: core.$constructor<ZodIBAN>;
+export declare function iban(params?: string | core.$ZodIBANParams): ZodIBAN;
 export interface ZodJWT extends ZodStringFormat<"jwt"> {
     _zod: core.$ZodJWTInternals;
 }
@@ -772,6 +779,11 @@ export interface ZodCustom<O = unknown, I = unknown> extends _ZodType<core.$ZodC
     "~standard": ZodStandardSchemaWithJSON<this>;
 }
 export declare const ZodCustom: core.$constructor<ZodCustom>;
+export interface ZodProperties<Shape extends core.$ZodShape = core.$ZodShape> extends _ZodType<core.$ZodPropertiesInternals<Shape>>, core.$ZodProperties<Shape> {
+    "~standard": ZodStandardSchemaWithJSON<this>;
+}
+export declare const ZodProperties: core.$constructor<ZodProperties>;
+export declare function properties<Shape extends core.$ZodShape>(shape: Shape, params?: string | core.$ZodPropertiesParams): ZodProperties<Shape>;
 export declare function check<O = unknown>(fn: core.CheckFn<O>): core.$ZodCheck<O>;
 export declare function custom<O>(fn?: (data: unknown) => unknown, _params?: string | core.$ZodCustomParams | undefined): ZodCustom<O, O>;
 export declare function refine<T>(fn: (arg: NoInfer<T>) => util.MaybeAsync<unknown>, _params?: string | core.$ZodCustomParams): core.$ZodCheck<T>;
@@ -779,7 +791,11 @@ export declare function superRefine<T>(fn: (arg: T, payload: core.$RefinementCtx
 export declare const describe: typeof core.describe;
 export declare const meta: typeof core.meta;
 type ZodInstanceOfParams = core.Params<ZodCustom, core.$ZodIssueCustom, "type" | "check" | "checks" | "fn" | "abort" | "error" | "params" | "path">;
-declare function _instanceof<T extends typeof util.Class>(cls: T, params?: ZodInstanceOfParams): ZodCustom<InstanceType<T>, InstanceType<T>>;
+export interface ZodInstanceOf<T = unknown> extends ZodCustom<T, T> {
+    properties<Shape extends core.$ZodShape>(shape: Shape, params?: string | core.$ZodPropertiesParams): ZodInstanceOf<T & core.$InferObjectInput<Shape, {}>>;
+}
+export declare const ZodInstanceOf: core.$constructor<ZodInstanceOf>;
+declare function _instanceof<T extends typeof util.Class>(cls: T, params?: ZodInstanceOfParams): ZodInstanceOf<InstanceType<T>>;
 export { _instanceof as instanceof };
 export declare const stringbool: (_params?: string | core.$ZodStringBoolParams) => ZodCodec<ZodString, ZodBoolean>;
 type _ZodJSONSchema = ZodUnion<[

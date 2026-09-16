@@ -111,16 +111,98 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 		$this->assertStringNotContainsString( '<a ', $html );
 		// role="link" は aria-disabled と意味が衝突するため出力しないこと。
 		$this->assertStringNotContainsString( 'role="link"', $html );
-		// 無効理由が title だけでなく読み上げ用テキストとしても要素内に含まれること。
+		// 可視ラベルが「ウェブ予約不可（Online reservation unavailable）」に
+		// なっていること（issue #451: 独自ラベル未指定時）。
 		// 英語文言を直書きせず、本番コードと同じ翻訳ルックアップから期待値を組み立てる
 		// （翻訳が読み込まれるロケールでも落ちないようにする）。
-		$this->assertStringContainsString( 'screen-reader-text', $html );
-		$expected_reason = esc_html( __( 'This menu does not accept online reservations.', 'vk-booking-manager' ) );
-		$this->assertStringContainsString( $expected_reason, $html );
+		$expected_label = esc_html( __( 'Online reservation unavailable', 'vk-booking-manager' ) );
+		$this->assertStringContainsString( $expected_label, $html );
+		// 無効理由は title に残ること（ホバー時の補助）。
+		$expected_reason = esc_attr( __( 'This menu does not accept online reservations.', 'vk-booking-manager' ) );
+		$this->assertStringContainsString( 'title="' . $expected_reason . '"', $html );
+	}
+
+	/**
+	 * ブロック属性で独自ラベル（label 引数）が指定されていても、
+	 * オンライン予約不可のメニューでは「ウェブ予約不可」の表示を優先する（issue #451）。
+	 */
+	public function test_render_button_prefers_disabled_label_over_custom_label_when_unavailable(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post(
+			array(
+				Reservation_Button_Renderer::META_ONLINE_UNAVAILABLE => '1',
+			)
+		);
+
+		// ブロック属性由来の独自ラベル（label 引数）を明示指定していても無視されること。
+		$html = $renderer->render_button(
+			$post,
+			array(
+				'label' => 'カスタム予約ラベル',
+			)
+		);
+
+		$expected_label = esc_html( __( 'Online reservation unavailable', 'vk-booking-manager' ) );
+		$this->assertStringContainsString( $expected_label, $html );
+		$this->assertStringNotContainsString( 'カスタム予約ラベル', $html );
+	}
+
+	/**
+	 * 基本設定の予約ボタンラベルのみを設定した場合も（label 引数は渡さず既定ラベル解決に
+	 * 任せた場合も）、オンライン予約不可のメニューでは「ウェブ予約不可」の表示を優先する
+	 * （issue #451・安藤さんレビュー指摘: 属性ラベルと同時に渡すケースだけでは
+	 * 基本設定ラベル単独での優先を確認できていなかったため、ケースを分離）。
+	 */
+	public function test_render_button_prefers_disabled_label_over_settings_label_when_unavailable(): void {
+		$this->set_settings(
+			array(
+				'reservation_page_url' => 'https://example.com/reserve/',
+				Reservation_Button_Renderer::SETTING_RESERVE_LABEL => 'いますぐ予約',
+			)
+		);
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post(
+			array(
+				Reservation_Button_Renderer::META_ONLINE_UNAVAILABLE => '1',
+			)
+		);
+
+		// label 引数を渡さず、基本設定ラベルが既定ラベルとして解決される状態で呼ぶ。
+		$html = $renderer->render_button( $post );
+
+		// 基本設定ラベル（いますぐ予約）が出ないこと。
+		$this->assertStringNotContainsString( 'いますぐ予約', $html );
+		// 「ウェブ予約不可」（Online reservation unavailable）が出ること。
+		$expected_label = esc_html( __( 'Online reservation unavailable', 'vk-booking-manager' ) );
+		$this->assertStringContainsString( $expected_label, $html );
+	}
+
+	/**
+	 * オンライン予約可能なメニューでは、従来どおり指定ラベル（基本設定・属性）を表示する。
+	 */
+	public function test_render_button_keeps_custom_label_when_available(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post();
+
+		$html = $renderer->render_button(
+			$post,
+			array(
+				'label' => 'カスタム予約ラベル',
+			)
+		);
+
+		$this->assertStringContainsString( 'カスタム予約ラベル', $html );
+		$disabled_label = esc_html( __( 'Online reservation unavailable', 'vk-booking-manager' ) );
+		$this->assertStringNotContainsString( $disabled_label, $html );
 	}
 
 	/**
 	 * 無効ボタンでもプラン名（accessible_suffix）が読み上げ用テキストに含まれる。
+	 *
+	 * 可視ラベルが「ウェブ予約不可」になったことで理由文の重複読み上げは無くなるが、
+	 * どのプランのボタンかを伝えるためプラン名は screen-reader-text に残す（issue #451）。
 	 */
 	public function test_render_disabled_button_includes_plan_name_for_screen_readers(): void {
 		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
@@ -140,6 +222,12 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 
 		$this->assertStringContainsString( 'screen-reader-text', $html );
 		$this->assertStringContainsString( 'Sample Plan', $html );
+		// 理由文（disabled_reason）は screen-reader-text 内には重複して含めないこと。
+		// title には残るため、html 全体からではなく screen-reader-text の中身だけを見て検証する。
+		$this->assertMatchesRegularExpression(
+			'/<span class="screen-reader-text"> Sample Plan<\/span>/',
+			$html
+		);
 	}
 
 	/**

@@ -157,7 +157,7 @@ export interface $ZodCheckLengthEquals<T extends util.HasLength = util.HasLength
     _zod: $ZodCheckLengthEqualsInternals<T>;
 }
 export declare const $ZodCheckLengthEquals: core.$constructor<$ZodCheckLengthEquals>;
-export type $ZodStringFormats = "email" | "url" | "emoji" | "uuid" | "guid" | "nanoid" | "cuid" | "cuid2" | "ulid" | "xid" | "ksuid" | "datetime" | "date" | "time" | "duration" | "ipv4" | "ipv6" | "cidrv4" | "cidrv6" | "base64" | "base64url" | "json_string" | "e164" | "credit_card" | "lowercase" | "uppercase" | "regex" | "jwt" | "starts_with" | "ends_with" | "includes";
+export type $ZodStringFormats = "email" | "url" | "emoji" | "uuid" | "guid" | "nanoid" | "cuid" | "cuid2" | "ulid" | "xid" | "ksuid" | "datetime" | "date" | "time" | "duration" | "ipv4" | "ipv6" | "cidrv4" | "cidrv6" | "base64" | "base64url" | "json_string" | "e164" | "credit_card" | "iban" | "lowercase" | "uppercase" | "regex" | "jwt" | "starts_with" | "ends_with" | "includes";
 export interface $ZodCheckStringFormatDef<Format extends string = string> extends $ZodCheckDef {
     check: "string_format";
     format: Format;
