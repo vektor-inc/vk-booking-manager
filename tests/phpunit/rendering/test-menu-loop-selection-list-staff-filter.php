@@ -25,6 +25,7 @@ namespace VKBookingManager\Tests\Frontend;
 
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
@@ -217,5 +218,75 @@ class Menu_Loop_Selection_List_Staff_Filter_Test extends WP_UnitTestCase {
 		$output = $this->block->render_menu_selection_list( $target_staff_id );
 
 		$this->assertSame( '', $output );
+	}
+
+	/**
+	 * 「すべてのリソースが担当できる」（_vkbm_staff_all、#485）のメニューが、個別チェックの無い
+	 * 公開中スタッフで絞り込んでも一覧に表示されることを検証する。
+	 *
+	 * 「すべて」は公開中のリソースへ展開されるため、下書き（非公開）のスタッフで絞り込んだ場合は表示しない。
+	 * Free版では「すべて」フラグ自体を無視し、かつスタッフ絞り込みも働かないため全件表示になる。
+	 */
+	public function test_render_menu_selection_list_shows_all_staff_menu(): void {
+		$is_free = Pro_Upsell::is_free_edition();
+		$this->set_site_wide_nomination( true );
+		Service_Menu_Post_Type::clear_published_resource_ids_cache();
+
+		// 「すべて」の展開先になる公開中スタッフと、候補に含まれない下書きスタッフを実際に作る。
+		$published_staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => '公開スタッフ',
+			)
+		);
+		$draft_staff_id     = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'draft',
+				'post_title'  => '下書きスタッフ',
+			)
+		);
+
+		// 「すべて」かつ個別チェックなし（指名は使う）。
+		$menu_all = $this->create_menu( 'メニューG（すべてのスタッフが担当できる）', array() );
+		update_post_meta( $menu_all, Service_Menu_Post_Type::META_STAFF_ALL, true );
+		// 「選ぶ」かつ別スタッフのみ（比較用）。
+		$menu_other = $this->create_menu( 'メニューH（対応スタッフが別）', array( 9201 ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '「すべて」のメニューは、個別チェックの無い公開中スタッフで絞り込んでも表示される（Free版は絞り込み自体が無効なため全件表示）',
+				'staff_id'            => $published_staff_id,
+				'expected_visible'    => $is_free ? array( $menu_all, $menu_other ) : array( $menu_all ),
+				'expected_hidden'     => $is_free ? array() : array( $menu_other ),
+			),
+			array(
+				'test_condition_name' => '「すべて」のメニューでも、下書き（非公開）スタッフで絞り込むと表示されない（Free版は全件表示）',
+				'staff_id'            => $draft_staff_id,
+				'expected_visible'    => $is_free ? array( $menu_all, $menu_other ) : array(),
+				'expected_hidden'     => $is_free ? array() : array( $menu_all, $menu_other ),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$output = $this->block->render_menu_selection_list( $case['staff_id'] );
+
+			foreach ( $case['expected_visible'] as $menu_id ) {
+				$this->assertStringContainsString(
+					get_the_title( $menu_id ),
+					$output,
+					$case['test_condition_name'] . '（表示されるべきメニュー: ' . get_the_title( $menu_id ) . '）'
+				);
+			}
+
+			foreach ( $case['expected_hidden'] as $menu_id ) {
+				$this->assertStringNotContainsString(
+					get_the_title( $menu_id ),
+					$output,
+					$case['test_condition_name'] . '（非表示になるべきメニュー: ' . get_the_title( $menu_id ) . '）'
+				);
+			}
+		}
 	}
 }

@@ -124,8 +124,34 @@
 				)
 				.prop( 'checked', true );
 		} );
+
+		// 「すべてのリソースが担当できる」ラジオ（#485）。data-staff-all が '1' なら「すべて」、
+		// それ以外は「選ぶ」を選択し、個別チェックリストの表示を切り替える。
+		const staffAll =
+			data.staffAll === '1' || data.staffAll === 1 || data.staffAll === true;
+		$editRow
+			.find( 'input.vkbm-qe-staff-all[value="' + ( staffAll ? '1' : '0' ) + '"]' )
+			.prop( 'checked', true );
+		syncStaffAllList( $editRow );
+
 		$editRow
 			.find( 'textarea.vkbm-qe-other-conditions' )
 			.val( otherConditions );
 	};
+
+	// 「すべて」選択中は個別チェックリストを hidden で非表示にする（編集画面と同じ作法。
+	// disabled の灰色表示にはしない）。個別選択の値は hidden でも送信されるため保持される。
+	function syncStaffAllList( $editRow ) {
+		const $all = $editRow.find( 'input.vkbm-qe-staff-all[value="1"]' );
+		if ( $all.length === 0 ) {
+			return;
+		}
+		$editRow
+			.find( '.vkbm-qe-staff-checkboxes' )
+			.prop( 'hidden', $all.prop( 'checked' ) );
+	}
+
+	$( document ).on( 'change', 'input.vkbm-qe-staff-all', function () {
+		syncStaffAllList( $( this ).closest( 'tr' ) );
+	} );
 } )( jQuery );

@@ -7,6 +7,7 @@ namespace VKBookingManager\Tests\Bookings;
 use VKBookingManager\Bookings\User_Favorites_Controller;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -58,7 +59,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 		$this->assertNotSame( '', (string) $created['id'] );
 
 		// 取得結果にも同じお気に入りが含まれること。
-		$list = $controller->get_favorites( new WP_REST_Request( 'GET', '/vkbm/v1/favorites' ) );
+		$list  = $controller->get_favorites( new WP_REST_Request( 'GET', '/vkbm/v1/favorites' ) );
 		$items = $list->get_data();
 		$this->assertCount( 1, $items );
 		$this->assertSame( $menu_id, $items[0]['menu_id'] );
@@ -120,6 +121,65 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 「すべてのリソースが担当できる」（_vkbm_staff_all、#485）のメニューでは、個別チェックに
+	 * 含まれない公開中スタッフでもお気に入りに登録できることを検証する。
+	 *
+	 * 無料版では「すべて」フラグを無視するため、個別選択に含まれないスタッフは従来どおり拒否される。
+	 * 下書き（非公開）のスタッフは Pro / Free とも拒否される。
+	 */
+	public function test_create_with_all_staff_menu(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		Service_Menu_Post_Type::clear_published_resource_ids_cache();
+
+		$menu_id       = $this->create_menu();
+		$checked_staff = $this->create_staff();
+		$other_staff   = $this->create_staff();
+		$draft_staff   = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'draft',
+			)
+		);
+		$is_pro        = Staff_Editor::is_enabled();
+
+		// 個別チェックは $checked_staff のみだが、「すべて」を選んでいる。
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $checked_staff ) );
+		update_post_meta( $menu_id, Service_Menu_Post_Type::META_STAFF_ALL, true );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '個別チェック済みのスタッフ => 登録できる（正常系・従来どおり）',
+				'resource_id'         => $checked_staff,
+				'expected_code'       => null,
+			),
+			array(
+				'test_condition_name' => '個別チェックの無い公開中スタッフ => Pro版は「すべて」で登録できる、Free版はフラグを無視して invalid_resource',
+				'resource_id'         => $other_staff,
+				'expected_code'       => $is_pro ? null : 'invalid_resource',
+			),
+			array(
+				'test_condition_name' => '下書き（非公開）のスタッフ => 「すべて」でも invalid_resource（異常系）',
+				'resource_id'         => $draft_staff,
+				'expected_code'       => 'invalid_resource',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$controller = new User_Favorites_Controller();
+			$response   = $controller->create_favorite( $this->build_create_request( $menu_id, $case['resource_id'] ) );
+
+			if ( null === $case['expected_code'] ) {
+				$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+				$this->assertSame( 201, $response->get_status(), $case['test_condition_name'] );
+			} else {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_code'], $response->get_error_code(), $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
 	 * 上限件数を超える登録は拒否されることを検証する。
 	 */
 	public function test_create_beyond_limit_is_rejected(): void {
@@ -160,7 +220,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 		$staff_id = $this->create_staff();
 		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 
-		$controller = new User_Favorites_Controller();
+		$controller  = new User_Favorites_Controller();
 		$created     = $controller->create_favorite( $this->build_create_request( $menu_id, $staff_id ) )->get_data();
 		$favorite_id = (string) $created['id'];
 
@@ -260,7 +320,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 		$menu_id = $this->create_menu( 'カット' );
 
 		$controller = new User_Favorites_Controller();
-		$created     = $controller->create_favorite(
+		$created    = $controller->create_favorite(
 			$this->build_create_request( $menu_id, 0 )
 		)->get_data();
 
@@ -287,7 +347,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 
 		$controller = new User_Favorites_Controller();
-		$created     = $controller->create_favorite(
+		$created    = $controller->create_favorite(
 			$this->build_create_request( $menu_id, $staff_id )
 		)->get_data();
 
@@ -309,7 +369,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 		$request->set_param( 'label', "  <b>いつもの</b>やつ\n  " );
 
 		$controller = new User_Favorites_Controller();
-		$created     = $controller->create_favorite( $request )->get_data();
+		$created    = $controller->create_favorite( $request )->get_data();
 
 		// タグが除去され、前後の空白・改行がトリムされた値になること。
 		$this->assertSame( 'いつものやつ', $created['label'] );
@@ -348,7 +408,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 		);
 
 		$controller = new User_Favorites_Controller();
-		$items       = $controller->get_favorites(
+		$items      = $controller->get_favorites(
 			new WP_REST_Request( 'GET', '/vkbm/v1/favorites' )
 		)->get_data();
 

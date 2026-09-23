@@ -359,4 +359,17 @@
 		margin-top: var(--vkbm--spacing--xs);
 		color: #2271b1;
 	}
+
+	// #475: 「連携」タブ（Google カレンダー連携）。
+	// このタブだけは、他タブと共有している保存フォームの外に描画される。
+	.vkbm-google-calendar {
+
+		.notice {
+			margin: var(--vkbm--spacing--sm) 0;
+		}
+
+		form {
+			margin: var(--vkbm--spacing--sm) 0 0;
+		}
+	}
 }

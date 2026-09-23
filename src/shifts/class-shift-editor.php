@@ -31,6 +31,21 @@ class Shift_Editor {
 	private const BULK_NONCE_NAME   = '_vkbm_shift_bulk_create_nonce';
 	private const BULK_ACTION       = 'vkbm_shift_bulk_create';
 
+	// シフトの自動登録（WP-Cron）で使うフック名。
+	private const AUTO_REGISTER_ACTION = 'vkbm_shift_auto_register_daily';
+	// シフトの自動登録を許可する月数（0=無効、1〜3=翌月〜3ヶ月先まで）。
+	private const AUTO_REGISTER_ALLOWED_MONTHS = array( 0, 1, 2, 3 );
+	// 毎日の自動登録を実行する固定時刻（サイトのタイムゾーン）。
+	private const AUTO_REGISTER_DAILY_HOUR   = 0;
+	private const AUTO_REGISTER_DAILY_MINUTE = 5;
+	// 有効化・自己修復（admin_init）で daily スケジュールを新規登録した際、次回の daily 実行を
+	// 待たせずに結果を反映させるための、単発実行までの遅延（秒）。設定保存時はこの遅延を待たず
+	// その場で実行するため使わない（ensure_auto_register_schedule() でのみ使用）。
+	private const AUTO_REGISTER_IMMEDIATE_DELAY = 60;
+	// 自動登録の多重実行を防ぐための簡易ロック（オプション名・タイムアウト秒）。
+	private const AUTO_REGISTER_LOCK_OPTION  = 'vkbm_shift_auto_register_lock';
+	private const AUTO_REGISTER_LOCK_TIMEOUT = 300;
+
 	public const META_RESOURCE            = '_vkbm_shift_resource_id';
 	public const META_YEAR                = '_vkbm_shift_year';
 	public const META_MONTH               = '_vkbm_shift_month';
@@ -65,6 +80,26 @@ class Shift_Editor {
 		add_action( 'admin_notices', array( $this, 'render_bulk_create_panel' ), 1 );
 		add_action( 'admin_notices', array( $this, 'render_bulk_create_notice' ), 5 );
 		add_action( 'admin_post_' . self::BULK_ACTION, array( $this, 'handle_bulk_create' ) );
+
+		// シフトの自動登録（WP-Cron）。
+		// その場（同期的）での自動登録の実行は、設定画面の保存成功時
+		// （Provider_Settings_Page::handle_form_submission() から run_auto_register_on_settings_saved()
+		// 経由）に一本化する（安藤レビュー指摘T1）。WordPress の update_option() は、保存前後で
+		// 値が変わらない場合 update_option_{OPTION_KEY} フックを発火させないため、このフックだけに
+		// 頼ると「設定値を変えない保存」で自動登録が動かず、完全に削除したシフトを作り直せない。
+		// add_option_ / update_option_ フックは、設定画面以外（WP-CLI の `wp option update` 等）で
+		// option が更新された場合に daily スケジュール（毎日の再実行）だけを現在の設定値へ追随
+		// させる役割に限定し、その場での自動登録は行わない（値が変わった保存で二重に実行しない
+		// ための整理）。
+		// daily スケジュールの確認は、全リクエストで走る 'init' ではなく上記フックと管理画面表示時
+		// （admin_init）に寄せる。admin_init はプラグイン更新直後など「既に有効な設定があるが
+		// 予約が無い」状態の取りこぼしに対する保険（次に管理画面を開いたときに自己修復する）で、
+		// 管理画面の表示を遅くしないよう、こちらは同期実行せず従来どおり予約（単発実行を含む）
+		// のままにする。
+		add_action( self::AUTO_REGISTER_ACTION, array( $this, 'handle_auto_register' ) );
+		add_action( 'add_option_' . Settings_Repository::OPTION_KEY, array( $this, 'handle_settings_added' ) );
+		add_action( 'update_option_' . Settings_Repository::OPTION_KEY, array( $this, 'handle_settings_updated' ) );
+		add_action( 'admin_init', array( $this, 'self_heal_auto_register_schedule' ) );
 	}
 
 	/**
@@ -433,7 +468,7 @@ class Shift_Editor {
 	 * Render bulk create panel for shift list screen.
 	 */
 	public function render_bulk_create_panel(): void {
-		if ( ! $this->is_shift_list_screen() ) {
+		if ( ! self::is_shift_list_screen() ) {
 			return;
 		}
 
@@ -515,10 +550,42 @@ class Shift_Editor {
 			exit;
 		}
 
+		$resources = $this->get_resource_posts();
+		// 手動の一括登録では、ゴミ箱のシフトは「登録済み」に数えない（従来どおりの挙動）。
+		$result = $this->create_shift_posts_for_resources( $resources, $year, $month, 'draft', false );
+
+		$redirect_url = add_query_arg(
+			array(
+				'vkbm_shift_bulk_created' => (string) $result['created'],
+				'vkbm_shift_bulk_skipped' => (string) $result['skipped'],
+				'vkbm_shift_bulk_year'    => (string) $year,
+				'vkbm_shift_bulk_month'   => (string) $month,
+			),
+			$redirect_base
+		);
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+	/**
+	 * 指定したリソース・年・月へシフト投稿を作成する（既にシフトがあるリソースはスキップする）。
+	 *
+	 * シフトの一括登録（下書き）とシフトの自動登録（公開）の両方から呼ばれる共通処理。
+	 * 重複防止は shift_exists()（リソース×年×月）に委譲する。
+	 *
+	 * @param array<int, WP_Post> $resources               シフトを作成する対象のリソース投稿一覧。
+	 * @param int                 $year                    年。
+	 * @param int                 $month                   月（1〜12）。
+	 * @param string              $post_status             新規作成するシフトの投稿ステータス（'draft' または 'publish'）。
+	 * @param bool                $include_trash_in_dedup 重複判定でゴミ箱のシフトも「登録済み」として扱うか。
+	 *                                                      自動登録では true を渡し、手動の一括登録では従来どおり
+	 *                                                      false（ゴミ箱は数えない）にする。
+	 * @return array{created:int, skipped:int}
+	 */
+	private function create_shift_posts_for_resources( array $resources, int $year, int $month, string $post_status, bool $include_trash_in_dedup = false ): array {
 		$created = 0;
 		$skipped = 0;
-
-		$resources = $this->get_resource_posts();
 
 		foreach ( $resources as $resource ) {
 			$resource_id = (int) $resource->ID;
@@ -526,7 +593,7 @@ class Shift_Editor {
 				continue;
 			}
 
-			if ( $this->shift_exists( $resource_id, $year, $month ) ) {
+			if ( $this->shift_exists( $resource_id, $year, $month, $include_trash_in_dedup ) ) {
 				++$skipped;
 				continue;
 			}
@@ -542,12 +609,13 @@ class Shift_Editor {
 			$post_id = wp_insert_post(
 				array(
 					'post_type'   => Shift_Post_Type::POST_TYPE,
-					'post_status' => 'draft',
+					'post_status' => $post_status,
 					'post_title'  => $title,
 				),
 				true
 			);
 
+			// wp_insert_post() 失敗時はスキップのみとし、管理者通知は行わない（仕様どおり）。
 			if ( is_wp_error( $post_id ) ) {
 				continue;
 			}
@@ -564,25 +632,412 @@ class Shift_Editor {
 			++$created;
 		}
 
-		$redirect_url = add_query_arg(
-			array(
-				'vkbm_shift_bulk_created' => (string) $created,
-				'vkbm_shift_bulk_skipped' => (string) $skipped,
-				'vkbm_shift_bulk_year'    => (string) $year,
-				'vkbm_shift_bulk_month'   => (string) $month,
-			),
-			$redirect_base
+		return array(
+			'created' => $created,
+			'skipped' => $skipped,
+		);
+	}
+
+	/**
+	 * WP-Cron callback: automatically register shifts (published) for the configured month range.
+	 *
+	 * 「今月〜今月+Nヶ月」の範囲で、未登録の月だけをリソースごとに公開ステータスで登録する。
+	 * 登録済みの月は create_shift_posts_for_resources() 内の shift_exists() でスキップされるため、
+	 * 同じ月に対して何度実行しても重複登録は起きない。自動登録の重複判定はゴミ箱のシフトも
+	 * 「登録済み」として数える（完全に削除すると、その月は次回実行時に再登録される）。
+	 * cron の多重起動に備え、簡易ロックで排他制御する。WP-Cron からだけでなく、
+	 * run_auto_register_on_settings_saved()（設定画面の保存成功時）からも同期的に呼ばれる。
+	 * 登録する月数は、ロックを取得した後に読み直す（安藤レビュー指摘T2(2)）。ロックを取る前に
+	 * 読んでしまうと、WP-Cron の実行中に管理画面から月数を増やして保存しても、その増分がロック
+	 * 取得までの間に反映されず、翌日の daily 実行まで登録されない可能性がある。
+	 */
+	public function handle_auto_register(): void {
+		$lock_value = $this->acquire_auto_register_lock();
+		if ( '' === $lock_value ) {
+			// 既に別の実行がロックを保持している（または取得自体に失敗した）。多重実行を避けて何もしない。
+			return;
+		}
+
+		try {
+			// 設定保存の直後に同一リクエスト内で同期実行される場合に備え、get_provider_settings()
+			// のリクエスト内キャッシュ（static）を保存後の最新値で読み直しておく。ここで
+			// 読み直さないと、この実行より前に一度でも呼ばれていた場合、保存前の古い値のまま
+			// シフトの日別ステータス（休業日等）を組み立ててしまう（司からの指摘）。
+			$this->get_provider_settings( true );
+
+			// 登録する月数は、ロックを取得した後に読み直す（安藤レビュー指摘T2(2)。理由は上記
+			// メソッド PHPDoc を参照）。
+			$months_ahead = $this->get_auto_register_months_ahead();
+
+			if ( $months_ahead <= 0 ) {
+				return;
+			}
+
+			$resources = $this->get_resource_posts();
+			if ( array() === $resources ) {
+				return;
+			}
+
+			$timezone = wp_timezone();
+			$now      = new \DateTimeImmutable( 'now', $timezone );
+			$base     = $now->setDate( (int) $now->format( 'Y' ), (int) $now->format( 'n' ), 1 );
+
+			for ( $offset = 0; $offset <= $months_ahead; $offset++ ) {
+				$target = $base->modify( sprintf( '+%d month', $offset ) );
+				if ( ! $target instanceof \DateTimeImmutable ) {
+					continue;
+				}
+
+				$year  = (int) $target->format( 'Y' );
+				$month = (int) $target->format( 'n' );
+
+				$this->create_shift_posts_for_resources( $resources, $year, $month, 'publish', true );
+			}
+		} finally {
+			$this->release_auto_register_lock( $lock_value );
+		}
+	}
+
+	/**
+	 * 自動登録の実行ロックの取得を試みる。
+	 *
+	 * WordPress 本体の WP_Upgrader::create_lock() と同じ方式（INSERT IGNORE による排他制御）を
+	 * 使う（安藤レビュー指摘N2）。add_option() は内部で「既に存在する場合は更新する」
+	 * INSERT ... ON DUPLICATE KEY UPDATE を使うため、同時に呼ばれた複数の実行がどちらも
+	 * 「取得できた」と判定してしまう可能性がある。INSERT IGNORE は既に行があれば何もしないため、
+	 * 新規に行を作成できた1つの実行だけがロックを取得したと判定できる。
+	 *
+	 * ロックの値は time() だけでなく `"<取得時刻>:<ランダム文字列>"` にしている
+	 * （安藤レビュー指摘R1）。同じ秒に2つの実行が取得を試みても、値が一意になるため
+	 * release_auto_register_lock() の一致判定で確実に区別できる。経過時間の判定は
+	 * 先頭のコロンまでの数値部分（取得時刻）だけを使う。
+	 *
+	 * 一定時間（AUTO_REGISTER_LOCK_TIMEOUT）を過ぎたロックは、前回の実行が異常終了した
+	 * ものとみなして奪い取る（WP_Upgrader::create_lock() と同じ方式）。ループの試行回数は
+	 * 最大2回（初回の取得試行＋期限切れロックを奪った直後の再試行1回）に限定しており
+	 * （安藤レビュー指摘R2）、DBへの書き込みが失敗し続けても無限に再試行しない。ロックの値が
+	 * 読めない（空文字）場合は、期限切れかどうかの判定自体ができないため、奪い取りを試みず
+	 * その場で取得失敗として抜ける。
+	 *
+	 * @return string ロックを取得できた場合は保存した値。取得できなかった場合は空文字列。
+	 */
+	private function acquire_auto_register_lock(): string {
+		global $wpdb;
+
+		for ( $attempt = 0; $attempt < 2; $attempt++ ) {
+			$lock_value = $this->generate_auto_register_lock_value();
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- WP_Upgrader::create_lock() と同じ排他制御のため直接クエリが必要（add_option() のキャッシュ経由の判定では複数実行の同時取得を防げない）。
+			$inserted = (bool) $wpdb->query(
+				$wpdb->prepare(
+					"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+					self::AUTO_REGISTER_LOCK_OPTION,
+					$lock_value
+				)
+			);
+
+			if ( $inserted ) {
+				// ロックを取得できたので、通常の保存関数を通して値とキャッシュの状態をそろえておく
+				// （WP_Upgrader::create_lock() と同じ手順）。
+				update_option( self::AUTO_REGISTER_LOCK_OPTION, $lock_value, false );
+				return $lock_value;
+			}
+
+			// 直接クエリで挿入を試みた直後の読み取りのため、このオプションが未作成だった時点の
+			// キャッシュ（個別のオプションキャッシュ・'notoptions'・'alloptions'）が残っていれば
+			// 無効化してから読み直す（WordPress 本体のキャッシュの扱いに倣う）。
+			wp_cache_delete( self::AUTO_REGISTER_LOCK_OPTION, 'options' );
+			wp_cache_delete( 'notoptions', 'options' );
+			wp_cache_delete( 'alloptions', 'options' );
+
+			$existing = (string) get_option( self::AUTO_REGISTER_LOCK_OPTION, '' );
+
+			if ( '' === $existing ) {
+				// 値が読めない（DBへの書き込みが失敗し続けている等）。期限切れの判定ができない
+				// ため奪い取りを試みず、再帰・再試行せずに取得失敗として抜ける（安藤レビュー指摘R2）。
+				return '';
+			}
+
+			$locked_at = $this->parse_auto_register_lock_timestamp( $existing );
+
+			if ( $locked_at <= 0 || ( time() - $locked_at ) <= self::AUTO_REGISTER_LOCK_TIMEOUT ) {
+				// まだ有効なロックを他の実行が保持している（あるいは形式が不正で期限切れと判定できない）。
+				return '';
+			}
+
+			// タイムアウトを超えた古いロックを奪い取り、ループの次の回で取得を再試行する
+			// （最大1回だけ再試行し、それでも失敗すれば取得失敗として抜ける）。
+			$this->release_auto_register_lock( $existing );
+		}
+
+		return '';
+	}
+
+	/**
+	 * 自動登録の実行ロックの値を生成する。
+	 *
+	 * `"<取得時刻>:<ランダム文字列>"` の形式にすることで、同じ秒に複数の実行が取得を試みても
+	 * 値が一意になり、release_auto_register_lock() の一致判定で確実に区別できる
+	 * （安藤レビュー指摘R1）。
+	 *
+	 * @return string
+	 */
+	private function generate_auto_register_lock_value(): string {
+		return time() . ':' . wp_generate_password( 12, false );
+	}
+
+	/**
+	 * 自動登録の実行ロックの値から、取得時刻（先頭のコロンまでの数値部分）を取り出す。
+	 *
+	 * @param string $lock_value ロックの値。
+	 * @return int 取得時刻（Unix タイムスタンプ）。形式が不正な場合は 0。
+	 */
+	private function parse_auto_register_lock_timestamp( string $lock_value ): int {
+		$timestamp_part = strtok( $lock_value, ':' );
+
+		return is_numeric( $timestamp_part ) ? (int) $timestamp_part : 0;
+	}
+
+	/**
+	 * 自動登録の実行ロックを解放する。
+	 *
+	 * 比較（取得時に保存した値と現在の値が一致するか）と削除を1本の SQL
+	 * （`DELETE ... WHERE option_name = %s AND option_value = %s`）で行う（安藤レビュー指摘R1）。
+	 * get_option() で読んでから delete_option() する2段階だと、比較に使う get_option() は
+	 * 個別のオプションキャッシュ（非autoloadのオプションが入る。取得成功時の update_option() が
+	 * このキャッシュへ自分の値を書き込んでいる）を読んでしまう。オブジェクトキャッシュが有効な
+	 * 環境（永続キャッシュが無くても、WordPress は1リクエスト内では常に非永続のオブジェクト
+	 * キャッシュを使う）では、他の実行が直接クエリで値を書き換えていてもこのキャッシュには
+	 * 反映されないため、比較が常に「一致」と誤判定し、他の実行に奪われたロックまで
+	 * 削除してしまう。DB の実値を条件に含めた1クエリの削除であれば、この誤判定は起きない。
+	 *
+	 * @param string $expected_value acquire_auto_register_lock() が返した、取得時に保存した値。
+	 */
+	private function release_auto_register_lock( string $expected_value ): void {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- 比較付き削除を1クエリで原子的に行う必要があるため直接クエリが必要（get_option() のキャッシュを介した比較では他の実行のロックを誤って削除しうる）。
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+				self::AUTO_REGISTER_LOCK_OPTION,
+				$expected_value
+			)
 		);
 
-		wp_safe_redirect( $redirect_url );
-		exit;
+		// 直接クエリのためキャッシュが追随しない。個別のオプションキャッシュと、
+		// 'notoptions' / 'alloptions' の両方を無効化しておく（WordPress 本体のキャッシュの扱いに倣う）。
+		wp_cache_delete( self::AUTO_REGISTER_LOCK_OPTION, 'options' );
+		wp_cache_delete( 'notoptions', 'options' );
+		wp_cache_delete( 'alloptions', 'options' );
+	}
+
+	/**
+	 * 自動登録の daily スケジュール（毎日の再実行）だけを、現在の設定値と一致させる。
+	 *
+	 * 設定が「無効」（またはリポジトリ既定の0）であればスケジュールを解除する。
+	 * 有効な月数が設定されていて、まだ daily スケジュールが登録されていない場合は、
+	 * 毎日の実行時刻を固定した daily スケジュールを登録する。保存直後の反映（今すぐの
+	 * 登録・単発実行の予約）はここでは行わない。呼び出し元（handle_settings_added() /
+	 * handle_settings_updated() / ensure_auto_register_schedule()）が、それぞれの文脈に応じて
+	 * 即時実行するか単発予約するかを選ぶ。
+	 *
+	 * @return bool 新たに daily スケジュールを登録した場合は true。それ以外
+	 *              （既に登録済み・無効化して解除した・もともと無効で何もしなかった）は false。
+	 */
+	private function ensure_daily_schedule(): bool {
+		$months_ahead   = $this->get_auto_register_months_ahead();
+		$next_scheduled = wp_next_scheduled( self::AUTO_REGISTER_ACTION );
+
+		if ( $months_ahead <= 0 ) {
+			if ( $next_scheduled ) {
+				wp_clear_scheduled_hook( self::AUTO_REGISTER_ACTION );
+			}
+			return false;
+		}
+
+		if ( $next_scheduled ) {
+			return false;
+		}
+
+		wp_schedule_event( $this->get_next_daily_run_timestamp(), 'daily', self::AUTO_REGISTER_ACTION );
+		return true;
+	}
+
+	/**
+	 * 自動登録の WP-Cron スケジュールを、現在の設定値と一致させる。
+	 *
+	 * プラグイン有効化時（Plugin::activate()）と admin_init の自己修復
+	 * （self_heal_auto_register_schedule()）から呼ばれる。どちらも「今このリクエストで
+	 * 登録処理そのものを実行する」用途ではなく、管理画面の表示を遅くしないための保険的な
+	 * 経路のため、新たに daily スケジュールを登録した場合はこれまでどおり単発実行も1件
+	 * 予約するに留める（設定保存時の即時実行は handle_settings_added() /
+	 * handle_settings_updated() が担う。司からの指示）。
+	 */
+	public function ensure_auto_register_schedule(): void {
+		if ( $this->ensure_daily_schedule() ) {
+			// daily スケジュールは翌回まで実行されないため、反映用に単発実行も予約する。
+			wp_schedule_single_event( time() + self::AUTO_REGISTER_IMMEDIATE_DELAY, self::AUTO_REGISTER_ACTION );
+		}
+	}
+
+	/**
+	 * 設定画面の保存が成功した直後に呼ばれる、シフト自動登録の実行口。
+	 *
+	 * Provider_Settings_Page::handle_form_submission() から、権限・nonce の確認を通り、かつ
+	 * 設定の保存自体が成功した（バリデーションエラーが無かった）場合にだけ呼ばれる想定
+	 * （安藤レビュー指摘T1）。WordPress の update_option() は、保存前後で値が変わらない場合
+	 * update_option_{OPTION_KEY} フックを発火させないため、update_option_ / add_option_ フック
+	 * （handle_settings_updated() / handle_settings_added()）だけに頼ると、設定値を何も変えずに
+	 * 保存したときに自動登録が動かない。完全に削除したシフトを、設定を変えずに保存して
+	 * 作り直そうとしても、その場では作られない不具合があった。
+	 *
+	 * この呼び出し口を「設定画面からの保存成功時にその場で実行する」経路として一本化し、
+	 * handle_settings_added() / handle_settings_updated() は daily スケジュールの管理だけを
+	 * 行う（値が変わった保存で二重に実行しないための整理）。daily スケジュールを現在の設定値に
+	 * 合わせたうえで、handle_auto_register()（ロック付き。無効な場合は内部で何もしない）を実行する。
+	 */
+	public function run_auto_register_on_settings_saved(): void {
+		$this->ensure_daily_schedule();
+		$this->handle_auto_register();
+	}
+
+	/**
+	 * add_option_{OPTION_KEY} フックのコールバック（設定の初回保存）。
+	 *
+	 * daily スケジュール（毎日の再実行）を現在の設定値に合わせるだけを行う。設定画面の保存成功時に
+	 * その場で自動登録を実行する処理は run_auto_register_on_settings_saved() に一本化したため
+	 * （安藤レビュー指摘T1。値を変えない保存ではこのフック自体が発火しないため、フック側に
+	 * その場実行を残すと不整合になる）、ここでは行わない。設定画面以外（WP-CLI の
+	 * `wp option update` 等）で option が新規作成された場合の daily スケジュールの追随は
+	 * 引き続きここで担う。
+	 */
+	public function handle_settings_added(): void {
+		$this->ensure_daily_schedule();
+	}
+
+	/**
+	 * update_option_{OPTION_KEY} フックのコールバック。
+	 *
+	 * daily スケジュール（毎日の再実行）を現在の設定値に合わせるだけを行う。設定画面の保存成功時に
+	 * その場で自動登録を実行する処理は run_auto_register_on_settings_saved() に一本化したため
+	 * （安藤レビュー指摘T1）、ここでは行わない。値が変わった保存でも、設定画面からの保存であれば
+	 * run_auto_register_on_settings_saved() 側で実行されるため、このフックでも重ねて実行すると
+	 * 二重実行になってしまう。設定画面以外（WP-CLI の `wp option update` 等）で option が更新
+	 * された場合の daily スケジュールの追随は引き続きここで担う。
+	 *
+	 * WordPress からは update_option_{$option} フックとして第1・第2引数（変更前後の値）を渡されて
+	 * 呼ばれるが、daily スケジュールの判定は ensure_daily_schedule() 内で Settings_Repository から
+	 * 都度取得した最新値を使うため、この値自体は使わない。
+	 */
+	public function handle_settings_updated(): void {
+		$this->ensure_daily_schedule();
+	}
+
+	/**
+	 * admin_init から呼ばれる自己修復の受け口。
+	 *
+	 * プラグイン更新直後など「既に有効な設定があるが予約が無い」状態の取りこぼしに対する保険として、
+	 * 管理画面表示のたびに ensure_auto_register_schedule() を呼び、スケジュールを現在の設定値と
+	 * 一致させる。Heartbeat（admin-ajax.php）のリクエストも admin_init を通過するため、そのたびに
+	 * get_settings() が走ってしまわないよう、Ajax リクエストではここで抜ける（安藤レビュー指摘N3）。
+	 */
+	public function self_heal_auto_register_schedule(): void {
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+
+		$this->ensure_auto_register_schedule();
+	}
+
+	/**
+	 * 次回の毎日実行時刻（サイトのタイムゾーンで固定した時刻）のタイムスタンプを算出する。
+	 *
+	 * @return int
+	 */
+	private function get_next_daily_run_timestamp(): int {
+		$timezone = wp_timezone();
+		$now      = new \DateTimeImmutable( 'now', $timezone );
+		$next_run = $now->setTime( self::AUTO_REGISTER_DAILY_HOUR, self::AUTO_REGISTER_DAILY_MINUTE, 0 );
+
+		if ( $next_run <= $now ) {
+			$next_run = $next_run->modify( '+1 day' );
+		}
+
+		return $next_run->getTimestamp();
+	}
+
+	/**
+	 * 自動登録の WP-Cron スケジュールを解除する。
+	 *
+	 * プラグイン無効化時に呼び出し、WP-Cron に登録済みのイベントを解除する。
+	 */
+	public function clear_auto_register_schedule(): void {
+		wp_clear_scheduled_hook( self::AUTO_REGISTER_ACTION );
+	}
+
+	/**
+	 * シフトの自動登録で許可される月数の範囲（0=無効、1〜3=翌月〜3ヶ月先まで）へ値を正規化する。
+	 *
+	 * Settings_Sanitizer（保存時の検証）・Setup_Notices（注意喚起の表示判定）・本クラス
+	 * （cron の実行月数判定）の3箇所で同じ判定基準を共有するために public static にしている。
+	 *
+	 * @param int $value 判定対象の値。
+	 * @return int 0〜3 のいずれか（範囲外は0=無効）。
+	 */
+	public static function normalize_auto_register_months( int $value ): int {
+		return in_array( $value, self::AUTO_REGISTER_ALLOWED_MONTHS, true ) ? $value : 0;
+	}
+
+	/**
+	 * 指定した値がシフトの自動登録「有効」を表すかどうかを判定する。
+	 *
+	 * @param int $value 判定対象の値。
+	 * @return bool
+	 */
+	public static function is_auto_register_enabled_for( int $value ): bool {
+		return self::normalize_auto_register_months( $value ) > 0;
+	}
+
+	/**
+	 * シフトの自動登録に設定されている月数（0=無効、1〜3=翌月〜3ヶ月先まで）を取得する。
+	 *
+	 * @return int
+	 */
+	private function get_auto_register_months_ahead(): int {
+		// get_provider_settings() はリクエスト内キャッシュ（static）を持つため、
+		// 設定変更を即座に反映したいこの用途（cron のたびに最新値を見る必要がある）では使わず、
+		// 都度 Settings_Repository から取得する。
+		$repository = new Settings_Repository();
+		$settings   = $repository->get_settings();
+
+		return $this->extract_auto_register_months( $settings );
+	}
+
+	/**
+	 * 設定配列からシフトの自動登録の月数（0=無効、1〜3=翌月〜3ヶ月先まで）を取り出す。
+	 *
+	 * get_auto_register_months_ahead()（現在の設定値を都度取得する用途。cron や設定保存の
+	 * たびに最新値を見る必要があるため使う）から使う共通処理。設定配列から値を取り出し、
+	 * normalize_auto_register_months() で許可範囲へ正規化する処理をまとめている（安藤レビュー
+	 * 指摘T3。以前は handle_settings_updated() が変更前後の設定配列を比較する用途でも使っていたが、
+	 * その場での自動登録の実行を run_auto_register_on_settings_saved() に一本化したことに伴い、
+	 * handle_settings_updated() 側の呼び出しは無くなった）。
+	 *
+	 * @param array<string, mixed> $settings 設定配列。
+	 * @return int
+	 */
+	private function extract_auto_register_months( array $settings ): int {
+		$value = isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0;
+
+		return self::normalize_auto_register_months( $value );
 	}
 
 	/**
 	 * Render notice after bulk create.
 	 */
 	public function render_bulk_create_notice(): void {
-		if ( ! $this->is_shift_list_screen() ) {
+		if ( ! self::is_shift_list_screen() ) {
 			return;
 		}
 
@@ -621,11 +1076,15 @@ class Shift_Editor {
 	}
 
 	/**
-	 * Determine whether the current admin screen is the shift list view.
+	 * 現在の管理画面がシフト一覧画面（edit.php?post_type=vkbm_shift）かどうかを判定する。
+	 *
+	 * Setup_Notices からも同じ判定基準で使うため public static にしている（安藤レビュー指摘での一本化）。
+	 * 画面情報が取得できない場合は false を返す。admin_notices が発火する時点では、通常の WordPress の
+	 * 実行順序上 $current_screen は必ず設定済みのため、リクエストパラメータへのフォールバックは持たない。
 	 *
 	 * @return bool
 	 */
-	private function is_shift_list_screen(): bool {
+	public static function is_shift_list_screen(): bool {
 		if ( ! is_admin() ) {
 			return false;
 		}
@@ -677,16 +1136,26 @@ class Shift_Editor {
 	/**
 	 * Check whether a shift already exists for resource/year/month.
 	 *
-	 * @param int $resource_id Resource ID.
-	 * @param int $year        Year.
-	 * @param int $month       Month.
+	 * @param int  $resource_id    Resource ID.
+	 * @param int  $year           Year.
+	 * @param int  $month          Month.
+	 * @param bool $include_trash ゴミ箱のシフトも「既に存在する」として扱うか。
+	 *                              自動登録から true で呼ぶと、ゴミ箱のシフトも登録済みとして扱う
+	 *                              （完全に削除された場合のみ再登録の対象になる）。手動の一括登録は
+	 *                              従来どおり false（ゴミ箱は数えない）で呼ぶ。
 	 * @return bool
 	 */
-	private function shift_exists( int $resource_id, int $year, int $month ): bool {
+	private function shift_exists( int $resource_id, int $year, int $month, bool $include_trash = false ): bool {
+		$post_statuses = array( 'publish', 'draft', 'pending', 'private' );
+
+		if ( $include_trash ) {
+			$post_statuses[] = 'trash';
+		}
+
 		$query = new \WP_Query(
 			array(
 				'post_type'      => Shift_Post_Type::POST_TYPE,
-				'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+				'post_status'    => $post_statuses,
 				'posts_per_page' => 1,
 				'no_found_rows'  => true,
 				'fields'         => 'ids',
@@ -1142,12 +1611,18 @@ class Shift_Editor {
 	/**
 	 * Retrieve provider settings.
 	 *
+	 * リクエスト内キャッシュ（static）を持つ。$force_refresh を渡すと、このリクエスト内で
+	 * 既にキャッシュされていても保存済みの最新値で読み直す。設定保存の直後に同一リクエスト内で
+	 * handle_auto_register() を同期実行する場合など、保存前の古い値を読んでしまうと困る呼び出し元
+	 * が使う（司からの指摘）。
+	 *
+	 * @param bool $force_refresh キャッシュを無視して読み直す場合は true。
 	 * @return array<string, mixed>
 	 */
-	private function get_provider_settings(): array {
+	private function get_provider_settings( bool $force_refresh = false ): array {
 		static $settings = null;
 
-		if ( null === $settings ) {
+		if ( $force_refresh || null === $settings ) {
 			$repository = new Settings_Repository();
 			$settings   = $repository->get_settings();
 		}

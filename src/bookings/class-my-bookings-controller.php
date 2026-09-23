@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Common\Price_Tiers;
+use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -74,17 +75,27 @@ class My_Bookings_Controller {
 	private ?Booking_Notification_Service $notification_service;
 
 	/**
+	 * 予約の状態変化を外部連携へ橋渡しするディスパッチャー（#474）。
+	 *
+	 * @var Booking_Event_Dispatcher
+	 */
+	private Booking_Event_Dispatcher $event_dispatcher;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Settings_Repository|null          $settings_repository Provider settings repository.
 	 * @param Booking_Notification_Service|null $notification_service Notification handler.
+	 * @param Booking_Event_Dispatcher|null     $event_dispatcher 予約の状態変化を外部連携へ橋渡しするディスパッチャー。
 	 */
 	public function __construct(
 		?Settings_Repository $settings_repository = null,
-		?Booking_Notification_Service $notification_service = null
+		?Booking_Notification_Service $notification_service = null,
+		?Booking_Event_Dispatcher $event_dispatcher = null
 	) {
 		$this->settings_repository  = $settings_repository ?? new Settings_Repository();
 		$this->notification_service = $notification_service;
+		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
 	}
 
 	/**
@@ -319,10 +330,16 @@ class My_Bookings_Controller {
 			return new WP_Error( 'cancel_deadline_passed', __( 'The cancellation deadline has passed.', 'vk-booking-manager' ), array( 'status' => 403 ) );
 		}
 
+		// #474: このメソッド自身のメタ書き込みより前にスナップショットを確保する（外部連携用の
+		// ディスパッチャーへ「変更前の内容」として渡す）。
+		$event_before = $this->event_dispatcher->capture_snapshot( $booking_id );
+
 		update_post_meta( $booking_id, self::META_STATUS, self::STATUS_CANCELLED );
 		if ( $this->notification_service ) {
 			$this->notification_service->handle_customer_cancellation( $booking_id );
 		}
+
+		$this->event_dispatcher->dispatch_change( $booking_id, $event_before );
 
 		return new WP_REST_Response( array( 'cancelled' => true ) );
 	}

@@ -170,6 +170,34 @@ class Shift_Dashboard_Staff_Conflict_Test extends WP_UnitTestCase {
 		$day_31   = ( new \DateTimeImmutable( 'today', wp_timezone() ) )->modify( '+31 days' )->format( 'Y-m-d' );
 		$this->create_booking( $staff_id, $day_30 . ' 23:30', $day_31 . ' 00:30', '30日後の顧客' );
 		$this->create_booking( $staff_id, $day_31 . ' 00:00', $day_31 . ' 01:00', '31日後の顧客' );
+
+		// issue #262: Resource_Delete_Guard が pre_delete_post で「紐づく予約が残っている
+		// リソースの完全削除」を常にブロックするようになったため、このテストが意図的に作る
+		// 「予約は残っているがスタッフだけ完全削除された」状態（担当未定へのフォールバック表示を
+		// 検証する対象）には、通常の削除経路ではもう到達できない。このテストは削除ガード自体の
+		// 検証対象ではないため、ここでだけそのフィルターを外して直接削除する。
+		// remove_all_filters() は同じフックに登録された他プラグイン（この場合は他クラス）の
+		// コールバックまで巻き込んで外してしまうため、Resource_Delete_Guard::get_instance() で
+		// 取得した自分自身のコールバックだけを外す（安藤レビュー指摘・issue #262）。
+		// （WP_UnitTestCase がテストごとにフック登録を自動でバックアップ・復元するため、
+		// 次のテストへは影響しない）。
+		//
+		// remove_filter() の戻り値を確認しておく（安藤レビュー指摘・issue #262 の副作用対応）:
+		// get_instance() が将来「古い（登録解除済みの）インスタンス」を返すようになった場合、
+		// remove_filter() は false を返して何も外せないが、そのまま無視すると
+		// このテストは黙って通過せず、直後の wp_delete_post() がガードにブロックされて
+		// 別の場所で失敗し、原因の特定に時間がかかる。ここで戻り値そのものを検証し、
+		// 「フィルターを外せなかった」ことを直接検出できるようにする。
+		$delete_guard = \VKBookingManager\Resources\Resource_Delete_Guard::get_instance();
+		$this->assertNotNull(
+			$delete_guard,
+			'本番の register() で登録された Resource_Delete_Guard のインスタンスが取得できること（Pro 版限定機能）'
+		);
+		$removed = remove_filter( 'pre_delete_post', array( $delete_guard, 'handle_pre_delete_post' ), 10 );
+		$this->assertTrue(
+			$removed,
+			'get_instance() が返したインスタンスのコールバックを実際に remove_filter() で外せたこと'
+		);
 		wp_delete_post( $staff_id, true );
 
 		$page   = new Shift_Dashboard_Page();

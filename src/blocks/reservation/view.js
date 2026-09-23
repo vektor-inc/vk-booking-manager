@@ -1,8 +1,15 @@
 import domReady from '@wordpress/dom-ready';
 import { render } from '@wordpress/element';
 import { ReservationApp } from './app';
+import { registerRestFallbackMiddleware } from '../shared/rest-fallback';
 
 const bootstrap = () => {
+	// パーマリンク設定はあるがサーバー側（.htaccess 等）に反映されていない環境向けの
+	// REST フォールバック（issue #489）。window.vkbmReservationConfig は
+	// Reservation_Block::maybe_enqueue_reservation_config() が他のインラインスクリプトと
+	// 同じタイミングで出力しているため、domReady のこのタイミングでは読み込み済み。
+	registerRestFallbackMiddleware();
+
 	const nodes = document.querySelectorAll(
 		'.wp-block-vk-booking-manager-reservation'
 	);

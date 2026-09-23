@@ -14,10 +14,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
 use VKBookingManager\Common\Weekday_Rule;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
+use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
 use function vkbm_get_default_resource_menu_icon;
 use function vkbm_sanitize_resource_menu_icon;
@@ -59,16 +61,53 @@ class Provider_Settings_Page {
 	private $page_hook = '';
 
 	/**
+	 * 設定の保存が成功した直後にシフトの自動登録を実行するための Shift_Editor
+	 * （安藤レビュー指摘T1対応）。コンストラクタで渡されなかった場合は null で、
+	 * その場合は自動登録を実行しない（既存テスト等、シフト機能と無関係な用途向け）。
+	 *
+	 * @var Shift_Editor|null
+	 */
+	private $shift_editor;
+
+	/**
+	 * 「連携」タブ（Google カレンダー連携）の中身を描画するパネル（issue #475）。
+	 * コンストラクタで渡されなかった場合は null で、その場合は「連携」タブを表示しない。
+	 *
+	 * @var Google_Calendar_Settings_Panel|null
+	 */
+	private $google_calendar_panel;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings_Service $settings_service Provider settings service.
-	 * @param string           $capability       Capability required to access the page.
-	 * @param string           $parent_slug      Parent admin menu slug.
+	 * @param Settings_Service                    $settings_service Provider settings service.
+	 * @param string                              $capability       Capability required to access the page.
+	 * @param string                              $parent_slug      Parent admin menu slug.
+	 * @param Shift_Editor|null                   $shift_editor          設定保存成功時にシフトの自動登録を実行する
+	 *                                                                    Shift_Editor（安藤レビュー指摘T1対応）。未指定
+	 *                                                                    （null）の場合は保存成功時の自動登録を行わない。
+	 * @param Google_Calendar_Settings_Panel|null $google_calendar_panel 「連携」タブの中身を描画するパネル（issue #475）。
+	 *                                                                   未指定（null）の場合は「連携」タブを表示しない。
 	 */
-	public function __construct( Settings_Service $settings_service, string $capability = 'manage_options', string $parent_slug = 'vkbm-shift-dashboard' ) {
-		$this->settings_service = $settings_service;
-		$this->capability       = $capability;
-		$this->parent_slug      = $parent_slug;
+	public function __construct( Settings_Service $settings_service, string $capability = 'manage_options', string $parent_slug = 'vkbm-shift-dashboard', ?Shift_Editor $shift_editor = null, ?Google_Calendar_Settings_Panel $google_calendar_panel = null ) {
+		$this->settings_service      = $settings_service;
+		$this->capability            = $capability;
+		$this->parent_slug           = $parent_slug;
+		$this->shift_editor          = $shift_editor;
+		$this->google_calendar_panel = $google_calendar_panel;
+	}
+
+	/**
+	 * 「連携」タブ（Google カレンダー連携）を表示するかどうかを返す。
+	 *
+	 * 描画するパネルが注入されていて、かつそのパネルが「見せてよい」と答えた場合のみ表示する。
+	 * パネル側の条件は Pro 版であることと、中継サーバーの接続先が決まっていること
+	 * （`Google_Calendar_Settings_Panel::is_available()`）。
+	 *
+	 * @return bool 表示するなら true。
+	 */
+	private function show_integration_tab(): bool {
+		return null !== $this->google_calendar_panel && $this->google_calendar_panel->is_available();
 	}
 
 	/**
@@ -206,6 +245,9 @@ class Provider_Settings_Page {
 			);
 			delete_transient( 'vkbm_provider_settings_field_errors' );
 			delete_transient( 'vkbm_provider_settings_previous_input' );
+
+			// 設定の保存が成功した場合にのみ、シフトの自動登録をその場で実行する（安藤レビュー指摘T1）。
+			$this->maybe_run_shift_auto_register();
 		}
 
 		set_transient( 'settings_errors', get_settings_errors(), 30 );
@@ -217,6 +259,9 @@ class Provider_Settings_Page {
 
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
 		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		if ( $this->show_integration_tab() ) {
+			$allowed_tabs[] = 'integration';
+		}
 		if ( class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) && current_user_can( 'manage_options' ) ) {
 			$allowed_tabs[] = 'license';
 		}
@@ -236,6 +281,26 @@ class Provider_Settings_Page {
 
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * 設定の保存が成功した直後に、シフトの自動登録（有効な場合のみ）をその場で実行する。
+	 *
+	 * WordPress の update_option() は、保存前後で値が変わらない場合
+	 * update_option_{OPTION_KEY} フックを発火させないため、そのフックだけに頼ると、設定値を
+	 * 変えずに保存したときに Shift_Editor::handle_settings_updated() が呼ばれず、完全に削除した
+	 * シフトを作り直せない不具合があった（安藤レビュー指摘T1）。この呼び出し口を保存成功時の
+	 * 実行に一本化し、フックの発火有無に関わらず、保存が成功するたびに実行する。
+	 *
+	 * $shift_editor がコンストラクタで注入されなかった場合（テスト等、シフト機能と無関係な
+	 * 用途）は何もしない。
+	 */
+	private function maybe_run_shift_auto_register(): void {
+		if ( null === $this->shift_editor ) {
+			return;
+		}
+
+		$this->shift_editor->run_auto_register_on_settings_saved();
 	}
 
 	/**
@@ -536,6 +601,7 @@ class Provider_Settings_Page {
 		}
 		$reservation_menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
 		$shift_alert_months                 = isset( $settings['shift_alert_months'] ) ? (int) $settings['shift_alert_months'] : 1;
+		$shift_auto_register_months         = isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0;
 		$booking_reminder_hours             = $settings['booking_reminder_hours'] ?? array();
 		if ( ! is_array( $booking_reminder_hours ) ) {
 			$booking_reminder_hours = array();
@@ -568,11 +634,16 @@ class Provider_Settings_Page {
 		$has_saved_license_key           = '' !== (string) get_option( 'vk-booking-manager-pro-license-key', '' );
 		$is_pro_edition                  = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
 		$show_license_tab                = $is_pro_edition && current_user_can( 'manage_options' );
+		// 「連携」タブ（Google カレンダー連携）は Pro 版限定（issue #475）。
+		$show_integration_tab = $this->show_integration_tab();
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$reservation_menu_list_display_mode = 'card';
 		}
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
 		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		if ( $show_integration_tab ) {
+			$allowed_tabs[] = 'integration';
+		}
 		if ( $show_license_tab ) {
 			$allowed_tabs[] = 'license';
 		}
@@ -636,6 +707,14 @@ class Provider_Settings_Page {
 				>
 					<?php esc_html_e( 'Advanced settings', 'vk-booking-manager' ); ?>
 				</a>
+				<?php if ( $show_integration_tab ) : ?>
+				<a
+					href="<?php echo esc_url( add_query_arg( 'tab', 'integration', $base_url ) ); ?>"
+					class="nav-tab<?php echo 'integration' === $active_tab ? ' nav-tab-active' : ''; ?>"
+				>
+					<?php esc_html_e( 'Integration', 'vk-booking-manager' ); ?>
+				</a>
+				<?php endif; ?>
 				<?php if ( $show_license_tab ) : ?>
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'license', $base_url ) ); ?>"
@@ -647,6 +726,13 @@ class Provider_Settings_Page {
 			</h2>
 			<?php settings_errors( self::MENU_SLUG ); ?>
 
+			<?php if ( 'integration' === $active_tab && $show_integration_tab ) : ?>
+				<?php
+				// 「連携」タブは、他タブと共有している保存フォームの外に置く。共有フォームの中に置くと、
+				// 連携のボタンを押した時点で別タブの入力内容まで保存されてしまうため（issue #475）。
+				$this->google_calendar_panel->render();
+				?>
+			<?php else : ?>
 			<form method="post" action="">
 				<?php wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME ); ?>
 				<table class="form-table" role="presentation">
@@ -861,27 +947,27 @@ class Provider_Settings_Page {
 										</tr>
 									</thead>
 									<tbody>
-		<?php foreach ( $business_day_labels as $day_key => $day_label ) : ?>
-			<?php
-			$day_settings                                   = isset( $business_hours_weekly[ $day_key ] ) && is_array( $business_hours_weekly[ $day_key ] )
-				? $business_hours_weekly[ $day_key ]
-				: array(
-					'use_custom' => false,
-					'time_slots' => array(),
-				);
-			$use_custom                                     = ! empty( $day_settings['use_custom'] );
-			$slots_for_day                                  = $this->prepare_weekly_business_hours_slots( $day_settings, $basic_slots, $use_custom );
-			$next_slot_index                                = $this->get_next_slot_index( $slots_for_day );
-			$is_regular_holiday                             = ! empty( $weekly_closed_days[ $day_key ] );
-			$day_field_errors                               = is_array( $weekly_field_errors[ $day_key ] ?? null ) ? $weekly_field_errors[ $day_key ] : array();
-			$row_classes                                    = array(
-				'vkbm-business-hours-row',
-				$is_regular_holiday ? 'is-regular-holiday' : '',
-				! $use_custom ? 'is-using-basic' : '',
-			);
+				<?php foreach ( $business_day_labels as $day_key => $day_label ) : ?>
+					<?php
+					$day_settings                           = isset( $business_hours_weekly[ $day_key ] ) && is_array( $business_hours_weekly[ $day_key ] )
+					? $business_hours_weekly[ $day_key ]
+					: array(
+						'use_custom' => false,
+						'time_slots' => array(),
+					);
+					$use_custom                             = ! empty( $day_settings['use_custom'] );
+					$slots_for_day                          = $this->prepare_weekly_business_hours_slots( $day_settings, $basic_slots, $use_custom );
+					$next_slot_index                        = $this->get_next_slot_index( $slots_for_day );
+					$is_regular_holiday                     = ! empty( $weekly_closed_days[ $day_key ] );
+					$day_field_errors                       = is_array( $weekly_field_errors[ $day_key ] ?? null ) ? $weekly_field_errors[ $day_key ] : array();
+					$row_classes                            = array(
+						'vkbm-business-hours-row',
+						$is_regular_holiday ? 'is-regular-holiday' : '',
+						! $use_custom ? 'is-using-basic' : '',
+					);
 											$row_class_attr = implode( ' ', array_filter( $row_classes ) );
 											$checkbox_id    = 'vkbm-business-hours-use-basic-' . $day_key;
-			?>
+					?>
 											<tr class="<?php echo esc_attr( $row_class_attr ); ?>" data-day="<?php echo esc_attr( $day_key ); ?>">
 												<th scope="row">
 													<?php echo esc_html( $day_label ); ?>
@@ -2130,6 +2216,36 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 						<tr class="vkbm-provider-settings__tab-advanced">
+							<th scope="row">
+								<label for="vkbm-shift-auto-register-months"><?php esc_html_e( 'Shift auto registration', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<select
+									id="vkbm-shift-auto-register-months"
+									name="vkbm_provider_settings[shift_auto_register_months]"
+								>
+									<option value="0" <?php selected( $shift_auto_register_months, 0 ); ?>>
+										<?php esc_html_e( 'Disabled', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="1" <?php selected( $shift_auto_register_months, 1 ); ?>>
+										<?php esc_html_e( 'Up to next month', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="2" <?php selected( $shift_auto_register_months, 2 ); ?>>
+										<?php esc_html_e( 'Up to 2 months ahead', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="3" <?php selected( $shift_auto_register_months, 3 ); ?>>
+										<?php esc_html_e( 'Up to 3 months ahead', 'vk-booking-manager' ); ?>
+									</option>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'At the time of saving, and then once a day after that, shifts are automatically registered as published (not draft) for each registered staff member, for any month without a registered shift, from the current month through the selected month ahead, using the same logic as bulk shift registration.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'A shift in the trash still counts as registered and is not re-created, but permanently deleting it will cause that month to be registered again the next time this runs.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-advanced">
 							<th scope="row"><?php esc_html_e( 'Email debug', 'vk-booking-manager' ); ?></th>
 							<td>
 								<label class="vkbm-inline-checkbox">
@@ -2246,6 +2362,7 @@ class Provider_Settings_Page {
 
 				<?php submit_button( __( 'Save changes', 'vk-booking-manager' ) ); ?>
 			</form>
+			<?php endif; ?>
 		</div>
 		<?php
 	}

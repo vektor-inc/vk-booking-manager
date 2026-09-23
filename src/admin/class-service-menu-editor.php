@@ -136,6 +136,9 @@ class Service_Menu_Editor {
 					'minCapacityNominationDescription2' => __( 'If the number of guests is below this value, the reservation cannot be accepted.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription3' => __( 'Enter 0 to remove the minimum and accept bookings from 1 guest.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription4' => __( 'Values above the time slot capacity (the maximum guests per group) are reduced to that capacity.', 'vk-booking-manager' ),
+					// #485: 担当できるリソースが「選ぶ」かつチェック0件のときに role="status" 領域へ入れる案内文
+					// （PHP 初期描画 render_staff_meta_box() と同じ文言）。
+					'staffUnselectedNotice'             => self::get_staff_unselected_notice(),
 				),
 				// 料金区分の料金欄に表示する単位（通貨記号＋税込ラベル）。税込ラベルが空でも通貨記号は常時表示する。
 				'priceUnit' => '' !== VKBM_Helper::get_tax_included_label()
@@ -167,7 +170,14 @@ class Service_Menu_Editor {
 		if ( Staff_Editor::is_enabled() ) {
 			add_meta_box(
 				'vkbm_service_menu_staff',
-				__( 'Staff collaboration', 'vk-booking-manager' ),
+				// メタボックスのタイトルは WordPress 本体が未エスケープで出力するため、利用者入力由来のラベルはここでエスケープする。
+				esc_html(
+					sprintf(
+						/* translators: %s: resource label (plural), e.g. "Staff". */
+						__( '%s collaboration', 'vk-booking-manager' ),
+						vkbm_get_resource_label_plural()
+					)
+				),
 				array( $this, 'render_staff_meta_box' ),
 				$post_type,
 				'side',
@@ -1088,8 +1098,10 @@ class Service_Menu_Editor {
 	 * @param WP_Post $post Current post object.
 	 */
 	public function render_staff_meta_box( WP_Post $post ): void {
-		$selected_staff = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
-		$selected_staff = is_array( $selected_staff ) ? array_map( 'intval', $selected_staff ) : array();
+		// 個別選択（保存値そのもの）。「すべて」選択中も保持しているため、そのままチェック状態に使う。
+		$selected_staff = Service_Menu_Post_Type::get_selected_staff_ids( $post->ID );
+		// 「すべてのリソースが担当できる」フラグ（#485）。既存・新規メニューとも未設定＝「選ぶ」が既定。
+		$is_all_staff = Service_Menu_Post_Type::is_all_staff_assigned( $post->ID );
 
 		$resources = get_posts(
 			array(
@@ -1103,30 +1115,142 @@ class Service_Menu_Editor {
 			)
 		);
 
+		$plural_label = vkbm_get_resource_label_plural();
+		// ラジオと説明文・チェックリストを aria で関連付けるための ID。
+		$list_id               = 'vkbm-service-menu-staff-list';
+		$all_description_id    = 'vkbm-service-menu-staff-all-description';
+		$choose_description_id = 'vkbm-service-menu-staff-choose-description';
+		$status_id             = 'vkbm-service-menu-staff-status';
+		// 「選ぶ」かつチェック0件のときだけ案内を出す（「すべて」のときは出さない）。
+		// リソースが1件も無いときは、チェックできる対象が無く「チェックを入れる」が実行できないため出さない
+		// （空状態の「〇〇が登録されていません。〇〇を追加」だけを見せる。植草レビュー）。
+		// 初期表示でも同条件ならサーバー側で最初から文言を入れておき、以降は service-menu-editor.js が同じ条件で更新する。
+		$show_unselected_notice = ! $is_all_staff && empty( $selected_staff ) && ! empty( $resources );
 		?>
-		<p>
-			<?php esc_html_e( 'Staff available', 'vk-booking-manager' ); ?>
-		</p>
-		<?php if ( empty( $resources ) ) : ?>
-			<p class="description"><?php esc_html_e( 'No staff members are registered.', 'vk-booking-manager' ); ?></p>
-		<?php else : ?>
-			<ul style="margin: 0;">
-				<?php foreach ( $resources as $resource ) : ?>
-					<li style="margin: 0 0 4px;">
-						<label>
-							<input
-								type="checkbox"
-								name="vkbm_service_menu[staff_ids][]"
-								value="<?php echo esc_attr( (string) $resource->ID ); ?>"
-								<?php checked( in_array( (int) $resource->ID, $selected_staff, true ) ); ?>
-							/>
-							<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
-						</label>
-					</li>
-				<?php endforeach; ?>
-			</ul>
-		<?php endif; ?>
+		<fieldset class="vkbm-service-menu-staff">
+			<legend class="vkbm-service-menu-staff__legend"><?php echo esc_html( Service_Menu_Post_Type::get_available_staff_label() ); ?></legend>
+			<div class="vkbm-service-menu-staff__option">
+				<label>
+					<input
+						type="radio"
+						id="vkbm-service-menu-staff-all"
+						name="vkbm_service_menu[staff_all]"
+						value="1"
+						aria-controls="<?php echo esc_attr( $list_id ); ?>"
+						aria-describedby="<?php echo esc_attr( $all_description_id ); ?>"
+						<?php checked( $is_all_staff ); ?>
+					/>
+					<?php echo esc_html( Service_Menu_Post_Type::get_all_staff_option_label() ); ?>
+				</label>
+				<p class="description" id="<?php echo esc_attr( $all_description_id ); ?>">
+					<?php
+					printf(
+						/* translators: %s: resource label (plural), e.g. "Staff". */
+						esc_html__( '%s added later will also be able to handle this menu automatically.', 'vk-booking-manager' ),
+						esc_html( $plural_label )
+					);
+					?>
+				</p>
+			</div>
+			<div class="vkbm-service-menu-staff__option">
+				<label>
+					<input
+						type="radio"
+						id="vkbm-service-menu-staff-choose"
+						name="vkbm_service_menu[staff_all]"
+						value="0"
+						aria-controls="<?php echo esc_attr( $list_id ); ?>"
+						aria-describedby="<?php echo esc_attr( $choose_description_id ); ?>"
+						<?php checked( ! $is_all_staff ); ?>
+					/>
+					<?php echo esc_html( Service_Menu_Post_Type::get_choose_staff_option_label() ); ?>
+				</label>
+				<p class="description" id="<?php echo esc_attr( $choose_description_id ); ?>">
+					<?php
+					printf(
+						/* translators: %s: resource label (plural), e.g. "Staff". */
+						esc_html__( 'After adding %s, check them here so they can be in charge.', 'vk-booking-manager' ),
+						esc_html( $plural_label )
+					);
+					?>
+				</p>
+				<?php
+				// 「すべて」選択中は個別チェックリストを hidden で非表示にする（disabled の灰色表示にはしない。
+				// チェック済みと未チェックが灰色で混在すると「すべてのはずなのに一部外れている」と読まれるため）。
+				// 個別選択の値は hidden でも送信されるため、「すべて」選択中も保持される。
+				?>
+				<div id="<?php echo esc_attr( $list_id ); ?>" class="vkbm-service-menu-staff__list" <?php echo $is_all_staff ? 'hidden' : ''; ?>>
+					<?php if ( empty( $resources ) ) : ?>
+						<p class="description">
+							<?php
+							printf(
+								/* translators: %s: resource label (plural), e.g. "Staff". */
+								esc_html__( 'No %s are registered.', 'vk-booking-manager' ),
+								esc_html( $plural_label )
+							);
+							?>
+							<a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=' . Resource_Post_Type::POST_TYPE ) ); ?>">
+								<?php
+								printf(
+									/* translators: %s: resource label (plural), e.g. "Staff". */
+									esc_html__( 'Add %s', 'vk-booking-manager' ),
+									esc_html( $plural_label )
+								);
+								?>
+							</a>
+						</p>
+					<?php else : ?>
+						<ul class="vkbm-service-menu-staff__checkboxes">
+							<?php foreach ( $resources as $resource ) : ?>
+								<li>
+									<label>
+										<input
+											type="checkbox"
+											class="vkbm-service-menu-staff__checkbox"
+											name="vkbm_service_menu[staff_ids][]"
+											value="<?php echo esc_attr( (string) $resource->ID ); ?>"
+											<?php checked( in_array( (int) $resource->ID, $selected_staff, true ) ); ?>
+										/>
+										<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
+									</label>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+					<?php endif; ?>
+				</div>
+			</div>
+			<?php
+			// 未選択の案内。role="status" の領域を最初から置き、条件を満たしたときだけ文言を入れる
+			// （フォーカスは動かさない）。「予約を受け付けられません」のような結果は書かない
+			// （指名ありのメニューでは担当未設定でも指名スタッフを受け付ける現状挙動があり、事実と違うため）。
+			// 開始タグ・文言・終了タグを1行に置き、案内を出さないときに空白文字を含めない（CSS の :empty で余白を消すため）。
+			?>
+			<p class="description vkbm-service-menu-staff__status" id="<?php echo esc_attr( $status_id ); ?>" role="status"><?php echo $show_unselected_notice ? esc_html( self::get_staff_unselected_notice() ) : ''; ?></p>
+		</fieldset>
 		<?php
+	}
+
+	/**
+	 * 「担当できるリソースが選ばれていません」の案内文を返す（#485）。
+	 *
+	 * PHP の初期描画と service-menu-editor.js（wp_localize_script 経由）で同じ文言を使う。
+	 * 翻訳関数は1文ごとに分け、リソースラベル（複数形）を差し込んで連結する。
+	 *
+	 * @return string 案内文（2文）。
+	 */
+	private static function get_staff_unselected_notice(): string {
+		$plural_label = vkbm_get_resource_label_plural();
+
+		return sprintf(
+			/* translators: %s: resource label (plural), e.g. "Staff". */
+			__( 'No %s have been selected to be in charge.', 'vk-booking-manager' ),
+			$plural_label
+		) . ' ' . sprintf(
+			/* translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option. */
+			__( 'Check the %1$s, or select "%2$s".', 'vk-booking-manager' ),
+			$plural_label,
+			Service_Menu_Post_Type::get_all_staff_option_label()
+		);
 	}
 
 	/**
@@ -1253,7 +1377,9 @@ class Service_Menu_Editor {
 		$exclusive_fee_exempt     = max( 0, (int) $this->sanitize_integer_value( $data, 'exclusive_fee_exempt_guests' ) );
 		$price_tiers              = $this->sanitize_price_tiers( $data['price_tiers'] ?? array() );
 		$staff_ids                = $this->sanitize_staff_ids( $data['staff_ids'] ?? array() );
-		$fixed_start_times        = $this->sanitize_fixed_start_times(
+		// 「すべてのリソースが担当できる」ラジオ（#485）。value="1" のときだけ true。
+		$staff_all         = isset( $data['staff_all'] ) && '1' === (string) $data['staff_all'];
+		$fixed_start_times = $this->sanitize_fixed_start_times(
 			$data['fixed_start_times'] ?? array(),
 			$data['fixed_start_minutes'] ?? array()
 		);
@@ -1417,7 +1543,10 @@ class Service_Menu_Editor {
 			delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS );
 		}
 		if ( Staff_Editor::is_enabled() ) {
+			// 個別選択は「すべて」選択中も消さずに保持する（「選ぶ」へ戻したとき以前の選択を復元するため。#485）。
 			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
+			// '' のときは update_meta_value() がメタを削除し、未設定（既定 false＝「選ぶ」）に戻る。
+			$this->update_meta_value( $post_id, Service_Menu_Post_Type::META_STAFF_ALL, $staff_all ? '1' : '' );
 		}
 		if ( empty( $fixed_start_times ) ) {
 			delete_post_meta( $post_id, self::META_FIXED_START_TIMES );

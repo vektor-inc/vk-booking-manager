@@ -76,3 +76,47 @@
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes input[type="checkbox"] {
 	margin: 0;
 }
+
+/**
+ * 担当できるリソース（#485）。ラジオ2択＋個別チェックリストを label ではなく div で囲むため、
+ * 他の項目（.inline-edit-group > label）と同じ 10em ＋ 1fr のグリッドで見出しと入力列を揃える。
+ */
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > .vkbm-qe-staff {
+	display: grid;
+	grid-template-columns: 10em 1fr;
+	align-items: start;
+	column-gap: 8px;
+	margin: 0 0 8px;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff > .title {
+	width: auto;
+	white-space: nowrap;
+	padding-right: 0;
+	float: none;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff > .input-text-wrap {
+	margin-left: 0;
+	float: none;
+}
+
+/*
+ * ラジオ（すべて／選ぶ）は縦に積む。余白は「コントロール＋ラベル間（6px）< 選択肢間（8px）<
+ * 選択肢群と個別チェックリストの間（12px）」の3段にする（design-rules の余白階層）。
+ */
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-mode {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0 0 8px;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-mode input[type="radio"] {
+	margin: 0;
+}
+
+/* 「選ぶ」のときだけ表示する個別チェックリストは、ラジオ群とのグループ境界が分かるよう選択肢間より広く離す。 */
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff .vkbm-qe-staff-checkboxes {
+	margin-top: 12px;
+}

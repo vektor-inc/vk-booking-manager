@@ -25,8 +25,10 @@ use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\Common\Staff_Load_Calculator;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
@@ -138,20 +140,30 @@ class Booking_Confirmation_Controller {
 	private $settings_repository;
 
 	/**
+	 * 予約の状態変化を外部連携へ橋渡しするディスパッチャー（#474）。
+	 *
+	 * @var Booking_Event_Dispatcher
+	 */
+	private $event_dispatcher;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Booking_Notification_Service $notification_service Notification handler.
-	 * @param Settings_Repository          $settings_repository  Provider settings repository.
-	 * @param Availability_Service|null    $availability_service Availability service.
+	 * @param Booking_Notification_Service  $notification_service Notification handler.
+	 * @param Settings_Repository           $settings_repository  Provider settings repository.
+	 * @param Availability_Service|null     $availability_service Availability service.
+	 * @param Booking_Event_Dispatcher|null $event_dispatcher     予約の状態変化を外部連携へ橋渡しするディスパッチャー。
 	 */
 	public function __construct(
 		Booking_Notification_Service $notification_service,
 		Settings_Repository $settings_repository,
-		?Availability_Service $availability_service = null
+		?Availability_Service $availability_service = null,
+		?Booking_Event_Dispatcher $event_dispatcher = null
 	) {
 		$this->notification_service = $notification_service;
 		$this->settings_repository  = $settings_repository;
 		$this->availability_service = null !== $availability_service ? $availability_service : new Availability_Service( $settings_repository );
+		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
 	}
 
 	/**
@@ -694,6 +706,9 @@ class Booking_Confirmation_Controller {
 		} else {
 			$this->notification_service->handle_pending_creation( (int) $booking_id );
 		}
+
+		// #474: 新規作成のため「変更前」は無い（null）。種別（created）の判定はディスパッチャー側で行う。
+		$this->event_dispatcher->dispatch_change( (int) $booking_id, null );
 
 		return new WP_REST_Response(
 			array(
@@ -2029,28 +2044,16 @@ class Booking_Confirmation_Controller {
 	}
 
 	/**
-	 * メニューに割り当てられたスタッフ数を数える。
+	 * メニューを担当できるスタッフ数を数える。
+	 *
+	 * #485: 「すべてのリソースが担当できる」フラグのメニューは公開中の全リソース数になる。
+	 * 候補の解決（重複排除・0以下の除外を含む）は Service_Menu_Post_Type::get_assignable_staff_ids() に集約。
 	 *
 	 * @param int $menu_id サービスメニューID。
 	 * @return int スタッフ数。
 	 */
 	private function count_menu_staff( int $menu_id ): int {
-		$staff_ids = get_post_meta( $menu_id, '_vkbm_staff_ids', true );
-		if ( ! is_array( $staff_ids ) ) {
-			return 0;
-		}
-
-		// 重複スタッフIDは1名として数える。
-		$valid = array_unique(
-			array_filter(
-				array_map( 'intval', $staff_ids ),
-				static function ( int $id ): bool {
-					return $id > 0;
-				}
-			)
-		);
-
-		return count( $valid );
+		return count( Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id ) );
 	}
 
 	/**

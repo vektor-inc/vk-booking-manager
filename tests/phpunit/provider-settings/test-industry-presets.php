@@ -200,6 +200,7 @@ class Industry_Presets_Test extends WP_UnitTestCase {
 	 * @return void
 	 */
 	public function test_get_current_preset(): void {
+		// @pro-gate-ignore get_current_preset: markTestSkipped ではなく、期待値側を編集版で分岐させて無料版・Pro 版の両方で検証しているため対象外とする。
 		$repository = new Settings_Repository();
 		$defaults   = $repository->get_default_settings();
 		$actual     = Industry_Presets::get_current_preset( array( 'industry_preset' => 'seminar' ), $defaults );

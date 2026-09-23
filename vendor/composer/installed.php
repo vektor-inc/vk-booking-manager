@@ -353,8 +353,8 @@
             'dev_requirement' => true,
         ),
         'wp-phpunit/wp-phpunit' => array(
-            'pretty_version' => '7.1.0',
-            'version' => '7.1.0.0',
+            'pretty_version' => '7.1.1',
+            'version' => '7.1.1.0',
             'reference' => '797edc710afc958854852d859c93d9aa1de6447d',
             'type' => 'library',
             'install_path' => __DIR__ . '/../wp-phpunit/wp-phpunit',

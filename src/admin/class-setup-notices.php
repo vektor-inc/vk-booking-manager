@@ -19,6 +19,7 @@ use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
 
 /**
@@ -33,10 +34,19 @@ class Setup_Notices {
 	private const SHIFT_META_MONTH = '_vkbm_shift_month';
 
 	/**
+	 * Cached result of has_missing_permalink_htaccess_rules() for the current request.
+	 * null は未判定、true/false は判定済みの結果.
+	 *
+	 * @var bool|null
+	 */
+	private ?bool $missing_permalink_htaccess_rules_cache = null;
+
+	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
 		add_action( 'admin_notices', array( $this, 'render_notices' ) );
+		add_action( 'admin_notices', array( $this, 'render_shift_auto_register_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_vkbm_dismiss_notice', array( $this, 'handle_dismiss' ) );
 		add_action( 'vkbm_shift_dashboard_notices', array( $this, 'render_shift_dashboard_notice' ) );
@@ -104,6 +114,10 @@ class Setup_Notices {
 							?>
 							<p><?php echo wp_kses( $message, array( 'a' => array( 'href' => array() ) ) ); ?></p>
 						<?php else : ?>
+							<?php if ( '' !== ( $item['heading'] ?? '' ) ) : ?>
+								<?php // 外側の h3（「Some items have not been set」）の1段下の見出しとして h4 にする（植草レビュー指摘）。 ?>
+								<h4><?php echo esc_html( $item['heading'] ); ?></h4>
+							<?php endif; ?>
 							<p><?php echo esc_html( $item['message'] ); ?></p>
 							<div class="vkbm-buttons">
 								<a class="button button-primary" href="<?php echo esc_url( $item['primary_url'] ); ?>">
@@ -131,9 +145,10 @@ class Setup_Notices {
 	public function enqueue_assets( string $hook_suffix ): void {
 		unset( $hook_suffix );
 
-		$has_setup_notice = ! $this->is_setup_complete() && array() !== $this->get_missing_setup_items_for_user();
-		$has_shift_notice = array() !== $this->get_missing_shift_months();
-		if ( ! $has_setup_notice && ! $has_shift_notice ) {
+		$has_setup_notice         = ! $this->is_setup_complete() && array() !== $this->get_missing_setup_items_for_user();
+		$has_shift_notice         = array() !== $this->get_missing_shift_months();
+		$has_auto_register_notice = Shift_Editor::is_shift_list_screen() && $this->has_shift_auto_register_enabled();
+		if ( ! $has_setup_notice && ! $has_shift_notice && ! $has_auto_register_notice ) {
 			return;
 		}
 
@@ -276,7 +291,111 @@ class Setup_Notices {
 			'secondary_url'   => admin_url( 'edit.php?post_type=' . Service_Menu_Post_Type::POST_TYPE ),
 		);
 
+		// サーバー側（.htaccess）に WordPress の書き換えルールが反映されていないと、
+		// 予約ページの REST 通信が失敗して予約フォームやログインが使えなくなる（issue #489）。
+		// 他の項目とは性質が異なるため、専用の見出し（heading）付きで表示する。パーマリンク設定は
+		// WordPress コアの manage_options 権限が必要な画面のため、権限もそれに合わせる。
+		$items[] = array(
+			'id'              => 'permalink_htaccess_rules',
+			'capability'      => 'manage_options',
+			'is_missing'      => fn () => $this->has_missing_permalink_htaccess_rules(),
+			'heading'         => __( 'Permalink settings may not have been saved', 'vk-booking-manager' ),
+			'message'         => $this->get_permalink_htaccess_notice_message(),
+			'primary_label'   => __( 'Open permalink settings', 'vk-booking-manager' ),
+			'primary_url'     => admin_url( 'options-permalink.php' ),
+			'secondary_label' => '',
+			'secondary_url'   => '',
+		);
+
 		return $items;
+	}
+
+	/**
+	 * Build the message body for the permalink .htaccess notice.
+	 *
+	 * 1つの __() に複数文を入れないよう、文ごとに分けてから連結する
+	 * （coding-rules.md の国際化ルールに準拠）。2文目・3文目は英語表示時のみ
+	 * 先頭に半角スペースが要るため msgid 側に含めている（日本語訳は先頭スペース無しで連結する）。
+	 *
+	 * @return string
+	 */
+	private function get_permalink_htaccess_notice_message(): string {
+		$message  = __( "The server's URL rewrite settings (.htaccess) do not contain the WordPress rules.", 'vk-booking-manager' );
+		$message .= __( ' The booking page may fail to communicate in this state.', 'vk-booking-manager' );
+		$message .= __( ' Open the permalink settings and click "Save Changes" without changing anything.', 'vk-booking-manager' );
+
+		return $message;
+	}
+
+	/**
+	 * Check whether the .htaccess is missing the WordPress rewrite rules even though
+	 * mod_rewrite-based (pretty) permalinks are configured.
+	 *
+	 * パーマリンク設定（DB）はあるのに、サーバー側（.htaccess）に WordPress の
+	 * 書き換えルールが反映されていないと、REST API への通信が 404 になり
+	 * 予約ページが使えなくなる（issue #489）。nginx 等、mod_rewrite を使わない環境は
+	 * .htaccess で判定できないため、ここでは対象外（false を返す）とする。
+	 *
+	 * マルチサイトでは `.htaccess` がネットワーク全体で共有され、かつ
+	 * `get_home_path()` の前提（1サイト1ドキュメントルート）が成り立たないため、
+	 * 判定対象外（false を返す）とする（安藤レビュー指摘 MEDIUM-2）。
+	 *
+	 * 判定結果は1リクエスト内で複数回呼ばれうる（`render_notices()` /
+	 * `render_shift_dashboard_notice()` / `enqueue_assets()` など）ため、
+	 * ファイル I/O とマーカー解析を毎回行わないようインスタンスプロパティへ
+	 * キャッシュする（安藤レビュー指摘 LOW-1）。
+	 *
+	 * @return bool
+	 */
+	private function has_missing_permalink_htaccess_rules(): bool {
+		if ( null !== $this->missing_permalink_htaccess_rules_cache ) {
+			return $this->missing_permalink_htaccess_rules_cache;
+		}
+
+		$this->missing_permalink_htaccess_rules_cache = $this->detect_missing_permalink_htaccess_rules();
+
+		return $this->missing_permalink_htaccess_rules_cache;
+	}
+
+	/**
+	 * Actually detect whether the .htaccess is missing the WordPress rewrite rules.
+	 *
+	 * `has_missing_permalink_htaccess_rules()` のキャッシュ機構から分離した実処理.
+	 *
+	 * @return bool
+	 */
+	private function detect_missing_permalink_htaccess_rules(): bool {
+		if ( is_multisite() ) {
+			return false;
+		}
+
+		global $wp_rewrite;
+
+		if ( ! $wp_rewrite instanceof \WP_Rewrite ) {
+			return false;
+		}
+
+		if ( ! $wp_rewrite->using_mod_rewrite_permalinks() ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'got_mod_rewrite' ) || ! function_exists( 'extract_from_markers' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/misc.php';
+		}
+
+		if ( ! got_mod_rewrite() ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'get_home_path' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+
+		// BEGIN/END WordPress マーカー内が空（またはファイル自体が無い）なら、
+		// 書き換えルールが反映されていない状態とみなす.
+		$htaccess_rules = extract_from_markers( get_home_path() . '.htaccess', 'WordPress' );
+
+		return array() === $htaccess_rules;
 	}
 
 	/**
@@ -577,6 +696,64 @@ class Setup_Notices {
 
 		$post_type = isset( $_GET['post_type'] ) ? sanitize_text_field( wp_unslash( $_GET['post_type'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
 		return Shift_Post_Type::POST_TYPE === $post_type;
+	}
+
+	/**
+	 * Check whether shift auto registration is currently enabled.
+	 *
+	 * 許可値の判定基準は Shift_Editor::is_auto_register_enabled_for() に一本化している
+	 * （Settings_Sanitizer・Shift_Editor 自身の判定と基準をそろえるため。安藤レビュー指摘）。
+	 *
+	 * @return bool
+	 */
+	private function has_shift_auto_register_enabled(): bool {
+		$repository = new Settings_Repository();
+		$settings   = $repository->get_settings();
+		$value      = isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0;
+
+		return Shift_Editor::is_auto_register_enabled_for( $value );
+	}
+
+	/**
+	 * Render an alert on the shift list screen when shift auto registration is configured.
+	 *
+	 * シフトの自動登録が設定されている場合、公開シフトが管理者の目視確認なしに自動で
+	 * 登録されるため、シフト一覧画面で内容確認を促す注意喚起を表示する。
+	 * 画面判定は Shift_Editor::is_shift_list_screen() に一本化している（安藤レビュー指摘）。
+	 * BM設定への権限（MANAGE_PROVIDER_SETTINGS）が無い利用者には、リンクにせず文字だけで表示する。
+	 */
+	public function render_shift_auto_register_notice(): void {
+		if ( ! Shift_Editor::is_shift_list_screen() ) {
+			return;
+		}
+
+		if ( ! $this->has_shift_auto_register_enabled() ) {
+			return;
+		}
+
+		$label = __( 'Shift auto registration', 'vk-booking-manager' );
+
+		if ( current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			$link_url = admin_url( 'admin.php?page=vkbm-provider-settings&tab=advanced#vkbm-shift-auto-register-months' );
+			$label    = sprintf( '<a href="%1$s">%2$s</a>', esc_url( $link_url ), esc_html( $label ) );
+		} else {
+			$label = esc_html( $label );
+		}
+
+		// 1つの __() に複数の文を入れないよう、文ごとに分けてから連結する。
+		// 2文目は英語表示時のみ先頭に半角スペースが要るため、msgid 側に含めている
+		// （日本語訳は先頭スペース無しで連結する）。
+		$message = sprintf(
+			/* translators: %s: link to the shift auto registration setting, or plain text if the user lacks permission to view the setting */
+			__( '%s is configured.', 'vk-booking-manager' ),
+			$label
+		);
+		$message .= __( ' Please check carefully that there are no discrepancies between the registered shift information and the actual shifts.', 'vk-booking-manager' );
+		?>
+		<div class="notice vkbm-notice vkbm-notice__warning">
+			<p><?php echo wp_kses( $message, array( 'a' => array( 'href' => array() ) ) ); ?></p>
+		</div>
+		<?php
 	}
 
 	/**

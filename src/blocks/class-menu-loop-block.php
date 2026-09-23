@@ -484,11 +484,27 @@ class Menu_Loop_Block {
 		);
 
 		if ( $filters['staff'] > 0 ) {
-			$meta_query[] = array(
-				'key'     => '_vkbm_staff_ids',
-				'value'   => sprintf( 'i:%d;', $filters['staff'] ),
-				'compare' => 'LIKE',
+			// 個別選択（_vkbm_staff_ids のシリアライズ値の部分一致）に加え、#485 で追加した
+			// 「すべてのリソースが担当できる」（_vkbm_staff_all が真）のメニューも該当させる。
+			// 対応リソース未設定（空）のメニューを除外する既存の挙動はここでは変えない。
+			$staff_meta_query = array(
+				'relation' => 'OR',
+				array(
+					'key'     => '_vkbm_staff_ids',
+					'value'   => sprintf( 'i:%d;', $filters['staff'] ),
+					'compare' => 'LIKE',
+				),
 			);
+			// 無料版ではメニュー側の担当設定を使わない（Service_Menu_Post_Type::is_all_staff_assigned() も常に false）ため、
+			// 「すべて」の条件は Pro 版のときだけ加える。
+			if ( Staff_Editor::is_enabled() ) {
+				$staff_meta_query[] = array(
+					'key'     => Service_Menu_Post_Type::META_STAFF_ALL,
+					'value'   => '1',
+					'compare' => '=',
+				);
+			}
+			$meta_query[] = $staff_meta_query;
 		}
 
 		$args = array(
@@ -861,8 +877,8 @@ class Menu_Loop_Block {
 			return false;
 		}
 
-		$staff_ids = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
-		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+		// #485: 「すべてのリソースが担当できる」は公開中の全リソースへ展開済み（Service_Menu_Post_Type::get_assignable_staff_ids()）。
+		$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID );
 
 		// 対応スタッフが未登録のメニューは、指名スタッフでそのまま受け付ける
 		// （Availability_Service::resolve_staff_ids() と同じ扱い）。
@@ -904,8 +920,8 @@ class Menu_Loop_Block {
 			return false;
 		}
 
-		$staff_ids = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
-		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+		// #485: 「すべてのリソースが担当できる」は公開中の全リソースへ展開済み（Service_Menu_Post_Type::get_assignable_staff_ids()）。
+		$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID );
 
 		// ここに到達するのは該当リソースが1件以上あるときだけ（0件は直前のreturn falseで
 		// 抜けている）。対応スタッフが未登録のメニューは、is_menu_visible_for_staff_filter()
@@ -1028,16 +1044,17 @@ class Menu_Loop_Block {
 		$price                = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$reservation_day_type = (string) get_post_meta( $post->ID, '_vkbm_reservation_day_type', true );
 		$other_conditions     = trim( (string) get_post_meta( $post->ID, '_vkbm_other_conditions', true ) );
-		$staff_ids            = get_post_meta( $post->ID, '_vkbm_staff_ids', true );
-		$staff_ids            = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
-		$staff_ids            = array_values(
-			array_filter(
-				$staff_ids,
-				static function ( int $staff_id ): bool {
-					return $staff_id > 0;
-				}
-			)
-		);
+		// #485: 「すべて」かどうかの判定のみここで取得する。担当できるリソース ID の解決
+		// （get_assignable_staff_ids()）は、名前一覧を表示する分岐に入ってから行う。
+		// ここで無条件に呼ぶと、「すべて」のとき（＝担当できるリソースが最も多いとき）に
+		// 空配列が入り、変数名（担当できるリソース ID）と中身が食い違うため
+		// （安藤レビュー MEDIUM）。
+		$is_all_staff = Service_Menu_Post_Type::is_all_staff_assigned( $post->ID );
+		// #392: 指名を使うかどうかの判定。このメソッド内の複数箇所（#485 の表示分岐・#392 由来の
+		// 定員表示ゲート）から参照するため、ここで1回だけ取得して共有する。同じ値を持つ変数を
+		// 分岐ごとに別名で持つと、後から片方にだけ条件を足したときに静かに食い違うため
+		// （安藤レビュー LOW）。
+		$is_nomination_menu = Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
 
 		$items          = array();
 		$price_markup   = '';
@@ -1095,45 +1112,59 @@ class Menu_Loop_Block {
 
 		// このメニューで指名機能が無効の場合、担当可能スタッフの表示をスキップする。
 		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。
-		if ( ! empty( $staff_ids ) && Staff_Editor::is_nomination_enabled_for_menu( $post->ID ) ) {
-			$staff_posts = get_posts(
-				array(
-					'post_type'      => Resource_Post_Type::POST_TYPE,
-					'post_status'    => array( 'publish' ),
-					'posts_per_page' => -1,
-					'orderby'        => array(
-						'menu_order' => 'ASC',
-						'title'      => 'ASC',
-					),
-					'include'        => $staff_ids,
-				)
+		// #485: 「すべてのリソースが担当できる」のメニューは、名前を並べず「すべての〇〇」と1語で表示する
+		// （人数が増えたときカードの行が延々と長くならないようにするため）。
+		if ( $is_all_staff && $is_nomination_menu ) {
+			$items[] = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html( $resource_label ),
+				esc_html( Service_Menu_Post_Type::get_all_staff_label() )
 			);
+		} elseif ( $is_nomination_menu ) {
+			// #485: 「すべて」ではない個別選択のときだけ、担当できるリソース ID を解決する
+			// （変数名どおり「担当できるリソース ID の配列」として使うため。安藤レビュー MEDIUM）。
+			$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID );
 
-			$names = array_values(
-				array_filter(
-					array_map(
-						static function ( WP_Post $staff_post ): string {
-							return get_the_title( $staff_post );
-						},
-						array_filter(
-							$staff_posts,
-							static function ( $staff_post ): bool {
-								return $staff_post instanceof WP_Post;
-							}
-						)
-					),
-					static function ( string $name ): bool {
-						return '' !== $name;
-					}
-				)
-			);
-
-			if ( ! empty( $names ) ) {
-				$items[] = sprintf(
-					'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
-					esc_html( $resource_label ),
-					esc_html( implode( ', ', $names ) )
+			if ( ! empty( $staff_ids ) ) {
+				$staff_posts = get_posts(
+					array(
+						'post_type'      => Resource_Post_Type::POST_TYPE,
+						'post_status'    => array( 'publish' ),
+						'posts_per_page' => -1,
+						'orderby'        => array(
+							'menu_order' => 'ASC',
+							'title'      => 'ASC',
+						),
+						'include'        => $staff_ids,
+					)
 				);
+
+				$names = array_values(
+					array_filter(
+						array_map(
+							static function ( WP_Post $staff_post ): string {
+								return get_the_title( $staff_post );
+							},
+							array_filter(
+								$staff_posts,
+								static function ( $staff_post ): bool {
+									return $staff_post instanceof WP_Post;
+								}
+							)
+						),
+						static function ( string $name ): bool {
+							return '' !== $name;
+						}
+					)
+				);
+
+				if ( ! empty( $names ) ) {
+					$items[] = sprintf(
+						'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+						esc_html( $resource_label ),
+						esc_html( implode( ', ', $names ) )
+					);
+				}
 			}
 		}
 
@@ -1190,7 +1221,6 @@ class Menu_Loop_Block {
 		$max_capacity            = (int) get_post_meta( $post->ID, '_vkbm_max_capacity', true );
 		$min_capacity            = (int) get_post_meta( $post->ID, '_vkbm_min_capacity', true );
 		$slot_capacity_available = Staff_Editor::is_multi_guest_available_for_menu( $post->ID );
-		$is_nomination_menu      = Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
 		// #392: 指名を使うメニューは、複数人一括予約の許可フラグ（_vkbm_allow_multiple_guests）が
 		// OFFなら実際には1名しか申し込めないため、定員表示自体を出さない。指名を使わないメニューは
 		// このメタと独立（定員＝相乗り人数）のため、従来どおり $slot_capacity_available のみで判定する。

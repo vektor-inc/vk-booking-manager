@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use DateTimeImmutable;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Common\Staff_Conflict_Detector;
+use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -99,12 +100,35 @@ class Shift_Dashboard_Page {
 	private $page_hook = '';
 
 	/**
+	 * 通知サービス（#474 レビュー対応: 従来は ajax_confirm_booking() のたびに都度生成していた。
+	 * 他クラスと同じ「未注入時のみ都度生成」の任意引数注入に揃える）。
+	 *
+	 * @var Booking_Notification_Service|null
+	 */
+	private $notification_service;
+
+	/**
+	 * 予約の状態変化を外部連携へ橋渡しするディスパッチャー（#474）。
+	 *
+	 * @var Booking_Event_Dispatcher
+	 */
+	private $event_dispatcher;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param string $capability Capability required to access the page.
+	 * @param string                            $capability Capability required to access the page.
+	 * @param Booking_Notification_Service|null $notification_service 通知サービス（未指定時は従来どおり ajax_confirm_booking() で都度生成する）。
+	 * @param Booking_Event_Dispatcher|null     $event_dispatcher 予約の状態変化を外部連携へ橋渡しするディスパッチャー。
 	 */
-	public function __construct( string $capability = 'manage_options' ) {
-		$this->capability = $capability;
+	public function __construct(
+		string $capability = 'manage_options',
+		?Booking_Notification_Service $notification_service = null,
+		?Booking_Event_Dispatcher $event_dispatcher = null
+	) {
+		$this->capability           = $capability;
+		$this->notification_service = $notification_service;
+		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
 	}
 
 	/**
@@ -2040,6 +2064,10 @@ class Shift_Dashboard_Page {
 			wp_send_json_success( array( 'status' => self::BOOKING_STATUS_CONFIRMED ) );
 		}
 
+		// #474: このメソッド自身のメタ書き込みより前にスナップショットを確保する（外部連携用の
+		// ディスパッチャーへ「変更前の内容」として渡す）。
+		$event_before = $this->event_dispatcher->capture_snapshot( $booking_id );
+
 		$updated = update_post_meta( $booking_id, self::META_BOOKING_STATUS, self::BOOKING_STATUS_CONFIRMED );
 		if ( ! $updated ) {
 			wp_send_json_error(
@@ -2048,8 +2076,12 @@ class Shift_Dashboard_Page {
 			);
 		}
 
-		$notification_service = new Booking_Notification_Service( new Settings_Repository() );
+		// #474 レビュー対応: 従来はここで都度生成していた（他クラスとの書き方の不揃い。司の
+		// decision record 参照）。他クラスと同じ「未注入時のみ都度生成」に揃える（既存挙動は変えない）。
+		$notification_service = $this->notification_service ?? new Booking_Notification_Service( new Settings_Repository() );
 		$notification_service->handle_status_transition( $booking_id, $current_status, self::BOOKING_STATUS_CONFIRMED );
+
+		$this->event_dispatcher->dispatch_change( $booking_id, $event_before );
 
 		wp_send_json_success( array( 'status' => self::BOOKING_STATUS_CONFIRMED ) );
 	}

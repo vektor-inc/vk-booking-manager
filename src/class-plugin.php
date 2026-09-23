@@ -31,6 +31,7 @@ use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
 use VKBookingManager\Bookings\User_Favorites_Controller;
 use VKBookingManager\Capabilities\Roles_Manager;
+use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\OEmbed\OEmbed_Override;
 use VKBookingManager\PostOrder\Post_Order_Manager;
@@ -258,6 +259,13 @@ class Plugin {
 	private $booking_notification_service;
 
 	/**
+	 * 予約の状態変化を外部連携（Google カレンダー連携等）へ橋渡しするディスパッチャー。
+	 *
+	 * @var Booking_Event_Dispatcher
+	 */
+	private $booking_event_dispatcher;
+
+	/**
 	 * OEmbed override handler.
 	 *
 	 * @var OEmbed_Override
@@ -330,6 +338,7 @@ class Plugin {
 	 * @param Menu_Preview_Controller         $menu_preview_controller Menu preview REST controller.
 	 * @param Provider_Settings_Controller    $provider_settings_controller Provider settings REST controller.
 	 * @param Booking_Notification_Service    $booking_notification_service Booking notification handler.
+	 * @param Booking_Event_Dispatcher        $booking_event_dispatcher 予約の状態変化を外部連携へ橋渡しするディスパッチャー。
 	 * @param OEmbed_Override                 $oembed_override             oEmbed override handler.
 	 * @param Auth_Shortcodes                 $auth_shortcodes         Auth shortcode handler.
 	 * @param Auth_Form_Controller            $auth_form_controller    Authentication form REST controller.
@@ -367,6 +376,7 @@ class Plugin {
 		Menu_Preview_Controller $menu_preview_controller,
 		Provider_Settings_Controller $provider_settings_controller,
 		Booking_Notification_Service $booking_notification_service,
+		Booking_Event_Dispatcher $booking_event_dispatcher,
 		OEmbed_Override $oembed_override,
 		Auth_Shortcodes $auth_shortcodes,
 		Auth_Form_Controller $auth_form_controller,
@@ -403,6 +413,7 @@ class Plugin {
 		$this->menu_preview_controller         = $menu_preview_controller;
 		$this->provider_settings_controller    = $provider_settings_controller;
 		$this->booking_notification_service    = $booking_notification_service;
+		$this->booking_event_dispatcher        = $booking_event_dispatcher;
 		$this->oembed_override                 = $oembed_override;
 		$this->auth_shortcodes                 = $auth_shortcodes;
 		$this->auth_form_controller            = $auth_form_controller;
@@ -418,6 +429,10 @@ class Plugin {
 	public function register(): void {
 		$this->common_styles->register();
 		$this->booking_notification_service->register();
+		// 予約のゴミ箱移動・復元・完全削除（trashed_post/untrashed_post/before_delete_post）を購読する。
+		// 作成・確定・変更・キャンセルは Booking_Admin 等の各呼び出し元から都度呼ばれる
+		// （Booking_Event_Dispatcher クラス doc コメント参照）。
+		$this->booking_event_dispatcher->register();
 		$this->oembed_override->register();
 		$this->roles_manager->register();
 		add_filter( 'retrieve_password_notification_email', array( $this, 'filter_retrieve_password_notification_email' ), 10, 4 );
@@ -732,10 +747,23 @@ class Plugin {
 	}
 
 	/**
-	 * Run activation routines.
+	 * 有効化時の処理を実行する。
+	 *
+	 * シフトの自動登録が既に有効な設定で保存されているサイトを再有効化した場合でも、
+	 * WP-Cron の予約が確実に登録されるようにする。
 	 */
 	public function activate(): void {
 		$this->roles_manager->activate();
+		$this->shift_editor->ensure_auto_register_schedule();
+	}
+
+	/**
+	 * 無効化時の処理を実行する。
+	 *
+	 * シフトの自動登録用に登録した WP-Cron イベントを解除する。
+	 */
+	public function deactivate(): void {
+		$this->shift_editor->clear_auto_register_schedule();
 	}
 
 	/**

@@ -546,4 +546,66 @@
 			syncDateRowConstraints( $( this ) );
 		} );
 	} );
+
+	// ---------------------------------------------------------------------
+	// 担当できるリソース（#485）
+	// 「すべて」「選ぶ」のラジオに連動して個別チェックリストの表示を切り替え、
+	// 「選ぶ」かつチェック0件のときだけ role="status" 領域へ案内文を入れる。
+	// PHP（class-service-menu-editor.php の render_staff_meta_box）の初期描画と同じ判定。
+	// ---------------------------------------------------------------------
+
+	// 「すべてのリソースが担当できる」ラジオが選ばれているかを返す。
+	// ラジオ自体が無い（無料版など、メタボックス非表示）場合は false。
+	function isAllStaffAssigned() {
+		const $all = $( '#vkbm-service-menu-staff-all' );
+		return $all.length > 0 && $all.prop( 'checked' );
+	}
+
+	// 案内文（role="status"）を現在の状態に合わせて更新する。フォーカスは動かさない。
+	function syncStaffUnselectedNotice() {
+		const $status = $( '#vkbm-service-menu-staff-status' );
+		if ( $status.length === 0 ) {
+			return;
+		}
+		const $checkboxes = $( '.vkbm-service-menu-staff__checkbox' );
+		const checkedCount = $checkboxes.filter( ':checked' ).length;
+		// リソースが1件も無い（チェックボックス自体が無い）ときは「チェックを入れる」が実行できないため
+		// 案内を出さない（PHP 側の $show_unselected_notice と同じ条件）。
+		const showNotice =
+			! isAllStaffAssigned() &&
+			$checkboxes.length > 0 &&
+			checkedCount === 0;
+		const notice =
+			window.vkbmServiceMenuEditor &&
+			window.vkbmServiceMenuEditor.i18n &&
+			window.vkbmServiceMenuEditor.i18n.staffUnselectedNotice
+				? window.vkbmServiceMenuEditor.i18n.staffUnselectedNotice
+				: '';
+		// 文言が変わらないときは書き換えない（スクリーンリーダーへの不要な再通知を避ける）。
+		const nextText = showNotice ? notice : '';
+		if ( $status.text() !== nextText ) {
+			$status.text( nextText );
+		}
+	}
+
+	// ラジオの選択に合わせて個別チェックリストを hidden で出し分ける
+	// （disabled の灰色表示にはしない。チェック済みと未チェックが灰色で混在すると
+	// 「すべてのはずなのに一部外れている」と読まれるため）。
+	function syncStaffAssignmentFields() {
+		const $list = $( '#vkbm-service-menu-staff-list' );
+		if ( $list.length === 0 ) {
+			return;
+		}
+		$list.prop( 'hidden', isAllStaffAssigned() );
+		syncStaffUnselectedNotice();
+	}
+
+	$( document ).on(
+		'change',
+		'input[name="vkbm_service_menu[staff_all]"], .vkbm-service-menu-staff__checkbox',
+		syncStaffAssignmentFields
+	);
+
+	// 初期表示時にも現在の選択へ揃える（PHP 側の初期 hidden・案内文と二重化しても無害）。
+	$( syncStaffAssignmentFields );
 } )( jQuery );

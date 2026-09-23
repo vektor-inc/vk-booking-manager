@@ -42,6 +42,7 @@ const BUNDLES = {
 		'admin-shift-editor.scss',
 		'admin-shift-bulk-create.scss',
 		'admin-shift-dashboard.scss',
+		'admin-resource-delete-guard.scss',
 		'admin-service-menu-quick-edit.scss',
 		'admin-post-order.scss',
 		'admin-term-order.scss',

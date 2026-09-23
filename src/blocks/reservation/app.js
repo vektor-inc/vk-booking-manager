@@ -16,6 +16,7 @@ import {
 	normalizePriceValue,
 } from '../shared/pricing';
 import { resolveLoginState } from '../shared/auth';
+import { resolveApiErrorMessage } from '../shared/rest-error-message';
 import { BookingConfirmApp } from './booking-confirm-app';
 import { BookingSummaryItems } from './components/booking-summary-items';
 import { ReservationHeader } from './components/reservation-header';
@@ -192,16 +193,21 @@ const buildRebookUrl = ( booking, reservationPageUrl = '' ) => {
 	return url.toString();
 };
 
-// メニューのメタ情報から、指名可能なスタッフID配列を正規化して取り出す。
+// メニュー（REST の vkbm_service_menu 1件）から、指名可能なスタッフID配列を正規化して取り出す。
 // メニュー選択・お気に入り適用・指名可能判定で共通利用する。
-const extractAssignableStaffIds = ( meta ) => {
-	const rawIds =
-		Array.isArray( meta?._vkbm_staff_ids ) && meta._vkbm_staff_ids.length
-			? meta._vkbm_staff_ids
-			: Array.isArray( meta?.vkbm_staff_ids ) &&
-			  meta.vkbm_staff_ids.length
-			? meta.vkbm_staff_ids
-			: [];
+// #485: サーバー側で「すべてのスタッフが担当できる」を公開中の全スタッフへ展開した
+// 読み取り専用フィールド vkbm_assignable_staff_ids を優先して使う（展開ロジックを
+// フロントで二重実装しないため。判定は Service_Menu_Post_Type::get_assignable_staff_ids() に集約）。
+// フィールドが無い（古いレスポンス等）場合のみ meta._vkbm_staff_ids へフォールバックする。
+const extractAssignableStaffIds = ( menu ) => {
+	const meta = menu?.meta;
+	const rawIds = Array.isArray( menu?.vkbm_assignable_staff_ids )
+		? menu.vkbm_assignable_staff_ids
+		: Array.isArray( meta?._vkbm_staff_ids ) && meta._vkbm_staff_ids.length
+		? meta._vkbm_staff_ids
+		: Array.isArray( meta?.vkbm_staff_ids ) && meta.vkbm_staff_ids.length
+		? meta.vkbm_staff_ids
+		: [];
 
 	return Array.from(
 		new Set(
@@ -552,7 +558,7 @@ export const ReservationApp = ( {
 				return false;
 			}
 
-			const assignableStaffIds = extractAssignableStaffIds( menu?.meta );
+			const assignableStaffIds = extractAssignableStaffIds( menu );
 
 			if (
 				staffActive &&
@@ -976,9 +982,11 @@ export const ReservationApp = ( {
 				setMenuList( {
 					html: '',
 					isLoading: false,
-					error:
-						error?.message ||
+					error: resolveApiErrorMessage(
+						error,
 						__( 'Could not get menu list.', 'vk-booking-manager' ),
+						canManageReservations
+					),
 				} );
 			} );
 
@@ -1118,17 +1126,20 @@ export const ReservationApp = ( {
 			} )
 			.catch( ( error ) => {
 				setAuthError(
-					error?.message ||
+					resolveApiErrorMessage(
+						error,
 						__(
 							'The form could not be displayed.',
 							'vk-booking-manager'
-						)
+						),
+						canManageReservations
+					)
 				);
 			} )
 			.finally( () => {
 				setAuthLoading( false );
 			} );
-	}, [ authMode, isLoggedIn ] );
+	}, [ authMode, isLoggedIn, canManageReservations ] );
 
 	const handleCancelBooking = useCallback(
 		( bookingId ) => {
@@ -1167,18 +1178,21 @@ export const ReservationApp = ( {
 				} )
 				.catch( ( error ) => {
 					setBookingsError(
-						error?.message ||
+						resolveApiErrorMessage(
+							error,
 							__(
 								'I was unable to cancel my reservation.',
 								'vk-booking-manager'
-							)
+							),
+							canManageReservations
+						)
 					);
 				} )
 				.finally( () => {
 					setCancellingBookingId( 0 );
 				} );
 		},
-		[ cancellingBookingId ]
+		[ cancellingBookingId, canManageReservations ]
 	);
 
 	// お気に入り一覧を取得する。追加・削除後の再取得にも使う。
@@ -1521,7 +1535,7 @@ export const ReservationApp = ( {
 	}, [ exclusiveCheckEnabled, userExclusive ] );
 
 	const assignableStaffIds = useMemo( () => {
-		return extractAssignableStaffIds( currentMenu?.meta );
+		return extractAssignableStaffIds( currentMenu );
 	}, [ currentMenu ] );
 
 	const availableStaffOptions = useMemo( () => {
@@ -1771,7 +1785,7 @@ export const ReservationApp = ( {
 			buildApiPath( '/wp/v2/vkbm_service_menu', {
 				per_page: 100,
 				_fields:
-					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests',
+					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests,vkbm_assignable_staff_ids',
 				status: canViewPrivateMenus ? 'publish,private' : undefined,
 			} ),
 		[ canViewPrivateMenus ]
@@ -1819,19 +1833,21 @@ export const ReservationApp = ( {
 				setMenuPreview( {
 					html: '',
 					isLoading: false,
-					error:
-						error?.message ||
+					error: resolveApiErrorMessage(
+						error,
 						__(
 							'Failed to retrieve menu information.',
 							'vk-booking-manager'
 						),
+						canManageReservations
+					),
 				} );
 			} );
 
 		return () => {
 			isMounted = false;
 		};
-	}, [ menuId ] );
+	}, [ menuId, canManageReservations ] );
 	// #391: このコレクションはサイト全体のスタッフ一覧であり、特定のメニューに紐づかない
 	// （お気に入り・マイ予約タブなど、他メニューの過去の指名スタッフ名を表示する場面もある）。
 	// そのためここは意図的にメニュー単位（menuNominationEnabled）ではなくサイト全体の
@@ -1960,8 +1976,11 @@ export const ReservationApp = ( {
 			} )
 			.catch( ( error ) => {
 				setCalendarError(
-					error?.message ||
-						__( 'Failed to load calendar.', 'vk-booking-manager' )
+					resolveApiErrorMessage(
+						error,
+						__( 'Failed to load calendar.', 'vk-booking-manager' ),
+						canManageReservations
+					)
 				);
 				// #411 麗美さん確認（PR #414 差し戻し）: エラー経路（担当スタッフ0件等）でも
 				// 管理者向けには unavailability_reason が error.data に付与される
@@ -1973,7 +1992,13 @@ export const ReservationApp = ( {
 			.finally( () => {
 				setCalendarLoading( false );
 			} );
-	}, [ menuId, effectiveResourceId, effectiveResourceTagIds, monthCursor ] );
+	}, [
+		menuId,
+		effectiveResourceId,
+		effectiveResourceTagIds,
+		monthCursor,
+		canManageReservations,
+	] );
 
 	useEffect( () => {
 		fetchCalendar();
@@ -2032,8 +2057,14 @@ export const ReservationApp = ( {
 			} )
 			.catch( ( error ) => {
 				setSlotError(
-					error?.message ||
-						__( 'Failed to read free space.', 'vk-booking-manager' )
+					resolveApiErrorMessage(
+						error,
+						__(
+							'Failed to read free space.',
+							'vk-booking-manager'
+						),
+						canManageReservations
+					)
 				);
 			} )
 			.finally( () => {
@@ -2046,6 +2077,7 @@ export const ReservationApp = ( {
 		effectiveResourceTagIds,
 		selectedDate,
 		currentStaff,
+		canManageReservations,
 	] );
 
 	useEffect( () => {
@@ -2094,7 +2126,7 @@ export const ReservationApp = ( {
 		// 無料版、または次のメニューで指名機能OFFのときはスタッフIDの処理をスキップ
 		if ( nextMenuNominationEnabled ) {
 			const nextAssignableStaffIds =
-				extractAssignableStaffIds( nextMeta );
+				extractAssignableStaffIds( nextMenu );
 
 			if ( nextAssignableStaffIds.length === 1 ) {
 				setStaffId( nextAssignableStaffIds[ 0 ] );
@@ -2175,7 +2207,7 @@ export const ReservationApp = ( {
 		}
 
 		if ( menuId ) {
-			const assignable = extractAssignableStaffIds( currentMenu?.meta );
+			const assignable = extractAssignableStaffIds( currentMenu );
 			const menuStillMatches =
 				resourceIdsForTagFilter.length > 0 &&
 				( assignable.length === 0 ||
@@ -2217,9 +2249,7 @@ export const ReservationApp = ( {
 			! Boolean( favoriteMenu?.meta?._vkbm_disable_nomination );
 		if ( favoriteMenuNominationEnabled ) {
 			if ( favoriteResourceId > 0 ) {
-				const assignable = extractAssignableStaffIds(
-					favoriteMenu?.meta
-				);
+				const assignable = extractAssignableStaffIds( favoriteMenu );
 				// 対応スタッフ未設定のメニュー、または対応スタッフに含まれる場合のみ指名する。
 				if (
 					assignable.length === 0 ||
@@ -2260,11 +2290,14 @@ export const ReservationApp = ( {
 			} )
 			.catch( ( error ) => {
 				setFavoritesError(
-					error?.message ||
+					resolveApiErrorMessage(
+						error,
 						__(
 							'Could not delete the favorite.',
 							'vk-booking-manager'
-						)
+						),
+						canManageReservations
+					)
 				);
 			} );
 	};
@@ -2502,11 +2535,14 @@ export const ReservationApp = ( {
 			} )
 			.catch( ( error ) => {
 				setSubmitError(
-					error?.message ||
+					resolveApiErrorMessage(
+						error,
 						__(
 							'Failed to save reservation details. Please try again later.',
 							'vk-booking-manager'
-						)
+						),
+						canManageReservations
+					)
 				);
 			} )
 			.finally( () => {
@@ -2531,6 +2567,7 @@ export const ReservationApp = ( {
 		selectedDate,
 		selectedSlot,
 		staffId,
+		canManageReservations,
 	] );
 
 	const shouldShowLogo =

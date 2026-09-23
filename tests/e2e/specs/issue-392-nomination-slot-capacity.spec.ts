@@ -53,6 +53,9 @@ let originalStaffEnabled = true;
 let menuId = '';
 let staffAId = '';
 let staffBId = '';
+// seedBooking() で作成した予約の post ID。afterAll でスタッフより先に削除する。
+// スタッフの完全削除は、紐づく予約が残っているとブロックされるため（#473）。
+const seededBookingIds: string[] = [];
 
 /**
  * 検証用の2人目のスタッフ（ガイドB）を作成する。同名スタッフがあれば作り直す（冪等）。
@@ -178,6 +181,7 @@ function seedBooking(
 	if ( ! /^\d+$/.test( result ) || Number( result ) <= 0 ) {
 		throw new Error( `Booking seeding failed: "${ result }"` );
 	}
+	seededBookingIds.push( result );
 	return result;
 }
 
@@ -230,6 +234,14 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 	} );
 
 	test.afterAll( () => {
+		// スタッフより先に予約を削除する。紐づく予約が残っているとスタッフの
+		// 完全削除がブロックされ、afterAll が失敗するため（#473）。
+		if ( seededBookingIds.length > 0 ) {
+			wpCliArgs( [ 'post', 'delete', ...seededBookingIds, '--force' ], {
+				stdio: 'ignore',
+			} );
+			seededBookingIds.length = 0;
+		}
 		if ( menuId ) {
 			wpCliArgs( [ 'post', 'delete', menuId, '--force' ], {
 				stdio: 'ignore',

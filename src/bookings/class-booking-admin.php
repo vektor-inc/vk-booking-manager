@@ -18,6 +18,7 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Staff_Conflict_Detector;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -29,6 +30,7 @@ use WP_Post;
 use WP_Query;
 use WP_User;
 use function admin_url;
+use function get_edit_post_link;
 use function get_userdata;
 use function get_users;
 use function vkbm_get_resource_label_singular;
@@ -82,6 +84,13 @@ class Booking_Admin {
 	private $notification_service;
 
 	/**
+	 * 予約の状態変化を外部連携へ橋渡しするディスパッチャー（#474）。
+	 *
+	 * @var Booking_Event_Dispatcher
+	 */
+	private $event_dispatcher;
+
+	/**
 	 * 管理通知のリダイレクトクエリ付与フィルタを多重登録しないためのフラグ。
 	 *
 	 * @var bool
@@ -89,12 +98,35 @@ class Booking_Admin {
 	private $notice_redirect_filter_added = false;
 
 	/**
+	 * save_post() が同じ投稿IDに対して自分自身の中で再入していないかを示す集合（#477 再入ガード）。
+	 *
+	 * save_post() の中では、担当者（投稿者）の変更やタイトル自動補完のために
+	 * wp_update_post() を呼んでいる。wp_update_post() は保存対象の投稿タイプに
+	 * 紐づく save_post_{$post_type} フックを再度発火させるため、これらの
+	 * wp_update_post() 呼び出しは save_post() 自身を入れ子で呼び出す（再入）。
+	 * 保存中の投稿IDをこの配列に記録しておくことで、同じ投稿IDに対する
+	 * 入れ子側の実行だけをすぐに return させ、通知メール送信
+	 * （Booking_Notification_Service::handle_status_transition）が
+	 * 1回の保存操作につき複数回走らないようにする。
+	 *
+	 * #477 レビュー対応（安藤さん指摘）: 単一の bool フラグだと、投稿IDを区別できず
+	 * 「予約Aの保存中に予約Bを保存する」経路が将来入った場合にBの保存が黙って
+	 * 丸ごと落ちてしまう。保存中の投稿IDをキーにした連想配列にすることで、
+	 * 同じ投稿IDの再入だけをガードし、別の投稿IDの保存には影響しないようにする。
+	 *
+	 * @var array<int, bool>
+	 */
+	private $saving_post_ids = array();
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Booking_Notification_Service|null $notification_service Notification handler.
+	 * @param Booking_Event_Dispatcher|null     $event_dispatcher     予約の状態変化を外部連携へ橋渡しするディスパッチャー。
 	 */
-	public function __construct( ?Booking_Notification_Service $notification_service = null ) {
+	public function __construct( ?Booking_Notification_Service $notification_service = null, ?Booking_Event_Dispatcher $event_dispatcher = null ) {
 		$this->notification_service = $notification_service;
+		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
 	}
 
 	/**
@@ -268,12 +300,59 @@ class Booking_Admin {
 			return;
 		}
 
+		// #477 植草さんレビュー対応（FAIL）: どの選択肢を disabled にすべきかの判定ロジックを
+		// Jest でテストできる純粋関数として切り出したファイル。booking-quick-edit.js より先に
+		// 読み込む必要があるため、依存として指定する。
+		wp_enqueue_script(
+			'vkbm-booking-quick-edit-status-guard',
+			VKBM_PLUGIN_DIR_URL . 'assets/js/booking-quick-edit-status-guard.js',
+			array(),
+			VKBM_VERSION,
+			true
+		);
+
 		wp_enqueue_script(
 			'vkbm-booking-quick-edit',
 			VKBM_PLUGIN_DIR_URL . 'assets/js/booking-quick-edit.js',
-			array( 'jquery', 'inline-edit-post' ),
+			array( 'jquery', 'inline-edit-post', 'vkbm-booking-quick-edit-status-guard' ),
 			VKBM_VERSION,
 			true
+		);
+
+		// #477 安藤さん・植草さんレビュー対応: クイック編集の保存は画面遷移せず
+		// display_rows() を返して閉じるだけのため、redirect_post_location /
+		// admin_notices を前提にした既存の通知の仕組み（push_admin_notice 等）は
+		// クイック編集では利用者に一度も表示されない。担当スタッフ未割当のまま
+		// 枠を消費するステータスへ変更しようとする操作を、保存が黙って中断される
+		// 前（プルダウン選択の時点）で防ぐため、JS 側へ「枠を消費するステータス」
+		// の一覧と、選べない理由・対処のリンク文言を渡す。サーバー側の
+		// save_quick_edit() の保存中断ガードは多層防御としてそのまま残す。
+		$target_statuses = array();
+		foreach ( array_keys( $this->get_status_options() ) as $status_key ) {
+			if ( self::is_staff_check_target_status( $status_key ) ) {
+				$target_statuses[] = $status_key;
+			}
+		}
+		wp_localize_script(
+			'vkbm-booking-quick-edit',
+			'vkbmBookingQuickEdit',
+			array(
+				'targetStatuses'    => $target_statuses,
+				// #477 植草さんレビュー対応（任意）: 「現在選択中の値は disabled にしない」
+				// 対応（shouldDisableStatusOption()）が入ったことで、この通知文だけを読むと
+				// 「この」がどの選択肢を指すのか曖昧になった。disabled になっている選択肢への
+				// 説明として読めば違和感はないが、「今のステータスは維持できる」という
+				// 安心材料が書かれていなかったため、それを明記する言い回しへ変更する。
+				/* translators: %s: resource label (singular), e.g. "staff". */
+				'noticeMessage'     => sprintf( __( 'You can keep the current status, but assigning %s is required to select a different status here.', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
+				// 植草さんレビュー対応: リンク単体（スクリーンリーダーのリンク一覧読み上げ等）でも
+				// 「何を」割り当てるのかが伝わるよう、既存の「Please assign at least one %s.」と
+				// 同じ resource label を含める。vkbm_get_resource_label_singular() は自由入力の
+				// ため、冠詞（a / an）を使うと語によって破綻する（例: "instructor" は "an" が必要）。
+				// 既存の「Please assign at least one %s.」と同じく、冠詞を使わない言い回しにする。
+				/* translators: %s: resource label (singular), e.g. "staff". */
+				'noticeActionLabel' => sprintf( __( 'Assign %s from the edit screen', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
+			)
 		);
 	}
 
@@ -908,6 +987,33 @@ class Booking_Admin {
 	 * @param WP_Post $post    Post object.
 	 */
 	public function save_post( int $post_id, WP_Post $post ): void {
+		// #477 再入ガード: このメソッドの中で wp_update_post() を呼ぶと
+		// save_post_{$post_type} フックが再発火し、このメソッド自身が入れ子で
+		// 呼び直される。入れ子側の実行をここで止めないと、変更前ステータスの
+		// 読み取りタイミングがずれて通知メールの送信入口が二重に呼ばれてしまう。
+		// 同じ投稿IDの再入だけを止めればよいため、投稿IDをキーにして判定する
+		// （#477 レビュー対応: 単一の bool だと別の投稿IDの保存まで巻き込んで
+		// 黙って落ちてしまうため）。
+		if ( isset( $this->saving_post_ids[ $post_id ] ) ) {
+			return;
+		}
+
+		$this->saving_post_ids[ $post_id ] = true;
+
+		try {
+			$this->save_post_inner( $post_id, $post );
+		} finally {
+			unset( $this->saving_post_ids[ $post_id ] );
+		}
+	}
+
+	/**
+	 * save_post() の実処理本体（#477 再入ガードから分離）。
+	 *
+	 * @param int     $post_id Post ID.
+	 * @param WP_Post $post    Post object.
+	 */
+	private function save_post_inner( int $post_id, WP_Post $post ): void {
 		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 			return;
 		}
@@ -924,6 +1030,17 @@ class Booking_Admin {
 		$data = $this->sanitize_booking_post_data( $raw );
 
 		$previous_status = (string) get_post_meta( $post_id, self::META_STATUS, true );
+
+		// #474/#477 マージ対応: このメソッド自身のメタ書き込みより前にスナップショットを
+		// 確保する（外部連携用のディスパッチャーへ「変更前の内容」として渡す）。#474 導入時点の
+		// コメントは「投稿者変更・タイトル自動補完で発生する wp_update_post() 経由の入れ子が
+		// このメソッドを再度最後まで走らせる」ことを前提に位置を決めていたが、#477 の再入ガード
+		// （save_post()）により、その入れ子側の呼び出しは save_post_inner() へ到達する前に
+		// return する。そのためこのスナップショット取得・後段の dispatch_change() 呼び出しは
+		// 1回の保存操作につき必ず1回だけ実行される（handle_status_transition() と同じ保証）。
+		// 位置自体は入れ子の有無に関わらず、この保存が変更を加える前の状態を渡すため、
+		// メタ書き込み・wp_update_post() 呼び出しより前のままにしておく。
+		$event_before = $this->event_dispatcher->capture_snapshot( $post_id );
 
 		$date       = $data['date'];
 		$start_time = $data['start_time'];
@@ -1091,6 +1208,10 @@ class Booking_Admin {
 		if ( $this->notification_service ) {
 			$this->notification_service->handle_status_transition( $post_id, $previous_status, $status );
 		}
+
+		// #474: 保存完了後に外部連携用のディスパッチャーへ通知する。種別（作成/確定/変更/
+		// キャンセル）の判定はディスパッチャー側が行う（クラス doc コメント参照）。
+		$this->event_dispatcher->dispatch_change( $post_id, $event_before );
 	}
 
 	/**
@@ -1169,9 +1290,18 @@ class Booking_Admin {
 				$status  = (string) get_post_meta( $post_id, self::META_STATUS, true );
 				$options = $this->get_status_options();
 				echo esc_html( $options[ $status ] ?? __( 'Not clear', 'vk-booking-manager' ) );
+				// #477 安藤さん・植草さんレビュー対応: クイック編集（booking-quick-edit.js）が、
+				// 担当スタッフ未割当の行では枠を消費するステータスの選択肢を選べなくするために
+				// 参照するデータ。data-resource-id は 0 のとき未割当を表す。data-edit-url は
+				// 「編集画面から担当を設定してください」という案内から実際に飛べる先
+				// （design-rules.md「〇〇〇から設定してください」には移動導線を添える）。
+				$column_status_resource_id = (int) get_post_meta( $post_id, self::META_RESOURCE_ID, true );
+				$column_edit_url           = (string) get_edit_post_link( $post_id, 'raw' );
 				printf(
-					'<span class="vkbm-booking-qe" data-status="%s"></span>',
-					esc_attr( $status )
+					'<span class="vkbm-booking-qe" data-status="%1$s" data-resource-id="%2$s" data-edit-url="%3$s"></span>',
+					esc_attr( $status ),
+					esc_attr( (string) $column_status_resource_id ),
+					esc_attr( $column_edit_url )
 				);
 				break;
 			case 'vkbm_booking_billed_total':
@@ -1329,7 +1459,52 @@ class Booking_Admin {
 			return;
 		}
 
+		// #477: 通知メール送信（handle_status_transition）は変更前ステータスを必要とするため、
+		// 上書き保存する前に取得しておく（編集画面の save_post_inner() と同じ順序）。
+		// 次のガード判定でも「実際にステータスが変わるかどうか」の比較に使う。
+		$previous_status = (string) get_post_meta( $post_id, self::META_STATUS, true );
+
+		// #477 レビュー対応（安藤さん・植草さん指摘）: 編集画面（save_post_inner）は、枠を消費する
+		// ステータスへ変更するとき担当スタッフが未割当なら保存ごと中断している。
+		// クイック編集はこの検証を通らないため、担当者が未割当のまま「確定」にでき、
+		// さらに確定通知メールまで飛んでしまう（メールは取り消せない）。
+		// スコープは最小限にとどめ、担当スタッフ未割当のガードだけをここでも行う
+		// （スタッフ競合判定・人数上限判定まで共有しなかった理由は本 PR の報告を参照）。
+		// ステータスが実際に変わるとき（$status !== $previous_status）だけ判定する。
+		// 変わらない場合まで対象にすると、担当スタッフ未割当の予約でステータス以外の
+		// 変更（タイトル修正など、確定状態を保ったままの再保存）をしただけでも保存ごと
+		// 中断されてしまい、この不具合修正が始まる前は成功していた操作まで巻き込む。
+		//
+		// #474/#477 マージ対応: このガードで return する（担当スタッフ未割当のため保存を
+		// 中断する）場合、下の capture_snapshot() / dispatch_change() の手前で return するため、
+		// 何も変更されていないのに外部連携イベントが発火することはない。
+		if ( $status !== $previous_status && self::is_staff_check_target_status( $status ) ) {
+			$resource_id = (int) get_post_meta( $post_id, self::META_RESOURCE_ID, true );
+			if ( $resource_id <= 0 ) {
+				$this->set_staff_required_notice( $post_id );
+				return;
+			}
+		}
+
+		// #474: メタ書き込みより前にスナップショットを確保する（save_post_inner() と同じ順序）。
+		// 上記ガードの return より後に置くことで、保存が中断されたときは外部連携イベントを
+		// 発火させない。
+		$event_before = $this->event_dispatcher->capture_snapshot( $post_id );
+
 		$this->update_meta_value( $post_id, self::META_STATUS, $status );
+
+		// #477: クイック編集は編集画面と異なり通知メール送信の入口を一度も呼んでいなかったため、
+		// 編集画面（save_post_inner）と同じ入口を同じ条件で呼び、挙動を揃える。
+		// handle_status_transition() 自身が「確定への変化時のみ送信」を判定するため、
+		// ここで通知の種類・条件を新たに増やすことはない。
+		if ( $this->notification_service ) {
+			$this->notification_service->handle_status_transition( $post_id, $previous_status, $status );
+		}
+
+		// #474: 保存完了後に外部連携用のディスパッチャーへ通知する。種別（作成/確定/変更/
+		// キャンセル）の判定はディスパッチャー側が行う（クラス doc コメント参照）。
+		// save_post_inner() と同じく、通知メール呼び出しの直後に置く。
+		$this->event_dispatcher->dispatch_change( $post_id, $event_before );
 	}
 
 	/**

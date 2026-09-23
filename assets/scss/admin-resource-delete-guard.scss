@@ -1,0 +1,103 @@
+/* ==========================================================================
+   リソース（スタッフ）削除ガードのダイアログ・通知（issue #262）
+   ネイティブ confirm() の代わりに使うアクセシブルなアラートダイアログ。
+   ========================================================================== */
+
+.vkbm-guard-dialog__overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	background: rgba(0, 0, 0, 0.5);
+}
+
+.vkbm-guard-dialog {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 100001;
+	width: 480px;
+	max-width: calc(100vw - 48px);
+	max-height: calc(100vh - 96px);
+	overflow-y: auto;
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+	padding: 20px 24px;
+}
+
+.vkbm-guard-dialog__title {
+	margin: 0 0 12px;
+	font-size: 1.1em;
+	font-weight: 600;
+}
+
+.vkbm-guard-dialog__body {
+
+	p {
+		margin: 0 0 10px;
+	}
+
+	p:last-child {
+		margin-bottom: 0;
+	}
+}
+
+.vkbm-guard-dialog__lead {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+
+	.dashicons {
+		flex: 0 0 auto;
+		width: 1.1em;
+		height: 1.1em;
+		font-size: 1.1em;
+
+		&.dashicons-warning {
+			color: var(--vkbm--color--warning-text, #664d03);
+		}
+
+		&.dashicons-dismiss {
+			color: var(--vkbm--color--danger-text, #842029);
+		}
+	}
+}
+
+.vkbm-guard-dialog__list {
+	margin: 0 0 10px;
+	padding-left: 1.2em;
+}
+
+.vkbm-guard-dialog__footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+/* ==========================================================================
+   削除ガードの管理通知（admin_notices）
+   ========================================================================== */
+.vkbm-resource-guard-notice {
+
+	.vkbm-resource-guard-notice__heading {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-weight: 600;
+	}
+
+	.vkbm-resource-guard-notice__list {
+		margin: 0.5em 0 0;
+		padding-left: 1.2em;
+		// 一括操作で件数が多いと縦に伸び続けるため、上限を設けてスクロールに切り替える
+		// （植草レビュー指摘・issue #262）。
+		max-height: 12em;
+		overflow-y: auto;
+
+		li {
+			margin-bottom: 0.25em;
+		}
+	}
+}

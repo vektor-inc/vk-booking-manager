@@ -65,7 +65,6 @@ class Availability_Service {
 	private const MENU_META_BUFFER_AFTER         = '_vkbm_buffer_after_minutes';
 	private const MENU_META_DEADLINE_HOURS       = '_vkbm_reservation_deadline_hours';
 	private const MENU_META_MAX_ADVANCE_DAYS     = '_vkbm_max_advance_booking_days';
-	private const MENU_META_STAFF_IDS            = '_vkbm_staff_ids';
 	private const MENU_META_ARCHIVED             = '_vkbm_is_archived';
 	private const MENU_META_ONLINE_DISABLED      = '_vkbm_online_unavailable';
 	private const MENU_META_RESERVATION_DAY_TYPE = '_vkbm_reservation_day_type';
@@ -815,8 +814,11 @@ class Availability_Service {
 			$default_staff_id = Resource_Post_Type::get_default_staff_id();
 			$staff_ids        = $default_staff_id > 0 ? array( $default_staff_id ) : array();
 		} else {
-			$staff_ids = get_post_meta( $menu_post->ID, self::MENU_META_STAFF_IDS, true );
-			$staff_ids = is_array( $staff_ids ) ? array_values( array_unique( array_map( 'intval', $staff_ids ) ) ) : array();
+			// #485: 担当できるリソースの解決は Service_Menu_Post_Type::get_assignable_staff_ids() に集約
+			// （「すべてのリソースが担当できる」フラグは公開中の全リソースへ展開済み。個別選択が
+			// 空（未設定）のメニューは従来どおり空配列が返り、下の「指名あり→そのまま受け付ける／
+			// 指名なし→staff_not_configured」の扱いは変えない）。
+			$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $menu_post->ID );
 
 			if ( $preferred_staff > 0 ) {
 				if ( empty( $staff_ids ) ) {

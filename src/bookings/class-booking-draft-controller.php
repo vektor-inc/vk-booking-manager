@@ -22,6 +22,7 @@ use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 use WP_Query;
@@ -1191,20 +1192,9 @@ class Booking_Draft_Controller {
 		$max_raw      = get_post_meta( $menu_id, '_vkbm_max_capacity', true );
 		$max_capacity = '' === $max_raw ? 1 : max( 1, (int) $max_raw );
 
-		// 重複スタッフIDは1名として数える。
-		$staff_ids   = get_post_meta( $menu_id, '_vkbm_staff_ids', true );
-		$staff_count = is_array( $staff_ids )
-			? count(
-				array_unique(
-					array_filter(
-						array_map( 'intval', $staff_ids ),
-						static function ( int $id ): bool {
-							return $id > 0;
-						}
-					)
-				)
-			)
-			: 0;
+		// 担当できるスタッフ数（重複排除・0以下の除外済み）。#485: 「すべてのリソースが担当できる」
+		// フラグのメニューは公開中の全リソース数になる。解決は Service_Menu_Post_Type::get_assignable_staff_ids() に集約。
+		$staff_count = count( Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id ) );
 
 		// スタッフ未割当のメニューは割り当て先が無いため、複数人一括予約を許可しない（0 を返す）。
 		if ( $staff_count < 1 ) {

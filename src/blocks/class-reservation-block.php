@@ -16,13 +16,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Capabilities\Capabilities;
 use WP_Post;
+use function add_query_arg;
 use function admin_url;
 use function current_user_can;
 use function esc_url_raw;
 use function generate_block_asset_handle;
+use function get_rest_url;
 use function home_url;
 use function is_user_logged_in;
 use function sanitize_key;
+use function trailingslashit;
 use function wp_set_script_translations;
 use function wp_json_encode;
 use function wp_logout_url;
@@ -179,12 +182,57 @@ class Reservation_Block {
 		$config = array(
 			// memo textarea の maxlength。`vkbm_draft_memo_max_length` フィルタを反映する。
 			// memo textarea maxlength, reflecting the vkbm_draft_memo_max_length filter result.
-			'memoMaxLength' => Booking_Draft_Controller::resolve_memo_max_length(),
+			'memoMaxLength'        => Booking_Draft_Controller::resolve_memo_max_length(),
+			// 通常の REST ルート URL（get_rest_url()）。パーマリンク構造が空なら、
+			// この時点で既に ?rest_route= 形式になっている。
+			// The regular REST root URL (get_rest_url()). Already ?rest_route= style
+			// when the permalink structure is empty.
+			'restRoot'             => get_rest_url(),
+			// パーマリンク設定（DB）はあるのに、サーバー側（.htaccess 等）へ書き換えルールが
+			// 反映されていない環境で REST 通信が 404 になる問題（issue #489）を避けるための
+			// フォールバック用ルート URL。コアの get_rest_url() の非パーマリンク分岐と
+			// 同じ形式（home_url + index.php?rest_route=/）で組み立てる。
+			// restRoot と同じ値のとき（既に基本パーマリンク）は、フロント側でフォールバックを
+			// 行わない前提のため、そのまま両方渡す。
+			// Fallback REST root URL, built in the same shape as core's non-pretty-permalink
+			// branch of get_rest_url() (home_url + index.php?rest_route=/), used to work around
+			// REST requests returning 404 when the server's rewrite rules (.htaccess etc.) are
+			// missing despite a permalink structure being configured in the DB (issue #489).
+			// When it equals restRoot (plain permalinks already), the front-end is expected to
+			// skip the fallback, but both values are always passed as-is.
+			'restFallbackRoot'     => $this->get_rest_fallback_root(),
+			// invalid_json エラー時、管理者向けメッセージに添えるパーマリンク設定画面へのリンク先。
+			// フロント側は dangerouslySetInnerHTML を使わず、React 要素として <a href> を描画する
+			// （植草レビュー指摘）。
+			// Permalink settings screen URL, linked from the admin-facing invalid_json error
+			// message. The front-end renders it as a real <a> element (not dangerouslySetInnerHTML).
+			'permalinkSettingsUrl' => esc_url_raw( admin_url( 'options-permalink.php' ) ),
 		);
 
 		$inline = 'window.vkbmReservationConfig = ' . wp_json_encode( $config ) . ';';
 		wp_add_inline_script( self::RESERVATION_CONFIG_HANDLE, $inline, 'before' );
 		wp_enqueue_script( self::RESERVATION_CONFIG_HANDLE );
+	}
+
+	/**
+	 * Build a REST root URL in the same shape as core's non-pretty-permalink
+	 * branch of get_rest_url() (home_url + index.php?rest_route=/).
+	 *
+	 * コアの get_rest_url() の非パーマリンク分岐と同じ形式で ?rest_route= 形式の
+	 * REST ルート URL を組み立てる。フロント側の apiFetch フォールバックで、
+	 * サーバー側の書き換えルール未反映時の再試行先として使う。
+	 *
+	 * 既知の制約（安藤レビュー指摘 LOW-2）: コアの get_rest_url() と異なり、
+	 * `rest_url` フィルタは通さない。このフィルタで REST のパスを独自に
+	 * 書き換えているサイト（一部のセキュリティ・キャッシュ系プラグイン等）では、
+	 * フォールバック用ルートが実際の REST パスとずれる可能性がある。
+	 *
+	 * @return string
+	 */
+	private function get_rest_fallback_root(): string {
+		$url = trailingslashit( home_url( '/' ) ) . 'index.php';
+
+		return add_query_arg( 'rest_route', '/', $url );
 	}
 
 	/**

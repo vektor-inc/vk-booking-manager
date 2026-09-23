@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     2.3.0
+ * Version:     2.4.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -85,7 +85,15 @@ require_once __DIR__ . '/src/bookings/class-booking-confirmation-controller.php'
 require_once __DIR__ . '/src/staff/class-staff-editor.php';
 require_once __DIR__ . '/src/post-types/class-resource-post-type.php';
 require_once __DIR__ . '/src/resources/class-resource-tag-taxonomy.php';
+require_once __DIR__ . '/src/resources/class-resource-delete-guard.php';
 require_once __DIR__ . '/src/notifications/class-booking-notification-service.php';
+require_once __DIR__ . '/src/integrations/class-booking-event-dispatcher.php';
+require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-secret-store.php';
+require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-connection.php';
+require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-relay-client.php';
+require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-api-client.php';
+require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-connect-controller.php';
+require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-settings-panel.php';
 require_once __DIR__ . '/src/auth/class-auth-shortcodes.php';
 require_once __DIR__ . '/src/post-order/class-post-order-manager.php';
 require_once __DIR__ . '/src/admin/class-owner-admin-menu-filter.php';
@@ -132,6 +140,12 @@ use VKBookingManager\Blocks\Reservation_Button_Block;
 use VKBookingManager\Blocks\Reservation_Button_Renderer;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Capabilities\Roles_Manager;
+use VKBookingManager\Integrations\Booking_Event_Dispatcher;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Api_Client;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connection;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\OEmbed\OEmbed_Override;
 use VKBookingManager\PostOrder\Post_Order_Manager;
@@ -153,6 +167,7 @@ use VKBookingManager\Resources\Resource_Schedule_Template_Repository;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
+use VKBookingManager\Resources\Resource_Delete_Guard;
 
 if ( ! function_exists( 'vkbm_plugin' ) ) {
 	/**
@@ -175,34 +190,70 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$settings_sanitizer  = new Settings_Sanitizer();
 		$settings_service    = new Settings_Service( $settings_repository, $settings_sanitizer );
 
-		$common_styles          = new Common_Styles();
-		$roles_manager          = new Roles_Manager();
-		$shift_dashboard_page   = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
-		$provider_settings_page = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '' );
+		$common_styles = new Common_Styles();
+		$roles_manager = new Roles_Manager();
+		// $shift_editor は Provider_Settings_Page にも注入するため、先に生成しておく
+		// （設定保存成功時にその場でシフトの自動登録を実行するため。安藤レビュー指摘T1対応）。
+		$shift_editor = new Shift_Editor();
+
+		// Google カレンダー連携（issue #475）。Pro 版限定のため、無料版では画面もフックも作らない。
+		// 中継サーバーとの通信・Google の API 呼び出し・接続状態の保存を、それぞれ別のクラスに分けている。
+		// Pro 版でも、中継サーバーの接続先が決まっていない間は「連携」タブを出さず、連携の受け口も
+		// 登録しない（判定は Google_Calendar_Connect_Controller::is_available()）。つながらない
+		// 連携ボタンがオーナーに見えるのを避けるため。
+		$google_calendar_connect_controller = null;
+		$google_calendar_settings_panel     = null;
+		if ( Google_Calendar_Connect_Controller::is_integration_enabled() ) {
+			$google_calendar_connection         = new Google_Calendar_Connection();
+			$google_calendar_relay_client       = new Google_Calendar_Relay_Client();
+			$google_calendar_api_client         = new Google_Calendar_Api_Client( $google_calendar_connection, $google_calendar_relay_client );
+			$google_calendar_connect_controller = new Google_Calendar_Connect_Controller(
+				$google_calendar_connection,
+				$google_calendar_relay_client,
+				$google_calendar_api_client,
+				Capabilities::MANAGE_PROVIDER_SETTINGS
+			);
+			$google_calendar_settings_panel     = new Google_Calendar_Settings_Panel(
+				$google_calendar_connection,
+				$google_calendar_api_client,
+				$google_calendar_connect_controller
+			);
+		}
+
+		$provider_settings_page = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '', $shift_editor, $google_calendar_settings_panel );
 		$email_log_page         = new Email_Log_Page( 'vkbm-provider-settings', Capabilities::MANAGE_PROVIDER_SETTINGS );
 		// Development-only: keep access permissive (file presence is the main gate).
-		$style_guide_page                = new Style_Guide_Page( 'read' );
-		$setup_notices                   = new Setup_Notices();
-		$user_profile_fields             = new User_Profile_Fields();
-		$resource_schedule_repository    = new Resource_Schedule_Template_Repository();
-		$resource_schedule_meta_box      = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
-		$shift_editor                    = new Shift_Editor();
-		$staff_editor                    = new Staff_Editor();
-		$resource_tag_taxonomy           = new Resource_Tag_Taxonomy();
-		$service_menu_editor             = new Service_Menu_Editor();
-		$resource_post_type              = new Resource_Post_Type();
-		$owner_admin_menu_filter         = new Owner_Admin_Menu_Filter();
-		$shift_post_type                 = new Shift_Post_Type();
-		$service_menu_post_type          = new Service_Menu_Post_Type();
-		$service_menu_front_redirect     = new Service_Menu_Front_Redirect( $settings_repository );
-		$booking_post_type               = new Booking_Post_Type();
-		$booking_notification_service    = new Booking_Notification_Service( $settings_repository );
+		$style_guide_page             = new Style_Guide_Page( 'read' );
+		$setup_notices                = new Setup_Notices();
+		$user_profile_fields          = new User_Profile_Fields();
+		$resource_schedule_repository = new Resource_Schedule_Template_Repository();
+		$resource_schedule_meta_box   = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
+		$staff_editor                 = new Staff_Editor();
+		$resource_tag_taxonomy        = new Resource_Tag_Taxonomy();
+		$service_menu_editor          = new Service_Menu_Editor();
+		$resource_post_type           = new Resource_Post_Type();
+		$owner_admin_menu_filter      = new Owner_Admin_Menu_Filter();
+		$shift_post_type              = new Shift_Post_Type();
+		$service_menu_post_type       = new Service_Menu_Post_Type();
+		$service_menu_front_redirect  = new Service_Menu_Front_Redirect( $settings_repository );
+		$booking_post_type            = new Booking_Post_Type();
+		$booking_notification_service = new Booking_Notification_Service( $settings_repository );
+		// 予約の状態変化（作成・確定・変更・キャンセル・ゴミ箱・復元・完全削除）を外部連携
+		// （後続の #475・#476）へ橋渡しするディスパッチャー。通知サービスと同様に単一インスタンスを
+		// 各呼び出し元へ共有し、同一リクエスト内の重複排除（入れ子の保存対策）が機能するようにする
+		// （Booking_Event_Dispatcher クラス doc コメント参照）。
+		$booking_event_dispatcher = new Booking_Event_Dispatcher();
+		// #474: 従来は ajax_confirm_booking() のたびに Booking_Notification_Service を都度生成しており
+		// 他クラスと書き方が揃っていなかった（司の decision record 参照）。他クラスと同じ任意引数の
+		// 注入に揃え、ここでは通知サービス・イベントディスパッチャーとも共有インスタンスを渡す
+		// （未注入の場合は Shift_Dashboard_Page 側で従来どおり都度生成する。既存挙動は変えない）。
+		$shift_dashboard_page            = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS, $booking_notification_service, $booking_event_dispatcher );
 		$oembed_override                 = new OEmbed_Override();
-		$booking_admin                   = new Booking_Admin( $booking_notification_service );
+		$booking_admin                   = new Booking_Admin( $booking_notification_service, $booking_event_dispatcher );
 		$availability_service            = new Availability_Service( $settings_repository );
 		$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository, $availability_service );
-		$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service );
-		$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service );
+		$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service, $booking_event_dispatcher );
+		$my_bookings_controller          = new My_Bookings_Controller( $settings_repository, $booking_notification_service, $booking_event_dispatcher );
 		$user_favorites_controller       = new User_Favorites_Controller();
 		$reservation_button_renderer     = new Reservation_Button_Renderer( $settings_repository );
 		$menu_search_block               = new Menu_Search_Block();
@@ -233,6 +284,16 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// リソースタグタクソノミーを登録（Pro版のみの機能）
 		// Register the resource tag taxonomy (Pro edition only).
 		$resource_tag_taxonomy->register();
+
+		// Google カレンダー連携の接続・解除の受け口を登録する（Pro 版限定。issue #475）。
+		// Resource_Delete_Guard と同様、Plugin へ注入せずここで直接登録する。
+		if ( null !== $google_calendar_connect_controller ) {
+			$google_calendar_connect_controller->register();
+		}
+
+		// リソース（スタッフ）削除ガードを登録（実質 Pro 版限定機能。register() 内部で判定する）。
+		// Register the resource (staff) delete guard (effectively Pro edition only; gated inside register()).
+		( new Resource_Delete_Guard() )->register();
 
 		// シフト・サービスメニュー・スタッフ・システム設定の保存/削除で
 		// 空き状況キャッシュ（transient）の世代番号を進める（#410 / #412）。
@@ -283,6 +344,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 			$menu_preview_controller,
 			$provider_settings_controller,
 			$booking_notification_service,
+			$booking_event_dispatcher,
 			$oembed_override,
 			$auth_shortcodes,
 			$auth_form_controller,
@@ -376,6 +438,27 @@ if ( ! function_exists( 'vkbm_activate_plugin' ) ) {
 }
 
 register_activation_hook( __FILE__, 'vkbm_activate_plugin' );
+
+if ( ! function_exists( 'vkbm_deactivate_plugin' ) ) {
+	/**
+	 * 無効化時のコールバック。
+	 *
+	 * シフトの自動登録用の WP-Cron イベントなど、プラグイン無効化時に解除すべき予約処理をまとめて解除する。
+	 *
+	 * @return void
+	 */
+	function vkbm_deactivate_plugin(): void {
+		$plugin = vkbm_plugin();
+
+		if ( ! $plugin instanceof Plugin ) {
+			return;
+		}
+
+		$plugin->deactivate();
+	}
+}
+
+register_deactivation_hook( __FILE__, 'vkbm_deactivate_plugin' );
 
 
 if ( ! function_exists( 'vkbm_normalize_reservation_page_url' ) ) {

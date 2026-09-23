@@ -86,6 +86,9 @@ You can use cash, credit cards, and transportation ICs.',
 			'provider_website_url'                       => '',
 			'provider_email'                             => '',
 			'shift_alert_months'                         => 1,
+			// シフトの自動登録設定。0=無効（既定）、1〜3=翌月〜3ヶ月先までを自動登録する。
+			// 未保存時は既定の0（無効）が適用されるため、導入前の既存サイトの挙動は変わらない。
+			'shift_auto_register_months'                 => 0,
 			'booking_reminder_hours'                     => array(),
 			'design_primary_color'                       => '',
 			'design_reservation_button_color'            => '',

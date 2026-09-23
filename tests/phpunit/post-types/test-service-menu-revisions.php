@@ -105,6 +105,11 @@ class Service_Menu_Revisions_Test extends WP_UnitTestCase {
 				'expected'            => true,
 			),
 			array(
+				'test_condition_name' => '「すべてのリソースが担当できる」フラグ（_vkbm_staff_all、#485）が含まれる',
+				'conditions'          => '_vkbm_staff_all',
+				'expected'            => true,
+			),
+			array(
 				'test_condition_name' => '廃止済みメタ（_vkbm_max_guests_per_booking）は含まれない',
 				'conditions'          => '_vkbm_max_guests_per_booking',
 				'expected'            => false,

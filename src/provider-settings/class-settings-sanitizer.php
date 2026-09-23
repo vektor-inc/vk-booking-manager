@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Shifts\Shift_Editor;
 use function vkbm_sanitize_resource_menu_icon;
 
 /**
@@ -150,10 +151,16 @@ class Settings_Sanitizer {
 		if ( '' === $data['provider_email'] ) {
 			$data['provider_email'] = $this->sanitize_email( (string) get_option( 'admin_email' ) );
 		}
-		$shift_alert_months                      = $this->sanitize_non_negative_int(
+		$shift_alert_months         = $this->sanitize_non_negative_int(
 			$input['shift_alert_months'] ?? ( $data['shift_alert_months'] ?? 1 )
 		);
-		$data['shift_alert_months']              = min( 4, max( 1, $shift_alert_months ) );
+		$data['shift_alert_months'] = min( 4, max( 1, $shift_alert_months ) );
+		// シフトの自動登録月数。許可値（0〜3）の判定は Shift_Editor::normalize_auto_register_months() に
+		// 一本化している（Setup_Notices・Shift_Editor 自身の判定と基準をそろえるため）。
+		$shift_auto_register_months              = $this->sanitize_non_negative_int(
+			$input['shift_auto_register_months'] ?? ( $data['shift_auto_register_months'] ?? 0 )
+		);
+		$data['shift_auto_register_months']      = Shift_Editor::normalize_auto_register_months( $shift_auto_register_months );
 		$data['booking_reminder_hours']          = $this->sanitize_reminder_hours(
 			$input['booking_reminder_hours'] ?? ( $data['booking_reminder_hours'] ?? array() )
 		);

@@ -46,8 +46,22 @@ class Service_Menu_Post_Type {
 	private const TERM_GROUP_DISPLAY_MODE_META_KEY = 'vkbm_menu_group_display_mode';
 	private const META_OTHER_CONDITIONS            = '_vkbm_other_conditions';
 	private const META_STAFF_IDS                   = '_vkbm_staff_ids';
-	private const META_RESERVATION_DAY_TYPE        = '_vkbm_reservation_day_type';
-	private const META_DISABLE_NOMINATION_FEE      = '_vkbm_disable_nomination_fee';
+	/**
+	 * 「すべてのリソースが担当できる」フラグのメタキー（#485）。
+	 *
+	 * true のとき、担当できるリソースは個別選択（META_STAFF_IDS）ではなく
+	 * 「公開中の全リソース」になる（今後追加するリソースも自動的に対象）。
+	 * 未設定（既定）は false ＝「担当できるリソースを選ぶ」で、従来どおり
+	 * META_STAFF_IDS の個別選択を使う。個別選択の配列は「すべて」選択中も
+	 * 消さずに保持する（「選ぶ」へ戻したときに以前の選択を復元できるようにするため。
+	 * #391・#412 の「親スイッチ OFF 時も子設定を残す」方針と同じ）。
+	 * 空配列（未設定）の意味は変えない（「すべて」とは別）。
+	 *
+	 * Service_Menu_Editor など他クラスからも参照するため public にしている。
+	 */
+	public const META_STAFF_ALL               = '_vkbm_staff_all';
+	private const META_RESERVATION_DAY_TYPE   = '_vkbm_reservation_day_type';
+	private const META_DISABLE_NOMINATION_FEE = '_vkbm_disable_nomination_fee';
 	// メニュー単位で指名機能を無効化するメタキー（#391）。既定（未設定）は「指名を使う」。
 	private const META_DISABLE_NOMINATION          = '_vkbm_disable_nomination';
 	private const META_MAX_CAPACITY                = '_vkbm_max_capacity';
@@ -78,6 +92,20 @@ class Service_Menu_Post_Type {
 	 * @var Availability_Service|null
 	 */
 	private ?Availability_Service $availability_service = null;
+
+	/**
+	 * 公開中リソースIDのリクエスト内キャッシュ（#485）。
+	 *
+	 * 「すべて」フラグのメニューごとに get_posts() を発行すると、予約ブロックの
+	 * REST 取得（メニュー最大100件）で1リクエストあたり最大100回クエリが走るため、
+	 * 1リクエスト内では1回だけ取得して使い回す。
+	 * 投稿の追加・更新・削除で無効化できるよう、取得時点の
+	 * wp_cache_get_last_changed( 'posts' ) を併せて保持し、値が変わっていれば再取得する
+	 * （テスト中や同一リクエスト内でリソースを公開した直後でも古い一覧を返さないため）。
+	 *
+	 * @var array{last_changed: string, ids: array<int>}|null
+	 */
+	private static ?array $published_resource_ids_cache = null;
 
 	/**
 	 * Hook registrations for the post type and taxonomy.
@@ -177,15 +205,19 @@ class Service_Menu_Post_Type {
 			$reordered['vkbm_price'] = __( 'Fee', 'vk-booking-manager' );
 			// Use the configurable duration label from provider settings.
 			// 基本設定の所要時間ラベルを使用する。
+			// 出力先（列見出し）は vkbm_staff と同じ未エスケープの sink だが、このラベルのエスケープ有無は
+			// 今回（#485）のスコープ外のため未エスケープのまま据え置く（安藤レビュー LOW）。
 			$reordered['vkbm_duration']             = vkbm_get_duration_label();
 			$reordered['vkbm_reservation_deadline'] = __( 'Reservation deadline', 'vk-booking-manager' );
 			$reordered['vkbm_buffer_after']         = __( 'Post-service buffer', 'vk-booking-manager' );
 			if ( Staff_Editor::is_enabled() ) {
-				// Only show the staff column when staff editor is enabled. / スタッフ編集が有効な場合のみスタッフ列を表示します.
-				$reordered['vkbm_staff'] = __( 'Staff available', 'vk-booking-manager' );
+				// スタッフ編集が有効な場合のみ担当リソース列を表示する。見出しは基本設定のリソースラベル（複数形）を使う（#485）。
+				// 列見出しは WordPress 本体が未エスケープで出力するため、利用者入力由来のラベルはここでエスケープする。
+				$reordered['vkbm_staff'] = esc_html( self::get_available_staff_label() );
 			}
 			// Use the configurable other conditions label from provider settings.
 			// 基本設定のその他条件ラベルを使用する。
+			// vkbm_duration と同じく、このラベルも同じ sink だが今回（#485）のスコープ外のため未エスケープのまま据え置く。
 			$reordered['vkbm_other_conditions']     = vkbm_get_other_conditions_label();
 			$reordered['vkbm_reservation_day_type'] = __( 'Reservation date', 'vk-booking-manager' );
 		}
@@ -208,44 +240,34 @@ class Service_Menu_Post_Type {
 		$reservation_deadline_meta      = get_post_meta( $post_id, '_vkbm_reservation_deadline_hours', true );
 		$reservation_deadline_has_value = '' !== $reservation_deadline_meta || metadata_exists( 'post', $post_id, '_vkbm_reservation_deadline_hours' );
 		$reservation_deadline           = $reservation_deadline_has_value ? (int) $reservation_deadline_meta : 0;
-		$staff_ids                      = get_post_meta( $post_id, self::META_STAFF_IDS, true );
-		$staff_ids                      = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
-		$staff_ids                      = array_values(
-			array_filter(
-				$staff_ids,
-				static function ( int $staff_id ): bool {
-					return $staff_id > 0;
-				}
-			)
-		);
-		$other_conditions               = get_post_meta( $post_id, self::META_OTHER_CONDITIONS, true );
-		$other_conditions               = is_string( $other_conditions ) ? $other_conditions : '';
-		$reservation_day_type           = (string) get_post_meta( $post_id, self::META_RESERVATION_DAY_TYPE, true );
-		$disable_nomination_fee         = (string) get_post_meta( $post_id, self::META_DISABLE_NOMINATION_FEE, true );
+		// 個別選択の担当リソース（保存値そのもの）。クイック編集のプリフィルにも使うため、
+		// 「すべて」フラグで展開した候補ではなく保存されている個別選択を読む。
+		$staff_ids = self::get_selected_staff_ids( $post_id );
+		// 「すべてのリソースが担当できる」フラグ（#485）。
+		$is_all_staff           = self::is_all_staff_assigned( $post_id );
+		$other_conditions       = get_post_meta( $post_id, self::META_OTHER_CONDITIONS, true );
+		$other_conditions       = is_string( $other_conditions ) ? $other_conditions : '';
+		$reservation_day_type   = (string) get_post_meta( $post_id, self::META_RESERVATION_DAY_TYPE, true );
+		$disable_nomination_fee = (string) get_post_meta( $post_id, self::META_DISABLE_NOMINATION_FEE, true );
 
-		$data_price                  = $price > 0 ? (string) $price : '';
-		$data_duration               = $duration > 0 ? (string) $duration : '';
-		$data_buffer                 = $buffer_has_value ? (string) $buffer : '';
-		$data_staff_ids              = wp_json_encode( $staff_ids );
-		$data_other_conditions       = wp_json_encode( $other_conditions );
-		$data_reservation_deadline   = $reservation_deadline_has_value ? (string) $reservation_deadline : '';
-		$data_reservation_day_type   = $reservation_day_type;
-		$data_disable_nomination_fee = '1' === $disable_nomination_fee ? '1' : '';
+		// クイック編集（service-menu-quick-edit.js）がプリフィルに使う data 属性の値。
+		// 各列に同じ span を出力するため、値の組み立てと出力（render_quick_edit_data_span）を1か所にまとめる。
+		$quick_edit_data = array(
+			'base-price'                 => $price > 0 ? (string) $price : '',
+			'duration-minutes'           => $duration > 0 ? (string) $duration : '',
+			'buffer-after-minutes'       => $buffer_has_value ? (string) $buffer : '',
+			'staff-ids'                  => (string) wp_json_encode( $staff_ids ),
+			'staff-all'                  => $is_all_staff ? '1' : '',
+			'other-conditions'           => (string) wp_json_encode( $other_conditions ),
+			'reservation-deadline-hours' => $reservation_deadline_has_value ? (string) $reservation_deadline : '',
+			'reservation-day-type'       => $reservation_day_type,
+			'disable-nomination-fee'     => '1' === $disable_nomination_fee ? '1' : '',
+		);
 
 		switch ( $column ) {
 			case 'vkbm_price':
 				echo esc_html( $price > 0 ? number_format_i18n( $price ) : '—' );
-				printf(
-					'<span class="vkbm-service-menu-qe" style="display:none" data-base-price="%1$s" data-duration-minutes="%2$s" data-buffer-after-minutes="%3$s" data-staff-ids="%4$s" data-other-conditions="%5$s" data-reservation-deadline-hours="%6$s" data-reservation-day-type="%7$s" data-disable-nomination-fee="%8$s"></span>',
-					esc_attr( $data_price ),
-					esc_attr( $data_duration ),
-					esc_attr( $data_buffer ),
-					esc_attr( (string) $data_staff_ids ),
-					esc_attr( (string) $data_other_conditions ),
-					esc_attr( $data_reservation_deadline ),
-					esc_attr( $data_reservation_day_type ),
-					esc_attr( $data_disable_nomination_fee )
-				);
+				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 
 			case 'vkbm_duration':
@@ -258,17 +280,7 @@ class Service_Menu_Post_Type {
 						)
 						: '—'
 				);
-				printf(
-					'<span class="vkbm-service-menu-qe" style="display:none" data-base-price="%1$s" data-duration-minutes="%2$s" data-buffer-after-minutes="%3$s" data-staff-ids="%4$s" data-other-conditions="%5$s" data-reservation-deadline-hours="%6$s" data-reservation-day-type="%7$s" data-disable-nomination-fee="%8$s"></span>',
-					esc_attr( $data_price ),
-					esc_attr( $data_duration ),
-					esc_attr( $data_buffer ),
-					esc_attr( (string) $data_staff_ids ),
-					esc_attr( (string) $data_other_conditions ),
-					esc_attr( $data_reservation_deadline ),
-					esc_attr( $data_reservation_day_type ),
-					esc_attr( $data_disable_nomination_fee )
-				);
+				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 
 			case 'vkbm_reservation_deadline':
@@ -282,17 +294,7 @@ class Service_Menu_Post_Type {
 						number_format_i18n( $effective_deadline )
 					)
 				);
-				printf(
-					'<span class="vkbm-service-menu-qe" style="display:none" data-base-price="%1$s" data-duration-minutes="%2$s" data-buffer-after-minutes="%3$s" data-staff-ids="%4$s" data-other-conditions="%5$s" data-reservation-deadline-hours="%6$s" data-reservation-day-type="%7$s" data-disable-nomination-fee="%8$s"></span>',
-					esc_attr( $data_price ),
-					esc_attr( $data_duration ),
-					esc_attr( $data_buffer ),
-					esc_attr( (string) $data_staff_ids ),
-					esc_attr( (string) $data_other_conditions ),
-					esc_attr( $reservation_deadline_has_value ? (string) $reservation_deadline : '' ),
-					esc_attr( $data_reservation_day_type ),
-					esc_attr( $data_disable_nomination_fee )
-				);
+				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 
 			case 'vkbm_buffer_after':
@@ -304,22 +306,18 @@ class Service_Menu_Post_Type {
 						number_format_i18n( $effective_buffer )
 					)
 				);
-				printf(
-					'<span class="vkbm-service-menu-qe" style="display:none" data-base-price="%1$s" data-duration-minutes="%2$s" data-buffer-after-minutes="%3$s" data-staff-ids="%4$s" data-other-conditions="%5$s" data-reservation-deadline-hours="%6$s" data-reservation-day-type="%7$s" data-disable-nomination-fee="%8$s"></span>',
-					esc_attr( $data_price ),
-					esc_attr( $data_duration ),
-					esc_attr( $data_buffer ),
-					esc_attr( (string) $data_staff_ids ),
-					esc_attr( (string) $data_other_conditions ),
-					esc_attr( $data_reservation_deadline ),
-					esc_attr( $data_reservation_day_type ),
-					esc_attr( $data_disable_nomination_fee )
-				);
+				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 
 			case 'vkbm_staff':
 				if ( ! Staff_Editor::is_enabled() ) {
 					return;
+				}
+
+				// 「すべて」のメニューは名前を並べず1語で表示する（#485。人数が増えても列が延々と長くならないようにするため）。
+				if ( $is_all_staff ) {
+					echo esc_html( self::get_all_staff_label() );
+					break;
 				}
 
 				if ( empty( $staff_ids ) ) {
@@ -369,17 +367,7 @@ class Service_Menu_Post_Type {
 					$excerpt = wp_html_excerpt( wp_strip_all_tags( $other_conditions ), 80, '…' );
 					echo esc_html( $excerpt );
 				}
-				printf(
-					'<span class="vkbm-service-menu-qe" style="display:none" data-base-price="%1$s" data-duration-minutes="%2$s" data-buffer-after-minutes="%3$s" data-staff-ids="%4$s" data-other-conditions="%5$s" data-reservation-deadline-hours="%6$s" data-reservation-day-type="%7$s" data-disable-nomination-fee="%8$s"></span>',
-					esc_attr( $data_price ),
-					esc_attr( $data_duration ),
-					esc_attr( $data_buffer ),
-					esc_attr( (string) $data_staff_ids ),
-					esc_attr( (string) $data_other_conditions ),
-					esc_attr( $data_reservation_deadline ),
-					esc_attr( $data_reservation_day_type ),
-					esc_attr( $data_disable_nomination_fee )
-				);
+				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 			case 'vkbm_reservation_day_type':
 				if ( '' === $reservation_day_type ) {
@@ -578,9 +566,30 @@ class Service_Menu_Post_Type {
 							?>
 						</p>
 						<?php if ( Staff_Editor::is_enabled() ) : ?>
-							<label>
-								<span class="title"><?php esc_html_e( 'Staff available', 'vk-booking-manager' ); ?></span>
+							<?php
+							// 担当できるリソース（#485）。「すべて」「選ぶ」のラジオ2択にし、「選ぶ」のときだけ
+							// 個別チェックリストを表示する（表示切替は service-menu-quick-edit.js。編集画面と同じ作法）。
+							// クイック編集は行 DOM を投稿間で使い回すため、id ではなく class と name で扱い、
+							// 現在値のプリフィルは JS が data-staff-all / data-staff-ids から行う。
+							$quick_edit_staff_label = self::get_available_staff_label();
+							?>
+							<?php
+							// role="group" + aria-label で、ラジオ2つとチェックリストの集合が「担当できるリソース」の
+							// グループであることを読み上げに伝える（メタボックス側の fieldset + legend と同等。植草レビュー）。
+							// fieldset + legend にしないのは、.vkbm-qe-staff に display: grid を当てているため legend が
+							// グリッド項目にならず 10em + 1fr の2列が崩れるため。
+							?>
+							<div class="vkbm-qe-staff" role="group" aria-label="<?php echo esc_attr( $quick_edit_staff_label ); ?>">
+								<span class="title"><?php echo esc_html( $quick_edit_staff_label ); ?></span>
 								<span class="input-text-wrap">
+									<label class="vkbm-qe-staff-mode">
+										<input type="radio" name="vkbm_service_menu_quick[staff_all]" class="vkbm-qe-staff-all" value="1" />
+										<?php echo esc_html( self::get_all_staff_option_label() ); ?>
+									</label>
+									<label class="vkbm-qe-staff-mode">
+										<input type="radio" name="vkbm_service_menu_quick[staff_all]" class="vkbm-qe-staff-all" value="0" checked />
+										<?php echo esc_html( self::get_choose_staff_option_label() ); ?>
+									</label>
 									<ul class="vkbm-qe-staff-checkboxes">
 										<?php foreach ( $staff_posts as $staff_post ) : ?>
 											<?php if ( ! $staff_post instanceof WP_Post ) : ?>
@@ -595,7 +604,7 @@ class Service_Menu_Post_Type {
 										<?php endforeach; ?>
 									</ul>
 								</span>
-							</label>
+							</div>
 						<?php endif; ?>
 						<label>
 							<span class="title"><?php echo esc_html( vkbm_get_other_conditions_label() ); ?></span>
@@ -691,11 +700,16 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$base_price             = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['base_price'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['base_price'] ) ) : '' );
-		$duration               = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ) : '' );
-		$buffer_after           = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ) : '' );
-		$reservation_deadline   = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ) : '' );
-		$staff_ids              = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( isset( $_POST['vkbm_service_menu_quick']['staff_ids'] ) && is_array( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ) : array() ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by array_map( 'absint' ) and sanitize_staff_ids().
+		$base_price           = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['base_price'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['base_price'] ) ) : '' );
+		$duration             = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ) : '' );
+		$buffer_after         = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ) : '' );
+		$reservation_deadline = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ) : '' );
+		$staff_ids            = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( isset( $_POST['vkbm_service_menu_quick']['staff_ids'] ) && is_array( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ) : array() ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by array_map( 'absint' ) and sanitize_staff_ids().
+		// 「すべてのリソースが担当できる」ラジオ（#485）。Pro 版でラジオが送信されたときだけ更新する
+		// （無料版や、ラジオを含まない古い行 DOM からの送信では触らない）。
+		$staff_all              = ( Staff_Editor::is_enabled() && isset( $_POST['vkbm_service_menu_quick']['staff_all'] ) )
+			? ( '1' === sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['staff_all'] ) ) ? '1' : '' )
+			: null;
 		$other_conditions       = isset( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ) : '';
 		$reservation_day_type   = $this->sanitize_reservation_day_type( isset( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ) : '', $post_id );
 		$disable_nomination_fee = ! empty( $_POST['vkbm_service_menu_quick']['disable_nomination_fee'] ) ? '1' : '';
@@ -705,7 +719,12 @@ class Service_Menu_Post_Type {
 		$this->update_meta_value( $post_id, '_vkbm_buffer_after_minutes', $buffer_after );
 		$this->update_meta_value( $post_id, '_vkbm_reservation_deadline_hours', $reservation_deadline );
 		if ( null !== $staff_ids ) {
+			// 「すべて」選択中でも個別選択は消さずに保持する（「選ぶ」へ戻したとき復元するため）。
 			$this->update_meta_value( $post_id, self::META_STAFF_IDS, $staff_ids, true );
+		}
+		if ( null !== $staff_all ) {
+			// '' のときは update_meta_value() がメタを削除し、未設定（既定 false）に戻る。
+			$this->update_meta_value( $post_id, self::META_STAFF_ALL, $staff_all );
 		}
 		$this->update_meta_value( $post_id, self::META_OTHER_CONDITIONS, $other_conditions );
 		$this->update_meta_value( $post_id, self::META_RESERVATION_DAY_TYPE, $reservation_day_type );
@@ -783,12 +802,28 @@ class Service_Menu_Post_Type {
 	}
 
 	/**
-	 * Sanitize staff ID array for quick edit.
+	 * Sanitize staff ID array for quick edit and the REST meta API.
+	 *
+	 * register_meta() の sanitize_callback としても登録しているため public にしている。
+	 * private のままだと register_meta() 側の is_callable() 判定が false になり、
+	 * フィルターが付かずに REST 書き込みが schema 検証だけで通ってしまう（#485 で修正）。
 	 *
 	 * @param mixed $ids Raw IDs.
 	 * @return array<int>
 	 */
-	private function sanitize_staff_ids( $ids ): array {
+	public function sanitize_staff_ids( $ids ): array {
+		return self::normalize_staff_ids( $ids );
+	}
+
+	/**
+	 * 担当リソースID配列を正規化する（int キャスト・0以下の除外・重複排除・添字の詰め直し）。
+	 *
+	 * 保存時の sanitize と読み取り時の正規化で同じ規則を使うために1か所へまとめている。
+	 *
+	 * @param mixed $ids 正規化前の値（配列以外は空配列として扱う）。
+	 * @return array<int> 正規化済みのリソースID配列。
+	 */
+	private static function normalize_staff_ids( $ids ): array {
 		if ( ! is_array( $ids ) ) {
 			return array();
 		}
@@ -808,6 +843,221 @@ class Service_Menu_Post_Type {
 		);
 
 		return array_values( array_unique( $ids ) );
+	}
+
+	/**
+	 * メニューで「すべてのリソースが担当できる」（META_STAFF_ALL）が選ばれているかを返す（#485）。
+	 *
+	 * 無料版（Staff_Editor::is_enabled() === false）ではメニュー側の担当設定自体を使わない
+	 * （担当は常に基本スタッフ1名）ため、メタの値に関わらず常に false を返す。
+	 * Pro 版から無料版へ切り替えてメタが残っていても、無料版の挙動に影響させない。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 「すべて」が選ばれていれば true。
+	 */
+	public static function is_all_staff_assigned( int $menu_id ): bool {
+		if ( $menu_id <= 0 || ! Staff_Editor::is_enabled() ) {
+			return false;
+		}
+
+		return (bool) get_post_meta( $menu_id, self::META_STAFF_ALL, true );
+	}
+
+	/**
+	 * メニューに個別選択で保存されている担当リソースID配列（META_STAFF_IDS）を返す（#485）。
+	 *
+	 * 「すべて」フラグの状態は見ない。編集画面のチェックボックスの初期状態や
+	 * クイック編集のプリフィルなど「保存されている個別選択そのもの」が必要な箇所で使う。
+	 * 予約・表示で実際に担当できるリソースを求めるときは get_assignable_staff_ids() を使う。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return array<int> 正規化済みのリソースID配列（未設定は空配列）。
+	 */
+	public static function get_selected_staff_ids( int $menu_id ): array {
+		if ( $menu_id <= 0 ) {
+			return array();
+		}
+
+		return self::normalize_staff_ids( get_post_meta( $menu_id, self::META_STAFF_IDS, true ) );
+	}
+
+	/**
+	 * メニューを実際に担当できるリソースID配列を返す（読み取り側の単一の入口、#485）。
+	 *
+	 * - 「すべて」（is_all_staff_assigned()）のとき: 公開中の全リソースID
+	 *   （表示順は管理画面のリソース並び順 menu_order → タイトル）。
+	 * - それ以外: 個別選択（META_STAFF_IDS）を正規化した配列。空配列（未設定）はそのまま
+	 *   空配列を返し、「未設定」の意味は変えない（自動割当不可として扱うのは呼び出し側の従来どおり）。
+	 *
+	 * 空き枠計算・予約下書き・予約確定・お気に入り・メニュー一覧の絞り込み・カード表示は
+	 * すべてこのメソッドを通し、「すべて」の展開ロジックを複製しない。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return array<int> 担当できるリソースID配列。
+	 */
+	public static function get_assignable_staff_ids( int $menu_id ): array {
+		if ( $menu_id <= 0 ) {
+			return array();
+		}
+
+		$is_all    = self::is_all_staff_assigned( $menu_id );
+		$staff_ids = $is_all ? self::get_published_resource_ids() : self::get_selected_staff_ids( $menu_id );
+
+		/**
+		 * メニューを担当できるリソースID配列を絞り込む・差し替えるためのフィルター（#485）。
+		 *
+		 * 将来「指名不可」などリソース側の属性で候補から外す必要が出たときに、
+		 * 読み取り側の各所を触らずここ1か所で除外できるようにする拡張点。
+		 *
+		 * @param array<int> $staff_ids 担当できるリソースID配列（正規化済み）。
+		 * @param int        $menu_id   サービスメニューの投稿ID。
+		 * @param bool       $is_all    「すべてのリソースが担当できる」が選ばれていれば true。
+		 */
+		$filtered = apply_filters( 'vkbm_menu_assignable_staff_ids', $staff_ids, $menu_id, $is_all );
+
+		// フィルターの戻り値は「正の整数の一意な配列」という形式だけを再正規化する（配列以外は空配列、
+		// 文字列IDは int 化、0以下と重複は除外）。実在する公開中のリソースかどうかは検証しない
+		// （フィルター側がリソースを追加する用途を塞がないため）。存在しないIDが混ざった場合の扱いは
+		// 呼び出し側で一様ではない。名前リスト表示（Menu_Loop_Block::render_meta_information()）や
+		// お気に入りの判定（User_Favorites_Controller::is_resource_assignable()）では get_posts の
+		// include や公開状態の確認で無視されるが、担当できるリソース数を数える箇所
+		// （Booking_Confirmation_Controller::count_menu_staff()、Booking_Draft_Controller の
+		// $staff_count）は count() するだけで存在確認をしないため、フィルターが存在しないIDを
+		// 足すと複数人一括予約の上限人数が水増しされ得る（安藤レビュー LOW）。
+		return self::normalize_staff_ids( $filtered );
+	}
+
+	/**
+	 * 公開中のリソース（vkbm_resource）の投稿IDを、管理画面の並び順で返す（#485）。
+	 *
+	 * リクエスト内キャッシュを使う。無効化条件は self::$published_resource_ids_cache を参照。
+	 *
+	 * @return array<int> 公開中リソースの投稿ID配列。
+	 */
+	public static function get_published_resource_ids(): array {
+		if ( ! post_type_exists( Resource_Post_Type::POST_TYPE ) ) {
+			return array();
+		}
+
+		// 投稿の追加・更新・削除があると wp_cache_get_last_changed( 'posts' ) の値が変わる。
+		// 取得時点の値と一致する間だけキャッシュを使い、変わっていれば再取得する。
+		$last_changed = (string) wp_cache_get_last_changed( 'posts' );
+		if ( null !== self::$published_resource_ids_cache && self::$published_resource_ids_cache['last_changed'] === $last_changed ) {
+			return self::$published_resource_ids_cache['ids'];
+		}
+
+		$ids = get_posts(
+			array(
+				'post_type'      => Resource_Post_Type::POST_TYPE,
+				'post_status'    => 'publish',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+				'no_found_rows'  => true,
+				'orderby'        => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
+			)
+		);
+
+		$ids = self::normalize_staff_ids( $ids );
+
+		self::$published_resource_ids_cache = array(
+			'last_changed' => $last_changed,
+			'ids'          => $ids,
+		);
+
+		return $ids;
+	}
+
+	/**
+	 * 公開中リソースIDのリクエスト内キャッシュを破棄する（#485）。
+	 *
+	 * 通常は last_changed による自動無効化で足りるが、テストなどで明示的に破棄したい場合に使う。
+	 */
+	public static function clear_published_resource_ids_cache(): void {
+		self::$published_resource_ids_cache = null;
+	}
+
+	/**
+	 * 「すべての〇〇」（〇〇＝基本設定のリソースラベル複数形）の表示文言を返す（#485）。
+	 *
+	 * フロントのカード・管理画面一覧・編集画面のラジオボタンで同じ文言を使うため1か所にまとめる。
+	 * リソースラベルは「スタッフ」以外（ルーム・コートなど人以外）にも変更されうるため
+	 * 「全員」ではなくラベルを差し込む形にしている。
+	 *
+	 * @return string 例: 「すべてのスタッフ」。
+	 */
+	public static function get_all_staff_label(): string {
+		return sprintf(
+			/* translators: %s: resource label (plural), e.g. "Staff". */
+			__( 'All %s', 'vk-booking-manager' ),
+			vkbm_get_resource_label_plural()
+		);
+	}
+
+	/**
+	 * 「担当できる〇〇」（〇〇＝基本設定のリソースラベル複数形）の見出し文言を返す（#485）。
+	 *
+	 * 管理画面一覧の列見出し・クイック編集・編集画面の legend で共通に使う。
+	 *
+	 * @return string 例: 「担当できるスタッフ」。
+	 */
+	public static function get_available_staff_label(): string {
+		return sprintf(
+			/* translators: %s: resource label (plural), e.g. "Staff". */
+			__( 'Available %s', 'vk-booking-manager' ),
+			vkbm_get_resource_label_plural()
+		);
+	}
+
+	/**
+	 * ラジオ「すべての〇〇が担当できる」の選択肢文言を返す（#485）。
+	 *
+	 * 編集画面のメタボックスとクイック編集で同じ文言を使う。
+	 *
+	 * @return string 例: 「すべてのスタッフが担当できる」。
+	 */
+	public static function get_all_staff_option_label(): string {
+		return sprintf(
+			/* translators: %s: resource label (plural), e.g. "Staff". */
+			__( 'All %s can be in charge', 'vk-booking-manager' ),
+			vkbm_get_resource_label_plural()
+		);
+	}
+
+	/**
+	 * ラジオ「担当できる〇〇を選ぶ」の選択肢文言を返す（#485）。
+	 *
+	 * 編集画面のメタボックスとクイック編集で同じ文言を使う。
+	 *
+	 * @return string 例: 「担当できるスタッフを選ぶ」。
+	 */
+	public static function get_choose_staff_option_label(): string {
+		return sprintf(
+			/* translators: %s: resource label (plural), e.g. "Staff". */
+			__( 'Choose which %s can be in charge', 'vk-booking-manager' ),
+			vkbm_get_resource_label_plural()
+		);
+	}
+
+	/**
+	 * クイック編集のプリフィル用 data 属性を持つ非表示 span を出力する。
+	 *
+	 * 一覧の複数列（料金・所要時間・予約締切・サービス後バッファ）で同じ span を出すため、
+	 * 属性名と値の組み立てをここに集約する（列ごとに printf を複製しない）。
+	 *
+	 * @param array<string, string> $data data 属性名（"data-" を除いたケバブケース）=> 値。
+	 */
+	private function render_quick_edit_data_span( array $data ): void {
+		$attributes = '';
+		foreach ( $data as $name => $value ) {
+			// 属性名は本メソッドの呼び出し元が固定文字列で指定するため、値のみエスケープする。
+			$attributes .= sprintf( ' data-%1$s="%2$s"', $name, esc_attr( (string) $value ) );
+		}
+
+		// $attributes は上で esc_attr 済み、クラス名・style は固定文字列。
+		echo '<span class="vkbm-service-menu-qe" style="display:none"' . $attributes . '></span>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Attribute values are escaped above.
 	}
 
 	/**
@@ -1326,6 +1576,33 @@ class Service_Menu_Post_Type {
 				},
 			)
 		);
+
+		// 「すべてのリソースが担当できる」フラグ（#485）。既定 false ＝個別選択を使う。
+		// フロント（app.js）は展開後の候補を REST 計算フィールド vkbm_assignable_staff_ids で
+		// 受け取るため、このメタ自体は主に管理画面の表示・保存と REST 書き込みのために公開する。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_STAFF_ALL,
+			array(
+				'type'              => 'boolean',
+				'single'            => true,
+				'default'           => false,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): bool {
+					// REST からは真偽値、管理画面フォームからは '1' / '' で届くため、
+					// 'false' などの文字列表現も正しく解釈できる rest_sanitize_boolean() で丸める。
+					return rest_sanitize_boolean( $value );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					// 無料版ではメニュー側の担当設定自体が存在しない（編集画面のメタボックスも
+					// 表示しない）ため、REST 経由の書き込みも Pro 版のみに限定する。
+					if ( ! current_user_can( 'edit_post', $post_id ) ) {
+						return false;
+					}
+					return Staff_Editor::is_enabled();
+				},
+			)
+		);
 	}
 
 	/**
@@ -1355,6 +1632,7 @@ class Service_Menu_Post_Type {
 			self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS,
 			self::META_PRICE_TIERS,
 			self::META_STAFF_IDS,
+			self::META_STAFF_ALL,
 			'_vkbm_catch_copy',
 			'_vkbm_internal_memo',
 			'_vkbm_duration_minutes',
@@ -1432,6 +1710,44 @@ class Service_Menu_Post_Type {
 				),
 			)
 		);
+
+		// メニューを実際に担当できるリソースID配列（#485）。「すべてのリソースが担当できる」
+		// フラグを公開中の全リソースへ展開した結果を読み取り専用で返す。フロント（app.js の
+		// extractAssignableStaffIds）は meta._vkbm_staff_ids より先にこの値を使い、
+		// 「すべて」の展開ロジックをフロントで二重実装しない。判定は
+		// Service_Menu_Post_Type::get_assignable_staff_ids() の1か所に集約する。
+		register_rest_field(
+			self::POST_TYPE,
+			'vkbm_assignable_staff_ids',
+			array(
+				'get_callback' => array( $this, 'get_assignable_staff_ids_rest_field' ),
+				'schema'       => array(
+					'description' => __( 'IDs of the resources (staff) that can be in charge of this menu, with "all resources" expanded to the published resources.', 'vk-booking-manager' ),
+					'type'        => 'array',
+					'items'       => array(
+						'type'    => 'integer',
+						'minimum' => 1,
+					),
+					'context'     => array( 'view', 'edit' ),
+					'readonly'    => true,
+				),
+			)
+		);
+	}
+
+	/**
+	 * REST レスポンス用に、メニューを担当できるリソースID配列を返す（#485）。
+	 *
+	 * @param array<string, mixed> $post REST post data.
+	 * @return array<int> 担当できるリソースID配列（「すべて」は公開中の全リソースへ展開済み）。
+	 */
+	public function get_assignable_staff_ids_rest_field( array $post ): array {
+		$post_id = isset( $post['id'] ) ? (int) $post['id'] : 0;
+		if ( $post_id <= 0 ) {
+			return array();
+		}
+
+		return self::get_assignable_staff_ids( $post_id );
 	}
 
 	/**

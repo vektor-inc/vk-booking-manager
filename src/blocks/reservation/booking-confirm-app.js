@@ -4,6 +4,7 @@ import apiFetch from '@wordpress/api-fetch';
 import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
 import { formatCurrency, normalizePriceValue } from '../shared/pricing';
 import { resolveLoginState } from '../shared/auth';
+import { resolveApiErrorMessage } from '../shared/rest-error-message';
 import { sanitizeDraftToken } from '../shared/draft-token';
 import { formatGuestsCount } from '../shared/guests';
 import { BookingSummaryItems } from './components/booking-summary-items';
@@ -387,15 +388,18 @@ export const BookingConfirmApp = ( {
 			} )
 			.catch( ( error ) => {
 				setLoadError(
-					error?.message ||
+					resolveApiErrorMessage(
+						error,
 						__(
 							"Couldn't load temporary reservation data. Please try again from the reservation page.",
 							'vk-booking-manager'
-						)
+						),
+						canManageReservations
+					)
 				);
 			} )
 			.finally( () => setLoading( false ) );
-	}, [ draftToken ] );
+	}, [ draftToken, canManageReservations ] );
 
 	useEffect( () => {
 		let isMounted = true;
@@ -764,15 +768,18 @@ export const BookingConfirmApp = ( {
 			} )
 			.catch( ( error ) => {
 				setAuthError(
-					error?.message ||
+					resolveApiErrorMessage(
+						error,
 						__(
 							'The form could not be displayed.',
 							'vk-booking-manager'
-						)
+						),
+						canManageReservations
+					)
 				);
 			} )
 			.finally( () => setAuthLoading( false ) );
-	}, [ authMode, isLoggedIn ] );
+	}, [ authMode, isLoggedIn, canManageReservations ] );
 
 	const handleCancelBooking = useCallback(
 		( bookingId ) => {
@@ -811,18 +818,21 @@ export const BookingConfirmApp = ( {
 				} )
 				.catch( ( error ) => {
 					setBookingsError(
-						error?.message ||
+						resolveApiErrorMessage(
+							error,
 							__(
 								'I was unable to cancel my reservation.',
 								'vk-booking-manager'
-							)
+							),
+							canManageReservations
+						)
 					);
 				} )
 				.finally( () => {
 					setCancellingBookingId( 0 );
 				} );
 		},
-		[ cancellingBookingId ]
+		[ cancellingBookingId, canManageReservations ]
 	);
 
 	useEffect( () => {
@@ -922,11 +932,14 @@ export const BookingConfirmApp = ( {
 					return;
 				}
 				setFavoriteError(
-					error?.message ||
+					resolveApiErrorMessage(
+						error,
 						__(
 							'Could not add to favorites.',
 							'vk-booking-manager'
-						)
+						),
+						canManageReservations
+					)
 				);
 			} );
 	};
@@ -1094,11 +1107,16 @@ export const BookingConfirmApp = ( {
 						'A reservation for the same date and time already exists.'
 					);
 				setSubmitError(
-					( isConflict ? conflictMessage : errorMessage ) ||
-						__(
-							'Confirmation of reservation failed. Please try again later.',
-							'vk-booking-manager'
-						)
+					isConflict
+						? conflictMessage
+						: resolveApiErrorMessage(
+								error,
+								__(
+									'Confirmation of reservation failed. Please try again later.',
+									'vk-booking-manager'
+								),
+								canManageReservations
+						  )
 				);
 			} )
 			.finally( () => setSubmitting( false ) );

@@ -55,6 +55,9 @@
 			"Please set the number of guests to %d or more.": [
 				"人数を %d 名以上にしてください。"
 			],
+			"Cancel": [
+				"キャンセル"
+			],
 			"Number of guests": [
 				"人数"
 			],
@@ -141,9 +144,6 @@
 			],
 			"Processing…": [
 				"処理中…"
-			],
-			"Cancel": [
-				"キャンセル"
 			],
 			"Book the same again": [
 				"同じ内容で予約する"
@@ -387,6 +387,15 @@
 			],
 			"Added to favorites.": [
 				"お気に入りに登録しました。"
+			],
+			"Open permalink settings": [
+				"パーマリンク設定を開く"
+			],
+			"The booking system is temporarily unavailable. Please try again later.": [
+				"現在、予約システムが一時的にご利用いただけません。しばらくしてから再度お試しください。"
+			],
+			"For administrators: The REST API is not responding. Try saving the permalink settings. If that does not help, check your security plugins or server settings.": [
+				"管理者の方へ: REST API が応答していません。パーマリンク設定を保存してみてください。解消しない場合は、セキュリティ系プラグインやサーバーの設定をご確認ください。"
 			]
 		}
 	}

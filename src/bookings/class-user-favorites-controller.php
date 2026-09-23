@@ -58,11 +58,6 @@ class User_Favorites_Controller {
 	private const MAX_FAVORITES = 20;
 
 	/**
-	 * メニューに紐づく対応スタッフID一覧を保持するメニュー側メタのキー。
-	 */
-	private const META_MENU_STAFF_IDS = '_vkbm_staff_ids';
-
-	/**
 	 * フックを登録する。
 	 */
 	public function register(): void {
@@ -361,8 +356,8 @@ class User_Favorites_Controller {
 	/**
 	 * 指定スタッフがそのメニューで指名可能かを判定する。
 	 *
-	 * メニューに対応スタッフ（_vkbm_staff_ids）が設定されている場合はその中に
-	 * 含まれること、未設定の場合は公開済みリソースであることを条件とする。
+	 * メニューに対応スタッフ（_vkbm_staff_ids、または「すべてのリソースが担当できる」の展開結果）が
+	 * 設定されている場合はその中に含まれること、未設定の場合は公開済みリソースであることを条件とする。
 	 *
 	 * @param int $menu_id     メニューID。
 	 * @param int $resource_id スタッフID。
@@ -374,8 +369,8 @@ class User_Favorites_Controller {
 			return false;
 		}
 
-		$staff_ids = get_post_meta( $menu_id, self::META_MENU_STAFF_IDS, true );
-		$staff_ids = is_array( $staff_ids ) ? array_map( 'intval', $staff_ids ) : array();
+		// #485: 担当できるリソースの解決は Service_Menu_Post_Type::get_assignable_staff_ids() に集約。
+		$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id );
 
 		// メニューに対応スタッフ指定がある場合は、その中に含まれることを必須とする。
 		if ( ! empty( $staff_ids ) ) {

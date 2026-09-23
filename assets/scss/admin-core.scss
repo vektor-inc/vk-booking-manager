@@ -330,6 +330,16 @@ input[type="number"].vkbm-price-input {
 		width: 8em;
 		white-space: nowrap;
 	}
+
+	/**
+	 * #477 安藤さん・植草さんレビュー対応: 担当スタッフ未割当のため枠を消費する
+	 * ステータスが選べないことを伝える通知（booking-quick-edit.js が動的に挿入）。
+	 * プルダウン（select.vkbm-qe-booking-status）と .vkbm-alert の間に余白を設け、
+	 * 選択肢と説明が地続きにならないようにする（design-rules.md「余白」）。
+	 */
+	.vkbm-qe-resource-required-notice {
+		margin-top: var(--vkbm--spacing--sm);
+	}
 }
 
 /**
@@ -383,4 +393,73 @@ input[type="number"].vkbm-price-input {
 .vkbm-booking-meta .form-table .vkbm-staff-distribution__staff {
 	width: 14em;
 	max-width: 100%;
+}
+
+/**
+ * サービスメニュー編集画面「〇〇連携」メタボックスの担当できるリソース（#485）。
+ * fieldset + legend で「すべて」「選ぶ」のラジオ2択と、「選ぶ」のときだけ表示する
+ * 個別チェックリストをグループ化する。余白は
+ * 「コントロール＋ラベル間 < 選択肢間 < 選択肢群と隣接グループ間」の3段で付ける。
+ */
+.vkbm-service-menu-staff {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+
+	.vkbm-service-menu-staff__legend {
+		padding: 0;
+		margin-bottom: var(--vkbm--spacing--xs);
+		font-weight: 600;
+	}
+
+	.vkbm-service-menu-staff__option {
+		margin-bottom: var(--vkbm--spacing--sm);
+
+		&:last-of-type {
+			margin-bottom: 0;
+		}
+
+		> label {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+
+			// 管理画面標準の input[type="radio"] は margin: -4px 4px 0 0 を持つため、これを 0 にして
+			// ラベル本文の開始位置を「ラジオ幅 16px ＋ gap 6px ＝ 22px」に固定する（下の説明文・リストのインデントと揃える）。
+			input[type="radio"] {
+				margin: 0;
+			}
+		}
+
+		> .description {
+			margin: 2px 0 0 22px;
+		}
+	}
+
+	.vkbm-service-menu-staff__list {
+		margin: var(--vkbm--spacing--xs) 0 0 22px;
+	}
+
+	.vkbm-service-menu-staff__checkboxes {
+		margin: 0;
+
+		li {
+			margin: 0 0 4px;
+		}
+
+		label {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+		}
+	}
+
+	.vkbm-service-menu-staff__status {
+		margin: var(--vkbm--spacing--xs) 0 0;
+
+		&:empty {
+			margin: 0;
+		}
+	}
 }
