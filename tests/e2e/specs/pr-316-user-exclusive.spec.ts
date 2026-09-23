@@ -4,7 +4,7 @@
  * 検証内容:
  *  A. 管理画面（サービスメニュー詳細）
  *     - Pro版・指名OFF・複数人予約ON のときだけ「予約者による貸切指定を受け付ける」チェックが出る。
- *     - そのチェック ON で「貸切料金 ￥/人」「貸切料金を適用しない申込人数」の第二段が表示される。
+ *     - そのチェック ON で「貸切料金 ￥/人」「貸切料金が無料になる申込人数」の第二段が表示される。
  *     - 値が保存・復元される。複数人予約 OFF にすると貸切系メタが削除される。
  *  B. フロント予約画面
  *     - 人数入力直下に「この時間帯を貸切にする」チェック。空き枠＋申込人数≧最小催行人数 で有効。
@@ -514,7 +514,7 @@ async function goToNextMonthLoaded( page: Page ): Promise< void > {
  * @param allowMulti      メニュー個別の複数人予約許可フラグ
  * @param userSelectable  ユーザー貸切指定チェック
  * @param feePerPerson    貸切料金（1人あたり）
- * @param feeExemptGuests 貸切料金を適用しない申込人数
+ * @param feeExemptGuests 貸切料金が無料になる申込人数
  */
 function savePostViaEditor(
 	menuId: string,

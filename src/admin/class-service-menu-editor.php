@@ -1018,8 +1018,13 @@ class Service_Menu_Editor {
 						</label>
 					</p>
 					<p class="description">
-						<?php esc_html_e( 'When the number of guests reaches this value or more, the slot is effectively private, so the private booking fee is not added.', 'vk-booking-manager' ); ?><br>
-						<?php esc_html_e( 'If left blank, the private booking fee is always added regardless of the number of guests.', 'vk-booking-manager' ); ?>
+						<?php esc_html_e( 'The private booking fee is not added when the number of guests is this value or more.', 'vk-booking-manager' ); ?><br>
+						<?php
+						/* translators: the numbers are an example threshold. Keep the second number one less than the first. */
+						esc_html_e( 'Example: if you enter 5, the fee is added for up to 4 guests and not added for 5 or more.', 'vk-booking-manager' );
+						?>
+						<br>
+						<?php esc_html_e( 'If left blank or set to 0, the private booking fee is always added regardless of the number of guests.', 'vk-booking-manager' ); ?>
 					</p>
 				</div>
 			</td>

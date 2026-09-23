@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: vk-booking-manager 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-"
 "manager\n"
-"POT-Creation-Date: 2026-09-23T03:14:52+00:00\n"
+"POT-Creation-Date: 2026-09-23T08:48:41+00:00\n"
 "PO-Revision-Date: 2026-02-23 23:58+0900\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -1503,26 +1503,26 @@ msgstr "%s の時間帯を削除"
 #. Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
 #: src/admin/class-service-menu-editor.php:121
 #: src/admin/class-service-menu-editor.php:882
-#: src/admin/class-service-menu-editor.php:1082
+#: src/admin/class-service-menu-editor.php:1087
 msgid "Delete"
 msgstr "削除"
 
 #. Translators: Placeholder for the price category name input. / 料金区分名の入力プレースホルダー.
 #: src/admin/class-service-menu-editor.php:123
-#: src/admin/class-service-menu-editor.php:1069
+#: src/admin/class-service-menu-editor.php:1074
 msgid "Category name (e.g. Adult)"
 msgstr "区分名（例：大人）"
 
 #. Translators: aria-label for the price category name input. / 料金区分名入力の aria-label.
 #: src/admin/class-service-menu-editor.php:125
-#: src/admin/class-service-menu-editor.php:1047
+#: src/admin/class-service-menu-editor.php:1052
 msgid "Price category name"
 msgstr "料金区分名"
 
 #. Translators: aria-label for the price input. / 料金入力の aria-label.
 #: src/admin/class-service-menu-editor.php:127
-#: src/admin/class-service-menu-editor.php:1048
-#: src/admin/class-service-menu-editor.php:1050
+#: src/admin/class-service-menu-editor.php:1053
+#: src/admin/class-service-menu-editor.php:1055
 #: src/post-types/class-service-menu-post-type.php:495
 msgid "Price"
 msgstr "価格"
@@ -1990,108 +1990,113 @@ msgstr "貸切料金は人数分加算されます"
 
 #: src/admin/class-service-menu-editor.php:1016
 msgid "Number of guests that exempts the private booking fee"
-msgstr "貸切料金を適用しない申込人数"
+msgstr "貸切料金が無料になる申込人数"
 
 #: src/admin/class-service-menu-editor.php:1021
 msgid ""
-"When the number of guests reaches this value or more, the slot is "
-"effectively private, so the private booking fee is not added."
-msgstr ""
-"この人数以上の申し込みなら、実質的に貸し切り状態になるため貸切料金は加算され"
-"ません。"
+"The private booking fee is not added when the number of guests is this value "
+"or more."
+msgstr "ここで指定した人数以上の申し込みには、貸切料金を加算しません。"
 
-#: src/admin/class-service-menu-editor.php:1022
+#. translators: the numbers are an example threshold. Keep the second number one less than the first.
+#: src/admin/class-service-menu-editor.php:1024
 msgid ""
-"If left blank, the private booking fee is always added regardless of the "
-"number of guests."
-msgstr "空欄の場合は人数に関わらず常に貸切料金を加算します。"
+"Example: if you enter 5, the fee is added for up to 4 guests and not added "
+"for 5 or more."
+msgstr "例：5 と入力した場合、4人までは加算、5人以上は加算なし。"
 
-#: src/admin/class-service-menu-editor.php:1049
+#: src/admin/class-service-menu-editor.php:1027
+msgid ""
+"If left blank or set to 0, the private booking fee is always added "
+"regardless of the number of guests."
+msgstr "空欄または 0 の場合は、人数に関わらず常に貸切料金を加算します。"
+
+#: src/admin/class-service-menu-editor.php:1054
 msgid "Category name"
 msgstr "区分名"
 
-#: src/admin/class-service-menu-editor.php:1053
+#: src/admin/class-service-menu-editor.php:1058
 msgid "Price categories"
 msgstr "料金区分"
 
-#: src/admin/class-service-menu-editor.php:1086
+#: src/admin/class-service-menu-editor.php:1091
 msgid "+ Add price category"
 msgstr "＋ 料金区分を追加"
 
-#: src/admin/class-service-menu-editor.php:1087
+#: src/admin/class-service-menu-editor.php:1092
 msgid ""
 "Define categories such as \"Adult\" and \"Child\", each with its own price."
 msgstr "「大人」「子供」などの区分を、それぞれの料金とともに定義します。"
 
-#: src/admin/class-service-menu-editor.php:1088
+#: src/admin/class-service-menu-editor.php:1093
 msgid ""
 "When one or more categories are defined, the basic price is ignored and the "
 "price is calculated from the categories."
 msgstr "区分を1つ以上定義すると、基本料金は無視されて区分料金で計算されます。"
 
-#: src/admin/class-service-menu-editor.php:1089
+#: src/admin/class-service-menu-editor.php:1094
 msgid ""
 "If no category is defined, the basic price multiplied by the number of "
 "guests is used."
 msgstr "区分を定義しない場合は、基本料金×人数で計算されます。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1149
+#: src/admin/class-service-menu-editor.php:1154
 msgid "%s added later will also be able to handle this menu automatically."
 msgstr "今後追加する%sも、自動的にこのメニューを担当できます。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1172
+#: src/admin/class-service-menu-editor.php:1177
 msgid "After adding %s, check them here so they can be in charge."
 msgstr "%sを追加したら、ここでチェックを入れると担当できるようになります。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1188
+#: src/admin/class-service-menu-editor.php:1193
 msgid "No %s are registered."
 msgstr "%sが登録されていません。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
 #. translators: %s: Resource label (singular).
-#: src/admin/class-service-menu-editor.php:1196
+#: src/admin/class-service-menu-editor.php:1201
 #: src/post-types/class-resource-post-type.php:52
 msgid "Add %s"
 msgstr "%sを追加"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1246
+#: src/admin/class-service-menu-editor.php:1251
 msgid "No %s have been selected to be in charge."
 msgstr "担当できる%sが選ばれていません。"
 
 #. translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option.
-#: src/admin/class-service-menu-editor.php:1250
+#: src/admin/class-service-menu-editor.php:1255
 msgid "Check the %1$s, or select \"%2$s\"."
 msgstr "%1$sにチェックを入れるか、「%2$s」を選んでください。"
 
-#: src/admin/class-service-menu-editor.php:1277
+#: src/admin/class-service-menu-editor.php:1282
 msgid "Disable online reservations"
 msgstr "オンライン予約を無効にする"
 
-#: src/admin/class-service-menu-editor.php:1283
+#: src/admin/class-service-menu-editor.php:1288
 msgid "Mark as archived"
 msgstr "アーカイブ済みにする"
 
-#: src/admin/class-service-menu-editor.php:1342
+#: src/admin/class-service-menu-editor.php:1347
 msgid ""
 "No valid day-of-week rows were found, so the reservation date was reset to "
 "\"Not specified\"."
 msgstr "有効な曜日の行が無いため、予約可能日を「指定なし」に戻しました。"
 
-#: src/admin/class-service-menu-editor.php:1345
+#: src/admin/class-service-menu-editor.php:1350
 msgid ""
 "No valid date rows were found, so the reservation date was reset to \"Not "
 "specified\"."
 msgstr "有効な日付の行が無いため、予約可能日を「指定なし」に戻しました。"
 
-#: src/admin/class-service-menu-editor.php:1349
+#: src/admin/class-service-menu-editor.php:1354
 msgid "Some invalid day-of-week rows were not saved."
 msgstr "一部の無効な曜日の行は保存されませんでした。"
 
-#: src/admin/class-service-menu-editor.php:1353
+#: src/admin/class-service-menu-editor.php:1358
 msgid "Some invalid dates (past dates, or start after end) were not saved."
 msgstr ""
 "一部の無効な日付（過去日、または開始が終了より後）は保存されませんでした。"
