@@ -3,7 +3,7 @@
  * メニューループ（カード）の開始時間表示の分岐テスト。
  *
  * 固定の開始時間（_vkbm_fixed_start_times）が設定されているサービスでは
- * カードに「開始時間」項目と各時刻を ` / ` 区切りで表示し、
+ * カードに「開始時間」項目と時部分の先頭の 0 を外した各時刻を ` / ` 区切りで表示し、
  * 未設定（空配列・空文字のみ）のサービスでは開始時間項目を出力しないことを確認する。
  *
  * @package VKBookingManager
@@ -71,10 +71,22 @@ class Menu_Loop_Card_Start_Time_Test extends WP_UnitTestCase {
 
 		$test_cases = array(
 			array(
-				'test_condition_name' => '開始時間が2件設定されている場合 => ラベルと各時刻が "&nbsp;/ " 区切りで表示される',
+				'test_condition_name' => '0付きの時と2桁の時が設定されている場合 => 時の先頭の0だけを外して "&nbsp;/ " 区切りで表示される',
 				'start_times'         => array( '09:00', '13:00' ),
 				'expect_label'        => true,
-				'expect_contains'     => array( '09:00&nbsp;/ 13:00' ),
+				'expect_contains'     => array( '<dd>9:00&nbsp;/ 13:00</dd>' ),
+			),
+			array(
+				'test_condition_name' => '時と分が0付きの場合 => 時の先頭の0だけを外して分の0は維持される',
+				'start_times'         => array( '09:05', '00:30' ),
+				'expect_label'        => true,
+				'expect_contains'     => array( '<dd>9:05&nbsp;/ 0:30</dd>' ),
+			),
+			array(
+				'test_condition_name' => 'HH:MM形式ではない値の場合 => 変換せずエスケープして表示される',
+				'start_times'         => array( '9:05', 'invalid<&' ),
+				'expect_label'        => true,
+				'expect_contains'     => array( '9:05&nbsp;/ invalid&lt;&amp;' ),
 			),
 			array(
 				'test_condition_name' => '開始時間が1件設定されている場合 => ラベルと単一の時刻が表示される',

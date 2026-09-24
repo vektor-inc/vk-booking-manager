@@ -1097,8 +1097,9 @@ class Menu_Loop_Block {
 
 		// 1件以上ある場合のみ開始時間の項目を追加する（自由予約メニューでは出さない）。
 		if ( ! empty( $start_times ) ) {
-			// 各時刻を個別にエスケープする。
-			$escaped_times = array_map( 'esc_html', $start_times );
+			// カード表示用に時の先頭の 0 を外してから、各時刻を個別にエスケープする。
+			$display_start_times = array_map( array( $this, 'format_start_time_for_card' ), $start_times );
+			$escaped_times       = array_map( 'esc_html', $display_start_times );
 			// 区切りの直前をノーブレークスペースで固定し、狭幅で折り返した際に
 			// 記号「/」だけが次行の行頭へ孤立しないようにする（改行は「/ 」の後でのみ起こる）。
 			// 各時刻は esc_html 済み・区切りは固定リテラルのため、dd へはそのまま出力する。
@@ -1303,6 +1304,22 @@ class Menu_Loop_Block {
 			$meta_markup,
 			$side_markup
 		);
+	}
+
+	/**
+	 * カードに表示する開始時間の時部分から先頭の 0 を外す。
+	 *
+	 * HH:MM 形式に一致しない値は、既存の表示を維持するため変換しない。
+	 *
+	 * @param string $start_time 開始時間。
+	 * @return string カード表示用の開始時間。
+	 */
+	private function format_start_time_for_card( string $start_time ): string {
+		if ( ! preg_match( '/^(\d{2}):(\d{2})$/', $start_time, $matches ) ) {
+			return $start_time;
+		}
+
+		return sprintf( '%d:%s', (int) $matches[1], $matches[2] );
 	}
 
 	/**

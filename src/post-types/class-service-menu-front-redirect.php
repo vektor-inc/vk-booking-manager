@@ -1,6 +1,6 @@
 <?php
 /**
- * 詳細ページを使用しないサービスメニューの個別ページを予約ページへリダイレクトする。
+ * 詳細ページを使用しないサービスメニューを予約ページへリダイレクトし、サイトマップから除外する。
  *
  * @package VKBookingManager
  */
@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
 use function add_action;
+use function add_filter;
 use function get_permalink;
 use function get_post_meta;
 use function get_queried_object;
@@ -28,13 +29,13 @@ use function wp_safe_redirect;
 use function wp_validate_redirect;
 
 /**
- * 詳細ページを使用しないサービスメニューの個別ページを、予約ページのトップへリダイレクトする。
+ * 詳細ページを使用しないサービスメニューを予約ページへリダイレクトし、サイトマップから除外する。
  *
  * 「詳細ページを使用する」（`_vkbm_use_detail_page`）がOFFのサービスメニューは、
  * 詳細ページ用のコンテンツが用意されていない前提のため、個別ページ（公開ページ）を
  * そのまま表示すると本文がほぼ空のページになってしまう（#453）。
  * このクラスは `template_redirect` フックでこの状態を検知し、基本設定の予約ページURLへ
- * 302リダイレクトする。
+ * 302リダイレクトする。また、WordPress 標準の XML サイトマップから対象の投稿を除外する。
  */
 class Service_Menu_Front_Redirect {
 
@@ -64,6 +65,42 @@ class Service_Menu_Front_Redirect {
 	 */
 	public function register(): void {
 		add_action( 'template_redirect', array( $this, 'maybe_redirect' ) );
+		add_filter( 'wp_sitemaps_posts_query_args', array( $this, 'filter_sitemap_query_args' ), 10, 2 );
+	}
+
+	/**
+	 * サービスメニューのサイトマップを、詳細ページを使用する投稿だけに絞り込む。
+	 *
+	 * @param array<string,mixed> $query_args サイトマップ取得用のクエリ引数。
+	 * @param string              $post_type  投稿タイプ名。
+	 * @return array<string,mixed> 絞り込み条件を反映したクエリ引数。
+	 */
+	public function filter_sitemap_query_args( array $query_args, string $post_type ): array {
+		// サービスメニュー以外のサイトマップには一切影響させない。
+		if ( Service_Menu_Post_Type::POST_TYPE !== $post_type ) {
+			return $query_args;
+		}
+
+		$detail_page_meta_query = array(
+			'key'     => self::META_USE_DETAIL_PAGE,
+			'value'   => '1',
+			'compare' => '=',
+		);
+
+		// 既存条件はひとまとまりの条件として残し、詳細ページ条件と AND で合成する。
+		if ( isset( $query_args['meta_query'] ) && is_array( $query_args['meta_query'] ) && ! empty( $query_args['meta_query'] ) ) {
+			$query_args['meta_query'] = array(
+				'relation' => 'AND',
+				$query_args['meta_query'],
+				$detail_page_meta_query,
+			);
+
+			return $query_args;
+		}
+
+		$query_args['meta_query'] = array( $detail_page_meta_query );
+
+		return $query_args;
 	}
 
 	/**

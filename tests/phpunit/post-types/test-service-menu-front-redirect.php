@@ -93,6 +93,97 @@ class Service_Menu_Front_Redirect_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * filter_sitemap_query_args() の投稿タイプ別の絞り込み条件を検証する。
+	 */
+	public function test_filter_sitemap_query_args(): void {
+		$handler               = $this->make_handler();
+		$existing_meta_query   = array(
+			'relation' => 'OR',
+			array(
+				'key'   => '_existing_key',
+				'value' => 'first',
+			),
+			array(
+				'key'   => '_existing_key',
+				'value' => 'second',
+			),
+		);
+		$detail_page_condition = array(
+			'key'     => Service_Menu_Front_Redirect::META_USE_DETAIL_PAGE,
+			'value'   => '1',
+			'compare' => '=',
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'サービスメニュー・既存meta_queryなし => 詳細ページを使用する条件を追加',
+				'post_type'           => Service_Menu_Post_Type::POST_TYPE,
+				'query_args'          => array( 'posts_per_page' => 100 ),
+				'expected'            => array(
+					'posts_per_page' => 100,
+					'meta_query'     => array( $detail_page_condition ),
+				),
+			),
+			array(
+				'test_condition_name' => 'サービスメニュー・既存meta_queryあり => 既存条件を維持して詳細ページ条件とANDで合成',
+				'post_type'           => Service_Menu_Post_Type::POST_TYPE,
+				'query_args'          => array( 'meta_query' => $existing_meta_query ),
+				'expected'            => array(
+					'meta_query' => array(
+						'relation' => 'AND',
+						$existing_meta_query,
+						$detail_page_condition,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => '通常投稿 => クエリ引数を変更しない',
+				'post_type'           => 'post',
+				'query_args'          => array( 'meta_query' => $existing_meta_query ),
+				'expected'            => array( 'meta_query' => $existing_meta_query ),
+			),
+			array(
+				'test_condition_name' => '固定ページ => クエリ引数を変更しない',
+				'post_type'           => 'page',
+				'query_args'          => array( 'posts_per_page' => 50 ),
+				'expected'            => array( 'posts_per_page' => 50 ),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = $handler->filter_sitemap_query_args( $case['query_args'], $case['post_type'] );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * WordPress 標準サイトマップのURL一覧に詳細ページを使用する投稿だけが含まれることを検証する。
+	 */
+	public function test_sitemap_url_list(): void {
+		$handler = $this->make_handler();
+		$handler->register();
+		// register() で追加したフックは WP_UnitTestCase の tear_down() が復元するため、個別の後片付けは不要。
+
+		$detail_page_post = $this->create_menu_post(
+			array( Service_Menu_Front_Redirect::META_USE_DETAIL_PAGE => '1' )
+		);
+		$this->create_menu_post(
+			array( Service_Menu_Front_Redirect::META_USE_DETAIL_PAGE => '' )
+		);
+		$this->create_menu_post();
+
+		$provider  = new \WP_Sitemaps_Posts();
+		$url_list  = $provider->get_url_list( 1, Service_Menu_Post_Type::POST_TYPE );
+		$locations = array_column( $url_list, 'loc' );
+
+		$this->assertSame(
+			array( get_permalink( $detail_page_post ) ),
+			$locations,
+			'詳細ページを使用する投稿だけがサービスメニューのサイトマップに含まれる'
+		);
+	}
+
+	/**
 	 * resolve_redirect_url() の判定ロジックを検証する。
 	 *
 	 * WordPress のグローバルな状態（クエリ・プレビュー判定）に依存しない純粋な

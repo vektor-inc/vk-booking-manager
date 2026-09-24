@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 2.4.1
+Stable tag: 2.4.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,10 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 2.4.2 =
+* [ 仕様変更 ] 「詳細ページを使用する」が無効なサービスメニューを WordPress 標準 XML サイトマップから除外
+* [ 仕様変更 ][ サービスメニュー一覧ブロック ] カードの開始時間を時の先頭の 0 を外した表記に変更（例: 09:00 → 9:00）
 
 = 2.4.1 =
 * [ 仕様変更 ] サービスメニュー編集画面の「貸切料金を適用しない申込人数」を「貸切料金が無料になる申込人数」に変更し、説明文を何人から無料になるかが分かる文言（具体例つき）に変更。空欄だけでなく 0 でも常に加算される点も明記
