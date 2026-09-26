@@ -1219,6 +1219,9 @@ class Menu_Loop_Block {
 		// 料金区分が基本料金へフォールバックしたにもかかわらず、カードには区分表が残ってしまう）。
 		// なお resolve_menu_price_tiers() のもう1条件（count_menu_staff >= 1）は、スタッフ未割当の
 		// メニューはそもそも予約できないため表示ゲートには揃えない（安藤さんの判断）。
+		// #515: 「料金区分が実際に適用されるか」の判定（$slot_capacity_available・max_capacity>=2・
+		// _vkbm_allow_multiple_guests・区分1件以上）は Price_Tiers::is_menu_using_price_tiers() に
+		// 集約し、後段でこのメソッドを直接呼ぶ。管理画面のサービスメニュー一覧の料金列も同じメソッドを使う。
 		$max_capacity            = (int) get_post_meta( $post->ID, '_vkbm_max_capacity', true );
 		$min_capacity            = (int) get_post_meta( $post->ID, '_vkbm_min_capacity', true );
 		$slot_capacity_available = Staff_Editor::is_multi_guest_available_for_menu( $post->ID );
@@ -1233,9 +1236,6 @@ class Menu_Loop_Block {
 		// #392: 最少催行人数は指名を使うメニューでは意味を持たないため、定員・料金区分とは別に
 		// 「指名OFF」を明示的に要求する（残数・催行状態をフロントで表示しない要件と同じ理由）。
 		$min_capacity_available = $slot_capacity_available && ! $is_nomination_menu;
-		$price_tiers_available  = $slot_capacity_available
-			&& $max_capacity >= 2
-			&& (bool) get_post_meta( $post->ID, '_vkbm_allow_multiple_guests', true );
 		if ( $slot_capacity_displayable && $max_capacity >= 2 ) {
 			// #392: 指名を使うメニューは「1組の最大人数」、使わないメニューは従来どおり
 			// 「予約枠の定員」とラベルを出し分ける。同じ数値でも「相乗りできる人数」なのか
@@ -1266,8 +1266,11 @@ class Menu_Loop_Block {
 
 		// 料金区分（_vkbm_price_tiers）が設定されていれば、単一料金ではなく区分一覧を表示する（排他）。
 		// 区分が無い場合のみ従来どおり基本料金の単一表示にフォールバックする。
+		// #515: 「料金区分で設定されているか」の判定は Price_Tiers::is_menu_using_price_tiers() に
+		// 集約し、管理画面のサービスメニュー一覧の料金列（Service_Menu_Post_Type::render_admin_columns()）
+		// と同じ判定を使う。
 		$price_tiers_raw = get_post_meta( $post->ID, '_vkbm_price_tiers', true );
-		if ( $price_tiers_available && Price_Tiers::has_tiers( $price_tiers_raw ) ) {
+		if ( Price_Tiers::is_menu_using_price_tiers( $post->ID ) ) {
 			$price_markup = $this->render_price_tiers( Price_Tiers::normalize_tiers( $price_tiers_raw ) );
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			$price_markup = sprintf(

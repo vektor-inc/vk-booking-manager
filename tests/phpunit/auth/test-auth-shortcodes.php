@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\Auth;
 
 use VKBookingManager\Auth\Auth_Shortcodes;
+use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
@@ -40,6 +41,10 @@ class Testable_Auth_Shortcodes extends Auth_Shortcodes {
 class Auth_Shortcodes_Test extends WP_UnitTestCase {
 	protected function setUp(): void {
 		parent::setUp();
+		// wp_delete_user() を使うテスト（issue #507 のログイン系テスト等）のために読み込んでおく。
+		if ( ! function_exists( 'wp_delete_user' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/user.php';
+		}
 		if ( function_exists( 'switch_to_locale' ) ) {
 			switch_to_locale( 'ja' );
 		}
@@ -860,6 +865,80 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * #510: send_verification_email() がメールログへ種類「registration_confirmation」を
+	 * 付けて記録すること、メールログ無効時は記録しないことを確認する。
+	 */
+	public function test_send_verification_email_records_type_in_email_log(): void {
+		$repository        = new Settings_Repository();
+		$original_settings = $repository->get_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'メールログ有効・送信成功 => type=registration_confirmation で記録される（正常系）',
+				'email_log_enabled'   => true,
+				'mail_result'         => true,
+				'expected_log_count'  => 1,
+				'expected_status'     => \VKBookingManager\Admin\Email_Log_Repository::STATUS_SENT,
+			),
+			array(
+				'test_condition_name' => 'メールログ有効・送信失敗 => failed で記録される（異常系）',
+				'email_log_enabled'   => true,
+				'mail_result'         => false,
+				'expected_log_count'  => 1,
+				'expected_status'     => \VKBookingManager\Admin\Email_Log_Repository::STATUS_FAILED,
+			),
+			array(
+				'test_condition_name' => 'メールログ無効 => 記録されない（境界値）',
+				'email_log_enabled'   => false,
+				'mail_result'         => true,
+				'expected_log_count'  => 0,
+				'expected_status'     => null,
+			),
+		);
+
+		try {
+			$log_repository = new \VKBookingManager\Admin\Email_Log_Repository();
+
+			foreach ( $test_cases as $case ) {
+				$log_repository->clear_logs();
+
+				$settings                       = $original_settings;
+				$settings['email_log_enabled']  = $case['email_log_enabled'];
+				$repository->update_settings( $settings );
+
+				$mail_result = $case['mail_result'];
+				$mail_filter = static function () use ( $mail_result ) {
+					if ( $mail_result ) {
+						return true;
+					}
+					do_action( 'wp_mail_failed', new \WP_Error( 'wp_mail_failed', 'Simulated SMTP failure' ) );
+					return false;
+				};
+				add_filter( 'pre_wp_mail', $mail_filter );
+
+				$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+				$shortcodes = new Auth_Shortcodes( $service );
+				$method     = new \ReflectionMethod( $shortcodes, 'send_verification_email' );
+				$method->setAccessible( true );
+				$method->invoke( $shortcodes, 'verify_type_user@example.com', '', 'dummy-token' );
+
+				remove_filter( 'pre_wp_mail', $mail_filter );
+
+				$logs = $log_repository->get_logs();
+				$this->assertCount( $case['expected_log_count'], $logs, $case['test_condition_name'] );
+
+				if ( $case['expected_log_count'] > 0 ) {
+					$this->assertSame( 'registration_confirmation', $logs[0]['type'], $case['test_condition_name'] );
+					$this->assertSame( $case['expected_status'], $logs[0]['status'], $case['test_condition_name'] );
+				}
+			}
+		} finally {
+			$repository->update_settings( $original_settings );
+			( new \VKBookingManager\Admin\Email_Log_Repository() )->clear_logs();
+		}
+	}
+
+	/**
 	 * Test that handle_email_verification cleans up the legacy plain-text token meta as well.
 	 * 認証完了時に旧仕様の平文トークンメタも一緒に掃除されることを確認する。
 	 */
@@ -1005,5 +1084,983 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		// Restore globals. / グローバルを復元する。
 		$_GET    = $previous_get;
 		$_SERVER = $previous_server;
+	}
+
+	/**
+	 * ログイン判定（issue #507）: 4つの保存状態 × メール認証必須設定のオン/オフ。
+	 * 正しいパスワードでログインを試み、Email_Verification::is_login_allowed() の
+	 * 結果どおりに許可・拒否されることを、リダイレクトの有無で検証する。
+	 */
+	public function test_process_login_request_respects_email_verification_status(): void {
+		$repository         = new Settings_Repository();
+		$original_settings  = $repository->get_settings();
+		$previous_post      = $_POST;
+		$previous_server    = $_SERVER;
+		$previous_cookie    = $_COOKIE;
+		$password           = 'CorrectPass123!';
+
+		$test_cases = [
+			[
+				'test_condition_name'    => '状態が保存されていない（旧ユーザー）かつ設定オンの場合 => ログイン許可',
+				'status'                 => null,
+				'verification_required'  => true,
+				'expect_login'           => true,
+				'expect_resend_grant'    => false,
+			],
+			[
+				'test_condition_name'    => '状態 "1"（メールで認証済み）かつ設定オンの場合 => ログイン許可',
+				'status'                 => Email_Verification::STATUS_VERIFIED,
+				'verification_required'  => true,
+				'expect_login'           => true,
+				'expect_resend_grant'    => false,
+			],
+			[
+				'test_condition_name'    => '状態 "manual"（手動承認）かつ設定オンの場合 => ログイン許可',
+				'status'                 => Email_Verification::STATUS_MANUAL,
+				'verification_required'  => true,
+				'expect_login'           => true,
+				'expect_resend_grant'    => false,
+			],
+			[
+				'test_condition_name'    => '状態 "0"（未認証）かつ設定オンの場合 => ログイン拒否・再送許可を発行',
+				'status'                 => Email_Verification::STATUS_UNVERIFIED,
+				'verification_required'  => true,
+				'expect_login'           => false,
+				'expect_resend_grant'    => true,
+			],
+			[
+				'test_condition_name'    => '状態 "0"（未認証）かつ設定オフの場合（論点1） => ログイン許可',
+				'status'                 => Email_Verification::STATUS_UNVERIFIED,
+				'verification_required'  => false,
+				'expect_login'           => true,
+				'expect_resend_grant'    => false,
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $index => $case ) {
+				$settings                                             = $original_settings;
+				$settings['registration_email_verification_enabled'] = $case['verification_required'];
+				$repository->update_settings( $settings );
+
+				$user_login = 'login_state_user_' . $index;
+				$user_id    = wp_insert_user(
+					[
+						'user_login' => $user_login,
+						'user_email' => $user_login . '@example.com',
+						'user_pass'  => $password,
+					]
+				);
+				$this->assertIsInt( $user_id, $case['test_condition_name'] );
+
+				if ( null !== $case['status'] ) {
+					update_user_meta( $user_id, Email_Verification::META_STATUS, $case['status'] );
+				}
+
+				$_SERVER['REQUEST_METHOD'] = 'POST';
+				$_COOKIE                   = [];
+				$_POST                     = [
+					'vkbm_login_form'  => '1',
+					'vkbm_login_nonce' => wp_create_nonce( 'vkbm_login_form' ),
+					'log'              => $user_login,
+					'pwd'              => $password,
+				];
+
+				$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+				$shortcodes = new Testable_Auth_Shortcodes( $service );
+				$shortcodes->handle_form_submission();
+
+				if ( $case['expect_login'] ) {
+					$this->assertNotNull( $shortcodes->last_redirect_url, $case['test_condition_name'] );
+				} else {
+					$this->assertNull( $shortcodes->last_redirect_url, $case['test_condition_name'] );
+				}
+
+				$this->assertSame(
+					$case['expect_resend_grant'],
+					$shortcodes->has_resend_grant(),
+					$case['test_condition_name']
+				);
+
+				wp_delete_user( $user_id );
+			}
+		} finally {
+			$repository->update_settings( $original_settings );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 再送許可の発行条件（issue #507）: パスワードを間違えた場合は再送許可を発行しないこと
+	 * （#194 と同じ観点。存在確認に使われないようにする）。
+	 */
+	public function test_resend_grant_is_not_issued_on_wrong_password(): void {
+		$repository        = new Settings_Repository();
+		$original_settings = $repository->get_settings();
+		$previous_post     = $_POST;
+		$previous_server   = $_SERVER;
+		$previous_cookie   = $_COOKIE;
+
+		try {
+			$settings                                             = $original_settings;
+			$settings['registration_email_verification_enabled'] = true;
+			$repository->update_settings( $settings );
+
+			$user_login = 'wrong_password_user';
+			$user_id    = wp_insert_user(
+				[
+					'user_login' => $user_login,
+					'user_email' => $user_login . '@example.com',
+					'user_pass'  => 'CorrectPass123!',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			$_COOKIE                   = [];
+			$_POST                     = [
+				'vkbm_login_form'  => '1',
+				'vkbm_login_nonce' => wp_create_nonce( 'vkbm_login_form' ),
+				'log'              => $user_login,
+				'pwd'              => 'WrongPassword!',
+			];
+
+			$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+			$shortcodes->handle_form_submission();
+
+			$this->assertNull( $shortcodes->last_redirect_url );
+			$this->assertFalse( $shortcodes->has_resend_grant(), 'パスワードを間違えた場合は再送許可を発行しない' );
+
+			wp_delete_user( $user_id );
+		} finally {
+			$repository->update_settings( $original_settings );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 再送処理（issue #507）: 使い捨て許可で再送すると、新しいトークンに置き換わり
+	 * （古いリンクが無効化され）、許可は消費されて再度は使えなくなること。
+	 */
+	public function test_process_resend_verification_request_rotates_token_and_consumes_grant(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		$mail_filter = static function () {
+			return true;
+		};
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			$user_id = $this->factory()->user->create(
+				[
+					'user_login' => 'resend_rotate_user',
+					'user_email' => 'resend_rotate_user@example.com',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+			$old_hash = hash( 'sha256', 'old-token' );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, $old_hash );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + DAY_IN_SECONDS );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			// issue_resend_grant() 相当を、ログイン失敗経由と同じ transient + クッキーの
+			// 形で再現する（private メソッドのため、公開 API 経由の同等の状態を用意する）。
+			$grant_token = 'grant-token-value';
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $grant_token ), $user_id, 600 );
+
+			$_SERVER['REQUEST_METHOD']            = 'POST';
+			$_COOKIE['vkbm_resend_grant']          = $grant_token;
+			$_POST                                = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			$shortcodes->handle_form_submission();
+
+			// 新しいトークンに置き換わり、古いハッシュはもう保存されていないこと。
+			$new_hash = (string) get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true );
+			$this->assertNotSame( $old_hash, $new_hash, '再送で新しいトークンハッシュに置き換わること' );
+			$this->assertSame( 1, preg_match( '/^[0-9a-f]{64}$/', $new_hash ), 'ハッシュがSHA-256形式であること' );
+
+			// 植草さんレビュー指摘（issue #507 PR）: 成功後も「もう一度お試しください」の
+			// 手段を残すため、新しい許可が発行し直されて再送ボタンが出続けること。
+			$this->assertTrue( $shortcodes->has_resend_grant(), '再送成功後も新しい許可が発行し直されること' );
+
+			// リダイレクトが行われていること（成功フィードバック用の通知クッキー経由）。
+			$this->assertNotNull( $shortcodes->last_redirect_url );
+
+			wp_delete_user( $user_id );
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 安藤さんレビュー指摘（issue #507 PR）: 再送許可を再発行する際、直前の許可の
+	 * transient は無効化されること（古い許可の使い回し防止）。
+	 */
+	public function test_issue_resend_grant_invalidates_previous_grant(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		$mail_filter = static function () {
+			return true;
+		};
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			$user_id = $this->factory()->user->create(
+				[
+					'user_login' => 'resend_invalidate_prev_user',
+					'user_email' => 'resend_invalidate_prev_user@example.com',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			$old_grant_token = 'old-grant-token';
+			$old_transient_key = 'vkbm_resend_grant_' . hash( 'sha256', $old_grant_token );
+			set_transient( $old_transient_key, $user_id, 600 );
+
+			$_SERVER['REQUEST_METHOD']    = 'POST';
+			$_COOKIE['vkbm_resend_grant'] = $old_grant_token;
+			$_POST                        = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			// この呼び出しで古い許可が消費され、成功後に新しい許可が発行し直される。
+			$shortcodes->handle_form_submission();
+
+			$this->assertTrue( $shortcodes->has_resend_grant(), '新しい許可が発行し直されること' );
+			$this->assertFalse(
+				get_transient( $old_transient_key ),
+				'古い許可の transient は再発行時に無効化されていること'
+			);
+
+			wp_delete_user( $user_id );
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 再送処理（issue #507）: 同一利用者への再送は60秒に1回まで（論点4）。
+	 */
+	public function test_process_resend_verification_request_enforces_per_user_cooldown(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		$mail_filter = static function () {
+			return true;
+		};
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			$user_id = $this->factory()->user->create(
+				[
+					'user_login' => 'resend_cooldown_user',
+					'user_email' => 'resend_cooldown_user@example.com',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+			// 59秒前に再送済みという状態を再現する（60秒未満）。
+			update_user_meta( $user_id, Email_Verification::META_RESEND_LAST_SENT, time() - 59 );
+			$old_hash = hash( 'sha256', 'old-token-cooldown' );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, $old_hash );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			$grant_token = 'grant-token-cooldown';
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $grant_token ), $user_id, 600 );
+
+			$_SERVER['REQUEST_METHOD']   = 'POST';
+			$_COOKIE['vkbm_resend_grant'] = $grant_token;
+			$_POST                       = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			$shortcodes->handle_form_submission();
+
+			// 60秒以内の再送は拒否され、トークンハッシュは変わらないこと。
+			$this->assertSame(
+				$old_hash,
+				(string) get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true ),
+				'60秒以内の再送はトークンを発行し直さないこと'
+			);
+
+			// 植草さんレビュー指摘（issue #507 PR）: 上限到達（クールダウン中）でも
+			// 「もう一度お試しください」の手段を残すため、許可が発行し直されること。
+			$this->assertTrue( $shortcodes->has_resend_grant(), 'クールダウン中でも新しい許可が発行し直されること' );
+
+			wp_delete_user( $user_id );
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 安藤さんレビュー指摘（issue #507 PR）: 利用者単位の1日上限（24時間で5回まで）。
+	 * 上限到達時は rate_limited 表示になり、上限未満なら再送できること。
+	 */
+	public function test_process_resend_verification_request_enforces_daily_limit(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		$mail_filter = static function () {
+			return true;
+		};
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			$user_id = $this->factory()->user->create(
+				[
+					'user_login' => 'resend_daily_limit_user',
+					'user_email' => 'resend_daily_limit_user@example.com',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+			// 1日上限（5回）に既に達している状態を再現する。60秒クールダウンに
+			// 引っかからないよう、最終送信は61秒以上前にしておく。
+			update_user_meta( $user_id, Email_Verification::META_RESEND_COUNT, 5 );
+			update_user_meta( $user_id, Email_Verification::META_RESEND_WINDOW_START, time() - 3600 );
+			update_user_meta( $user_id, Email_Verification::META_RESEND_LAST_SENT, time() - 61 );
+			$old_hash = hash( 'sha256', 'old-token-daily-limit' );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, $old_hash );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			$grant_token = 'grant-token-daily-limit';
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $grant_token ), $user_id, 600 );
+
+			$_SERVER['REQUEST_METHOD']    = 'POST';
+			$_COOKIE['vkbm_resend_grant'] = $grant_token;
+			$_POST                        = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			$shortcodes->handle_form_submission();
+
+			// 1日上限に達している場合はメールを再送せず、トークンハッシュは変わらないこと。
+			$this->assertSame(
+				$old_hash,
+				(string) get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true ),
+				'1日上限に達している場合はトークンを発行し直さないこと'
+			);
+			$this->assertTrue( $shortcodes->has_resend_grant(), '1日上限到達でも新しい許可が発行し直されること' );
+
+			wp_delete_user( $user_id );
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 安藤さんレビュー指摘（issue #507 PR）: メール送信に失敗した場合も、再挑戦の
+	 * 手段を残すため新しい許可が発行し直されること。
+	 */
+	public function test_process_resend_verification_request_reissues_grant_on_send_failure(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		$mail_filter = static function () {
+			return false;
+		};
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			$user_id = $this->factory()->user->create(
+				[
+					'user_login' => 'resend_send_failure_user',
+					'user_email' => 'resend_send_failure_user@example.com',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			$grant_token = 'grant-token-send-failure';
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $grant_token ), $user_id, 600 );
+
+			$_SERVER['REQUEST_METHOD']    = 'POST';
+			$_COOKIE['vkbm_resend_grant'] = $grant_token;
+			$_POST                        = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			$shortcodes->handle_form_submission();
+
+			$this->assertTrue( $shortcodes->has_resend_grant(), '送信失敗でも新しい許可が発行し直されること' );
+
+			wp_delete_user( $user_id );
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 安藤さんレビュー指摘（issue #507 PR）: 許可が無効・期限切れの場合はサイレントに
+	 * 何もしないのではなく、共通文言（状態を推測されない）でリダイレクトすること。
+	 * この場合は新しい許可を発行し直さない（有効な未認証ユーザーと確認できていないため）。
+	 */
+	public function test_process_resend_verification_request_shows_expired_notice_for_invalid_grant(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		try {
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			// 存在しないトークン（transient が無い）。
+			$_SERVER['REQUEST_METHOD']    = 'POST';
+			$_COOKIE['vkbm_resend_grant'] = 'never-issued-token';
+			$_POST                        = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			$shortcodes->handle_form_submission();
+
+			// サイレントに終わらず、リダイレクト（＝案内表示）が行われること。
+			$this->assertNotNull( $shortcodes->last_redirect_url, '無効な許可でもサイレントに終わらずリダイレクトされること' );
+			// 有効な未認証ユーザーと確認できていないため、許可は発行し直さないこと。
+			$this->assertFalse( $shortcodes->has_resend_grant(), '無効な許可では新しい許可を発行し直さないこと' );
+		} finally {
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * 安藤さんレビュー指摘（issue #507 PR）: 再送の IP レート制限は会員登録用の
+	 * 'register' 枠と別バケットにする。再送で上限に達しても、新規登録は別枠のため
+	 * 影響を受けないこと。
+	 */
+	public function test_resend_rate_limit_does_not_share_bucket_with_registration(): void {
+		$repository          = new Settings_Repository();
+		$original_settings   = $repository->get_settings();
+		$original_can_register = get_option( 'users_can_register' );
+		$previous_post       = $_POST;
+		$previous_server     = $_SERVER;
+		$previous_cookie     = $_COOKIE;
+
+		$mail_filter = static function () {
+			return true;
+		};
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter );
+
+			// テスト用にユーザー登録を有効化する（既定は無効のため）。
+			update_option( 'users_can_register', 1 );
+
+			// IP単位のレート制限を検証可能にするため、固定のクライアントIPを与える。
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.77';
+
+			$settings                                             = $original_settings;
+			$settings['auth_rate_limit_enabled']                  = true;
+			// 再送用の上限を1にして、1回で使い切れるようにする（登録用の設定値を流用する仕様）。
+			$settings['auth_rate_limit_register_max']             = 1;
+			$settings['registration_email_verification_enabled']  = true;
+			$repository->update_settings( $settings );
+
+			$user_id = $this->factory()->user->create(
+				[
+					'user_login' => 'resend_bucket_user',
+					'user_email' => 'resend_bucket_user@example.com',
+				]
+			);
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+
+			$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+
+			$grant_token = 'grant-token-bucket';
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $grant_token ), $user_id, 600 );
+
+			$_SERVER['REQUEST_METHOD']    = 'POST';
+			$_COOKIE['vkbm_resend_grant'] = $grant_token;
+			$_POST                        = [
+				'vkbm_resend_verification_form'  => '1',
+				'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+			];
+
+			// 再送用IPレート制限（上限1）を使い切る。
+			$shortcodes->handle_form_submission();
+
+			$new_hash = (string) get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true );
+			$this->assertSame( 1, preg_match( '/^[0-9a-f]{64}$/', $new_hash ), '再送1回目は成功しトークンが発行されること' );
+
+			// 同じIPからの新規登録が、再送のレート制限に巻き添えにされず成功すること
+			// （'register' と 'resend_verification' が別バケットである証明）。
+			$register_user_login = 'resend_bucket_register_user';
+			$_POST = [
+				'vkbm_registration_form'  => '1',
+				'vkbm_registration_nonce' => wp_create_nonce( 'vkbm_registration_form' ),
+				'user_login'              => $register_user_login,
+				'user_email'              => 'resend_bucket_register_user@example.com',
+				'user_pass'               => 'password123',
+				'user_pass_confirm'       => 'password123',
+				'kana_name'               => 'たろう',
+				'phone_number'            => '090-0000-0000',
+				'vkbm_agree_terms_of_service' => '1',
+				'vkbm_agree_privacy_policy'   => '1',
+			];
+
+			$shortcodes->handle_form_submission();
+
+			$registered_user = get_user_by( 'login', $register_user_login );
+			$this->assertInstanceOf(
+				\WP_User::class,
+				$registered_user,
+				'再送のレート制限を使い切っていても、別バケットの新規登録は成功すること'
+			);
+
+			wp_delete_user( $user_id );
+			if ( $registered_user instanceof \WP_User ) {
+				wp_delete_user( $registered_user->ID );
+			}
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter );
+			$repository->update_settings( $original_settings );
+			update_option( 'users_can_register', $original_can_register );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			$_COOKIE = $previous_cookie;
+		}
+	}
+
+	/**
+	 * after_password_reset（issue #507 やること3）: '0' / 'manual' のユーザーが
+	 * パスワード再設定を完了すると '1' に切り替わり、トークン系メタが削除されること。
+	 */
+	public function test_handle_after_password_reset_marks_verified(): void {
+		$test_cases = [
+			[
+				'test_condition_name' => '状態 "0"（未認証）の場合 => "1" に切り替わる',
+				'status'               => Email_Verification::STATUS_UNVERIFIED,
+			],
+			[
+				'test_condition_name' => '状態 "manual"（手動承認）の場合 => "1" に切り替わる',
+				'status'               => Email_Verification::STATUS_MANUAL,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$user_id = $this->factory()->user->create();
+			update_user_meta( $user_id, Email_Verification::META_STATUS, $case['status'] );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', 'token' ) );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + DAY_IN_SECONDS );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+			$user       = get_userdata( $user_id );
+
+			$shortcodes->handle_after_password_reset( $user, 'new-password' );
+
+			$this->assertSame(
+				Email_Verification::STATUS_VERIFIED,
+				Email_Verification::get_status( $user_id ),
+				$case['test_condition_name']
+			);
+			$this->assertSame(
+				'',
+				(string) get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true ),
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
+	 * issue #512: get_login_error_message() は固定のホワイトリストに載っているコードだけ
+	 * 文言を返し、それ以外（`<script>` 等の任意文字列を含む）は空文字を返して
+	 * 「何も表示しない」を呼び出し側に伝えること。
+	 */
+	public function test_get_login_error_message_only_returns_whitelisted_codes(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'auth_failed => 統一文言',
+				'code'                => 'auth_failed',
+				'expect_empty'        => false,
+			],
+			[
+				'test_condition_name' => 'invalid_nonce => セキュリティチェック失敗の文言',
+				'code'                => 'invalid_nonce',
+				'expect_empty'        => false,
+			],
+			[
+				'test_condition_name' => 'rate_limited => 試行回数超過の文言',
+				'code'                => 'rate_limited',
+				'expect_empty'        => false,
+			],
+			[
+				'test_condition_name' => 'unverified_email => メール認証未完了の文言',
+				'code'                => 'unverified_email',
+				'expect_empty'        => false,
+			],
+			[
+				'test_condition_name' => 'empty_username => ユーザー名未入力の文言',
+				'code'                => 'empty_username',
+				'expect_empty'        => false,
+			],
+			[
+				'test_condition_name' => 'empty_password => パスワード未入力の文言',
+				'code'                => 'empty_password',
+				'expect_empty'        => false,
+			],
+			[
+				'test_condition_name' => '一覧に無いコード（script混入）=> 空文字（何も表示しない）',
+				'code'                => '<script>alert(1)</script>',
+				'expect_empty'        => true,
+			],
+			[
+				'test_condition_name' => '一覧に無いコード（未知の英数字）=> 空文字（何も表示しない）',
+				'code'                => 'some_unknown_code',
+				'expect_empty'        => true,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$message = $shortcodes->get_login_error_message( $case['code'] );
+
+			if ( $case['expect_empty'] ) {
+				$this->assertSame( '', $message, $case['test_condition_name'] );
+			} else {
+				$this->assertNotSame( '', $message, $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
+	 * issue #512: process_login_request() が確定させたログイン失敗コードを
+	 * get_current_login_error_code() 経由で取得できること（Cookie を使わず
+	 * render_block フィルタへ橋渡しするための入口）。
+	 */
+	public function test_get_current_login_error_code_reflects_process_login_request_result(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'login_error_code_user',
+				'user_pass'  => 'CorrectPass123!',
+			]
+		);
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'nonce不正 => invalid_nonce',
+				'post'                => [
+					'vkbm_login_form'  => '1',
+					'vkbm_login_nonce' => 'invalid-nonce',
+					'log'              => 'login_error_code_user',
+					'pwd'              => 'CorrectPass123!',
+				],
+				'expected_code'       => 'invalid_nonce',
+			],
+			[
+				'test_condition_name' => 'ユーザー名未入力 => empty_username',
+				'post'                => [
+					'vkbm_login_form'  => '1',
+					'vkbm_login_nonce' => null, // 実行時に発行する。
+					'log'              => '',
+					'pwd'              => 'CorrectPass123!',
+				],
+				'expected_code'       => 'empty_username',
+			],
+			[
+				'test_condition_name' => 'パスワード不一致 => auth_failed（統一文言に丸める）',
+				'post'                => [
+					'vkbm_login_form'  => '1',
+					'vkbm_login_nonce' => null,
+					'log'              => 'login_error_code_user',
+					'pwd'              => 'WrongPassword!!',
+				],
+				'expected_code'       => 'auth_failed',
+			],
+			[
+				// issue #512 レビュー対応（安藤さん指摘）: 存在しないユーザー名でも
+				// invalid_username のままではなく auth_failed に丸まること
+				// （#194 のユーザー列挙対策を、コード経由でも崩さないことの確認）。
+				'test_condition_name' => '存在しないユーザー名 => auth_failed（統一文言に丸める）',
+				'post'                => [
+					'vkbm_login_form'  => '1',
+					'vkbm_login_nonce' => null,
+					'log'              => 'no_such_user_xyz_512',
+					'pwd'              => 'WhateverPass123!',
+				],
+				'expected_code'       => 'auth_failed',
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$post = $case['post'];
+				if ( null === $post['vkbm_login_nonce'] ) {
+					$post['vkbm_login_nonce'] = wp_create_nonce( 'vkbm_login_form' );
+				}
+
+				$_SERVER['REQUEST_METHOD'] = 'POST';
+				$_POST                     = $post;
+
+				$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+				$shortcodes = new Auth_Shortcodes( $service );
+				$shortcodes->handle_form_submission();
+
+				$this->assertSame(
+					$case['expected_code'],
+					$shortcodes->get_current_login_error_code(),
+					$case['test_condition_name']
+				);
+			}
+		} finally {
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			wp_delete_user( $user_id );
+		}
+	}
+
+	/**
+	 * issue #512: 未実行・未失敗の Auth_Shortcodes インスタンスでは
+	 * get_current_login_error_code() が空文字を返すこと（render_block フィルタが
+	 * ログイン導線以外のリクエストで誤って何かを埋め込まないようにするための前提）。
+	 */
+	public function test_get_current_login_error_code_returns_empty_when_no_attempt_made(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$this->assertSame( '', $shortcodes->get_current_login_error_code() );
+	}
+
+	/**
+	 * issue #512: render_login_form() の error_code att が、ホワイトリストのコードなら
+	 * 既存の文言をエラー欄に出し、ホワイトリスト外のコードでは何も出さないこと
+	 * （REST コントローラー・render_block フィルタが同じ経路を通る）。
+	 */
+	public function test_render_login_form_error_code_attribute(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'ホワイトリストのコード => 統一文言がエラー欄に出る',
+				'error_code'          => 'auth_failed',
+				'expect_error_box'    => true,
+			],
+			[
+				'test_condition_name' => 'ホワイトリスト外のコード => 何も出ない',
+				'error_code'          => '<script>alert(1)</script>',
+				'expect_error_box'    => false,
+			],
+			[
+				'test_condition_name' => '空文字 => 何も出ない（従来どおり）',
+				'error_code'          => '',
+				'expect_error_box'    => false,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$html = $shortcodes->render_login_form( [ 'error_code' => $case['error_code'] ] );
+
+			if ( $case['expect_error_box'] ) {
+				$this->assertStringContainsString( 'vkbm-alert__danger', $html, $case['test_condition_name'] );
+				$this->assertStringContainsString(
+					__( 'Username or password is incorrect.', 'vk-booking-manager' ),
+					$html,
+					$case['test_condition_name']
+				);
+			} else {
+				$this->assertStringNotContainsString( 'vkbm-alert__danger', $html, $case['test_condition_name'] );
+				$this->assertStringNotContainsString( '<script>', $html, $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
+	 * issue #512 レビュー対応（安藤さん指摘）: 他プラグイン等が `authenticate` フィルタで
+	 * 独自コード・文言の WP_Error を返しても、process_login_request() は
+	 * 確認2（承認済み仕様）どおり統一文言（auth_failed）に丸めること。ユーザー名の
+	 * 存在を推測させない（#194）方針が、想定外のエラー種別でも崩れないことの確認。
+	 */
+	public function test_process_login_request_unifies_custom_authenticate_filter_errors_to_auth_failed(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => 'custom_authenticate_filter_user',
+				'user_pass'  => 'CorrectPass123!',
+			]
+		);
+
+		// wp_signon() の内部で呼ばれる authenticate フィルタへ、コア認証より後ろの
+		// 優先度で割り込み、正しい認証情報でも独自コード・文言の WP_Error を返す
+		// 「他プラグインが認証結果を上書きする」状況を再現する。
+		$inject_custom_error = static function () {
+			return new \WP_Error( 'some_third_party_plugin_error', 'このプラグイン独自のエラー文言です。' );
+		};
+		add_filter( 'authenticate', $inject_custom_error, 30 );
+
+		try {
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			$_POST                     = [
+				'vkbm_login_form'  => '1',
+				'vkbm_login_nonce' => wp_create_nonce( 'vkbm_login_form' ),
+				'log'              => 'custom_authenticate_filter_user',
+				'pwd'              => 'CorrectPass123!',
+			];
+
+			$shortcodes = new Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+			$shortcodes->handle_form_submission();
+
+			$this->assertSame( 'auth_failed', $shortcodes->get_current_login_error_code() );
+			$this->assertStringNotContainsString(
+				'このプラグイン独自のエラー文言です。',
+				$shortcodes->get_login_error_message( $shortcodes->get_current_login_error_code() )
+			);
+		} finally {
+			remove_filter( 'authenticate', $inject_custom_error, 30 );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+			wp_delete_user( $user_id );
+		}
+	}
+
+	/**
+	 * issue #512 レビュー対応（安藤さん指摘）: フォールバック案内リンク
+	 * （wp-login.php + vkbm_native_login=1）経由のアクセスは、他の条件が
+	 * すべて「転送する」を満たしていても redirect_wp_login_to_vkbm() が
+	 * 転送しないこと（堂々巡り防止）。
+	 *
+	 * 実際に転送するケースは wp_safe_redirect() 直後に exit() が呼ばれ
+	 * テストプロセスごと終了してしまうため検証できない（既存の
+	 * test_redirect_wp_login_to_vkbm() と同じ制約）。このテストは
+	 * 「転送条件を満たしていても、バイパスクエリがあれば転送されない
+	 * （＝テストが正常に完了する）」ことを確認する。
+	 */
+	public function test_redirect_wp_login_to_vkbm_does_not_redirect_with_native_login_bypass(): void {
+		wp_set_current_user( 0 );
+
+		$page_with_block_id = $this->factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_content' => '<!-- wp:vk-booking-manager/reservation /-->',
+			]
+		);
+
+		$repository = new Settings_Repository();
+		$settings   = $repository->get_settings();
+		$settings['membership_redirect_wp_login'] = true;
+		$settings['reservation_page_url']           = get_permalink( $page_with_block_id );
+		$repository->update_settings( $settings );
+
+		$previous_request = $_REQUEST;
+		// バイパスクエリ以外は、転送されるべき条件を満たしている。
+		$_REQUEST['action']            = 'login';
+		$_REQUEST['vkbm_native_login'] = '1';
+
+		try {
+			$shortcodes = new Auth_Shortcodes( new Settings_Service( $repository, new Settings_Sanitizer() ) );
+
+			ob_start();
+			$shortcodes->redirect_wp_login_to_vkbm();
+			$output = ob_get_clean();
+
+			// ここに到達できた時点で exit() が呼ばれなかった（＝転送しなかった）ことの証明になる。
+			$this->assertEmpty( $output );
+		} finally {
+			$_REQUEST = $previous_request;
+		}
+	}
+
+	/**
+	 * issue #512 レビュー対応（安藤さん指摘）: render_native_login_bypass_field() は
+	 * バイパスクエリがある時だけ隠しフィールドを出力し、無い時は何も出さないこと。
+	 */
+	public function test_render_native_login_bypass_field_only_outputs_when_flag_present(): void {
+		$previous_request = $_REQUEST;
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'バイパスクエリあり => 隠しフィールドを出力する',
+				'flag'                => '1',
+				'expect_output'       => true,
+			],
+			[
+				'test_condition_name' => 'バイパスクエリ無し => 何も出力しない',
+				'flag'                => null,
+				'expect_output'       => false,
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$_REQUEST = [];
+				if ( null !== $case['flag'] ) {
+					$_REQUEST['vkbm_native_login'] = $case['flag'];
+				}
+
+				$shortcodes = new Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+
+				ob_start();
+				$shortcodes->render_native_login_bypass_field();
+				$output = ob_get_clean();
+
+				if ( $case['expect_output'] ) {
+					$this->assertStringContainsString( 'name="vkbm_native_login"', $output, $case['test_condition_name'] );
+					$this->assertStringContainsString( 'type="hidden"', $output, $case['test_condition_name'] );
+				} else {
+					$this->assertSame( '', $output, $case['test_condition_name'] );
+				}
+			}
+		} finally {
+			$_REQUEST = $previous_request;
+		}
 	}
 }

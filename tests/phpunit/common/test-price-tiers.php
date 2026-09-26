@@ -9,8 +9,16 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Common;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Common\Price_Tiers;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
+use function delete_option;
+use function get_option;
+use function update_option;
+use function update_post_meta;
 
 /**
  * 料金区分ユーティリティ（Price_Tiers）のテスト。
@@ -18,6 +26,50 @@ use WP_UnitTestCase;
  * @group common
  */
 class Price_Tiers_Test extends WP_UnitTestCase {
+
+	/**
+	 * is_menu_using_price_tiers() 用テストで書き換えた予約枠の定員機能の設定を復元するため、
+	 * setUp() 時点の設定を退避しておく。
+	 *
+	 * @var array<string, mixed>|null
+	 */
+	private $original_settings;
+
+	/**
+	 * 各テスト前に現在の予約枠の定員機能設定を退避する。
+	 */
+	public function set_up(): void {
+		parent::set_up();
+		$this->original_settings = get_option( Settings_Repository::OPTION_KEY );
+	}
+
+	/**
+	 * 各テスト後に予約枠の定員機能設定を元に戻し、キャッシュをクリアする。
+	 */
+	public function tear_down(): void {
+		if ( null === $this->original_settings ) {
+			delete_option( Settings_Repository::OPTION_KEY );
+		} else {
+			update_option( Settings_Repository::OPTION_KEY, $this->original_settings );
+		}
+		Staff_Editor::clear_nomination_enabled_cache();
+		parent::tear_down();
+	}
+
+	/**
+	 * テスト用のサービスメニュー投稿を作成するヘルパー。
+	 *
+	 * @return int 作成したサービスメニューの投稿ID。
+	 */
+	private function create_menu(): int {
+		return (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => 'テストサービス（#515）',
+			)
+		);
+	}
 
 	/**
 	 * sanitize_tiers(): 生入力を保存用に正規化する。
@@ -446,5 +498,210 @@ class Price_Tiers_Test extends WP_UnitTestCase {
 		$this->assertSame( 3, Price_Tiers::normalize_guest_tiers( $snapshot )[0]['count'], 'normalize_guest_tiers は count を保持する' );
 		$this->assertSame( 12000, Price_Tiers::total_price( Price_Tiers::normalize_guest_tiers( $snapshot ) ), 'count 保持により合計が正しく再計算される' );
 		$this->assertSame( 0, Price_Tiers::total_price( Price_Tiers::normalize_tiers( $snapshot ) ), 'normalize_tiers 経由は count=0 扱いで合計0（バグ再現）' );
+	}
+
+	/**
+	 * is_menu_using_price_tiers(): 「料金区分で設定されているメニューか」を判定する（#515）。
+	 *
+	 * 公開側メニューカード（Menu_Loop_Block::render_meta_information()）と同じ4条件
+	 * （Pro版・予約枠の定員機能ON・複数人一括予約ON・定員2以上・区分1件以上）のうち、
+	 * Pro版・予約枠の定員機能ON以外の3条件の組み合わせを検証する。Pro/予約枠の定員機能の
+	 * ゲート（Staff_Editor::is_multi_guest_available_for_menu()）自体は
+	 * test_is_menu_using_price_tiers_returns_false_when_slot_capacity_feature_disabled() と
+	 * test_is_menu_using_price_tiers_free_edition_equivalent() で別途検証する。
+	 */
+	public function test_is_menu_using_price_tiers(): void {
+		$tiers = array(
+			array(
+				'label' => '一般',
+				'price' => 4000,
+			),
+		);
+		// ラベルにインラインタグ（<b> 等）を含む区分。update_post_meta() は register_post_meta() の
+		// sanitize_callback（Price_Tiers::sanitize_tiers()）を経由するため、保存時点で
+		// sanitize_text_field() -> wp_strip_all_tags() によりタグ自体は除去されるが、
+		// <script>/<style> 以外のタグは中のテキストが残る（strip_tags() の挙動）。
+		// 「一部にタグが混ざっていても、テキストが残る区分は有効な区分として扱われる」ことを確認する。
+		$tiers_with_inline_tag_label = array(
+			array(
+				'label' => '<b>特別</b>',
+				'price' => 4000,
+			),
+		);
+		// <script>/<style> はタグに加えて要素の中身ごと除去される（wp_strip_all_tags() の仕様、
+		// XSS対策）。ラベルが空になり sanitize_tiers() で行ごと除外されるため、この区分だけの
+		// メニューは「有効な区分が無い」＝false になることを確認する（安全側に倒れることの確認）。
+		$tiers_with_script_label = array(
+			array(
+				'label' => '<script>alert(1)</script>',
+				'price' => 4000,
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name'   => '複数人一括予約ON・定員2・区分1件 => 予約枠の定員機能ON時のみ true（正常系）',
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 2,
+				'price_tiers'           => $tiers,
+				'expected_when_pro'     => true,
+			),
+			array(
+				'test_condition_name'   => 'ラベルにインラインタグを含む区分1件（保存時にタグ除去・テキストは残る）=> 予約枠の定員機能ON時のみ true（正常系）',
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 2,
+				'price_tiers'           => $tiers_with_inline_tag_label,
+				'expected_when_pro'     => true,
+			),
+			array(
+				'test_condition_name'   => 'ラベルが <script> タグのみ（保存時に中身ごと除去され空ラベルになる）=> 有効な区分が残らないため false（異常系・安全性の確認）',
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 2,
+				'price_tiers'           => $tiers_with_script_label,
+				'expected_when_pro'     => false,
+			),
+			array(
+				'test_condition_name'   => '区分なし => false（正常系・条件4未達）',
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 2,
+				'price_tiers'           => array(),
+				'expected_when_pro'     => false,
+			),
+			array(
+				'test_condition_name'   => '複数人一括予約OFF => false（異常系・条件2未達）',
+				'allow_multiple_guests' => false,
+				'max_capacity'          => 2,
+				'price_tiers'           => $tiers,
+				'expected_when_pro'     => false,
+			),
+			array(
+				'test_condition_name'   => '定員1 => false（境界値・条件3未達）',
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 1,
+				'price_tiers'           => $tiers,
+				'expected_when_pro'     => false,
+			),
+		);
+
+		// 予約枠の定員機能はON（既定）にして、条件2〜4の組み合わせだけを検証する。
+		$settings                          = (array) get_option( Settings_Repository::OPTION_KEY );
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		// 予約枠の定員機能ONの場合、Pro版なら「全条件を満たす」ケースのみ true。
+		// 無料版（Staff_Editor::is_multi_guest_available_for_menu() が常に false）ではどのケースも false。
+		$expect_true_when_all_conditions_met = ! Pro_Upsell::is_free_edition();
+
+		foreach ( $test_cases as $case ) {
+			$menu_id = $this->create_menu();
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', $case['allow_multiple_guests'] );
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
+			if ( ! empty( $case['price_tiers'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_price_tiers', $case['price_tiers'] );
+			}
+
+			$expected = $case['expected_when_pro'] ? $expect_true_when_all_conditions_met : false;
+
+			$this->assertSame( $expected, Price_Tiers::is_menu_using_price_tiers( $menu_id ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * is_menu_using_price_tiers(): メニューIDが0以下（メニューという文脈が無い呼び出し）の場合、
+	 * 他の条件を満たしていても false を返すことを確認する（境界値）。
+	 */
+	public function test_is_menu_using_price_tiers_returns_false_for_invalid_menu_id(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'menu_id が 0 => false（境界値）',
+				'menu_id'             => 0,
+			),
+			array(
+				'test_condition_name' => 'menu_id が負数 => false（異常系）',
+				'menu_id'             => -1,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertFalse(
+				Price_Tiers::is_menu_using_price_tiers( $case['menu_id'] ),
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
+	 * is_menu_using_price_tiers(): 予約枠の定員機能がOFFのときは、区分・複数人一括予約・定員の
+	 * メタが残っていても false になることを確認する（条件1未達＝定員機能OFFで区分メタだけ残る）。
+	 *
+	 * 区分メタを削除せずに残したまま予約枠の定員機能だけをOFFにするのは、実運用で「一度ONにして
+	 * 区分を設定した後に基本設定でOFFへ戻す」操作を想定しているため（#412 の「親スイッチOFF時も
+	 * 子設定を残す」方針と同じ）。
+	 */
+	public function test_is_menu_using_price_tiers_returns_false_when_slot_capacity_feature_disabled(): void {
+		$menu_id = $this->create_menu();
+		update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+		update_post_meta( $menu_id, '_vkbm_max_capacity', 2 );
+		update_post_meta(
+			$menu_id,
+			'_vkbm_price_tiers',
+			array(
+				array(
+					'label' => '一般',
+					'price' => 4000,
+				),
+			)
+		);
+
+		$settings                          = (array) get_option( Settings_Repository::OPTION_KEY );
+		$settings['slot_capacity_enabled'] = false;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$this->assertFalse(
+			Price_Tiers::is_menu_using_price_tiers( $menu_id ),
+			'予約枠の定員機能OFF => 区分・複数人一括予約・定員のメタが残っていても false（条件1未達）'
+		);
+	}
+
+	/**
+	 * is_menu_using_price_tiers(): 「Pro版であること」自体を満たさない（無料版相当）場合は、
+	 * 他の3条件（複数人一括予約ON・定員2以上・区分1件以上）をすべて満たしていても false になることを
+	 * 確認する（#515 の「Free 相当」ケース）。
+	 *
+	 * 無料版ビルドで実行した場合にこの意味を持つ。Pro版ビルドで実行した場合は
+	 * Staff_Editor::is_multi_guest_available_for_menu() が true になるため、
+	 * この境界（Pro版チェック単体の分岐）自体は Free 版ビルドでの実行時のみ検証される
+	 * （Pro版ビルドでは true になることを test_is_menu_using_price_tiers() 側で確認している）。
+	 */
+	public function test_is_menu_using_price_tiers_free_edition_equivalent(): void {
+		if ( ! Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( 'この境界（Pro版チェック単体）は無料版ビルドでのみ意味を持つため、Pro版ビルドではスキップする。' );
+		}
+
+		$menu_id = $this->create_menu();
+		update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+		update_post_meta( $menu_id, '_vkbm_max_capacity', 2 );
+		update_post_meta(
+			$menu_id,
+			'_vkbm_price_tiers',
+			array(
+				array(
+					'label' => '一般',
+					'price' => 4000,
+				),
+			)
+		);
+
+		$settings                          = (array) get_option( Settings_Repository::OPTION_KEY );
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$this->assertFalse(
+			Price_Tiers::is_menu_using_price_tiers( $menu_id ),
+			'無料版相当（Pro版チェック不通過）は、他の条件をすべて満たしていても false'
+		);
 	}
 }

@@ -16,6 +16,7 @@ use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Api_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connection;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync_Settings;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Secret_Store;
 use WP_Error;
@@ -769,6 +770,64 @@ class Test_Google_Calendar_Connect_Controller extends WP_UnitTestCase {
 
 			$this->assertSame( $case['expected'], $this->connection->get_calendar_id(), $case['test_condition_name'] );
 		}
+	}
+
+	/**
+	 * 「予定に載せる情報」の項目設定が、カレンダー一覧の取得・照合の成否に関わらず
+	 * 保存されることを検証する（安藤レビュー指摘: 以前は照合失敗時に save_sync_fields() を
+	 * 呼ばずに戻っていたため保存されなかった）。
+	 *
+	 * @return void
+	 */
+	public function test_handle_select_calendar_saves_sync_fields_even_when_calendar_verification_fails(): void {
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( 'Google カレンダー連携は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		delete_option( Google_Calendar_Event_Sync_Settings::OPTION_NAME );
+
+		$relay_client  = new Google_Calendar_Relay_Client();
+		$sync_settings = new Google_Calendar_Event_Sync_Settings();
+		$controller    = new Spy_Connect_Controller(
+			$this->connection,
+			$relay_client,
+			new Google_Calendar_Api_Client( $this->connection, $relay_client ),
+			'manage_options',
+			$sync_settings
+		);
+
+		$this->connection->save_tokens(
+			array(
+				'access_token'  => 'at',
+				'refresh_token' => 'rt',
+				'expires_in'    => 3600,
+			)
+		);
+
+		// カレンダー一覧の取得そのものを失敗させる（照合失敗の一種）。
+		$this->mock_responses['calendarList'] = array(
+			'response' => array( 'code' => 500 ),
+			'body'     => '{"error":{"message":"server error"}}',
+		);
+
+		$_POST['vkbm_google_calendar_id']          = 'owner@example.com';
+		$_POST['vkbm_google_calendar_sync_fields'] = array( Google_Calendar_Event_Sync_Settings::FIELD_CUSTOMER_TEL );
+		$_REQUEST['_wpnonce']                      = wp_create_nonce( Google_Calendar_Connect_Controller::ACTION_SELECT_CALENDAR );
+
+		try {
+			$controller->handle_select_calendar();
+			$this->fail( 'カレンダー一覧の取得に失敗しても設定画面へ戻されるはず' );
+		} catch ( Redirect_Exception $exception ) {
+			$this->assertSame( 'settings', $controller->redirected_to, 'カレンダー一覧の取得に失敗しても設定画面へ戻されること' );
+		}
+
+		$this->assertSame(
+			array( Google_Calendar_Event_Sync_Settings::FIELD_CUSTOMER_TEL ),
+			$sync_settings->get_enabled_fields(),
+			'カレンダー一覧が取得できなくても、項目設定は保存されること'
+		);
+
+		delete_option( Google_Calendar_Event_Sync_Settings::OPTION_NAME );
 	}
 
 	/**

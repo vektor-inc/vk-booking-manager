@@ -15,7 +15,11 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Blocks;
 
+use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Blocks\Reservation_Block;
+use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\ProviderSettings\Settings_Sanitizer;
+use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_UnitTestCase;
 
 /**
@@ -102,7 +106,12 @@ class Reservation_Block_Rest_Fallback_Config_Test extends WP_UnitTestCase {
 		);
 		$post    = get_post( $post_id ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- ブロック判定対象のグローバル投稿を差し替えるため。
 
-		$block = new Reservation_Block();
+		// issue #512: render_block フィルタ（ログイン失敗フォールバック）から参照するため
+		// コンストラクタで必須になった依存。このテストの対象（restRoot 等）とは無関係。
+		$settings_service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$auth_shortcodes  = new Auth_Shortcodes( $settings_service );
+
+		$block = new Reservation_Block( $auth_shortcodes );
 		$block->register_block();
 		$block->maybe_enqueue_menu_loop_styles();
 

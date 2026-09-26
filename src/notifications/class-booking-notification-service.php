@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
+use VKBookingManager\Admin\Email_Log_Repository;
+use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -25,6 +27,7 @@ use WP_User;
 use function absint;
 use function add_action;
 use function add_filter;
+use function admin_url;
 use function __;
 use function current_time;
 use function get_user_by;
@@ -83,12 +86,21 @@ class Booking_Notification_Service {
 	private $settings_repository;
 
 	/**
+	 * メールログの保存先。
+	 *
+	 * @var Email_Log_Repository
+	 */
+	private $email_log_repository;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Settings_Repository $settings_repository Settings store.
+	 * @param Settings_Repository       $settings_repository  Settings store.
+	 * @param Email_Log_Repository|null $email_log_repository メールログの保存先（テスト時の差し替え用。省略時は新規作成）。
 	 */
-	public function __construct( Settings_Repository $settings_repository ) {
-		$this->settings_repository = $settings_repository;
+	public function __construct( Settings_Repository $settings_repository, ?Email_Log_Repository $email_log_repository = null ) {
+		$this->settings_repository  = $settings_repository;
+		$this->email_log_repository = $email_log_repository ?? new Email_Log_Repository();
 	}
 
 	/**
@@ -295,16 +307,38 @@ class Booking_Notification_Service {
 
 		$message = $this->build_message( $type, $payload );
 
-		if ( empty( $message['to'] ) || '' === trim( $message['body'] ?? '' ) ) {
+		if ( '' === trim( $message['body'] ?? '' ) ) {
+			return;
+		}
+
+		// #510: 宛先は固定の payload 値ではなく、事業者向け通知の管理者メールへの
+		// フォールバックを含めて解決する。解決できない場合は「未送信」として記録して終了する
+		// （予約の作成・確定・キャンセルのみ対象。リマインダーはこの経路を通らないため記録しない）。
+		$recipient = $this->resolve_recipient( $type, $payload );
+
+		if ( '' === $recipient['to'] ) {
+			$this->record_skipped_notification(
+				$type,
+				$booking_id,
+				(string) $message['subject'],
+				$recipient['skip_reason'],
+				$attempt,
+				self::MAX_ATTEMPTS,
+				$recipient['action_url'],
+				$recipient['action_label']
+			);
 			return;
 		}
 
 		$sent = $this->send_mail(
-			(string) $message['to'],
+			$recipient['to'],
 			(string) $message['subject'],
 			(string) $message['body'],
 			$type,
-			$payload
+			$payload,
+			$attempt,
+			self::MAX_ATTEMPTS,
+			$booking_id
 		);
 
 		if ( $sent ) {
@@ -324,6 +358,126 @@ class Booking_Notification_Service {
 				$booking_id,
 				$attempt + 1,
 			)
+		);
+	}
+
+	/**
+	 * 通知タイプに応じた送信先メールアドレスを解決する。
+	 *
+	 * 事業者向け通知は provider_email が空・不正な場合、WordPress の管理者メールアドレス
+	 * （admin_email）へフォールバックする。管理者メールアドレスも空・不正な場合のみ
+	 * 「送信先なし」を返す。利用者向け通知は customer_email が空・不正な場合に
+	 * フォールバック無しで「送信先なし」を返す。
+	 *
+	 * @param string               $type    通知タイプ。
+	 * @param array<string, mixed> $payload 予約データ。
+	 * @return array{to:string,skip_reason:string,action_url:string,action_label:string} 解決した送信先
+	 *         （解決できない場合は空文字）、その場合の未送信理由、および案内リンク（無ければ空文字）。
+	 */
+	private function resolve_recipient( string $type, array $payload ): array {
+		$no_action = array(
+			'action_url'   => '',
+			'action_label' => '',
+		);
+
+		if ( $this->is_provider_notification_type( $type ) ) {
+			$provider_email = sanitize_email( (string) ( $payload['provider_email'] ?? '' ) );
+			if ( is_email( $provider_email ) ) {
+				return array_merge(
+					array(
+						'to'          => $provider_email,
+						'skip_reason' => '',
+					),
+					$no_action
+				);
+			}
+
+			$admin_email = sanitize_email( (string) get_option( 'admin_email' ) );
+			if ( is_email( $admin_email ) ) {
+				return array_merge(
+					array(
+						'to'          => $admin_email,
+						'skip_reason' => '',
+					),
+					$no_action
+				);
+			}
+
+			return $this->get_missing_provider_email_recipient_result();
+		}
+
+		$customer_email = sanitize_email( (string) ( $payload['customer_email'] ?? '' ) );
+		if ( is_email( $customer_email ) ) {
+			return array_merge(
+				array(
+					'to'          => $customer_email,
+					'skip_reason' => '',
+				),
+				$no_action
+			);
+		}
+
+		return array_merge(
+			array(
+				'to'          => '',
+				'skip_reason' => __( 'This booking has no customer email address, so the email was not sent.', 'vk-booking-manager' ),
+			),
+			$no_action
+		);
+	}
+
+	/**
+	 * 事業者向け通知の送信先（代表メールアドレス・管理者メールアドレスとも）が無いときの
+	 * 未送信理由・案内リンクをまとめて組み立てる。
+	 *
+	 * 植草（UX）レビュー対応（#510）: リンク文言はリンク単体で行き先が分かる表現にし、
+	 * URL を本文へ埋め込まず別要素として渡す。理由文言も「設定されていない」ではなく
+	 * 「どちらも有効なメールアドレスではない」（形式不正のケースも含む）に修正。
+	 *
+	 * @return array{to:string,skip_reason:string,action_url:string,action_label:string}
+	 */
+	private function get_missing_provider_email_recipient_result(): array {
+		return array(
+			'to'           => '',
+			'skip_reason'  => __( 'Not sent because neither the representative email address nor the WordPress administration email address is a valid email address.', 'vk-booking-manager' ),
+			'action_url'   => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-provider-email' ),
+			'action_label' => __( 'Set the representative email address', 'vk-booking-manager' ),
+		);
+	}
+
+	/**
+	 * 送信先が解決できず送らなかった通知を、未送信としてメールログへ記録する。
+	 *
+	 * CodeRabbit 指摘対応（#510・#511）: attempt / max_attempts を常に 0 で保存すると、
+	 * 1回目の送信が失敗して再送した際に宛先が無効になっていた場合、何回目の送信だったかが
+	 * 失われる。呼び出し元（dispatch_notification）が持つ今回の attempt をそのまま渡す。
+	 *
+	 * @param string $type         通知タイプ。
+	 * @param int    $booking_id   予約ID。
+	 * @param string $subject      件名（送るはずだった文字列）。
+	 * @param string $reason       未送信の理由。
+	 * @param int    $attempt      今回が何回目の送信か。
+	 * @param int    $max_attempts 最大送信回数。
+	 * @param string $action_url   案内リンクの URL（無ければ空文字）。
+	 * @param string $action_label 案内リンクの文言（無ければ空文字）。
+	 */
+	private function record_skipped_notification( string $type, int $booking_id, string $subject, string $reason, int $attempt = 0, int $max_attempts = 0, string $action_url = '', string $action_label = '' ): void {
+		$settings = $this->settings_repository->get_settings();
+		if ( empty( $settings['email_log_enabled'] ) ) {
+			return;
+		}
+
+		$this->email_log_repository->add_log(
+			'',
+			$subject,
+			Email_Log_Repository::STATUS_SKIPPED,
+			$reason,
+			$type,
+			$attempt,
+			$max_attempts,
+			$booking_id,
+			$action_url,
+			$action_label
 		);
 	}
 
@@ -449,26 +603,33 @@ class Booking_Notification_Service {
 
 		$body = $this->render_customer_body( $payload, $lead );
 
+		// リマインダーは再送（attempt）の概念を持たないため 0 を渡す（#510）。
 		return $this->send_mail(
 			(string) $to,
 			(string) $subject,
 			(string) $body,
 			self::TYPE_REMINDER_CUSTOMER,
-			$payload
+			$payload,
+			0,
+			0,
+			$booking_id
 		);
 	}
 
 	/**
-	 * 通知タイプに応じた送信者情報を適用してメールを送信します。
+	 * 通知タイプに応じた送信者情報を適用してメールを送信し、メールログが有効なときは結果を記録します。
 	 *
-	 * @param string               $to      送信先メールアドレス。
-	 * @param string               $subject 件名。
-	 * @param string               $body    本文。
-	 * @param string               $type    通知タイプ。
-	 * @param array<string, mixed> $payload 通知本文・送信先の生成に使う予約データ。
+	 * @param string               $to           送信先メールアドレス。
+	 * @param string               $subject      件名。
+	 * @param string               $body         本文。
+	 * @param string               $type         通知タイプ。
+	 * @param array<string, mixed> $payload      通知本文・送信先の生成に使う予約データ。
+	 * @param int                  $attempt      今回が何回目の送信か（再送の概念が無い通知は 0）。
+	 * @param int                  $max_attempts 最大送信回数（再送の概念が無い通知は 0）。
+	 * @param int                  $booking_id   紐づく予約ID（0 は未紐づけ）。
 	 * @return bool
 	 */
-	private function send_mail( string $to, string $subject, string $body, string $type, array $payload ): bool {
+	private function send_mail( string $to, string $subject, string $body, string $type, array $payload, int $attempt = 0, int $max_attempts = 0, int $booking_id = 0 ): bool {
 		$mail_header = $this->get_mail_header( $type, $payload );
 		$from_name   = $this->sanitize_mail_header_name( (string) $mail_header['name'] );
 		$headers     = $this->build_headers( (string) $mail_header['reply_to'] );
@@ -485,11 +646,59 @@ class Booking_Notification_Service {
 		add_filter( 'wp_mail_from_name', $from_name_filter );
 
 		try {
-			return (bool) wp_mail( $to, $subject, $body, $headers );
+			// #510: wp_mail() の直前・直後だけ wp_mail_failed を購読し、今回の送信が
+			// 失敗したかどうかを確かめてからエラー文を読む（連続送信での取り違え防止）。
+			$result = Mail_Error_Capture::send(
+				static function () use ( $to, $subject, $body, $headers ) {
+					return wp_mail( $to, $subject, $body, $headers );
+				}
+			);
 		} finally {
 			remove_filter( 'wp_mail_from', $from_mail_filter );
 			remove_filter( 'wp_mail_from_name', $from_name_filter );
 		}
+
+		$this->record_notification_log( $to, $subject, $type, $booking_id, $attempt, $max_attempts, $result['sent'], $result['error'] );
+
+		return $result['sent'];
+	}
+
+	/**
+	 * メールログが有効なときだけ、通知メールの送信結果を1件記録する。
+	 *
+	 * @param string $to           送信先メールアドレス。
+	 * @param string $subject      件名（実際に送った文字列）。
+	 * @param string $type         通知タイプ。
+	 * @param int    $booking_id   紐づく予約ID。
+	 * @param int    $attempt      今回が何回目の送信か。
+	 * @param int    $max_attempts 最大送信回数。
+	 * @param bool   $sent         送信に成功したか。
+	 * @param string $error        失敗時のエラー文（成功時は空文字）。
+	 */
+	private function record_notification_log( string $to, string $subject, string $type, int $booking_id, int $attempt, int $max_attempts, bool $sent, string $error ): void {
+		$settings = $this->settings_repository->get_settings();
+		if ( empty( $settings['email_log_enabled'] ) ) {
+			return;
+		}
+
+		// 再送の概念がある通知（$max_attempts > 0）に限り、失敗行の末尾に
+		// 「自動で再送します。」／「これ以上再送しません。」を付け足す。
+		if ( ! $sent && $attempt > 0 && $max_attempts > 0 ) {
+			$error .= "\n" . ( $attempt < $max_attempts
+				? __( 'It will be retried automatically.', 'vk-booking-manager' )
+				: __( 'It will not be retried further.', 'vk-booking-manager' ) );
+		}
+
+		$this->email_log_repository->add_log(
+			$to,
+			$subject,
+			$sent ? Email_Log_Repository::STATUS_SENT : Email_Log_Repository::STATUS_FAILED,
+			$sent ? '' : $error,
+			$type,
+			$attempt,
+			$max_attempts,
+			$booking_id
+		);
 	}
 
 	/**
@@ -735,15 +944,17 @@ class Booking_Notification_Service {
 	/**
 	 * Build the outgoing message details.
 	 *
+	 * 送信先（to）は #510 で resolve_recipient() 側に一本化したため、ここでは
+	 * 件名・本文のみを組み立てる。
+	 *
 	 * @param string               $type    Notification type.
 	 * @param array<string, mixed> $payload Booking payload.
-	 * @return array{to:string,subject:string,body:string}
+	 * @return array{subject:string,body:string}
 	 */
 	private function build_message( string $type, array $payload ): array {
 		switch ( $type ) {
 			case self::TYPE_PENDING_PROVIDER:
 				return array(
-					'to'      => $payload['provider_email'],
 					/* translators: %1$s: Provider name, %2$s: Booking status label. */
 					'subject' => sprintf( __( '[ %1$s ][ %2$s ] A new reservation has been made.', 'vk-booking-manager' ), $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
 					'body'    => $this->render_provider_body( $payload, __( 'Pending', 'vk-booking-manager' ) ),
@@ -751,7 +962,6 @@ class Booking_Notification_Service {
 
 			case self::TYPE_CONFIRMED_PROVIDER:
 				return array(
-					'to'      => $payload['provider_email'],
 					/* translators: %s: Provider name. */
 					'subject' => sprintf( __( '[ %s ] Reservation confirmed', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_provider_body( $payload, __( 'Confirmed', 'vk-booking-manager' ) ),
@@ -759,7 +969,6 @@ class Booking_Notification_Service {
 
 			case self::TYPE_CONFIRMED_CUSTOMER:
 				return array(
-					'to'      => $payload['customer_email'],
 					/* translators: %s: Provider name. */
 					'subject' => sprintf( __( '[ %s ] Your reservation has been confirmed', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_customer_body( $payload, __( 'Your reservation has been confirmed.', 'vk-booking-manager' ) ),
@@ -767,7 +976,6 @@ class Booking_Notification_Service {
 
 			case self::TYPE_CANCELLED_CUSTOMER:
 				return array(
-					'to'      => $payload['customer_email'],
 					/* translators: %s: Provider name. */
 					'subject' => sprintf( __( '[ %s ] Your reservation has been canceled', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_customer_body( $payload, __( 'Your reservation has been cancelled.', 'vk-booking-manager' ) ),
@@ -775,7 +983,6 @@ class Booking_Notification_Service {
 
 			case self::TYPE_CANCELLED_PROVIDER:
 				return array(
-					'to'      => $payload['provider_email'],
 					/* translators: %s: Provider name. */
 					'subject' => sprintf( __( '[ %s ] Reservation canceled', 'vk-booking-manager' ), $payload['provider_name'] ),
 					'body'    => $this->render_provider_body( $payload, __( 'Cancelled', 'vk-booking-manager' ) ),
@@ -784,7 +991,6 @@ class Booking_Notification_Service {
 			case self::TYPE_PENDING_CUSTOMER:
 			default:
 				return array(
-					'to'      => $payload['customer_email'],
 					/* translators: %1$s: Provider name, %2$s: Booking status label. */
 					'subject' => sprintf( __( '[ %1$s ][ %2$s ] Your reservation has been accepted.', 'vk-booking-manager' ), $payload['provider_name'], __( 'Pending', 'vk-booking-manager' ) ),
 					'body'    => $this->render_customer_body( $payload, __( 'We have tentatively accepted your reservation.', 'vk-booking-manager' ) ),

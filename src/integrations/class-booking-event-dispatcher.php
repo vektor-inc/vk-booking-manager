@@ -209,6 +209,17 @@ class Booking_Event_Dispatcher {
 	private const META_CUSTOMER_TEL = '_vkbm_booking_customer_tel';
 
 	/**
+	 * 予約メタキー（お客様からのメモ・ご要望）。
+	 *
+	 * issue #476（Google カレンダー連携）で、予定の説明欄に載せられるようスナップショットへ
+	 * 追加した（司の decision record 参照。管理用メモ `_vkbm_booking_internal_note` は
+	 * 含めない。店舗スタッフだけが書く内部メモのため、外部連携に一切渡さない設計にしている）。
+	 *
+	 * @var string
+	 */
+	private const META_NOTE = '_vkbm_booking_note';
+
+	/**
 	 * 予約メタキー（予約ステータス：confirmed/pending/cancelled/no_show）。
 	 *
 	 * @var string
@@ -510,6 +521,7 @@ class Booking_Event_Dispatcher {
 			'customer_name'  => (string) get_post_meta( $booking_id, self::META_CUSTOMER, true ),
 			'customer_email' => (string) get_post_meta( $booking_id, self::META_CUSTOMER_MAIL, true ),
 			'customer_tel'   => (string) get_post_meta( $booking_id, self::META_CUSTOMER_TEL, true ),
+			'note'           => (string) get_post_meta( $booking_id, self::META_NOTE, true ),
 			'status'         => (string) get_post_meta( $booking_id, self::META_STATUS, true ),
 			'post_status'    => (string) $post->post_status,
 		);

@@ -37,11 +37,11 @@
 			"There are no %s matching the selected conditions.": [
 				"条件に該当する%sがいません。"
 			],
+			"Loading form…": [
+				"フォームを読み込み中…"
+			],
 			"Proceed to Reservation": [
 				"予約に進む"
-			],
-			"Service basic fee": [
-				"サービス基本料金"
 			],
 			"Total basic fee": [
 				"基本料金合計"
@@ -55,11 +55,11 @@
 			"Please set the number of guests to %d or more.": [
 				"人数を %d 名以上にしてください。"
 			],
-			"Cancel": [
-				"キャンセル"
-			],
 			"Number of guests": [
 				"人数"
+			],
+			"Cancel": [
+				"キャンセル"
 			],
 			"This menu requires a minimum of %d guests.": [
 				"このメニューは最低 %d 名からのお申し込みです。"
@@ -159,9 +159,6 @@
 			],
 			"Past reservations": [
 				"過去の予約"
-			],
-			"Loading form…": [
-				"フォームを読み込み中…"
 			],
 			"Favorites": [
 				"お気に入り"
@@ -396,6 +393,15 @@
 			],
 			"For administrators: The REST API is not responding. Try saving the permalink settings. If that does not help, check your security plugins or server settings.": [
 				"管理者の方へ: REST API が応答していません。パーマリンク設定を保存してみてください。解消しない場合は、セキュリティ系プラグインやサーバーの設定をご確認ください。"
+			],
+			"Service basic fee": [
+				"サービス基本料金"
+			],
+			"Service basic fee (%1$s × %2$s)": [
+				"サービス基本料金（%1$s × %2$s）"
+			],
+			"%1$s (%2$s × %3$s)": [
+				"%1$s（%2$s × %3$s）"
 			]
 		}
 	}

@@ -13,6 +13,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Staff\Staff_Editor;
+use function get_post_meta;
+
 /**
  * 料金区分の正規化・人数内訳の計算をまとめたユーティリティクラス。
  *
@@ -186,6 +189,53 @@ class Price_Tiers {
 	 */
 	public static function has_tiers( $raw ): bool {
 		return ! empty( self::normalize_tiers( $raw ) );
+	}
+
+	/**
+	 * メニューが「料金区分で設定されている」かどうかを判定する（#515）。
+	 *
+	 * 管理画面のサービスメニュー一覧の料金列（`Service_Menu_Post_Type::render_admin_columns()`）と
+	 * 公開側メニューカード（`Menu_Loop_Block::render_meta_information()`）の両方で「基本料金の代わりに
+	 * 区分一覧を表示するか」を判定するために使う、単一の入口。判定条件は次の4つすべてを満たすこと。
+	 *
+	 * 1. `Staff_Editor::is_multi_guest_available_for_menu()` が true（Pro版・予約枠の定員機能ON）。
+	 * 2. `_vkbm_allow_multiple_guests`（複数人一括予約の許可）がON。
+	 * 3. 予約枠の定員（`_vkbm_max_capacity`）が2以上。
+	 * 4. 区分（`_vkbm_price_tiers`）が1件以上保存されている。
+	 *
+	 * この4条件は、編集画面で料金区分欄（`#vkbm-price-tiers-field`）を表示する条件
+	 * （`Service_Menu_Editor::render_basic_meta_box()` の `$show_multi_guest_dependent_fields`）と
+	 * 実質的に同一（1〜3）に「区分が1件以上」（4）を加えたもの。編集画面は区分欄そのものの
+	 * 表示可否（空でも編集を始められるように）を、この判定は「区分で表示するか基本料金で表示するか」の
+	 * 排他判定を担うため、条件4の有無だけが異なる。
+	 *
+	 * 予約確定時の料金計算（`Booking_Confirmation_Controller::resolve_menu_price_tiers()`）は、
+	 * 上記に加えて「スタッフが1名以上割り当てられていること」も条件にしており、意図的に統合しない
+	 * （スタッフ未割当のメニューはそもそも予約できないため、表示判定に含める必要が無い。安藤さんの判断）。
+	 *
+	 * @param int $menu_id サービスメニュー（vkbm_service_menu）の投稿ID。
+	 * @return bool 料金区分で設定されているメニューなら true。それ以外（基本料金で設定）は false。
+	 */
+	public static function is_menu_using_price_tiers( int $menu_id ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		if ( ! Staff_Editor::is_multi_guest_available_for_menu( $menu_id ) ) {
+			return false;
+		}
+
+		if ( ! (bool) get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true ) ) {
+			return false;
+		}
+
+		// max_capacity の取得方法はメニューカード（Menu_Loop_Block::render_meta_information()）と揃える。
+		$max_capacity = (int) get_post_meta( $menu_id, '_vkbm_max_capacity', true );
+		if ( $max_capacity < 2 ) {
+			return false;
+		}
+
+		return self::has_tiers( get_post_meta( $menu_id, '_vkbm_price_tiers', true ) );
 	}
 
 	/**

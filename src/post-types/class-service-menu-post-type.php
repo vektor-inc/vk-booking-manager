@@ -249,6 +249,21 @@ class Service_Menu_Post_Type {
 		$other_conditions       = is_string( $other_conditions ) ? $other_conditions : '';
 		$reservation_day_type   = (string) get_post_meta( $post_id, self::META_RESERVATION_DAY_TYPE, true );
 		$disable_nomination_fee = (string) get_post_meta( $post_id, self::META_DISABLE_NOMINATION_FEE, true );
+		// #515: 「料金区分で設定されているメニューか」の判定は、公開側メニューカードと共通の
+		// Price_Tiers::is_menu_using_price_tiers() を使う（一覧の料金列・クイック編集の注記の両方で使用）。
+		$uses_price_tiers = Price_Tiers::is_menu_using_price_tiers( $post_id );
+		// クイック編集の「料金区分を編集」リンク先（編集画面の料金区分欄）。区分で設定されている
+		// メニューのみ組み立てる（それ以外は空のまま。JS 側は uses-price-tiers が空なら参照しない）。
+		$price_tiers_edit_url = '';
+		if ( $uses_price_tiers ) {
+			$edit_link = get_edit_post_link( $post_id, 'raw' );
+			if ( is_string( $edit_link ) && '' !== $edit_link ) {
+				// この値は data 属性として一旦保持し、出力時に render_quick_edit_data_span() の
+				// esc_attr() で改めてエスケープする（DB 保存やさらなる加工を経る値と同様、組み立て時は
+				// esc_url() ではなく esc_url_raw() を使う。安藤レビュー指摘）。
+				$price_tiers_edit_url = esc_url_raw( $edit_link . '#vkbm-price-tiers-field' );
+			}
+		}
 
 		// クイック編集（service-menu-quick-edit.js）がプリフィルに使う data 属性の値。
 		// 各列に同じ span を出力するため、値の組み立てと出力（render_quick_edit_data_span）を1か所にまとめる。
@@ -262,11 +277,29 @@ class Service_Menu_Post_Type {
 			'reservation-deadline-hours' => $reservation_deadline_has_value ? (string) $reservation_deadline : '',
 			'reservation-day-type'       => $reservation_day_type,
 			'disable-nomination-fee'     => '1' === $disable_nomination_fee ? '1' : '',
+			'uses-price-tiers'           => $uses_price_tiers ? '1' : '',
+			'price-tiers-edit-url'       => $price_tiers_edit_url,
 		);
 
 		switch ( $column ) {
 			case 'vkbm_price':
-				echo esc_html( $price > 0 ? number_format_i18n( $price ) : '—' );
+				if ( $uses_price_tiers ) {
+					// #515: 料金区分で設定されているメニューは、基本料金の代わりに区分を全件
+					// 「区分名: 料金」で縦に表示する（省略しない）。0円の区分も「0」と表示し「—」にはしない。
+					$tiers = Price_Tiers::normalize_tiers( get_post_meta( $post_id, self::META_PRICE_TIERS, true ) );
+					$rows  = array();
+					foreach ( $tiers as $tier ) {
+						$rows[] = sprintf(
+							'<li>%1$s: <span class="vkbm-admin-price-tiers-price">%2$s</span></li>',
+							esc_html( $tier['label'] ),
+							esc_html( number_format_i18n( $tier['price'] ) )
+						);
+					}
+					echo '<span class="screen-reader-text">' . esc_html__( 'Price categories', 'vk-booking-manager' ) . '</span>';
+					echo wp_kses_post( '<ul class="vkbm-admin-price-tiers-list">' . implode( '', $rows ) . '</ul>' );
+				} else {
+					echo esc_html( $price > 0 ? number_format_i18n( $price ) : '—' );
+				}
 				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 
@@ -490,18 +523,66 @@ class Service_Menu_Post_Type {
 				<div class="inline-edit-col">
 					<div class="inline-edit-group">
 						<label>
-							<span class="title">
+							<?php
+							/**
+							 * #515 レビュー対応（植草）: ラベルが「Price」から「Basic price」に伸び、
+							 * 税込ラベル付きだと「Basic price (tax included)」相当になる。他のラベルと
+							 * 同じ固定10emの列幅・nowrapのままだと入力欄に重なるおそれがあるため、
+							 * このラベルだけ vkbm-qe-base-price-title を付けて折り返しを許容する
+							 * （design-rules「日本語で10文字を超える場合はnowrap必須ではない」と同じ考え方を
+							 * 英語ラベルにも適用）。折り返しても列幅（10em）の内側で改行されるだけなので、
+							 * 入力欄への重なりは起きない。
+							 */
+							?>
+							<span class="title vkbm-qe-base-price-title">
 								<?php
-								esc_html_e( 'Price', 'vk-booking-manager' );
+								esc_html_e( 'Basic price', 'vk-booking-manager' );
 								if ( '' !== $tax_label ) {
 									echo ' ' . esc_html( $tax_label );
 								}
 								?>
 							</span>
 							<span class="input-text-wrap">
+								<?php
+								/**
+								 * #515: 区分で設定されているメニューでも、この基本料金欄は disabled/readonly に
+								 * しない。空送信すると save_quick_edit() -> update_meta_value() が
+								 * _vkbm_base_price メタごと削除してしまうため（disabled/readonly は値を送信
+								 * しないか、readonly でも意図に反して編集を制限するため）。「基本料金は使われ
+								 * ない」旨は下の注記（vkbm-qe-price-tiers-notice）で伝え、入力欄自体は常に
+								 * 編集可能なままにする。
+								 *
+								 * aria-describedby はここでは固定で付けない。行ごとに区分の有無が変わるため、
+								 * PHP側で常時付けると区分を使っていない行でも「非表示の注記」を指したままになる
+								 * （hidden 要素への aria-describedby はスクリーンリーダーの実装によって扱いが
+								 * 割れるため、確実に無くす）。JS（service-menu-quick-edit.js）が
+								 * usesPriceTiers の値に応じて行ごとに付け外しする（安藤レビュー指摘）。
+								 */
+								?>
 								<input type="number" name="vkbm_service_menu_quick[base_price]" class="vkbm-qe-base-price" min="0" step="1" value="" />
 							</span>
 						</label>
+						<?php
+						/**
+						 * #515: 料金区分で設定されているメニューの行だけ、JS
+						 * （service-menu-quick-edit.js）が hidden を外して表示する注記とリンク。
+						 * label の外に置く理由・aria-describedby の使い方は、直後のバッファ説明文と同じ
+						 * （label 内に置くとスクリーンリーダーが入力欄名にリンク文言まで連結して読み上げる）。
+						 * リンク href は行ごとに異なる編集画面URLのため、初期値は "#" とし JS が
+						 * data-price-tiers-edit-url から差し込む。
+						 *
+						 * 説明文とリンクは `<br>` で余白を作らず（design-rules の「`<br />` で余白を作らない」）、
+						 * 2つの `<p>` に分けて CSS のマージン（vkbm-qe-buffer-after-description と同じ手法）で
+						 * 分離する。aria-describedby の対象は外側の div の id 1つのまま。`hidden` 属性自体は
+						 * 読み上げを止めない（aria-describedby で参照された文はスクリーンリーダーに読み上げ
+						 * られる）ため、区分を使わない行では JS（service-menu-quick-edit.js）が基本料金欄の
+						 * aria-describedby を外し、この注記が読み上げられないようにする（安藤レビュー指摘）。
+						 */
+						?>
+						<div class="description vkbm-qe-price-tiers-notice" id="vkbm-qe-price-tiers-notice" hidden>
+							<p class="vkbm-qe-price-tiers-notice-text"><?php esc_html_e( 'This menu uses price categories, so the basic price is not used for bookings.', 'vk-booking-manager' ); ?></p>
+							<p class="vkbm-qe-price-tiers-notice-link"><a href="#" class="vkbm-qe-price-tiers-link" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Edit price categories', 'vk-booking-manager' ); ?></a></p>
+						</div>
 						<?php
 						// #391: クイック編集はテンプレートを一覧ページに1回だけ描画し、JS側で行ごとの
 						// データ属性を差し込む方式のため、この時点では対象の特定メニューIDが無い

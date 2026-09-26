@@ -1432,6 +1432,8 @@ class Provider_Settings_Page {
 									value="<?php echo esc_attr( $settings['provider_email'] ?? '' ); ?>"
 								/>
 								<p class="description"><?php esc_html_e( 'This is used as the reply address when sending notification emails.', 'vk-booking-manager' ); ?></p>
+								<?php // #510: 事業者向け通知の宛先が空/不正な場合に管理者メールへフォールバックすることを明記する。 ?>
+								<p class="description"><?php esc_html_e( 'If left blank, notification emails to the provider are sent to the WordPress administration email address (Settings > General).', 'vk-booking-manager' ); ?></p>
 							</td>
 						</tr>
 
@@ -2257,8 +2259,9 @@ class Provider_Settings_Page {
 									/>
 									<?php esc_html_e( 'Enable email log', 'vk-booking-manager' ); ?>
 								</label>
+								<?php // #510: 記録対象（予約通知＋会員登録の確認メールのみ）が伝わる説明文に変更。 ?>
 								<p class="description">
-									<?php esc_html_e( 'When enabled, the Email Log page becomes available and email send attempts are recorded.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'When enabled, the Email Log page shows the send results of booking notification emails (including reminders) and the registration confirmation email.', 'vk-booking-manager' ); ?>
 								</p>
 							</td>
 						</tr>

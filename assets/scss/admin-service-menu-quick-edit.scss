@@ -25,6 +25,16 @@
 	padding-right: 0;
 }
 
+/*
+ * 基本料金のラベル（#515）。「Basic price」＋税込ラベルで英語表記が長くなり、他のラベルと
+ * 同じ固定10em幅・nowrapのままだと入力欄に重なるおそれがあるため、このラベルだけ折り返しを許容する
+ * （design-rules「日本語で10文字を超える場合はnowrap必須ではない」と同じ考え方）。折り返しても
+ * 列幅（10em）の内側で改行されるだけなので、入力欄への重なりは起きない。
+ */
+.inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .vkbm-qe-base-price-title {
+	white-space: normal;
+}
+
 .inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .input-text-wrap {
 	margin-left: 0;
 }
@@ -47,6 +57,29 @@
  */
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-buffer-after-description {
 	margin: 0 0 8px calc(10em + 8px);
+}
+
+/*
+ * 料金区分で設定されているメニューの行だけ表示する注記（#515）。
+ * バッファの説明文（vkbm-qe-buffer-after-description）と同じく、grid の1列目幅（10em）+
+ * 列間（8px）分を左マージンとして再現し、基本料金の入力欄の列に揃える。
+ */
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-price-tiers-notice {
+	margin: 0 0 8px calc(10em + 8px);
+}
+
+/*
+ * 説明文とリンクの間の余白は `<br>` ではなく、2つの p のマージンで作る
+ * （design-rules の「`<br />` で余白を作らない」）。p の既定マージンをリセットしたうえで、
+ * 説明文とリンクの間だけ小さめの余白（4px）を明示する。
+ */
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-price-tiers-notice-text,
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-price-tiers-notice-link {
+	margin: 0;
+}
+
+.inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-price-tiers-notice-text {
+	margin-bottom: 4px;
 }
 
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-checkboxes {

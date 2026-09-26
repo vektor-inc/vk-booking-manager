@@ -31,9 +31,33 @@
 
 		const data = $dataEl.data();
 
-		$editRow
-			.find( 'input.vkbm-qe-base-price' )
-			.val( data.basePrice !== undefined ? data.basePrice : '' );
+		const $basePriceInput = $editRow.find( 'input.vkbm-qe-base-price' );
+		$basePriceInput.val( data.basePrice !== undefined ? data.basePrice : '' );
+
+		// #515: 料金区分で設定されているメニューの行だけ、基本料金欄の下に注記とリンクを出す。
+		// クイック編集は行 DOM を投稿間で使い回すため、前に開いた行の状態を引きずらないよう
+		// 毎回 usesPriceTiers の値で明示的に hidden を出し分ける（else 側の考慮漏れ防止）。
+		const usesPriceTiers =
+			data.usesPriceTiers === '1' ||
+			data.usesPriceTiers === 1 ||
+			data.usesPriceTiers === true;
+		const priceTiersEditUrl =
+			data.priceTiersEditUrl !== undefined ? data.priceTiersEditUrl : '';
+		const $priceTiersNotice = $editRow.find(
+			'.vkbm-qe-price-tiers-notice'
+		);
+		$priceTiersNotice.prop( 'hidden', ! usesPriceTiers );
+		$priceTiersNotice
+			.find( 'a.vkbm-qe-price-tiers-link' )
+			.attr( 'href', usesPriceTiers && priceTiersEditUrl ? priceTiersEditUrl : '#' );
+
+		// #515: aria-describedby は PHP側で固定せず、行ごとに区分の有無で付け外しする
+		// （区分を使っていない行で非表示の注記を指したままにしないため。安藤レビュー指摘）。
+		if ( usesPriceTiers ) {
+			$basePriceInput.attr( 'aria-describedby', 'vkbm-qe-price-tiers-notice' );
+		} else {
+			$basePriceInput.removeAttr( 'aria-describedby' );
+		}
 		$editRow
 			.find( 'input.vkbm-qe-duration-minutes' )
 			.val(

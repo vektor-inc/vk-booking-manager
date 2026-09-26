@@ -93,11 +93,96 @@
 
 	$( document ).on( 'click', '#vkbm-price-tier-add', function () {
 		$( '#vkbm-price-tiers-list' ).append( buildPriceTierRow() );
+		syncBasePriceOverride();
 	} );
 
 	$( document ).on( 'click', '.vkbm-price-tier-remove', function () {
 		$( this ).closest( '.vkbm-price-tier-row' ).remove();
+		syncBasePriceOverride();
 	} );
+
+	// 区分名の入力に合わせて即時に判定し直す（デリゲートで動的追加した行にも効かせる）。
+	$( document ).on( 'input', '.vkbm-price-tier-label', syncBasePriceOverride );
+
+	// 基本料金入力欄のグレーアウトに使う aria-describedby の id（PHP側の render_base_price_field() と一致させる）。
+	const BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID =
+		'vkbm-base-price-overridden-description';
+
+	/**
+	 * 区分名が「有効」（保存対象になる）かどうかを、保存側の判定基準に合わせて判定する。
+	 *
+	 * 保存側は Price_Tiers::sanitize_tiers() で `sanitize_text_field( $label )` してから
+	 * `trim()` し、空文字なら保存対象から除外する（#514レビュー対応・安藤 LOW）。
+	 * JS ではこれと完全には同じ処理ができないため、判定結果に効く2点だけを近似で合わせる。
+	 * 完全再現できない理由は各手順のコメントを参照。
+	 */
+	function isPriceTierLabelActive( rawValue ) {
+		// 1) タグを除去する。sanitize_text_field() は HTML タグを取り除くため、
+		//    "<b></b>" のようなタグだけの値は空扱いになり保存されない。ここでも
+		//    正規表現でタグを除去してから判定する（完全な HTML パーサーではないため、
+		//    不正な閉じ忘れなどの厳密な再現はしていない）。
+		const withoutTags = String( rawValue ).replace( /<[^>]*>/g, '' );
+
+		// 2) ASCII の空白だけを trim する。PHP の trim() は既定で ASCII 空白
+		//    （半角スペース・タブ・改行・NUL・垂直タブ）だけを対象とし、全角スペース
+		//    （U+3000）は取り除かない。一方 JS の String.prototype.trim() は Unicode の
+		//    空白文字（全角スペースを含む）まで取り除くため、全角スペースだけの区分名で
+		//    PHP と判定が食い違う。ASCII 空白だけを対象にした正規表現で置き換えることで揃える。
+		const trimmedAsciiOnly = withoutTags.replace(
+			/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g,
+			''
+		);
+
+		return trimmedAsciiOnly !== '';
+	}
+
+	// 基本料金の入力欄：料金区分の行が表示中（hidden でない）かつ、有効な区分名
+	// （isPriceTierLabelActive() が true）を持つ行が1件以上あるときは、基本料金は
+	// 使われないため readonly にしてグレーアウト表示し、理由の説明文を出す（#514）。
+	// disabled ではなく readonly にする理由：disabled は入力値が送信されず、保存処理
+	// （save_post）で基本料金メタが削除されてしまうため（readonly なら値は保持されたまま
+	// 送信される）。
+	function syncBasePriceOverride() {
+		const $input = $( '#vkbm_service_menu_base_price' );
+		if ( $input.length === 0 ) {
+			return;
+		}
+		const $description = $( '#' + BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID );
+
+		const $tiersField = $( '#vkbm-price-tiers-field' );
+		// 料金区分の行自体が非表示（無料版・複数人一括予約の条件未達など）のときは、
+		// 基本料金が常に使われるため上書き扱いにしない。
+		const tiersFieldVisible =
+			$tiersField.length > 0 && ! $tiersField.prop( 'hidden' );
+
+		let hasActiveTier = false;
+		if ( tiersFieldVisible ) {
+			$( '.vkbm-price-tier-label' ).each( function () {
+				if ( isPriceTierLabelActive( $( this ).val() ) ) {
+					hasActiveTier = true;
+					return false;
+				}
+			} );
+		}
+
+		const overridden = tiersFieldVisible && hasActiveTier;
+		$input.prop( 'readonly', overridden );
+		$input.toggleClass( 'vkbm-base-price-overridden', overridden );
+		// #514レビュー対応（安藤 LOW）: aria-describedby はグレーアウト中（＝説明文が実際に
+		// 表示されている）ときだけ付与する。常時付与すると、非表示の説明文を支援技術に
+		// 関連付けてしまう。PHP側（render_base_price_field()）の初期出力とも合わせている。
+		if ( overridden ) {
+			$input.attr(
+				'aria-describedby',
+				BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID
+			);
+		} else {
+			$input.removeAttr( 'aria-describedby' );
+		}
+		if ( $description.length > 0 ) {
+			$description.prop( 'hidden', ! overridden );
+		}
+	}
 
 	// 「このメニューで指名を使う」チェックボックスが指名を使う状態かどうかを返す。
 	// チェックボックス自体が画面に無い（サイト全体の指名機能OFF・無料版など）場合は
@@ -230,6 +315,10 @@
 				$field.prop( 'hidden', hiddenMultiGuestDependentFields );
 			}
 		} );
+
+		// 料金区分の行の表示・非表示が変わったタイミングで、基本料金のグレーアウト表示も
+		// 再評価する（#514）。
+		syncBasePriceOverride();
 	}
 
 	// 「ユーザーによる貸し切り指定を受け付ける」チェックと、第二段（貸し切り料金・適用外人数）の表示を連動させる。

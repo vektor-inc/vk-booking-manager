@@ -45,3 +45,29 @@
 	border-top: 1px solid #f5f5f5;
 	border-bottom: 1px solid #f5f5f5;
 }
+
+/* ==========================================================================
+   サービスメニュー一覧：料金区分の一覧表示（#515）
+   ========================================================================== */
+
+/*
+ * 料金区分で設定されているメニューの料金列。区分を全件縦に並べる。
+ * 金額（vkbm-admin-price-tiers-price）は折り返さない（design-rules のレスポンシブ折り返し対策）。
+ */
+.vkbm-admin-price-tiers-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.vkbm-admin-price-tiers-list li {
+	margin: 0 0 4px;
+}
+
+.vkbm-admin-price-tiers-list li:last-child {
+	margin-bottom: 0;
+}
+
+.vkbm-admin-price-tiers-price {
+	white-space: nowrap;
+}

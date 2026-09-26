@@ -24,6 +24,10 @@ use function admin_url;
 use function add_query_arg;
 use function wp_date;
 use function get_option;
+use function absint;
+use function esc_url;
+use function get_edit_post_link;
+use function sprintf;
 
 /**
  * Handles the email log admin page.
@@ -161,6 +165,13 @@ class Email_Log_Page {
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Email Log', 'vk-booking-manager' ); ?></h1>
 
+			<?php // #510: このログが何を示す/示さないかを常に案内する（見出し直下）。 ?>
+			<p class="description">
+				<?php echo esc_html__( 'This log only shows whether WordPress was able to process sending the email.', 'vk-booking-manager' ); ?>
+				<?php echo esc_html__( 'It does not record whether the email was actually delivered to the recipient.', 'vk-booking-manager' ); ?>
+				<?php echo esc_html__( 'If the status shows "Sent" but the email was not received, check the recipient\'s spam folder and the server\'s email settings (such as DKIM).', 'vk-booking-manager' ); ?>
+			</p>
+
 			<?php if ( $cleared ) : ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php echo esc_html__( 'Logs cleared successfully.', 'vk-booking-manager' ); ?></p>
@@ -188,6 +199,12 @@ class Email_Log_Page {
 					</thead>
 					<tbody>
 						<?php foreach ( $logs as $log ) : ?>
+							<?php
+							// #510: type・attempt 等を持つのは今回の変更以降に記録されたログのみ。
+							// 変更前に保存された古いログ（status キーが無い）は従来どおりの表示のままにする。
+							$is_new_format_log = array_key_exists( 'status', $log );
+							$status_meta       = $this->resolve_status_meta( $log );
+							?>
 							<tr>
 								<td>
 									<?php
@@ -201,19 +218,35 @@ class Email_Log_Page {
 									?>
 								</td>
 								<td><?php echo esc_html( $log['email'] ?? '' ); ?></td>
-								<td><?php echo esc_html( $log['subject'] ?? '' ); ?></td>
 								<td>
-									<?php if ( ! empty( $log['success'] ) ) : ?>
-										<span style="color: green;"><?php echo esc_html__( 'Success', 'vk-booking-manager' ); ?></span>
-									<?php else : ?>
-										<span style="color: red;"><?php echo esc_html__( 'Failed', 'vk-booking-manager' ); ?></span>
+									<?php echo esc_html( $log['subject'] ?? '' ); ?>
+									<?php if ( $is_new_format_log ) : ?>
+										<?php echo $this->render_type_and_booking_line( $log ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped inside the helper. ?>
 									<?php endif; ?>
 								</td>
 								<td>
+									<span style="color: <?php echo esc_attr( $status_meta['color'] ); ?>;"><?php echo esc_html( $status_meta['label'] ); ?></span>
+									<?php if ( $is_new_format_log ) : ?>
+										<?php echo $this->render_retry_line( $log ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped inside the helper. ?>
+									<?php endif; ?>
+								</td>
+								<?php
+								// レビュー対応（#510 植草・安藤）: 再送案内文は "\n" で連結して保存しているため、
+								// nl2br() で改行を <br> として表示する（<code> は空白を折りたたむため、そのままでは
+								// 1行に繋がって読めなくなる）。未送信（skipped）は設定不足であり故障ではないため、
+								// 失敗（failed）と同じ赤 (#d63638) ではなく中立色 (#50575e) で表示する
+								// （白背景・縞模様行 #f6f7f7 のどちらでもコントラスト比 4.5:1 以上）。
+								$error_text_color = ( Email_Log_Repository::STATUS_SKIPPED === $status_meta['status'] ) ? '#50575e' : '#d63638';
+								?>
+								<td>
 									<?php if ( ! empty( $log['error'] ) ) : ?>
-										<code style="font-size: 11px; color: #d63638;"><?php echo esc_html( $log['error'] ); ?></code>
+										<code style="font-size: 11px; color: <?php echo esc_attr( $error_text_color ); ?>;"><?php echo nl2br( esc_html( (string) $log['error'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- nl2br() only adds <br> after esc_html() already escaped the content. ?></code>
 									<?php else : ?>
 										<span style="color: #999;">—</span>
+									<?php endif; ?>
+									<?php if ( ! empty( $log['action_url'] ) ) : ?>
+										<?php // #510: 植草（UX）レビュー対応。案内リンクは <code> の外に通常の文字として置き、リンク単体で行き先が分かる文言にする。 ?>
+										<br><a href="<?php echo esc_url( (string) $log['action_url'] ); ?>"><?php echo esc_html( (string) ( $log['action_label'] ?? '' ) ); ?></a>
 									<?php endif; ?>
 								</td>
 							</tr>
@@ -223,6 +256,133 @@ class Email_Log_Page {
 			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * ログの状態（送信済み／失敗／未送信）に応じたラベルと文字色を返す。
+	 *
+	 * 新形式（status キーあり）は status の値をそのまま使う。旧形式（status キー無し）は
+	 * success（真偽値）から sent/failed のいずれかに読み替える（skipped は旧形式には存在しない）。
+	 *
+	 * @param array<string, mixed> $log ログ1件分のデータ。
+	 * @return array{status:string,label:string,color:string}
+	 */
+	private function resolve_status_meta( array $log ): array {
+		if ( array_key_exists( 'status', $log ) ) {
+			$status = (string) $log['status'];
+		} else {
+			$status = ! empty( $log['success'] ) ? Email_Log_Repository::STATUS_SENT : Email_Log_Repository::STATUS_FAILED;
+		}
+
+		switch ( $status ) {
+			case Email_Log_Repository::STATUS_SKIPPED:
+				return array(
+					'status' => $status,
+					// #510: アクセシビリティ基準（コントラスト比 4.5:1 以上）を満たす色。
+					'label'  => __( 'Not sent', 'vk-booking-manager' ),
+					'color'  => '#8a6d00',
+				);
+
+			case Email_Log_Repository::STATUS_FAILED:
+				return array(
+					'status' => $status,
+					'label'  => __( 'Failed', 'vk-booking-manager' ),
+					'color'  => '#b32d2e',
+				);
+
+			case Email_Log_Repository::STATUS_SENT:
+			default:
+				return array(
+					'status' => Email_Log_Repository::STATUS_SENT,
+					'label'  => __( 'Sent', 'vk-booking-manager' ),
+					'color'  => '#008000',
+				);
+		}
+	}
+
+	/**
+	 * 件名の下に出す「通知の種類」と「予約 #123（編集画面リンク）」の行を組み立てる。
+	 *
+	 * @param array<string, mixed> $log ログ1件分のデータ。
+	 * @return string 出力用にエスケープ済みの HTML。
+	 */
+	private function render_type_and_booking_line( array $log ): string {
+		$type       = (string) ( $log['type'] ?? '' );
+		$booking_id = isset( $log['booking_id'] ) ? absint( $log['booking_id'] ) : 0;
+
+		$type_label = $this->get_type_label( $type );
+
+		$parts = array();
+		if ( '' !== $type_label ) {
+			$parts[] = '<span class="vkbm-email-log__type">' . esc_html( $type_label ) . '</span>';
+		}
+
+		if ( $booking_id > 0 ) {
+			$edit_url = (string) get_edit_post_link( $booking_id, 'raw' );
+			/* translators: %d: Booking post ID. */
+			$booking_label = sprintf( __( 'Reservation #%d', 'vk-booking-manager' ), $booking_id );
+			if ( '' !== $edit_url ) {
+				$parts[] = '<a href="' . esc_url( $edit_url ) . '">' . esc_html( $booking_label ) . '</a>';
+			} else {
+				$parts[] = esc_html( $booking_label );
+			}
+		}
+
+		if ( array() === $parts ) {
+			return '';
+		}
+
+		return '<br><small class="vkbm-email-log__meta">' . implode( ' / ', $parts ) . '</small>';
+	}
+
+	/**
+	 * ステータスの下に出す「再送（N回目）」の行を組み立てる。1回目（attempt が 1 以下）や
+	 * 再送の概念が無い通知（max_attempts が 0）は何も出力しない。
+	 *
+	 * @param array<string, mixed> $log ログ1件分のデータ。
+	 * @return string 出力用にエスケープ済みの HTML。
+	 */
+	private function render_retry_line( array $log ): string {
+		$attempt      = isset( $log['attempt'] ) ? absint( $log['attempt'] ) : 0;
+		$max_attempts = isset( $log['max_attempts'] ) ? absint( $log['max_attempts'] ) : 0;
+
+		if ( $attempt < 2 || $max_attempts <= 0 ) {
+			return '';
+		}
+
+		if ( $attempt >= $max_attempts ) {
+			/* translators: %d: Attempt number (e.g. 3rd attempt, and final). */
+			$label = sprintf( __( 'Resend (attempt %d, final)', 'vk-booking-manager' ), $attempt );
+		} else {
+			/* translators: %d: Attempt number (e.g. 2nd attempt). */
+			$label = sprintf( __( 'Resend (attempt %d)', 'vk-booking-manager' ), $attempt );
+		}
+
+		return '<br><small class="vkbm-email-log__retry">' . esc_html( $label ) . '</small>';
+	}
+
+	/**
+	 * 通知タイプの内部キーを、一覧表示用のラベルへ変換する。
+	 *
+	 * 対応表は Booking_Notification_Service の通知タイプ定数、および
+	 * Auth_Shortcodes::EMAIL_TYPE_REGISTRATION_CONFIRMATION と一致させること。
+	 *
+	 * @param string $type 通知タイプ。
+	 * @return string ラベル（未知のタイプ・空文字は空文字を返す）。
+	 */
+	private function get_type_label( string $type ): string {
+		$labels = array(
+			'pending_customer'          => __( 'Pending reservation (to customer)', 'vk-booking-manager' ),
+			'pending_provider'          => __( 'Pending reservation (to provider)', 'vk-booking-manager' ),
+			'confirmed_customer'        => __( 'Reservation confirmed (to customer)', 'vk-booking-manager' ),
+			'confirmed_provider'        => __( 'Reservation confirmed (to provider)', 'vk-booking-manager' ),
+			'cancelled_customer'        => __( 'Reservation cancelled (to customer)', 'vk-booking-manager' ),
+			'cancelled_provider'        => __( 'Reservation cancelled (to provider)', 'vk-booking-manager' ),
+			'reminder_customer'         => __( 'Reservation reminder (to customer)', 'vk-booking-manager' ),
+			'registration_confirmation' => __( 'Email address confirmation', 'vk-booking-manager' ),
+		);
+
+		return $labels[ $type ] ?? '';
 	}
 
 	/**

@@ -32,6 +32,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use function add_query_arg;
 use function admin_url;
+use function checked;
 use function delete_transient;
 use function esc_attr;
 use function esc_html;
@@ -39,11 +40,14 @@ use function esc_html__;
 use function esc_html_e;
 use function esc_url;
 use function get_transient;
+use function in_array;
 use function is_wp_error;
 use function sanitize_key;
 use function selected;
 use function set_transient;
+use function sprintf;
 use function submit_button;
+use function vkbm_get_resource_label_singular;
 use function wp_nonce_field;
 use function wp_unslash;
 
@@ -97,20 +101,30 @@ class Google_Calendar_Settings_Panel {
 	private $controller;
 
 	/**
+	 * 予定に載せる情報の設定（issue #476）。
+	 *
+	 * @var Google_Calendar_Event_Sync_Settings
+	 */
+	private $sync_settings;
+
+	/**
 	 * コンストラクタ。
 	 *
-	 * @param Google_Calendar_Connection         $connection 接続状態。
-	 * @param Google_Calendar_Api_Client         $api_client Google の API を呼ぶクライアント。
-	 * @param Google_Calendar_Connect_Controller $controller 連携の操作を受け取るコントローラー。
+	 * @param Google_Calendar_Connection          $connection    接続状態。
+	 * @param Google_Calendar_Api_Client          $api_client    Google の API を呼ぶクライアント。
+	 * @param Google_Calendar_Connect_Controller  $controller    連携の操作を受け取るコントローラー。
+	 * @param Google_Calendar_Event_Sync_Settings $sync_settings 予定に載せる情報の設定。
 	 */
 	public function __construct(
 		Google_Calendar_Connection $connection,
 		Google_Calendar_Api_Client $api_client,
-		Google_Calendar_Connect_Controller $controller
+		Google_Calendar_Connect_Controller $controller,
+		Google_Calendar_Event_Sync_Settings $sync_settings
 	) {
-		$this->connection = $connection;
-		$this->api_client = $api_client;
-		$this->controller = $controller;
+		$this->connection    = $connection;
+		$this->api_client    = $api_client;
+		$this->controller    = $controller;
+		$this->sync_settings = $sync_settings;
 	}
 
 	/**
@@ -272,23 +286,33 @@ class Google_Calendar_Settings_Panel {
 						</p>
 					</td>
 				</tr>
-				<tr>
-					<th scope="row">
-						<label for="vkbm-google-calendar-id"><?php esc_html_e( 'Calendar to use', 'vk-booking-manager' ); ?></label>
-					</th>
-					<td>
-						<?php if ( is_wp_error( $calendars ) ) : ?>
-							<div class="notice notice-error inline">
-								<p><?php echo esc_html( $calendars->get_error_message() ); ?></p>
-							</div>
-						<?php elseif ( array() === $calendars ) : ?>
-							<p class="description">
-								<?php esc_html_e( 'No calendar that allows adding events was found in this Google account.', 'vk-booking-manager' ); ?>
-							</p>
-						<?php else : ?>
-							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-								<?php wp_nonce_field( Google_Calendar_Connect_Controller::ACTION_SELECT_CALENDAR ); ?>
-								<input type="hidden" name="action" value="<?php echo esc_attr( Google_Calendar_Connect_Controller::ACTION_SELECT_CALENDAR ); ?>" />
+			</tbody>
+		</table>
+		<p class="description">
+			<?php esc_html_e( 'Bookings made before you connect are not added to the calendar.', 'vk-booking-manager' ); ?>
+		</p>
+		<?php /* 「予定に載せる情報」は、カレンダー一覧が取得できない・0件のときも表示する（植草レビュー指摘）。フォーム自体は常に出し、カレンダーIDは選べないときは保存済みの値をそのまま維持する隠しフィールドにする。 */ ?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<?php wp_nonce_field( Google_Calendar_Connect_Controller::ACTION_SELECT_CALENDAR ); ?>
+			<input type="hidden" name="action" value="<?php echo esc_attr( Google_Calendar_Connect_Controller::ACTION_SELECT_CALENDAR ); ?>" />
+			<table class="form-table" role="presentation">
+				<tbody>
+					<tr>
+						<th scope="row">
+							<label for="vkbm-google-calendar-id"><?php esc_html_e( 'Calendar to use', 'vk-booking-manager' ); ?></label>
+						</th>
+						<td>
+							<?php if ( is_wp_error( $calendars ) ) : ?>
+								<div class="notice notice-error inline">
+									<p><?php echo esc_html( $calendars->get_error_message() ); ?></p>
+								</div>
+								<input type="hidden" name="vkbm_google_calendar_id" value="<?php echo esc_attr( $this->connection->get_calendar_id() ); ?>" />
+							<?php elseif ( array() === $calendars ) : ?>
+								<p class="description">
+									<?php esc_html_e( 'No calendar that allows adding events was found in this Google account.', 'vk-booking-manager' ); ?>
+								</p>
+								<input type="hidden" name="vkbm_google_calendar_id" value="<?php echo esc_attr( $this->connection->get_calendar_id() ); ?>" />
+							<?php else : ?>
 								<select id="vkbm-google-calendar-id" name="vkbm_google_calendar_id">
 									<?php foreach ( $calendars as $calendar ) : ?>
 										<option
@@ -299,13 +323,14 @@ class Google_Calendar_Settings_Panel {
 										</option>
 									<?php endforeach; ?>
 								</select>
-								<?php submit_button( __( 'Save the calendar to use', 'vk-booking-manager' ), 'primary', 'submit', false ); ?>
-							</form>
-						<?php endif; ?>
-					</td>
-				</tr>
-			</tbody>
-		</table>
+							<?php endif; ?>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<?php $this->render_sync_fields_fieldset(); ?>
+			<?php submit_button( __( 'Save the calendar to use', 'vk-booking-manager' ), 'primary', 'submit', false ); ?>
+		</form>
 		<p>
 			<a
 				class="button button-link-delete"
@@ -315,6 +340,70 @@ class Google_Calendar_Settings_Panel {
 			</a>
 		</p>
 		<?php
+	}
+
+	/**
+	 * 「予定に載せる情報」チェックボックスを出力する。
+	 *
+	 * 反映先カレンダーの選択と同じフォーム・同じ保存ボタンにまとめる（植草案。issue #476）。
+	 * 管理用メモ（内部メモ）は選択肢に出さない
+	 * （{@see Google_Calendar_Event_Sync_Settings::get_field_keys()} 参照）。
+	 *
+	 * @return void
+	 */
+	private function render_sync_fields_fieldset(): void {
+		$enabled = $this->sync_settings->get_enabled_fields();
+		$options = array(
+			Google_Calendar_Event_Sync_Settings::FIELD_GUESTS         => __( 'Number of guests', 'vk-booking-manager' ),
+			/* translators: %s: 担当の呼び名（設定で変更可）。 */
+			Google_Calendar_Event_Sync_Settings::FIELD_STAFF          => sprintf( __( '%s in charge', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
+			Google_Calendar_Event_Sync_Settings::FIELD_ADMIN_LINK     => __( 'Link to the reservation management screen', 'vk-booking-manager' ),
+			Google_Calendar_Event_Sync_Settings::FIELD_CUSTOMER_NAME  => __( 'Customer name', 'vk-booking-manager' ),
+			Google_Calendar_Event_Sync_Settings::FIELD_CUSTOMER_TEL   => __( 'Customer phone number', 'vk-booking-manager' ),
+			Google_Calendar_Event_Sync_Settings::FIELD_CUSTOMER_EMAIL => __( 'Customer email address', 'vk-booking-manager' ),
+			Google_Calendar_Event_Sync_Settings::FIELD_CUSTOMER_NOTE  => __( 'Notes and requests from the customer', 'vk-booking-manager' ),
+		);
+		?>
+		<fieldset class="vkbm-google-calendar__sync-fields">
+			<legend><strong><?php esc_html_e( 'Information to include in the calendar event', 'vk-booking-manager' ); ?></strong></legend>
+			<p class="description">
+				<?php echo esc_html( $this->get_sync_fields_description() ); ?>
+			</p>
+			<ul>
+				<?php foreach ( $options as $key => $label ) : ?>
+					<li>
+						<label>
+							<input
+								type="checkbox"
+								name="vkbm_google_calendar_sync_fields[]"
+								value="<?php echo esc_attr( $key ); ?>"
+								<?php checked( in_array( $key, $enabled, true ) ); ?>
+							/>
+							<?php echo esc_html( $label ); ?>
+						</label>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		</fieldset>
+		<?php
+	}
+
+	/**
+	 * 「予定に載せる情報」フィールドセットの説明文を組み立てる。
+	 *
+	 * 初期値オンの項目（予約人数・担当・予約管理画面へのリンク）もあるため、「すべてオフ」と
+	 * 読める書き方をしない。実際にオフなのはお客様に関する項目だけと分かる文にする
+	 * （植草レビュー指摘）。1つの翻訳関数に複数文を入れないよう、文ごとに分けてから連結する
+	 * （coding-rules.md の国際化ルールに準拠。`Setup_Notices::get_permalink_htaccess_notice_message()`
+	 * と同じ方式）。
+	 *
+	 * @return string 説明文。
+	 */
+	private function get_sync_fields_description(): string {
+		$message  = __( 'Choose what to include in the event created in Google Calendar.', 'vk-booking-manager' );
+		$message .= __( ' Items related to the customer (name, phone number, email address, and notes) are off by default because Google Calendar may be seen by more people than the reservation management screen (sharing, phone notifications, etc.).', 'vk-booking-manager' );
+
+		return $message;
 	}
 
 	/**

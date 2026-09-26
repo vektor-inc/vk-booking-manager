@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Settings_Service;
@@ -35,6 +36,12 @@ class Auth_Shortcodes {
 	private const RATE_LIMIT_LOGIN_WINDOW    = 600;
 	private const RATE_LIMIT_REGISTER_MAX    = 5;
 	private const RATE_LIMIT_REGISTER_WINDOW = 1800;
+	// #510: メールログの通知種類。一覧画面で「会員登録の確認」ラベルとして表示する。
+	private const EMAIL_TYPE_REGISTRATION_CONFIRMATION = 'registration_confirmation';
+
+	// issue #507: 認証メール再送許可（使い捨て）の有効期間と、同一利用者への再送の間隔制限。
+	private const RESEND_GRANT_TTL        = 10 * MINUTE_IN_SECONDS;
+	private const RESEND_COOLDOWN_SECONDS = 60;
 
 	/**
 	 * Login errors.
@@ -93,6 +100,17 @@ class Auth_Shortcodes {
 	private $settings_service;
 
 	/**
+	 * Resend grant token issued during the current request (unhashed), if any.
+	 *
+	 * 同一リクエスト内（ショートコードページの POST → 直後の描画）で、クッキーの
+	 * 反映を待たずに再送ボタンを出すために使う（$_COOKIE は同一リクエスト内では
+	 * 更新されないため）。
+	 *
+	 * @var string
+	 */
+	private $resend_grant_token = '';
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Settings_Service $settings_service Provider settings helper.
@@ -104,19 +122,40 @@ class Auth_Shortcodes {
 	/**
 	 * Hook into WordPress.
 	 */
-	/**
-	 * Hook into WordPress.
-	 */
 	public function register(): void {
 		add_action( 'init', array( $this, 'handle_form_submission' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'template_redirect', array( $this, 'handle_email_verification' ) );
 		add_action( 'login_form_register', array( $this, 'redirect_wp_register_to_vkbm' ) );
 		add_action( 'login_form_login', array( $this, 'redirect_wp_login_to_vkbm' ) );
+		// issue #512: フォールバック案内リンク（wp-login.php + vkbm_native_login=1）で
+		// 開いた場合、GET→POST を通じて回避クエリを維持するための隠しフィールド。
+		add_action( 'login_form', array( $this, 'render_native_login_bypass_field' ) );
 		add_action( 'login_enqueue_scripts', array( $this, 'enqueue_login_branding' ) );
 		add_action( 'admin_init', array( $this, 'redirect_free_user_from_admin' ) );
+		// issue #507: パスワード再設定の完了を、メール認証の代わりとして扱う。
+		add_action( 'after_password_reset', array( $this, 'handle_after_password_reset' ), 10, 2 );
 		add_shortcode( 'vkbm_login_form', array( $this, 'render_login_form' ) );
 		add_shortcode( 'vkbm_register_form', array( $this, 'render_registration_form' ) );
+	}
+
+	/**
+	 * WordPress 本体のパスワード再設定完了時に、メール認証未確認のユーザーを認証済み扱いにする。
+	 *
+	 * パスワード再設定のリンクは登録メールアドレスに届くため、再設定を完了できた時点で
+	 * 「そのアドレスにメールが届く」ことは確認できている（issue #507 やること3）。
+	 *
+	 * @param WP_User $user     再設定を完了したユーザー。
+	 * @param string  $new_pass 新しいパスワード（未使用）。
+	 */
+	public function handle_after_password_reset( WP_User $user, string $new_pass ): void {
+		unset( $new_pass );
+
+		$status = Email_Verification::get_status( (int) $user->ID );
+
+		if ( Email_Verification::STATUS_UNVERIFIED === $status || Email_Verification::STATUS_MANUAL === $status ) {
+			Email_Verification::mark_verified( (int) $user->ID );
+		}
 	}
 
 	/**
@@ -132,10 +171,7 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		$reservation_url = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			$reservation_url = vkbm_normalize_reservation_page_url( $reservation_url );
-		}
+		$reservation_url = $this->get_reservation_page_url();
 
 		if ( '' === $reservation_url ) {
 			return;
@@ -164,15 +200,20 @@ class Auth_Shortcodes {
 			return;
 		}
 
+		// issue #512: 予約ブロックの JS 未実行時フォールバック案内（wp-login.php + この
+		// クエリ）から開いた場合は、堂々巡りを避けるため予約ページへ転送しない。GET
+		// (リンク経由) と POST (フォーム送信、render_native_login_bypass_field() が
+		// 出す隠しフィールド経由) の両方を拾うため $_REQUEST を見る。
+		if ( ! empty( $_REQUEST['vkbm_native_login'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Bypass flag only, no state change.
+			return;
+		}
+
 		$settings = $this->settings_service->get_settings();
 		if ( empty( $settings['membership_redirect_wp_login'] ) ) {
 			return;
 		}
 
-		$reservation_url = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			$reservation_url = vkbm_normalize_reservation_page_url( $reservation_url );
-		}
+		$reservation_url = $this->get_reservation_page_url();
 
 		if ( '' === $reservation_url ) {
 			return;
@@ -186,6 +227,26 @@ class Auth_Shortcodes {
 		$redirect_url = add_query_arg( 'vkbm_auth', 'login', $reservation_url );
 		wp_safe_redirect( $redirect_url );
 		exit;
+	}
+
+	/**
+	 * Outputs a hidden field on the native WordPress login form so the
+	 * `vkbm_native_login` bypass flag survives the GET (link click) → POST
+	 * (credentials submit) transition.
+	 *
+	 * issue #512: コアの wp-login.php ログインフォームは action 属性にクエリ文字列を
+	 * 含まないため、フォールバック案内リンクの `?vkbm_native_login=1` はフォーム送信時に
+	 * 失われる。`login_form` フック（コアが `</form>` 直前に発火）で隠しフィールドとして
+	 * 埋め込み、`redirect_wp_login_to_vkbm()` が POST 側でも同じフラグを拾えるようにする。
+	 *
+	 * @return void
+	 */
+	public function render_native_login_bypass_field(): void {
+		if ( empty( $_REQUEST['vkbm_native_login'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Bypass flag only, no state change.
+			return;
+		}
+
+		echo '<input type="hidden" name="vkbm_native_login" value="1">';
 	}
 
 	/**
@@ -211,16 +272,12 @@ class Auth_Shortcodes {
 		$current_user = wp_get_current_user();
 
 		// 予約顧客（管理権限・VKBM権限を持たないユーザー）でない場合は対象外.
-		if ( ! $this->is_booking_customer( $current_user ) ) {
+		if ( ! self::is_booking_customer( $current_user ) ) {
 			return;
 		}
 
 		// 予約ページURLが設定されていない場合は対象外.
-		$settings        = $this->settings_service->get_settings();
-		$reservation_url = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			$reservation_url = vkbm_normalize_reservation_page_url( $reservation_url );
-		}
+		$reservation_url = $this->get_reservation_page_url();
 
 		if ( '' === $reservation_url ) {
 			return;
@@ -242,7 +299,7 @@ class Auth_Shortcodes {
 	 * @param WP_User $user 判定対象のユーザー.
 	 * @return bool 予約顧客の場合 true.
 	 */
-	public function is_booking_customer( WP_User $user ): bool {
+	public static function is_booking_customer( WP_User $user ): bool {
 		// 投稿編集権限があれば管理者・エディター相当のため予約顧客ではない.
 		if ( $user->has_cap( 'edit_posts' ) ) {
 			return false;
@@ -312,6 +369,10 @@ class Auth_Shortcodes {
 		if ( isset( $_POST['vkbm_profile_form'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in the handler.
 			$this->process_profile_request();
 		}
+
+		if ( isset( $_POST['vkbm_resend_verification_form'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in the handler.
+			$this->process_resend_verification_request();
+		}
 	}
 
 	/**
@@ -353,12 +414,7 @@ class Auth_Shortcodes {
 			return;
 		}
 
-		update_user_meta( $user->ID, 'vkbm_email_verified', '1' );
-		delete_user_meta( $user->ID, 'vkbm_email_verify_token_hash' );
-		// Also purge the legacy plain-text meta in case it was left over before the hash migration.
-		// ハッシュ化前の旧仕様で平文保存された残骸を、ここで併せて削除する。
-		delete_user_meta( $user->ID, 'vkbm_email_verify_token' );
-		delete_user_meta( $user->ID, 'vkbm_email_verify_expires' );
+		Email_Verification::mark_verified( $user->ID );
 		$this->set_verification_notice( __( 'Email verification has been completed. Please log in.', 'vk-booking-manager' ) );
 
 		$redirect_url = remove_query_arg( 'vkbm_verify_email', $this->get_current_url() );
@@ -389,6 +445,11 @@ class Auth_Shortcodes {
 			'show_lost_password_link' => 'true',
 			'lost_password_url'       => wp_lostpassword_url(),
 			'action_url'              => '',
+			// issue #512: `vkbm_login_error` Cookie の代わりに、呼び出し側（REST
+			// コントローラー等）が同一リクエスト内で判明したログイン失敗コードを
+			// 直接渡すための att。ホワイトリスト外のコードは get_login_error_message()
+			// が空文字を返すため、何も表示されない。
+			'error_code'              => '',
 		);
 
 		$atts        = shortcode_atts( $defaults, $atts, 'vkbm_login_form' );
@@ -407,14 +468,33 @@ class Auth_Shortcodes {
 		$username_value  = isset( $this->login_posted_data['user_login'] ) ? (string) $this->login_posted_data['user_login'] : '';
 		$remember_active = isset( $this->login_posted_data['remember'] ) ? (bool) $this->login_posted_data['remember'] : true;
 
-		$cookie_error = $this->consume_login_error_cookie();
-		if ( $cookie_error ) {
-			if ( ! $this->login_errors instanceof WP_Error ) {
-				$this->login_errors = new WP_Error();
-			}
+		// issue #512 レビュー対応（安藤さん指摘）: $this->login_errors（共有プロパティ）
+		// を直接書き換えると、同一インスタンスで render_login_form() を複数回呼ぶ場面
+		// （PHPUnit のケース網羅・REST 経由の複数リクエストを模した呼び出し等）で、
+		// 一度 error_code から追加したエラーが後続の呼び出しにも残り続けてしまう
+		// （error_code が空/無効でも前回分がエラー欄に出続ける状態漏れ）。
+		// $this->login_errors は他経路（process_login_request() 等）が設定した
+		// 「本当にこのインスタンスが処理した結果」を保持する必要があるため、
+		// error_code att はローカル変数へコピーしてから追加し、共有プロパティ自体は
+		// 変更しない。
+		$login_errors_to_render = $this->login_errors;
+		$error_code             = sanitize_key( (string) ( $atts['error_code'] ?? '' ) );
+		if ( '' !== $error_code ) {
+			$error_message = $this->get_login_error_message( $error_code );
 
-			$this->login_errors->add( 'auth_failed', $cookie_error );
+			if ( '' !== $error_message ) {
+				$login_errors_to_render = $login_errors_to_render instanceof WP_Error
+					? clone $login_errors_to_render
+					: new WP_Error();
+				$login_errors_to_render->add( $error_code, $error_message );
+			}
 		}
+
+		// issue #507: 未認証で弾いたときだけ発行される使い捨ての再送許可。
+		// クッキー経由（予約ブロックの別リクエスト）と同一リクエスト内（ショートコード
+		// ページの POST 直後）の両方をカバーする。
+		$resend_notice    = $this->consume_notice_cookie( 'vkbm_resend_notice' );
+		$show_resend_form = $this->has_resend_grant();
 
 		ob_start();
 		?>
@@ -425,11 +505,37 @@ class Auth_Shortcodes {
 			<?php if ( ! empty( $atts['description'] ) ) : ?>
 				<p class="vkbm-auth-card__description"><?php echo esc_html( $atts['description'] ); ?></p>
 			<?php endif; ?>
-			<?php $this->render_error_list( $this->login_errors ); ?>
+			<?php $this->render_error_list( $login_errors_to_render ); ?>
 			<?php $verification_message = $this->consume_verification_notice(); ?>
 			<?php if ( $verification_message ) : ?>
 				<div class="vkbm-alert vkbm-alert__success">
 					<?php echo esc_html( $verification_message ); ?>
+				</div>
+			<?php endif; ?>
+			<?php if ( $resend_notice || $show_resend_form ) : ?>
+				<div class="vkbm-alert vkbm-alert__warning" role="status">
+					<?php if ( 'success' === $resend_notice ) : ?>
+						<p><?php esc_html_e( 'The verification email has been resent. Click the link in the email within 24 hours to complete verification.', 'vk-booking-manager' ); ?></p>
+					<?php elseif ( 'rate_limited' === $resend_notice ) : ?>
+						<p><?php esc_html_e( 'You have reached the resend limit for the verification email. Please wait a while and try again. Please also check whether the email already sent has arrived, including your spam folder.', 'vk-booking-manager' ); ?></p>
+					<?php elseif ( 'send_failed' === $resend_notice ) : ?>
+						<p><?php esc_html_e( 'Failed to resend the verification email. Please try again later.', 'vk-booking-manager' ); ?></p>
+					<?php elseif ( 'expired' === $resend_notice ) : ?>
+						<p><?php esc_html_e( 'The resend request has expired. Please log in again.', 'vk-booking-manager' ); ?></p>
+					<?php else : ?>
+						<h3><?php esc_html_e( 'Email verification has not been completed yet', 'vk-booking-manager' ); ?></h3>
+						<p><?php esc_html_e( 'Click the link in the verification email sent to your registered email address to be able to log in.', 'vk-booking-manager' ); ?></p>
+					<?php endif; ?>
+					<?php foreach ( $this->get_verification_contact_lines() as $verification_contact_line ) : ?>
+						<p><?php echo esc_html( $verification_contact_line ); ?></p>
+					<?php endforeach; ?>
+					<?php if ( $show_resend_form ) : ?>
+						<form class="vkbm-auth-form__resend" method="post" action="<?php echo esc_url( $form_action ); ?>">
+							<?php echo wp_nonce_field( 'vkbm_resend_verification_form', 'vkbm_resend_verification_nonce', true, false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_nonce_field() outputs escaped HTML. ?>
+							<input type="hidden" name="vkbm_resend_verification_form" value="1">
+							<button type="submit" class="vkbm-button vkbm-button__md vkbm-button__secondary"><?php esc_html_e( 'Resend verification email', 'vk-booking-manager' ); ?></button>
+						</form>
+					<?php endif; ?>
 				</div>
 			<?php endif; ?>
 			<form class="vkbm-auth-form" method="post" action="<?php echo esc_url( $form_action ); ?>">
@@ -1049,19 +1155,20 @@ class Auth_Shortcodes {
 	private function process_login_request(): void {
 		$this->login_errors = new WP_Error();
 
+		// issue #512: 表示文言は get_login_error_messages() の対応表を唯一の情報源とする
+		// （REST 経由でコードから文言へ変換する get_login_error_message() とも共有）。
+		$messages = $this->get_login_error_messages();
+
 		$nonce = isset( $_POST['vkbm_login_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_login_nonce'] ) ) : '';
 
 		if ( ! wp_verify_nonce( $nonce, 'vkbm_login_form' ) ) {
-			$this->login_errors->add( 'invalid_nonce', __( 'Security check failed. Please reload the page and try again.', 'vk-booking-manager' ) );
+			$this->login_errors->add( 'invalid_nonce', $messages['invalid_nonce'] );
 			return;
 		}
 
 		$login_limit = $this->get_rate_limit_login_max();
 		if ( $this->is_rate_limit_enabled() && ! $this->consume_rate_limit_token( 'login', $login_limit, self::RATE_LIMIT_LOGIN_WINDOW ) ) {
-			$this->login_errors->add(
-				'rate_limited',
-				__( 'Too many attempts in a short period of time. Please try again later.', 'vk-booking-manager' )
-			);
+			$this->login_errors->add( 'rate_limited', $messages['rate_limited'] );
 			return;
 		}
 
@@ -1075,11 +1182,11 @@ class Auth_Shortcodes {
 		);
 
 		if ( '' === $username ) {
-			$this->login_errors->add( 'empty_username', __( 'Please enter your username (or email address).', 'vk-booking-manager' ) );
+			$this->login_errors->add( 'empty_username', $messages['empty_username'] );
 		}
 
 		if ( '' === $password ) {
-			$this->login_errors->add( 'empty_password', __( 'Please enter your password.', 'vk-booking-manager' ) );
+			$this->login_errors->add( 'empty_password', $messages['empty_password'] );
 		}
 
 		if ( $this->login_errors->has_errors() ) {
@@ -1096,34 +1203,286 @@ class Auth_Shortcodes {
 		);
 
 		if ( is_wp_error( $user ) ) {
-			$message = $this->format_login_error_message( $user, $username );
-			$this->login_errors->add( 'auth_failed', $message );
-			$this->queue_login_error_cookie( $message );
+			// 確認2（issue #512 承認済み仕様）: wp_signon() が返すエラーの種類を問わず
+			// 統一文言（auth_failed）に丸める。他プラグインが wp_signon() に独自の
+			// エラーを追加していても、その文言をそのまま出すとユーザー列挙対策
+			// （#194）が崩れるため。
+			$this->login_errors->add( 'auth_failed', $messages['auth_failed'] );
 			return;
 		}
 
-		$verified = get_user_meta( $user->ID, 'vkbm_email_verified', true );
-		if ( '' === $verified ) {
-			$verified = '1';
-		}
+		// issue #507: 判定・状態変更ロジックを Email_Verification に一本化する。
+		// 論点1: BM設定でメール認証が不要なら、'0'（未認証）のままの利用者もログインを許可する。
+		$verification_required = $this->requires_email_verification();
 
-		if ( '1' !== $verified ) {
+		if ( ! Email_Verification::is_login_allowed( (int) $user->ID, $verification_required ) ) {
 			wp_clear_auth_cookie();
-			$this->login_errors->add(
-				'unverified_email',
-				__( 'Email verification has not been completed. Please click the link in the registered email to confirm.', 'vk-booking-manager' )
-			);
-			$this->queue_login_error_cookie(
-				__( 'Email verification has not been completed.', 'vk-booking-manager' )
-			);
+
+			$status = Email_Verification::get_status( (int) $user->ID );
+
+			if ( Email_Verification::STATUS_UNVERIFIED === $status ) {
+				// パスワードが正しく、未認証で弾いたときにだけ使い捨ての再送許可を発行する
+				// （#194＝ログイン失敗メッセージから登録済みユーザーを推測できた問題、と同じ観点）。
+				// 案内・再送ボタンはログインフォーム描画時（render_login_form）に出す。
+				$this->issue_resend_grant( (int) $user->ID );
+				return;
+			}
+
+			// 想定外の保存値に対する保険（通常はここへ来ない）。
+			$this->login_errors->add( 'unverified_email', $messages['unverified_email'] );
 			return;
 		}
 
 		$redirect_to_raw = isset( $_POST['redirect_to'] ) ? sanitize_text_field( wp_unslash( $_POST['redirect_to'] ) ) : '';
 		$redirect_to     = '' !== $redirect_to_raw ? $this->normalize_redirect( $redirect_to_raw ) : $this->get_current_url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verified above.
 
-		wp_safe_redirect( $redirect_to );
-		exit;
+		$this->redirect_and_exit( $redirect_to );
+	}
+
+	/**
+	 * Issues a single-use resend grant for the given user.
+	 *
+	 * パスワードが正しく、未認証（'0'）で弾いたときにだけ呼ばれる。10分間有効な
+	 * transient と、ブラウザ側からは読めない HttpOnly クッキーで運ぶ。パスワードを
+	 * 間違えた人には発行しないため、「そのユーザーが存在して未認証である」ことは
+	 * 分からない（#194 と同じ観点）。
+	 *
+	 * @param int $user_id 未認証のまま弾かれたユーザー ID。
+	 */
+	private function issue_resend_grant( int $user_id ): void {
+		// 安藤さんレビュー指摘（issue #507 PR）: 直前の許可が残っていれば、再発行前に
+		// 無効化する。再送のたびに新しい許可を出し直す（下記 finish_resend_request()
+		// 参照）ようになったため、古い許可を放置すると有効な許可が積み上がってしまう。
+		$this->invalidate_current_resend_grant();
+
+		$token = $this->generate_email_token();
+
+		set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $token ), $user_id, self::RESEND_GRANT_TTL );
+
+		// 同一リクエスト内での render_login_form() 呼び出しにも即座に反映させる
+		// （$_COOKIE は同一リクエスト内では更新されないため）。
+		$this->resend_grant_token = $token;
+		$this->set_resend_grant_cookie( $token );
+	}
+
+	/**
+	 * Deletes the transient behind whatever resend grant is currently tracked
+	 * (in-memory token for this request, or the cookie from a previous request), if any.
+	 */
+	private function invalidate_current_resend_grant(): void {
+		if ( '' !== $this->resend_grant_token ) {
+			delete_transient( 'vkbm_resend_grant_' . hash( 'sha256', $this->resend_grant_token ) );
+		}
+
+		$cookie_token = $this->peek_resend_grant_cookie();
+		if ( '' !== $cookie_token ) {
+			delete_transient( 'vkbm_resend_grant_' . hash( 'sha256', $cookie_token ) );
+		}
+	}
+
+	/**
+	 * Sets the HttpOnly cookie carrying the raw resend grant token.
+	 *
+	 * @param string $token Raw (unhashed) grant token.
+	 */
+	private function set_resend_grant_cookie( string $token ): void {
+		if ( headers_sent() ) {
+			return;
+		}
+
+		setcookie(
+			'vkbm_resend_grant',
+			$token,
+			time() + self::RESEND_GRANT_TTL,
+			'/',
+			defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '',
+			$this->is_request_secure(),
+			true
+		);
+	}
+
+	/**
+	 * Clears the resend grant cookie.
+	 */
+	private function clear_resend_grant_cookie(): void {
+		// 同一リクエスト内で peek_resend_grant_cookie() を再度呼んでも古い値を
+		// 拾わないよう、$_COOKIE 自体も更新する（setcookie() は次リクエストにしか効かない）。
+		unset( $_COOKIE['vkbm_resend_grant'] );
+
+		if ( headers_sent() ) {
+			return;
+		}
+
+		setcookie( 'vkbm_resend_grant', '', time() - 3600, '/', defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '' );
+	}
+
+	/**
+	 * Reads the raw resend grant token from the cookie without clearing it.
+	 *
+	 * @return string
+	 */
+	private function peek_resend_grant_cookie(): string {
+		if ( empty( $_COOKIE['vkbm_resend_grant'] ) ) {
+			return '';
+		}
+
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized below.
+		return sanitize_text_field( wp_unslash( $_COOKIE['vkbm_resend_grant'] ) );
+	}
+
+	/**
+	 * Determines whether a resend grant is currently available (without consuming it).
+	 *
+	 * ログインフォーム描画時に再送ボタンを出すかどうかの判定に使う。
+	 *
+	 * @return bool
+	 */
+	public function has_resend_grant(): bool {
+		if ( '' !== $this->resend_grant_token ) {
+			return true;
+		}
+
+		$token = $this->peek_resend_grant_cookie();
+		if ( '' === $token ) {
+			return false;
+		}
+
+		return false !== get_transient( 'vkbm_resend_grant_' . hash( 'sha256', $token ) );
+	}
+
+	/**
+	 * Builds the "contact the shop if the email does not arrive" notice lines, appending
+	 * the shop's phone number / email address from BM settings when configured (issue #507
+	 * 論点3). Each line is rendered as its own paragraph by the caller (植草さんレビュー
+	 * 指摘: 電話・メールを1行に詰め込まず別行にする).
+	 *
+	 * @return array<int, string>
+	 */
+	private function get_verification_contact_lines(): array {
+		$lines = array(
+			__( 'If the email does not arrive, please check your spam folder and then contact the shop.', 'vk-booking-manager' ),
+		);
+
+		$settings = $this->settings_service->get_settings();
+		$phone    = isset( $settings['provider_phone'] ) ? trim( (string) $settings['provider_phone'] ) : '';
+		$email    = isset( $settings['provider_email'] ) ? trim( (string) $settings['provider_email'] ) : '';
+
+		if ( '' !== $phone ) {
+			/* translators: %s: shop phone number. */
+			$lines[] = sprintf( __( 'Phone: %s', 'vk-booking-manager' ), $phone );
+		}
+		if ( '' !== $email && is_email( $email ) ) {
+			/* translators: %s: shop email address. */
+			$lines[] = sprintf( __( 'Email: %s', 'vk-booking-manager' ), $email );
+		}
+
+		return $lines;
+	}
+
+	/**
+	 * Handles a "resend verification email" submission.
+	 *
+	 * 使い捨ての再送許可を消費して、新しい認証トークンを発行・送信する。成否に
+	 * 関わらず、この1回の POST で許可を無効化する（#507）。
+	 */
+	private function process_resend_verification_request(): void {
+		$nonce = isset( $_POST['vkbm_resend_verification_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_resend_verification_nonce'] ) ) : '';
+
+		if ( ! wp_verify_nonce( $nonce, 'vkbm_resend_verification_form' ) ) {
+			$this->login_errors = new WP_Error();
+			$this->login_errors->add( 'invalid_nonce', __( 'Security check failed. Please reload the page and try again.', 'vk-booking-manager' ) );
+			return;
+		}
+
+		$token = $this->peek_resend_grant_cookie();
+		$this->clear_resend_grant_cookie();
+		$this->resend_grant_token = '';
+
+		if ( '' === $token ) {
+			// 安藤さんレビュー指摘（issue #507 PR）: サイレントに何も表示しないと
+			// 利用者が詰まる。存在確認につながらないよう、原因を問わず共通の文言で
+			// 案内する（許可を再発行しないため $user_id は渡さない）。
+			$this->finish_resend_request( 'expired' );
+			return;
+		}
+
+		$transient_key = 'vkbm_resend_grant_' . hash( 'sha256', $token );
+		$user_id       = get_transient( $transient_key );
+		delete_transient( $transient_key );
+
+		if ( false === $user_id || (int) $user_id <= 0 ) {
+			$this->finish_resend_request( 'expired' );
+			return;
+		}
+
+		$user_id = (int) $user_id;
+		$user    = get_userdata( $user_id );
+
+		if ( ! $user instanceof WP_User || Email_Verification::STATUS_UNVERIFIED !== Email_Verification::get_status( $user_id ) ) {
+			// 既に別の操作（手動承認・認証リンクの利用等）で状態が変わっている場合も、
+			// 状態を推測されないよう同じ 'expired' 文言にする。
+			$this->finish_resend_request( 'expired' );
+			return;
+		}
+
+		// レート制限1（安藤さんレビュー指摘）: 再送専用の IP 単位レート制限を使う。
+		// 会員登録用の 'register' 枠と共有すると、再送の連打が新規登録のレート制限を
+		// 巻き添えにしてしまうため、action を分ける（上限値・期間は登録用の設定値を流用）。
+		$resend_ip_limit = $this->get_rate_limit_register_max();
+		if ( $this->is_rate_limit_enabled() && ! $this->consume_rate_limit_token( 'resend_verification', $resend_ip_limit, self::RATE_LIMIT_REGISTER_WINDOW ) ) {
+			$this->finish_resend_request( 'rate_limited', $user_id );
+			return;
+		}
+
+		// レート制限2（安藤さんレビュー指摘）: 利用者単位の1日上限（24時間で5回まで）。
+		// 他人のメールアドレスで登録して再送を連打し、大量にメールを送りつける対策。
+		if ( Email_Verification::has_reached_daily_resend_limit( $user_id ) ) {
+			$this->finish_resend_request( 'rate_limited', $user_id );
+			return;
+		}
+
+		// レート制限3（論点4）: 同一利用者への再送は60秒に1回まで。
+		$last_resend = (int) get_user_meta( $user_id, Email_Verification::META_RESEND_LAST_SENT, true );
+		if ( $last_resend > 0 && ( time() - $last_resend ) < self::RESEND_COOLDOWN_SECONDS ) {
+			$this->finish_resend_request( 'rate_limited', $user_id );
+			return;
+		}
+
+		$new_token = $this->generate_email_token();
+		// 新しいトークンで上書きすることで、以前発行した認証リンクを無効化する。
+		update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', $new_token ) );
+		update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + self::EMAIL_TOKEN_TTL );
+
+		if ( ! $this->send_verification_email( $user->user_email, $this->get_current_url(), $new_token ) ) {
+			$this->finish_resend_request( 'send_failed', $user_id );
+			return;
+		}
+
+		update_user_meta( $user_id, Email_Verification::META_RESEND_LAST_SENT, time() );
+		Email_Verification::record_resend( $user_id );
+		$this->finish_resend_request( 'success', $user_id );
+	}
+
+	/**
+	 * Stores the resend outcome in a one-shot cookie and redirects back to the login page.
+	 *
+	 * 植草さんレビュー指摘（issue #507 PR）: 成功・上限到達・送信失敗のいずれの結果でも
+	 * 文言が「もう一度お試しください」と再挑戦を促すため、手段（再送ボタン）を残す
+	 * 必要がある。$user_id を渡した場合（＝有効な未認証ユーザーに対する処理だった
+	 * 場合）は新しい使い捨て許可を発行し直す。連打は呼び出し元の各レート制限で防ぐ。
+	 * 許可・状態が無効だった（'expired'）場合は $user_id を渡さず、発行し直さない。
+	 *
+	 * @param string $result  'success' | 'rate_limited' | 'send_failed' | 'expired'.
+	 * @param int    $user_id 許可を再発行する対象ユーザー ID。'expired' では 0 のまま。
+	 */
+	private function finish_resend_request( string $result, int $user_id = 0 ): void {
+		if ( $user_id > 0 ) {
+			$this->issue_resend_grant( $user_id );
+		}
+
+		$this->set_notice_cookie( 'vkbm_resend_notice', $result, '/' );
+		$redirect_to = add_query_arg( 'vkbm_auth', 'login', $this->get_current_url() );
+		$this->redirect_and_exit( $redirect_to );
 	}
 
 	/**
@@ -1280,7 +1639,7 @@ class Auth_Shortcodes {
 		$requires_verification = $this->requires_email_verification();
 
 		if ( $requires_verification ) {
-			update_user_meta( $user_id, 'vkbm_email_verified', '0' );
+			Email_Verification::mark_unverified( $user_id );
 
 			$token   = $this->generate_email_token();
 			$expires = time() + self::EMAIL_TOKEN_TTL;
@@ -1309,12 +1668,7 @@ class Auth_Shortcodes {
 
 			$redirect_to = add_query_arg( 'vkbm_auth', 'login', $redirect_to );
 		} else {
-			update_user_meta( $user_id, 'vkbm_email_verified', '1' );
-			delete_user_meta( $user_id, 'vkbm_email_verify_token_hash' );
-			// Also purge the legacy plain-text meta in case it was left over before the hash migration.
-			// ハッシュ化前の旧仕様で平文保存された残骸を、ここで併せて削除する。
-			delete_user_meta( $user_id, 'vkbm_email_verify_token' );
-			delete_user_meta( $user_id, 'vkbm_email_verify_expires' );
+			Email_Verification::mark_verified( $user_id );
 
 			$this->set_verification_notice(
 				__( 'Thank you for registering. Please log in to continue booking.', 'vk-booking-manager' )
@@ -1390,7 +1744,8 @@ class Auth_Shortcodes {
 			return;
 		}
 		?>
-		<div class="vkbm-alert vkbm-alert__danger" role="alert">
+		<?php // issue #512: tabindex="-1" は自然なタブ順には加えず、JS（app.js / booking-confirm-app.js）が REST 応答後にこの要素へ一度だけプログラム的にフォーカスできるようにするため。 ?>
+		<div class="vkbm-alert vkbm-alert__danger" role="alert" tabindex="-1">
 			<ul>
 				<?php foreach ( $errors->get_error_messages() as $message ) : ?>
 					<li><?php echo wp_kses( $message, $this->get_allowed_error_tags() ); ?></li>
@@ -1612,6 +1967,28 @@ class Auth_Shortcodes {
 	}
 
 	/**
+	 * Returns the normalized reservation page URL from provider settings, or '' if unset.
+	 *
+	 * 予約ページURL設定値を正規化して返す（`vkbm_normalize_reservation_page_url()` が
+	 * 定義されていれば適用）。redirect_wp_register_to_vkbm() / redirect_wp_login_to_vkbm() /
+	 * redirect_free_user_from_admin() で重複していた同じ取得処理を1か所にまとめたもの。
+	 * issue #512 のフォールバック案内リンク（Reservation_Block::get_native_login_fallback_url()）
+	 * からも参照する。
+	 *
+	 * @return string
+	 */
+	public function get_reservation_page_url(): string {
+		$settings        = $this->settings_service->get_settings();
+		$reservation_url = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
+
+		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
+			$reservation_url = vkbm_normalize_reservation_page_url( $reservation_url );
+		}
+
+		return $reservation_url;
+	}
+
+	/**
 	 * Check if the reservation page URL contains the reservation block.
 	 *
 	 * 予約ページURLに予約ブロックが含まれているかチェックします。
@@ -1741,30 +2118,28 @@ class Auth_Shortcodes {
 		$provider_settings = $this->settings_service->get_settings();
 		$email_log_enabled = ! empty( $provider_settings['email_log_enabled'] );
 
-		$result = wp_mail( $email, $subject, $message, $headers );
-
-		// Get error information if available.
-		$error_info = '';
-		if ( ! $result ) {
-			global $phpmailer;
-			if ( isset( $phpmailer ) && is_object( $phpmailer ) ) {
-				$phpmailer_error = isset( $phpmailer->ErrorInfo ) ? $phpmailer->ErrorInfo : ''; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase -- PHPMailer property name.
-				if ( ! empty( $phpmailer_error ) ) {
-					$error_info = $phpmailer_error;
-				}
+		// #510: 予約通知メールと同じ仕組みで、wp_mail() 直前・直後だけ wp_mail_failed を
+		// 購読してエラー文を取得する（WP_Error のメッセージ → PHPMailer の ErrorInfo →
+		// 「不明なエラー」の優先順位）。
+		$result = Mail_Error_Capture::send(
+			static function () use ( $email, $subject, $message, $headers ) {
+				return wp_mail( $email, $subject, $message, $headers );
 			}
-			if ( empty( $error_info ) ) {
-				$error_info = 'Unknown error';
-			}
-		}
+		);
 
 		// Save log entry.
 		if ( $email_log_enabled ) {
 			$log_repository = new Email_Log_Repository();
-			$log_repository->add_log( $email, $subject, (bool) $result, $error_info );
+			$log_repository->add_log(
+				$email,
+				$subject,
+				$result['sent'] ? Email_Log_Repository::STATUS_SENT : Email_Log_Repository::STATUS_FAILED,
+				$result['sent'] ? '' : $result['error'],
+				self::EMAIL_TYPE_REGISTRATION_CONFIRMATION
+			);
 		}
 
-		return (bool) $result;
+		return $result['sent'];
 	}
 
 	/**
@@ -2387,68 +2762,78 @@ class Auth_Shortcodes {
 	}
 
 	/**
-	 * Stores the latest login error in a cookie so it survives reloads.
+	 * Returns the fixed whitelist of login error codes and their display messages.
 	 *
-	 * @param string $message Error message.
+	 * issue #512: `vkbm_login_error` Cookie を廃止し、ログイン失敗コードを同一リクエスト
+	 * 内で HTML（render_block フィルタ）や REST パラメータとして受け渡す方式に替えた際の、
+	 * コード→文言の唯一の対応表。process_login_request() のエラー登録、
+	 * get_login_error_message()（REST 経由の文言解決）の両方がここを参照する。
+	 * 一覧に無いコードは表示させないため、あえて連想配列以外の形は持たない。
+	 *
+	 * @return array<string,string> Error code => display message.
 	 */
-	private function queue_login_error_cookie( string $message ): void {
-		if ( headers_sent() ) {
-			return;
-		}
-
-		$cookie_value = rawurlencode( $message );
-		setcookie(
-			'vkbm_login_error',
-			$cookie_value,
-			time() + 30,
-			defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/',
-			defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '',
-			$this->is_request_secure(),
-			true
+	private function get_login_error_messages(): array {
+		return array(
+			// #194: ユーザー列挙対策の統一文言（wp_signon() のエラー種別を問わず使う）。
+			'auth_failed'      => __( 'Username or password is incorrect.', 'vk-booking-manager' ),
+			'invalid_nonce'    => __( 'Security check failed. Please reload the page and try again.', 'vk-booking-manager' ),
+			'rate_limited'     => __( 'Too many attempts in a short period of time. Please try again later.', 'vk-booking-manager' ),
+			'unverified_email' => __( 'Email verification has not been completed. Please click the link in the registered email to confirm.', 'vk-booking-manager' ),
+			'empty_username'   => __( 'Please enter your username (or email address).', 'vk-booking-manager' ),
+			'empty_password'   => __( 'Please enter your password.', 'vk-booking-manager' ),
 		);
 	}
 
 	/**
-	 * Consume any pending login error stored in a cookie.
+	 * Returns the display message for a known login error code, or '' if the code
+	 * is not in the fixed whitelist.
 	 *
-	 * @return string|null
+	 * ホワイトリストに無いコードは空文字を返す。呼び出し側（REST コントローラー・
+	 * render_block フィルタ）はこれを「何も表示しない」の合図として扱う（任意の
+	 * 文字列を画面に出させないため）。
+	 *
+	 * @param string $code Sanitized error code.
+	 * @return string
 	 */
-	private function consume_login_error_cookie(): ?string {
-		if ( empty( $_COOKIE['vkbm_login_error'] ) ) {
-			return null;
-		}
+	public function get_login_error_message( string $code ): string {
+		$messages = $this->get_login_error_messages();
 
-		$value = isset( $_COOKIE['vkbm_login_error'] )
-			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE['vkbm_login_error'] ) ) ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Correctly sanitized AFTER decode to prevent XSS. WPCS scanner does not track through rawurldecode.
-			: '';
-
-		$cookie_path   = defined( 'COOKIEPATH' ) && '' !== COOKIEPATH ? COOKIEPATH : '/';
-		$cookie_domain = defined( 'COOKIE_DOMAIN' ) && '' !== COOKIE_DOMAIN ? COOKIE_DOMAIN : '';
-		setcookie( 'vkbm_login_error', '', time() - 3600, $cookie_path, $cookie_domain );
-
-		return $value;
+		return $messages[ $code ] ?? '';
 	}
 
 	/**
-	 * Formats login failure message for display.
+	 * Returns the fixed whitelist of login error codes (without messages).
 	 *
-	 * @param WP_Error $error    Error returned by wp_signon().
-	 * @param string   $username Attempted username.
+	 * issue #512 レビュー対応（安藤さん指摘）: REST `/vkbm/v1/auth-form` の `error`
+	 * 引数を `register_rest_route()` の `args` で self-describing に宣言する際、
+	 * その説明文（description）に一覧を載せるために使う（`enum` は使わない。理由は
+	 * `Auth_Form_Controller::register_routes()` のコメント参照）。ホワイトリストの
+	 * 実体は get_login_error_messages() の1か所のみで、ここはそのキー一覧を返すだけの
+	 * 薄いラッパー。
+	 *
+	 * @return array<int,string>
+	 */
+	public function get_login_error_codes(): array {
+		return array_keys( $this->get_login_error_messages() );
+	}
+
+	/**
+	 * Returns the login error code determined during this request's
+	 * process_login_request() call, or '' if login has not failed (or has not
+	 * been attempted) on this request/instance.
+	 *
+	 * issue #512: 予約ブロックの render_block フィルタ（Reservation_Block）が、Cookie を
+	 * 使わず同一リクエスト内で判明したログイン失敗を HTML に埋め込むために使う。
+	 *
 	 * @return string
 	 */
-	private function format_login_error_message( WP_Error $error, string $username ): string {
-		$codes = $error->get_error_codes();
-
-		// ユーザー列挙対策：認証情報の不一致は全て同じメッセージに統一する。
-		// Mitigate user enumeration: unify all auth-failure messages.
-		if (
-			in_array( 'invalid_username', $codes, true )
-			|| in_array( 'invalid_email', $codes, true )
-			|| in_array( 'incorrect_password', $codes, true )
-		) {
-			return __( 'Username or password is incorrect.', 'vk-booking-manager' );
+	public function get_current_login_error_code(): string {
+		if ( ! $this->login_errors instanceof WP_Error || ! $this->login_errors->has_errors() ) {
+			return '';
 		}
 
-		return $error->get_error_message();
+		$codes = $this->login_errors->get_error_codes();
+
+		return (string) ( $codes[0] ?? '' );
 	}
 }

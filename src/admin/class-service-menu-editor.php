@@ -373,9 +373,7 @@ class Service_Menu_Editor {
 		 */
 	public function render_basic_meta_box( WP_Post $post ): void {
 		$catch_copy             = get_post_meta( $post->ID, '_vkbm_catch_copy', true );
-		$base_price             = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$disable_nomination_fee = (string) get_post_meta( $post->ID, self::META_DISABLE_NOMINATION_FEE, true );
-		$tax_label              = VKBM_Helper::get_tax_included_label();
 		// サイト全体の指名機能スイッチ（基本設定）。メニュー単位トグルの表示可否にのみ使う。
 		// #412 C-7: Free版では Staff_Editor::is_nomination_enabled() が常に false を返すため
 		// 暗黙にPro限定になっていたが、保存側（save_post、$is_pro_edition の明示チェック）と
@@ -391,22 +389,12 @@ class Service_Menu_Editor {
 				<input type="text" id="vkbm_service_menu_catch_copy" name="vkbm_service_menu[catch_copy]" class="regular-text" value="<?php echo esc_attr( $catch_copy ); ?>" />
 			</td>
 		</tr>
-		<tr>
-			<th scope="row">
-				<label for="vkbm_service_menu_base_price">
-					<?php
-					esc_html_e( 'Basic price', 'vk-booking-manager' );
-					if ( '' !== $tax_label ) {
-						echo ' ' . esc_html( $tax_label );
-					}
-					?>
-				</label>
-			</th>
-			<td>
-				<input type="number" id="vkbm_service_menu_base_price" name="vkbm_service_menu[base_price]" class="small-text vkbm-price-input" min="0" step="1" value="<?php echo esc_attr( $base_price ); ?>" />
-			</td>
-		</tr>
 		<?php
+		// #514: 「基本料金」の行は、料金区分（price tiers）が入る位置の直前に置く必要があるため、
+		// render_conditions_meta_box() 側（料金区分の行の直前、または料金区分が表示されない
+		// 構成ではその位置に相当する末尾）で render_base_price_field() を呼び出す形に分離した。
+		// ここでは描画しない。
+		//
 		// #391: サイト全体の指名機能がONのときだけ、メニュー単位の「指名を使う」設定を表示する。
 		// サイト全体がOFFのサイトでは、メニュー単位で切り替える余地自体が無いため表示しない
 		// （このメタの auth_callback もサイト全体ONを要求しており、表示条件と保存条件を揃えている）。
@@ -558,7 +546,12 @@ class Service_Menu_Editor {
 					</td>
 				</tr>
 				<?php
-			else :
+				// #514: 料金区分の行はこの構成（予約枠の定員機能OFF）では表示されないため、
+				// 「料金区分が入るはずの位置」＝この分岐の末尾に基本料金の行を置く。
+				$this->render_base_price_field( $post, false );
+				?>
+			<?php else : ?>
+				<?php
 				// 予約枠の定員機能はON。
 				//
 				// #392: 指名を使うメニューを「1枠1組（貸切）」として扱う仕様変更に伴い、予約枠の定員・
@@ -679,6 +672,10 @@ class Service_Menu_Editor {
 				</tr>
 				<?php $this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields ); ?>
 				<?php $this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields ); ?>
+				<?php
+				// #514: 基本料金の行を料金区分の行の直前に配置する。
+				$this->render_base_price_field( $post, $show_multi_guest_dependent_fields );
+				?>
 				<?php $this->render_price_tiers_field( $post, $show_multi_guest_dependent_fields ); ?>
 			<?php endif; ?>
 		<?php else : ?>
@@ -697,6 +694,11 @@ class Service_Menu_Editor {
 					?>
 				</td>
 			</tr>
+			<?php
+			// #514: 無料版には料金区分自体が存在しないため、この分岐の末尾（料金区分が
+			// 入るはずの位置に相当）に基本料金の行を置く。
+			$this->render_base_price_field( $post, false );
+			?>
 		<?php endif; ?>
 		<?php $this->render_fixed_start_times_field( $post ); ?>
 		<?php
@@ -1027,6 +1029,81 @@ class Service_Menu_Editor {
 						<?php esc_html_e( 'If left blank or set to 0, the private booking fee is always added regardless of the number of guests.', 'vk-booking-manager' ); ?>
 					</p>
 				</div>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * 「基本料金（税込）」フィールドを出力する（#514）。
+	 *
+	 * 料金区分（price tiers）が入る位置の直前に置く必要があるため、render_basic_meta_box() では
+	 * 描画せず render_conditions_meta_box() から呼び出す。料金区分の行が表示されない構成
+	 * （無料版、または予約枠の定員機能OFF）でも、この行自体は必ず描画し、料金区分が入るはずの
+	 * 位置（その構成の末尾側）に置く（$price_tiers_visible に false を渡す）。
+	 *
+	 * 料金区分の行が表示中（hidden でない）かつ、区分名（trim後）が空でない行が1件以上
+	 * 登録されているときは、基本料金は使われないため readonly にしてグレーアウト表示し、
+	 * 理由を説明文で示す（aria-describedby で関連付け）。disabled ではなく readonly にする
+	 * のは、disabled にすると入力値が送信されず save_post() で基本料金メタが削除されて
+	 * しまうため（readonly なら値は保持されたまま送信される）。以降の切り替え（料金区分の
+	 * 追加・削除・区分名入力、複数人一括予約チェック、予約枠の定員の変更）は
+	 * service-menu-editor.js の syncBasePriceOverride() が担う。
+	 *
+	 * @param WP_Post $post                 Current post object.
+	 * @param bool    $price_tiers_visible  料金区分の行が初期表示される構成かどうか
+	 *                                      （render_price_tiers_field() に渡す $show_field と同じ値）。
+	 */
+	private function render_base_price_field( WP_Post $post, bool $price_tiers_visible ): void {
+		$base_price = get_post_meta( $post->ID, '_vkbm_base_price', true );
+		$tax_label  = VKBM_Helper::get_tax_included_label();
+
+		// 有効な区分（区分名が空でない行）が1件以上あるかどうかを Price_Tiers::sanitize_tiers() と
+		// 同じ基準で判定する。normalize_tiers() は空ラベル行を既に除外して返すため、
+		// 1件でも残っていれば有効な区分が登録されていることになる。
+		// 料金区分の行自体が表示されない構成では、基本料金は常に使われるため判定しない。
+		$has_active_tier = $price_tiers_visible
+			&& array() !== Price_Tiers::normalize_tiers( get_post_meta( $post->ID, self::META_PRICE_TIERS, true ) );
+
+		$description_id = 'vkbm-base-price-overridden-description';
+		?>
+		<tr id="vkbm-base-price-field">
+			<th scope="row">
+				<label for="vkbm_service_menu_base_price">
+					<?php
+					esc_html_e( 'Basic price', 'vk-booking-manager' );
+					if ( '' !== $tax_label ) {
+						echo ' ' . esc_html( $tax_label );
+					}
+					?>
+				</label>
+			</th>
+			<td>
+				<input
+					type="number"
+					id="vkbm_service_menu_base_price"
+					name="vkbm_service_menu[base_price]"
+					class="small-text vkbm-price-input<?php echo $has_active_tier ? ' vkbm-base-price-overridden' : ''; ?>"
+					min="0"
+					step="1"
+					value="<?php echo esc_attr( $base_price ); ?>"
+					<?php
+					// #514 レビュー対応（安藤・LOW）: aria-describedby はグレーアウト中（＝説明文が
+					// 実際に表示されている）ときだけ出力する。常時出力すると、非表示の説明文を
+					// 支援技術に関連付けてしまう。JS 側（syncBasePriceOverride()）も同じ考え方で
+					// 状態変化に合わせて属性ごと付け外しする。
+					if ( $has_active_tier ) {
+						echo 'aria-describedby="' . esc_attr( $description_id ) . '" readonly';
+					}
+					?>
+				/>
+				<p class="description" id="<?php echo esc_attr( $description_id ); ?>" <?php echo $has_active_tier ? '' : 'hidden'; ?>>
+					<?php
+					// #514 レビュー対応（植草・中）: 料金区分欄側の説明文（render_price_tiers_field()）と
+					// 同一文言が並んで表示されると重複に見えるため、基本料金側は専用の短い文言にする。
+					esc_html_e( 'Price categories are set, so the basic price is not used.', 'vk-booking-manager' );
+					?>
+				</p>
 			</td>
 		</tr>
 		<?php

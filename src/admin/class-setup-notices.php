@@ -15,12 +15,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
+use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
+use WP_Query;
 
 /**
  * Provides setup notices in wp-admin.
@@ -47,6 +52,7 @@ class Setup_Notices {
 	public function register(): void {
 		add_action( 'admin_notices', array( $this, 'render_notices' ) );
 		add_action( 'admin_notices', array( $this, 'render_shift_auto_register_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_google_calendar_sync_broken_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_vkbm_dismiss_notice', array( $this, 'handle_dismiss' ) );
 		add_action( 'vkbm_shift_dashboard_notices', array( $this, 'render_shift_dashboard_notice' ) );
@@ -308,6 +314,222 @@ class Setup_Notices {
 		);
 
 		return $items;
+	}
+
+	/**
+	 * Google カレンダー連携: 再試行しても反映できない予約がある場合のお知らせ。
+	 *
+	 * `get_setup_items()`（「未設定の項目があります」の枠）には含めない。あの枠は「まだ
+	 * 設定していない項目」を並べる場所で、見出し・案内文が「設定してください」前提のため、
+	 * 「反映に失敗している」お知らせを混ぜると見出しと中身が合わない（安藤レビュー指摘）。
+	 * `render_shift_auto_register_notice()` と同じく、独立した通知として出す。
+	 *
+	 * 「連携」タブを開ける権限の人にだけ、復旧するまで消えない形で出す（司の decision
+	 * record 参照。開けない人に出すと行き止まりになるため）。
+	 *
+	 * @return void
+	 */
+	public function render_google_calendar_sync_broken_notice(): void {
+		if ( $this->is_shift_dashboard_screen() ) {
+			return;
+		}
+
+		if ( ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			return;
+		}
+
+		if ( ! $this->is_google_calendar_integration_reachable() ) {
+			return;
+		}
+
+		$reason = $this->get_google_calendar_sync_broken_reason();
+
+		if ( '' === $reason ) {
+			return;
+		}
+
+		$button = $this->get_google_calendar_sync_broken_button( $reason );
+
+		// REASON_OTHER のときだけ、失敗中の予約を一覧で示す（植草レビュー指摘 中。「連携」タブには
+		// どの予約が失敗しているかの手がかりが無いため）。REASON_AUTH は再接続で全体が直る
+		// 想定のため、個別の予約を並べる必要が無い。
+		$failed_bookings     = Google_Calendar_Event_Sync::REASON_OTHER === $reason
+			? $this->get_failed_google_calendar_bookings( 5 )
+			: null;
+		$has_listed_bookings = null !== $failed_bookings && array() !== $failed_bookings->posts;
+
+		?>
+		<div class="notice vkbm-notice vkbm-notice__warning">
+			<h3><?php echo esc_html__( 'Some bookings could not be reflected in Google Calendar', 'vk-booking-manager' ); ?></h3>
+			<p><?php echo esc_html( $this->get_google_calendar_sync_broken_message( $reason, $has_listed_bookings ) ); ?></p>
+			<?php if ( $has_listed_bookings ) : ?>
+				<ul>
+					<?php foreach ( $failed_bookings->posts as $booking_id ) : ?>
+						<li>
+							<a href="<?php echo esc_url( admin_url( 'post.php?post=' . (int) $booking_id . '&action=edit' ) ); ?>">
+								<?php echo esc_html( get_the_title( (int) $booking_id ) ); ?>
+							</a>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+				<?php if ( $failed_bookings->found_posts > count( $failed_bookings->posts ) ) : ?>
+					<p>
+						<?php
+						printf(
+							/* translators: %d: number of additional bookings not shown in the list above. */
+							esc_html__( 'There are %d more.', 'vk-booking-manager' ),
+							(int) ( $failed_bookings->found_posts - count( $failed_bookings->posts ) )
+						);
+						?>
+					</p>
+				<?php endif; ?>
+			<?php endif; ?>
+			<div class="vkbm-buttons">
+				<a class="button button-primary" href="<?php echo esc_url( $button['url'] ); ?>">
+					<?php echo esc_html( $button['label'] ); ?>
+				</a>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * サイト全体のお知らせに列挙する、反映に失敗している予約（新しい順）を取得する。
+	 *
+	 * `_vkbm_google_calendar_sync_failed` が立っている予約を対象にする（植草レビュー指摘 中。
+	 * 「連携」タブにはどの予約が失敗しているかの手がかりが無いため、このお知らせ自体に
+	 * 対象を並べる）。「新しい順」は `modified`（予約の状態変化のたびに更新される）で
+	 * 判定する。失敗した正確な日時は保持していないため、予約が最後に動いた日時を近似として
+	 * 使う。
+	 *
+	 * このお知らせは管理画面のページを開くたびに実行されるため、クエリを軽くする
+	 * （安藤レビュー指摘の考え方と同じ、無駄な負荷を避ける）。`fields => 'ids'` で
+	 * 必要最小限の列だけ取得し、一覧の表示（タイトル・編集リンク）に使わない
+	 * meta・term キャッシュのプライムは `update_post_meta_cache` / `update_post_term_cache`
+	 * を false にして省く。総件数（「ほか n 件」の算出）に `found_posts` を使うため、
+	 * `no_found_rows` は使わない（既定の false のまま）。
+	 *
+	 * @param int $limit 一覧に出す最大件数。
+	 * @return WP_Query 予約の WP_Query（`posts` が投稿ID配列、`found_posts` が総件数）。
+	 */
+	private function get_failed_google_calendar_bookings( int $limit ): WP_Query {
+		return new WP_Query(
+			array(
+				'post_type'              => Booking_Post_Type::POST_TYPE,
+				'post_status'            => 'any',
+				'posts_per_page'         => $limit,
+				'orderby'                => 'modified',
+				'order'                  => 'DESC',
+				'fields'                 => 'ids',
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 失敗フラグは post_status 等では表現できず、このメタキーでの絞り込みが必須.
+					array(
+						'key'   => Google_Calendar_Event_Sync::META_SYNC_FAILED,
+						'value' => '1',
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Google カレンダー連携の「連携」タブが画面に出ている状態かどうかを返す。
+	 *
+	 * Pro 版であることと、中継サーバーの接続先が決まっていることの両方を満たす場合のみ
+	 * true。タブが出ていない状態でお知らせのリンク先だけ出すと行き止まりになるため、
+	 * このお知らせ自体を出さない判定に使う。
+	 *
+	 * @return bool
+	 */
+	private function is_google_calendar_integration_reachable(): bool {
+		return Google_Calendar_Connect_Controller::is_integration_enabled()
+			&& ( new Google_Calendar_Relay_Client() )->is_configured();
+	}
+
+	/**
+	 * Google カレンダー連携の「反映できていない予約がある」お知らせの本文を組み立てる。
+	 *
+	 * 再試行しても直らない失敗の原因（{@see Google_Calendar_Event_Sync::REASON_AUTH} /
+	 * {@see Google_Calendar_Event_Sync::REASON_OTHER}）によって文言を分ける。認可が
+	 * 失われたわけではない失敗（例: 予約に日時が無い）にまで「アクセスが失われている
+	 * 可能性」と出すと、オーナーが再接続しても直らず混乱する（植草レビュー指摘・安藤
+	 * レビュー指摘）。1つの翻訳関数に複数文を入れないよう、文ごとに分けてから連結する
+	 * （coding-rules.md の国際化ルールに準拠。`get_permalink_htaccess_notice_message()` と
+	 * 同じ方式）。
+	 *
+	 * REASON_OTHER のときは以前「「連携」タブで詳細を確認してください。」と案内していたが、
+	 * 「連携」タブにはどの予約が失敗しているかの詳細は無く、実際に取れる行動と文言が
+	 * ずれていた（植草レビュー指摘）。失敗した予約自体は分からないため、当初は「予約一覧を
+	 * 開いて該当の予約を確認し…」という案内文に差し替えたが、その後さらに植草レビュー指摘
+	 * （中）で、お知らせ自体に対象の予約を最大5件並べるよう変更した
+	 * （{@see get_failed_google_calendar_bookings()}）。一覧に1件以上出せた場合は「以下の
+	 * 予約を開いて…」に、対象が1件も見つからない場合（稀。フラグは立っているが該当する
+	 * 予約が見つからない等）は従来どおり「予約一覧を開いて…」にフォールバックする。
+	 * ボタンの行き先・文言は {@see get_google_calendar_sync_broken_button()} を参照。
+	 *
+	 * @param string $reason              Google_Calendar_Event_Sync::REASON_* のいずれか。
+	 * @param bool   $has_listed_bookings REASON_OTHER のとき、失敗中の予約を1件以上
+	 *                                    一覧に出せたか。REASON_AUTH では使わない。
+	 * @return string お知らせ文。
+	 */
+	private function get_google_calendar_sync_broken_message( string $reason, bool $has_listed_bookings = false ): string {
+		if ( Google_Calendar_Event_Sync::REASON_AUTH === $reason ) {
+			$message  = __( 'Reflecting to Google Calendar has failed repeatedly, possibly because access to Google was lost.', 'vk-booking-manager' );
+			$message .= __( ' Please check the connection on the Integration tab.', 'vk-booking-manager' );
+
+			return $message;
+		}
+
+		$message = __( 'Reflecting some bookings to Google Calendar has failed repeatedly.', 'vk-booking-manager' );
+
+		if ( $has_listed_bookings ) {
+			$message .= __( ' Open one of the bookings below and use the "Retry now" button on its edit screen.', 'vk-booking-manager' );
+		} else {
+			$message .= __( ' Please open the bookings list, find the affected booking, and use the "Retry now" button on its edit screen.', 'vk-booking-manager' );
+		}
+
+		return $message;
+	}
+
+	/**
+	 * サイト全体のお知らせに添えるボタンの行き先・文言を、失敗理由に応じて返す。
+	 *
+	 * REASON_AUTH は連携の再接続が解決策なので「連携」タブへ、REASON_OTHER は
+	 * どの予約が失敗しているか「連携」タブでは分からないため、予約一覧へ案内する
+	 * （{@see get_google_calendar_sync_broken_message()} の文言と行き先を一致させる。
+	 * 植草レビュー指摘）。
+	 *
+	 * @param string $reason Google_Calendar_Event_Sync::REASON_* のいずれか。
+	 * @return array{label:string, url:string} ボタンの文言と行き先URL。
+	 */
+	private function get_google_calendar_sync_broken_button( string $reason ): array {
+		if ( Google_Calendar_Event_Sync::REASON_AUTH === $reason ) {
+			return array(
+				'label' => __( 'Open the Integration tab', 'vk-booking-manager' ),
+				'url'   => Google_Calendar_Connect_Controller::get_settings_tab_url(),
+			);
+		}
+
+		return array(
+			'label' => __( 'Open the bookings list', 'vk-booking-manager' ),
+			'url'   => admin_url( 'edit.php?post_type=' . Booking_Post_Type::POST_TYPE ),
+		);
+	}
+
+	/**
+	 * Google カレンダー連携で、再試行しても反映できていない予約があるかどうかと、
+	 * その理由を返す。
+	 *
+	 * `Google_Calendar_Event_Sync::OPTION_SYNC_BROKEN` は、再試行の上限に達した時点で
+	 * 理由付きで立ち、反映に成功すると消える（`Google_Calendar_Event_Sync` 参照）。
+	 *
+	 * @return string Google_Calendar_Event_Sync::REASON_* のいずれか。立っていなければ空文字。
+	 */
+	private function get_google_calendar_sync_broken_reason(): string {
+		$reason = (string) get_option( Google_Calendar_Event_Sync::OPTION_SYNC_BROKEN, '' );
+
+		return in_array( $reason, array( Google_Calendar_Event_Sync::REASON_AUTH, Google_Calendar_Event_Sync::REASON_OTHER ), true ) ? $reason : '';
 	}
 
 	/**

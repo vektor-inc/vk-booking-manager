@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     2.4.2
+ * Version:     2.5.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -94,6 +94,7 @@ require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-
 require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-api-client.php';
 require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-connect-controller.php';
 require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-settings-panel.php';
+require_once __DIR__ . '/src/auth/class-email-verification.php';
 require_once __DIR__ . '/src/auth/class-auth-shortcodes.php';
 require_once __DIR__ . '/src/post-order/class-post-order-manager.php';
 require_once __DIR__ . '/src/admin/class-owner-admin-menu-filter.php';
@@ -144,6 +145,8 @@ use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Api_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connection;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync_Settings;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
 use VKBookingManager\Notifications\Booking_Notification_Service;
@@ -203,20 +206,36 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// 連携ボタンがオーナーに見えるのを避けるため。
 		$google_calendar_connect_controller = null;
 		$google_calendar_settings_panel     = null;
+		$google_calendar_event_sync         = null;
 		if ( Google_Calendar_Connect_Controller::is_integration_enabled() ) {
-			$google_calendar_connection         = new Google_Calendar_Connection();
-			$google_calendar_relay_client       = new Google_Calendar_Relay_Client();
-			$google_calendar_api_client         = new Google_Calendar_Api_Client( $google_calendar_connection, $google_calendar_relay_client );
-			$google_calendar_connect_controller = new Google_Calendar_Connect_Controller(
+			$google_calendar_connection   = new Google_Calendar_Connection();
+			$google_calendar_relay_client = new Google_Calendar_Relay_Client();
+			$google_calendar_api_client   = new Google_Calendar_Api_Client( $google_calendar_connection, $google_calendar_relay_client );
+			// 予定に載せる情報（チェックボックス）の設定（issue #476）。接続・カレンダー選択の
+			// コントローラーと、実際に予定を作成・更新・削除する同期処理の両方が参照する。
+			$google_calendar_event_sync_settings = new Google_Calendar_Event_Sync_Settings();
+			$google_calendar_connect_controller  = new Google_Calendar_Connect_Controller(
 				$google_calendar_connection,
 				$google_calendar_relay_client,
 				$google_calendar_api_client,
-				Capabilities::MANAGE_PROVIDER_SETTINGS
+				Capabilities::MANAGE_PROVIDER_SETTINGS,
+				$google_calendar_event_sync_settings
 			);
-			$google_calendar_settings_panel     = new Google_Calendar_Settings_Panel(
+			$google_calendar_settings_panel      = new Google_Calendar_Settings_Panel(
 				$google_calendar_connection,
 				$google_calendar_api_client,
-				$google_calendar_connect_controller
+				$google_calendar_connect_controller,
+				$google_calendar_event_sync_settings
+			);
+			// 予約の作成・確定・変更・キャンセル・削除を Google カレンダーの予定へ反映する
+			// 同期処理（issue #476）。「今すぐ再試行」ボタンは予約編集権限（MANAGE_RESERVATIONS）
+			// で操作できるようにする（「連携」タブの操作権限とは別）。
+			$google_calendar_event_sync = new Google_Calendar_Event_Sync(
+				$google_calendar_connection,
+				$google_calendar_api_client,
+				$google_calendar_connect_controller,
+				$google_calendar_event_sync_settings,
+				Capabilities::MANAGE_RESERVATIONS
 			);
 		}
 
@@ -249,7 +268,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// （未注入の場合は Shift_Dashboard_Page 側で従来どおり都度生成する。既存挙動は変えない）。
 		$shift_dashboard_page            = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS, $booking_notification_service, $booking_event_dispatcher );
 		$oembed_override                 = new OEmbed_Override();
-		$booking_admin                   = new Booking_Admin( $booking_notification_service, $booking_event_dispatcher );
+		$booking_admin                   = new Booking_Admin( $booking_notification_service, $booking_event_dispatcher, $google_calendar_event_sync );
 		$availability_service            = new Availability_Service( $settings_repository );
 		$booking_draft_controller        = new Booking_Draft_Controller( $settings_repository, $availability_service );
 		$booking_confirmation_controller = new Booking_Confirmation_Controller( $booking_notification_service, $settings_repository, $availability_service, $booking_event_dispatcher );
@@ -259,21 +278,23 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$menu_search_block               = new Menu_Search_Block();
 		$menu_loop_block                 = new Menu_Loop_Block( $settings_repository, $reservation_button_renderer );
 		$menu_card_block                 = new Menu_Card_Block( $menu_loop_block );
-		$reservation_block               = new Reservation_Block();
-		$reservation_button_block        = new Reservation_Button_Block( $reservation_button_renderer );
-		$availability_controller         = new Availability_Controller( $availability_service );
-		$current_user_controller         = new Current_User_Controller( $settings_service );
-		$menu_preview_controller         = new Menu_Preview_Controller( $menu_loop_block );
-		$provider_settings_controller    = new Provider_Settings_Controller( $settings_repository );
-		$auth_shortcodes                 = new Auth_Shortcodes( $settings_service );
-		$auth_form_controller            = new Auth_Form_Controller( $auth_shortcodes );
-		$post_order_manager              = new Post_Order_Manager(
+		// issue #512: render_block フィルタ（ログイン失敗フォールバック描画）から、同一
+		// リクエスト内のログイン失敗コード・予約ページURLを参照するために先に生成する。
+		$auth_shortcodes              = new Auth_Shortcodes( $settings_service );
+		$reservation_block            = new Reservation_Block( $auth_shortcodes );
+		$reservation_button_block     = new Reservation_Button_Block( $reservation_button_renderer );
+		$availability_controller      = new Availability_Controller( $availability_service );
+		$current_user_controller      = new Current_User_Controller( $settings_service );
+		$menu_preview_controller      = new Menu_Preview_Controller( $menu_loop_block );
+		$provider_settings_controller = new Provider_Settings_Controller( $settings_repository );
+		$auth_form_controller         = new Auth_Form_Controller( $auth_shortcodes );
+		$post_order_manager           = new Post_Order_Manager(
 			array(
 				Resource_Post_Type::POST_TYPE,
 				Service_Menu_Post_Type::POST_TYPE,
 			)
 		);
-		$term_order_manager              = new Term_Order_Manager(
+		$term_order_manager           = new Term_Order_Manager(
 			array(
 				Service_Menu_Post_Type::TAXONOMY,
 				Service_Menu_Post_Type::TAXONOMY_GROUP,
@@ -289,6 +310,12 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// Resource_Delete_Guard と同様、Plugin へ注入せずここで直接登録する。
 		if ( null !== $google_calendar_connect_controller ) {
 			$google_calendar_connect_controller->register();
+		}
+
+		// 予約の状態変化を Google カレンダーの予定へ反映する同期処理を登録する
+		// （Pro 版限定。中継サーバーの接続先が決まっていない間は register() 内部で何もしない。issue #476）。
+		if ( null !== $google_calendar_event_sync ) {
+			$google_calendar_event_sync->register();
 		}
 
 		// リソース（スタッフ）削除ガードを登録（実質 Pro 版限定機能。register() 内部で判定する）。

@@ -1,6 +1,7 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { useId } from '@wordpress/element';
 import { decodeEntities } from '@wordpress/html-entities';
+import { PricingRowLabel } from '../components/pricing-row-label';
 
 const SelectField = ( {
 	label,
@@ -322,9 +323,18 @@ export const SelectedPlanSummary = ( {
 							<div
 								key={ row.key }
 								className="vkbm-plan-summary__pricing-row"
+								// #503: live 指定の行（基本料金合計）は、人数の変更などで金額が変わったことを
+								// 読み上げソフトにも伝える。見出し・金額・税表記をまとめて読ませるため、
+								// 行全体を live 領域にして aria-atomic も付ける。小計の行には付けない（二重読み上げ防止）。
+								aria-live={ row.live ? 'polite' : undefined }
+								aria-atomic={ row.live ? 'true' : undefined }
 							>
 								<span className="vkbm-plan-summary__pricing-label">
-									{ row.label }
+									{ /* #503: 「（単価 × 人数）」の括弧の途中で改行させない。 */ }
+									<PricingRowLabel
+										label={ row.label }
+										labelParts={ row.labelParts }
+									/>
 								</span>
 								<strong
 									className={ [

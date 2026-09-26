@@ -37,9 +37,13 @@ use WP_Error;
 use function add_query_arg;
 use function delete_transient;
 use function get_transient;
+use function is_array;
 use function is_wp_error;
+use function rawurlencode;
 use function set_transient;
+use function wp_json_encode;
 use function wp_remote_get;
+use function wp_remote_request;
 use function wp_remote_retrieve_body;
 use function wp_remote_retrieve_response_code;
 
@@ -54,6 +58,15 @@ class Google_Calendar_Api_Client {
 	 * @var string
 	 */
 	private const CALENDAR_LIST_URL = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
+
+	/**
+	 * カレンダーの予定（イベント）を作成・取得する API のベース URL（末尾にカレンダーIDを続ける）。
+	 *
+	 * issue #476。
+	 *
+	 * @var string
+	 */
+	private const EVENTS_BASE_URL = 'https://www.googleapis.com/calendar/v3/calendars/';
 
 	/**
 	 * Google への通信のタイムアウト（秒）。
@@ -265,6 +278,181 @@ class Google_Calendar_Api_Client {
 		$items  = ( is_array( $parsed ) && isset( $parsed['items'] ) && is_array( $parsed['items'] ) ) ? $parsed['items'] : array();
 
 		return self::normalize_calendar_list( $items );
+	}
+
+	/**
+	 * カレンダーに予定を新規作成する。
+	 *
+	 * issue #476。招待メールは送らない固定（`sendUpdates=none`）にしている（親 issue #94 で決定）。
+	 *
+	 * `$event_id` は呼び出し側（{@see \VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync::get_deterministic_event_id()}）が
+	 * 予約IDから決定的に組み立てた ID。Google 側で応答がタイムアウトした後の再試行や、cron が
+	 * 並行して動いた場合でも、同じ予約に対しては常に同じ ID で作成を試みるため、二重に作成
+	 * されることがない（安藤レビュー指摘）。既に同じ ID の予定が存在する場合、Google は
+	 * `409 Conflict` を返す。このメソッドはそれを `vkbm_google_calendar_event_already_exists`
+	 * として返すので、呼び出し側は `update_event()` に切り替えること。
+	 *
+	 * @param string               $calendar_id 反映先カレンダーの ID。
+	 * @param string               $event_id    作成する予定の ID（base32hex、5〜1024文字）。
+	 * @param array<string, mixed> $event       Google Calendar API のイベント表現
+	 *                                           （{@see Google_Calendar_Event_Builder::build()}）。
+	 * @return string|WP_Error 作成できたイベント ID、または失敗の内容。
+	 */
+	public function create_event( string $calendar_id, string $event_id, array $event ) {
+		$event['id'] = $event_id;
+
+		return $this->send_event_request( 'POST', $this->get_events_url( $calendar_id ), $event );
+	}
+
+	/**
+	 * 既存の予定を書き換える。
+	 *
+	 * 仮予約が確定したときに、新しい予定を作らず同じ予定を書き換えるために使う
+	 * （司の decision record 参照。重複した予定が残るのを防ぐため）。
+	 *
+	 * @param string               $calendar_id 反映先カレンダーの ID。
+	 * @param string               $event_id    書き換える予定の Google 側 ID。
+	 * @param array<string, mixed> $event       Google Calendar API のイベント表現。
+	 * @return string|WP_Error 書き換えたイベント ID、または失敗の内容。
+	 *                         予定が Google 側で既に無くなっている場合は
+	 *                         `vkbm_google_calendar_event_not_found` を返す
+	 *                         （呼び出し側は新規作成へ倒すこと）。
+	 */
+	public function update_event( string $calendar_id, string $event_id, array $event ) {
+		return $this->send_event_request( 'PUT', $this->get_events_url( $calendar_id ) . '/' . rawurlencode( $event_id ), $event );
+	}
+
+	/**
+	 * 予定を削除する。
+	 *
+	 * Google 側で既に削除・存在しない予定を指定した場合も、目的（「その予定が無い状態」）は
+	 * 既に達成されているとみなして成功扱いにする（安藤レビュー指摘を先取り: 手動で消された
+	 * 予定を再試行し続けて失敗が積み上がるのを防ぐため）。
+	 *
+	 * @param string $calendar_id 反映先カレンダーの ID。
+	 * @param string $event_id    削除する予定の Google 側 ID。
+	 * @return true|WP_Error 成功したら true、失敗の内容。
+	 */
+	public function delete_event( string $calendar_id, string $event_id ) {
+		$result = $this->send_event_request( 'DELETE', $this->get_events_url( $calendar_id ) . '/' . rawurlencode( $event_id ), null );
+
+		if ( is_wp_error( $result ) && 'vkbm_google_calendar_event_not_found' === $result->get_error_code() ) {
+			return true;
+		}
+
+		return is_wp_error( $result ) ? $result : true;
+	}
+
+	/**
+	 * カレンダーIDから、予定（イベント）を扱う API の URL を組み立てる。
+	 *
+	 * @param string $calendar_id カレンダー ID。
+	 * @return string API の URL。
+	 */
+	private function get_events_url( string $calendar_id ): string {
+		return self::EVENTS_BASE_URL . rawurlencode( $calendar_id ) . '/events';
+	}
+
+	/**
+	 * 予定の作成・更新・削除に共通する通信処理。
+	 *
+	 * 招待メールを送らないよう `sendUpdates=none` を必ず付ける（親 issue #94 で決定）。
+	 *
+	 * @param string                    $method HTTP メソッド（POST/PUT/DELETE）。
+	 * @param string                    $url    宛先 URL（`sendUpdates` は付与前）。
+	 * @param array<string, mixed>|null $body   送信する JSON 本文。DELETE では null。
+	 * @return string|WP_Error 成功時、本文があれば `id`、無ければ空文字。失敗時は WP_Error。
+	 */
+	private function send_event_request( string $method, string $url, ?array $body ) {
+		$access_token = $this->get_access_token();
+
+		if ( is_wp_error( $access_token ) ) {
+			return $access_token;
+		}
+
+		$url = add_query_arg( array( 'sendUpdates' => 'none' ), $url );
+
+		$args = array(
+			'method'  => $method,
+			'timeout' => self::TIMEOUT_SECONDS,
+			'headers' => array(
+				'Authorization' => 'Bearer ' . $access_token,
+				'Accept'        => 'application/json',
+			),
+		);
+
+		if ( null !== $body ) {
+			$args['headers']['Content-Type'] = 'application/json';
+			$args['body']                    = wp_json_encode( $body );
+		}
+
+		$response = wp_remote_request( $url, $args );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error(
+				'vkbm_google_calendar_unreachable',
+				__( 'Could not reach Google.', 'vk-booking-manager' ),
+				array( 'detail' => $response->get_error_message() )
+			);
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+
+		if ( 401 === $status ) {
+			// アクセス許可が取り消された場合のみ。画面に「連携が切れています」と出す
+			// （get_calendar_list() と同じ扱い）。403 は権限不足・レート制限等、連携そのものが
+			// 切れたとは限らない理由でも返るため、ここには含めない（安藤レビュー指摘）。
+			$this->connection->mark_error(
+				'invalid_grant',
+				__( 'The connection to Google has been lost.', 'vk-booking-manager' )
+			);
+
+			return new WP_Error(
+				'vkbm_google_calendar_unauthorized',
+				__( 'The connection to Google has been lost.', 'vk-booking-manager' )
+			);
+		}
+
+		if ( 403 === $status ) {
+			// 認可そのものは失われていない可能性があるため connection を error にしない。
+			// 一時的な失敗として、呼び出し側の再試行に任せる（安藤レビュー指摘）。
+			return new WP_Error(
+				'vkbm_google_calendar_forbidden',
+				__( 'Google did not allow this request.', 'vk-booking-manager' ),
+				array( 'status' => $status )
+			);
+		}
+
+		if ( 404 === $status || 410 === $status ) {
+			// 予定が Google 側で既に無い（手動で削除された等）。認可は失われていないため
+			// 「連携が切れています」にはしない。呼び出し側が新規作成・削除成功扱いへ倒す。
+			return new WP_Error(
+				'vkbm_google_calendar_event_not_found',
+				__( 'The event was not found in Google Calendar.', 'vk-booking-manager' )
+			);
+		}
+
+		if ( 409 === $status ) {
+			// 決定的な予定IDでの新規作成時、既に同じIDの予定が存在する場合（タイムアウト後の
+			// 再試行・cron の並行実行等）。呼び出し側が update_event() へ切り替える
+			// （安藤レビュー指摘。Google_Calendar_Event_Sync::execute_upsert() 参照）。
+			return new WP_Error(
+				'vkbm_google_calendar_event_already_exists',
+				__( 'An event with this ID already exists in Google Calendar.', 'vk-booking-manager' )
+			);
+		}
+
+		if ( $status < 200 || $status >= 300 ) {
+			return new WP_Error(
+				'vkbm_google_calendar_request_failed',
+				__( 'Could not update Google Calendar.', 'vk-booking-manager' ),
+				array( 'status' => $status )
+			);
+		}
+
+		$parsed = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+
+		return ( is_array( $parsed ) && isset( $parsed['id'] ) ) ? (string) $parsed['id'] : '';
 	}
 
 	/**

@@ -13,22 +13,34 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Capabilities\Capabilities;
+use WP_HTML_Tag_Processor;
 use WP_Post;
+use function add_filter;
 use function add_query_arg;
 use function admin_url;
 use function current_user_can;
+use function esc_attr;
+use function esc_html;
+use function esc_html__;
+use function esc_url;
 use function esc_url_raw;
 use function generate_block_asset_handle;
 use function get_rest_url;
 use function home_url;
 use function is_user_logged_in;
 use function sanitize_key;
+use function sanitize_text_field;
 use function trailingslashit;
-use function wp_set_script_translations;
+use function wp_get_inline_script_tag;
 use function wp_json_encode;
+use function wp_kses;
+use function wp_login_url;
 use function wp_logout_url;
+use function wp_set_script_translations;
+use function wp_unique_id;
 use function wp_unslash;
 use function wp_validate_redirect;
 
@@ -40,6 +52,16 @@ class Reservation_Block {
 	private const MENU_CARD_STYLE_HANDLE        = 'vkbm-shared-menu-card';
 	private const CURRENT_USER_BOOTSTRAP_HANDLE = 'vkbm-current-user-bootstrap';
 	private const RESERVATION_CONFIG_HANDLE     = 'vkbm-reservation-config';
+	private const BLOCK_NAME                    = 'vk-booking-manager/reservation';
+	// issue #512 差し戻し対応（安藤さん指摘）: render_block はフィルタチェーンのため、
+	// 同じ処理を行うコールバックが複数回フックされていると、後段のコールバックは
+	// 前段が既に書き換えた $block_content を受け取って再度フォールバック markup を
+	// 追記してしまい、二重出力になる。ただし WordPress は同じコールバックを同じ優先度で
+	// 重ねて登録しない（_wp_filter_build_unique_id() が同じキーに上書きするため、
+	// 同一インスタンス・同一優先度の多重登録では発生しない）。実際に起こり得るのは、
+	// 別インスタンスが登録された場合、または異なる優先度で重ねて登録された場合。
+	// このマーカーを埋め込み済みなら以降は何もしない防御を入れる。
+	private const FALLBACK_MARKUP_MARKER = '<!-- vkbm-reservation-login-fallback -->';
 
 	/**
 	 * Whether block is registered.
@@ -49,12 +71,36 @@ class Reservation_Block {
 	private static bool $block_registered = false;
 
 	/**
+	 * Auth shortcodes handler, used to read the current request's login error
+	 * (if any) and the configured reservation page URL for the login fallback.
+	 *
+	 * ログイン失敗フォールバック（issue #512）で、同一リクエスト内のログイン
+	 * エラー・予約ページURLを参照するために使う。
+	 *
+	 * @var Auth_Shortcodes
+	 */
+	private $auth_shortcodes;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param Auth_Shortcodes $auth_shortcodes Auth shortcodes handler.
+	 */
+	public function __construct( Auth_Shortcodes $auth_shortcodes ) {
+		$this->auth_shortcodes = $auth_shortcodes;
+	}
+
+	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
 		add_action( 'init', array( $this, 'register_block' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'maybe_enqueue_menu_loop_styles' ) );
 		add_action( 'enqueue_block_editor_assets', array( $this, 'localize_reservation_editor_script' ) );
+		// issue #512: JS（view.js）が読み込めない・失敗した場合に画面が真っ白になる不具合の
+		// フォールバック。ログイン導線に限り、保存済みブロック HTML（空の div）へ
+		// ローディング表示・ログイン失敗文・代替ログイン導線を直接埋め込む。
+		add_filter( 'render_block', array( $this, 'inject_login_fallback_markup' ), 10, 2 );
 	}
 
 	/**
@@ -323,5 +369,196 @@ class Reservation_Block {
 			default:
 				return $base . '-' . sanitize_key( $field );
 		}
+	}
+
+	/**
+	 * Injects login-fallback markup into the reservation block's rendered HTML.
+	 *
+	 * issue #512: 予約ブロックは JS（view.js）が REST 経由でフォームを取得して描画するため、
+	 * 保存済みブロック HTML は空の div のみで、JS が読み込めない・失敗した場合に画面が真っ白に
+	 * なっていた（save.js・保存済みブロック HTML 自体は変更しないので deprecation は不要）。
+	 * 未ログイン時のログイン導線（`vkbm_auth=login` の GET、またはこのショートコードの
+	 * `vkbm_login_form` POST）に限り、この render_block フィルタで同一リクエスト内に
+	 * - ログイン失敗コードを wrapper の data-vkbm-login-error 属性へ埋め込む
+	 *   （JS は初回の auth-form 取得時だけこれを REST の error パラメータとして送る）
+	 * - 「フォームを読み込み中…」（常時）／ログイン失敗時のみエラー文／
+	 *   約3秒後に表示する「別のログイン画面」への案内（JS 未実行時の保険）
+	 * を直接埋め込む。
+	 *
+	 * @param string              $block_content Rendered block HTML.
+	 * @param array<string,mixed> $block         Parsed block data (blockName, attrs, ...).
+	 * @return string
+	 */
+	public function inject_login_fallback_markup( string $block_content, array $block ): string {
+		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) ) {
+			return $block_content;
+		}
+
+		// 二重登録（レビュー対応・PHPUnit 差し戻し）: 既にこのフィルタでフォールバック markup を
+		// 埋め込み済みなら、他のコールバックが同じ内容を重ねて追記しないよう何もしない。
+		if ( false !== strpos( $block_content, self::FALLBACK_MARKUP_MARKER ) ) {
+			return $block_content;
+		}
+
+		if ( is_user_logged_in() ) {
+			return $block_content;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 読み取り専用のモード判定（状態変更なし）。
+		$is_login_get = isset( $_GET['vkbm_auth'] ) && 'login' === sanitize_key( wp_unslash( $_GET['vkbm_auth'] ) );
+
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用のコンテキスト判定。nonce検証は Auth_Shortcodes::process_login_request() 側で行済み。
+		$is_login_post = 'POST' === $request_method && isset( $_POST['vkbm_login_form'] );
+
+		// ログイン導線（GETのモード切替 or ログインPOST）以外では何も付与しない。
+		if ( ! $is_login_get && ! $is_login_post ) {
+			return $block_content;
+		}
+
+		// ログインPOST失敗時のみ、同一リクエスト内で確定したエラーコードを取得する。
+		// （ログイン成功時は Auth_Shortcodes::process_login_request() が既に
+		// redirect_and_exit() で終了しているため、ここに到達する時点で失敗確定）。
+		$error_code    = $is_login_post ? $this->auth_shortcodes->get_current_login_error_code() : '';
+		$error_message = '' !== $error_code ? $this->auth_shortcodes->get_login_error_message( $error_code ) : '';
+
+		if ( '' !== $error_code ) {
+			$block_content = $this->set_login_error_attribute( $block_content, $error_code );
+		}
+
+		return $this->append_before_closing_tag(
+			$block_content,
+			$this->build_login_fallback_markup( $error_message )
+		);
+	}
+
+	/**
+	 * Sets the `data-vkbm-login-error` attribute on the block's wrapper element.
+	 *
+	 * @param string $html Block wrapper HTML.
+	 * @param string $code Whitelisted login error code.
+	 * @return string
+	 */
+	private function set_login_error_attribute( string $html, string $code ): string {
+		if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+			return $html;
+		}
+
+		$processor = new WP_HTML_Tag_Processor( $html );
+		// issue #512 レビュー対応（安藤さん指摘）: 「最初に見つかったタグ」ではなく、
+		// useBlockProps.save() が必ず付与するブロックのベースクラス
+		// （wp-block-vk-booking-manager-reservation）を明示的にマッチ対象にする。
+		// $html の構造がどうであれ、この wrapper 要素だけを確実に狙うことで、
+		// 別のタグ（読み込み中の <p> 等）へ誤って属性が付く事故を防ぐ。
+		if ( ! $processor->next_tag( array( 'class_name' => 'wp-block-vk-booking-manager-reservation' ) ) ) {
+			return $html;
+		}
+
+		$processor->set_attribute( 'data-vkbm-login-error', $code );
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Inserts markup just before the wrapper element's closing `</div>`.
+	 *
+	 * ブロックの save.js は属性なしの単一 div のみを出力するため、その最後の
+	 * 閉じタグの直前へ挿入すれば wrapper の子要素として追加できる。
+	 *
+	 * @param string $html   Block wrapper HTML.
+	 * @param string $markup Markup to insert.
+	 * @return string
+	 */
+	private function append_before_closing_tag( string $html, string $markup ): string {
+		if ( '' === $markup ) {
+			return $html;
+		}
+
+		$pos = strrpos( $html, '</div>' );
+		if ( false === $pos ) {
+			return $html . $markup;
+		}
+
+		return substr_replace( $html, $markup . '</div>', $pos, strlen( '</div>' ) );
+	}
+
+	/**
+	 * Builds the login-fallback markup (loading text, optional error text, and the
+	 * hidden "alternate login page" hint revealed ~3s later if JS never mounted).
+	 *
+	 * @param string $error_message Display message for the current login failure, or '' if none.
+	 * @return string
+	 */
+	private function build_login_fallback_markup( string $error_message ): string {
+		$loading = sprintf(
+			'<p class="vkbm-alert vkbm-alert__info" role="status">%s</p>',
+			esc_html__( 'Loading form…', 'vk-booking-manager' )
+		);
+
+		$error_html = '';
+		if ( '' !== $error_message ) {
+			$error_html = sprintf(
+				'<p class="vkbm-alert vkbm-alert__danger" role="alert" tabindex="-1">%s</p>',
+				esc_html( $error_message )
+			);
+		}
+
+		$hint_id   = wp_unique_id( 'vkbm-reservation-fallback-hint-' );
+		$login_url = $this->get_native_login_fallback_url();
+
+		/* translators: %1$s: opening <a> tag to the native WordPress login page, %2$s: closing </a> tag. */
+		$hint_template = __( 'If the login form does not appear, please log in from the %1$salternate login page%2$s.', 'vk-booking-manager' );
+		$hint_text     = sprintf(
+			$hint_template,
+			'<a href="' . esc_url( $login_url ) . '">',
+			'</a>'
+		);
+		$hint_text     = wp_kses( $hint_text, array( 'a' => array( 'href' => true ) ) );
+
+		$hint = sprintf(
+			'<p id="%1$s" class="vkbm-alert vkbm-alert__info" role="status" hidden>%2$s</p>',
+			esc_attr( $hint_id ),
+			$hint_text
+		);
+
+		return self::FALLBACK_MARKUP_MARKER . $loading . $error_html . $hint . $this->get_fallback_reveal_script( $hint_id );
+	}
+
+	/**
+	 * Returns the WordPress default login screen URL for the fallback link, with the
+	 * `vkbm_native_login` bypass query so `Auth_Shortcodes::redirect_wp_login_to_vkbm()`
+	 * does not redirect it straight back to this same reservation page (issue #512).
+	 *
+	 * @return string
+	 */
+	private function get_native_login_fallback_url(): string {
+		$reservation_url = $this->auth_shortcodes->get_reservation_page_url();
+		$login_url       = wp_login_url( $reservation_url );
+
+		return add_query_arg( 'vkbm_native_login', '1', $login_url );
+	}
+
+	/**
+	 * Builds the tiny inline script that reveals the hidden fallback hint ~3s after
+	 * render if the reservation block's React app never replaced this markup.
+	 *
+	 * 外部 JS ファイルに依存しないよう、ブロック HTML 内に直接埋め込むごく短いスクリプト。
+	 * React マウント成功時は wrapper の中身が丸ごと置き換わるため、この要素・スクリプトごと
+	 * 消え、setTimeout のコールバックは既に DOM から外れた要素を操作するだけの無害な処理になる。
+	 *
+	 * @param string $hint_id Element id of the hidden hint paragraph.
+	 * @return string
+	 */
+	private function get_fallback_reveal_script( string $hint_id ): string {
+		$js = sprintf(
+			'(function(){var h=document.getElementById(%s);if(!h){return;}window.setTimeout(function(){h.hidden=false;},3000);})();',
+			wp_json_encode( $hint_id )
+		);
+
+		if ( function_exists( 'wp_get_inline_script_tag' ) ) {
+			return wp_get_inline_script_tag( $js );
+		}
+
+		return sprintf( '<script>%s</script>', $js ); // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- 同一リクエスト内完結の極小フォールバック処理（外部JS不可時の保険）。
 	}
 }

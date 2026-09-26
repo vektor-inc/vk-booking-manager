@@ -18,6 +18,13 @@ import {
 import { resolveLoginState } from '../shared/auth';
 import { resolveApiErrorMessage } from '../shared/rest-error-message';
 import { BookingConfirmApp } from './booking-confirm-app';
+import {
+	buildPriceTierRows,
+	buildServiceBasicFeeRow,
+	calculateBaseFeeTotal,
+	isMultiGuestFlatPricing,
+	sumPriceTierSubtotals,
+} from './pricing-breakdown';
 import { BookingSummaryItems } from './components/booking-summary-items';
 import { ReservationHeader } from './components/reservation-header';
 import { sanitizeDraftToken } from '../shared/draft-token';
@@ -379,6 +386,14 @@ export const ReservationApp = ( {
 	defaultStaffId = 0,
 	allowStaffSelection = true,
 	isEditor = false,
+	// issue #512: サーバー側（render_block フィルタ）が同一リクエスト内で判明した
+	// ログイン失敗コードを wrapper の data-vkbm-login-error に埋め込み、view.js 経由で
+	// ここまで渡す。初回の auth-form 取得時だけ REST の error パラメータとして送る。
+	initialLoginError = '',
+	// issue #512 植草指摘（ちらつき対策）: 上記コードに対応する、サーバー側フォール
+	// バックが既に表示していたエラー文そのもの（view.js が DOM から読み取った値）。
+	// REST 応答が届くまでの間、同じ文言を表示し続けるための初期値として使う。
+	initialLoginErrorMessage = '',
 } ) => {
 	const userBootstrap = useMemo( () => {
 		if ( typeof window === 'undefined' ) {
@@ -696,8 +711,15 @@ export const ReservationApp = ( {
 	} );
 	const [ authFormHtml, setAuthFormHtml ] = useState( '' );
 	const [ authLoading, setAuthLoading ] = useState( false );
-	const [ authError, setAuthError ] = useState( '' );
+	// issue #512 植草指摘（ちらつき対策）: 初期値をサーバー側フォールバックの
+	// エラー文で埋めておく。REST 応答が届くまでの間、空にせず表示し続ける。
+	const [ authError, setAuthError ] = useState( initialLoginErrorMessage );
 	const [ authMode, setAuthMode ] = useState( queryDefaults.auth || '' );
+	// issue #512: 初回の auth-form 取得だけ initialLoginError を送るためのフラグ。
+	const initialLoginErrorSentRef = useRef( false );
+	// authFormHtml（dangerouslySetInnerHTML）の描画先。エラー要素への
+	// フォーカス（下記 useEffect）に使う。
+	const authFormContainerRef = useRef( null );
 	const [ logoutUrl, setLogoutUrl ] = useState(
 		userBootstrap?.logoutUrl || ''
 	);
@@ -1091,8 +1113,19 @@ export const ReservationApp = ( {
 			return;
 		}
 
+		// issue #512 植草指摘（ちらつき対策）: サーバー側フォールバックのエラー文を
+		// 初回の auth-form 取得中は消さない（=まだ error パラメータを送っておらず、
+		// かつ引き継いだ初期エラー文がある場合だけ）。それ以外（モード切替の再取得等）
+		// は従来どおり毎回クリアする。
+		const includeInitialLoginError =
+			authMode === 'login' &&
+			!! initialLoginError &&
+			! initialLoginErrorSentRef.current;
+
 		setAuthLoading( true );
-		setAuthError( '' );
+		if ( ! includeInitialLoginError ) {
+			setAuthError( '' );
+		}
 		setAuthFormHtml( '' );
 
 		const params = new URLSearchParams();
@@ -1105,9 +1138,17 @@ export const ReservationApp = ( {
 
 		if ( authMode === 'login' ) {
 			params.set( 'register_url', buildModeUrl( 'register' ) );
+
+			// issue #512: サーバーで判明したログイン失敗コードは、初回の auth-form
+			// 取得時だけ渡す。モード切替等での再取得では渡さない。
+			if ( includeInitialLoginError ) {
+				params.set( 'error', initialLoginError );
+			}
 		} else if ( authMode === 'register' ) {
 			params.set( 'login_url', buildModeUrl( 'login' ) );
 		}
+
+		initialLoginErrorSentRef.current = true;
 
 		apiFetch( {
 			path: `/vkbm/v1/auth-form?${ params.toString() }`,
@@ -1120,7 +1161,11 @@ export const ReservationApp = ( {
 
 				setAuthFormHtml( html );
 
-				if ( ! html && authMode === 'register' && message ) {
+				if ( html ) {
+					// issue #512: 実フォーム（エラー欄込み）が取得できたら、初期表示用の
+					// トップレベルのエラー文は不要になるため消す（二重表示防止）。
+					setAuthError( '' );
+				} else if ( authMode === 'register' && message ) {
 					setAuthError( message );
 				}
 			} )
@@ -1139,7 +1184,23 @@ export const ReservationApp = ( {
 			.finally( () => {
 				setAuthLoading( false );
 			} );
-	}, [ authMode, isLoggedIn, canManageReservations ] );
+	}, [ authMode, isLoggedIn, canManageReservations, initialLoginError ] );
+
+	// issue #512: 植草提案。auth-form の HTML（ログイン失敗文を含む）が描画されたら、
+	// その中のエラー要素（role="alert"。Auth_Shortcodes::render_error_list() が
+	// tabindex="-1" 付きで出力）へ一度だけフォーカスし、スクリーンリーダー利用者にも
+	// 気づけるようにする。REST 応答待ちの間は authFormHtml が空のままのため消えない。
+	useEffect( () => {
+		if ( ! authFormHtml || ! authFormContainerRef.current ) {
+			return;
+		}
+
+		const errorEl =
+			authFormContainerRef.current.querySelector( '[role="alert"]' );
+		if ( errorEl ) {
+			errorEl.focus();
+		}
+	}, [ authFormHtml ] );
 
 	const handleCancelBooking = useCallback(
 		( bookingId ) => {
@@ -1701,14 +1762,57 @@ export const ReservationApp = ( {
 		return applyTax( staffNominationFeeRaw );
 	}, [ applyTax, staffNominationFeeRaw ] );
 
+	// #503: 複数人一括予約を使うメニュー（料金区分なし）か。料金欄の人数掛けと
+	// 「単価 × 人数」の見出しはこのときだけ適用する。料金区分ありは区分ごとの行で出す。
+	const isMultiGuestFlat = isMultiGuestFlatPricing( {
+		allowMultipleGuests,
+		hasPriceTiers,
+		guests: currentGuestCount,
+	} );
+	// 料金欄の計算に使う人数。料金区分なしの複数人一括予約メニューだけ申込人数、それ以外は1名。
+	const pricingGuestCount = isMultiGuestFlat ? currentGuestCount : 1;
+	// 料金区分ありのメニューの、入力中の人数を反映した区分（[ { label, price, count }, ... ]）。
+	const pricedGuestTiers = useMemo(
+		() =>
+			hasPriceTiers
+				? priceTiers.map( ( tier, index ) => ( {
+						...tier,
+						count: guestTierCounts[ index ] ?? 0,
+				  } ) )
+				: [],
+		[ hasPriceTiers, priceTiers, guestTierCounts ]
+	);
+	// 料金区分ありのメニューの区分小計の合計。人数未選択（合計0名）のときは合計を出さない（null）。
+	const tiersSubtotal =
+		hasPriceTiers && guestTiersTotalCount > 0
+			? sumPriceTierSubtotals( pricedGuestTiers )
+			: null;
+
+	// #503: 予約確定時・下書き計算と同じ式で合計を出す。
+	// 料金区分なし: 基本料金 × 人数 ＋ 指名料 ＋ 貸し切り料金。
+	// 料金区分あり: 区分小計の合計 ＋ 指名料 ＋ 貸し切り料金（メニューの基本料金は使わない）。
+	// 以前は人数も区分小計も計算に入れておらず、確認画面の合計と食い違っていた。
 	const totalPrice = useMemo( () => {
-		if ( basePrice === null ) {
+		// 料金区分ありで人数未選択のときは合計を「—」にする（サーバーも0名は受け付けない）。
+		if ( hasPriceTiers && tiersSubtotal === null ) {
 			return null;
 		}
 
-		const extra = staffNominationFee === null ? 0 : staffNominationFee;
-		return basePrice + extra;
-	}, [ basePrice, staffNominationFee ] );
+		return calculateBaseFeeTotal( {
+			basePrice,
+			guests: pricingGuestCount,
+			nominationFee: staffNominationFee,
+			exclusiveFee,
+			tiersSubtotal,
+		} );
+	}, [
+		hasPriceTiers,
+		tiersSubtotal,
+		basePrice,
+		pricingGuestCount,
+		staffNominationFee,
+		exclusiveFee,
+	] );
 
 	const pricingRows = useMemo( () => {
 		if ( ! providerSettingsLoaded ) {
@@ -1733,16 +1837,46 @@ export const ReservationApp = ( {
 		} );
 
 		const currencySymbol = providerSettings.currencySymbol || null;
+		// #503: 複数人一括予約を使うメニューでは見出しに「単価 × 人数」、金額に小計を出す。
+		const baseRow = buildServiceBasicFeeRow( {
+			unitPrice: basePrice,
+			guests: pricingGuestCount,
+			isMultiGuest: isMultiGuestFlat,
+			currencySymbol,
+			guestsUnitLabel: providerSettings.guestsUnitLabel,
+		} );
+		// #503: 料金区分ありのメニューは「サービス基本料金」行を出さず、区分ごとの行
+		// （「大人（¥5,000 × 2名）」＋小計。0名の区分は省く）を出す（確認画面 #338 と同じ考え方）。
+		const baseRows = hasPriceTiers
+			? buildPriceTierRows( {
+					tiers: pricedGuestTiers,
+					currencySymbol,
+					guestsUnitLabel: providerSettings.guestsUnitLabel,
+			  } ).map( ( tierRow, index ) => ( {
+					key: `tier-${ index }`,
+					label: tierRow.label,
+					labelParts: tierRow.labelParts,
+					...withTaxLabel(
+						formatCurrency( tierRow.amount, currencySymbol )
+					),
+			  } ) )
+			: [
+					{
+						key: 'base',
+						label: baseRow.label,
+						labelParts: baseRow.labelParts,
+						...withTaxLabel(
+							baseRow.amount !== null
+								? formatCurrency(
+										baseRow.amount,
+										currencySymbol
+								  )
+								: '—'
+						),
+					},
+			  ];
 		const rows = [
-			{
-				key: 'base',
-				label: __( 'Service basic fee', 'vk-booking-manager' ),
-				...withTaxLabel(
-					basePrice !== null
-						? formatCurrency( basePrice, currencySymbol )
-						: '—'
-				),
-			},
+			...baseRows,
 			{
 				key: 'nomination',
 				label: providerSettings.nominationFeeLabel,
@@ -1758,6 +1892,21 @@ export const ReservationApp = ( {
 				taxLabel:
 					staffNominationFee !== null || staffId ? taxSuffix : '',
 			},
+			// #503: 貸し切り料金を合計に含めるときは、内訳を足して合計になるよう行も出す。
+			...( exclusiveFee > 0
+				? [
+						{
+							key: 'exclusive',
+							label: __(
+								'Private booking fee',
+								'vk-booking-manager'
+							),
+							...withTaxLabel(
+								formatCurrency( exclusiveFee, currencySymbol )
+							),
+						},
+				  ]
+				: [] ),
 			{
 				key: 'total',
 				label: __( 'Total basic fee', 'vk-booking-manager' ),
@@ -1767,12 +1916,19 @@ export const ReservationApp = ( {
 						: '—'
 				),
 				highlight: true,
+				// #503: 人数の入力欄から離れた位置にあるため、合計の変化を読み上げソフトにも伝える。
+				live: true,
 			},
 		];
 
 		return rows;
 	}, [
 		basePrice,
+		pricingGuestCount,
+		isMultiGuestFlat,
+		hasPriceTiers,
+		pricedGuestTiers,
+		exclusiveFee,
 		staffNominationFee,
 		totalPrice,
 		providerSettings,
@@ -2639,6 +2795,8 @@ export const ReservationApp = ( {
 						'vk-booking-manager'
 					) }
 					isEditor={ isEditor }
+					initialLoginError={ initialLoginError }
+					initialLoginErrorMessage={ initialLoginErrorMessage }
 				/>
 			</div>
 		);
@@ -2867,6 +3025,7 @@ export const ReservationApp = ( {
 						) }
 						{ authMode !== 'bookings' && authFormHtml && (
 							<div
+								ref={ authFormContainerRef }
 								className="vkbm-reservation-content__auth-form"
 								dangerouslySetInnerHTML={ {
 									__html: authFormHtml,
@@ -3290,43 +3449,28 @@ export const ReservationApp = ( {
 												/>
 											</div>
 										) ) }
-										{ /* 人数未選択（合計0）のときは概算合計を表示しない。 */ }
-										{ guestTiersTotalCount > 0 && (
-											<div className="vkbm-plan-summary__guest-tiers-total">
-												{ sprintf(
-													/* translators: %s: total price. */
-													__(
-														'Total: %s',
-														'vk-booking-manager'
-													),
-													formatCurrency(
-														priceTiers.reduce(
-															(
-																sum,
-																tier,
-																index
-															) =>
-																sum +
-																tier.price *
-																	Math.max(
-																		0,
-																		Math.floor(
-																			Number(
-																				guestTierCounts[
-																					index
-																				]
-																			) ||
-																				0
-																		)
-																	),
-															0
+										{ /* 人数未選択（合計0）のときは概算合計を表示しない。
+											#503: 指名を使うメニューでは料金欄に区分ごとの小計と基本料金合計（指名料込み）が出るため、
+											ここに指名料を含まない別の合計を並べると一致しない金額に見える。料金欄が無いとき（指名を使わないメニュー）だけ出す。 */ }
+										{ guestTiersTotalCount > 0 &&
+											! menuNominationEnabled && (
+												<div className="vkbm-plan-summary__guest-tiers-total">
+													{ sprintf(
+														/* translators: %s: total price. */
+														__(
+															'Total: %s',
+															'vk-booking-manager'
 														),
-														providerSettings.currencySymbol ||
-															null
-													)
-												) }
-											</div>
-										) }
+														formatCurrency(
+															sumPriceTierSubtotals(
+																pricedGuestTiers
+															),
+															providerSettings.currencySymbol ||
+																null
+														)
+													) }
+												</div>
+											) }
 										{ /* 合計が残枠を超えると「予約へ進む」が無言で disabled になるのを避けるため、理由を明示する。 */ }
 										{ guestTiersTotalCount >
 											maxSelectableGuests && (

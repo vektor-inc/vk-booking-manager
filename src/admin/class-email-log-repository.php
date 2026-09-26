@@ -21,6 +21,12 @@ class Email_Log_Repository {
 	public const MAX_LOGS              = 100;
 	public const LAST_PRUNE_OPTION_KEY = 'vkbm_email_logs_last_pruned';
 
+	// #510: ログの送信結果を表す状態。旧仕様の success(bool) は互換のため残しつつ、
+	// 「未送信（宛先が無い・不正で送らなかった）」を区別できるようにする。
+	public const STATUS_SENT    = 'sent';
+	public const STATUS_FAILED  = 'failed';
+	public const STATUS_SKIPPED = 'skipped';
+
 	/**
 	 * Normalize a stored timestamp into a UTC epoch integer.
 	 *
@@ -71,24 +77,43 @@ class Email_Log_Repository {
 	}
 
 	/**
-	 * Add a log entry.
+	 * ログエントリを1件追加する。
 	 *
-	 * @param string $email      Recipient email address.
-	 * @param string $subject    Email subject.
-	 * @param bool   $success    Whether the email was sent successfully.
-	 * @param string $error_info Error information if failed.
+	 * #510: 通知の種類・何回目の送信か・予約IDを追加で保存し、成否は
+	 * 「送信済み／失敗／未送信」の3状態（$status）で記録する。
+	 * `success`（真偽値）は互換のため、$status から導出した値を残す。
+	 *
+	 * @param string $email        送信先メールアドレス（未送信で宛先が無い場合は空文字）。
+	 * @param string $subject      件名（実際に送った、または送るはずだった文字列）。
+	 * @param string $status       送信結果（self::STATUS_SENT / STATUS_FAILED / STATUS_SKIPPED）。
+	 * @param string $error_info   失敗・未送信の理由（送信済みの場合は空文字）。
+	 * @param string $type         通知の種類（例: pending_customer, registration_confirmation）。空文字は種類不明（旧形式のログ用）。
+	 * @param int    $attempt      今回が何回目の送信か。再送の概念が無い通知（リマインダー等）は 0。
+	 * @param int    $max_attempts 最大送信回数。再送の概念が無い通知は 0。
+	 * @param int    $booking_id   紐づく予約の投稿ID。予約に紐づかない通知（会員登録の確認メール等）は 0。
+	 * @param string $action_url   エラー欄に添える案内リンクの URL（無ければ空文字）。
+	 * @param string $action_label 案内リンクの文言（無ければ空文字）。
 	 * @return void
 	 */
-	public function add_log( string $email, string $subject, bool $success, string $error_info = '' ): void {
+	public function add_log( string $email, string $subject, string $status, string $error_info = '', string $type = '', int $attempt = 0, int $max_attempts = 0, int $booking_id = 0, string $action_url = '', string $action_label = '' ): void {
 		$logs = $this->get_logs();
 
 		$log_entry = array(
 			// Store UTC epoch seconds for consistent retention comparisons.
-			'timestamp' => time(),
-			'email'     => $email,
-			'subject'   => $subject,
-			'success'   => $success,
-			'error'     => $error_info,
+			'timestamp'    => time(),
+			'email'        => $email,
+			'subject'      => $subject,
+			// 互換のため、送信済みかどうかの真偽値も引き続き保存する。
+			'success'      => ( self::STATUS_SENT === $status ),
+			'status'       => $status,
+			'error'        => $error_info,
+			'type'         => $type,
+			'attempt'      => $attempt,
+			'max_attempts' => $max_attempts,
+			'booking_id'   => $booking_id,
+			// #510: エラー欄の本文とは別に、案内リンク（例: 設定画面への導線）を持たせる。
+			'action_url'   => $action_url,
+			'action_label' => $action_label,
 		);
 
 		array_unshift( $logs, $log_entry );

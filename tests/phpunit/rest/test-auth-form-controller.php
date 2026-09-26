@@ -56,4 +56,60 @@ class Auth_Form_Controller_Test extends WP_UnitTestCase {
 		unset( $_COOKIE['vkbm_registration_errors'] );
 		update_option( 'users_can_register', $original_registration );
 	}
+
+	/**
+	 * issue #512: `vkbm_login_error` Cookie の廃止に伴い、ログイン失敗コードは REST の
+	 * `error` パラメータで受け渡す。ホワイトリストのコードは既存の統一文言に変換され、
+	 * 一覧に無いコードでは何も表示されないこと（`vkbm_login_error` Cookie 自体が
+	 * 発行されないことも合わせて確認する）。
+	 */
+	public function test_login_form_response_converts_error_param_and_ignores_unknown_codes(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+		$controller = new Auth_Form_Controller( $shortcodes );
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'ホワイトリストのコード（auth_failed）=> 統一文言が出る',
+				'error_param'         => 'auth_failed',
+				'expect_message'      => true,
+			],
+			[
+				'test_condition_name' => 'ホワイトリスト外のコード（未知の値）=> 何も出ない',
+				'error_param'         => 'not_a_real_code',
+				'expect_message'      => false,
+			],
+			[
+				'test_condition_name' => 'error パラメータ省略時 => 何も出ない（従来どおり）',
+				'error_param'         => '',
+				'expect_message'      => false,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/auth-form' );
+			$request->set_param( 'type', 'login' );
+			$request->set_param( 'redirect', home_url( '/' ) );
+			if ( '' !== $case['error_param'] ) {
+				$request->set_param( 'error', $case['error_param'] );
+			}
+
+			$response = $controller->get_form( $request );
+			$html     = (string) ( $response->get_data()['html'] ?? '' );
+
+			if ( $case['expect_message'] ) {
+				$this->assertStringContainsString(
+					__( 'Username or password is incorrect.', 'vk-booking-manager' ),
+					$html,
+					$case['test_condition_name']
+				);
+			} else {
+				$this->assertStringNotContainsString( 'vkbm-alert__danger', $html, $case['test_condition_name'] );
+			}
+
+			// #512 の対応前まで発行されていた一時 Cookie が、この経路では一切
+			// 発行されないことを確認する。
+			$this->assertArrayNotHasKey( 'vkbm_login_error', $_COOKIE, $case['test_condition_name'] );
+		}
+	}
 }

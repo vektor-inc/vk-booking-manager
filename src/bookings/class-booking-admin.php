@@ -14,11 +14,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
+use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Staff_Conflict_Detector;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -31,6 +33,7 @@ use WP_Query;
 use WP_User;
 use function admin_url;
 use function get_edit_post_link;
+use function get_edit_user_link;
 use function get_userdata;
 use function get_users;
 use function vkbm_get_resource_label_singular;
@@ -91,6 +94,14 @@ class Booking_Admin {
 	private $event_dispatcher;
 
 	/**
+	 * Google カレンダー連携の同期処理（issue #476）。未注入（無料版・Pro 版でも連携が
+	 * 使える状態でない場合）は null になり、予約編集画面には何も表示しない。
+	 *
+	 * @var Google_Calendar_Event_Sync|null
+	 */
+	private $google_calendar_event_sync;
+
+	/**
 	 * 管理通知のリダイレクトクエリ付与フィルタを多重登録しないためのフラグ。
 	 *
 	 * @var bool
@@ -121,12 +132,18 @@ class Booking_Admin {
 	/**
 	 * Constructor.
 	 *
-	 * @param Booking_Notification_Service|null $notification_service Notification handler.
-	 * @param Booking_Event_Dispatcher|null     $event_dispatcher     予約の状態変化を外部連携へ橋渡しするディスパッチャー。
+	 * @param Booking_Notification_Service|null $notification_service       Notification handler.
+	 * @param Booking_Event_Dispatcher|null     $event_dispatcher           予約の状態変化を外部連携へ橋渡しするディスパッチャー。
+	 * @param Google_Calendar_Event_Sync|null   $google_calendar_event_sync Google カレンダー連携の同期処理（issue #476）。
 	 */
-	public function __construct( ?Booking_Notification_Service $notification_service = null, ?Booking_Event_Dispatcher $event_dispatcher = null ) {
-		$this->notification_service = $notification_service;
-		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
+	public function __construct(
+		?Booking_Notification_Service $notification_service = null,
+		?Booking_Event_Dispatcher $event_dispatcher = null,
+		?Google_Calendar_Event_Sync $google_calendar_event_sync = null
+	) {
+		$this->notification_service       = $notification_service;
+		$this->event_dispatcher           = $event_dispatcher ?? new Booking_Event_Dispatcher();
+		$this->google_calendar_event_sync = $google_calendar_event_sync;
 	}
 
 	/**
@@ -143,6 +160,8 @@ class Booking_Admin {
 		add_action( 'admin_notices', array( $this, 'render_staff_conflict_notice' ) );
 		add_filter( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_columns', array( $this, 'register_columns' ) );
 		add_action( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_custom_column', array( $this, 'render_column' ), 10, 2 );
+		// issue #507: 予約者がメール未確認（'manual'）の場合、予約タイトル横に状態を表示する.
+		add_filter( 'display_post_states', array( $this, 'add_email_unconfirmed_post_state' ), 10, 2 );
 		add_filter( 'manage_edit-' . Booking_Post_Type::POST_TYPE . '_sortable_columns', array( $this, 'sortable_columns' ) );
 		add_action( 'pre_get_posts', array( $this, 'handle_sortable_query' ) );
 		add_action( 'quick_edit_custom_box', array( $this, 'render_quick_edit_fields' ), 10, 2 );
@@ -371,12 +390,76 @@ class Booking_Admin {
 	}
 
 	/**
+	 * Renders a notice when the reservation's customer is only manually approved
+	 * (email delivery unconfirmed), with a button to the user edit screen.
+	 *
+	 * issue #507: Google カレンダー連携の notice と同じ位置・形式で出す。
+	 *
+	 * @param WP_Post $post Booking post.
+	 */
+	private function render_email_unconfirmed_notice( WP_Post $post ): void {
+		$author_id = (int) $post->post_author;
+
+		if ( $author_id <= 0 || Email_Verification::STATUS_MANUAL !== Email_Verification::get_status( $author_id ) ) {
+			return;
+		}
+
+		$user_edit_url = get_edit_user_link( $author_id );
+		?>
+		<div class="notice notice-warning inline">
+			<p><?php esc_html_e( 'This reservation customer has not confirmed their email address, so booking confirmations and change notices may not have reached them. Please contact them another way, such as by phone.', 'vk-booking-manager' ); ?></p>
+			<?php if ( $user_edit_url ) : ?>
+				<p>
+					<a class="button button-secondary" href="<?php echo esc_url( $user_edit_url ); ?>">
+						<?php esc_html_e( 'View user information', 'vk-booking-manager' ); ?>
+					</a>
+				</p>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Adds an "Email unconfirmed" post state next to the booking title (issue #507).
+	 *
+	 * 予約タイトル横に、予約者（post_author）が 'manual'（手動承認・メール未確認）の
+	 * 場合だけ表示する。
+	 *
+	 * @param array<string, string> $post_states Existing post states.
+	 * @param WP_Post               $post        Post being listed.
+	 * @return array<string, string>
+	 */
+	public function add_email_unconfirmed_post_state( array $post_states, WP_Post $post ): array {
+		if ( Booking_Post_Type::POST_TYPE !== $post->post_type ) {
+			return $post_states;
+		}
+
+		if ( Email_Verification::STATUS_MANUAL !== Email_Verification::get_status( (int) $post->post_author ) ) {
+			return $post_states;
+		}
+
+		$post_states['vkbm_email_unconfirmed'] = __( 'Email unconfirmed', 'vk-booking-manager' );
+
+		return $post_states;
+	}
+
+	/**
 	 * Render booking meta box form.
 	 *
 	 * @param WP_Post $post Post.
 	 */
 	public function render_meta_box( WP_Post $post ): void {
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
+
+		// issue #507: 予約者がメール未確認（'manual'）の場合、Google カレンダー連携の
+		// notice と同じ位置・形式で注意を出す。
+		$this->render_email_unconfirmed_notice( $post );
+
+		// Google カレンダー連携（issue #476）: 未反映のときだけ、入力欄の上にお知らせを出す
+		// （反映済み・未着手のときは何も出さない。司の decision record 参照）。
+		if ( null !== $this->google_calendar_event_sync ) {
+			$this->google_calendar_event_sync->render_booking_notice( $post->ID );
+		}
 
 		$start       = get_post_meta( $post->ID, self::META_DATE_START, true );
 		$end         = get_post_meta( $post->ID, self::META_DATE_END, true );

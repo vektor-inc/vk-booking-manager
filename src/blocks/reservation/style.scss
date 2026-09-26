@@ -269,6 +269,8 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+	// #503: 見出しが折り返すときも金額とくっつかないよう間隔を空ける。
+	gap: 0.5rem;
 	font-size: 0.9rem;
 }
 
@@ -282,6 +284,14 @@
 
 .vkbm-plan-summary__pricing-value {
 	font-weight: 400;
+	// #503: 「¥30,000 (税込)」の金額と税表記の間で改行させない。
+	white-space: nowrap;
+}
+
+// #503: 料金の行の見出しの「（単価 × 人数）」部分は途中で改行させず、括弧の手前で折り返す
+// （予約画面の料金欄と確認画面で共通）。
+.vkbm-pricing-row-label__detail {
+	white-space: nowrap;
 }
 
 .vkbm-plan-summary__pricing-value--accent {
@@ -904,6 +914,8 @@
 
 		&-title {
 			margin-bottom: 0.5rem;
+			// #503: 縦積みでは見出しが1行を占めるため折り返しを許し、長い見出しは「（単価 × 人数）」の括弧の手前で改行させる。
+			white-space: normal;
 		}
 
 		&-value {

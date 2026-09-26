@@ -18,6 +18,7 @@ use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Api_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connection;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync_Settings;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -125,7 +126,7 @@ class Test_Provider_Settings_Page_Integration_Tab extends WP_UnitTestCase {
 		$relay_client = new Google_Calendar_Relay_Client();
 		$api_client   = new Google_Calendar_Api_Client( $this->connection, $relay_client );
 		$controller   = new Google_Calendar_Connect_Controller( $this->connection, $relay_client, $api_client );
-		$panel        = new Google_Calendar_Settings_Panel( $this->connection, $api_client, $controller );
+		$panel        = new Google_Calendar_Settings_Panel( $this->connection, $api_client, $controller, new Google_Calendar_Event_Sync_Settings() );
 
 		$page = new Provider_Settings_Page(
 			new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ),

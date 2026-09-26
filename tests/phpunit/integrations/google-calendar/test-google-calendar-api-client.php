@@ -66,6 +66,20 @@ class Test_Google_Calendar_Api_Client extends WP_UnitTestCase {
 	private $relay_url_filter = null;
 
 	/**
+	 * 直近に送信されたリクエストの URL（issue #476 の sendUpdates=none 確認用）。
+	 *
+	 * @var string
+	 */
+	private $last_request_url = '';
+
+	/**
+	 * 直近に送信されたリクエストの引数（HTTP メソッド等。issue #476 の確認用）。
+	 *
+	 * @var array<string, mixed>
+	 */
+	private $last_request_args = array();
+
+	/**
 	 * 各テストの前に、接続済みの状態を作り、HTTP 通信を差し替える。
 	 *
 	 * @return void
@@ -84,6 +98,9 @@ class Test_Google_Calendar_Api_Client extends WP_UnitTestCase {
 		$this->client     = new Google_Calendar_Api_Client( $this->connection, new Google_Calendar_Relay_Client() );
 
 		$this->http_filter = function ( $preempt, $args, $url ) {
+			$this->last_request_url  = (string) $url;
+			$this->last_request_args = $args;
+
 			foreach ( $this->mock_responses as $needle => $response ) {
 				if ( false !== strpos( (string) $url, (string) $needle ) ) {
 					return $response;
@@ -431,6 +448,179 @@ class Test_Google_Calendar_Api_Client extends WP_UnitTestCase {
 			// Google 側の一時的な不調や通信の失敗で、連携そのものを切れた扱いにしないため。
 			$expected_status = 'vkbm_google_calendar_unauthorized' === $case['expected'] ? 'error' : 'connected';
 			$this->assertSame( $expected_status, $this->connection->get_status(), $case['test_condition_name'] . '（接続状態の記録）' );
+		}
+	}
+
+	/**
+	 * 接続済みの状態を作る共通ヘルパー（issue #476 のテスト用）。
+	 *
+	 * @return void
+	 */
+	private function connect(): void {
+		$this->connection->save_tokens(
+			array(
+				'access_token'  => 'access-token',
+				'refresh_token' => 'refresh-token',
+				'expires_in'    => 3600,
+			)
+		);
+	}
+
+	/**
+	 * create_event() が、成功時にイベント ID を返すこと、招待メールを送らない
+	 * （sendUpdates=none）を必ず付けること、指定した予定IDを本文の `id` に含めて送ること
+	 * （安藤レビュー指摘: 決定的な予定IDでの作成）を検証する（issue #476。親 issue #94 で決定）。
+	 */
+	public function test_create_event(): void {
+		$this->connect();
+
+		$this->mock_responses = array(
+			'calendars/calendar-1/events' => array(
+				'response' => array( 'code' => 200 ),
+				'body'     => '{"id":"new-event-id"}',
+			),
+		);
+
+		$result = $this->client->create_event( 'calendar-1', 'new-event-id', array( 'summary' => 'カット' ) );
+
+		$this->assertSame( 'new-event-id', $result, '成功時はイベント ID を返すこと' );
+		$this->assertStringContainsString( 'sendUpdates=none', $this->last_request_url, '招待メールを送らない固定にすること' );
+		$this->assertSame( 'POST', $this->last_request_args['method'], '新規作成は POST で送ること' );
+
+		$sent_body = json_decode( (string) $this->last_request_args['body'], true );
+		$this->assertSame( 'new-event-id', $sent_body['id'], '指定した予定IDを本文の id に含めて送ること' );
+	}
+
+	/**
+	 * create_event() が、既に同じ予定IDが存在する場合（409）に専用のエラー種別を返すこと
+	 * を検証する（安藤レビュー指摘: 呼び出し側が update へ切り替えるための切り分け）。
+	 */
+	public function test_create_event_already_exists(): void {
+		$this->connect();
+
+		$this->mock_responses = array(
+			'calendars/calendar-1/events' => array(
+				'response' => array( 'code' => 409 ),
+				'body'     => '{"error":{"code":409,"message":"The requested identifier already exists."}}',
+			),
+		);
+
+		$result = $this->client->create_event( 'calendar-1', 'existing-event-id', array( 'summary' => 'カット' ) );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'vkbm_google_calendar_event_already_exists', $result->get_error_code() );
+		$this->assertSame( 'connected', $this->connection->get_status(), '既に存在するだけでは連携を切れた扱いにしないこと' );
+	}
+
+	/**
+	 * 403 は認可が失われたとは限らない（権限不足・レート制限等）ため、401 と違って
+	 * connection を error 状態にしないことを検証する（安藤レビュー指摘）。
+	 */
+	public function test_create_event_forbidden_does_not_mark_connection_error(): void {
+		$this->connect();
+
+		$this->mock_responses = array(
+			'calendars/calendar-1/events' => array(
+				'response' => array( 'code' => 403 ),
+				'body'     => '{"error":{"code":403,"message":"Rate Limit Exceeded"}}',
+			),
+		);
+
+		$result = $this->client->create_event( 'calendar-1', 'new-event-id', array( 'summary' => 'カット' ) );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'vkbm_google_calendar_forbidden', $result->get_error_code() );
+		$this->assertSame( 'connected', $this->connection->get_status(), '403 だけでは連携が切れた扱いにしないこと（安藤レビュー指摘）' );
+	}
+
+	/**
+	 * update_event() が、成功時にイベント ID を返すこと、PUT で送ることを検証する。
+	 */
+	public function test_update_event(): void {
+		$this->connect();
+
+		$this->mock_responses = array(
+			'events/existing-event-id' => array(
+				'response' => array( 'code' => 200 ),
+				'body'     => '{"id":"existing-event-id"}',
+			),
+		);
+
+		$result = $this->client->update_event( 'calendar-1', 'existing-event-id', array( 'summary' => 'カット（変更後）' ) );
+
+		$this->assertSame( 'existing-event-id', $result, '成功時はイベント ID を返すこと' );
+		$this->assertSame( 'PUT', $this->last_request_args['method'], '更新は PUT で送ること' );
+	}
+
+	/**
+	 * update_event() が、Google 側で既に削除された予定に対して専用のエラー種別を返すこと
+	 * （呼び出し側が新規作成へ倒すための切り分け。issue #476）。
+	 */
+	public function test_update_event_not_found(): void {
+		$this->connect();
+
+		$this->mock_responses = array(
+			'events/deleted-event-id' => array(
+				'response' => array( 'code' => 404 ),
+				'body'     => '{"error":{"code":404,"message":"Not Found"}}',
+			),
+		);
+
+		$result = $this->client->update_event( 'calendar-1', 'deleted-event-id', array( 'summary' => 'カット' ) );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'vkbm_google_calendar_event_not_found', $result->get_error_code() );
+		$this->assertSame( 'connected', $this->connection->get_status(), '予定が無いだけでは連携を切れた扱いにしないこと' );
+	}
+
+	/**
+	 * delete_event() の正常系・異常系をまとめて検証する。
+	 */
+	public function test_delete_event(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '削除に成功（204） => true（正常系）',
+				'response'            => array(
+					'response' => array( 'code' => 204 ),
+					'body'     => '',
+				),
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'Google 側で既に無い（404） => 目的は達成済みとして true 扱い（正常系。安藤レビュー指摘の先取り対応）',
+				'response'            => array(
+					'response' => array( 'code' => 404 ),
+					'body'     => '{"error":{"code":404,"message":"Not Found"}}',
+				),
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'アクセス許可が失効（401） => WP_Error（異常系。連携が切れています扱い）',
+				'response'            => array(
+					'response' => array( 'code' => 401 ),
+					'body'     => '{"error":{"code":401,"message":"Invalid Credentials"}}',
+				),
+				'expected'            => 'vkbm_google_calendar_unauthorized',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			delete_option( Google_Calendar_Connection::OPTION_NAME );
+			delete_transient( 'vkbm_google_calendar_refresh_throttle' );
+			$this->connect();
+
+			$this->mock_responses = array( 'events/event-id' => $case['response'] );
+
+			$result = $this->client->delete_event( 'calendar-1', 'event-id' );
+
+			if ( true === $case['expected'] ) {
+				$this->assertTrue( $result, $case['test_condition_name'] );
+				$this->assertSame( 'DELETE', $this->last_request_args['method'], $case['test_condition_name'] );
+				continue;
+			}
+
+			$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $result->get_error_code(), $case['test_condition_name'] );
 		}
 	}
 }

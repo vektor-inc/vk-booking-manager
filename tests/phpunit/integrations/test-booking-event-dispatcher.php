@@ -313,6 +313,79 @@ class Booking_Event_Dispatcher_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * #476（Google カレンダー連携）で追加した `note`（お客様からのメモ・ご要望）が
+	 * スナップショットへ含まれること、この項目だけの変更でも `updated` が1回発火することを
+	 * 検証する。含めていないと、お客様メモだけを変更した保存で diff_snapshot() が差分を
+	 * 検出できず、Google カレンダー連携がメモの変更を反映できなくなる（仕様書参照）。
+	 */
+	public function test_dispatch_change_includes_note_field(): void {
+		$dispatcher = new Booking_Event_Dispatcher();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'メモを新規作成時に設定 => created のペイロードに note が含まれる（正常系）',
+				'initial_status'      => null,
+				'initial_note'        => null,
+				'mutate'              => static function ( int $booking_id ): void {
+					update_post_meta( $booking_id, self::META_STATUS, 'confirmed' );
+					update_post_meta( $booking_id, '_vkbm_booking_note', 'アレルギーがあります' );
+				},
+				'expected_event'      => Booking_Event_Dispatcher::EVENT_CREATED,
+				'expected_note'       => 'アレルギーがあります',
+			),
+			array(
+				'test_condition_name' => 'メモだけを変更 => updated で1回発火し、新しいメモが payload に入る（正常系）',
+				'initial_status'      => 'confirmed',
+				'initial_note'        => '当初のメモ',
+				'mutate'              => static function ( int $booking_id ): void {
+					update_post_meta( $booking_id, '_vkbm_booking_note', '変更後のメモ' );
+				},
+				'expected_event'      => Booking_Event_Dispatcher::EVENT_UPDATED,
+				'expected_note'       => '変更後のメモ',
+			),
+			array(
+				'test_condition_name' => 'メモを変更せず再保存 => 発火しない（異常系・境界値）',
+				'initial_status'      => 'confirmed',
+				'initial_note'        => '据え置きのメモ',
+				'mutate'              => static function ( int $booking_id ): void {
+					// 何もしない（変更なしの再保存を再現）。
+				},
+				'expected_event'      => null,
+				'expected_note'       => null,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->dispatched = array();
+			$booking_id       = $this->create_booking_post();
+
+			if ( null !== $case['initial_status'] ) {
+				update_post_meta( $booking_id, self::META_STATUS, $case['initial_status'] );
+			}
+
+			if ( null !== $case['initial_note'] ) {
+				update_post_meta( $booking_id, '_vkbm_booking_note', $case['initial_note'] );
+			}
+
+			$before = null !== $case['initial_status'] ? $dispatcher->capture_snapshot( $booking_id ) : null;
+
+			( $case['mutate'] )( $booking_id );
+
+			$dispatcher->dispatch_change( $booking_id, $before );
+
+			if ( null === $case['expected_event'] ) {
+				$this->assertCount( 0, $this->dispatched, $case['test_condition_name'] );
+				continue;
+			}
+
+			$this->assertCount( 1, $this->dispatched, $case['test_condition_name'] );
+			$this->assertSame( $case['expected_event'], $this->dispatched[0][0], $case['test_condition_name'] );
+			$this->assertArrayHasKey( 'note', $this->dispatched[0][2]['booking'], $case['test_condition_name'] );
+			$this->assertSame( $case['expected_note'], $this->dispatched[0][2]['booking']['note'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * ゴミ箱移動・復元・完全削除（trashed_post/untrashed_post/before_delete_post）で、
 	 * 本番の配線（vk-booking-manager.php で register 済みのディスパッチャー）から
 	 * それぞれ1回だけ発火することを検証する。完全削除のペイロードには、メタが消える前に

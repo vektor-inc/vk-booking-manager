@@ -1,6 +1,7 @@
 <?php
 /**
- * Adds VKBM user meta fields to the WordPress user profile screens.
+ * Adds VKBM user meta fields, plus the email verification status, to the WordPress
+ * user profile and user list screens.
  *
  * @package VKBookingManager
  */
@@ -13,21 +14,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Auth\Auth_Shortcodes;
+use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\Common\VKBM_Helper;
 use WP_User;
+use function __;
 use function add_action;
+use function add_filter;
 use function current_user_can;
 use function delete_user_meta;
 use function esc_attr;
 use function esc_html;
 use function esc_html_e;
+use function get_current_user_id;
+use function get_option;
+use function get_the_author_meta;
 use function get_user_meta;
+use function get_userdata;
 use function sanitize_text_field;
+use function sprintf;
 use function update_user_meta;
+use function wp_date;
 use function wp_unslash;
 
 /**
- * Adds VKBM user meta fields to the WordPress user profile screens.
+ * Adds VKBM user meta fields, plus the email verification status, to the WordPress
+ * user profile and user list screens.
  */
 class User_Profile_Fields {
 	/**
@@ -38,6 +50,8 @@ class User_Profile_Fields {
 		add_action( 'edit_user_profile', array( $this, 'render_fields' ) );
 		add_action( 'personal_options_update', array( $this, 'save_fields' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'save_fields' ) );
+		add_filter( 'manage_users_columns', array( $this, 'register_verification_column' ) );
+		add_filter( 'manage_users_custom_column', array( $this, 'render_verification_column' ), 10, 3 );
 	}
 
 	/**
@@ -111,6 +125,139 @@ class User_Profile_Fields {
 			</tr>
 		</table>
 		<?php
+		$this->render_email_verification_section( $user );
+	}
+
+	/**
+	 * Renders the "email verification" row (status, manual approve / revoke checkboxes).
+	 *
+	 * 予約顧客以外（オーナー・スタッフ・管理者）には表示しない。自分自身にも表示しない
+	 * （論点2・issue #507: 自己承認・自己取り消しを防ぐ）。
+	 *
+	 * @param WP_User $user User object.
+	 */
+	private function render_email_verification_section( WP_User $user ): void {
+		if ( ! Auth_Shortcodes::is_booking_customer( $user ) ) {
+			return;
+		}
+
+		$is_self = get_current_user_id() === $user->ID;
+		$status  = Email_Verification::get_status( $user->ID );
+		?>
+		<h2><?php esc_html_e( 'Email verification', 'vk-booking-manager' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th><?php esc_html_e( 'Status', 'vk-booking-manager' ); ?></th>
+				<td>
+					<p><?php echo esc_html( $this->get_status_label( $status ) ); ?></p>
+					<?php if ( Email_Verification::STATUS_MANUAL === $status ) : ?>
+						<?php $approval = Email_Verification::get_manual_approval_info( $user->ID ); ?>
+						<?php if ( $approval['at'] > 0 ) : ?>
+							<p class="description"><?php echo esc_html( $this->format_manual_approval_description( $approval ) ); ?></p>
+						<?php endif; ?>
+					<?php endif; ?>
+
+					<?php if ( ! $is_self && Email_Verification::STATUS_UNVERIFIED === $status ) : ?>
+						<p>
+							<label>
+								<input type="checkbox" name="vkbm_email_verify_manual" value="1">
+								<?php esc_html_e( 'Mark email as verified (manual approval)', 'vk-booking-manager' ); ?>
+							</label>
+						</p>
+						<p class="description">
+							<?php esc_html_e( 'Checking this and clicking "Update User" lets this customer log in without clicking the link in the verification email. Because delivery to their email address has not been confirmed, booking confirmation emails may not reach them. If a booking comes in, contact them another way, such as by phone.', 'vk-booking-manager' ); ?>
+						</p>
+					<?php elseif ( ! $is_self && Email_Verification::STATUS_MANUAL === $status ) : ?>
+						<p>
+							<label>
+								<input type="checkbox" name="vkbm_email_verify_revoke_manual" value="1">
+								<?php esc_html_e( 'Revoke manual approval (return to unverified)', 'vk-booking-manager' ); ?>
+							</label>
+						</p>
+					<?php endif; ?>
+				</td>
+			</tr>
+		</table>
+		<?php
+	}
+
+	/**
+	 * Returns a human-readable label for the given verification status.
+	 *
+	 * @param string $status Raw status value ('', '0', '1', or 'manual').
+	 * @return string
+	 */
+	private function get_status_label( string $status ): string {
+		if ( Email_Verification::STATUS_MANUAL === $status ) {
+			return __( 'Manually approved (email unconfirmed)', 'vk-booking-manager' );
+		}
+
+		if ( Email_Verification::STATUS_UNVERIFIED === $status ) {
+			return __( 'Unverified', 'vk-booking-manager' );
+		}
+
+		// '1' またはメタ未保存（機能導入前の登録ユーザー・管理者作成ユーザー）は認証済み扱い。
+		return __( 'Verified', 'vk-booking-manager' );
+	}
+
+	/**
+	 * Formats the "approved at ... by ..." description under the manual approval status.
+	 *
+	 * @param array{at: int, by: int} $approval Manual approval metadata.
+	 * @return string
+	 */
+	private function format_manual_approval_description( array $approval ): string {
+		$datetime = wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $approval['at'] );
+		$approver = $approval['by'] > 0 ? (string) get_the_author_meta( 'display_name', $approval['by'] ) : '';
+
+		if ( '' !== $approver ) {
+			/* translators: 1: approval datetime, 2: approver display name. */
+			return sprintf( __( 'Manually approved at %1$s by %2$s.', 'vk-booking-manager' ), $datetime, $approver );
+		}
+
+		/* translators: %s: approval datetime. */
+		return sprintf( __( 'Manually approved at %s.', 'vk-booking-manager' ), $datetime );
+	}
+
+	/**
+	 * Adds the "Email verification" column to the users list table.
+	 *
+	 * @param array<string, string> $columns Columns.
+	 * @return array<string, string>
+	 */
+	public function register_verification_column( array $columns ): array {
+		$columns['vkbm_email_verification'] = __( 'Email verification', 'vk-booking-manager' );
+		return $columns;
+	}
+
+	/**
+	 * Renders the "Email verification" column content on the users list table.
+	 *
+	 * @param string $value       Current column value (empty by default).
+	 * @param string $column_name Column name.
+	 * @param int    $user_id     User ID.
+	 * @return string
+	 */
+	public function render_verification_column( string $value, string $column_name, int $user_id ): string {
+		if ( 'vkbm_email_verification' !== $column_name ) {
+			return $value;
+		}
+
+		$user = get_userdata( $user_id );
+		if ( ! $user instanceof WP_User || ! Auth_Shortcodes::is_booking_customer( $user ) ) {
+			return '';
+		}
+
+		$badge = Email_Verification::get_badge( $user_id );
+		if ( null === $badge ) {
+			return '';
+		}
+
+		return sprintf(
+			'<span class="vkbm-email-verification-badge %1$s">%2$s</span>',
+			esc_attr( $badge['css_class'] ),
+			esc_html( $badge['label'] )
+		);
 	}
 
 	/**
@@ -137,6 +284,42 @@ class User_Profile_Fields {
 		$this->update_user_meta_value( $user_id, 'vkbm_kana_name', $kana );
 		$this->update_user_meta_value( $user_id, 'phone_number', $phone );
 		$this->update_user_meta_value( $user_id, 'vkbm_birth_date', $birth );
+
+		$this->save_email_verification_fields( $user_id, $raw );
+	}
+
+	/**
+	 * Saves the manual approve / revoke checkboxes for email verification.
+	 *
+	 * 自分自身には適用しない（論点2・issue #507）。予約顧客以外も対象外にする。
+	 *
+	 * @param int                  $user_id Target user ID.
+	 * @param array<string, mixed> $raw     Unslashed $_POST data.
+	 */
+	private function save_email_verification_fields( int $user_id, array $raw ): void {
+		if ( get_current_user_id() === $user_id ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'edit_user', $user_id ) ) {
+			return;
+		}
+
+		$target_user = get_userdata( $user_id );
+		if ( ! $target_user instanceof WP_User || ! Auth_Shortcodes::is_booking_customer( $target_user ) ) {
+			return;
+		}
+
+		$status = Email_Verification::get_status( $user_id );
+
+		if ( Email_Verification::STATUS_UNVERIFIED === $status && ! empty( $raw['vkbm_email_verify_manual'] ) ) {
+			Email_Verification::mark_manual( $user_id, get_current_user_id() );
+			return;
+		}
+
+		if ( Email_Verification::STATUS_MANUAL === $status && ! empty( $raw['vkbm_email_verify_revoke_manual'] ) ) {
+			Email_Verification::revoke_manual( $user_id );
+		}
 	}
 
 	/**

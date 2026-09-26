@@ -129,6 +129,26 @@ input[type="number"].vkbm-price-input {
 	width: 8em;
 }
 
+/**
+ * サービスメニュー編集：基本料金の入力欄（#514）。
+ *
+ * 料金区分（price tiers）が1件以上登録されているときは、基本料金は使われず区分料金で
+ * 計算されるため、readonly にしたうえで見た目もグレーアウトし「入力しても無効」と
+ * 一見して分かるようにする（.vkbm-email-verification-badge--unverified と同じ配色を再利用）。
+ * disabled ではなく readonly にしているため、コア CSS の `:disabled` セレクタは効かない。
+ * #514レビュー対応（植草・低）: 背景色だけでなく枠線の色も変えて、readonly への切り替わりに
+ * 気づきやすくする（背景色のみだと薄いグレーの変化に気づきにくいユーザーがいるため）。
+ * #514再レビュー対応（植草・中）: border-strong（#d0d7de）は背景色 border-medium（#e0e4e8）との
+ * コントラスト比が約1.14:1しかなく、通常時の枠線より薄くなり「気づきやすくする」意図と逆効果
+ * だったため、背景色に対して3:1以上のコントラストを持つ text-tertiary（#646970。約4.33:1）に変更。
+ */
+input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
+	background-color: var(--vkbm--admin--color--border-medium, #e0e4e8);
+	border-color: var(--vkbm--admin--color--text-tertiary, #646970);
+	color: var(--vkbm--admin--color--text-secondary, #50575e);
+	cursor: not-allowed;
+}
+
 .vkbm-service-menu-field {
 	margin-bottom: 1em;
 
@@ -462,4 +482,28 @@ input[type="number"].vkbm-price-input {
 			margin: 0;
 		}
 	}
+}
+
+/* ==========================================================================
+   メール認証バッジ（issue #507）
+   ユーザー一覧の「メール認証」列に表示する。未認証＝グレー、手動承認・
+   メール未確認＝アンバー。alert.scss の warning 系トークンを再利用する。
+   ========================================================================== */
+.vkbm-email-verification-badge {
+	display: inline-block;
+	padding: 0.15em 0.6em;
+	border-radius: var(--vkbm--radius--md, 8px);
+	font-size: 0.85em;
+	line-height: 1.6;
+	white-space: nowrap;
+}
+
+.vkbm-email-verification-badge--unverified {
+	background: var(--vkbm--admin--color--border-medium, #e0e4e8);
+	color: var(--vkbm--admin--color--text-secondary, #50575e);
+}
+
+.vkbm-email-verification-badge--manual {
+	background: var(--vkbm--color--warning-bg, #fff3cd);
+	color: var(--vkbm--color--warning-text, #664d03);
 }

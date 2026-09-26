@@ -92,6 +92,9 @@ if (
 		// 両方から import され app.js にバンドルされるため、他の shared/ 配下ファイルと違い
 		// ここに含める必要がある（安藤レビュー指摘 HIGH-1）。
 		'src/blocks/shared/rest-error-message.js',
+		// #503: 料金欄の「サービス基本料金（単価 × 人数）」の見出し。app.js / booking-confirm-app.js の
+		// 両方から import され app.js にバンドルされるため、ここに含める。
+		'src/blocks/reservation/pricing-breakdown.js',
 	];
 
 	const sourcesToMerge = [

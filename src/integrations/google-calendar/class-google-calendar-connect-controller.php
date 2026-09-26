@@ -43,6 +43,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Admin\Pro_Upsell;
 use function add_action;
 use function add_query_arg;
+use function array_map;
+use function is_array;
 use function esc_html__;
 use function esc_url_raw;
 use function hash_equals;
@@ -162,23 +164,34 @@ class Google_Calendar_Connect_Controller {
 	private $capability;
 
 	/**
+	 * 予定に載せる情報の設定（issue #476）。未注入の場合は反映先カレンダーの選択のみ扱い、
+	 * 項目チェックボックスの保存は行わない（後方互換のため任意注入にしている）。
+	 *
+	 * @var Google_Calendar_Event_Sync_Settings|null
+	 */
+	private $sync_settings;
+
+	/**
 	 * コンストラクタ。
 	 *
-	 * @param Google_Calendar_Connection   $connection   接続状態。
-	 * @param Google_Calendar_Relay_Client $relay_client 中継サーバーとの通信クライアント。
-	 * @param Google_Calendar_Api_Client   $api_client   Google の API を呼ぶクライアント。
-	 * @param string                       $capability   操作に必要な権限。
+	 * @param Google_Calendar_Connection               $connection    接続状態。
+	 * @param Google_Calendar_Relay_Client             $relay_client  中継サーバーとの通信クライアント。
+	 * @param Google_Calendar_Api_Client               $api_client    Google の API を呼ぶクライアント。
+	 * @param string                                   $capability    操作に必要な権限。
+	 * @param Google_Calendar_Event_Sync_Settings|null $sync_settings 予定に載せる情報の設定。
 	 */
 	public function __construct(
 		Google_Calendar_Connection $connection,
 		Google_Calendar_Relay_Client $relay_client,
 		Google_Calendar_Api_Client $api_client,
-		string $capability = 'manage_options'
+		string $capability = 'manage_options',
+		?Google_Calendar_Event_Sync_Settings $sync_settings = null
 	) {
-		$this->connection   = $connection;
-		$this->relay_client = $relay_client;
-		$this->api_client   = $api_client;
-		$this->capability   = $capability;
+		$this->connection    = $connection;
+		$this->relay_client  = $relay_client;
+		$this->api_client    = $api_client;
+		$this->capability    = $capability;
+		$this->sync_settings = $sync_settings;
 	}
 
 	/**
@@ -422,10 +435,20 @@ class Google_Calendar_Connect_Controller {
 	public function handle_select_calendar(): void {
 		$this->verify_request( self::ACTION_SELECT_CALENDAR );
 
+		// 「予定に載せる情報」は反映先カレンダーと同じフォーム・同じ保存ボタンで保存する
+		// （植草案。issue #476）。カレンダー一覧の取得・照合の成否に関わらず必ず保存する。
+		// 以前は照合（この下の一覧との突き合わせ）の成功時にしか呼んでおらず、一覧が取れない
+		// 等で早期リターンすると、この項目だけ入力して保存したつもりが保存されていない状態に
+		// なっていた（安藤レビュー指摘）。
+		$this->save_sync_fields();
+
 		$calendar_id = isset( $_POST['vkbm_google_calendar_id'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_google_calendar_id'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- verify_request() で確認済み.
 
 		if ( '' === $calendar_id ) {
-			$this->set_notice( 'error', __( 'Please select the calendar to use.', 'vk-booking-manager' ) );
+			$this->set_notice(
+				'error',
+				__( 'Please select the calendar to use.', 'vk-booking-manager' ) . ' ' . $this->get_sync_fields_saved_message()
+			);
 			$this->redirect_to_settings();
 		}
 
@@ -434,7 +457,7 @@ class Google_Calendar_Connect_Controller {
 		$calendars = $this->api_client->get_calendar_list();
 
 		if ( is_wp_error( $calendars ) ) {
-			$this->set_notice( 'error', $calendars->get_error_message() );
+			$this->set_notice( 'error', $calendars->get_error_message() . ' ' . $this->get_sync_fields_saved_message() );
 			$this->redirect_to_settings();
 		}
 
@@ -446,8 +469,42 @@ class Google_Calendar_Connect_Controller {
 			}
 		}
 
-		$this->set_notice( 'error', __( 'The selected calendar was not found.', 'vk-booking-manager' ) );
+		$this->set_notice(
+			'error',
+			__( 'The selected calendar was not found.', 'vk-booking-manager' ) . ' ' . $this->get_sync_fields_saved_message()
+		);
 		$this->redirect_to_settings();
+	}
+
+	/**
+	 * 「予定に載せる情報」の項目設定は保存できたが、反映先カレンダーは確認できなかった
+	 * ことを伝える文を返す（安藤レビュー指摘。項目設定はカレンダーの照合結果に関わらず
+	 * 常に保存されるため、カレンダー側でエラーを出す全ての経路でこの文を添える）。
+	 *
+	 * @return string お知らせ文（1文）。
+	 */
+	private function get_sync_fields_saved_message(): string {
+		return __( 'The settings for what to include in the event have been saved, but the calendar to use could not be confirmed.', 'vk-booking-manager' );
+	}
+
+	/**
+	 * 「予定に載せる情報」チェックボックスの内容を保存する。
+	 *
+	 * `Google_Calendar_Event_Sync_Settings` が注入されていない場合は何もしない
+	 * （後方互換。テスト等でカレンダー選択のみを確かめる場合に備える）。
+	 *
+	 * @return void
+	 */
+	private function save_sync_fields(): void {
+		if ( null === $this->sync_settings ) {
+			return;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.MissingUnslash, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- verify_request() で nonce 確認済み。この行はまだ unslash/サニタイズ前の生の値を一時変数へ退避しているだけで、次の行で wp_unslash() ＋ sanitize_text_field() を必ず通す。
+		$raw_fields = isset( $_POST['vkbm_google_calendar_sync_fields'] ) ? $_POST['vkbm_google_calendar_sync_fields'] : array();
+		$fields     = is_array( $raw_fields ) ? array_map( 'sanitize_text_field', wp_unslash( $raw_fields ) ) : array();
+
+		$this->sync_settings->save( $fields );
 	}
 
 	/**
@@ -508,6 +565,23 @@ class Google_Calendar_Connect_Controller {
 		return add_query_arg(
 			array( 'action' => self::ACTION_CALLBACK ),
 			admin_url( 'admin-post.php' )
+		);
+	}
+
+	/**
+	 * 「連携」タブの URL を返す。
+	 *
+	 * issue #476。予約編集画面の「連携タブを開く」導線（`Google_Calendar_Event_Sync`）から使う。
+	 *
+	 * @return string URL。
+	 */
+	public static function get_settings_tab_url(): string {
+		return add_query_arg(
+			array(
+				'page' => self::SETTINGS_PAGE_SLUG,
+				'tab'  => self::SETTINGS_TAB,
+			),
+			admin_url( 'admin.php' )
 		);
 	}
 
