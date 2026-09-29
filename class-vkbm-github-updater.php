@@ -135,43 +135,107 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		/**
 		 * Push in plugin version information to get the update notification.
 		 *
+		 * WordPress のプラグイン一覧は、対象プラグインが $transient->response（更新あり）
+		 * または $transient->no_update（更新なし）のどちらかに登録されていないと
+		 * 「自動更新」欄自体を表示しない（class-wp-plugins-list-table.php 参照）。
+		 * そのため、更新が無い場合も no_update 側へ明示的に登録する。
+		 *
 		 * @param object $transient Plugin update information.
 		 * @return object Updated plugin update information.
 		 */
 		public function set_transient( $transient ) {
+			// $transient がオブジェクトでない、または response / no_update プロパティが
+			// 無い場合に備えてガードする（plugin-update-checker の実装に合わせる）。
+			if ( ! is_object( $transient ) ) {
+				return $transient;
+			}
 			if ( empty( $transient->checked ) ) {
 				return $transient;
+			}
+			if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
+				$transient->response = array();
+			}
+			if ( ! isset( $transient->no_update ) || ! is_array( $transient->no_update ) ) {
+				$transient->no_update = array();
 			}
 
 			$this->init_plugin_data();
 			$this->get_repository_info();
 
+			$current_version = $this->normalize_version( (string) $this->plugin_data['Version'] );
+
+			// GitHub API の取得に失敗した場合も自動更新欄が消えないよう、
+			// 現在のバージョンのまま no_update に登録しておく（更新の有無が
+			// 確認できないだけで、プラグイン自体は正常に動作しているため）。
 			if ( empty( $this->github_api_result ) ) {
+				// response と no_update の両方に同時登録されないことをコード上で保証するための防御。
+				// 現状の分岐は排他的で両方に載る手順は確認できていないが、
+				// 今後の分岐追加で崩れても片方には確実に載る状態を保つ。
+				unset( $transient->response[ $this->plugin_slug ] );
+				$transient->no_update[ $this->plugin_slug ] = $this->build_no_update_item( $current_version );
 				return $transient;
 			}
 
-			$tag_version     = $this->normalize_version( (string) $this->github_api_result->tag_name );
-			$current_version = $this->normalize_version( (string) $this->plugin_data['Version'] );
-
-			$do_update = version_compare( $tag_version, $current_version, '>' );
+			$tag_version = $this->normalize_version( (string) $this->github_api_result->tag_name );
+			$do_update   = version_compare( $tag_version, $current_version, '>' );
 
 			if ( $do_update && ! empty( $this->github_api_result->assets ) ) {
 				$package = $this->find_asset_package( $this->github_api_result->assets );
 
-				if ( '' === $package ) {
+				if ( '' !== $package ) {
+					$obj              = new stdClass();
+					$obj->slug        = $this->plugin_slug;
+					$obj->plugin      = $this->plugin_slug;
+					$obj->new_version = $this->github_api_result->tag_name;
+					$obj->url         = $this->plugin_data['PluginURI'] ?? '';
+					$obj->package     = $package;
+
+					// response と no_update の両方に同時登録されないことをコード上で保証するための防御。
+					// 現状の分岐は排他的で両方に載る手順は確認できていないが、
+					// 今後の分岐追加で崩れても片方には確実に載る状態を保つ。
+					unset( $transient->no_update[ $this->plugin_slug ] );
+					$transient->response[ $this->plugin_slug ] = $obj;
+
 					return $transient;
 				}
-
-				$obj              = new stdClass();
-				$obj->slug        = $this->plugin_slug;
-				$obj->new_version = $this->github_api_result->tag_name;
-				$obj->url         = $this->plugin_data['PluginURI'] ?? '';
-				$obj->package     = $package;
-
-				$transient->response[ $this->plugin_slug ] = $obj;
 			}
 
+			// 更新が無い、またはパッケージが見つからない場合は no_update に登録する。
+			// response と no_update の両方に同時登録されないことをコード上で保証するための防御。
+			// 現状の分岐は排他的で両方に載る手順は確認できていないが、
+			// 今後の分岐追加で崩れても片方には確実に載る状態を保つ。
+			unset( $transient->response[ $this->plugin_slug ] );
+			$transient->no_update[ $this->plugin_slug ] = $this->build_no_update_item( $current_version );
+
 			return $transient;
+		}
+
+		/**
+		 * no_update に登録するプラグイン情報オブジェクトを組み立てる。
+		 *
+		 * plugin-update-checker の addNoUpdateItem() / getNoUpdateItemFields() が
+		 * 生成する項目に倣い、WordPress が期待するフィールドを埋める。
+		 * package を空文字にすることで「更新パッケージが無い＝最新」を表す。
+		 *
+		 * @param string $current_version 現在のプラグインバージョン.
+		 * @return object no_update に登録するオブジェクト。
+		 */
+		private function build_no_update_item( string $current_version ) {
+			$obj                = new stdClass();
+			$obj->id            = $this->plugin_slug;
+			$obj->slug          = $this->plugin_slug;
+			$obj->plugin        = $this->plugin_slug;
+			$obj->new_version   = $current_version;
+			$obj->url           = $this->plugin_data['PluginURI'] ?? '';
+			$obj->package       = '';
+			$obj->icons         = array();
+			$obj->banners       = array();
+			$obj->banners_rtl   = array();
+			$obj->tested        = '';
+			$obj->requires_php  = '';
+			$obj->compatibility = new stdClass();
+
+			return $obj;
 		}
 
 		/**
@@ -228,6 +292,14 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		/**
 		 * Perform additional actions to successfully install our plugin.
 		 *
+		 * upgrader_post_install は本プラグイン専用のフックではなく、サイト上の
+		 * すべてのプラグイン・テーマのインストール／更新で発火する WordPress コア共通フックのため、
+		 * $hook_extra（今回インストール・更新された対象を示す情報。プラグインなら
+		 * $hook_extra['plugin']、テーマなら $hook_extra['theme'] にスラッグが入る）を見て、
+		 * 今回の対象が本プラグイン自身かどうかを判定してから処理する。
+		 * 対象が本プラグイン以外（他のプラグイン・テーマの更新）の場合は、
+		 * ファイル移動・再有効化を一切行わず $result をそのまま返し、他の更新処理に干渉しない。
+		 *
 		 * @param bool  $true Install result.
 		 * @param array $hook_extra Hook extra.
 		 * @param array $result Install result data.
@@ -236,19 +308,37 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		public function post_install( $true, $hook_extra, $result ) {
 			global $wp_filesystem;
 
-			// Avoid deprecated dirname(null) error and only process if plugin_slug is set.
-			// dirname(null) の非推奨警告を避けるため plugin_slug がある時のみ処理する。
-			if ( ! empty( $this->plugin_slug ) ) {
-				$plugin_folder      = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
-				$result_destination = $result['destination'] ?? '';
-				if ( '' !== $result_destination ) {
-					$wp_filesystem->move( $result_destination, $plugin_folder );
-					$result['destination'] = $plugin_folder;
-				}
+			// plugin_slug は init_plugin_data() 等を呼ぶまで未セットのため、
+			// $hook_extra との比較前に必ずセットしておく
+			// （set_transient() 等が同一リクエスト内で先に呼ばれているとは限らないため）。
+			// upgrader_post_install はパッケージ展開後、WordPress がファイルを
+			// 既存のプラグインフォルダへ移動した「後」に発火するため、この時点では
+			// $this->plugin_file（コンストラクタで受け取った元のファイルパス）が
+			// 既に存在しない可能性がある。init_plugin_data() は内部で get_plugin_data()
+			// を呼びファイルを fopen() で読み込むため、ここではファイル読み込みを
+			// 伴わない plugin_basename() のみでスラッグを設定する。
+			$this->plugin_slug = plugin_basename( $this->plugin_file );
 
-				if ( is_plugin_active( $this->plugin_slug ) ) {
-					activate_plugin( $this->plugin_slug );
-				}
+			// $hook_extra はプラグインなら 'plugin' キー、テーマなら 'theme' キーにスラッグが入る。
+			// いずれのキーも無い場合は空文字とし、本プラグインのスラッグとは一致しない値にする。
+			$target_slug = isset( $hook_extra['plugin'] ) ? $hook_extra['plugin'] : ( isset( $hook_extra['theme'] ) ? $hook_extra['theme'] : '' );
+
+			// 今回の対象が本プラグイン自身でなければ、ここで処理を打ち切って $result をそのまま返す。
+			// plugin_slug が未取得（空）の場合も、誤って他の対象を移動しないよう同様に打ち切る。
+			if ( empty( $this->plugin_slug ) || $target_slug !== $this->plugin_slug ) {
+				return $result;
+			}
+
+			// dirname(null) の非推奨警告を避けるため、result destination が空でない場合のみ移動する。
+			$plugin_folder      = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname( $this->plugin_slug );
+			$result_destination = $result['destination'] ?? '';
+			if ( '' !== $result_destination ) {
+				$wp_filesystem->move( $result_destination, $plugin_folder );
+				$result['destination'] = $plugin_folder;
+			}
+
+			if ( is_plugin_active( $this->plugin_slug ) ) {
+				activate_plugin( $this->plugin_slug );
 			}
 
 			return $result;

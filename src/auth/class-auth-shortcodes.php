@@ -43,6 +43,13 @@ class Auth_Shortcodes {
 	private const RESEND_GRANT_TTL        = 10 * MINUTE_IN_SECONDS;
 	private const RESEND_COOLDOWN_SECONDS = 60;
 
+	// issue #516: 会員登録エラー時の入力値・エラー文を保存する transient の有効期間。
+	// 予約ブロックの render_block フィルタが同一リクエスト内で埋め込んだトークンを、
+	// JS が直後（通常は1秒未満）に REST /vkbm/v1/auth-form へ渡して読み戻す想定のため、
+	// 短時間で十分（廃止前の Cookie も 30 秒だった）。低速回線・タブのバックグラウンド化
+	// 等でも読み戻せるよう、多少の余裕を持たせて2分とする。
+	private const REGISTRATION_ERROR_TTL = 2 * MINUTE_IN_SECONDS;
+
 	/**
 	 * Login errors.
 	 *
@@ -109,6 +116,45 @@ class Auth_Shortcodes {
 	 * @var string
 	 */
 	private $resend_grant_token = '';
+
+	/**
+	 * Registration error token issued during the current request (unhashed), if any.
+	 *
+	 * issue #516: 予約ブロックの render_block フィルタ（Reservation_Block）が、Cookie を
+	 * 使わず同一リクエスト内で発行したトークンを wrapper の data 属性へ埋め込むために
+	 * 保持する（$_COOKIE 同様、transient も同一リクエスト内では素直に読み返せないため）。
+	 *
+	 * @var string
+	 */
+	private $registration_error_token = '';
+
+	/**
+	 * Whether the registration error transient has actually been written to the
+	 * database for this request's token yet.
+	 *
+	 * issue #516 安藤さんレビュー指摘（MEDIUM）: persist_registration_errors() では
+	 * まだ transient を書き込まず、実際に issue_registration_error_token() が
+	 * 呼ばれて初めて書き込む（予約ブロックが無いページ・タブを閉じた・bot の大量POST
+	 * 等、誰も鍵を必要としない状況では個人情報を一切 DB へ残さないため）。
+	 *
+	 * @var bool
+	 */
+	private $registration_error_persisted = false;
+
+	/**
+	 * Registration error restore key set by set_registration_error_restore_key(),
+	 * consumed by the next render_registration_form() call.
+	 *
+	 * issue #516 安藤さんレビュー指摘（LOW）: このトークンは他人が保存した入力値・
+	 * エラー文を読み出すための鍵であり、`[vkbm_register_form]` の公開 att（誰でも
+	 * 投稿本文に書ける値）にはしない。REST コントローラー等、信頼できる呼び出し元だけが
+	 * このセッターで渡せるようにする（公開 att にすると、ショートコードを置ける人が
+	 * REST のバリデーション〔形式チェック・レート制限等〕を経由せずに任意のキーを
+	 * 総当たりできてしまう）。
+	 *
+	 * @var string
+	 */
+	private $registration_error_restore_key = '';
 
 	/**
 	 * Constructor.
@@ -592,6 +638,23 @@ class Auth_Shortcodes {
 	}
 
 	/**
+	 * Sets the registration error restore key for the next render_registration_form()
+	 * call on this instance.
+	 *
+	 * issue #516 安藤さんレビュー指摘（LOW）: `[vkbm_register_form]` の公開 att
+	 * （`error_key`）としては受け付けない。ショートコードの att は誰でも投稿本文に
+	 * 書けてしまうため、att にすると REST の形式検証（`Auth_Form_Controller::
+	 * validate_registration_error_key()`）を経由せずに任意のキーを総当たりできる
+	 * 経路が生まれてしまう。信頼できる呼び出し元（REST コントローラー等）だけが、
+	 * このセッターで明示的に渡す。
+	 *
+	 * @param string $token Raw (unhashed) registration error token to restore.
+	 */
+	public function set_registration_error_restore_key( string $token ): void {
+		$this->registration_error_restore_key = $token;
+	}
+
+	/**
 	 * Outputs the registration form markup.
 	 *
 	 * @param array<string,mixed> $atts Shortcode attributes.
@@ -603,7 +666,6 @@ class Auth_Shortcodes {
 		}
 
 		$this->enqueue_assets();
-		$this->restore_registration_errors();
 
 		$defaults = array(
 			'redirect'     => $this->get_current_url(),
@@ -615,7 +677,12 @@ class Auth_Shortcodes {
 			'action_url'   => '',
 		);
 
-		$atts        = shortcode_atts( $defaults, $atts, 'vkbm_register_form' );
+		$atts = shortcode_atts( $defaults, $atts, 'vkbm_register_form' );
+		// issue #516 安藤さんレビュー指摘（LOW）: `vkbm_registration_errors` Cookie の代わりに
+		// 読み戻すトークンは、公開ショートコード att（誰でも投稿本文に書ける値）ではなく、
+		// set_registration_error_restore_key() 経由で信頼できる呼び出し元（REST
+		// コントローラー等）だけが渡せる非公開プロパティから読む。
+		$this->restore_registration_errors( $this->registration_error_restore_key );
 		$redirect_to = $this->normalize_redirect( $atts['redirect'] ?? '' );
 		$auto_login  = $this->is_truthy( $atts['auto_login'] ?? true );
 		$login_url   = ! empty( $atts['login_url'] )
@@ -1681,42 +1748,105 @@ class Auth_Shortcodes {
 	}
 
 	/**
-	 * Store registration errors and posted data for the next request.
+	 * Prepare (but do not yet persist) registration errors and posted data for
+	 * the next request.
+	 *
+	 * issue #516: 個人情報（氏名・メール・電話番号・生年月日等）とエラー文を含む約1.3KBの
+	 * `vkbm_registration_errors` Cookie を廃止した。トークンだけをこの時点で発行し、
+	 * 実際に transient へ書き込む（＝個人情報を DB に残す）のは
+	 * `issue_registration_error_token()` が実際に呼ばれたとき（＝予約ブロックの
+	 * render_block フィルタが鍵を必要としたとき）まで遅らせる。予約ブロックの無い
+	 * ページ・タブを閉じた・bot による大量 POST 等、誰も鍵を必要としない状況では
+	 * 個人情報を一切 DB へ書き込まない（安藤さんレビュー指摘・MEDIUM）。
 	 */
 	private function persist_registration_errors(): void {
 		if ( ! $this->registration_errors instanceof WP_Error || ! $this->registration_errors->has_errors() ) {
 			return;
 		}
 
-		$payload = array(
-			'messages' => $this->registration_errors->get_error_messages(),
-			'posted'   => $this->registration_posted_data,
-			'raw'      => $this->registration_raw_data,
-		);
-
-		$this->set_notice_cookie( 'vkbm_registration_errors', wp_json_encode( $payload ), '/' );
+		// トークンの発行だけを行う。DB への書き込みは issue_registration_error_token()
+		// まで遅延する（$this->registration_posted_data / registration_raw_data /
+		// registration_errors は既にこのインスタンスが保持済みのため、ここで別途
+		// コピーする必要は無い）。
+		$this->registration_error_token     = wp_generate_password( 32, false, false );
+		$this->registration_error_persisted = false;
 	}
 
 	/**
-	 * Restore registration errors and posted data from cookies.
+	 * Issues the registration error token for this request, persisting the
+	 * error text and posted values to a short-lived transient on first call.
+	 *
+	 * issue #516 安藤さんレビュー指摘（MEDIUM）: `get_current_registration_error_token()`
+	 * は取得のみで副作用を持たせない（このリポジトリの命名規約）ため、実際に transient
+	 * へ書き込む（DB に個人情報を残す）側は動詞で始まる別メソッドに分けた。呼び出し元
+	 * （Reservation_Block::inject_registration_error_attribute()）が実際にこの値を
+	 * HTML へ埋め込む直前にだけ呼ぶことで、誰も鍵を必要としない状況（予約ブロックの
+	 * 無いページ・タブを閉じた等）では DB へ一切書き込まれないようにする。2回目以降の
+	 * 呼び出しでは同一リクエスト内で既に書き込み済みのため再書き込みしない。
+	 *
+	 * @return string 登録エラーが無ければ ''。
 	 */
-	private function restore_registration_errors(): void {
-		$payload = $this->consume_notice_cookie( 'vkbm_registration_errors' );
-		if ( null === $payload ) {
+	public function issue_registration_error_token(): string {
+		if ( '' === $this->registration_error_token ) {
+			return '';
+		}
+
+		if ( ! $this->registration_error_persisted ) {
+			$payload = array(
+				'messages' => $this->registration_errors instanceof WP_Error
+					? $this->registration_errors->get_error_messages()
+					: array(),
+				'posted'   => $this->registration_posted_data,
+				'raw'      => $this->registration_raw_data,
+			);
+
+			set_transient(
+				'vkbm_registration_error_' . hash( 'sha256', $this->registration_error_token ),
+				$payload,
+				self::REGISTRATION_ERROR_TTL
+			);
+
+			$this->registration_error_persisted = true;
+		}
+
+		return $this->registration_error_token;
+	}
+
+	/**
+	 * Restore registration errors and posted data from the short-lived transient
+	 * issued by persist_registration_errors().
+	 *
+	 * issue #516: Cookie の代わりに、呼び出し側（REST コントローラー等）が受け取った
+	 * ランダムトークンをここへ渡してもらい、それをキーに transient から読み戻す。
+	 * 一度読んだら即座に削除するため、他人のブラウザからの推測はもちろん、正しい
+	 * トークンであっても使い回すことはできない。
+	 *
+	 * @param string $token Raw (unhashed) registration error token from the request.
+	 */
+	private function restore_registration_errors( string $token = '' ): void {
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized on the next line.
+		$token = sanitize_text_field( $token );
+		if ( '' === $token ) {
 			return;
 		}
 
-		$data = json_decode( $payload, true );
-		if ( ! is_array( $data ) ) {
+		$transient_key = 'vkbm_registration_error_' . hash( 'sha256', $token );
+		$payload       = get_transient( $transient_key );
+		// トークン不一致・期限切れで復元に失敗した場合も含め、常に一度で使い切る。
+		delete_transient( $transient_key );
+
+		if ( ! is_array( $payload ) ) {
 			return;
 		}
 
-		// Sanitize the decoded array data. / デコードされた配列データをサニタイズ。
-		$data = map_deep( $data, 'sanitize_text_field' );
+		// Sanitize the stored array data as defense in depth. transient の値自体は
+		// クライアントから直接改ざんできないが、既存の Cookie 実装と同じ扱いにしておく。
+		// 保存データをサニタイズ（多重防御）。
+		$payload = map_deep( $payload, 'sanitize_text_field' );
 
-		$messages                       = isset( $data['messages'] ) && is_array( $data['messages'] ) ? $data['messages'] : array();
-		$this->registration_posted_data = isset( $data['posted'] ) && is_array( $data['posted'] ) ? $data['posted'] : array();
-		$this->registration_raw_data    = isset( $data['raw'] ) && is_array( $data['raw'] ) ? $data['raw'] : array();
+		$messages                       = isset( $payload['messages'] ) && is_array( $payload['messages'] ) ? $payload['messages'] : array();
+		$this->registration_posted_data = isset( $payload['posted'] ) && is_array( $payload['posted'] ) ? $payload['posted'] : array();
+		$this->registration_raw_data    = isset( $payload['raw'] ) && is_array( $payload['raw'] ) ? $payload['raw'] : array();
 
 		if ( empty( $messages ) ) {
 			return;
@@ -2835,5 +2965,25 @@ class Auth_Shortcodes {
 		$codes = $this->login_errors->get_error_codes();
 
 		return (string) ( $codes[0] ?? '' );
+	}
+
+	/**
+	 * Returns the registration error token issued during this request's
+	 * persist_registration_errors() call, or '' if registration has not failed
+	 * (or has not been attempted) on this request/instance.
+	 *
+	 * issue #516 安藤さんレビュー指摘（MEDIUM）対応: このメソッドは取得のみで、
+	 * transient への書き込み（DB への個人情報の永続化）は一切行わない
+	 * （get* に副作用を持たせないというこのリポジトリの命名規約に従う）。トークンが
+	 * 実際に必要な呼び出し元（Reservation_Block::inject_registration_error_attribute()）
+	 * は、この取得専用メソッドではなく `issue_registration_error_token()`
+	 * （transient への書き込みを伴う）を使う。このメソッドはテスト等での参照用に残す。
+	 * トークン単体からはエラー文・入力値のどちらも読み取れない（transient のキーでしか
+	 * ない）。
+	 *
+	 * @return string
+	 */
+	public function get_current_registration_error_token(): string {
+		return $this->registration_error_token;
 	}
 }

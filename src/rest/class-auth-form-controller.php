@@ -81,7 +81,7 @@ class Auth_Form_Controller {
 					// 求めているため、ホワイトリスト判定は
 					// Auth_Shortcodes::get_login_error_message() に委ね、ここでは
 					// 型とサニタイズだけを宣言する。
-					'error' => array(
+					'error'                  => array(
 						'type'              => 'string',
 						'sanitize_callback' => 'sanitize_key',
 						'description'       => sprintf(
@@ -90,9 +90,43 @@ class Auth_Form_Controller {
 							implode( ', ', $this->shortcodes->get_login_error_codes() )
 						),
 					),
+					// issue #516: `vkbm_registration_errors` Cookie の代わりに、フロントが
+					// 初回の auth-form 取得時だけ渡す会員登録失敗トークン。大文字小文字を
+					// 区別するため `sanitize_key`（小文字化される）ではなく
+					// `sanitize_text_field` を使う。トークン自体に個人情報は含まれず、
+					// サーバー側 transient への鍵でしかない。
+					'registration_error_key' => array(
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+						// issue #516 安藤さんレビュー指摘（LOW）: 空文字、または
+						// Auth_Shortcodes::persist_registration_errors() が
+						// wp_generate_password(32, false, false) で発行する形式
+						// （英数字32文字）だけを許可する。形式外の値は DB
+						// （get_transient()）に触れる前に REST 層で 400 として弾く。
+						'validate_callback' => array( $this, 'validate_registration_error_key' ),
+						'description'       => __( 'One-time random token issued when registration fails on the initial page render, used to restore the posted values and error text from a short-lived, server-side store. It carries no personal data itself.', 'vk-booking-manager' ),
+					),
 				),
 			)
 		);
+	}
+
+	/**
+	 * Validates the `registration_error_key` REST argument's format.
+	 *
+	 * issue #516 安藤さんレビュー指摘（LOW）: 空文字（未指定）は許可し、値がある場合は
+	 * `wp_generate_password( 32, false, false )` の出力形式（半角英数字32文字）と
+	 * 一致するものだけを許可する。形式外の値は `register_rest_route()` の
+	 * `args` バリデーションの時点で 400 として弾かれ、`get_form()` 本体
+	 * （`get_transient()` 等の DB アクセス）まで到達しない。
+	 *
+	 * @param mixed $value 検証対象の値（サニタイズ前）。
+	 * @return bool
+	 */
+	public function validate_registration_error_key( $value ): bool {
+		$value = (string) $value;
+
+		return '' === $value || 1 === preg_match( '/^[A-Za-z0-9]{32}$/', $value );
 	}
 
 	/**
@@ -111,6 +145,12 @@ class Auth_Form_Controller {
 		// 取得時だけ渡すログイン失敗コード。ホワイトリスト外は
 		// Auth_Shortcodes::render_login_form() 側で無視され、何も表示されない。
 		$error_code = sanitize_key( (string) $request->get_param( 'error' ) );
+		// issue #516: `vkbm_registration_errors` Cookie の代わりに、フロントが初回の
+		// auth-form 取得時だけ渡す会員登録失敗トークン。ホワイトリスト外という概念は
+		// なく、Auth_Shortcodes::restore_registration_errors() が transient に
+		// 一致するトークンが見つからなければ何も復元しない（不一致・期限切れ・空文字は
+		// すべて同じ扱い）。
+		$registration_error_key = (string) $request->get_param( 'registration_error_key' );
 
 		if ( '' === $action_url ) {
 			$action_url = $redirect;
@@ -128,6 +168,11 @@ class Auth_Form_Controller {
 					403
 				);
 			}
+
+			// issue #516 安藤さんレビュー指摘（LOW）: トークンは公開ショートコード att
+			// ではなく、専用セッター経由で渡す（render_registration_form() 呼び出しの
+			// 直前に設定する）。
+			$this->shortcodes->set_registration_error_restore_key( $registration_error_key );
 
 			$markup = $this->shortcodes->render_registration_form(
 				array_filter(

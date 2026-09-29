@@ -225,6 +225,11 @@ export const BookingConfirmApp = ( {
 	// バックが既に表示していたエラー文そのもの。REST 応答が届くまでの間、同じ文言を
 	// 表示し続けるための初期値として使う。
 	initialLoginErrorMessage = '',
+	// issue #516: サーバー側（render_block フィルタ）が同一リクエスト内で発行した
+	// 会員登録失敗トークンを wrapper の data-vkbm-registration-error-key に埋め込み、
+	// view.js → app.js 経由でここまで渡す。初回の auth-form 取得時だけ REST の
+	// registration_error_key パラメータとして送る。トークン自体に個人情報は含まれない。
+	initialRegistrationErrorKey = '',
 } ) => {
 	const userBootstrap = useMemo( () => {
 		if ( typeof window === 'undefined' ) {
@@ -311,6 +316,8 @@ export const BookingConfirmApp = ( {
 	const [ authError, setAuthError ] = useState( initialLoginErrorMessage );
 	// issue #512: 初回の auth-form 取得だけ initialLoginError を送るためのフラグ。
 	const initialLoginErrorSentRef = useRef( false );
+	// issue #516: 初回の auth-form 取得だけ initialRegistrationErrorKey を送るためのフラグ。
+	const initialRegistrationErrorSentRef = useRef( false );
 	// authFormHtml（dangerouslySetInnerHTML）の描画先。エラー要素への
 	// フォーカス（下記 useEffect）に使う。
 	const authFormContainerRef = useRef( null );
@@ -852,6 +859,12 @@ export const BookingConfirmApp = ( {
 			!! initialLoginError &&
 			! initialLoginErrorSentRef.current;
 
+		// issue #516: 会員登録失敗トークンも、初回の auth-form 取得時だけ送る。
+		const includeInitialRegistrationErrorKey =
+			authMode === 'register' &&
+			!! initialRegistrationErrorKey &&
+			! initialRegistrationErrorSentRef.current;
+
 		setAuthLoading( true );
 		if ( ! includeInitialLoginError ) {
 			setAuthError( '' );
@@ -874,9 +887,20 @@ export const BookingConfirmApp = ( {
 			}
 		} else if ( authMode === 'register' ) {
 			params.set( 'login_url', buildModeUrl( 'login' ) );
+
+			// issue #516: `vkbm_registration_errors` Cookie の代わりに、サーバー側
+			// transient への鍵となるトークンを渡す。トークンだけでは中身（エラー文・
+			// 入力値）は分からない。
+			if ( includeInitialRegistrationErrorKey ) {
+				params.set(
+					'registration_error_key',
+					initialRegistrationErrorKey
+				);
+			}
 		}
 
 		initialLoginErrorSentRef.current = true;
+		initialRegistrationErrorSentRef.current = true;
 
 		apiFetch( {
 			path: `/vkbm/v1/auth-form?${ params.toString() }`,
@@ -910,7 +934,13 @@ export const BookingConfirmApp = ( {
 				);
 			} )
 			.finally( () => setAuthLoading( false ) );
-	}, [ authMode, isLoggedIn, canManageReservations, initialLoginError ] );
+	}, [
+		authMode,
+		isLoggedIn,
+		canManageReservations,
+		initialLoginError,
+		initialRegistrationErrorKey,
+	] );
 
 	// issue #512: 植草提案。auth-form の HTML（ログイン失敗文を含む）が描画されたら、
 	// その中のエラー要素（role="alert"。Auth_Shortcodes::render_error_list() が

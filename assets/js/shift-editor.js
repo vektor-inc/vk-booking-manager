@@ -1,6 +1,22 @@
 ( function ( $ ) {
 	'use strict';
 
+	// 時刻・時間帯の検査は shift-time-utils.js（依存スクリプトとして先に読み込む）に切り出している。
+	// 読み込めていないと以降の処理がすべて TypeError で止まるため、原因を出して何もしない。
+	const timeUtils = window.vkbmShiftTimeUtils;
+	if ( ! timeUtils ) {
+		window.console?.error( '[vkbm] shift-time-utils.js is not loaded.' );
+		return;
+	}
+
+	const {
+		sanitizeTime,
+		buildSlotFromSelectValues,
+		normalizeSlotList,
+		isEndMinuteSelectable,
+		resolveEndMinute,
+	} = timeUtils;
+
 	const config = window.vkbmShiftEditor || {};
 
 	const selectors = {
@@ -137,40 +153,6 @@
 		} );
 
 		return normalized;
-	}
-
-	function sanitizeTime( time ) {
-		if ( 'string' !== typeof time ) {
-			return '';
-		}
-
-		const trimmed = time.trim();
-		return /^([01][0-9]|2[0-3]):([0-5][0-9])$/.test( trimmed )
-			? trimmed
-			: '';
-	}
-
-	function normalizeSlotList( slots ) {
-		if ( ! Array.isArray( slots ) ) {
-			return [];
-		}
-
-		return slots
-			.map( ( slot ) => {
-				if ( ! slot || 'object' !== typeof slot ) {
-					return null;
-				}
-
-				const start = sanitizeTime( slot.start || '' );
-				const end = sanitizeTime( slot.end || '' );
-
-				if ( ! start || ! end || end <= start ) {
-					return null;
-				}
-
-				return { start, end };
-			} )
-			.filter( ( slot ) => !! slot );
 	}
 
 	function getDaysInMonth( year, month ) {
@@ -587,7 +569,41 @@
 			.find( 'select[data-field="end_minute"]' )
 			.val( slotEnd.substring( 3, 5 ) );
 
+		// 終了（時）が 24 のときは終了（分）を 00 にそろえ、それ以外の分を選べなくする。
+		applyEndMinuteConstraint( $slot );
+
 		$container.append( $slot );
+	}
+
+	/**
+	 * 時間帯の行の終了（時）に合わせて、終了（分）の値と選択肢の有効・無効をそろえる（#501）。
+	 *
+	 * 終了（時）が 24 のときは 00 分以外の選択肢を disabled にし、値を 00 にする。
+	 * 24 以外なら全部の選択肢を選べる状態に戻す。選択肢は隠さず disabled にする
+	 * （プルダウンの幅・並びを変えず、スクリーンリーダーでも選べないことが伝わるため）。
+	 *
+	 * @param {jQuery} $slot 時間帯の行（.vkbm-shift-slot）。
+	 */
+	function applyEndMinuteConstraint( $slot ) {
+		const endHour = String(
+			$slot.find( 'select[data-field="end_hour"]' ).val() || ''
+		);
+		const $endMinute = $slot.find( 'select[data-field="end_minute"]' );
+
+		// 選択肢ごとに、今の終了（時）で選べるかどうかを反映する。
+		$endMinute.find( 'option' ).each( function () {
+			$( this ).prop(
+				'disabled',
+				! isEndMinuteSelectable( endHour, String( $( this ).val() ) )
+			);
+		} );
+
+		// 選べない値が残っていれば、選べる値へそろえる。
+		const currentMinute = String( $endMinute.val() || '' );
+		const resolvedMinute = resolveEndMinute( endHour, currentMinute );
+		if ( resolvedMinute !== currentMinute ) {
+			$endMinute.val( resolvedMinute );
+		}
 	}
 
 	function rebuildWorkingDays() {
@@ -637,13 +653,15 @@
 						$slot.find( 'select[data-field="end_minute"]' ).val() ||
 						'';
 
-					const start = sanitizeTime(
-						`${ startHour }:${ startMinute }`
+					const slot = buildSlotFromSelectValues(
+						startHour,
+						startMinute,
+						endHour,
+						endMinute
 					);
-					const end = sanitizeTime( `${ endHour }:${ endMinute }` );
 
-					if ( start && end && end > start ) {
-						slots.push( { start, end } );
+					if ( slot ) {
+						slots.push( slot );
 					}
 				} );
 			}
@@ -781,6 +799,16 @@
 		renderDays();
 		syncHiddenField();
 	} );
+
+	// 終了（時）の変更に合わせて終了（分）をそろえる。保存用の値へ書き込む下のハンドラより先に
+	// 登録し、そろえた後の値が保存用の隠し項目に入るようにする。
+	$( document ).on(
+		'change',
+		'.vkbm-shift-slot select[data-field="end_hour"]',
+		function () {
+			applyEndMinuteConstraint( $( this ).closest( '.vkbm-shift-slot' ) );
+		}
+	);
 
 	$( document ).on(
 		'change',

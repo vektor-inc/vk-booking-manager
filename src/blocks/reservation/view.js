@@ -36,12 +36,20 @@ const bootstrap = () => {
 			  ).trim()
 			: '';
 
+		// issue #516: render_block フィルタ（Reservation_Block）が同一リクエスト内で
+		// 発行した会員登録失敗トークンのみを data-vkbm-registration-error-key に埋め込む
+		// （`data-vkbm-registration-error-key` → `dataset.vkbmRegistrationErrorKey`）。
+		// トークン自体に個人情報は含まれない（サーバー側 transient への鍵でしかない）。
+		const initialRegistrationErrorKey =
+			dataset.vkbmRegistrationErrorKey ?? '';
+
 		const props = {
 			defaultMenuId: Number( defaultMenuId ) || 0,
 			defaultStaffId: Number( defaultResourceId ) || 0,
 			allowStaffSelection: allowStaffSelection !== '0',
 			initialLoginError,
 			initialLoginErrorMessage,
+			initialRegistrationErrorKey,
 		};
 
 		render( <ReservationApp { ...props } />, node );

@@ -372,10 +372,19 @@ class Shift_Editor {
 
 		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 
+		// 時刻・時間帯の検査処理（shift-editor.js が window.vkbmShiftTimeUtils として使う）。
+		wp_enqueue_script(
+			'vkbm-shift-time-utils',
+			$base_url . 'assets/js/shift-time-utils.js',
+			array(),
+			VKBM_VERSION,
+			true
+		);
+
 		wp_enqueue_script(
 			'vkbm-shift-editor',
 			$base_url . 'assets/js/shift-editor.js',
-			array( 'jquery' ),
+			array( 'jquery', 'vkbm-shift-time-utils' ),
 			VKBM_VERSION,
 			true
 		);

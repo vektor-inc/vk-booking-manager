@@ -394,6 +394,11 @@ export const ReservationApp = ( {
 	// バックが既に表示していたエラー文そのもの（view.js が DOM から読み取った値）。
 	// REST 応答が届くまでの間、同じ文言を表示し続けるための初期値として使う。
 	initialLoginErrorMessage = '',
+	// issue #516: サーバー側（render_block フィルタ）が同一リクエスト内で発行した
+	// 会員登録失敗トークンを wrapper の data-vkbm-registration-error-key に埋め込み、
+	// view.js 経由でここまで渡す。初回の auth-form 取得時だけ REST の
+	// registration_error_key パラメータとして送る。トークン自体に個人情報は含まれない。
+	initialRegistrationErrorKey = '',
 } ) => {
 	const userBootstrap = useMemo( () => {
 		if ( typeof window === 'undefined' ) {
@@ -717,6 +722,8 @@ export const ReservationApp = ( {
 	const [ authMode, setAuthMode ] = useState( queryDefaults.auth || '' );
 	// issue #512: 初回の auth-form 取得だけ initialLoginError を送るためのフラグ。
 	const initialLoginErrorSentRef = useRef( false );
+	// issue #516: 初回の auth-form 取得だけ initialRegistrationErrorKey を送るためのフラグ。
+	const initialRegistrationErrorSentRef = useRef( false );
 	// authFormHtml（dangerouslySetInnerHTML）の描画先。エラー要素への
 	// フォーカス（下記 useEffect）に使う。
 	const authFormContainerRef = useRef( null );
@@ -1092,6 +1099,20 @@ export const ReservationApp = ( {
 	}, [ canManageReservations, authMode ] );
 
 	useEffect( () => {
+		// issue #516 安藤さんレビュー指摘（HIGH）: 予約確認画面（confirmDraftToken あり）
+		// では、この親コンポーネントの JSX（下記 `if ( confirmDraftToken )` 分岐）は
+		// authFormHtml を一切描画しない（BookingConfirmApp が単独で auth-form を
+		// 取得・描画する）にもかかわらず、この effect は authMode の変化にだけ反応して
+		// 実行されてしまう。すると親・子の両方が同じ使い捨ての
+		// initialRegistrationErrorKey を REST へ送り合い、先に届いた方だけが
+		// transient の復元に成功し、後着の側（多くの場合これから表示される確認画面）は
+		// 復元できずフォームが空になる競合が起きる。確認画面では親側の auth-form 取得
+		// 自体を行わないことで、鍵の消費を子（BookingConfirmApp）だけに一本化する。
+		if ( confirmDraftToken ) {
+			setAuthFormHtml( '' );
+			return;
+		}
+
 		if ( ! authMode ) {
 			setAuthFormHtml( '' );
 			return;
@@ -1122,6 +1143,14 @@ export const ReservationApp = ( {
 			!! initialLoginError &&
 			! initialLoginErrorSentRef.current;
 
+		// issue #516: 会員登録失敗トークンも、初回の auth-form 取得時だけ送る。
+		// モード切替等での再取得では送らない（そのトークンは transient から一度きりで
+		// 消費済みのため、送っても復元できない）。
+		const includeInitialRegistrationErrorKey =
+			authMode === 'register' &&
+			!! initialRegistrationErrorKey &&
+			! initialRegistrationErrorSentRef.current;
+
 		setAuthLoading( true );
 		if ( ! includeInitialLoginError ) {
 			setAuthError( '' );
@@ -1146,9 +1175,20 @@ export const ReservationApp = ( {
 			}
 		} else if ( authMode === 'register' ) {
 			params.set( 'login_url', buildModeUrl( 'login' ) );
+
+			// issue #516: `vkbm_registration_errors` Cookie の代わりに、サーバー側
+			// transient への鍵となるトークンを渡す。トークンだけでは中身（エラー文・
+			// 入力値）は分からない。
+			if ( includeInitialRegistrationErrorKey ) {
+				params.set(
+					'registration_error_key',
+					initialRegistrationErrorKey
+				);
+			}
 		}
 
 		initialLoginErrorSentRef.current = true;
+		initialRegistrationErrorSentRef.current = true;
 
 		apiFetch( {
 			path: `/vkbm/v1/auth-form?${ params.toString() }`,
@@ -1184,7 +1224,14 @@ export const ReservationApp = ( {
 			.finally( () => {
 				setAuthLoading( false );
 			} );
-	}, [ authMode, isLoggedIn, canManageReservations, initialLoginError ] );
+	}, [
+		confirmDraftToken,
+		authMode,
+		isLoggedIn,
+		canManageReservations,
+		initialLoginError,
+		initialRegistrationErrorKey,
+	] );
 
 	// issue #512: 植草提案。auth-form の HTML（ログイン失敗文を含む）が描画されたら、
 	// その中のエラー要素（role="alert"。Auth_Shortcodes::render_error_list() が
@@ -2797,6 +2844,7 @@ export const ReservationApp = ( {
 					isEditor={ isEditor }
 					initialLoginError={ initialLoginError }
 					initialLoginErrorMessage={ initialLoginErrorMessage }
+					initialRegistrationErrorKey={ initialRegistrationErrorKey }
 				/>
 			</div>
 		);

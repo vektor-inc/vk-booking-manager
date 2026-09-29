@@ -101,6 +101,10 @@ class Reservation_Block {
 		// フォールバック。ログイン導線に限り、保存済みブロック HTML（空の div）へ
 		// ローディング表示・ログイン失敗文・代替ログイン導線を直接埋め込む。
 		add_filter( 'render_block', array( $this, 'inject_login_fallback_markup' ), 10, 2 );
+		// issue #516: 会員登録エラー時、入力値・エラー文を含む Cookie
+		// （`vkbm_registration_errors`）を発行する代わりに、同一リクエスト内で発行された
+		// トークンだけを wrapper の data 属性へ埋め込む。
+		add_filter( 'render_block', array( $this, 'inject_registration_error_attribute' ), 10, 2 );
 	}
 
 	/**
@@ -455,6 +459,80 @@ class Reservation_Block {
 		}
 
 		$processor->set_attribute( 'data-vkbm-login-error', $code );
+
+		return $processor->get_updated_html();
+	}
+
+	/**
+	 * Embeds the registration error token into the reservation block's wrapper
+	 * element, without ever writing it to a Cookie.
+	 *
+	 * issue #516: 会員登録エラー時、入力値・エラー文を含む約1.3KBの
+	 * `vkbm_registration_errors` Cookie を発行していたため、Cookie の多いブラウザで
+	 * ヘッダーサイズの上限を超え、予約ページ・管理画面が 400 Bad Request になる
+	 * おそれがあった。エラー文・入力値はサーバー側の transient
+	 * （Auth_Shortcodes::persist_registration_errors() が発行）に短時間だけ保存し、
+	 * この render_block フィルタでは推測不能なランダムトークンだけを wrapper の
+	 * data-vkbm-registration-error-key 属性へ埋め込む。JS（app.js /
+	 * booking-confirm-app.js）は初回の auth-form 取得時だけこれを REST の
+	 * registration_error_key パラメータとして送る。
+	 *
+	 * @param string              $block_content Rendered block HTML.
+	 * @param array<string,mixed> $block         Parsed block data (blockName, attrs, ...).
+	 * @return string
+	 */
+	public function inject_registration_error_attribute( string $block_content, array $block ): string {
+		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) ) {
+			return $block_content;
+		}
+
+		if ( is_user_logged_in() ) {
+			return $block_content;
+		}
+
+		$request_method = isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : '';
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- 読み取り専用のコンテキスト判定。nonce検証は Auth_Shortcodes::process_registration_request() 側で行済み。
+		$is_registration_post = 'POST' === $request_method && isset( $_POST['vkbm_registration_form'] );
+
+		if ( ! $is_registration_post ) {
+			return $block_content;
+		}
+
+		// 会員登録POST失敗時のみ、同一リクエスト内で発行されたトークンを取得する
+		// （成功時は Auth_Shortcodes::process_registration_request() が既に
+		// redirect_and_exit() で終了しているため、ここに到達する時点で失敗確定）。
+		// issue #516 安藤さんレビュー指摘（MEDIUM）: ここで実際に HTML へ埋め込む
+		// ときにだけ `issue_registration_error_token()` を呼び、transient への書き込み
+		// （個人情報の DB 永続化）をこの瞬間まで遅らせる。この render_block フィルタが
+		// 呼ばれない（＝予約ブロックの無いページ等）状況では、この行自体に到達しないため
+		// DB へは一切書き込まれない。
+		$token = $this->auth_shortcodes->issue_registration_error_token();
+
+		if ( '' === $token ) {
+			return $block_content;
+		}
+
+		return $this->set_registration_error_attribute( $block_content, $token );
+	}
+
+	/**
+	 * Sets the `data-vkbm-registration-error-key` attribute on the block's wrapper element.
+	 *
+	 * @param string $html  Block wrapper HTML.
+	 * @param string $token Raw (unhashed) registration error token.
+	 * @return string
+	 */
+	private function set_registration_error_attribute( string $html, string $token ): string {
+		if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+			return $html;
+		}
+
+		$processor = new WP_HTML_Tag_Processor( $html );
+		if ( ! $processor->next_tag( array( 'class_name' => 'wp-block-vk-booking-manager-reservation' ) ) ) {
+			return $html;
+		}
+
+		$processor->set_attribute( 'data-vkbm-registration-error-key', $token );
 
 		return $processor->get_updated_html();
 	}

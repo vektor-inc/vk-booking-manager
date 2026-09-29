@@ -260,7 +260,6 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		// Snapshot globals so we can restore them after the test. / グローバルの状態を退避。
 		$previous_post   = $_POST;
 		$previous_server = $_SERVER;
-		$previous_cookie = $_COOKIE['vkbm_registration_errors'] ?? null;
 
 		// Simulate a POST registration request. / 登録フォームのPOSTを擬似的に実行。
 		$_SERVER['REQUEST_METHOD'] = 'POST';
@@ -296,21 +295,274 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
 		$_SERVER = $previous_server;
-		if ( null === $previous_cookie ) {
-			unset( $_COOKIE['vkbm_registration_errors'] );
-		} else {
-			$_COOKIE['vkbm_registration_errors'] = $previous_cookie;
-		}
 		update_option( 'users_can_register', $original_registration );
 	}
 
-	public function test_registration_errors_are_rendered_from_cookie(): void {
+	/**
+	 * issue #516 植草さん確認事項: 予約ブロックを使わず `[vkbm_register_form]` だけを
+	 * 置いたページ（＝トークン・transient の仕組みを一切経由しない、同一リクエスト内で
+	 * POST → 直後に render_registration_form() が呼ばれる従来どおりの経路）でも、
+	 * エラー文・入力値（パスワード以外）が引き続きフォームに復元されることを確認する。
+	 * MEDIUM対応（transient書き込みの遅延化）・LOW対応（error_keyの公開att廃止）の
+	 * 後もこの経路が壊れていないことの回帰確認を兼ねる。
+	 */
+	public function test_registration_form_shows_errors_in_same_request_without_block(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$this->factory()->user->create(
+			[
+				'user_login' => 'existing_user_plainpage',
+				'user_email' => 'existing_plainpage@example.com',
+			]
+		);
+
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = [
+			'vkbm_registration_form'      => '1',
+			'vkbm_registration_nonce'     => wp_create_nonce( 'vkbm_registration_form' ),
+			'user_login'                  => 'newuser_plainpage',
+			'user_email'                  => 'existing_plainpage@example.com',
+			'user_pass'                   => 'password123',
+			'user_pass_confirm'           => 'password123',
+			'kana_name'                   => 'プレーン',
+			'phone_number'                => '090-1111-2222',
+			'vkbm_agree_terms_of_service' => '1',
+			'vkbm_agree_privacy_policy'   => '1',
+		];
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		// init フックでの処理（実運用の順序どおり）。
+		$shortcodes->handle_form_submission();
+
+		// 同一リクエスト内で、[vkbm_register_form] ショートコードがそのまま描画される
+		// （REST 経由でも set_registration_error_restore_key() 経由でもない）。
+		$html = $shortcodes->render_registration_form();
+
+		$this->assertStringContainsString(
+			__( 'This email address is already registered.', 'vk-booking-manager' ),
+			$html
+		);
+		$this->assertStringContainsString( 'newuser_plainpage', $html );
+		$this->assertStringContainsString( 'プレーン', $html );
+		// VKBM_Helper::normalize_phone_number() がハイフンを除去するため、
+		// 保存・表示される値は数字だけになる。
+		$this->assertStringContainsString( '09011112222', $html );
+		$this->assertStringNotContainsString( 'password123', $html );
+
+		// この経路では鍵・transient の仕組みを一切使っていないこと。
+		$token = $shortcodes->get_current_registration_error_token();
+		$this->assertNotSame( '', $token, '前提: registration_errors 自体はこのインスタンスに保持されていること。' );
+		$this->assertFalse(
+			get_transient( 'vkbm_registration_error_' . hash( 'sha256', $token ) ),
+			'同一リクエスト内の直接描画では transient を書き込まないこと。'
+		);
+
+		$_POST   = $previous_post;
+		$_SERVER = $previous_server;
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #516: 会員登録エラー時に、入力値・エラー文を含む Cookie
+	 * （`vkbm_registration_errors`）が発行されないことを確認する。エラー文・入力値は
+	 * サーバー側の transient に保存され、同一リクエスト内で発行されたトークン経由でのみ
+	 * 読み戻せる。
+	 */
+	public function test_registration_errors_do_not_set_cookie(): void {
 		// Ensure registration is enabled for this test. / テスト用にユーザー登録を有効化。
 		$original_registration = get_option( 'users_can_register' );
 		update_option( 'users_can_register', 1 );
 
-		// Seed an error cookie to emulate a previous failed submission. / 失敗後のcookie状態を再現。
-		$payload = [
+		// Create an existing user to trigger the "email exists" validation. / 既存メールでエラーを発生させる。
+		$this->factory()->user->create(
+			[
+				'user_login' => 'existing_user_516',
+				'user_email' => 'existing516@example.com',
+			]
+		);
+
+		// Snapshot globals so we can restore them after the test. / グローバルの状態を退避。
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		unset( $_COOKIE['vkbm_registration_errors'] );
+
+		// Simulate a POST registration request. / 登録フォームのPOSTを擬似的に実行。
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = [
+			'vkbm_registration_form'      => '1',
+			'vkbm_registration_nonce'     => wp_create_nonce( 'vkbm_registration_form' ),
+			'user_login'                  => 'newuser516',
+			'user_email'                  => 'existing516@example.com',
+			'user_pass'                   => 'password123',
+			'user_pass_confirm'           => 'password123',
+			'kana_name'                   => 'たろう',
+			'phone_number'                => '090-0000-0000',
+			// Provide consent fields to mirror the real registration flow. / 実際の登録フローに合わせて同意フィールドを付与。
+			'vkbm_agree_terms_of_service' => '1',
+			'vkbm_agree_privacy_policy'   => '1',
+		];
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$shortcodes->handle_form_submission();
+
+		// 完了条件1: vkbm_registration_errors Cookie が発行されないこと。
+		$this->assertArrayNotHasKey(
+			'vkbm_registration_errors',
+			$_COOKIE,
+			'登録エラー時に vkbm_registration_errors Cookie が発行されないこと。'
+		);
+
+		// 代わりに、同一リクエスト内でランダムトークンが発行されていること
+		// （この時点ではまだ DB へ書き込まれていない。issue #516 安藤さんレビュー
+		// 指摘・MEDIUM。下記 test_registration_error_transient_is_not_written_until_issued()
+		// で「誰も呼ばなければ transient は作られない」ことを別途確認する）。
+		$token = $shortcodes->get_current_registration_error_token();
+		$this->assertNotSame( '', $token, '登録エラー時にトークンが発行されていること。' );
+
+		$transient_key = 'vkbm_registration_error_' . hash( 'sha256', $token );
+
+		// 予約ブロックの render_block フィルタが鍵を必要とした場面を模して
+		// issue_registration_error_token() を呼ぶと、この時点で初めて transient に
+		// エラー文・入力値（パスワード以外）が書き込まれること。
+		$issued_token = $shortcodes->issue_registration_error_token();
+		$this->assertSame( $token, $issued_token, 'issue_registration_error_token() は同じトークンを返すこと。' );
+
+		$transient = get_transient( $transient_key );
+
+		$this->assertIsArray( $transient );
+		$this->assertContains(
+			__( 'This email address is already registered.', 'vk-booking-manager' ),
+			$transient['messages']
+		);
+		$this->assertSame( 'existing516@example.com', $transient['posted']['user_email'] );
+		$this->assertArrayNotHasKey( 'user_pass', $transient['posted'], 'パスワードは posted に保存しないこと。' );
+		$this->assertArrayNotHasKey( 'user_pass', $transient['raw'], 'パスワードは raw にも保存しないこと。' );
+		$this->assertArrayNotHasKey( 'user_pass_confirm', $transient['raw'], 'パスワード確認欄も raw に保存しないこと。' );
+
+		// Cleanup to keep global state isolated. / グローバル状態の後始末。
+		delete_transient( $transient_key );
+		$_POST   = $previous_post;
+		$_SERVER = $previous_server;
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #516 安藤さんレビュー指摘（MEDIUM）: 予約ブロックが無いページ・タブを閉じた・
+	 * bot の大量 POST 等、誰も issue_registration_error_token() を呼ばない状況では、
+	 * 個人情報を含む transient が DB へ一切書き込まれないことを確認する。
+	 */
+	public function test_registration_error_transient_is_not_written_until_issued(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$this->factory()->user->create(
+			[
+				'user_login' => 'existing_user_516b',
+				'user_email' => 'existing516b@example.com',
+			]
+		);
+
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = [
+			'vkbm_registration_form'      => '1',
+			'vkbm_registration_nonce'     => wp_create_nonce( 'vkbm_registration_form' ),
+			'user_login'                  => 'newuser516b',
+			'user_email'                  => 'existing516b@example.com',
+			'user_pass'                   => 'password123',
+			'user_pass_confirm'           => 'password123',
+			'kana_name'                   => 'たろう',
+			'phone_number'                => '090-0000-0000',
+			'vkbm_agree_terms_of_service' => '1',
+			'vkbm_agree_privacy_policy'   => '1',
+		];
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		// 予約ブロックの render_block フィルタ（＝issue_registration_error_token()の
+		// 呼び出し元）を一切経由しない、素の handle_form_submission() だけを実行する。
+		$shortcodes->handle_form_submission();
+
+		$token = $shortcodes->get_current_registration_error_token();
+		$this->assertNotSame( '', $token, '前提: 登録エラー時にトークンは発行されていること。' );
+
+		$transient_key = 'vkbm_registration_error_' . hash( 'sha256', $token );
+
+		$this->assertFalse(
+			get_transient( $transient_key ),
+			'issue_registration_error_token() を誰も呼ばない限り、個人情報を含む transient は DB へ書き込まれないこと。'
+		);
+
+		$_POST   = $previous_post;
+		$_SERVER = $previous_server;
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #516 安藤さんレビュー指摘（MEDIUM・検討事項）: invalid_nonce・honeypot 等の
+	 * 早期リターンでは、そもそも posted/raw が設定される前にエラー登録されるため、
+	 * issue_registration_error_token() で書き込まれる transient にも入力値が
+	 * 含まれないことを確認する（対応不要である根拠を実測で担保する）。
+	 */
+	public function test_registration_error_transient_has_no_posted_data_for_invalid_nonce(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = [
+			'vkbm_registration_form'  => '1',
+			'vkbm_registration_nonce' => 'invalid-nonce-value',
+			'user_login'              => 'should_not_be_saved',
+			'user_email'              => 'should_not_be_saved@example.com',
+		];
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+
+		$shortcodes->handle_form_submission();
+
+		$token = $shortcodes->issue_registration_error_token();
+		$this->assertNotSame( '', $token, '前提: nonce 不正でもトークンは発行されること。' );
+
+		$transient = get_transient( 'vkbm_registration_error_' . hash( 'sha256', $token ) );
+
+		$this->assertIsArray( $transient );
+		$this->assertSame( [], $transient['posted'], 'invalid_nonce では入力値が保存されないこと。' );
+		$this->assertSame( [], $transient['raw'], 'invalid_nonce では raw 入力値も保存されないこと。' );
+
+		delete_transient( 'vkbm_registration_error_' . hash( 'sha256', $token ) );
+		$_POST   = $previous_post;
+		$_SERVER = $previous_server;
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #516: 発行されたトークンを渡せば、transient に保存したエラー文・入力値が
+	 * 従来のCookie実装と同じようにフォームへ復元されることを確認する。
+	 */
+	public function test_registration_errors_are_rendered_from_transient_token(): void {
+		// Ensure registration is enabled for this test. / テスト用にユーザー登録を有効化。
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		// Seed a transient to emulate a previous failed submission. / 失敗後のtransient状態を再現。
+		$token         = 'test-registration-token-restore-0001';
+		$transient_key = 'vkbm_registration_error_' . hash( 'sha256', $token );
+		$payload       = [
 			'messages' => [ 'このメールアドレスは既に登録済みです。' ],
 			'posted'   => [
 				'user_email' => 'sample@example.com',
@@ -318,18 +570,103 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			'raw'      => [],
 		];
 
-		$_COOKIE['vkbm_registration_errors'] = rawurlencode( wp_json_encode( $payload ) );
+		set_transient( $transient_key, $payload, 120 );
 
 		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
 		$shortcodes = new Auth_Shortcodes( $service );
 
-		// Rendering should include the error message from the cookie. / cookieの内容がHTMLに出ることを確認。
+		// Rendering with the matching token should restore the transient's contents.
+		// 一致するトークンを渡すと、transientの内容がHTMLに出ることを確認。
+		// issue #516 安藤さんレビュー指摘（LOW）: `error_key` はショートコードの公開 att
+		// ではなく専用セッター経由で渡す。
+		$shortcodes->set_registration_error_restore_key( $token );
 		$html = $shortcodes->render_registration_form();
 
 		$this->assertStringContainsString( 'このメールアドレスは既に登録済みです。', $html );
+		$this->assertStringContainsString( 'sample@example.com', $html );
 
-		// Cleanup to keep global state isolated. / グローバル状態の後始末。
-		unset( $_COOKIE['vkbm_registration_errors'] );
+		// Cleanup (should already be consumed, but stay defensive). / 後始末（既に消費済みのはずだが念のため）。
+		delete_transient( $transient_key );
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #516 完了条件3: 他人のブラウザ（=推測したキー）からは他人の入力値を
+	 * 読み出せないことを確認する。
+	 */
+	public function test_registration_errors_are_not_restored_with_wrong_key(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$token         = 'correct-registration-token-0002';
+		$transient_key = 'vkbm_registration_error_' . hash( 'sha256', $token );
+		$payload       = [
+			'messages' => [ '他人には見えないはずのエラーメッセージ' ],
+			'posted'   => [
+				'user_email' => 'victim@example.com',
+			],
+			'raw'      => [],
+		];
+
+		set_transient( $transient_key, $payload, 120 );
+
+		$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+		// 推測した（=一致しない）キーでは復元できない。
+		$guessing_shortcodes = new Auth_Shortcodes( $service );
+		$guessing_shortcodes->set_registration_error_restore_key( 'guessed-wrong-token' );
+		$html = $guessing_shortcodes->render_registration_form();
+
+		$this->assertStringNotContainsString( '他人には見えないはずのエラーメッセージ', $html );
+		$this->assertStringNotContainsString( 'victim@example.com', $html );
+
+		// 誤ったキーを渡しても、正しいトークンに対応する transient 自体は消えていない
+		// （キー不一致時に無関係の transient を巻き込んで削除していないこと）。
+		$owner_shortcodes = new Auth_Shortcodes( $service );
+		$owner_shortcodes->set_registration_error_restore_key( $token );
+		$owner_html = $owner_shortcodes->render_registration_form();
+
+		$this->assertStringContainsString( '他人には見えないはずのエラーメッセージ', $owner_html );
+
+		delete_transient( $transient_key );
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #516 完了条件3: 一度読んだトークンは transient ごと削除され、使い回せない
+	 * ことを確認する（同じトークンでの2回目の復元は失敗する）。
+	 */
+	public function test_registration_error_token_is_single_use(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$token         = 'single-use-registration-token-0003';
+		$transient_key = 'vkbm_registration_error_' . hash( 'sha256', $token );
+		$payload       = [
+			'messages' => [ '使い回し禁止のエラーメッセージ' ],
+			'posted'   => [
+				'user_email' => 'reuse@example.com',
+			],
+			'raw'      => [],
+		];
+
+		set_transient( $transient_key, $payload, 120 );
+
+		$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+		// 1回目: 正しいトークンで復元できる。
+		$first_shortcodes = new Auth_Shortcodes( $service );
+		$first_shortcodes->set_registration_error_restore_key( $token );
+		$first_html = $first_shortcodes->render_registration_form();
+		$this->assertStringContainsString( '使い回し禁止のエラーメッセージ', $first_html );
+
+		// 2回目: 同じトークンを渡しても、1回目の復元時に transient ごと削除済みのため
+		// 復元できない（新しいリクエスト＝新しいインスタンスを模して検証）。
+		$second_shortcodes = new Auth_Shortcodes( $service );
+		$second_shortcodes->set_registration_error_restore_key( $token );
+		$second_html = $second_shortcodes->render_registration_form();
+		$this->assertStringNotContainsString( '使い回し禁止のエラーメッセージ', $second_html );
+
 		update_option( 'users_can_register', $original_registration );
 	}
 
@@ -1386,8 +1723,10 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 				]
 			);
 			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
-			// 59秒前に再送済みという状態を再現する（60秒未満）。
-			update_user_meta( $user_id, Email_Verification::META_RESEND_LAST_SENT, time() - 59 );
+			// 30秒前に再送済みという状態を再現する（60秒未満。59秒だと実行中に秒の境目を
+			// またいだ場合に経過60秒と判定されクールダウンを通り抜けてしまうため、
+			// 境界から十分離す）。
+			update_user_meta( $user_id, Email_Verification::META_RESEND_LAST_SENT, time() - 30 );
 			$old_hash = hash( 'sha256', 'old-token-cooldown' );
 			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, $old_hash );
 

@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 2.5.0
+Stable tag: 2.5.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,12 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 2.5.1 =
+* [ 不具合修正 ] シフト編集画面で終了時刻を 24:00 にして更新すると、その日の時間帯が保存されず予約を受け付けなくなる不具合を修正
+* [ 不具合修正 ] 会員登録に失敗すると、入力値・エラー文を含む大きな Cookie が発行され、Cookie の多いブラウザで直後の一定時間、予約ページや管理画面が 400 エラーになることがある不具合を修正
+* [ 不具合修正 ] 無料版で更新が無い（最新の状態の）とき、プラグイン一覧の「自動更新」欄が空欄になり有効化できない不具合を修正
+* [ 不具合修正 ] 他のプラグイン・テーマを更新した際に、無料版の自動更新処理が誤って作動する可能性があった不具合を修正
 
 = 2.5.0 =
 * [ 機能追加 ] メール認証が未完了でログインを拒否した際に、ログイン画面から認証メールを再送できるボタンを追加
