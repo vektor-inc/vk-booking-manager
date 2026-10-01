@@ -209,6 +209,7 @@
 		padding: 0;
 		overflow: hidden;
 		border: 0;
+		/* stylelint-disable-next-line property-no-deprecated -- 視覚的に隠す定番パターン（古いブラウザ向けに clip を併記） */
 		clip: rect(1px, 1px, 1px, 1px);
 		clip-path: inset(50%);
 		white-space: nowrap;
@@ -741,6 +742,36 @@
 	border-radius: 0;
 }
 
+// #547: スマホ幅のヘッダーナビ。上方の「.nav-link + .nav-link」と同じ詳細度のため、ソース順の後勝ちで上書きしている（この位置より上へ移動しないこと）。
+// 区切り線は枠線のままだと 44px いっぱいに伸びるため、擬似要素で描く。
+@media (max-width: 767px) {
+
+	.vkbm-reservation-header__nav {
+		flex-wrap: wrap;
+
+		.vkbm-reservation-header__nav-link {
+			min-height: 44px;
+			padding-inline: 0.25rem;
+		}
+	}
+
+	.vkbm-reservation-header__nav-link + .vkbm-reservation-header__nav-link {
+		position: relative;
+		border-left: 0;
+
+		&::before {
+			content: "";
+			position: absolute;
+			top: 50%;
+			left: -0.25rem;
+			width: 1px;
+			height: 1em;
+			background-color: var(--vkbm--color--text-primary, #333);
+			transform: translateY(-50%);
+		}
+	}
+}
+
 .vkbm-confirm {
 	display: flex;
 	flex-direction: column;
@@ -806,6 +837,31 @@
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+}
+
+// 予約完了画面の通知ブロック（見出し＋任意の本文）。
+// 見出しは中央揃え、本文は読みやすいよう左揃えにして管理画面で入力した改行を保持する。
+.vkbm-confirm__complete {
+
+	// テーマの見出し装飾（余白・罫線・背景・下線など）を打ち消す。
+	.vkbm-confirm__complete-title {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		font-size: 1rem;
+		font-weight: 600;
+		text-align: center;
+	}
+
+	.vkbm-confirm__complete-message {
+		margin: 0.5em 0 0;
+		font-size: 0.95rem;
+		line-height: 1.7;
+		overflow-wrap: anywhere;
+		text-align: left;
+		white-space: pre-line;
+	}
 }
 
 // お気に入り（いつもの）クイック選択。
@@ -1001,6 +1057,17 @@
 	.vkbm-confirm__auth .vkbm-buttons {
 		margin-bottom: 0.75rem;
 		justify-content: center;
+	}
+
+	@media (max-width: 767px) {
+
+		.vkbm-confirm__auth .vkbm-buttons {
+			gap: 0.75rem;
+		}
+
+		.vkbm-confirm__auth .vkbm-button {
+			min-height: 44px;
+		}
 	}
 
 	.vkbm-confirm__auth-loading,

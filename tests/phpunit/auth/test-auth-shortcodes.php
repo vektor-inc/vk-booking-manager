@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\Auth;
 
 use VKBookingManager\Auth\Auth_Shortcodes;
+use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
@@ -295,6 +296,102 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		// Restore globals to avoid side effects. / 退避した状態を復元。
 		$_POST = $previous_post;
 		$_SERVER = $previous_server;
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #544: エラーが無い登録フォームでも、パスワード欄に条件の注記と minlength が出ること。
+	 * 確認用パスワード欄には注記・minlength を付けないこと。
+	 */
+	public function test_registration_form_shows_password_hint_and_minlength(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+		$html       = $shortcodes->render_registration_form();
+
+		$this->assertMatchesRegularExpression( '/<input[^>]*id="vkbm-register-password"[^>]*minlength="8"/', $html );
+		$this->assertMatchesRegularExpression( '/<input[^>]*id="vkbm-register-password"[^>]*aria-describedby="vkbm-register-password-note"/', $html );
+		$this->assertStringContainsString( 'id="vkbm-register-password-note"', $html );
+		$this->assertStringContainsString( __( 'Please use at least 8 characters.', 'vk-booking-manager' ), $html );
+		$this->assertStringNotContainsString( 'vkbm-register-password-error', $html );
+		$this->assertStringNotContainsString( 'aria-invalid', $html );
+		$this->assertDoesNotMatchRegularExpression( '/<input[^>]*id="vkbm-register-password-confirm"[^>]*minlength/', $html );
+
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #544: 登録 POST を流し込んで、同一リクエスト内で描画したフォームの HTML を返す。
+	 *
+	 * @param string $password Password.
+	 * @param string $confirm  Password confirmation.
+	 * @return string
+	 */
+	private function render_registration_form_after_post( string $password, string $confirm ): string {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		$_SERVER['REQUEST_METHOD'] = 'POST';
+		$_POST                     = [
+			'vkbm_registration_form'      => '1',
+			'vkbm_registration_nonce'     => wp_create_nonce( 'vkbm_registration_form' ),
+			'user_login'                  => 'newuser_pwhint',
+			'user_email'                  => 'newuser_pwhint@example.com',
+			'user_pass'                   => $password,
+			'user_pass_confirm'           => $confirm,
+			'kana_name'                   => 'テスト',
+			'phone_number'                => '090-1111-2222',
+			'vkbm_agree_terms_of_service' => '1',
+			'vkbm_agree_privacy_policy'   => '1',
+		];
+
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+		$shortcodes->handle_form_submission();
+		$html = $shortcodes->render_registration_form();
+
+		$_POST   = $previous_post;
+		$_SERVER = $previous_server;
+
+		return $html;
+	}
+
+	/**
+	 * issue #544: 8文字未満エラー時は、欄付近にエラーが出て aria-invalid と aria-describedby が付くこと。
+	 */
+	public function test_registration_form_shows_field_error_when_password_too_short(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		$html = $this->render_registration_form_after_post( 'short', 'short' );
+
+		$this->assertMatchesRegularExpression( '/<p class="vkbm-auth-form__note vkbm-auth-form__note--error" id="vkbm-register-password-error">' . preg_quote( __( 'Please enter a password of 8 characters or more.', 'vk-booking-manager' ), '/' ) . '<\/p>/', $html );
+		$this->assertMatchesRegularExpression( '/<input[^>]*id="vkbm-register-password"[^>]*aria-describedby="vkbm-register-password-note vkbm-register-password-error"[^>]*aria-invalid="true"/', $html );
+		$this->assertStringNotContainsString( 'id="vkbm-register-password-error" role', $html );
+		// 上部のエラー一覧は残る。
+		$this->assertStringContainsString( 'vkbm-alert__danger', $html );
+
+		update_option( 'users_can_register', $original_registration );
+	}
+
+	/**
+	 * issue #544: 空欄・不一致のエラーでは欄付近のエラーと aria-invalid を出さないこと。
+	 */
+	public function test_registration_form_hides_field_error_for_empty_or_mismatched_password(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+
+		foreach ( [ [ '', '' ], [ 'password123', 'different123' ] ] as $pair ) {
+			$html = $this->render_registration_form_after_post( $pair[0], $pair[1] );
+
+			$this->assertStringContainsString( 'vkbm-alert__danger', $html, '前提: 上部のエラー一覧は出ること。' );
+			$this->assertStringNotContainsString( 'vkbm-register-password-error', $html );
+			$this->assertStringNotContainsString( 'aria-invalid', $html );
+			$this->assertMatchesRegularExpression( '/<input[^>]*id="vkbm-register-password"[^>]*aria-describedby="vkbm-register-password-note"/', $html );
+		}
+
 		update_option( 'users_can_register', $original_registration );
 	}
 
@@ -1505,6 +1602,8 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 
 				$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
 				$shortcodes = new Testable_Auth_Shortcodes( $service );
+				// issue #519: 未認証の判定は authenticate フィルタで行うため、フィルタを登録する。
+				$shortcodes->register();
 				$shortcodes->handle_form_submission();
 
 				if ( $case['expect_login'] ) {
@@ -1566,6 +1665,7 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 
 			$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
 			$shortcodes = new Testable_Auth_Shortcodes( $service );
+			$shortcodes->register();
 			$shortcodes->handle_form_submission();
 
 			$this->assertNull( $shortcodes->last_redirect_url );
@@ -2400,6 +2500,401 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			}
 		} finally {
 			$_REQUEST = $previous_request;
+		}
+	}
+
+	/**
+	 * issue #519 用: 顧客ユーザーを作り、メール認証状態を設定して返す。
+	 *
+	 * @param string      $login  ログイン名。
+	 * @param string|null $status 認証状態（null なら meta を保存しない）。
+	 * @param string      $role   ロール。
+	 * @return int ユーザー ID。
+	 */
+	private function create_user_with_verification_status( string $login, ?string $status, string $role = 'subscriber' ): int {
+		$user_id = $this->factory()->user->create(
+			[
+				'user_login' => $login,
+				'user_pass'  => 'CorrectPass123!',
+				'role'       => $role,
+			]
+		);
+		if ( null !== $status ) {
+			update_user_meta( $user_id, Email_Verification::META_STATUS, $status );
+		}
+
+		return $user_id;
+	}
+
+	/**
+	 * issue #519 用: メール認証の必須設定を切り替える。
+	 *
+	 * @param bool $required 必須にするか。
+	 */
+	private function set_email_verification_required( bool $required ): void {
+		$repository                                           = new Settings_Repository();
+		$settings                                             = $repository->get_settings();
+		$settings['registration_email_verification_enabled'] = $required;
+		$repository->update_settings( $settings );
+	}
+
+	/**
+	 * issue #519: 標準ログイン画面と同じ wp_authenticate() の経路で、パスワードが正しく
+	 * 未認証のときだけ vkbm_unverified_email で止まること。パスワード誤りではこのコードが
+	 * 含まれないこと（#194）。管理者・認証状態 meta 無し・設定オフは従来どおり通ること。
+	 */
+	public function test_block_unverified_email_login(): void {
+		$original_settings = ( new Settings_Repository() )->get_settings();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '未認証・パスワード正・設定オンの顧客の場合 => vkbm_unverified_email で止まる',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'subscriber',
+				'required'            => true,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'error:vkbm_unverified_email',
+			],
+			[
+				'test_condition_name' => '未認証・パスワード誤りの顧客の場合 => 未認証のコードを含まない',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'subscriber',
+				'required'            => true,
+				'password'            => 'WrongPassword!',
+				'expected'            => 'error:incorrect_password',
+			],
+			[
+				'test_condition_name' => '未認証の管理者の場合 => 通る',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'administrator',
+				'required'            => true,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'user',
+			],
+			[
+				'test_condition_name' => '未認証で予約閲覧権限を持つスタッフの場合 => 通る',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'subscriber',
+				'cap'                 => Capabilities::VIEW_RESERVATIONS,
+				'required'            => true,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'user',
+			],
+			[
+				'test_condition_name' => '未認証で自分の予約管理権限を持つスタッフの場合 => 通る',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'subscriber',
+				'cap'                 => Capabilities::MANAGE_OWN_RESERVATIONS,
+				'required'            => true,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'user',
+			],
+			[
+				'test_condition_name' => '認証状態 meta 無しの顧客の場合 => 通る',
+				'status'              => null,
+				'role'                => 'subscriber',
+				'required'            => true,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'user',
+			],
+			[
+				'test_condition_name' => '未認証でも BM 設定でメール認証オフの顧客の場合 => 通る',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'subscriber',
+				'required'            => false,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'user',
+			],
+			[
+				'test_condition_name' => '認証済みの顧客の場合 => 通る',
+				'status'              => Email_Verification::STATUS_VERIFIED,
+				'role'                => 'subscriber',
+				'required'            => true,
+				'password'            => 'CorrectPass123!',
+				'expected'            => 'user',
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $index => $case ) {
+				$this->set_email_verification_required( $case['required'] );
+				$login = 'block_unverified_' . $index;
+				$staff_user_id = $this->create_user_with_verification_status( $login, $case['status'], $case['role'] );
+				if ( ! empty( $case['cap'] ) ) {
+					get_userdata( $staff_user_id )->add_cap( $case['cap'] );
+				}
+
+				$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+				$shortcodes->register();
+
+				$result = wp_authenticate( $login, $case['password'] );
+
+				if ( is_wp_error( $result ) ) {
+					$actual = 'error:' . $result->get_error_code();
+					if ( 'error:vkbm_unverified_email' !== $actual ) {
+						$this->assertNotContains( 'vkbm_unverified_email', $result->get_error_codes(), $case['test_condition_name'] );
+					}
+				} else {
+					$actual = 'user';
+				}
+
+				$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+			}
+		} finally {
+			( new Settings_Repository() )->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * issue #519: 止めたエラーのデータに user_id と状態が入り、未認証のときは wp_login が発火しないこと。
+	 */
+	public function test_block_unverified_email_login_data_and_wp_login_action(): void {
+		$original_settings = ( new Settings_Repository() )->get_settings();
+		$this->set_email_verification_required( true );
+
+		$user_id    = $this->create_user_with_verification_status( 'block_unverified_data', Email_Verification::STATUS_UNVERIFIED );
+		$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+		$shortcodes->register();
+
+		$fired = 0;
+		$count = static function () use ( &$fired ) {
+			++$fired;
+		};
+		add_action( 'wp_login', $count );
+
+		try {
+			$result = wp_signon(
+				[
+					'user_login'    => 'block_unverified_data',
+					'user_password' => 'CorrectPass123!',
+				]
+			);
+
+			$this->assertWPError( $result );
+			$this->assertSame(
+				[
+					'user_id' => $user_id,
+					Email_Verification::ERROR_DATA_STATUS_KEY => Email_Verification::STATUS_UNVERIFIED,
+				],
+				$result->get_error_data( 'vkbm_unverified_email' ),
+				'エラーデータに user_id と状態が入る'
+			);
+			$this->assertSame( 0, $fired, '未認証のときは wp_login が発火しない' );
+			$this->assertSame( 0, get_current_user_id(), '未認証のときはログイン状態にならない' );
+		} finally {
+			remove_action( 'wp_login', $count );
+			( new Settings_Repository() )->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * issue #519: 標準ログイン画面（wp-login.php）で止めたときだけ再送許可を発行し、
+	 * パスワード誤り・標準ログイン画面以外では発行しないこと。
+	 */
+	public function test_issue_resend_grant_on_native_login_failure(): void {
+		global $pagenow;
+		$previous_pagenow  = $pagenow;
+		$original_settings = ( new Settings_Repository() )->get_settings();
+		$this->set_email_verification_required( true );
+
+		$test_cases = [
+			[
+				'test_condition_name' => 'wp-login.php・未認証・パスワード正の場合 => 再送許可を発行する',
+				'pagenow'             => 'wp-login.php',
+				'password'            => 'CorrectPass123!',
+				'expected'            => true,
+			],
+			[
+				'test_condition_name' => 'wp-login.php・未認証・パスワード誤りの場合 => 発行しない',
+				'pagenow'             => 'wp-login.php',
+				'password'            => 'WrongPassword!',
+				'expected'            => false,
+			],
+			[
+				'test_condition_name' => 'wp-login.php 以外（独自フォームなど）の場合 => この経路では発行しない',
+				'pagenow'             => 'index.php',
+				'password'            => 'CorrectPass123!',
+				'expected'            => false,
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $index => $case ) {
+				$login = 'native_login_grant_' . $index;
+				$this->create_user_with_verification_status( $login, Email_Verification::STATUS_UNVERIFIED );
+
+				$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+				$shortcodes->register();
+
+				$pagenow = $case['pagenow'];
+				wp_authenticate( $login, $case['password'] );
+
+				$this->assertSame( $case['expected'], $shortcodes->has_resend_grant(), $case['test_condition_name'] );
+			}
+		} finally {
+			$pagenow = $previous_pagenow;
+			( new Settings_Repository() )->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * issue #519: wp-login.php に出す案内文。予約ページのログイン画面へのリンクは、予約ページ URL が
+	 * あり予約ブロックがあるときだけ出す。ユーザー名は URL に入れず、他のエラーは残すこと。
+	 */
+	public function test_render_unverified_email_login_error(): void {
+		$repository         = new Settings_Repository();
+		$original_settings  = $repository->get_settings();
+		$page_with_block    = $this->factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_content' => '<!-- wp:vk-booking-manager/reservation /-->',
+			]
+		);
+		$page_without_block = $this->factory()->post->create(
+			[
+				'post_type'    => 'page',
+				'post_content' => '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->',
+			]
+		);
+
+		$test_cases = [
+			[
+				'test_condition_name' => '予約ページ URL あり・予約ブロックあり => リンクを出す',
+				'url'                 => get_permalink( $page_with_block ),
+				'expected_link'       => true,
+			],
+			[
+				'test_condition_name' => '予約ページ URL 未設定 => リンクを出さない',
+				'url'                 => '',
+				'expected_link'       => false,
+			],
+			[
+				'test_condition_name' => '予約ブロックが無いページ => リンクを出さない',
+				'url'                 => get_permalink( $page_without_block ),
+				'expected_link'       => false,
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$settings                         = $original_settings;
+				$settings['reservation_page_url'] = $case['url'];
+				$repository->update_settings( $settings );
+
+				$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+
+				$errors = new \WP_Error( 'other_error', 'その他のエラー' );
+				$errors->add(
+					'vkbm_unverified_email',
+					'元の文言',
+					[
+						'user_id' => 1,
+						Email_Verification::ERROR_DATA_STATUS_KEY => '0',
+					]
+				);
+
+				$result  = $shortcodes->render_unverified_email_login_error( $errors );
+				$message = $result->get_error_message( 'vkbm_unverified_email' );
+
+				$this->assertSame( 'その他のエラー', $result->get_error_message( 'other_error' ), $case['test_condition_name'] );
+				$this->assertStringStartsWith( '<strong>', $message, $case['test_condition_name'] );
+				$this->assertStringContainsString( 'メール認証がまだ完了していません', $message, $case['test_condition_name'] );
+				$this->assertStringNotContainsString( 'log=', $message, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_link'], false !== strpos( $message, 'vkbm_auth=login' ), $case['test_condition_name'] );
+				if ( $case['expected_link'] ) {
+					$this->assertStringContainsString( '予約ページのログイン画面</a>', $message, $case['test_condition_name'] );
+				}
+			}
+
+			// 未認証エラーが無ければ何も変えない。
+			$untouched = new \WP_Error( 'other_error', 'その他のエラー' );
+			$this->assertSame( $untouched, $shortcodes->render_unverified_email_login_error( $untouched ) );
+			$this->assertSame( [ 'other_error' ], $untouched->get_error_codes() );
+		} finally {
+			$repository->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * issue #519: アプリケーションパスワードでの認証も、未認証の顧客は止め、管理者・認証済みは通すこと。
+	 */
+	public function test_block_unverified_email_application_password(): void {
+		$original_settings = ( new Settings_Repository() )->get_settings();
+		$this->set_email_verification_required( true );
+		add_filter( 'wp_is_application_passwords_available', '__return_true' );
+		add_filter( 'application_password_is_api_request', '__return_true' );
+
+		$test_cases = [
+			[
+				'test_condition_name' => '未認証の顧客の場合 => vkbm_unverified_email で止まる',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'subscriber',
+				'expected'            => 'error:vkbm_unverified_email',
+			],
+			[
+				'test_condition_name' => '未認証の管理者の場合 => 通る',
+				'status'              => Email_Verification::STATUS_UNVERIFIED,
+				'role'                => 'administrator',
+				'expected'            => 'user',
+			],
+			[
+				'test_condition_name' => '認証済みの顧客の場合 => 通る',
+				'status'              => Email_Verification::STATUS_VERIFIED,
+				'role'                => 'subscriber',
+				'expected'            => 'user',
+			],
+		];
+
+		try {
+			foreach ( $test_cases as $index => $case ) {
+				$login   = 'app_password_user_' . $index;
+				$user_id = $this->create_user_with_verification_status( $login, $case['status'], $case['role'] );
+
+				$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+				$shortcodes->register();
+
+				$created = \WP_Application_Passwords::create_new_application_password( $user_id, [ 'name' => 'test' ] );
+				$this->assertNotWPError( $created, $case['test_condition_name'] );
+
+				$result = wp_authenticate_application_password( null, $login, $created[0] );
+				$actual = is_wp_error( $result ) ? 'error:' . $result->get_error_code() : 'user';
+
+				$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+				if ( is_wp_error( $result ) ) {
+					// REST API は data['status'] を HTTP ステータスとして使うため 401 であること。
+					$data = $result->get_error_data( 'vkbm_unverified_email' );
+					$this->assertSame( 401, $data['status'], $case['test_condition_name'] );
+					$this->assertSame( '0', $data[ Email_Verification::ERROR_DATA_STATUS_KEY ], $case['test_condition_name'] );
+				}
+			}
+		} finally {
+			remove_filter( 'wp_is_application_passwords_available', '__return_true' );
+			remove_filter( 'application_password_is_api_request', '__return_true' );
+			( new Settings_Repository() )->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * issue #519: パスワード再設定を完了した後は、未認証だった顧客も標準ログインの経路でログインできること。
+	 */
+	public function test_block_unverified_email_login_allows_login_after_password_reset(): void {
+		$original_settings = ( new Settings_Repository() )->get_settings();
+		$this->set_email_verification_required( true );
+
+		$user_id    = $this->create_user_with_verification_status( 'reset_then_login', Email_Verification::STATUS_UNVERIFIED );
+		$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+		$shortcodes->register();
+
+		try {
+			$before = wp_authenticate( 'reset_then_login', 'CorrectPass123!' );
+			$this->assertWPError( $before, '再設定前は止まる' );
+
+			$shortcodes->handle_after_password_reset( get_userdata( $user_id ), 'CorrectPass123!' );
+
+			$after = wp_authenticate( 'reset_then_login', 'CorrectPass123!' );
+			$this->assertInstanceOf( \WP_User::class, $after, '再設定後はログインできる' );
+		} finally {
+			( new Settings_Repository() )->update_settings( $original_settings );
 		}
 	}
 }

@@ -70,11 +70,35 @@
 	overflow: auto;
 }
 
+/* 同意チェック行（スマホでも読みやすく押しやすくする）
+   - 文字は本文と同じ 1rem（テーマが label に文字サイズを指定していても効くよう label 側に指定）
+   - チェックボックスは見た目 20px のまま、ラベルの左余白を含めて 44px 四方の押せる範囲を確保
+   - ラベルの左余白の下にチェックボックスを重ねるため、文字・余白のどこをタップしても切り替わる
+   - label は input の直後にあるため `input[type="checkbox"] + label` で指定（Twenty Twenty-One など、テーマの
+     `input[type="checkbox"] + label`（display / padding-left 等）に詳細度で負けないようにするため。!important は使わない）
+   ========================================================================== */
 .vkbm-agreement__check {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
+	position: relative;
 	margin-top: 0.75rem;
-	font-size: 0.9rem;
+}
+
+.vkbm-agreement__check input[type="checkbox"] {
+	position: absolute;
+	top: 12px;
+	left: 12px;
+	width: 20px;
+	height: 20px;
+	margin: 0;
+}
+
+.vkbm-agreement__check input[type="checkbox"] + label {
+	display: block;
+	box-sizing: border-box;
+	min-height: 44px;
+	margin: 0;
+	padding: 10px 0 10px 44px;
+	font-size: 1rem;
+	line-height: 1.5;
+	cursor: pointer;
 }
 

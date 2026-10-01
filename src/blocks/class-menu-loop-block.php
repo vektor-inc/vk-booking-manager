@@ -1348,7 +1348,7 @@ class Menu_Loop_Block {
 			}
 
 			$buttons[] = sprintf(
-				'<a class="vkbm-menu-loop__button vkbm-button vkbm-button__sm vkbm-button__primary" href="%1$s">%2$s</a>',
+				'<a class="vkbm-menu-loop__button vkbm-button vkbm-button__primary" href="%1$s">%2$s</a>',
 				esc_url( get_permalink( $post ) ),
 				esc_html( $label )
 			);

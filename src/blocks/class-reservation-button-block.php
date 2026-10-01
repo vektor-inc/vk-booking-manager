@@ -144,6 +144,8 @@ class Reservation_Button_Block {
 			array(
 				'label'             => $label,
 				'extra_classes'     => 'vkbm-reservation-button__link',
+				// 予約ボタンブロックは従来どおり小さいサイズで表示する。
+				'size'              => Reservation_Button_Renderer::SIZE_SM,
 				// アクセシブルネームに対象プラン名を含める。
 				'accessible_suffix' => (string) get_the_title( $post ),
 			)

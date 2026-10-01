@@ -12,6 +12,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Frontend;
 
+use VKBookingManager\Blocks\Reservation_Button_Block;
 use VKBookingManager\Blocks\Reservation_Button_Renderer;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -87,6 +88,82 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 		$this->assertStringContainsString( '<a ', $html );
 		$this->assertStringContainsString( 'menu_id=' . $post->ID, $html );
 		$this->assertStringContainsString( 'vkbm-button', $html );
+	}
+
+	/**
+	 * サイズを省略した場合は標準サイズ（サイズクラス無し）になる。
+	 */
+	public function test_render_button_has_no_size_class_by_default(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post();
+
+		$html = $renderer->render_button( $post );
+
+		$this->assertStringContainsString( 'class="vkbm-button"', $html );
+		$this->assertDoesNotMatchRegularExpression( '/vkbm-button__/', $html );
+	}
+
+	/**
+	 * 許可したサイズ値を指定すると、対応するサイズ修飾クラスが付く。
+	 */
+	public function test_render_button_adds_size_class_for_allowed_sizes(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post();
+
+		$expected = array(
+			Reservation_Button_Renderer::SIZE_XS => 'vkbm-button vkbm-button__xs',
+			Reservation_Button_Renderer::SIZE_SM => 'vkbm-button vkbm-button__sm',
+			Reservation_Button_Renderer::SIZE_LG => 'vkbm-button vkbm-button__lg',
+		);
+		foreach ( $expected as $size => $class ) {
+			$html = $renderer->render_button( $post, array( 'size' => $size ) );
+			$this->assertStringContainsString( 'class="' . $class . '"', $html );
+		}
+	}
+
+	/**
+	 * 想定外のサイズ値は標準サイズ（サイズクラス無し）になり、任意の文字列は出力されない。
+	 */
+	public function test_render_button_ignores_unexpected_size(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post();
+
+		$html = $renderer->render_button( $post, array( 'size' => 'evil-class' ) );
+
+		$this->assertStringContainsString( 'class="vkbm-button"', $html );
+		$this->assertStringNotContainsString( 'evil-class', $html );
+	}
+
+	/**
+	 * 予約ボタンブロックは従来どおり小さいサイズ（vkbm-button__sm）で出力する。
+	 */
+	public function test_reservation_button_block_keeps_small_size_class(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$post  = $this->create_menu_post();
+		$block = new Reservation_Button_Block( $this->make_renderer() );
+
+		// render_block() を直接呼ぶと、get_block_wrapper_attributes() が前提とする
+		// 「描画中のブロック情報」（WP_Block_Supports::$block_to_render）が未設定のままになり
+		// コア側で警告が出る。本番の描画時と同じ形で設定してから呼び、後で元に戻す。
+		// do_blocks() 経由にしないのは、CI ではビルドを行わず build/ の block.json が無いため
+		// ブロック型が登録されず出力が空になるため。ブロック型が未登録の場合、
+		// コアは supports を適用せず空配列を返すだけなので警告にはならない。
+		$previous_block_to_render = \WP_Block_Supports::$block_to_render;
+		try {
+			\WP_Block_Supports::$block_to_render = array(
+				'blockName' => 'vk-booking-manager/reservation-button',
+				'attrs'     => array( 'menuId' => $post->ID ),
+			);
+
+			$html = $block->render_block( array( 'menuId' => $post->ID ) );
+		} finally {
+			\WP_Block_Supports::$block_to_render = $previous_block_to_render;
+		}
+
+		$this->assertStringContainsString( 'vkbm-button vkbm-button__sm', $html );
 	}
 
 	/**

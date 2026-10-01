@@ -23,6 +23,7 @@ import {
 } from './pricing-breakdown';
 import { ReservationHeader } from './components/reservation-header';
 import { PricingRowLabel } from './components/pricing-row-label';
+import { BookingCompleteNotice } from './components/booking-complete-notice';
 
 const getQueryParam = ( key ) => {
 	if ( typeof window === 'undefined' ) {
@@ -278,6 +279,9 @@ export const BookingConfirmApp = ( {
 	const [ providerTermsOfService, setProviderTermsOfService ] =
 		useState( '' );
 	const [ providerPaymentMethod, setProviderPaymentMethod ] = useState( '' );
+	// 仮予約の完了画面で見出しの下に出す案内文（REST の実効値。空のままなら標準文を使う）。
+	const [ pendingCompleteMessage, setPendingCompleteMessage ] =
+		useState( '' );
 	const [ providerName, setProviderName ] = useState( '' );
 	const [ providerLogoUrl, setProviderLogoUrl ] = useState( '' );
 	const [ showProviderLogo, setShowProviderLogo ] = useState( false );
@@ -321,6 +325,8 @@ export const BookingConfirmApp = ( {
 	// authFormHtml（dangerouslySetInnerHTML）の描画先。エラー要素への
 	// フォーカス（下記 useEffect）に使う。
 	const authFormContainerRef = useRef( null );
+	// 予約完了ブロックのコンテナ。完了時にフォーカスを移すために使う。
+	const completeNoticeRef = useRef( null );
 	const [ bookingsLoading, setBookingsLoading ] = useState( false );
 	const [ bookingsError, setBookingsError ] = useState( '' );
 	const [ bookings, setBookings ] = useState( [] );
@@ -551,6 +557,12 @@ export const BookingConfirmApp = ( {
 				setProviderPaymentMethod(
 					typeof response?.payment_method === 'string'
 						? response.payment_method
+						: ''
+				);
+				setPendingCompleteMessage(
+					typeof response?.booking_complete_message_pending ===
+						'string'
+						? response.booking_complete_message_pending
 						: ''
 				);
 				setProviderName(
@@ -1317,6 +1329,13 @@ export const BookingConfirmApp = ( {
 		window.history.replaceState( null, '', url.toString() );
 	}, [ success, redirectUrl ] );
 
+	// 予約完了時に完了ブロックへフォーカスを移し、支援技術に完了を伝える。
+	useEffect( () => {
+		if ( success && ! redirectUrl ) {
+			completeNoticeRef.current?.focus();
+		}
+	}, [ success, redirectUrl ] );
+
 	if ( loading ) {
 		return (
 			<div className="vkbm-confirm">
@@ -1344,13 +1363,21 @@ export const BookingConfirmApp = ( {
 		return null;
 	}
 
-	const finalSuccessMessage =
-		createdStatus === 'pending'
-			? __(
-					'Your tentative reservation has been completed.',
-					'vk-booking-manager'
-			  )
-			: successMessage;
+	// 仮予約は「見出し＋案内文」、即時確定は従来どおり見出しのみ（本文なし）。
+	const isPendingComplete = createdStatus === 'pending';
+	const completeTitle = isPendingComplete
+		? __(
+				'Your tentative reservation has been received.',
+				'vk-booking-manager'
+		  )
+		: successMessage;
+	const completeMessage = isPendingComplete
+		? pendingCompleteMessage ||
+		  __(
+				'We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.',
+				'vk-booking-manager'
+		  )
+		: '';
 
 	const menuName =
 		draft.menu_label ||
@@ -1529,7 +1556,7 @@ export const BookingConfirmApp = ( {
 						/>
 						<label htmlFor="vkbm-confirm-favorite-optin">
 							{ __(
-								'Save this content to my favorites for next time',
+								'Save these details so you can quickly book the same thing again next time (add to favorites)',
 								'vk-booking-manager'
 							) }
 						</label>
@@ -1989,7 +2016,6 @@ export const BookingConfirmApp = ( {
 									type="button"
 									className={ [
 										'vkbm-button',
-										'vkbm-button__sm',
 										'vkbm-button__primary',
 										authMode === 'login' && 'is-active',
 									]
@@ -2003,7 +2029,6 @@ export const BookingConfirmApp = ( {
 									type="button"
 									className={ [
 										'vkbm-button',
-										'vkbm-button__sm',
 										'vkbm-button-outline',
 										'vkbm-button-outline__primary',
 										authMode === 'register' && 'is-active',
@@ -2154,12 +2179,11 @@ export const BookingConfirmApp = ( {
 							</button>
 						) }
 						{ showSuccessMessage && (
-							<p
-								className="vkbm-alert vkbm-alert__success text-center"
-								role="status"
-							>
-								{ finalSuccessMessage }
-							</p>
+							<BookingCompleteNotice
+								title={ completeTitle }
+								message={ completeMessage }
+								containerRef={ completeNoticeRef }
+							/>
 						) }
 						{ /* 予約確定時にチェックされていれば、お気に入り登録の結果を表示する。 */ }
 						{ showSuccessMessage && favoriteSaved && (

@@ -80,6 +80,8 @@ You can use cash, credit cards, and transportation ICs.',
 			'provider_slot_step_minutes'                 => 15,
 			'provider_service_menu_buffer_after_minutes' => 0,
 			'provider_booking_status_mode'               => 'confirmed',
+			// 仮予約の完了画面で見出しの下に表示する案内文。空文字のときは get_default_booking_complete_message_pending() の標準文を表示する。
+			'provider_booking_complete_message_pending'  => '',
 			'provider_booking_cancel_mode'               => 'hours',
 			'provider_booking_cancel_deadline_hours'     => 24,
 			'provider_allow_staff_overlap_admin'         => false,
@@ -242,6 +244,27 @@ Contact us: Please contact our store.",
 		// 保存済みの選択済みプリセットは保存経路でも失われない（#387 レビュー指摘・安藤案B）。
 		$settings = Industry_Presets::apply_effective_values( $settings, $this->get_default_settings() );
 		return update_option( $this->option_key, $settings );
+	}
+
+	/**
+	 * 仮予約の完了画面に表示する標準の案内文を返す。案内文の設定が空のときに使われる。
+	 *
+	 * @return string
+	 */
+	public function get_default_booking_complete_message_pending(): string {
+		return __( 'We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.', 'vk-booking-manager' );
+	}
+
+	/**
+	 * 仮予約の完了画面に表示する案内文の実効値を返す（設定が空白のみ・空のときは標準文）。
+	 *
+	 * @param array<string, mixed> $settings get_settings() が返す設定配列。
+	 * @return string
+	 */
+	public function resolve_booking_complete_message_pending( array $settings ): string {
+		$message = isset( $settings['provider_booking_complete_message_pending'] ) ? trim( (string) $settings['provider_booking_complete_message_pending'] ) : '';
+
+		return '' !== $message ? $message : $this->get_default_booking_complete_message_pending();
 	}
 
 	/**

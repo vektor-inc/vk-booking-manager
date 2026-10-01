@@ -181,8 +181,147 @@ class Auth_Shortcodes {
 		add_action( 'admin_init', array( $this, 'redirect_free_user_from_admin' ) );
 		// issue #507: パスワード再設定の完了を、メール認証の代わりとして扱う。
 		add_action( 'after_password_reset', array( $this, 'handle_after_password_reset' ), 10, 2 );
+		// issue #519: どのログイン経路でもメール認証未完了のログインを止める。
+		// 優先度 100 は本体のパスワード照合（20）より後。パスワードが正しいときだけ判定する。
+		add_filter( 'authenticate', array( $this, 'block_unverified_email_login' ), 100 );
+		add_action( 'wp_authenticate_application_password_errors', array( $this, 'block_unverified_email_application_password' ), 10, 2 );
+		add_action( 'wp_login_failed', array( $this, 'issue_resend_grant_on_native_login_failure' ), 10, 2 );
+		add_filter( 'wp_login_errors', array( $this, 'render_unverified_email_login_error' ) );
 		add_shortcode( 'vkbm_login_form', array( $this, 'render_login_form' ) );
 		add_shortcode( 'vkbm_register_form', array( $this, 'render_registration_form' ) );
+	}
+
+	/**
+	 * Stops a login whose password was correct but whose email verification is incomplete.
+	 *
+	 * `authenticate` フィルタ（優先度 100）用。WP_User 以外（null / WP_Error）はそのまま返す。
+	 *
+	 * @param WP_User|WP_Error|null $user 本体のパスワード照合までの結果。
+	 * @return WP_User|WP_Error|null
+	 */
+	public function block_unverified_email_login( $user ) {
+		$error = Email_Verification::get_unverified_login_error( $user, $this->requires_email_verification() );
+
+		return null !== $error ? $error : $user;
+	}
+
+	/**
+	 * Adds the unverified-email error when an application password is used by an unverified user.
+	 *
+	 * REST API では wp_validate_application_password() が `authenticate` フィルタを
+	 * 経由せずに照合するため、照合時のアクションでも同じ判定をかける（issue #519）。
+	 * XML-RPC は `authenticate` フィルタを通る。REST では HTTP ステータス 401 で拒否する。
+	 *
+	 * @param WP_Error $error 照合エラー（追加すると認証が拒否される）。
+	 * @param WP_User  $user  アプリケーションパスワードの持ち主。
+	 */
+	public function block_unverified_email_application_password( $error, $user ): void {
+		if ( ! $error instanceof WP_Error ) {
+			return;
+		}
+
+		$unverified_error = Email_Verification::get_unverified_login_error( $user, $this->requires_email_verification() );
+		if ( null === $unverified_error ) {
+			return;
+		}
+
+		$error->add(
+			Email_Verification::ERROR_CODE_UNVERIFIED,
+			$unverified_error->get_error_message(),
+			array_merge(
+				(array) $unverified_error->get_error_data(),
+				array( 'status' => 401 )
+			)
+		);
+	}
+
+	/**
+	 * Issues a resend grant when the standard login screen (wp-login.php) stopped an unverified user.
+	 *
+	 * パスワードが正しく未認証（'0'）だったときだけ発行する。パスワード誤りでは
+	 * `vkbm_unverified_email` が付かないため発行されない（#194）。独自フォームの
+	 * 経路は process_login_request() 側で発行するため、ここでは wp-login.php のみ対象にする。
+	 *
+	 * @param string        $username ログイン名（未使用）。
+	 * @param WP_Error|null $error    ログイン失敗エラー。
+	 */
+	public function issue_resend_grant_on_native_login_failure( $username, $error = null ): void {
+		unset( $username );
+
+		if ( ! $error instanceof WP_Error || ! $this->is_native_login_screen_request() ) {
+			return;
+		}
+
+		$data = $error->get_error_data( Email_Verification::ERROR_CODE_UNVERIFIED );
+		if ( ! is_array( $data ) || empty( $data['user_id'] ) || Email_Verification::STATUS_UNVERIFIED !== ( $data[ Email_Verification::ERROR_DATA_STATUS_KEY ] ?? '' ) ) {
+			return;
+		}
+
+		$this->issue_resend_grant( (int) $data['user_id'] );
+	}
+
+	/**
+	 * Replaces the unverified-email error message on wp-login.php with the guidance text.
+	 *
+	 * `wp_login_errors` フィルタ用。案内文は独自フォームの文言を流用し、予約ページの
+	 * ログイン画面へのリンクを添える（issue #519 確認2）。
+	 *
+	 * @param WP_Error $errors wp-login.php が表示するエラー。
+	 * @return WP_Error
+	 */
+	public function render_unverified_email_login_error( $errors ) {
+		if ( ! $errors instanceof WP_Error || ! in_array( Email_Verification::ERROR_CODE_UNVERIFIED, $errors->get_error_codes(), true ) ) {
+			return $errors;
+		}
+
+		$data = $errors->get_error_data( Email_Verification::ERROR_CODE_UNVERIFIED );
+
+		// 他のエラーを残したまま、未認証エラーだけを案内文に差し替える。
+		$errors->remove( Email_Verification::ERROR_CODE_UNVERIFIED );
+		$errors->add( Email_Verification::ERROR_CODE_UNVERIFIED, $this->build_native_login_unverified_message(), $data );
+
+		return $errors;
+	}
+
+	/**
+	 * Builds the HTML guidance shown on wp-login.php for an unverified user.
+	 *
+	 * 1〜2行目と4行目以降は独自フォームの既存文言・get_verification_contact_lines() を流用し、
+	 * 3行目（予約ページのログイン画面へのリンク）だけ新規。ユーザー名は URL に入れない。
+	 *
+	 * @return string 先頭に `<strong>Error:</strong>` を付けた HTML。
+	 */
+	private function build_native_login_unverified_message(): string {
+		$lines = array(
+			esc_html__( 'Email verification has not been completed yet', 'vk-booking-manager' ),
+			esc_html__( 'Click the link in the verification email sent to your registered email address to be able to log in.', 'vk-booking-manager' ),
+		);
+
+		// 予約ページ URL があり、予約ブロックが置かれているときだけ再送導線を出す。
+		$reservation_url = $this->get_reservation_page_url();
+		if ( '' !== $reservation_url && self::reservation_page_has_block( $reservation_url ) ) {
+			$login_url = add_query_arg( 'vkbm_auth', 'login', $reservation_url );
+			$link      = '<a href="' . esc_url( $login_url ) . '">' . esc_html__( 'the login screen on the reservation page', 'vk-booking-manager' ) . '</a>';
+			/* translators: %s: link to the login screen on the reservation page. */
+			$lines[] = sprintf( esc_html__( 'If you cannot find the email, you can resend the verification email from %s.', 'vk-booking-manager' ), $link );
+		}
+
+		foreach ( $this->get_verification_contact_lines() as $contact_line ) {
+			$lines[] = esc_html( $contact_line );
+		}
+
+		return '<strong>' . esc_html__( 'Error:', 'vk-booking-manager' ) . '</strong> ' . implode( '<br />', $lines );
+	}
+
+	/**
+	 * Determines whether the current request is a login attempt on wp-login.php.
+	 *
+	 * @return bool
+	 */
+	private function is_native_login_screen_request(): bool {
+		global $pagenow;
+
+		return isset( $pagenow ) && 'wp-login.php' === $pagenow;
 	}
 
 	/**
@@ -691,6 +830,13 @@ class Auth_Shortcodes {
 		$action_base = $this->normalize_redirect( $atts['action_url'] ?? '' );
 		$form_action = $this->get_auth_action_url( 'register', $action_base );
 
+		// issue #544: 8文字未満エラー時のみ、パスワード欄付近にもエラーを出し aria-invalid を付ける。
+		$password_is_short    = $this->registration_errors instanceof WP_Error
+			&& in_array( 'password_short', $this->registration_errors->get_error_codes(), true );
+		$password_describedby = $password_is_short
+			? 'vkbm-register-password-note vkbm-register-password-error'
+			: 'vkbm-register-password-note';
+
 		$username_raw           = isset( $this->registration_raw_data['user_login'] ) ? (string) $this->registration_raw_data['user_login'] : '';
 		$username_value         = '' !== $username_raw ? $username_raw : ( isset( $this->registration_posted_data['user_login'] ) ? (string) $this->registration_posted_data['user_login'] : '' );
 		$email_value            = isset( $this->registration_posted_data['user_email'] ) ? (string) $this->registration_posted_data['user_email'] : '';
@@ -756,7 +902,12 @@ class Auth_Shortcodes {
 						<?php esc_html_e( 'password', 'vk-booking-manager' ); ?>
 						<span class="vkbm-auth-form__required" aria-hidden="true">*</span>
 					</label>
-					<input type="password" class="vkbm-auth-form__input" id="vkbm-register-password" name="user_pass" autocomplete="new-password" required>
+					<input type="password" class="vkbm-auth-form__input" id="vkbm-register-password" name="user_pass" autocomplete="new-password" minlength="8" required aria-describedby="<?php echo esc_attr( $password_describedby ); ?>"<?php echo $password_is_short ? ' aria-invalid="true"' : ''; ?>>
+					<p class="vkbm-auth-form__note" id="vkbm-register-password-note"><?php esc_html_e( 'Please use at least 8 characters.', 'vk-booking-manager' ); ?></p>
+					<?php if ( $password_is_short ) : ?>
+						<?php // 上部のエラー一覧が role="alert" のため、欄付近のメッセージには role を付けない（二重読み上げ防止）。 ?>
+						<p class="vkbm-auth-form__note vkbm-auth-form__note--error" id="vkbm-register-password-error"><?php esc_html_e( 'Please enter a password of 8 characters or more.', 'vk-booking-manager' ); ?></p>
+					<?php endif; ?>
 				</div>
 				<div class="vkbm-auth-form__field">
 					<label class="vkbm-auth-form__label" for="vkbm-register-password-confirm">
@@ -1058,7 +1209,7 @@ class Auth_Shortcodes {
 							</svg>
 						</button>
 					</div>
-					<p class="vkbm-auth-form__note"><?php esc_html_e( 'Leave empty if you do not want to change it.', 'vk-booking-manager' ); ?></p>
+					<p class="vkbm-auth-form__note"><?php esc_html_e( 'Please use at least 8 characters.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Leave empty if you do not want to change it.', 'vk-booking-manager' ); ?></p>
 				</div>
 				<div class="vkbm-auth-form__field vkbm-auth-form__password">
 					<label class="vkbm-auth-form__label" for="vkbm-profile-password-confirm"><?php esc_html_e( 'New password (confirm)', 'vk-booking-manager' ); ?></label>
@@ -1270,33 +1421,30 @@ class Auth_Shortcodes {
 		);
 
 		if ( is_wp_error( $user ) ) {
+			// issue #519: メール認証未完了のエラーは、他のエラーより先に拾う
+			// （authenticate フィルタが、パスワード照合後にだけ付けるコード）。
+			if ( in_array( Email_Verification::ERROR_CODE_UNVERIFIED, $user->get_error_codes(), true ) ) {
+				$unverified_data = $user->get_error_data( Email_Verification::ERROR_CODE_UNVERIFIED );
+				$unverified_data = is_array( $unverified_data ) ? $unverified_data : array();
+
+				if ( Email_Verification::STATUS_UNVERIFIED === ( $unverified_data[ Email_Verification::ERROR_DATA_STATUS_KEY ] ?? '' ) ) {
+					// パスワードが正しく、未認証で弾いたときにだけ使い捨ての再送許可を発行する
+					// （#194＝ログイン失敗メッセージから登録済みユーザーを推測できた問題、と同じ観点）。
+					// 案内・再送ボタンはログインフォーム描画時（render_login_form）に出す。
+					$this->issue_resend_grant( (int) ( $unverified_data['user_id'] ?? 0 ) );
+					return;
+				}
+
+				// 想定外の保存値に対する保険（通常はここへ来ない）。
+				$this->login_errors->add( 'unverified_email', $messages['unverified_email'] );
+				return;
+			}
+
 			// 確認2（issue #512 承認済み仕様）: wp_signon() が返すエラーの種類を問わず
 			// 統一文言（auth_failed）に丸める。他プラグインが wp_signon() に独自の
 			// エラーを追加していても、その文言をそのまま出すとユーザー列挙対策
 			// （#194）が崩れるため。
 			$this->login_errors->add( 'auth_failed', $messages['auth_failed'] );
-			return;
-		}
-
-		// issue #507: 判定・状態変更ロジックを Email_Verification に一本化する。
-		// 論点1: BM設定でメール認証が不要なら、'0'（未認証）のままの利用者もログインを許可する。
-		$verification_required = $this->requires_email_verification();
-
-		if ( ! Email_Verification::is_login_allowed( (int) $user->ID, $verification_required ) ) {
-			wp_clear_auth_cookie();
-
-			$status = Email_Verification::get_status( (int) $user->ID );
-
-			if ( Email_Verification::STATUS_UNVERIFIED === $status ) {
-				// パスワードが正しく、未認証で弾いたときにだけ使い捨ての再送許可を発行する
-				// （#194＝ログイン失敗メッセージから登録済みユーザーを推測できた問題、と同じ観点）。
-				// 案内・再送ボタンはログインフォーム描画時（render_login_form）に出す。
-				$this->issue_resend_grant( (int) $user->ID );
-				return;
-			}
-
-			// 想定外の保存値に対する保険（通常はここへ来ない）。
-			$this->login_errors->add( 'unverified_email', $messages['unverified_email'] );
 			return;
 		}
 

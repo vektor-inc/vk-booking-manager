@@ -13,7 +13,7 @@ const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
  * Issue #90: 予約履歴からの「同じ内容で予約する」とお気に入り（いつもの）機能の E2E。
  *
  * 検証内容:
- * - 予約確認画面に「次回のために、この内容をお気に入りに登録する」チェックボックスがあり、
+ * - 予約確認画面に「この予約内容で次回もすぐ予約できるようにする（お気に入り登録）」チェックボックスがあり、
  *   ON のまま確定すると予約完了画面に登録結果が表示される。
  * - 登録後、予約フォーム上部に「いつもの」クイック選択が表示される。
  * - マイページの予約一覧に「同じ内容で予約する」ボタンが表示され、クリックすると
@@ -151,15 +151,23 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		await confirmButton.click();
 
 		// 完了メッセージと、お気に入り登録結果が表示されること。
-		// 本確定（「予約が完了しました。」）と仮予約（「仮予約が完了しました。」）の
-		// 双方に一致させる。英語ロケールでは "...reservation has been completed." で
-		// 確定・仮予約のどちらも拾えるようにする。
+		// 本確定（「予約が完了しました。」）と仮予約（見出し「仮予約を受け付けました」）の
+		// 双方に一致させる。英語ロケールでは "reservation has been completed." /
+		// "tentative reservation has been received." で確定・仮予約のどちらも拾えるようにする。
 		await expect(
-			page.getByText( '予約が完了しました', { exact: false } ).or(
-				page.getByText( 'reservation has been completed', {
-					exact: false,
-				} )
-			)
+			page
+				.getByText( '予約が完了しました', { exact: false } )
+				.or( page.getByText( '仮予約を受け付けました', { exact: false } ) )
+				.or(
+					page.getByText( 'reservation has been completed', {
+						exact: false,
+					} )
+				)
+				.or(
+					page.getByText( 'reservation has been received', {
+						exact: false,
+					} )
+				)
 		).toBeVisible( { timeout: 15000 } );
 		await expect(
 			page

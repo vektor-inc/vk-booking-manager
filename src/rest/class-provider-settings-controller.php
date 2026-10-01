@@ -161,6 +161,8 @@ class Provider_Settings_Controller {
 				'cancellation_policy'                => $cancellation_policy,
 				'terms_of_service'                   => $terms_of_service,
 				'payment_method'                     => $payment_method,
+				// 仮予約の完了画面の案内文（実効値。設定が空なら標準文に解決済み）。
+				'booking_complete_message_pending'   => $this->settings_repository->resolve_booking_complete_message_pending( $settings ),
 				'no_nomination_label'                => $no_nomination_label,
 				'nomination_fee_label'               => $nomination_fee_label,
 				'closed_day_label'                   => $closed_day_label,

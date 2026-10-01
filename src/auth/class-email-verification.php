@@ -169,6 +169,63 @@ class Email_Verification {
 	}
 
 	/**
+	 * Error code returned when login is stopped because email verification is incomplete.
+	 *
+	 * issue #519: 標準ログイン画面・独自ログインフォーム・アプリケーションパスワードが
+	 * 同じコードで未認証を判別できるようにする。
+	 *
+	 * @var string
+	 */
+	public const ERROR_CODE_UNVERIFIED = 'vkbm_unverified_email';
+
+	/**
+	 * Key of the verification status inside the unverified-login WP_Error data.
+	 *
+	 * `status` は REST API が HTTP ステータスとして解釈するため、別名にしている。
+	 *
+	 * @var string
+	 */
+	public const ERROR_DATA_STATUS_KEY = 'verification_status';
+
+	/**
+	 * Builds the error that stops a login when the authenticated user has not verified their email.
+	 *
+	 * issue #519: `authenticate` フィルタ（優先度 100）と、アプリケーションパスワードの
+	 * 照合時から呼ばれる判定。パスワード照合後（WP_User が渡されたとき）にだけ呼ぶため、
+	 * パスワードを間違えた人には未認証かどうかが伝わらない（#194 と同じ観点）。
+	 * 予約顧客ではない利用者（管理者・スタッフ）は、メール認証の対象外として止めない。
+	 *
+	 * @param mixed $user                 `authenticate` フィルタが受け取った値（WP_User / WP_Error / null 等）。
+	 * @param bool  $verification_required BM 設定でメール認証が必要か（`registration_email_verification_enabled`）。
+	 * @return \WP_Error|null 止める場合はエラー（データに user_id と status）。止めない場合は null。
+	 */
+	public static function get_unverified_login_error( $user, bool $verification_required ): ?\WP_Error {
+		// パスワード照合が済んだ WP_User のときだけ判定する（null / WP_Error はそのまま通す）。
+		if ( ! $user instanceof \WP_User ) {
+			return null;
+		}
+
+		// 管理者・スタッフ（予約顧客ではない利用者）は対象外。
+		if ( ! Auth_Shortcodes::is_booking_customer( $user ) ) {
+			return null;
+		}
+
+		// 認証状態 meta 無し・認証済み・手動承認・設定オフの未認証は従来どおり通す。
+		if ( self::is_login_allowed( (int) $user->ID, $verification_required ) ) {
+			return null;
+		}
+
+		return new \WP_Error(
+			self::ERROR_CODE_UNVERIFIED,
+			__( 'Email verification has not been completed. Please click the link in the registered email to confirm.', 'vk-booking-manager' ),
+			array(
+				'user_id'                   => (int) $user->ID,
+				self::ERROR_DATA_STATUS_KEY => self::get_status( (int) $user->ID ),
+			)
+		);
+	}
+
+	/**
 	 * Marks a user as verified via the email confirmation link (or a completed password reset).
 	 *
 	 * 認証用トークン系メタ（ハッシュ・有効期限・旧仕様の平文トークン）も併せて削除する。

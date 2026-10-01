@@ -335,6 +335,21 @@
 		}
 	}
 
+	// 予約ステータスが「仮予約にする」のときだけ、仮予約完了時の案内文の入力欄を表示する。
+	// 非表示にしても入力値は送信・保持する（即時確定へ戻しても値を失わない）。
+	function updateBookingStatusModeState() {
+		const $mode = $( '#vkbm-provider-booking-status-mode' );
+		const $messageField = $(
+			'#vkbm-provider-booking-complete-message-pending-field'
+		);
+
+		if ( ! $mode.length || ! $messageField.length ) {
+			return;
+		}
+
+		$messageField.toggle( 'pending' === $mode.val() );
+	}
+
 	function updateReservationMenuListModeState() {
 		const $checkbox = $( '#vkbm-reservation-show-menu-list' );
 		const $row = $( '#vkbm-reservation-menu-list-display-mode-row' );
@@ -770,6 +785,14 @@
 
 	$( document ).on(
 		'change',
+		'#vkbm-provider-booking-status-mode',
+		function () {
+			updateBookingStatusModeState();
+		}
+	);
+
+	$( document ).on(
+		'change',
 		'#vkbm-provider-booking-cancel-mode',
 		function () {
 			updateBookingCancelModeState();
@@ -831,6 +854,7 @@
 			toggleWeeklyRowState( $( this ) );
 		} );
 
+		updateBookingStatusModeState();
 		updateBookingCancelModeState();
 		updateReservationMenuListModeState();
 		updateResourceTagSearchState();

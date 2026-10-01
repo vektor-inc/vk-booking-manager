@@ -48,6 +48,31 @@ class Reservation_Button_Renderer {
 	public const SETTING_RESERVATION_PAGE_URL = 'reservation_page_url';
 
 	/**
+	 * ボタンサイズ: 極小サイズ（vkbm-button__xs）。
+	 */
+	public const SIZE_XS = 'xs';
+
+	/**
+	 * ボタンサイズ: 小さいサイズ（vkbm-button__sm）。
+	 */
+	public const SIZE_SM = 'sm';
+
+	/**
+	 * ボタンサイズ: 大きいサイズ（vkbm-button__lg）。
+	 */
+	public const SIZE_LG = 'lg';
+
+	/**
+	 * ボタンサイズ指定値とサイズ修飾クラスの対応表。
+	 * 標準サイズは指定なし（サイズクラス無し）で表すため、ここには含めない。
+	 */
+	private const SIZE_CLASS_MAP = array(
+		self::SIZE_XS => 'vkbm-button__xs',
+		self::SIZE_SM => 'vkbm-button__sm',
+		self::SIZE_LG => 'vkbm-button__lg',
+	);
+
+	/**
 	 * 基本設定リポジトリ。
 	 *
 	 * @var Settings_Repository
@@ -145,6 +170,7 @@ class Reservation_Button_Renderer {
 	 *
 	 *     @type string $label             ボタンラベル。空なら既定ラベルを使う（オンライン予約不可の場合は無視される）。
 	 *     @type string $extra_classes     追加するクラス名（スペース区切り）。
+	 *     @type string $size              ボタンサイズ。'xs' / 'sm' / 'lg' のいずれか。省略時および想定外の値は標準サイズ（サイズクラス無し）。
 	 *     @type string $fallback_url      予約ページ未設定時に使う代替URL。
 	 *     @type string $accessible_suffix アクセシブルネームに追記するプラン名等。
 	 * }
@@ -157,8 +183,13 @@ class Reservation_Button_Renderer {
 		}
 
 		$extra_classes = trim( (string) ( $args['extra_classes'] ?? '' ) );
-		$base_classes  = 'vkbm-button vkbm-button__sm';
-		$class_attr    = '' !== $extra_classes ? $base_classes . ' ' . $extra_classes : $base_classes;
+
+		// サイズは対応表にある値のみ受け付け、省略・想定外の値は標準サイズ（サイズクラス無し）にする。
+		// 外部から任意のクラス文字列が入らないよう、クラス名は固定の対応表から取得する。
+		$size         = (string) ( $args['size'] ?? '' );
+		$size_class   = self::SIZE_CLASS_MAP[ $size ] ?? '';
+		$base_classes = '' !== $size_class ? 'vkbm-button ' . $size_class : 'vkbm-button';
+		$class_attr   = '' !== $extra_classes ? $base_classes . ' ' . $extra_classes : $base_classes;
 
 		// アクセシブルネーム（読み上げ用ラベル）にプラン名等を含める。
 		$accessible_suffix = trim( (string) ( $args['accessible_suffix'] ?? '' ) );

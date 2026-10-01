@@ -296,7 +296,7 @@
 				"新規登録"
 			],
 			"Confirm reservation": [
-				"予約内容を確認する"
+				"予約内容確認"
 			],
 			"Payment method": [
 				"決済方法"
@@ -328,6 +328,9 @@
 			"A reservation for the same date and time already exists. Please change the date and time.": [
 				"同じ日時の予約が既に存在します。日時を変更してください。"
 			],
+			"We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.": [
+				"ご予約内容を確認のうえ、予約確定のご連絡をメールでお送りします。確定のメールが届くまで、しばらくお待ちください。この画面は閉じていただいて構いません。"
+			],
 			"The response is not a valid JSON response.": [
 				"有効な JSON 応答ではありません。"
 			],
@@ -346,8 +349,8 @@
 			"Loading temporary reservation data…": [
 				"一時予約データを読み込み中…"
 			],
-			"Your tentative reservation has been completed.": [
-				"仮予約が完了しました。"
+			"Your tentative reservation has been received.": [
+				"仮予約を受け付けました"
 			],
 			"No entry": [
 				"記入なし"
@@ -355,8 +358,8 @@
 			"I agree to the cancellation policy": [
 				"キャンセルポリシーに同意します"
 			],
-			"Save this content to my favorites for next time": [
-				"次回のために、この内容をお気に入りに登録する"
+			"Save these details so you can quickly book the same thing again next time (add to favorites)": [
+				"この予約内容で次回もすぐ予約できるようにする（お気に入り登録）"
 			],
 			"Private (exclusive use of this slot)": [
 				"貸切（この枠を専有）"

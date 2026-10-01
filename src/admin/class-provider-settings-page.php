@@ -17,6 +17,7 @@ use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
 use VKBookingManager\Common\Weekday_Rule;
 use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\Shifts\Shift_Editor;
@@ -31,6 +32,36 @@ class Provider_Settings_Page {
 	private const MENU_SLUG    = 'vkbm-provider-settings';
 	private const NONCE_ACTION = 'vkbm_provider_settings_save';
 	private const NONCE_NAME   = 'vkbm_provider_settings_nonce';
+
+	/**
+	 * 入力エラー時の再表示で、保存時と同じサニタイズ（Settings_Sanitizer::sanitize()）の結果から
+	 * 送信値を復元する設定項目。
+	 *
+	 * ここに無い項目は sanitize_old_input() で個別に復元している。フォームにあるのに
+	 * どちらにも含まれない項目は、再表示画面で送信値ではなく保存済みの値が表示され、
+	 * エラーを直して保存し直したときに、その項目の変更が知らされないまま元に戻る。
+	 * フォームに設定項目を追加したときは、このどちらかに必ず含めること。
+	 */
+	private const OLD_INPUT_KEYS_FROM_SANITIZER = array(
+		'tax_label_text',
+		'resource_tag_search_enabled',
+		'resource_tag_display_enabled',
+		'provider_slot_step_minutes',
+		'provider_allow_staff_overlap_admin',
+		'registration_email_verification_enabled',
+		'membership_redirect_wp_register',
+		'auth_rate_limit_enabled',
+		'auth_rate_limit_register_max',
+		'auth_rate_limit_login_max',
+		'provider_privacy_policy_mode',
+		'provider_privacy_policy_url',
+		'provider_privacy_policy_content',
+		'shift_alert_months',
+		'shift_auto_register_months',
+		'design_primary_color',
+		'design_reservation_button_color',
+		'design_radius_md',
+	);
 
 	/**
 	 * Parent admin menu slug.
@@ -482,9 +513,11 @@ class Provider_Settings_Page {
 			}
 			delete_transient( 'vkbm_provider_settings_previous_input' );
 		}
-		$logo_id              = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
-		$booking_cancel_mode  = isset( $settings['provider_booking_cancel_mode'] ) ? (string) $settings['provider_booking_cancel_mode'] : 'hours';
-		$booking_cancel_hours = isset( $settings['provider_booking_cancel_deadline_hours'] ) ? (int) $settings['provider_booking_cancel_deadline_hours'] : 24;
+		$logo_id                          = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
+		$booking_cancel_mode              = isset( $settings['provider_booking_cancel_mode'] ) ? (string) $settings['provider_booking_cancel_mode'] : 'hours';
+		$booking_complete_message_pending = isset( $settings['provider_booking_complete_message_pending'] ) ? (string) $settings['provider_booking_complete_message_pending'] : '';
+		$booking_status_mode_current      = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : 'confirmed';
+		$booking_cancel_hours             = isset( $settings['provider_booking_cancel_deadline_hours'] ) ? (int) $settings['provider_booking_cancel_deadline_hours'] : 24;
 
 		$regular_holidays = array();
 		if ( isset( $settings['provider_regular_holidays'] ) && is_array( $settings['provider_regular_holidays'] ) ) {
@@ -1357,6 +1390,32 @@ class Provider_Settings_Page {
 									<?php esc_html_e( 'For tentative reservations, a reservation confirmation email will be sent to the user even when the reservation is changed to confirmed.', 'vk-booking-manager' ); ?><br />
 									<?php esc_html_e( '*Reservations made by users with administrator privileges and salon privileges will be confirmed immediately.', 'vk-booking-manager' ); ?>
 								</p>
+								<?php // 仮予約の完了画面の案内文。「仮予約にする」選択時のみ表示する（切り替えは assets/js/provider-settings.js）。値は即時確定に戻しても保持する。 ?>
+								<div
+									id="vkbm-provider-booking-complete-message-pending-field"
+									style="margin-top:1rem;<?php echo 'pending' === $booking_status_mode_current ? '' : 'display:none;'; ?>"
+								>
+									<label for="vkbm-provider-booking-complete-message-pending"><strong><?php esc_html_e( 'Guidance text for tentative reservation completion', 'vk-booking-manager' ); ?></strong></label>
+									<textarea
+										id="vkbm-provider-booking-complete-message-pending"
+										name="vkbm_provider_settings[provider_booking_complete_message_pending]"
+										class="large-text"
+										rows="4"
+										maxlength="<?php echo esc_attr( (string) Settings_Sanitizer::BOOKING_COMPLETE_MESSAGE_MAX_LENGTH ); ?>"
+										style="margin-top:0.25rem;"
+									><?php echo esc_textarea( $booking_complete_message_pending ); ?></textarea>
+									<p class="description">
+										<?php esc_html_e( 'This text is displayed below the heading "Your tentative reservation has been received." on the screen shown after a tentative reservation is completed.', 'vk-booking-manager' ); ?><br />
+										<?php esc_html_e( 'You can rewrite it to match how your store operates, such as when you will confirm the reservation (for example, "We will contact you within 24 hours.") and how you will contact the customer.', 'vk-booking-manager' ); ?><br />
+										<?php esc_html_e( 'If left blank, the standard text below is displayed.', 'vk-booking-manager' ); ?><br />
+										<?php esc_html_e( 'HTML tags cannot be used, and line breaks are displayed as entered.', 'vk-booking-manager' ); ?><br />
+										<?php esc_html_e( 'The text of emails does not change.', 'vk-booking-manager' ); ?>
+									</p>
+									<p class="description" style="margin-top:0.5rem;">
+										<?php esc_html_e( 'Standard text:', 'vk-booking-manager' ); ?>
+										<?php echo esc_html( ( new Settings_Repository() )->get_default_booking_complete_message_pending() ); ?>
+									</p>
+								</div>
 							</td>
 						</tr>
 
@@ -2667,6 +2726,7 @@ class Provider_Settings_Page {
 			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? 0 );
 			$output['provider_service_menu_buffer_after_minutes'] = absint( $input['provider_service_menu_buffer_after_minutes'] ?? 0 );
 			$output['provider_booking_status_mode']               = sanitize_key( (string) ( $input['provider_booking_status_mode'] ?? 'confirmed' ) );
+		$output['provider_booking_complete_message_pending']      = Settings_Sanitizer::sanitize_booking_complete_message( $input['provider_booking_complete_message_pending'] ?? '' );
 		$output['provider_booking_cancel_mode']                   = sanitize_key( (string) ( $input['provider_booking_cancel_mode'] ?? 'hours' ) );
 		$output['provider_booking_cancel_deadline_hours']         = absint( $input['provider_booking_cancel_deadline_hours'] ?? 24 );
 		$output['provider_website_url']                           = sanitize_text_field( $input['provider_website_url'] ?? '' );
@@ -2694,6 +2754,20 @@ class Provider_Settings_Page {
 		$output['menu_loop_reserve_button_label']                 = sanitize_text_field( $input['menu_loop_reserve_button_label'] ?? '' );
 		$output['menu_loop_detail_button_label']                  = sanitize_text_field( $input['menu_loop_detail_button_label'] ?? '' );
 		$output['closed_day_label']                               = sanitize_text_field( $input['closed_day_label'] ?? '' );
+
+		// 上限・既定値・親子項目の連動（例: 絞り込み検索が OFF ならリソースタグ検索も OFF）を
+		// 保存時と食い違わせないよう、保存時と同じ Settings_Sanitizer を通した値で復元する。
+		// ここで得たエラーは使わない（エラーの表示は保存処理の結果で行っている）。
+		$sanitized_by_save_rules = ( new Settings_Sanitizer() )->sanitize(
+			$input,
+			$this->settings_service->get_default_settings()
+		);
+		foreach ( self::OLD_INPUT_KEYS_FROM_SANITIZER as $key ) {
+			// 万一サニタイズ結果にキーが無い場合は復元せず、保存済みの値の表示に任せる。
+			if ( array_key_exists( $key, $sanitized_by_save_rules ) ) {
+				$output[ $key ] = $sanitized_by_save_rules[ $key ];
+			}
+		}
 
 		return $output;
 	}

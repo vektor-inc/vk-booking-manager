@@ -137,6 +137,10 @@
 	margin: 0.25rem 0 0;
 }
 
+.vkbm-auth-form__note--error {
+	color: var(--vkbm--color--danger-text);
+}
+
 .vkbm-auth-form__input[disabled],
 .vkbm-auth-form__input:disabled {
 	background: #f1f5f9;

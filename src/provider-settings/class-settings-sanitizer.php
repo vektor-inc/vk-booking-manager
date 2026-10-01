@@ -30,6 +30,13 @@ class Settings_Sanitizer {
 	 */
 	public const DESIGN_RADIUS_MD_MAX = 32;
 
+	/**
+	 * 仮予約の完了画面の案内文の最大文字数。
+	 *
+	 * @var int
+	 */
+	public const BOOKING_COMPLETE_MESSAGE_MAX_LENGTH = 1000;
+
 	private const HOLIDAY_FREQUENCIES = array(
 		'weekly',
 		'nth-1',
@@ -74,6 +81,26 @@ class Settings_Sanitizer {
 	 * @var array<string, mixed>
 	 */
 	private $field_errors = array();
+
+	/**
+	 * 仮予約の完了画面の案内文をサニタイズする。
+	 *
+	 * 改行コードを LF にそろえ、HTML タグを除去し、前後の空白を除いて上限文字数までに切り詰める。
+	 * 設定の保存（sanitize()）と、検証エラー後のフォーム再表示用の入力保持の両方で使う。
+	 *
+	 * @param mixed $value 入力値。
+	 * @return string サニタイズ後の案内文。
+	 */
+	public static function sanitize_booking_complete_message( $value ): string {
+		// 改行コードを LF にそろえてから切る（CRLF を 2 文字として数えないため）。
+		$value = str_replace( array( "\r\n", "\r" ), "\n", (string) $value );
+
+		return mb_substr(
+			trim( sanitize_textarea_field( $value ) ),
+			0,
+			self::BOOKING_COMPLETE_MESSAGE_MAX_LENGTH
+		);
+	}
 
 	/**
 	 * Sanitize submitted settings data.
@@ -123,9 +150,13 @@ class Settings_Sanitizer {
 		$data['provider_booking_cancel_deadline_hours'] = $this->sanitize_non_negative_int(
 			$input['provider_booking_cancel_deadline_hours'] ?? ( $data['provider_booking_cancel_deadline_hours'] ?? 24 )
 		);
-		$data['provider_allow_staff_overlap_admin']     = ! empty( $input['provider_allow_staff_overlap_admin'] );
-			$data['provider_website_url']               = $this->sanitize_url( $data['provider_website_url'] );
-			$data['reservation_page_url']               = $this->sanitize_url( $data['reservation_page_url'] );
+		// 仮予約の完了画面の案内文。改行は保持し、前後の空白を除いて1000文字までに制限する（空欄なら標準文が使われる）。
+		$data['provider_booking_complete_message_pending'] = self::sanitize_booking_complete_message(
+			$input['provider_booking_complete_message_pending'] ?? ( $data['provider_booking_complete_message_pending'] ?? '' )
+		);
+		$data['provider_allow_staff_overlap_admin']        = ! empty( $input['provider_allow_staff_overlap_admin'] );
+			$data['provider_website_url']                  = $this->sanitize_url( $data['provider_website_url'] );
+			$data['reservation_page_url']                  = $this->sanitize_url( $data['reservation_page_url'] );
 		// #427: 「絞り込み検索」チェックボックス。未送信＝チェック無しとして扱う（他のチェックボックス項目と同様）。
 		$data['reservation_show_menu_search'] = ! empty( $input['reservation_show_menu_search'] );
 		// #431: 「リソースタグ検索」チェックボックス。「絞り込み検索」の子項目のため、
