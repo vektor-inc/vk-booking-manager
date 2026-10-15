@@ -26,7 +26,7 @@ class Menu_Loop_Card_Image_Sizes_Test extends WP_UnitTestCase {
 	/**
 	 * カード画像に指定する sizes 属性の期待値。
 	 */
-	private const EXPECTED_SIZES = '(max-width: 767px) 100vw, 480px';
+	private const EXPECTED_SIZES = '(max-width: 599.98px) 100vw, 480px';
 
 	/**
 	 * テスト対象のブロックインスタンス。

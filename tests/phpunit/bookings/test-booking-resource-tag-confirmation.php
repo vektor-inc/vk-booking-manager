@@ -34,6 +34,7 @@ use function get_post_meta;
 use function set_transient;
 use function update_option;
 use function update_post_meta;
+use function vkbm_get_resource_tag_empty_message;
 use function wp_generate_password;
 use function wp_insert_term;
 use function wp_set_current_user;
@@ -307,6 +308,8 @@ class Booking_Resource_Tag_Confirmation_Test extends WP_UnitTestCase {
 
 		$this->assertInstanceOf( \WP_Error::class, $response, 'タグを持たない担当への予約は拒否されるべき' );
 		$this->assertSame( 'resource_tag_unavailable', $response->get_error_code() );
+		// テスト環境は日本語ロケールで動くため、英語の固定文言ではなく共通ヘルパーの戻り値と比較する。
+		$this->assertSame( vkbm_get_resource_tag_empty_message(), $response->get_error_message(), '確定時も共通ヘルパーの文言を返すべき' );
 		$error_data = $response->get_error_data();
 		$this->assertSame( 409, $error_data['status'] ?? null, '拒否時のHTTPステータスは409であるべき' );
 	}

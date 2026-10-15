@@ -118,10 +118,138 @@ class Rate_Limit_Trait_Test extends WP_UnitTestCase {
 
 		$stub = new Rate_Limit_Trait_Stub();
 
-		// 信頼するプロキシ経由なら XFF の先頭IPを採用する。
-		$this->assertSame( '198.51.100.7', $stub->get_client_ip() );
+		// 信頼するプロキシ経由なら、右端から辿って信頼プロキシでない最初のIPを採用する。
+		$this->assertSame( '192.0.2.1', $stub->get_client_ip() );
 
 		// 解除は tearDown() で確実に行う。
+	}
+
+	/**
+	 * 先頭に偽装値があっても、右端側の実IPが採用されること。
+	 */
+	public function test_get_client_ip_ignores_spoofed_leftmost_xff_value(): void {
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.5';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.99, 192.0.2.50';
+		$this->trust_proxies( array( '203.0.113.5' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		$this->assertSame( '192.0.2.50', $stub->get_client_ip() );
+	}
+
+	/**
+	 * 多段プロキシで、信頼プロキシを右から読み飛ばして実IPが採用されること。
+	 */
+	public function test_get_client_ip_skips_trusted_proxies_from_right(): void {
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.5';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.99, 192.0.2.50, 203.0.113.6';
+		$this->trust_proxies( array( '203.0.113.5', '203.0.113.6' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		$this->assertSame( '192.0.2.50', $stub->get_client_ip() );
+	}
+
+	/**
+	 * 偽装値を変えても同じIPになること（レート制限の回避ができないこと）。
+	 */
+	public function test_get_client_ip_is_stable_regardless_of_spoofed_value(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+		$this->trust_proxies( array( '203.0.113.5' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+		$ips  = array();
+
+		// 偽装値を毎回変えて取得する。
+		foreach ( array( '198.51.100.1', '198.51.100.2', '10.9.8.7', 'abc', 'unknown' ) as $spoofed ) {
+			$_SERVER['HTTP_X_FORWARDED_FOR'] = $spoofed . ', 192.0.2.50';
+			$ips[]                           = $stub->get_client_ip();
+		}
+
+		$this->assertSame( array( '192.0.2.50' ), array_values( array_unique( $ips ) ) );
+	}
+
+	/**
+	 * XFF の全要素が信頼プロキシ、または空の場合は REMOTE_ADDR にフォールバックすること。
+	 */
+	public function test_get_client_ip_falls_back_to_remote_addr_when_all_xff_entries_are_trusted_or_empty(): void {
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.5';
+		$this->trust_proxies( array( '203.0.113.5', '203.0.113.6' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		// 全要素が信頼プロキシ。
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.6, 203.0.113.5';
+		$this->assertSame( '203.0.113.5', $stub->get_client_ip() );
+
+		// 空要素のみ。
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = ' , ,';
+		$this->assertSame( '203.0.113.5', $stub->get_client_ip() );
+	}
+
+	/**
+	 * ポート付き IPv4 からポートを外して採用されること。
+	 */
+	public function test_get_client_ip_strips_port_from_ipv4(): void {
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.5';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.99, 192.0.2.50:51234';
+		$this->trust_proxies( array( '203.0.113.5' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		$this->assertSame( '192.0.2.50', $stub->get_client_ip() );
+	}
+
+	/**
+	 * 角括弧・ポート付き IPv6 から角括弧とポートを外して採用されること。
+	 */
+	public function test_get_client_ip_strips_brackets_and_port_from_ipv6(): void {
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.5';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '[2001:db8::1]:443';
+		$this->trust_proxies( array( '203.0.113.5' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		$this->assertSame( '2001:db8::1', $stub->get_client_ip() );
+	}
+
+	/**
+	 * IP として読めない値に当たったら探索を止め、左側の偽装値を採用せず REMOTE_ADDR になること。
+	 */
+	public function test_get_client_ip_stops_at_unreadable_value(): void {
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.5';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.99, unknown';
+		$this->trust_proxies( array( '203.0.113.5' ) );
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		$this->assertSame( '203.0.113.5', $stub->get_client_ip() );
+	}
+
+	/**
+	 * 信頼プロキシ未設定なら、複数要素の XFF でも無視されること。
+	 */
+	public function test_get_client_ip_ignores_multi_value_xff_without_trusted_proxy(): void {
+		$_SERVER['REMOTE_ADDR']          = '203.0.113.5';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.99, 192.0.2.50';
+
+		$stub = new Rate_Limit_Trait_Stub();
+
+		$this->assertSame( '203.0.113.5', $stub->get_client_ip() );
+	}
+
+	/**
+	 * 信頼プロキシのIPを設定するフィルタを登録する（解除は tearDown() で行う）。
+	 *
+	 * @param string[] $proxies 信頼するプロキシのIP。
+	 */
+	private function trust_proxies( array $proxies ): void {
+		add_filter(
+			'vkbm_trusted_proxy_ips',
+			static function () use ( $proxies ) {
+				return $proxies;
+			}
+		);
 	}
 
 	/**

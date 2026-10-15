@@ -8,6 +8,7 @@ use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
@@ -81,6 +82,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 		remove_all_filters( 'vkbm_draft_memo_max_length' );
 		// 指名機能の静的キャッシュをクリアして他テストへの影響を防ぐ。
 		Staff_Editor::clear_nomination_enabled_cache();
+		Industry_Presets::clear_cache();
 		parent::tearDown();
 	}
 
@@ -93,6 +95,137 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 		$settings['staff_enabled'] = false;
 		update_option( Settings_Repository::OPTION_KEY, $settings );
 		Staff_Editor::clear_nomination_enabled_cache();
+	}
+
+	/**
+	 * #643: 別の所有者（別の owner Cookie）が既存トークンで保存すると 403 になり、元の下書きは変わらない。
+	 */
+	public function test_save_draft_rejects_overwrite_by_other_cookie_owner(): void {
+		$menu_id = $this->create_menu();
+		wp_set_current_user( 0 );
+		$_COOKIE[ self::OWNER_COOKIE ] = 'ownerkeyaaaa1111';
+
+		$controller = new Booking_Draft_Controller();
+		$token      = $this->save_draft( $controller, $this->build_payload( $menu_id, '2024-08-01T10:00:00+09:00' ) );
+		$before     = get_transient( self::TRANSIENT_PREFIX . $token );
+		$this->owner_ids[] = 'cookie:ownerkeyaaaa1111';
+		$this->owner_ids[] = 'cookie:ownerkeybbbb2222';
+
+		$_COOKIE[ self::OWNER_COOKIE ] = 'ownerkeybbbb2222';
+		$result                        = $this->save_draft_raw(
+			$controller,
+			array_merge( $this->build_payload( $menu_id, '2024-08-02T10:00:00+09:00' ), array( 'token' => $token ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'forbidden_draft', $result->get_error_code() );
+		$this->assertSame( 403, $result->get_error_data()['status'] );
+		$this->assertSame( $before, get_transient( self::TRANSIENT_PREFIX . $token ), '元の下書きは変更されないはず' );
+		$this->assertFalse(
+			get_transient( VKBM_TESTS_OWNER_INDEX_PREFIX . sha1( 'cookie:ownerkeybbbb2222' ) ),
+			'拒否された所有者の owner index には何も書かれないはず'
+		);
+	}
+
+	/**
+	 * #643: 別ユーザーが、ログインユーザーの下書きのトークンで保存すると 403 になり、元の下書きは変わらない。
+	 */
+	public function test_save_draft_rejects_overwrite_by_other_user(): void {
+		$menu_id  = $this->create_menu();
+		$owner_id = $this->factory()->user->create();
+		wp_set_current_user( $owner_id );
+		$this->owner_ids[] = 'user:' . $owner_id;
+
+		$controller = new Booking_Draft_Controller();
+		$token      = $this->save_draft( $controller, $this->build_payload( $menu_id, '2024-08-03T10:00:00+09:00' ) );
+		$before     = get_transient( self::TRANSIENT_PREFIX . $token );
+
+		$other_id = $this->factory()->user->create();
+		wp_set_current_user( $other_id );
+		$this->owner_ids[] = 'user:' . $other_id;
+		$result            = $this->save_draft_raw(
+			$controller,
+			array_merge( $this->build_payload( $menu_id, '2024-08-04T10:00:00+09:00' ), array( 'token' => $token ) )
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'forbidden_draft', $result->get_error_code() );
+		$this->assertSame( $before, get_transient( self::TRANSIENT_PREFIX . $token ), '元の下書きは変更されないはず' );
+		$this->assertFalse(
+			get_transient( VKBM_TESTS_OWNER_INDEX_PREFIX . sha1( 'user:' . $other_id ) ),
+			'拒否されたユーザーの owner index には何も書かれないはず'
+		);
+	}
+
+	/**
+	 * #643: 同じ所有者なら既存トークンを上書きできる。
+	 */
+	public function test_save_draft_allows_overwrite_by_same_owner(): void {
+		$menu_id  = $this->create_menu();
+		$owner_id = $this->factory()->user->create();
+		wp_set_current_user( $owner_id );
+		$this->owner_ids[] = 'user:' . $owner_id;
+
+		$controller = new Booking_Draft_Controller();
+		$token      = $this->save_draft( $controller, $this->build_payload( $menu_id, '2024-08-05T10:00:00+09:00' ) );
+
+		$result = $this->save_draft_raw(
+			$controller,
+			array_merge( $this->build_payload( $menu_id, '2024-08-06T10:00:00+09:00' ), array( 'token' => $token ) )
+		);
+
+		$this->assertInstanceOf( WP_REST_Response::class, $result );
+		$this->assertSame( $token, $result->get_data()['token'] );
+		$stored = get_transient( self::TRANSIENT_PREFIX . $token );
+		$this->assertSame( '2024-08-06', $stored['date'], '同じ所有者の再保存は上書きされるはず' );
+	}
+
+	/**
+	 * #643: 匿名で作った下書きを、同じ owner Cookie を持ったままログインしたユーザーが上書きできる。
+	 */
+	public function test_save_draft_allows_logged_in_user_to_overwrite_anonymous_draft_with_same_cookie(): void {
+		$menu_id = $this->create_menu();
+		wp_set_current_user( 0 );
+		$_COOKIE[ self::OWNER_COOKIE ] = 'ownerkeycccc3333';
+		$this->owner_ids[]             = 'cookie:ownerkeycccc3333';
+
+		$controller = new Booking_Draft_Controller();
+		$token      = $this->save_draft( $controller, $this->build_payload( $menu_id, '2024-08-07T10:00:00+09:00' ) );
+
+		$login_user_id = $this->factory()->user->create();
+		wp_set_current_user( $login_user_id );
+		$this->owner_ids[] = 'user:' . $login_user_id;
+
+		$result = $this->save_draft_raw(
+			$controller,
+			array_merge( $this->build_payload( $menu_id, '2024-08-08T10:00:00+09:00' ), array( 'token' => $token ) )
+		);
+
+		$this->assertInstanceOf( WP_REST_Response::class, $result );
+		$stored = get_transient( self::TRANSIENT_PREFIX . $token );
+		$this->assertSame( '2024-08-08', $stored['date'] );
+		$this->assertSame( $login_user_id, (int) $stored['owner_user_id'], '所有者はログインユーザーに切り替わるはず' );
+	}
+
+	/**
+	 * #643: 存在しないトークンを指定した場合は、従来どおりそのトークンで新規保存できる。
+	 */
+	public function test_save_draft_accepts_unknown_token(): void {
+		$menu_id = $this->create_menu();
+		wp_set_current_user( 0 );
+		$_COOKIE[ self::OWNER_COOKIE ] = 'ownerkeydddd4444';
+		$this->owner_ids[]             = 'cookie:ownerkeydddd4444';
+
+		$controller     = new Booking_Draft_Controller();
+		$unknown_token  = 'abcdefabcdefabcdefabcdefabcdefab';
+		$this->tokens[] = $unknown_token;
+		$result         = $this->save_draft_raw(
+			$controller,
+			array_merge( $this->build_payload( $menu_id, '2024-08-09T10:00:00+09:00' ), array( 'token' => $unknown_token ) )
+		);
+
+		$this->assertInstanceOf( WP_REST_Response::class, $result );
+		$this->assertSame( $unknown_token, $result->get_data()['token'] );
 	}
 
 	public function test_logged_in_owner_can_access_and_others_cannot(): void {
@@ -337,6 +470,9 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 		$cookie_owner_id   = 'cookie:' . $cookie_owner_key;
 		$cookie_index_key  = VKBM_TESTS_OWNER_INDEX_PREFIX . sha1( $cookie_owner_id );
 		$this->owner_ids[] = $cookie_owner_id;
+
+		// ブラウザは払い出された所有者 Cookie を保持したままログインする（#643: 既存トークンの上書きは所有者の照合を通る）。
+		$_COOKIE[ self::OWNER_COOKIE ] = $cookie_owner_key;
 
 		// 匿名作成直後は cookie owner の index にエントリが 1 件入っている。
 		$cookie_index_before = get_transient( $cookie_index_key );
@@ -807,13 +943,23 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			array(
 				'test_condition_name'         => 'メニュー単位の指名設定なし（既定＝使う） => 指名フラグ・指名料とも保持される（#391導入前と同じ挙動）',
 				'menu_disable_nomination'     => false,
+				'industry_preset'             => 'custom',
 				'expected_is_staff_preferred' => true,
 				'expected_nomination_enabled' => true,
 				'expected_nomination_fee'     => 1000,
 			),
 			array(
+				'test_condition_name'         => '宿泊のサイトは時間枠のプランでも指名料が 0（スタッフに指名料が保存されていても加算しない・#736）',
+				'menu_disable_nomination'     => false,
+				'industry_preset'             => 'lodging',
+				'expected_is_staff_preferred' => true,
+				'expected_nomination_enabled' => true,
+				'expected_nomination_fee'     => 0,
+			),
+			array(
 				'test_condition_name'         => 'サイト全体は指名ONだがこのメニューは指名を無効化 => 指名フラグが強制的にfalseになり指名料も0（#391・本機能の本体）',
 				'menu_disable_nomination'     => true,
+				'industry_preset'             => 'custom',
 				'expected_is_staff_preferred' => false,
 				'expected_nomination_enabled' => false,
 				'expected_nomination_fee'     => 0,
@@ -825,7 +971,9 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			$repository                = new Settings_Repository();
 			$settings                  = $repository->get_settings();
 			$settings['staff_enabled'] = true;
+			$settings['industry_preset'] = $case['industry_preset'];
 			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Industry_Presets::clear_cache();
 			Staff_Editor::clear_nomination_enabled_cache();
 
 			$menu_id  = $this->create_menu();
@@ -881,6 +1029,74 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			wp_set_current_user( 0 );
 			Staff_Editor::clear_nomination_enabled_cache();
 		}
+	}
+
+	/**
+	 * get_draft: 宿泊へ切り替える前に指名料つきで保存された下書きを読み直しても、指名料を 0 円にする（#736）。
+	 *
+	 * 宿泊以外のサイトで指名料つきの下書きを保存してから、業種プリセットを宿泊に切り替えたあとで読み直す。
+	 * 保存時に 0 円になる経路ではなく、get_draft() が保存済みの金額を読み直すときの判定だけを確かめる。
+	 */
+	public function test_get_draft_zeroes_nomination_fee_saved_before_switching_to_lodging(): void {
+		// 宿泊のサイトは Pro 版限定機能のため、無料版ビルドでは Industry_Presets::supports() が常に false になる。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '宿泊のサイトは Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$repository                  = new Settings_Repository();
+		$settings                    = $repository->get_settings();
+		$settings['staff_enabled']   = true;
+		$settings['industry_preset'] = 'custom';
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Industry_Presets::clear_cache();
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$menu_id  = $this->create_menu();
+		$staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		update_post_meta( $staff_id, Staff_Editor::META_NOMINATION_FEE, 1000 );
+
+		$owner_id = $this->factory()->user->create();
+		wp_set_current_user( $owner_id );
+		$this->owner_ids[] = 'user:' . $owner_id;
+
+		$controller = new Booking_Draft_Controller();
+		$payload    = array_merge(
+			$this->build_payload( $menu_id, '2024-11-15T10:00:00+09:00' ),
+			array(
+				'resource_id'        => $staff_id,
+				'is_staff_preferred' => true,
+			)
+		);
+		$token      = $this->save_draft( $controller, $payload );
+
+		// 宿泊以外のサイトでは、指名料つきで読み出せる（比較の基準）。
+		$before = $controller->get_draft( $this->build_get_request( $token ) )->get_data();
+		$this->assertSame( 1000, (int) ( $before['nomination_fee'] ?? -1 ), '切り替え前は指名料 1000 で読める' );
+
+		// 保存済みの下書きは変えずに、業種プリセットだけを宿泊へ切り替える。
+		$settings['industry_preset'] = 'lodging';
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Industry_Presets::clear_cache();
+		Staff_Editor::clear_nomination_enabled_cache();
+		$this->assertTrue( Industry_Presets::supports( 'lodging' ), '前提: 宿泊のサイトになっている' );
+
+		$after = $controller->get_draft( $this->build_get_request( $token ) )->get_data();
+		$this->assertSame( 0, (int) ( $after['nomination_fee'] ?? -1 ), '宿泊へ切り替えたあとは保存済みの指名料を使わない' );
+		$this->assertSame(
+			(int) $before['total_price'] - 1000,
+			(int) ( $after['total_price'] ?? -1 ),
+			'合計にも指名料を含めない'
+		);
+
+		delete_transient( self::TRANSIENT_PREFIX . $token );
+		$this->tokens = array();
+		wp_set_current_user( 0 );
+		Staff_Editor::clear_nomination_enabled_cache();
 	}
 
 	/**
@@ -1496,7 +1712,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				],
 			],
 			[
-				'test_condition_name' => 'slot_id / start_at / end_at / service_end_at / meta.timezone は各 64 文字に切り詰められる（異常系：上限超過）',
+				'test_condition_name' => 'slot_id / start_at / end_at / service_end_at は各 64 文字に切り詰められ、meta.timezone は入力値によらずサイト設定のタイムゾーンで上書きされる（異常系：上限超過 / #672 以降の仕様）',
 				'overrides'           => [
 					'slot' => [
 						'slot_id'        => str_repeat( 'x', 100 ),
@@ -1514,7 +1730,8 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 					'start_at_length'       => 64,
 					'end_at_length'         => 64,
 					'service_end_at_length' => 64,
-					'timezone_length'       => 64,
+					// #672 以降、meta.timezone は入力を使わずサイト設定で上書きするため、切り詰めではなくサイト設定との一致を確認する。
+					'timezone_value'        => wp_timezone()->getName(),
 				],
 			],
 			[
@@ -1676,11 +1893,11 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 					$case['test_condition_name'] . ' (slot.service_end_at length)'
 				);
 			}
-			if ( array_key_exists( 'timezone_length', $expected ) ) {
+			if ( array_key_exists( 'timezone_value', $expected ) ) {
 				$this->assertSame(
-					$expected['timezone_length'],
-					$this->utf8_length( (string) $stored['meta']['timezone'] ),
-					$case['test_condition_name'] . ' (meta.timezone length)'
+					$expected['timezone_value'],
+					(string) $stored['meta']['timezone'],
+					$case['test_condition_name'] . ' (meta.timezone value)'
 				);
 			}
 			if ( array_key_exists( 'date_length', $expected ) ) {
@@ -2558,9 +2775,26 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * @param int    $menu_id Menu ID.
-	 * @param string $start_at Slot start datetime.
-	 * @return array<string, mixed>
+	 * save_draft: meta.timezone をサイトのタイムゾーンで上書きすることを検証する。
+	 */
+	public function test_save_draft_overwrites_timezone_with_site_timezone(): void {
+		$menu_id                      = $this->create_menu();
+		$payload                      = $this->build_payload( $menu_id, '2026-10-05T10:00:00+09:00' );
+		$payload['meta']['timezone'] = 'America/New_York';
+
+		$token  = $this->save_draft( new Booking_Draft_Controller(), $payload );
+		$stored = get_transient( self::TRANSIENT_PREFIX . $token );
+
+		$this->assertIsArray( $stored, '下書きが保存されるべき' );
+		$this->assertSame( wp_timezone()->getName(), $stored['meta']['timezone'] ?? null, 'meta.timezone はサイト設定で上書きされるべき' );
+	}
+
+	/**
+	 * 下書き保存用の基本ペイロードを組み立てる。
+	 *
+	 * @param int    $menu_id サービスメニュー ID。
+	 * @param string $start_at 開始日時。
+	 * @return array<string, mixed> 下書き保存用ペイロード。
 	 */
 	private function build_payload( int $menu_id, string $start_at ): array {
 		$date = substr( $start_at, 0, 10 );
@@ -2577,6 +2811,17 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'timezone' => 'Asia/Tokyo',
 			],
 		];
+	}
+
+	/**
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function save_draft_raw( Booking_Draft_Controller $controller, array $payload ) {
+		$request = new WP_REST_Request( 'POST', '/vkbm/v1/drafts' );
+		$request->set_header( 'content-type', 'application/json' );
+		$request->set_body( wp_json_encode( $payload ) );
+
+		return $controller->save_draft( $request );
 	}
 
 	private function save_draft( Booking_Draft_Controller $controller, array $payload ): string {

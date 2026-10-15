@@ -7,7 +7,7 @@
  *
  * 実測した原因は次の2点。
  * 1. assets/scss/variables.scss の :root ブロック（--vkbm--radius--md 等の既定値定義）が
- *    assets/scss/index-blocks.scss 経由で各ブロックの style.scss にも @forward され、
+ *    （issue #660 で廃止した）assets/scss/index-blocks.scss 経由で各ブロックの style.scss にも @forward され、
  *    ビルド後の build/blocks/*\/style-index.css に :root{...} が重複出力されていた。
  *    CSS カスタムプロパティは同じ :root への宣言なら「後から読み込まれた方が勝つ」ため、
  *    設定値を差し込むインライン CSS より後にブロック CSS が読み込まれる状況になると、
@@ -18,8 +18,8 @@
  *
  * ビルド成果物（build/ 配下、.gitignore 対象で CI ではビルドされない）ではなく、
  * 上記2点の原因そのものであるソースファイルの構成を直接検証する。CSS の読み込み順序に
- * 依存するカスケードの結果はユニットテストで直接検証しにくいため、「index-blocks.scss
- * から実際に読み込まれる全パーシャルに :root ブロックが存在しない（＝ :root の実体が
+ * 依存するカスケードの結果はユニットテストで直接検証しにくいため、「各ブロックの
+ * style.scss から実際に読み込まれる全ファイルに :root ブロックが存在しない（＝ :root の実体が
  * どこにも重複しない）こと」と「対象セレクタが共通のカスタムプロパティを参照している
  * こと」の2点に落として検証する。
  *
@@ -42,43 +42,135 @@ use PHPUnit\Framework\TestCase;
 class Block_Style_Tokens_Test extends TestCase {
 
 	/**
-	 * index-blocks.scss から @use / @forward で到達する全パーシャルに、
-	 * トップレベルの :root ブロック宣言が存在しないことを検証する。
+	 * 共通部品を持たず、ブロック固有ルールだけを書く style.scss の一覧。
 	 *
-	 * 「index-blocks.scss が @forward "variables" を含まない」という条件だけを見ると、
-	 * 誰かが別のパーシャル（例: common.scss）へ @use "variables" を書き足した場合に
-	 * :root の重複が復活してもこのテストは気づけない。実際に到達するファイルを
-	 * 再帰的に辿り、それぞれの中身を見て判定する。
+	 * @var string[]
+	 */
+	private const BLOCK_STYLE_SOURCES = array(
+		'src/blocks/reservation/style.scss',
+		'src/blocks/menu-loop/style.scss',
+		'src/blocks/menu-card/style.scss',
+		'src/blocks/reservation-button/style.scss',
+		'src/blocks/menu-search/style.scss',
+	);
+
+	/**
+	 * ブロックの style.scss が到達する全ファイルに、トップレベルの :root ブロック宣言が
+	 * 存在しないことを検証する。
+	 *
+	 * 「各 style.scss が variables を @use しない」という条件だけを見ると、誰かが別の
+	 * パーシャルへ @use "variables" を書き足した場合に :root の重複が復活してもこのテストは
+	 * 気づけない。実際に到達するファイルを再帰的に辿り、それぞれの中身を見て判定する。
+	 * （index-blocks.scss は issue #660 で廃止したため、各ブロックの style.scss を起点にする。）
 	 */
 	public function test_root_custom_properties_are_not_declared_in_partials_reachable_from_block_styles(): void {
-		$entry_path = VKBM_PLUGIN_DIR_PATH . 'assets/scss/index-blocks.scss';
-		$this->assertFileExists( $entry_path, 'assets/scss/index-blocks.scss が存在しません。' );
+		foreach ( self::BLOCK_STYLE_SOURCES as $relative_path ) {
+			$entry_path = VKBM_PLUGIN_DIR_PATH . $relative_path;
+			$this->assertFileExists( $entry_path, $relative_path . ' が存在しません。' );
 
-		$visited = array();
-		$this->collect_reachable_scss_partials( $entry_path, $visited );
+			$visited = array();
+			$this->collect_reachable_scss_partials( $entry_path, $visited );
 
-		// index-blocks.scss 自身が到達先に含まれていることを確認し、収集ロジックが
-		// そもそも機能しているかを担保する（正常系の前提チェック）。
-		$this->assertArrayHasKey(
-			(string) realpath( $entry_path ),
-			$visited,
-			'到達ファイル収集の起点である index-blocks.scss 自体が結果に含まれていません。'
+			// 起点自身が到達先に含まれていることを確認し、収集ロジックが機能しているかを担保する。
+			$this->assertArrayHasKey(
+				(string) realpath( $entry_path ),
+				$visited,
+				'到達ファイル収集の起点である ' . $relative_path . ' 自体が結果に含まれていません。'
+			);
+
+			foreach ( $visited as $path => $content ) {
+				$this->assertFalse(
+					$this->has_top_level_root_block( $content ),
+					sprintf(
+						'%s に :root ブロックが見つかりました。ブロック CSS（webpack 経由で個別ビルドされる）へ ' .
+						':root の実体を持ち込むと、build/blocks/*/style-index.css に既定値が重複出力され、' .
+						'基本設定で指定した値が上書きされる不具合（issue #420）が復活します。',
+						$path
+					)
+				);
+			}
+		}
+	}
+
+	/**
+	 * ブロックの style.scss が共通部品（common / alert / utility / buttons）を取り込まず、
+	 * 他の SCSS への @use / @forward / @import を一切持たないことを検証する。
+	 *
+	 * 共通部品をブロックごとにコンパイルすると、同じ CSS が各ブロックの style-index.css に
+	 * 重複して出力され、読み込み順で「どのコピーが勝つか」が決まってしまう（issue #660）。
+	 * 共通部品は vkbm-components バンドルに1本化し、block.json の style から参照する。
+	 */
+	public function test_block_styles_do_not_pull_in_shared_partials(): void {
+		// 共通部品（common / alert / utility / buttons）と廃止した index-blocks の取り込みだけを禁止する。
+		// variables など別の目的のパーシャルを @use することまでは禁止しない。
+		$forbidden_pattern = '/@(?:use|forward|import)\s+[\'"][^\'"]*(?:index-blocks|(?<![\w-])(?:common|alert|utility|buttons))(?:\.scss)?[\'"]/';
+
+		foreach ( self::BLOCK_STYLE_SOURCES as $relative_path ) {
+			$content = $this->strip_scss_comments( $this->read_local_file( VKBM_PLUGIN_DIR_PATH . $relative_path ) );
+
+			$this->assertSame(
+				0,
+				preg_match( $forbidden_pattern, $content ),
+				$relative_path . ' が共通部品（common / alert / utility / buttons / index-blocks）を取り込んでいます。共通部品は vkbm-components バンドルから読み込んでください。'
+			);
+		}
+
+		// 禁止パターン自体が意図どおりに働くことの確認（取り込み記述は検出し、別目的のパーシャルは検出しない）。
+		$this->assertSame( 1, preg_match( $forbidden_pattern, '@use "../../../assets/scss/index-blocks.scss" as *;' ) );
+		$this->assertSame( 1, preg_match( $forbidden_pattern, "@forward 'buttons';" ) );
+		$this->assertSame( 0, preg_match( $forbidden_pattern, '@use "../../../assets/scss/variables.scss" as *;' ) );
+
+		$this->assertFileDoesNotExist(
+			VKBM_PLUGIN_DIR_PATH . 'assets/scss/index-blocks.scss',
+			'index-blocks.scss は issue #660 で廃止しました。'
 		);
+	}
 
-		$this->assertNotEmpty(
-			$visited,
-			'index-blocks.scss から到達するファイルが1件も見つかりませんでした（@use / @forward の解析に失敗している可能性があります）。'
+	/**
+	 * 共通部品が vkbm-components バンドルに集約され、各ブロックの block.json の style から
+	 * 参照されていること、および認証バンドルに重複して含まれないことを検証する。
+	 */
+	public function test_shared_components_are_bundled_once_and_referenced_from_block_json(): void {
+		$bundles = $this->read_local_file( VKBM_PLUGIN_DIR_PATH . 'bin/build-css-bundles.js' );
+
+		$components = $this->extract_js_object_property_block( $bundles, "'vkbm-components.min.css'" );
+		$this->assertNotSame( '', $components, 'vkbm-components.min.css バンドルの定義が見つかりません。' );
+
+		foreach ( array( 'alert.scss', 'utility.scss', 'buttons.scss' ) as $partial ) {
+			$this->assertStringContainsString( "'" . $partial . "'", $components, "vkbm-components に {$partial} が含まれていません。" );
+		}
+
+		$test_cases = array(
+			array(
+				'bundle_key' => "'vkbm-auth.min.css'",
+				'forbidden'  => array( 'buttons.scss', 'alert.scss', 'utility.scss', 'common.scss' ),
+			),
+			// vkbm-editor は補正のみ。部品を含めると、エディターのキャンバスでブロック自身の CSS より
+			// 後に読まれて上書きする（issue #659 / PR #666）。部品は vkbm-auth 経由で先に読み込む。
+			array(
+				'bundle_key' => "'vkbm-editor.min.css'",
+				'forbidden'  => array( 'buttons.scss', 'alert.scss', 'utility.scss', 'auth-forms.scss', 'common.scss' ),
+			),
 		);
+		foreach ( $test_cases as $case ) {
+			$block = $this->extract_js_object_property_block( $bundles, $case['bundle_key'] );
+			$this->assertNotSame( '', $block, $case['bundle_key'] . ' のバンドル定義が見つかりません。' );
+			foreach ( $case['forbidden'] as $partial ) {
+				$this->assertStringNotContainsString(
+					"'" . $partial . "'",
+					$block,
+					$case['bundle_key'] . ' に ' . $partial . ' が重複して含まれています。'
+				);
+			}
+		}
 
-		foreach ( $visited as $path => $content ) {
-			$this->assertFalse(
-				$this->has_top_level_root_block( $content ),
-				sprintf(
-					'%s に :root ブロックが見つかりました。ブロック CSS（webpack 経由で個別ビルドされる）へ ' .
-					':root の実体を持ち込むと、build/blocks/*/style-index.css に既定値が重複出力され、' .
-					'基本設定で指定した値が上書きされる不具合（issue #420）が復活します。',
-					$path
-				)
+		foreach ( array( 'reservation', 'menu-loop', 'menu-card', 'reservation-button', 'menu-search' ) as $block_name ) {
+			$json = json_decode( $this->read_local_file( VKBM_PLUGIN_DIR_PATH . "src/blocks/{$block_name}/block.json" ), true );
+			$this->assertIsArray( $json, "{$block_name}/block.json を解析できません。" );
+			$this->assertSame(
+				array( 'vkbm-components', 'file:./style-index.css' ),
+				$json['style'] ?? null,
+				"{$block_name}/block.json の style は共通部品のハンドルを先に、ブロック固有 CSS を後に指定してください。"
 			);
 		}
 	}
@@ -155,6 +247,75 @@ class Block_Style_Tokens_Test extends TestCase {
 	}
 
 	/**
+	 * admin-notice.scss が vkbm-admin-notice バンドルにだけ含まれ、管理画面用の vkbm-admin
+	 * バンドルには含まれないことを検証する（issue #659）。
+	 *
+	 * 全管理画面に出る通知は小さな専用バンドルから読み込み、約48KBの vkbm-admin は VKBM の画面でだけ
+	 * 読み込む。admin-notice.scss が両方に入っていると、VKBM の画面で同じ CSS が二重に読み込まれる。
+	 */
+	public function test_css_bundle_config_keeps_admin_notice_in_its_own_bundle(): void {
+		$content = $this->read_local_file( VKBM_PLUGIN_DIR_PATH . 'bin/build-css-bundles.js' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'vkbm-admin-notice.min.css バンドルは admin-notice.scss を含む',
+				'bundle_key'          => "'vkbm-admin-notice.min.css'",
+				'should_contain'      => true,
+			),
+			array(
+				'test_condition_name' => 'vkbm-admin.min.css バンドルは admin-notice.scss を含まない',
+				'bundle_key'          => "'vkbm-admin.min.css'",
+				'should_contain'      => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$block = $this->extract_js_object_property_block( $content, $case['bundle_key'] );
+			$this->assertNotSame( '', $block, $case['test_condition_name'] . '（バンドル定義が見つかりません）' );
+			$this->assertSame(
+				$case['should_contain'],
+				false !== strpos( $block, "'admin-notice.scss'" ),
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
+	 * common.scss が「クラス名に vkbm- を含む全要素」を対象にするセレクターを持たないことを検証する（issue #659）。
+	 *
+	 * WordPress 管理画面の <body> には `toplevel_page_vkbm-...` のような画面クラスが付くため、
+	 * `*[class*="vkbm-"]` のような指定は <body> 自体に一致し、コアの入力欄・説明文まで巻き込む。
+	 * 共通 CSS は、プラグインが出力する最上位ラッパーを列挙したスコープの内側だけを対象にする。
+	 */
+	public function test_common_scss_does_not_match_every_element_with_vkbm_class(): void {
+		$content = $this->read_local_file( VKBM_PLUGIN_DIR_PATH . 'assets/scss/common.scss' );
+
+		// コメントを除いたうえで、行頭（セレクターの先頭）に `*[class*="vkbm-"]` が無いことを確認する。
+		$without_comments = preg_replace( '#/\*.*?\*/#s', '', $content );
+		$without_comments = preg_replace( '#^\s*//.*$#m', '', (string) $without_comments );
+
+		$this->assertDoesNotMatchRegularExpression(
+			'/^\s*\*\[class\*=["\']vkbm-["\']\]/m',
+			(string) $without_comments,
+			'common.scss に `*[class*="vkbm-"]` で始まるセレクターが残っています。'
+		);
+	}
+
+	/**
+	 * common.scss の text-box ルールのルートが `:where()` で包まれていることを検証する（issue #659）。
+	 *
+	 * ルートを包まないと詳細度が (0,2,0) に上がり、個別に `text-box: normal` を指定した要素
+	 * （例: 予約ブロックのフッター `.vkbm-reservation-footer__info p`、#638）が負けて退行する。
+	 */
+	public function test_common_scss_text_box_roots_are_wrapped_in_where(): void {
+		$content = $this->read_local_file( VKBM_PLUGIN_DIR_PATH . 'assets/scss/common.scss' );
+
+		$this->assertStringContainsString( '":where(#{$root})"', $content, 'text-box のルートが :where() で包まれていません。' );
+		$this->assertStringContainsString( 'vkbm-scoped($vkbm-text-where-roots,', $content, 'text-box のルールが :where() で包んだルートを使っていません。' );
+		$this->assertStringNotContainsString( 'vkbm-scoped($vkbm-text-roots,', $content, 'text-box のルールが :where() で包まないルートを使っています。' );
+	}
+
+	/**
 	 * 予約ブロックの特定セレクタが、border-radius の値をハードコードせず
 	 * 共通のカスタムプロパティ（--vkbm--radius--md）を参照していることを検証する。
 	 *
@@ -202,6 +363,44 @@ class Block_Style_Tokens_Test extends TestCase {
 	}
 
 	/**
+	 * 予約ブロックのフッターで、住所（.vkbm-reservation-footer__address）と
+	 * 営業時間（.vkbm-reservation-footer__hours）に white-space: pre-line が当たり、
+	 * 入力欄の改行が表示に反映されることを検証する（issue #745）。
+	 *
+	 * 住所は <p> に model.address をそのまま出力しており、white-space の指定が無いと
+	 * 入力欄で入れた改行が表示上つぶれて1行になる。
+	 */
+	public function test_reservation_footer_address_and_hours_preserve_line_breaks(): void {
+		$path = VKBM_PLUGIN_DIR_PATH . 'src/blocks/reservation/style.scss';
+		$this->assertFileExists( $path, 'src/blocks/reservation/style.scss が存在しません。' );
+
+		$content = $this->strip_scss_comments( $this->read_local_file( $path ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '住所（.vkbm-reservation-footer__address）は white-space: pre-line で改行を維持する',
+				'selector'            => '.vkbm-reservation-footer__address',
+			),
+			array(
+				'test_condition_name' => '営業時間（.vkbm-reservation-footer__hours）は white-space: pre-line で改行を維持する',
+				'selector'            => '.vkbm-reservation-footer__hours',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// セレクタリストの一部として並記されていてもよい（例: 住所と営業時間をまとめた規則）。
+			$pattern = '/(?:^|[}\s,;])' . preg_quote( $case['selector'], '/' ) . '\s*(?:,[^{}]*)?\{([^{}]*)\}/';
+			$matched = preg_match_all( $pattern, $content, $matches );
+			$this->assertGreaterThan( 0, $matched, $case['test_condition_name'] . '（セレクタが見つかりません）' );
+			$this->assertMatchesRegularExpression(
+				'/white-space:\s*pre-line/',
+				implode( "\n", $matches[1] ),
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
 	 * extract_top_level_rule_block() が、直前の文（@use "…"; 等）がセミコロン終端で
 	 * 終わっている場合でも、その直後の最初のルールを取り出せることを検証する。
 	 *
@@ -215,7 +414,7 @@ class Block_Style_Tokens_Test extends TestCase {
 	 * 通ってしまい気づけていなかった）。
 	 */
 	public function test_extract_top_level_rule_block_finds_rule_immediately_after_semicolon_terminated_statement(): void {
-		$scss = "@use \"../../../assets/scss/index-blocks.scss\" as *;\n\n" .
+		$scss = "@use \"../../../assets/scss/variables.scss\" as *;\n\n" .
 			".wp-block-vk-booking-manager-reservation {\n\tdisplay: block;\n}\n";
 
 		$block = $this->invoke_extract_top_level_rule_block( $scss, '.wp-block-vk-booking-manager-reservation' );

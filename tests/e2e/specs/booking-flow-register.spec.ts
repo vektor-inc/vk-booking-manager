@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { wpCliArgs } from '../utils/helpers';
+import { wpCliArgs, getServiceMenuId } from '../utils/helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 const E2E_DEBUG =
@@ -250,20 +250,22 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			console.log( 'All service menus (any status):', allMenus );
 		}
 
+		// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+		// 見つからないエラーを下の catch（旧スタイルへのフォールバック）で握りつぶさないよう try の外で取得する。
+		const menuId = getServiceMenuId();
+
 		// 適切なタイムアウトでサービスメニューボタンを探す
 		try {
 			// まず新しいボタンスタイルを試す
-			await page.waitForSelector( '.vkbm-menu-loop__button--reserve', {
+			const reserveSelector = `.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`;
+			await page.waitForSelector( reserveSelector, {
 				state: 'visible',
 				timeout: 10000,
 			} );
 			console.log(
 				'Service menu button found (.vkbm-menu-loop__button--reserve). Clicking...'
 			);
-			await page
-				.locator( '.vkbm-menu-loop__button--reserve' )
-				.first()
-				.click();
+			await page.locator( reserveSelector ).first().click();
 		} catch ( e ) {
 			console.log(
 				'New style button not found, trying old style (.vkbm-service-menu-card)...'

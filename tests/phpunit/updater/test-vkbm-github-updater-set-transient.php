@@ -103,7 +103,7 @@ class Test_VKBM_GitHub_Updater_Set_Transient extends WP_UnitTestCase {
 		$dummy_assets = array(
 			array(
 				'name'                 => 'vk-booking-manager.zip',
-				'browser_download_url' => 'https://example.com/vk-booking-manager.zip',
+				'browser_download_url' => 'https://github.com/vektor-inc/vk-booking-manager/releases/download/99.0.0/vk-booking-manager.zip',
 			),
 		);
 
@@ -182,6 +182,102 @@ class Test_VKBM_GitHub_Updater_Set_Transient extends WP_UnitTestCase {
 					$result->no_update[ $plugin_slug ]->package,
 					$case['test_condition_name'] . '（no_update の package は空文字）'
 				);
+			}
+		}
+	}
+
+	/**
+	 * set_transient() が、ベータ版・下書きを除いた最大バージョンのリリースを採用することを検証する。
+	 */
+	public function test_select_latest_release() {
+		$plugin_file = dirname( __DIR__, 3 ) . '/vk-booking-manager.php';
+		$plugin_slug = plugin_basename( $plugin_file );
+
+		if ( ! function_exists( 'get_plugin_data' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$real_plugin_data     = get_plugin_data( $plugin_file );
+		$real_current_version = (string) $real_plugin_data['Version'];
+
+		// 現在のバージョンより確実に大きい 3 つのバージョン（小 < 中 < 大）。
+		$major    = (int) $real_current_version;
+		$ver_low  = ( $major + 100 ) . '.0.0';
+		$ver_mid  = ( $major + 200 ) . '.0.0';
+		$ver_high = ( $major + 300 ) . '.0.0';
+
+		/**
+		 * リリース 1 件分の配列を作る。
+		 *
+		 * @param string $tag_name    タグ名。
+		 * @param bool   $prerelease  ベータ版かどうか。
+		 * @param bool   $draft       下書きかどうか。
+		 * @return array リリース 1 件分。
+		 */
+		$release = static function ( $tag_name, $prerelease = false, $draft = false ) {
+			return array(
+				'tag_name'   => $tag_name,
+				'prerelease' => $prerelease,
+				'draft'      => $draft,
+				'assets'     => array(
+					array(
+						'name'                 => 'vk-booking-manager.zip',
+						'browser_download_url' => 'https://github.com/vektor-inc/vk-booking-manager/releases/download/' . $tag_name . '/vk-booking-manager.zip',
+					),
+				),
+			);
+		};
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '先頭がベータ版で 2 件目が正式版の場合 => ベータ版を採用せず正式版を採用する',
+				'releases'            => array( $release( $ver_high, true ), $release( $ver_mid ) ),
+				'expect_new_version'  => $ver_mid,
+			),
+			array(
+				'test_condition_name' => '先頭が下書きで 2 件目が正式版の場合 => 下書きを除外して正式版を採用する',
+				'releases'            => array( $release( $ver_high, false, true ), $release( $ver_low ) ),
+				'expect_new_version'  => $ver_low,
+			),
+			array(
+				'test_condition_name' => '並び順が新しい順でない場合 => 並び順に関係なく最大バージョンを採用する',
+				'releases'            => array( $release( $ver_low ), $release( $ver_high ), $release( $ver_mid ) ),
+				'expect_new_version'  => $ver_high,
+			),
+			array(
+				'test_condition_name' => 'v 付きのタグ名が混在する場合 => v を除いた数値で比較して最大を採用する',
+				'releases'            => array( $release( $ver_low ), $release( 'v' . $ver_mid ) ),
+				'expect_new_version'  => 'v' . $ver_mid,
+			),
+			array(
+				'test_condition_name' => '不正な形の要素（文字列・タグ名なし・数値のタグ名）が混ざる場合 => 無視して正式版を採用する',
+				'releases'            => array( 'foo', array( 'prerelease' => false ), array( 'tag_name' => 123 ), $release( $ver_mid ) ),
+				'expect_new_version'  => $ver_mid,
+			),
+			array(
+				'test_condition_name' => 'すべてベータ版または下書きの場合 => 採用できるリリースが無く更新なし（no_update）になる',
+				'releases'            => array( $release( $ver_high, true ), $release( $ver_mid, false, true ) ),
+				'expect_new_version'  => null,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->stub_enabled       = true;
+			$this->stub_response_body = wp_json_encode( $case['releases'] );
+
+			$updater = new VKBM_GitHub_Updater( $plugin_file );
+
+			$transient           = new stdClass();
+			$transient->checked  = array( $plugin_slug => $real_current_version );
+			$transient->response = array();
+
+			$result = $updater->set_transient( $transient );
+
+			if ( null === $case['expect_new_version'] ) {
+				$this->assertFalse( isset( $result->response[ $plugin_slug ] ), $case['test_condition_name'] );
+				$this->assertTrue( isset( $result->no_update[ $plugin_slug ] ), $case['test_condition_name'] );
+			} else {
+				$this->assertTrue( isset( $result->response[ $plugin_slug ] ), $case['test_condition_name'] );
+				$this->assertSame( $case['expect_new_version'], $result->response[ $plugin_slug ]->new_version, $case['test_condition_name'] );
 			}
 		}
 	}

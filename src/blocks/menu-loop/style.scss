@@ -1,19 +1,20 @@
-@use "../../../assets/scss/index-blocks.scss" as *;
+@use "../../../assets/scss/breakpoints" as *;
+@use "../../../assets/scss/mixins" as *;
 
 .vkbm-menu-loop {
 	--vkbm-menu-loop-gap: 1.5rem;
 	--vkbm-menu-loop-columns: 1;
 }
 
-/***********************************
- * Menu Groups
- ***********************************/
+/* ==========================================================================
+   メニューグループ
+   ========================================================================== */
 
 .vkbm-menu-loop__group-title {
 	font-size: 1.25rem;
 	margin: 0 0 1rem;
 	background-color: #f5f5f5;
-	border-left: 3px solid var(--vkbm--color--primary, #007cba);
+	border-left: 3px solid var(--vkbm--color--primary, #2563eb);
 	padding: 0.6em 0.7em;
 }
 
@@ -43,15 +44,19 @@
 	flex-direction: column;
 	height: 100%;
 	overflow: hidden;
+	container: vkbm-menu-loop-item / inline-size;
 
-	@media (min-width: 768px) {
+	@include vkbm-bp-up($vkbm-bp-front-sm) {
 		flex-direction: row;
+
+		// 列数を増やしてカードが狭くなったときは、本文が潰れないよう画像の下へ折り返す。
+		flex-wrap: wrap;
 	}
 }
 
-/***********************************
- * Card Style
- ***********************************/
+/* ==========================================================================
+   カード
+   ========================================================================== */
 
 .vkbm-menu-loop__list--card {
 	display: grid;
@@ -60,7 +65,7 @@
 }
 
 .vkbm-menu-loop__card-item {
-	background: #fff;
+	background: var(--vkbm--color--bg-primary, #fff);
 	border: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
 	border-radius: var(--vkbm--radius--md, 8px);
 
@@ -74,14 +79,19 @@
 	width: 100%;
 	padding: var(--vkbm--spacing--sm);
 
-	@media (max-width: 767px) {
-		padding-bottom: 0;
-	}
+	// 画像の下に本文を置く縦積み（599px 以下、およびカードが狭いとき）は、画像をカードの内側いっぱいに広げる。
+	padding-bottom: 0;
 
-	@media (min-width: 768px) {
-		max-width: 240px;
-		min-width: 180px;
-		padding-right: 0;
+	// 画像と本文を横に並べるのは、カードの内側の幅が画像の最大幅（240px）+ 本文の最小幅（240px）以上のときだけ。
+	// 列数でカードの幅が変わるため、画面幅ではなくカード（.vkbm-menu-loop__item）の幅で切り替える。
+	@include vkbm-bp-up($vkbm-bp-front-sm) {
+
+		@container vkbm-menu-loop-item (min-width: 480px) {
+			max-width: 240px;
+			min-width: 180px;
+			padding-right: 0;
+			padding-bottom: var(--vkbm--spacing--sm);
+		}
 	}
 
 	img {
@@ -97,6 +107,11 @@
 	flex-grow: 1;
 	height: 100%;
 	padding: var(--vkbm--spacing--sm);
+
+	// 画像の最大幅（240px）と並べて収まらない狭さのカードでは、本文が 240px を割る前に折り返す。
+	@include vkbm-bp-up($vkbm-bp-front-sm) {
+		flex-basis: 240px;
+	}
 }
 
 .vkbm-menu-loop__card-categories {
@@ -108,13 +123,12 @@
 }
 
 .vkbm-menu-loop__card-categories li {
-	// border: 1px solid var(--wp--preset--color--primary, #007cba);
 	border-radius: var(--vkbm--radius--sm, 4px);
-	color: var(--wp--preset--color--primary, #007cba);
+	color: var(--wp--preset--color--primary, #2563eb);
 	font-size: 0.75rem;
 	line-height: 1;
 	padding: 3px 0.55rem;
-	background-color: color-mix(in srgb, var(--wp--preset--color--primary, #007cba) 15%, #fff);
+	background-color: color-mix(in srgb, var(--wp--preset--color--primary, #2563eb) 15%, #fff);
 }
 
 .vkbm-menu-loop__card-title {
@@ -132,7 +146,7 @@
 }
 
 .vkbm-menu-loop__card-catch {
-	color: var(--wp--preset--color--contrast, #222);
+	color: var(--vkbm--color--menu-card-catch, var(--wp--preset--color--contrast, #222));
 	font-size: var(--vkbm--font-size--sm);
 	margin: 0 0 var(--vkbm--spacing--sm);
 }
@@ -173,6 +187,167 @@
 	margin: 0;
 }
 
+/* ==========================================================================
+   カードのサブ画像（ギャラリー）
+   ========================================================================== */
+
+// 1行5枚で折り返す。幅が足りないときは 64px より小さく縮む。
+.vkbm-menu-loop__gallery {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 64px));
+	gap: var(--vkbm--spacing--xs, 8px);
+	margin: var(--vkbm--spacing--sm, 12px) 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.vkbm-menu-loop__gallery-item {
+	margin: 0;
+	padding: 0;
+}
+
+.vkbm-menu-loop__gallery-button {
+	display: block;
+	appearance: none;
+	box-shadow: none;
+	color: inherit;
+	width: 100%;
+	aspect-ratio: 1 / 1;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--vkbm--radius--sm, 4px);
+	background: none;
+	overflow: hidden;
+	cursor: zoom-in;
+
+	&:focus-visible {
+		outline: 2px solid var(--vkbm--color--primary, #2563eb);
+		outline-offset: 2px;
+	}
+}
+
+.vkbm-menu-loop__gallery-image {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+/* ==========================================================================
+   サブ画像の拡大表示（ダイアログ）
+   ========================================================================== */
+
+.vkbm-gallery-dialog {
+	max-width: 100vw;
+	max-height: 100vh;
+	margin: auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	overflow: visible;
+
+	&::backdrop {
+		background: rgba(0, 0, 0, 0.8);
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+	.vkbm-gallery-dialog[open] {
+		animation: vkbm-gallery-dialog-fade 0.15s ease-out;
+	}
+}
+
+@keyframes vkbm-gallery-dialog-fade {
+
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+.vkbm-gallery-dialog__inner {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	max-height: 100vh;
+	max-height: 100dvh;
+	padding: 48px 8px 8px;
+	overflow: hidden;
+}
+
+.vkbm-gallery-dialog__figure {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: center;
+	min-height: 0;
+	margin: 0;
+	text-align: center;
+}
+
+.vkbm-gallery-dialog__image {
+	display: block;
+	flex: 1 1 auto;
+	min-height: 0;
+	max-width: 90vw;
+	margin: 0 auto;
+	object-fit: contain;
+}
+
+.vkbm-gallery-dialog__caption {
+	flex: 0 0 auto;
+	max-height: 3em;
+	margin-top: 8px;
+	overflow-y: auto;
+	color: #fff;
+	font-size: 14px;
+}
+
+.vkbm-gallery-dialog__nav {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: 16px;
+	color: #fff;
+}
+
+.vkbm-gallery-dialog__close,
+.vkbm-gallery-dialog__step {
+	min-width: 44px;
+	min-height: 44px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.9);
+	color: #000;
+	font-size: 28px;
+	line-height: 1;
+	cursor: pointer;
+
+	&:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+
+	&:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: 2px;
+	}
+}
+
+.vkbm-gallery-dialog__close {
+	position: absolute;
+	top: 0;
+	right: 8px;
+}
+
 .vkbm-menu-loop__card-meta-side {
 	display: flex;
 	flex-direction: column;
@@ -206,7 +381,7 @@
 }
 
 .vkbm-menu-loop__card-price {
-	color: #d11c1c;
+	color: var(--vkbm--color--menu-card-price, #d11c1c);
 	font-size: 1.2rem;
 	font-weight: 700;
 	text-align: right;
@@ -235,8 +410,8 @@
 }
 
 // 区分名側は折り返しを許容し、長い名称でもレイアウトを壊さない。
-// font-size: 12px は .vkbm-menu-loop__card-meta（区分名以外のメタ表示）と
-// 意図的に揃えた値。共通トークン化は別 issue で対応する。
+// font-size: 12px は .vkbm-menu-loop__card-meta（区分名以外のメタ表示）と値をそろえている。
+// 片方だけ変えないこと。
 .vkbm-menu-loop__card-prices-label {
 	min-width: 0;
 	overflow-wrap: anywhere;
@@ -244,14 +419,14 @@
 	margin: 0;
 }
 
-// 料金側は単一料金と同じトーンで強調し、絶対に折り返さない。
-// color / font-size / font-weight は .vkbm-menu-loop__card-price（単一料金表示）と
-// 意図的に同じ値にして、料金区分一覧と単一料金で見た目のトーンを揃えている。
-// これらの値の共通トークン化は別 issue で対応する。
+// 料金側は単一料金と同じトーンで強調する。金額と単位（「¥7,000〜 / 1名・1泊」）は
+// .vkbm-price-chunk ごとに折り返さない塊にし、幅が足りないときは「 / 」の境目で折り返す。
+// color / font-size / font-weight は .vkbm-menu-loop__card-price（単一料金表示）と値をそろえている。
+// 片方だけ変えないこと。
 .vkbm-menu-loop__card-prices-value {
-	flex: 0 0 auto;
-	white-space: nowrap;
-	color: #d11c1c;
+	flex: 0 1 auto;
+	text-align: right;
+	color: var(--vkbm--color--menu-card-price, #d11c1c);
 	font-size: 1.2rem;
 	font-weight: 700;
 	margin: 0;
@@ -266,9 +441,9 @@
 }
 
 
-/***********************************
- * Text Style
- ***********************************/
+/* ==========================================================================
+   テキスト
+   ========================================================================== */
 
 .vkbm-menu-loop__list--text {
 	display: block;
@@ -321,9 +496,31 @@
 	white-space: nowrap;
 }
 
-/***********************************
- * Disabled reserve button
- ***********************************/
+// 金額と単位は別々の塊にして、折り返すときは塊の境目にする。
+.vkbm-price-chunk {
+	white-space: nowrap;
+}
+
+/* ==========================================================================
+   予約ボタン
+   ========================================================================== */
+
+// 基本設定の「予約ボタンの色」（--vkbm--color--reservation-action）を使う。
+// 共通の .vkbm-button__primary と同じ詳細度のため、共通 CSS より後に読み込まれる
+// このファイルに置いて後勝ちにする。
+.vkbm-menu-loop__button--reserve {
+	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
+	color: #fff;
+}
+
+.vkbm-menu-loop__button--reserve:hover {
+
+	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)));
+}
+
+/* ==========================================================================
+   予約ボタン（無効時）
+   ========================================================================== */
 
 .vkbm-menu-loop__button.is-disabled {
 	opacity: 0.5;

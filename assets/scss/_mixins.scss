@@ -1,0 +1,97 @@
+// =============================================================================
+// 共通のミキシン（複数の SCSS で同じ書き方を繰り返さないための部品）
+// =============================================================================
+// 使い方: 先頭で @use "mixins" as *; する（ブロックの style.scss は相対パスで指す）。
+// このファイルは出力する CSS を持たない。@include した場所にだけ宣言が展開される。
+
+@use "sass:map";
+
+// hover で背景を暗くする
+// -----------------------------------------------------------------------------
+// ボタンの hover 色は「元の色を 75% 残して黒を混ぜる」で統一している。式が各ファイルに
+// 直書きされていると、片方だけ割合を変えたときにボタンごとに hover の暗さがずれる。
+// 暗さを変えるときはここだけ直すこと。
+// $color には、通常時の背景に使っているのと同じ色（var(...) の式でよい）を渡す。
+// 通常時の色と式がずれると hover で色相が変わるため、通常時と同じ式を渡すこと。
+@mixin vkbm-hover-darken($color) {
+	background: color-mix(in srgb, #{$color} 75%, #000);
+}
+
+// 画面には出さず、読み上げだけ残す（visually-hidden）
+// -----------------------------------------------------------------------------
+// 1px 四方に切り詰め、clip と clip-path を併記し、折り返さない（white-space: nowrap）。
+// - white-space: nowrap がないと、1px 幅で単語ごとに折り返され、読み上げ順が崩れる
+//   ブラウザ・支援技術がある。
+// - clip は古いブラウザ向け、clip-path は新しいブラウザ向け。片方だけだと一部の
+//   ブラウザで 1px の点が見えて残る。
+// 使う要素は position: absolute になるので、位置の基準が必要なら親に position を指定する。
+// ハニーポット欄（auth-forms.scss の .vkbm-auth-form__honeypot）は読み上げからも
+// 外す必要があるため、このミキシンは使わない（visibility: hidden で別に隠している）。
+@mixin vkbm-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	border: 0;
+	// stylelint-disable-next-line property-no-deprecated -- 視覚的に隠す定番パターン（古いブラウザ向けに clip を併記）
+	clip: rect(1px, 1px, 1px, 1px);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+// 状態色（danger / warning / info / success）
+// -----------------------------------------------------------------------------
+// .vkbm-alert（フロント・管理画面の埋め込みアラート、alert.scss）と .vkbm-notice（管理画面の
+// 通知、admin-notice.scss）は、同じ 4 色（文字・リンク・背景・枠）を別々に組み立てていた。
+// 色の既定値（フォールバック）を片方だけ変えると、同じ「警告」なのにアラートと通知で色が
+// ずれるため、既定値はこの map に 1 箇所だけ持つ。
+// 各色はサイト側で上書きできる CSS カスタムプロパティ
+// （--vkbm--color--{名前}-{link|text|bg|border}）を先に見て、無ければこの既定値を使う。
+$vkbm-status-colors: (
+	danger: (
+		link: #842029,
+		text: #842029,
+		bg: #f8d7da,
+		border: #f5c2c7,
+	),
+	warning: (
+		link: #664d03,
+		text: #664d03,
+		bg: #fff3cd,
+		border: #ffecb5,
+	),
+	info: (
+		link: #055160,
+		text: #055160,
+		bg: #cff4fc,
+		border: #b6effb,
+	),
+	success: (
+		link: #0f5132,
+		text: #0f5132,
+		bg: #d1e7dd,
+		border: #badbcc,
+	),
+);
+
+// 1 色ぶんを var(--vkbm--color--{名前}-{種類}, 既定値) の式にする。
+@function vkbm-status-color($name, $kind) {
+
+	@return var(--vkbm--color--#{$name}-#{$kind}, map.get(map.get($vkbm-status-colors, $name), $kind));
+}
+
+// リンク色・文字色を当てる。$link-prop には、リンク色を渡すカスタムプロパティ名
+// （--vkbm--alert-link-color / --vkbm--notice-link-color）を渡す。
+// $surface を true にすると背景色と枠線色も当てる（アラートは当てる。通知は左の太線だけ別色のため当てない）。
+@mixin vkbm-status-colors($name, $link-prop, $surface: false) {
+	#{$link-prop}: vkbm-status-color($name, link);
+
+	@if $surface {
+		background: vkbm-status-color($name, bg);
+		border-color: vkbm-status-color($name, border);
+	}
+
+	color: vkbm-status-color($name, text);
+}

@@ -16,10 +16,6 @@
       "type": "string",
       "default": ""
     },
-    "itemsPerPage": {
-      "type": "number",
-      "default": -1
-    },
     "order": {
       "type": "string",
       "default": "ASC"
@@ -71,18 +67,6 @@
       "type": "boolean",
       "default": true
     },
-    "buttonLabel": {
-      "type": "string",
-      "default": "View details"
-    },
-    "reserveButtonLabel": {
-      "type": "string",
-      "default": "Proceed to Reservation"
-    },
-    "reserveButtonUrl": {
-      "type": "string",
-      "default": ""
-    },
     "emptyMessage": {
       "type": "string",
       "default": ""
@@ -101,7 +85,10 @@
       "padding": true
     }
   },
-  "style": "file:./style-index.css",
+  "style": [
+    "vkbm-components",
+    "file:./style-index.css"
+  ],
   "editorStyle": "file:./index.css",
   "editorScript": "file:./index.js"
 }

@@ -13,9 +13,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Site_Url;
+use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use WP_HTML_Tag_Processor;
 use WP_Post;
 use function add_filter;
@@ -27,6 +30,7 @@ use function esc_html;
 use function esc_html__;
 use function esc_url;
 use function esc_url_raw;
+use function get_queried_object;
 use function generate_block_asset_handle;
 use function get_rest_url;
 use function home_url;
@@ -71,6 +75,13 @@ class Reservation_Block {
 	private static bool $block_registered = false;
 
 	/**
+	 * 詳細表示を埋め込み済みか。1ページに予約ブロックが複数あっても、本文は1回だけ描画する。
+	 *
+	 * @var bool
+	 */
+	private static bool $is_detail_embedded = false;
+
+	/**
 	 * Auth shortcodes handler, used to read the current request's login error
 	 * (if any) and the configured reservation page URL for the login fallback.
 	 *
@@ -82,12 +93,21 @@ class Reservation_Block {
 	private $auth_shortcodes;
 
 	/**
+	 * 予約ブロック内に表示するサービスメニューの詳細表示を用意する（#635）。
+	 *
+	 * @var Service_Menu_Detail_Renderer
+	 */
+	private $detail_renderer;
+
+	/**
 	 * Constructor.
 	 *
-	 * @param Auth_Shortcodes $auth_shortcodes Auth shortcodes handler.
+	 * @param Auth_Shortcodes                   $auth_shortcodes Auth shortcodes handler.
+	 * @param Service_Menu_Detail_Renderer|null $detail_renderer 詳細表示を用意するクラス。省略時は基本設定から生成する。
 	 */
-	public function __construct( Auth_Shortcodes $auth_shortcodes ) {
+	public function __construct( Auth_Shortcodes $auth_shortcodes, ?Service_Menu_Detail_Renderer $detail_renderer = null ) {
 		$this->auth_shortcodes = $auth_shortcodes;
+		$this->detail_renderer = $detail_renderer ?? new Service_Menu_Detail_Renderer( new Service_Menu_Detail_Link(), new Menu_Loop_Block() );
 	}
 
 	/**
@@ -101,10 +121,69 @@ class Reservation_Block {
 		// フォールバック。ログイン導線に限り、保存済みブロック HTML（空の div）へ
 		// ローディング表示・ログイン失敗文・代替ログイン導線を直接埋め込む。
 		add_filter( 'render_block', array( $this, 'inject_login_fallback_markup' ), 10, 2 );
+		// #707: 認証フォームの CSS/JS は、予約ブロックが実際に描画されたページだけで読み込む。
+		// ブロック内のログイン・会員登録・会員情報フォームは REST（/vkbm/v1/auth-form）の HTML を
+		// フロント JS が差し込むため、REST 側では読み込めない。認証フォーム用の CSS/JS に限り、
+		// テンプレートやパターン内の予約ブロックでも効くよう、has_block() ではなく描画時に読み込む
+		// （予約ブロックのほかのアセットは従来どおり has_block() で判定している）。
+		add_filter( 'render_block', array( $this, 'enqueue_auth_assets_on_render' ), 10, 2 );
 		// issue #516: 会員登録エラー時、入力値・エラー文を含む Cookie
 		// （`vkbm_registration_errors`）を発行する代わりに、同一リクエスト内で発行された
 		// トークンだけを wrapper の data 属性へ埋め込む。
 		add_filter( 'render_block', array( $this, 'inject_registration_error_attribute' ), 10, 2 );
+		// #635: サービスメニューの詳細表示（本文・カード）をサーバー側で用意して埋め込む。
+		add_filter( 'render_block', array( $this, 'inject_service_menu_detail_markup' ), 10, 2 );
+		// #643: 確認画面の URL（?draft=<token>）が Referer 経由で外部サイトへ渡らないようにする。
+		add_filter( 'wp_headers', array( $this, 'filter_confirmation_referrer_policy' ) );
+	}
+
+	/**
+	 * 予約ブロックの描画時に、認証フォーム用の CSS/JS を読み込む。
+	 *
+	 * 出力の HTML は変更せず、そのまま返す。
+	 *
+	 * @param string               $block_content 描画済みのブロック HTML。
+	 * @param array<string, mixed> $block         ブロックの情報。
+	 * @return string 引数の $block_content をそのまま返す。
+	 */
+	public function enqueue_auth_assets_on_render( string $block_content, array $block ): string {
+		// 予約ブロック以外では何もしない。
+		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) ) {
+			return $block_content;
+		}
+
+		$this->auth_shortcodes->enqueue_assets();
+
+		return $block_content;
+	}
+
+	/**
+	 * Send "Referrer-Policy: no-referrer" on the reservation confirmation screen only.
+	 *
+	 * 確認画面（予約ブロックを置いたページの `?draft=<token>` 付き URL）の URL には下書きのトークンが
+	 * 含まれる。外部サイトのリンクを開いたときなどに Referer としてトークンが渡らないよう、
+	 * このページに限って Referer を送らない指定をレスポンスヘッダーで付ける（サイト全体には効かせない）。
+	 *
+	 * @param array<string, string> $headers Response headers.
+	 * @return array<string, string>
+	 */
+	public function filter_confirmation_referrer_policy( $headers ) {
+		if ( ! is_array( $headers ) || is_admin() ) {
+			return $headers;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 表示の切り替え判定のみで、状態は変更しない。
+		$draft = isset( $_GET['draft'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['draft'] ) ) : '';
+		if ( '' === $draft ) {
+			return $headers;
+		}
+
+		$post = get_queried_object();
+		if ( $post instanceof WP_Post && has_block( 'vk-booking-manager/reservation', $post ) ) {
+			$headers['Referrer-Policy'] = 'no-referrer';
+		}
+
+		return $headers;
 	}
 
 	/**
@@ -160,6 +239,8 @@ class Reservation_Block {
 
 		if ( $post instanceof WP_Post && function_exists( 'has_block' ) && has_block( 'vk-booking-manager/reservation', $post ) ) {
 			wp_enqueue_style( self::MENU_CARD_STYLE_HANDLE );
+			// 予約ブロック内のメニューカード（後から差し込まれる）でもサブ画像を拡大表示できるようにする。
+			Menu_Loop_Block::enqueue_gallery_assets();
 			$this->maybe_enqueue_current_user_bootstrap( $post );
 			$this->maybe_enqueue_reservation_config();
 			return;
@@ -197,7 +278,7 @@ class Reservation_Block {
 			'canManageReservations' => $is_logged_in && current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 			'canViewPrivateMenus'   => $is_logged_in && current_user_can( Capabilities::VIEW_SERVICE_MENUS ),
 			'shiftDashboardUrl'     => $is_logged_in ? admin_url( 'admin.php?page=vkbm-shift-dashboard' ) : '',
-			'logoutUrl'             => $is_logged_in ? wp_logout_url( $redirect ) : '',
+			'logoutUrl'             => $is_logged_in ? str_replace( '&amp;', '&', wp_logout_url( $redirect ) ) : '',
 			'locale'                => $locale,
 		);
 
@@ -296,13 +377,13 @@ class Reservation_Block {
 		if ( $permalink ) {
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
 			if ( '' !== $request_uri ) {
-				return esc_url_raw( home_url( $request_uri ) );
+				return esc_url_raw( Site_Url::from_request_uri( $request_uri ) );
 			}
 			return esc_url_raw( $permalink );
 		}
 
 		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '/';
-		return esc_url_raw( home_url( $request_uri ) );
+		return esc_url_raw( Site_Url::from_request_uri( $request_uri ) );
 	}
 
 	/**
@@ -316,7 +397,7 @@ class Reservation_Block {
 		wp_register_style(
 			self::MENU_CARD_STYLE_HANDLE,
 			VKBM_PLUGIN_DIR_URL . 'build/blocks/menu-loop/style-index.css',
-			array(),
+			array( Common_Styles::COMPONENTS_HANDLE ),
 			defined( 'VKBM_VERSION' ) ? VKBM_VERSION : null
 		);
 	}
@@ -434,6 +515,52 @@ class Reservation_Block {
 			$block_content,
 			$this->build_login_fallback_markup( $error_message )
 		);
+	}
+
+	/**
+	 * 予約ブロックへ、サービスメニューの詳細表示の元になる HTML を埋め込む（#635）。
+	 *
+	 * `menu_id` と `vkbm_view=detail` が付いたURLで予約ページを開いたときだけ、詳細表示の本文と
+	 * カードをサーバー側で組み立てて、非表示の要素として予約ブロックの末尾へ追加する。
+	 * 予約ブロックの JavaScript がこの要素を読み取って表示する。
+	 *
+	 * @param string              $block_content Rendered block HTML.
+	 * @param array<string,mixed> $block         Parsed block data (blockName, attrs, ...).
+	 * @return string
+	 */
+	public function inject_service_menu_detail_markup( string $block_content, array $block ): string {
+		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) ) {
+			return $block_content;
+		}
+
+		// 本文の中に予約ブロックがあっても、入れ子で詳細表示を組み立て直さない。
+		if ( $this->detail_renderer->is_rendering() ) {
+			return $block_content;
+		}
+
+		// 二重に埋め込まない。
+		if ( false !== strpos( $block_content, 'vkbm-reservation-detail-source' ) ) {
+			return $block_content;
+		}
+
+		// 1リクエストにつき1回だけ埋め込む（2つ目以降の予約ブロックでは本文を重ねて描画しない）。
+		if ( self::$is_detail_embedded ) {
+			return $block_content;
+		}
+
+		$markup = $this->detail_renderer->build_source_markup();
+		if ( '' !== $markup ) {
+			self::$is_detail_embedded = true;
+		}
+
+		return $this->append_before_closing_tag( $block_content, $markup );
+	}
+
+	/**
+	 * 詳細表示を埋め込み済みの印を戻す（テスト用。同じプロセスで複数のリクエストを再現するため）。
+	 */
+	public static function reset_detail_embedded_flag(): void {
+		self::$is_detail_embedded = false;
 	}
 
 	/**

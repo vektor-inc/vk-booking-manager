@@ -13,11 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\VKBM_Helper;
-use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
@@ -29,6 +31,9 @@ use function array_intersect;
 use function array_map;
 use function current_user_can;
 use function generate_block_asset_handle;
+use function wp_enqueue_script;
+use function wp_localize_script;
+use function wp_register_script;
 use function sanitize_key;
 use function wp_set_script_translations;
 
@@ -43,6 +48,13 @@ class Menu_Loop_Block {
 	private const TERM_GROUP_DISPLAY_MODE_META_KEY = 'vkbm_menu_group_display_mode';
 
 	/**
+	 * メニューカードの「担当できる〇〇」ラベル（取得済みの結果。未取得は null）。
+	 *
+	 * @var string|null
+	 */
+	private $resource_label_menu = null;
+
+	/**
 	 * カード表示のアイキャッチ画像に付けるクラス名。
 	 *
 	 * 本文のタグ処理（the_content など）でコアが sizes="auto" を付け直したときに、対象の画像を見分けるために使う。
@@ -52,11 +64,13 @@ class Menu_Loop_Block {
 	/**
 	 * カード表示のアイキャッチ画像の sizes 属性。
 	 *
-	 * 767px 以下はカードが縦積みになり、画像は横幅いっぱい・高さは画像の縦横比のままになるため 100vw を指定する。
-	 * 768px 以上は画像枠が幅 240px 以下で、高さはカード本文に合わせて伸びる。
-	 * object-fit: cover で縦長の枠を埋めても画質が落ちないよう、枠の幅より大きい 480px を指定する。
+	 * 注意: 600px は assets/scss/_breakpoints.scss の $vkbm-bp-front-sm（-0.02px 手前までが 599.98px）と互いに揃えること。
+	 * 600px 未満はカードが縦積みになり、画像は横幅いっぱい・高さは画像の縦横比のままになるため 100vw を指定する。
+	 * 600px 以上でも、列数が多くカードの内側の幅が 480px 未満のときは縦積みになり、画像はカードの内側いっぱい（480px 未満）に広がる。
+	 * カードの内側の幅が 480px 以上のときは画像枠が幅 240px 以下で、高さはカード本文に合わせて伸びる。
+	 * object-fit: cover で縦長の枠を埋めても画質が落ちないよう、どちらの場合も枠の幅以上になる 480px を指定する。
 	 */
-	private const CARD_IMAGE_SIZES = '(max-width: 767px) 100vw, 480px';
+	private const CARD_IMAGE_SIZES = '(max-width: 599.98px) 100vw, 480px';
 
 	/**
 	 * Settings repository.
@@ -80,6 +94,13 @@ class Menu_Loop_Block {
 	private $reservation_button_renderer;
 
 	/**
+	 * 「詳細を見る」等のリンク先を決めるヘルパー（#635）。
+	 *
+	 * @var Service_Menu_Detail_Link
+	 */
+	private $detail_link;
+
+	/**
 	 * Whether blocks are registered.
 	 *
 	 * @var bool
@@ -87,14 +108,23 @@ class Menu_Loop_Block {
 	private static bool $block_registered = false;
 
 	/**
+	 * 絞り込み検索の日付指定で、予約できるメニューを判定するヘルパー（初回利用時に生成）。
+	 *
+	 * @var Menu_Date_Filter|null
+	 */
+	private ?Menu_Date_Filter $menu_date_filter = null;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Settings_Repository|null         $settings_repository         Provider settings repository.
 	 * @param Reservation_Button_Renderer|null $reservation_button_renderer 予約ボタンの共通描画ヘルパー。
+	 * @param Service_Menu_Detail_Link|null    $detail_link                 詳細ページのリンク先を決めるヘルパー。省略時は基本設定から生成する。
 	 */
-	public function __construct( ?Settings_Repository $settings_repository = null, ?Reservation_Button_Renderer $reservation_button_renderer = null ) {
+	public function __construct( ?Settings_Repository $settings_repository = null, ?Reservation_Button_Renderer $reservation_button_renderer = null, ?Service_Menu_Detail_Link $detail_link = null ) {
 		$this->settings_repository         = $settings_repository ?? new Settings_Repository();
 		$this->reservation_button_renderer = $reservation_button_renderer ?? new Reservation_Button_Renderer( $this->settings_repository );
+		$this->detail_link                 = $detail_link ?? new Service_Menu_Detail_Link( $this->settings_repository );
 	}
 
 	/**
@@ -185,6 +215,8 @@ class Menu_Loop_Block {
 			}
 		}
 		wp_reset_postdata();
+		$this->prime_gallery_attachment_caches( $posts );
+		$this->prime_assigned_staff_post_caches( $posts );
 
 		$style_attr   = $this->build_wrapper_style( $attributes );
 		$mode         = $this->normalize_display_mode( (string) ( $attributes['displayMode'] ?? 'card' ) );
@@ -281,7 +313,15 @@ class Menu_Loop_Block {
 			$term_groups[ $term->term_id ]['posts'][] = $post;
 		}
 
-		$sort_posts = static function ( array $group_posts ): array {
+		// 手動の並び順（menu_order）のときだけ、グループ内を menu_order → タイトルで並べ直す。
+		// それ以外（公開日・タイトル等）は、クエリで取得した順序をグループ内でもそのまま保つ（issue #654）。
+		$is_manual_order = 'menu_order' === $this->normalize_order_by( (string) ( $attributes['orderBy'] ?? 'menu_order' ) );
+
+		$sort_posts = static function ( array $group_posts ) use ( $is_manual_order ): array {
+			if ( ! $is_manual_order ) {
+				return $group_posts;
+			}
+
 			usort(
 				$group_posts,
 				static function ( WP_Post $a, WP_Post $b ): int {
@@ -508,18 +548,20 @@ class Menu_Loop_Block {
 		}
 
 		$args = array(
-			'post_type'           => Service_Menu_Post_Type::POST_TYPE,
-			'post_status'         => $this->get_menu_post_statuses(),
-			'posts_per_page'      => -1,
-			'orderby'             => 'menu_order' === $order_by
+			'post_type'             => Service_Menu_Post_Type::POST_TYPE,
+			'post_status'           => $this->get_menu_post_statuses(),
+			'posts_per_page'        => -1,
+			'orderby'               => 'menu_order' === $order_by
 				? array(
 					'menu_order' => $order,
 					'title'      => 'ASC',
 				)
 				: $order_by,
-			'order'               => $order,
-			'ignore_sticky_posts' => true,
-			'meta_query'          => $meta_query,
+			'order'                 => $order,
+			'ignore_sticky_posts'   => true,
+			'meta_query'            => $meta_query,
+			// 「公開日」などブロックで指定した並び順を、Post_Order_Manager に手動並び順へ書き換えさせない。
+			'vkbm_force_menu_order' => false,
 		);
 
 		$tax_query = array();
@@ -630,6 +672,25 @@ class Menu_Loop_Block {
 	}
 
 	/**
+	 * 詳細ページへのリンクに足すクエリ（絞り込み検索で選んだ日付）を返す。
+	 *
+	 * @param array<string,mixed> $attributes 描画の属性。
+	 * @return array<string,string> 足すクエリ。日付を引き継がないときは空配列。
+	 */
+	private function get_detail_link_query( array $attributes ): array {
+		$query = $attributes['detailLinkQuery'] ?? array();
+		if ( ! is_array( $query ) ) {
+			return array();
+		}
+
+		// 引き継ぐのは検証済みの日付2つだけ（それ以外のキーは付けない）。
+		return Menu_Date_Filter::normalize_carry_dates(
+			is_string( $query['date'] ?? null ) ? $query['date'] : '',
+			is_string( $query['check_out_date'] ?? null ) ? $query['check_out_date'] : ''
+		);
+	}
+
+	/**
 	 * カード表示のアイキャッチ画像の img タグを生成する。
 	 *
 	 * 画像枠を埋められる解像度の画像が選ばれるよう、sizes 属性を指定したうえで、コアが付ける sizes="auto" を取り除く。
@@ -668,7 +729,7 @@ class Menu_Loop_Block {
 
 		$use_detail_page = '1' === (string) get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
 		if ( $use_detail_page ) {
-			$title_markup = sprintf( '<a href="%1$s">%2$s</a>', esc_url( get_permalink( $post ) ), $title_text );
+			$title_markup = sprintf( '<a href="%1$s">%2$s</a>', esc_url( $this->detail_link->get_detail_url( $post, $this->get_detail_link_query( $attributes ) ) ), $title_text );
 		} else {
 			$title_markup = $title_text;
 		}
@@ -681,7 +742,14 @@ class Menu_Loop_Block {
 
 		$price_markup = '';
 		$price        = get_post_meta( $post->ID, '_vkbm_base_price', true );
-		if ( is_numeric( $price ) && (int) $price >= 0 ) {
+		$lodging_rows = Lodging_Price_Display::get_menu_price_rows( $post->ID );
+		if ( array() !== $lodging_rows ) {
+			// 日によって料金が変わる泊のプランは、最安＋「〜」で表記する（料金区分があれば区分ごとに並べる）。
+			$price_markup = sprintf(
+				'<div class="vkbm-menu-loop__text-price">%s</div>',
+				wp_kses_post( $this->render_lodging_price_rows( $post->ID, $lodging_rows ) )
+			);
+		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__text-price">%s</div>',
 				wp_kses_post( $this->format_price_display( (int) $price ) )
@@ -750,15 +818,92 @@ class Menu_Loop_Block {
 	}
 
 	/**
-	 * Render a selection list for the reservation page.
+	 * 予約ページのサービスメニュー一覧（メニュー選択用）の HTML を返す。
 	 *
 	 * @param int        $staff_id 絞り込み検索で選択されているスタッフの投稿ID（#429）。
 	 *                             0（指名なし）のときは絞り込みを行わず全メニューを表示する。
 	 * @param array<int> $tag_ids  絞り込み検索で選択されているリソースタグのターム ID配列（#431・AND条件）。
 	 *                             空配列のときは絞り込みを行わず全メニューを表示する。
-	 * @return string
+	 * @param string     $date     絞り込み検索で選択されている日付（Y-m-d）。空文字のときは日付で絞り込まない。
+	 *                             宿泊のサイトではチェックイン日。
+	 * @param string     $check_out_date 絞り込み検索で選択されているチェックアウト日（Y-m-d。宿泊のサイトだけ使う）。
+	 * @return string 一覧の HTML。表示するメニューが無いときは空文字。
 	 */
-	public function render_menu_selection_list( int $staff_id = 0, array $tag_ids = array() ): string {
+	public function render_menu_selection_list( int $staff_id = 0, array $tag_ids = array(), string $date = '', string $check_out_date = '' ): string {
+		return $this->get_selection_list( $staff_id, $tag_ids, $date, true, $check_out_date )['html'];
+	}
+
+	/**
+	 * 予約ページのサービスメニュー一覧の HTML と、表示するメニューの投稿IDを返す。
+	 *
+	 * 「メニュー」プルダウンの選択肢を一覧と同じ絞り込み結果にそろえるため、
+	 * HTML と ID を同じ絞り込み（スタッフ・リソースタグ・日付）から1回で求める。
+	 *
+	 * @param int        $staff_id  絞り込み検索で選択されているスタッフの投稿ID。0 は絞り込みなし。
+	 * @param array<int> $tag_ids   絞り込み検索で選択されているリソースタグのターム ID配列。
+	 * @param string     $date      絞り込み検索で選択されている日付（Y-m-d）。空文字は絞り込みなし。宿泊のサイトではチェックイン日。
+	 * @param bool       $with_html false のときは HTML を作らず空文字にする（ID だけが必要なとき）。
+	 * @param string     $check_out_date 絞り込み検索で選択されているチェックアウト日（Y-m-d。宿泊のサイトだけ使う）。
+	 * @return array{html: string, menu_ids: array<int>} 一覧の HTML（表示するメニューが無いときは空文字）と表示するメニューの投稿ID。
+	 */
+	public function get_selection_list( int $staff_id = 0, array $tag_ids = array(), string $date = '', bool $with_html = true, string $check_out_date = '' ): array {
+		$posts    = $this->get_selection_list_posts( $staff_id, $tag_ids, $date, $check_out_date );
+		$menu_ids = array_map(
+			static function ( WP_Post $post ): int {
+				return (int) $post->ID;
+			},
+			$posts
+		);
+
+		if ( empty( $posts ) || ! $with_html ) {
+			return array(
+				'html'     => '',
+				'menu_ids' => $menu_ids,
+			);
+		}
+
+		$this->prime_gallery_attachment_caches( $posts );
+		$this->prime_assigned_staff_post_caches( $posts );
+
+		$attributes = array_merge(
+			$this->get_default_attributes(),
+			array(
+				'showDetailButton'  => true,
+				'showReserveButton' => true,
+				'disableTitleLink'  => true,
+				// 詳細ページへのリンクに、絞り込み検索で選んだ日付を付けて引き継ぐ。
+				'detailLinkQuery'   => Menu_Date_Filter::normalize_carry_dates( $date, $check_out_date ),
+			)
+		);
+
+		$provider_settings         = $this->get_provider_settings();
+		$mode                      = $this->normalize_display_mode(
+			(string) ( $provider_settings['reservation_menu_list_display_mode'] ?? 'card' )
+		);
+		$attributes['displayMode'] = $mode;
+
+		$items_markup = $this->render_grouped_items( $posts, $attributes );
+
+		return array(
+			'html'     => sprintf(
+				'<div class="vkbm-menu-loop vkbm-menu-loop--selection vkbm-menu-loop--mode-%2$s"><div class="vkbm-menu-loop__list vkbm-menu-loop__list--%2$s">%1$s</div></div>',
+				$items_markup,
+				esc_attr( $mode )
+			),
+			'menu_ids' => $menu_ids,
+		);
+	}
+
+	/**
+	 * 予約ページのサービスメニュー一覧に表示するメニュー投稿を、絞り込み後の状態で返す。
+	 *
+	 * @param int        $staff_id 絞り込み検索で選択されているスタッフの投稿ID（#429）。
+	 * @param array<int> $tag_ids  絞り込み検索で選択されているリソースタグのターム ID配列（#431・AND条件）。
+	 * @param string     $date     絞り込み検索で選択されている日付（Y-m-d）。空文字は日付で絞り込まない。宿泊のサイトではチェックイン日。
+	 * @param string     $check_out_date 絞り込み検索で選択されているチェックアウト日（Y-m-d。宿泊のサイトだけ使う）。
+	 * @return array<int, WP_Post> 表示するメニュー投稿。
+	 */
+	private function get_selection_list_posts( int $staff_id, array $tag_ids, string $date, string $check_out_date = '' ): array {
 		// #431: タグを「すべて」持つリソースの投稿ID集合を先に1回だけ求め、ループ内で使い回す。
 		// タグ未指定（$tag_ids が空）のときは null にし、絞り込みを行わない扱いにする
 		// （空配列だと「該当リソース0件」と区別できないため）。
@@ -794,7 +939,7 @@ class Menu_Loop_Block {
 		);
 
 		if ( ! $query->have_posts() ) {
-			return '';
+			return array();
 		}
 
 		$posts = array();
@@ -815,32 +960,45 @@ class Menu_Loop_Block {
 		}
 		wp_reset_postdata();
 
-		if ( empty( $posts ) ) {
-			return '';
+		// 日付で絞り込む。スタッフ・タグの条件を通ったメニューだけを、日付の判定にかける。
+		if ( '' !== $date && ! empty( $posts ) ) {
+			$bookable_ids = $this->get_menu_date_filter()->filter_menu_ids(
+				array_map(
+					static function ( WP_Post $post ): int {
+						return (int) $post->ID;
+					},
+					$posts
+				),
+				$date,
+				$staff_id,
+				$tag_ids,
+				$check_out_date
+			);
+
+			$posts = array_values(
+				array_filter(
+					$posts,
+					static function ( WP_Post $post ) use ( $bookable_ids ): bool {
+						return in_array( (int) $post->ID, $bookable_ids, true );
+					}
+				)
+			);
 		}
 
-		$attributes = array_merge(
-			$this->get_default_attributes(),
-			array(
-				'showDetailButton'  => true,
-				'showReserveButton' => true,
-				'disableTitleLink'  => true,
-			)
-		);
+		return $posts;
+	}
 
-		$provider_settings         = $this->get_provider_settings();
-		$mode                      = $this->normalize_display_mode(
-			(string) ( $provider_settings['reservation_menu_list_display_mode'] ?? 'card' )
-		);
-		$attributes['displayMode'] = $mode;
+	/**
+	 * 日付で予約できるメニューを判定するヘルパーを返す（初回に生成して使い回す）。
+	 *
+	 * @return Menu_Date_Filter 日付による絞り込みの判定。
+	 */
+	private function get_menu_date_filter(): Menu_Date_Filter {
+		if ( null === $this->menu_date_filter ) {
+			$this->menu_date_filter = new Menu_Date_Filter();
+		}
 
-		$items_markup = $this->render_grouped_items( $posts, $attributes );
-
-		return sprintf(
-			'<div class="vkbm-menu-loop vkbm-menu-loop--selection vkbm-menu-loop--mode-%2$s"><div class="vkbm-menu-loop__list vkbm-menu-loop__list--%2$s">%1$s</div></div>',
-			$items_markup,
-			esc_attr( $mode )
-		);
+		return $this->menu_date_filter;
 	}
 
 	/**
@@ -967,7 +1125,7 @@ class Menu_Loop_Block {
 		} else {
 			$title_markup = sprintf(
 				'<a href="%1$s">%2$s</a>',
-				esc_url( get_permalink( $post ) ),
+				esc_url( $this->detail_link->get_detail_url( $post, $this->get_detail_link_query( $attributes ) ) ),
 				esc_html( get_the_title( $post ) )
 			);
 		}
@@ -1032,6 +1190,210 @@ class Menu_Loop_Block {
 	}
 
 	/**
+	 * 一覧に出すメニューのサブ画像の添付をまとめて先読みする。
+	 *
+	 * 添付ごとの画像判定（wp_attachment_is_image）が1件ずつ問い合わせるのを防ぐため、
+	 * 描画前に全メニューの添付をキャッシュへ載せる。
+	 *
+	 * @param array<int,WP_Post> $posts 描画するサービスメニューの投稿。
+	 */
+	private function prime_gallery_attachment_caches( array $posts ): void {
+		$attachment_ids = array();
+		foreach ( $posts as $menu_post ) {
+			$stored = get_post_meta( $menu_post->ID, Service_Menu_Post_Type::META_GALLERY_IDS, true );
+			if ( is_array( $stored ) ) {
+				$attachment_ids = array_merge( $attachment_ids, array_map( 'absint', $stored ) );
+			}
+		}
+
+		$attachment_ids = array_values( array_unique( array_filter( $attachment_ids ) ) );
+		if ( ! empty( $attachment_ids ) ) {
+			_prime_post_caches( $attachment_ids, false, true );
+		}
+	}
+
+	/**
+	 * このメニューのカードに、個別選択の担当リソース名を並べて表示するかどうかを返す。
+	 *
+	 * 指名が有効で、かつ「すべてのリソースが担当できる」ではないメニューが対象。
+	 * カードの表示と、描画前の先読みで同じ判定を使うために1か所にまとめている。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 担当リソース名を並べるなら true。
+	 */
+	private function lists_assigned_staff_names( int $menu_id ): bool {
+		return Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) && ! Service_Menu_Post_Type::is_all_staff_assigned( $menu_id );
+	}
+
+	/**
+	 * 個別選択の担当リソース名を出すカードのため、担当リソースの投稿をまとめてキャッシュへ載せる。
+	 *
+	 * render_meta_information() がカードごとに get_the_title() で名前を引いても、
+	 * 問い合わせが増えないようにする。名前を出すのは lists_assigned_staff_names() が true の
+	 * メニューだけなので、該当するメニューが無ければ何も読み込まない。
+	 *
+	 * @param array<int,WP_Post> $posts 描画するサービスメニューの投稿。
+	 */
+	private function prime_assigned_staff_post_caches( array $posts ): void {
+		// 名前を表示するメニューが担当できるリソースIDを集める。
+		$assigned_ids = array();
+		foreach ( $posts as $menu_post ) {
+			if ( ! $this->lists_assigned_staff_names( $menu_post->ID ) ) {
+				continue;
+			}
+			$assigned_ids = array_merge( $assigned_ids, Service_Menu_Post_Type::get_assignable_staff_ids( $menu_post->ID ) );
+		}
+
+		if ( empty( $assigned_ids ) ) {
+			return;
+		}
+
+		// 公開中のリソースだけを読み込む（カード側も公開中だけを表示するため）。
+		$prime_ids = array_values( array_intersect( Service_Menu_Post_Type::get_published_resource_ids(), $assigned_ids ) );
+		if ( ! empty( $prime_ids ) ) {
+			_prime_post_caches( $prime_ids, false, false );
+		}
+	}
+
+	/**
+	 * サブ画像のスクリプトのハンドル名。
+	 */
+	public const GALLERY_SCRIPT_HANDLE = 'vkbm-menu-gallery-lightbox';
+
+	/**
+	 * サブ画像の拡大表示（ライトボックス）用の文言を返す。
+	 *
+	 * @return array<string,string> キーごとの文言。
+	 */
+	private static function get_gallery_lightbox_strings(): array {
+		return array(
+			'dialogLabel' => __( 'Photo viewer', 'vk-booking-manager' ),
+			'close'       => __( 'Close', 'vk-booking-manager' ),
+			'previous'    => __( 'Previous photo', 'vk-booking-manager' ),
+			'next'        => __( 'Next photo', 'vk-booking-manager' ),
+			/* translators: 1: current photo number, 2: total number of photos. */
+			'position'    => __( '%1$d / %2$d', 'vk-booking-manager' ),
+		);
+	}
+
+	/**
+	 * サブ画像の拡大表示のスクリプトを読み込む。
+	 *
+	 * メニューカードの出力と、予約ブロックのあるページ（カードを後から差し込む）の両方から呼ぶ。
+	 * 何度呼んでも登録・読み込みは1回だけ行う。
+	 */
+	public static function enqueue_gallery_assets(): void {
+		if ( ! wp_script_is( self::GALLERY_SCRIPT_HANDLE, 'registered' ) ) {
+			wp_register_script(
+				self::GALLERY_SCRIPT_HANDLE,
+				VKBM_PLUGIN_DIR_URL . 'assets/js/menu-gallery-lightbox.js',
+				array(),
+				defined( 'VKBM_VERSION' ) ? VKBM_VERSION : null,
+				true
+			);
+			wp_localize_script(
+				self::GALLERY_SCRIPT_HANDLE,
+				'vkbmMenuGallery',
+				array( 'i18n' => self::get_gallery_lightbox_strings() )
+			);
+		}
+
+		wp_enqueue_script( self::GALLERY_SCRIPT_HANDLE );
+	}
+
+	/**
+	 * メニューのサブ画像をカード用のサムネイル一覧として描画する。
+	 *
+	 * 登録された画像をすべて、登録順に出す。0枚のときは何も出さない。
+	 * サムネイルは拡大表示用のボタンで包み、拡大に使う画像の情報は data 属性に持たせる。
+	 *
+	 * @param WP_Post $post サービスメニューの投稿。
+	 * @return string サブ画像一覧の HTML（0枚のときは空文字）。
+	 */
+	private function render_gallery( WP_Post $post ): string {
+		$attachment_ids = Service_Menu_Post_Type::get_gallery_attachment_ids( $post->ID );
+		$total          = count( $attachment_ids );
+		if ( 0 === $total ) {
+			return '';
+		}
+
+		$menu_title = get_the_title( $post );
+		$items      = '';
+
+		foreach ( $attachment_ids as $index => $attachment_id ) {
+			$position = $index + 1;
+
+			// 拡大表示用の画像（large。無ければ full）。
+			$large_url = wp_get_attachment_image_url( $attachment_id, 'large' );
+			if ( ! is_string( $large_url ) || '' === $large_url ) {
+				continue;
+			}
+			$large_srcset = wp_get_attachment_image_srcset( $attachment_id, 'large' );
+
+			// 代替テキストはメディアライブラリの値。空ならメニュー名と位置で補う。
+			$alt = trim( (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ) );
+			if ( '' === $alt ) {
+				$alt = sprintf(
+					/* translators: 1: photo number, 2: total number of photos, 3: menu name. */
+					__( 'Photo of %3$s %1$d/%2$d', 'vk-booking-manager' ),
+					$position,
+					$total,
+					$menu_title
+				);
+			}
+			$caption = trim( wp_strip_all_tags( (string) wp_get_attachment_caption( $attachment_id ) ) );
+
+			$thumbnail = wp_get_attachment_image(
+				$attachment_id,
+				'thumbnail',
+				false,
+				array(
+					'class'    => 'vkbm-menu-loop__gallery-image',
+					'alt'      => '',
+					'loading'  => 'lazy',
+					'decoding' => 'async',
+					'sizes'    => '64px',
+				)
+			);
+
+			$items .= sprintf(
+				'<li class="vkbm-menu-loop__gallery-item"><button type="button" class="vkbm-menu-loop__gallery-button" aria-haspopup="dialog" aria-label="%1$s" data-vkbm-gallery-src="%2$s" data-vkbm-gallery-srcset="%3$s" data-vkbm-gallery-alt="%4$s" data-vkbm-gallery-caption="%5$s">%6$s</button></li>',
+				esc_attr(
+					sprintf(
+						/* translators: 1: photo number, 2: total number of photos. */
+						__( 'Enlarge photo %1$d (%2$d in total)', 'vk-booking-manager' ),
+						$position,
+						$total
+					)
+				),
+				esc_url( $large_url ),
+				esc_attr( (string) $large_srcset ),
+				esc_attr( $alt ),
+				esc_attr( $caption ),
+				$thumbnail
+			);
+		}
+
+		if ( '' === $items ) {
+			return '';
+		}
+
+		self::enqueue_gallery_assets();
+
+		return sprintf(
+			'<ul class="vkbm-menu-loop__gallery" data-vkbm-gallery-label="%1$s">%2$s</ul>',
+			esc_attr(
+				sprintf(
+					/* translators: %s: menu name. */
+					__( 'Photos of %s', 'vk-booking-manager' ),
+					$menu_title
+				)
+			),
+			$items
+		);
+	}
+
+	/**
 	 * Render meta information markup.
 	 *
 	 * @param WP_Post             $post           Post object.
@@ -1056,11 +1418,32 @@ class Menu_Loop_Block {
 		// （安藤レビュー LOW）。
 		$is_nomination_menu = Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
 
+		// 泊のプランかどうか。チェックイン表示と開始時間の非表示（#602）の両方で使うため1回だけ判定する。
+		$is_night_unit  = Service_Menu_Post_Type::is_night_unit( $post->ID );
 		$items          = array();
 		$price_markup   = '';
 		$resource_label = $this->get_resource_label_menu();
 
-		if ( is_numeric( $duration ) && (int) $duration > 0 ) {
+		if ( $is_night_unit ) {
+			// 泊のプランは所要時間の代わりにチェックイン／チェックアウトの時刻を出す。
+			// チェックアウトは最終宿泊日の翌日の時刻なので「翌」を添える。
+			$items[] = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html__( 'Check-in', 'vk-booking-manager' ),
+				esc_html( $this->format_start_time_for_card( Service_Menu_Post_Type::get_check_in_time( $post->ID ) ) )
+			);
+			$items[] = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html__( 'Check-out', 'vk-booking-manager' ),
+				esc_html(
+					sprintf(
+						/* translators: %s: check-out time (the day after the last night). */
+						__( 'Next day %s', 'vk-booking-manager' ),
+						$this->format_start_time_for_card( Service_Menu_Post_Type::get_check_out_time( $post->ID ) )
+					)
+				)
+			);
+		} elseif ( is_numeric( $duration ) && (int) $duration > 0 ) {
 			$duration_value = sprintf(
 				/* translators: %d: duration in minutes */
 				__( '%d minutes', 'vk-booking-manager' ),
@@ -1078,7 +1461,10 @@ class Menu_Loop_Block {
 
 		// 固定の開始時間（_vkbm_fixed_start_times）が設定されていれば表示する。
 		// 管理画面「Fixed start times」で入力された HH:MM 形式の文字列配列を想定する。
-		$start_times = get_post_meta( $post->ID, '_vkbm_fixed_start_times', true );
+		// 泊のプランは編集画面でこの欄が隠れるだけで値が残るため、残っていても読まない（#602）。
+		$start_times = $is_night_unit
+			? array()
+			: get_post_meta( $post->ID, '_vkbm_fixed_start_times', true );
 		$start_times = is_array( $start_times ) ? $start_times : array();
 		// 各要素を文字列化・トリムし、空文字を除外して詰め直す（保存順は維持する）。
 		$start_times = array_values(
@@ -1121,37 +1507,34 @@ class Menu_Loop_Block {
 				esc_html( $resource_label ),
 				esc_html( Service_Menu_Post_Type::get_all_staff_label() )
 			);
-		} elseif ( $is_nomination_menu ) {
+		} elseif ( $this->lists_assigned_staff_names( $post->ID ) ) {
 			// #485: 「すべて」ではない個別選択のときだけ、担当できるリソース ID を解決する
 			// （変数名どおり「担当できるリソース ID の配列」として使うため。安藤レビュー MEDIUM）。
 			$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID );
 
 			if ( ! empty( $staff_ids ) ) {
-				$staff_posts = get_posts(
-					array(
-						'post_type'      => Resource_Post_Type::POST_TYPE,
-						'post_status'    => array( 'publish' ),
-						'posts_per_page' => -1,
-						'orderby'        => array(
-							'menu_order' => 'ASC',
-							'title'      => 'ASC',
-						),
-						'include'        => $staff_ids,
+				// 公開中のリソースID（menu_order → タイトルの並び・リクエスト内キャッシュ済み）のうち、
+				// このメニューが担当できるものだけを残す。非公開・削除済みのIDは公開中一覧に無いため除外される。
+				// 投稿は描画前に prime_assigned_staff_post_caches() でキャッシュへ載せてあるため、
+				// get_the_title() はカードごとの DB 問い合わせにならない。
+				$assigned_published_ids = array_values(
+					array_intersect(
+						Service_Menu_Post_Type::get_published_resource_ids(),
+						$staff_ids
 					)
 				);
+
+				// render_menu_card() を単独で使う経路（一覧の先読みを通らない）でも、投稿を1回でまとめて読む。
+				// 先読み済みなら追加の問い合わせは発生しない。
+				if ( ! empty( $assigned_published_ids ) ) {
+					_prime_post_caches( $assigned_published_ids, false, false );
+				}
 
 				$names = array_values(
 					array_filter(
 						array_map(
-							static function ( WP_Post $staff_post ): string {
-								return get_the_title( $staff_post );
-							},
-							array_filter(
-								$staff_posts,
-								static function ( $staff_post ): bool {
-									return $staff_post instanceof WP_Post;
-								}
-							)
+							'get_the_title',
+							$assigned_published_ids
 						),
 						static function ( string $name ): bool {
 							return '' !== $name;
@@ -1270,7 +1653,11 @@ class Menu_Loop_Block {
 		// 集約し、管理画面のサービスメニュー一覧の料金列（Service_Menu_Post_Type::render_admin_columns()）
 		// と同じ判定を使う。
 		$price_tiers_raw = get_post_meta( $post->ID, '_vkbm_price_tiers', true );
-		if ( Price_Tiers::is_menu_using_price_tiers( $post->ID ) ) {
+		$lodging_rows    = Lodging_Price_Display::get_menu_price_rows( $post->ID );
+		if ( array() !== $lodging_rows ) {
+			// 日によって料金が変わる泊のプランは、最安＋「〜」で表記する（料金区分があれば区分ごとに並べる）。
+			$price_markup = $this->render_lodging_price_card( $post->ID, $lodging_rows );
+		} elseif ( Price_Tiers::is_menu_using_price_tiers( $post->ID ) ) {
 			$price_markup = $this->render_price_tiers( Price_Tiers::normalize_tiers( $price_tiers_raw ) );
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			$price_markup = sprintf(
@@ -1293,7 +1680,10 @@ class Menu_Loop_Block {
 			$actions_markup = $this->render_actions( $post, $attributes );
 		}
 
-		if ( '' === $meta_markup && '' === $price_markup && '' === $actions_markup ) {
+		// サブ画像（#623）は、スペック表の直下に出す。0枚なら空文字になる。
+		$gallery_markup = $this->render_gallery( $post );
+
+		if ( '' === $meta_markup && '' === $price_markup && '' === $actions_markup && '' === $gallery_markup ) {
 			return '';
 		}
 
@@ -1303,9 +1693,10 @@ class Menu_Loop_Block {
 		}
 
 		return sprintf(
-			'<div class="vkbm-menu-loop__card-meta-wrap"><div class="vkbm-menu-loop__card-meta-main">%1$s</div>%2$s</div>',
+			'<div class="vkbm-menu-loop__card-meta-wrap"><div class="vkbm-menu-loop__card-meta-main">%1$s%3$s</div>%2$s</div>',
 			$meta_markup,
-			$side_markup
+			$side_markup,
+			$gallery_markup
 		);
 	}
 
@@ -1349,7 +1740,7 @@ class Menu_Loop_Block {
 
 			$buttons[] = sprintf(
 				'<a class="vkbm-menu-loop__button vkbm-button vkbm-button__primary" href="%1$s">%2$s</a>',
-				esc_url( get_permalink( $post ) ),
+				esc_url( $this->detail_link->get_detail_url( $post, $this->get_detail_link_query( $attributes ) ) ),
 				esc_html( $label )
 			);
 		}
@@ -1411,26 +1802,85 @@ class Menu_Loop_Block {
 		);
 	}
 
-		/**
-		 * Format the price label considering tax settings.
-		 *
-		 * @param int $base_price Base (tax-included) price.
-		 * @return string
-		 */
-	private function format_price_display( int $base_price ): string {
-		$formatted_price = esc_html( VKBM_Helper::format_currency( $base_price ) );
-		$tax_label       = VKBM_Helper::get_tax_included_label();
+	/**
+	 * 日によって料金が変わる泊のプランの料金を、テキスト表示用のマークアップにする。
+	 *
+	 * 料金区分が無ければ「¥7,000〜 / 1名・1泊」の 1 つ、区分があれば「区分名 ¥7,000〜 / 1名・1泊」を区分ごとに並べる。
+	 *
+	 * @param int                                                         $menu_id サービスメニューの投稿ID。
+	 * @param array<int, array{label: string, price: int, is_from: bool}> $rows    Lodging_Price_Display::get_menu_price_rows() の結果。
+	 * @return string マークアップ（呼び出し側で wp_kses_post を通す）。
+	 */
+	private function render_lodging_price_rows( int $menu_id, array $rows ): string {
+		$price_unit = Service_Menu_Post_Type::get_night_price_unit( $menu_id );
+		$parts      = array();
+		foreach ( $rows as $row ) {
+			$text = Lodging_Price_Display::format_price_with_unit_html( $row['price'], $row['is_from'], $price_unit );
+			if ( '' !== $row['label'] ) {
+				$text = esc_html( $row['label'] ) . ' ' . $text;
+			}
+			$parts[] = $text;
+		}
+
+		return $this->append_tax_label( implode( ' / ', $parts ) );
+	}
+
+	/**
+	 * 日によって料金が変わる泊のプランの料金を、カード表示用のマークアップにする。
+	 *
+	 * 料金区分が無ければ 1 つの料金、区分があれば区分ごとの dl リストにする。金額は「¥7,000〜 / 1名・1泊」の形。
+	 *
+	 * @param int                                                         $menu_id サービスメニューの投稿ID。
+	 * @param array<int, array{label: string, price: int, is_from: bool}> $rows    Lodging_Price_Display::get_menu_price_rows() の結果。
+	 * @return string マークアップ。
+	 */
+	private function render_lodging_price_card( int $menu_id, array $rows ): string {
+		$price_unit = Service_Menu_Post_Type::get_night_price_unit( $menu_id );
+		$texts      = array();
+		foreach ( $rows as $row ) {
+			$texts[] = Lodging_Price_Display::format_price_with_unit_html( $row['price'], $row['is_from'], $price_unit );
+		}
+
+		// 料金区分が無い（基本料金の 1 行だけ）ときは、今の単一料金と同じ見た目にする。
+		if ( 1 === count( $rows ) && '' === $rows[0]['label'] ) {
+			return sprintf(
+				'<div class="vkbm-menu-loop__card-price">%s</div>',
+				wp_kses_post( $this->append_tax_label( $texts[0] ) )
+			);
+		}
+
+		return $this->render_price_tiers( $rows, $texts );
+	}
+
+	/**
+	 * エスケープ済みの料金表記の後ろに、税込みラベルを付ける。
+	 *
+	 * @param string $escaped_price エスケープ済みの料金表記。
+	 * @return string 税込みラベルを付けた料金表記。ラベルが無ければそのまま返す。
+	 */
+	private function append_tax_label( string $escaped_price ): string {
+		$tax_label = VKBM_Helper::get_tax_included_label();
 
 		if ( '' === $tax_label ) {
-			return $formatted_price;
+			return $escaped_price;
 		}
 
 		return sprintf(
 			/* translators: 1: price, 2: tax-included label */
 			'%1$s<span class="vkbm-menu-loop__card-price-tax">%2$s</span>',
-			$formatted_price,
+			$escaped_price,
 			esc_html( $tax_label )
 		);
+	}
+
+	/**
+	 * Format the price label considering tax settings.
+	 *
+	 * @param int $base_price Base (tax-included) price.
+	 * @return string
+	 */
+	private function format_price_display( int $base_price ): string {
+		return $this->append_tax_label( esc_html( VKBM_Helper::format_currency( $base_price ) ) );
 	}
 
 	/**
@@ -1440,24 +1890,26 @@ class Menu_Loop_Block {
 	 * 金額は単一料金と同じトーンで強調し、税込みラベルは各行ではなく
 	 * 一覧の末尾に 1 回だけ付ける。区分は件数によらず全件を縦に並べて表示する。
 	 *
-	 * @param array<int, array{label: string, price: int}> $tiers 正規化済みの料金区分。
+	 * @param array<int, array{label: string, price: int}> $tiers         正規化済みの料金区分。
+	 * @param array<int, string>                           $price_texts   金額の代わりに出す表記（エスケープ済みのマークアップ。任意。区分の並び順で指定する。泊のプランの「¥7,000〜 / 1名・1泊」用）。
 	 * @return string 料金区分一覧の HTML。区分が無い場合は空文字列。
 	 */
-	private function render_price_tiers( array $tiers ): string {
+	private function render_price_tiers( array $tiers, array $price_texts = array() ): string {
 		if ( empty( $tiers ) ) {
 			return '';
 		}
 
 		$rows = array();
-		foreach ( $tiers as $tier ) {
+		foreach ( array_values( $tiers ) as $index => $tier ) {
 			// ラベル・料金はいずれも正規化済みだが、出力時に改めてエスケープする。
 			$label = isset( $tier['label'] ) ? (string) $tier['label'] : '';
 			$price = isset( $tier['price'] ) ? (int) $tier['price'] : 0;
+			$text  = $price_texts[ $index ] ?? esc_html( VKBM_Helper::format_currency( $price ) );
 
 			$rows[] = sprintf(
 				'<div class="vkbm-menu-loop__card-prices-row"><dt class="vkbm-menu-loop__card-prices-label">%1$s</dt><dd class="vkbm-menu-loop__card-prices-value">%2$s</dd></div>',
 				esc_html( $label ),
-				esc_html( VKBM_Helper::format_currency( $price ) )
+				wp_kses_post( $text )
 			);
 		}
 
@@ -1515,12 +1967,12 @@ class Menu_Loop_Block {
 	}
 
 	/**
-	 * Build edit link markup for menu items when the current user can edit the post.
+	 * 現在の利用者が投稿を編集できるときだけ、カードと詳細見出しで共有する編集リンクを返す。
 	 *
-	 * @param WP_Post $post Service menu post.
-	 * @return string
+	 * @param WP_Post $post サービスメニュー投稿。
+	 * @return string 編集リンクの HTML。権限がない場合は空文字。
 	 */
-	private function get_menu_edit_link_markup( WP_Post $post ): string {
+	public function get_menu_edit_link_markup( WP_Post $post ): string {
 		if ( ! is_user_logged_in() || ! current_user_can( 'edit_post', $post->ID ) ) {
 			return '';
 		}
@@ -1538,21 +1990,6 @@ class Menu_Loop_Block {
 	}
 
 	/**
-	 * Get resource label for staff-related UI.
-	 *
-	 * Returns the singular label used across staff-related UI.
-	 * スタッフ関連UIで使用する単数ラベルを返します。
-	 *
-	 * @return string
-	 */
-	private function get_resource_label_singular(): string {
-		$settings = $this->get_provider_settings();
-		$label    = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : '';
-
-		return '' !== trim( $label ) ? $label : __( 'Staff', 'vk-booking-manager' );
-	}
-
-	/**
 	 * Get menu-loop label for staff availability.
 	 *
 	 * Returns the menu card label for staff availability.
@@ -1561,10 +1998,12 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function get_resource_label_menu(): string {
-		$settings = $this->get_provider_settings();
-		$label    = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : '';
+		// カードごとに設定を読み直さないよう、最初に取得した結果を覚える。
+		if ( null === $this->resource_label_menu ) {
+			$this->resource_label_menu = vkbm_get_resource_label_menu();
+		}
 
-		return '' !== trim( $label ) ? $label : __( 'Staff available', 'vk-booking-manager' );
+		return $this->resource_label_menu;
 	}
 
 
@@ -1630,7 +2069,7 @@ class Menu_Loop_Block {
 			$category = absint( $target['category'] );
 		}
 		if ( isset( $target['keyword'] ) ) {
-			$keyword = sanitize_text_field( (string) wp_unslash( $target['keyword'] ) );
+			$keyword = sanitize_text_field( (string) $target['keyword'] );
 		}
 
 		return array(

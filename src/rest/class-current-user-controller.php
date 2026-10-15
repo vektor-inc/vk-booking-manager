@@ -108,14 +108,20 @@ class Current_User_Controller extends WP_REST_Controller {
 			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
 		}
 
-		$reservation_redirect = $this->get_reservation_page_redirect();
-		$redirect             = '' !== $reservation_redirect ? $reservation_redirect : $this->determine_redirect_target( $request );
+		// ログアウト後の戻り先: リクエストの redirect → 予約ページ URL → サイトトップ の順で採用する。
+		$redirect = $this->determine_redirect_target( $request );
+		if ( '' === $redirect ) {
+			$redirect = $this->get_reservation_page_redirect();
+		}
+		if ( '' === $redirect ) {
+			$redirect = home_url();
+		}
 
 		return new WP_REST_Response(
 			array(
 				'can_manage_reservations' => current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 				'shift_dashboard_url'     => admin_url( 'admin.php?page=vkbm-shift-dashboard' ),
-				'logout_url'              => wp_logout_url( $redirect ),
+				'logout_url'              => str_replace( '&amp;', '&', wp_logout_url( $redirect ) ),
 			)
 		);
 	}
@@ -123,21 +129,23 @@ class Current_User_Controller extends WP_REST_Controller {
 	/**
 	 * Sanitize and validate redirect parameter.
 	 *
+	 * 同一ドメインの有効な URL のみ返し、未指定・不正・外部ドメインの場合は空文字を返す。
+	 *
 	 * @param WP_REST_Request $request Request.
-	 * @return string
+	 * @return string Validated URL, or empty string when unavailable.
 	 */
 	private function determine_redirect_target( WP_REST_Request $request ): string {
 		$raw = $request->get_param( 'redirect' );
 		if ( empty( $raw ) ) {
-			return home_url();
+			return '';
 		}
 
 		$url = esc_url_raw( (string) wp_unslash( $raw ) );
 		if ( empty( $url ) ) {
-			return home_url();
+			return '';
 		}
 
-		return wp_validate_redirect( $url, home_url() );
+		return wp_validate_redirect( $url, '' );
 	}
 
 	/**

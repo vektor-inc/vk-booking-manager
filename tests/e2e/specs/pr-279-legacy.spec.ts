@@ -111,7 +111,11 @@ test.describe( 'PR #279 後方互換: 区分なしメニュー', () => {
 		// カレンダーのロード完了を待ってから、空き枠のある日を安定して選ぶ（フレーク対策）。
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
 		await page.waitForTimeout( 1000 );
-		await page.locator( '.vkbm-slot-list__item' ).first().click();
+		// 先に走る spec が残した予約で先頭の枠が満枠（disabled）のことがあるため、押せる最初の枠を選ぶ。
+		await page
+			.locator( '.vkbm-slot-list__item:not(:disabled)' )
+			.first()
+			.click();
 		await page.waitForTimeout( 1000 );
 
 		// 単一の人数入力（#vkbm-reservation-guests）が出て、区分入力（tier-0）は出ない。

@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     2.6.0
+ * Version:     3.0.0
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -55,12 +55,22 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 
 require_once __DIR__ . '/src/common/trait-rate-limit.php';
 require_once __DIR__ . '/src/post-types/class-booking-post-type.php';
+require_once __DIR__ . '/src/bookings/class-booking-overlap.php';
+require_once __DIR__ . '/src/bookings/class-reserver-search.php';
 require_once __DIR__ . '/src/bookings/class-booking-admin.php';
 require_once __DIR__ . '/src/bookings/class-booking-draft-controller.php';
 require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
+require_once __DIR__ . '/src/bookings/class-user-favorites-controller.php';
 require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
+require_once __DIR__ . '/src/common/class-mail-from.php';
+require_once __DIR__ . '/src/common/class-site-url.php';
+require_once __DIR__ . '/src/common/class-scheduled-events.php';
+require_once __DIR__ . '/src/uninstall/class-uninstaller.php';
 require_once __DIR__ . '/src/common/class-price-tiers.php';
 require_once __DIR__ . '/src/common/class-exclusive-fee.php';
+require_once __DIR__ . '/src/common/class-lodging-rate.php';
+require_once __DIR__ . '/src/common/class-lodging-price.php';
+require_once __DIR__ . '/src/common/class-lodging-price-display.php';
 require_once __DIR__ . '/src/common/class-nomination-min-guests-message.php';
 require_once __DIR__ . '/src/common/class-staff-load-calculator.php';
 require_once __DIR__ . '/src/common/class-staff-conflict-detector.php';
@@ -73,9 +83,12 @@ require_once __DIR__ . '/src/blocks/class-menu-loop-block.php';
 require_once __DIR__ . '/src/blocks/class-menu-card-block.php';
 require_once __DIR__ . '/src/blocks/class-reservation-block.php';
 require_once __DIR__ . '/src/blocks/class-reservation-button-block.php';
+require_once __DIR__ . '/src/availability/interface-slot-strategy.php';
+require_once __DIR__ . '/src/availability/class-time-slot-strategy.php';
 require_once __DIR__ . '/src/availability/class-availability-service.php';
 require_once __DIR__ . '/src/availability/class-availability-cache-generation.php';
 require_once __DIR__ . '/src/availability/class-availability-booking-cache-generation.php';
+require_once __DIR__ . '/src/availability/class-menu-date-filter.php';
 require_once __DIR__ . '/src/rest/class-availability-controller.php';
 require_once __DIR__ . '/src/rest/class-menu-preview-controller.php';
 require_once __DIR__ . '/src/rest/class-auth-form-controller.php';
@@ -85,15 +98,12 @@ require_once __DIR__ . '/src/bookings/class-booking-confirmation-controller.php'
 require_once __DIR__ . '/src/staff/class-staff-editor.php';
 require_once __DIR__ . '/src/post-types/class-resource-post-type.php';
 require_once __DIR__ . '/src/resources/class-resource-tag-taxonomy.php';
-require_once __DIR__ . '/src/resources/class-resource-delete-guard.php';
 require_once __DIR__ . '/src/notifications/class-booking-notification-service.php';
 require_once __DIR__ . '/src/integrations/class-booking-event-dispatcher.php';
-require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-secret-store.php';
-require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-connection.php';
-require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-relay-client.php';
-require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-api-client.php';
-require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-connect-controller.php';
-require_once __DIR__ . '/src/integrations/google-calendar/class-google-calendar-settings-panel.php';
+// Pro 版専用のファイル。無料版のビルドでは下のマーカーの間を行ごと削除する
+// （除外対象の一覧は docs/specification-distribution.md を参照。ここに足したファイルは
+// 無料版のビルド時の除外処理にも足すこと）。
+
 require_once __DIR__ . '/src/auth/class-email-verification.php';
 require_once __DIR__ . '/src/auth/class-auth-shortcodes.php';
 require_once __DIR__ . '/src/post-order/class-post-order-manager.php';
@@ -107,9 +117,16 @@ require_once __DIR__ . '/src/admin/class-email-log-page.php';
 require_once __DIR__ . '/src/oembed/class-oembed-override.php';
 require_once __DIR__ . '/src/resources/resource-labels.php';
 require_once __DIR__ . '/src/provider-settings/class-industry-presets.php';
+require_once __DIR__ . '/src/provider-settings/class-provider-display-name.php';
 require_once __DIR__ . '/src/provider-settings/class-settings-repository.php';
 require_once __DIR__ . '/src/provider-settings/class-settings-sanitizer.php';
 require_once __DIR__ . '/src/provider-settings/class-settings-service.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-repository.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-service.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-settings-page.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-meta-box.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-user-profile.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-booking-guard.php';
 
 use VKBookingManager\Admin\Email_Log_Page;
 use VKBookingManager\Admin\Provider_Settings_Page;
@@ -137,10 +154,16 @@ use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Blocks\Menu_Card_Block;
 use VKBookingManager\Blocks\Menu_Search_Block;
 use VKBookingManager\Blocks\Reservation_Block;
+use VKBookingManager\Blocks\Service_Menu_Detail_Renderer;
 use VKBookingManager\Blocks\Reservation_Button_Block;
 use VKBookingManager\Blocks\Reservation_Button_Renderer;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Capabilities\Roles_Manager;
+use VKBookingManager\Customers\Customer_Flag_Service;
+use VKBookingManager\Customers\Customer_Flag_Settings_Page;
+use VKBookingManager\Customers\Customer_Flag_Meta_Box;
+use VKBookingManager\Customers\Customer_Flag_User_Profile;
+use VKBookingManager\Customers\Customer_Flag_Booking_Guard;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Api_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
@@ -156,6 +179,7 @@ use VKBookingManager\TermOrder\Term_Order_Manager;
 use VKBookingManager\Plugin;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use VKBookingManager\PostTypes\Service_Menu_Front_Redirect;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -207,7 +231,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$google_calendar_connect_controller = null;
 		$google_calendar_settings_panel     = null;
 		$google_calendar_event_sync         = null;
-		if ( Google_Calendar_Connect_Controller::is_integration_enabled() ) {
+		// 無料版の配布物には Google カレンダー連携のファイルが無いため、クラスの有無も確認する。
+		if ( class_exists( Google_Calendar_Connect_Controller::class ) && Google_Calendar_Connect_Controller::is_integration_enabled() ) {
 			$google_calendar_connection   = new Google_Calendar_Connection();
 			$google_calendar_relay_client = new Google_Calendar_Relay_Client();
 			$google_calendar_api_client   = new Google_Calendar_Api_Client( $google_calendar_connection, $google_calendar_relay_client );
@@ -241,8 +266,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 
 		$provider_settings_page = new Provider_Settings_Page( $settings_service, Capabilities::MANAGE_PROVIDER_SETTINGS, '', $shift_editor, $google_calendar_settings_panel );
 		$email_log_page         = new Email_Log_Page( 'vkbm-provider-settings', Capabilities::MANAGE_PROVIDER_SETTINGS );
-		// Development-only: keep access permissive (file presence is the main gate).
-		$style_guide_page             = new Style_Guide_Page( 'read' );
+		// 開発用スタイルガイド画面は、BM設定と同じ権限を持つユーザーだけに見せる。
+		$style_guide_page             = new Style_Guide_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
 		$setup_notices                = new Setup_Notices();
 		$user_profile_fields          = new User_Profile_Fields();
 		$resource_schedule_repository = new Resource_Schedule_Template_Repository();
@@ -254,7 +279,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$owner_admin_menu_filter      = new Owner_Admin_Menu_Filter();
 		$shift_post_type              = new Shift_Post_Type();
 		$service_menu_post_type       = new Service_Menu_Post_Type();
-		$service_menu_front_redirect  = new Service_Menu_Front_Redirect( $settings_repository );
+		$service_menu_detail_link     = new Service_Menu_Detail_Link( $settings_repository );
+		$service_menu_front_redirect  = new Service_Menu_Front_Redirect( $settings_repository, $service_menu_detail_link );
 		$booking_post_type            = new Booking_Post_Type();
 		$booking_notification_service = new Booking_Notification_Service( $settings_repository );
 		// 予約の状態変化（作成・確定・変更・キャンセル・ゴミ箱・復元・完全削除）を外部連携
@@ -266,7 +292,9 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// 他クラスと書き方が揃っていなかった（司の decision record 参照）。他クラスと同じ任意引数の
 		// 注入に揃え、ここでは通知サービス・イベントディスパッチャーとも共有インスタンスを渡す
 		// （未注入の場合は Shift_Dashboard_Page 側で従来どおり都度生成する。既存挙動は変えない）。
-		$shift_dashboard_page            = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS, $booking_notification_service, $booking_event_dispatcher );
+		// 顧客フラグサービスは、シフト表の予約カードと顧客フラグ機能（下で登録）で共有する。
+		$customer_flag_service           = new Customer_Flag_Service();
+		$shift_dashboard_page            = new Shift_Dashboard_Page( Capabilities::MANAGE_PROVIDER_SETTINGS, $booking_notification_service, $booking_event_dispatcher, $customer_flag_service );
 		$oembed_override                 = new OEmbed_Override();
 		$booking_admin                   = new Booking_Admin( $booking_notification_service, $booking_event_dispatcher, $google_calendar_event_sync );
 		$availability_service            = new Availability_Service( $settings_repository );
@@ -276,12 +304,12 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$user_favorites_controller       = new User_Favorites_Controller();
 		$reservation_button_renderer     = new Reservation_Button_Renderer( $settings_repository );
 		$menu_search_block               = new Menu_Search_Block();
-		$menu_loop_block                 = new Menu_Loop_Block( $settings_repository, $reservation_button_renderer );
+		$menu_loop_block                 = new Menu_Loop_Block( $settings_repository, $reservation_button_renderer, $service_menu_detail_link );
 		$menu_card_block                 = new Menu_Card_Block( $menu_loop_block );
 		// issue #512: render_block フィルタ（ログイン失敗フォールバック描画）から、同一
 		// リクエスト内のログイン失敗コード・予約ページURLを参照するために先に生成する。
 		$auth_shortcodes              = new Auth_Shortcodes( $settings_service );
-		$reservation_block            = new Reservation_Block( $auth_shortcodes );
+		$reservation_block            = new Reservation_Block( $auth_shortcodes, new Service_Menu_Detail_Renderer( $service_menu_detail_link, $menu_loop_block ) );
 		$reservation_button_block     = new Reservation_Button_Block( $reservation_button_renderer );
 		$availability_controller      = new Availability_Controller( $availability_service );
 		$current_user_controller      = new Current_User_Controller( $settings_service );
@@ -320,7 +348,10 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 
 		// リソース（スタッフ）削除ガードを登録（実質 Pro 版限定機能。register() 内部で判定する）。
 		// Register the resource (staff) delete guard (effectively Pro edition only; gated inside register()).
-		( new Resource_Delete_Guard() )->register();
+		// 無料版の配布物にはこのクラスのファイルが無いため、クラスの有無も確認する。
+		if ( class_exists( Resource_Delete_Guard::class ) ) {
+			( new Resource_Delete_Guard() )->register();
+		}
 
 		// シフト・サービスメニュー・スタッフ・システム設定の保存/削除で
 		// 空き状況キャッシュ（transient）の世代番号を進める（#410 / #412）。
@@ -335,6 +366,16 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$style_guide_page->register();
 		$setup_notices->register();
 		$email_log_page->register();
+
+		// 顧客フラグ機能（種別定義ページ・予約編集メタボックス・ユーザー編集画面の編集欄・予約ブロック連携）を登録する。
+		$customer_flag_settings_page = new Customer_Flag_Settings_Page( $customer_flag_service );
+		$customer_flag_meta_box      = new Customer_Flag_Meta_Box( $customer_flag_service );
+		$customer_flag_user_profile  = new Customer_Flag_User_Profile( $customer_flag_service );
+		$customer_flag_booking_guard = new Customer_Flag_Booking_Guard( $customer_flag_service );
+		$customer_flag_settings_page->register();
+		$customer_flag_meta_box->register();
+		$customer_flag_user_profile->register();
+		$customer_flag_booking_guard->register();
 
 		// 無料版でプロ版への誘導リンク（プラグイン一覧）を登録する。Pro 版では no-op。
 		( new Pro_Upsell() )->register();
@@ -398,7 +439,7 @@ if ( ! function_exists( 'vkbm_init_plugin' ) ) {
 			return;
 		}
 
-		// Load textdomain (excluded in free edition GitHub releases for WordPress.org).
+		// 翻訳ファイルを読み込む（無料版・Pro 版のどちらでも必要。file_exists は念のためのガード）。
 		$textdomain_file = __DIR__ . '/load-plugin-textdomain.php';
 		if ( file_exists( $textdomain_file ) ) {
 			require_once $textdomain_file;
@@ -543,15 +584,78 @@ if ( ! function_exists( 'vkbm_get_reservation_page_logout_url' ) ) {
 	}
 }
 
-/**
- * Get the configured singular label for resources (default: スタッフ).
- *
- * @return string
- */
+if ( ! function_exists( 'vkbm_resolve_logout_redirect' ) ) {
+	/**
+	 * wp_logout で転送する先を決める。
+	 * 戻り先の指定（redirect_to）があれば、WordPress 標準の処理に任せるため空文字を返す。
+	 *
+	 * @param string $requested_redirect リクエストの redirect_to の値。
+	 * @param string $reservation_page_url 正規化済みの予約ページ URL。
+	 * @return string 転送先 URL。転送しない場合は空文字。
+	 */
+	function vkbm_resolve_logout_redirect( string $requested_redirect, string $reservation_page_url ): string {
+		if ( '' !== trim( $requested_redirect ) ) {
+			return '';
+		}
+
+		return $reservation_page_url;
+	}
+}
+
+if ( ! function_exists( 'vkbm_get_requested_logout_redirect' ) ) {
+	/**
+	 * リクエストから redirect_to を文字列で取り出す。無い・文字列以外（配列など）の場合は空文字を返す。
+	 *
+	 * @param array<string, mixed> $request $_REQUEST 相当の配列。
+	 * @return string サニタイズ済みの redirect_to。
+	 */
+	function vkbm_get_requested_logout_redirect( array $request ): string {
+		if ( ! isset( $request['redirect_to'] ) || ! is_string( $request['redirect_to'] ) ) {
+			return '';
+		}
+
+		return sanitize_text_field( wp_unslash( $request['redirect_to'] ) );
+	}
+}
+
+if ( ! function_exists( 'vkbm_should_redirect_on_logout' ) ) {
+	/**
+	 * ログアウト時に予約ページへ転送してよい種類のリクエストかを返す。
+	 *
+	 * AJAX・REST API・WP-CLI・WP-Cron は画面遷移を伴わない処理のため、転送して処理を終了すると
+	 * 他のプラグインがプログラムからログアウトさせる処理など、呼び出し元の処理が途中で止まる。
+	 *
+	 * @param bool $is_ajax AJAX（admin-ajax.php）の処理中か。
+	 * @param bool $is_rest REST API の処理中か。
+	 * @param bool $is_cli  WP-CLI の処理中か。
+	 * @param bool $is_cron WP-Cron の処理中か。
+	 * @return bool 転送してよければ true。
+	 */
+	function vkbm_should_redirect_on_logout( bool $is_ajax, bool $is_rest, bool $is_cli, bool $is_cron ): bool {
+		return ! ( $is_ajax || $is_rest || $is_cli || $is_cron );
+	}
+}
+
+// ログアウト時、戻り先の指定が無ければ予約ページ URL へ転送する（指定があれば WordPress 標準の処理に任せる）。
 add_action(
 	'wp_logout',
 	static function (): void {
-		$redirect = vkbm_get_reservation_page_logout_url();
+		// 画面遷移を伴わない処理（AJAX・REST API・WP-CLI・WP-Cron）の中では転送も exit もしない。
+		$can_redirect = vkbm_should_redirect_on_logout(
+			wp_doing_ajax(),
+			defined( 'REST_REQUEST' ) && REST_REQUEST,
+			defined( 'WP_CLI' ) && WP_CLI,
+			wp_doing_cron()
+		);
+
+		if ( ! $can_redirect ) {
+			return;
+		}
+
+		// wp-login.php?action=logout 側で nonce（check_admin_referer）検証済みのため、ここでは redirect_to の有無だけを見る。
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$requested = vkbm_get_requested_logout_redirect( $_REQUEST );
+		$redirect  = vkbm_resolve_logout_redirect( $requested, vkbm_get_reservation_page_logout_url() );
 
 		if ( '' === $redirect ) {
 			return;

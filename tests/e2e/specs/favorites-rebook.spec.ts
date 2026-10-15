@@ -5,6 +5,7 @@ import {
 	getStaffId,
 	getTokyoDateParts,
 	createShiftForMonth,
+	getServiceMenuId,
 } from '../utils/helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
@@ -25,8 +26,51 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 	// グローバルセットアップの user_* クリーンアップ対象に合わせた接頭辞を使う。
 	const username = `user_fav_${ Date.now() }`;
 
+	// この describe の開始前から存在した予約の ID。afterAll で「このテストが作った予約」だけを
+	// 差分で特定して削除するために控える（issue #715: 予約が残ると空き枠が埋まり、
+	// 続けて流した 2 回目に空き日が 0 件になる）。
+	// beforeAll で取得できなかった場合は null のまま（差分を特定できないので afterAll で何も消さない）。
+	let bookingIdsBefore: string[] | null = null;
+
+	/**
+	 * 現在の予約（vkbm_booking）の ID 一覧を返す。
+	 *
+	 * @return 予約 ID の配列。
+	 */
+	const listBookingIds = (): string[] =>
+		wpCliArgs( [
+			'post',
+			'list',
+			'--post_type=vkbm_booking',
+			'--post_status=any',
+			'--format=ids',
+		] )
+			.split( /\s+/ )
+			.filter( ( id ) => /^\d+$/.test( id ) );
+
+	// このテストが作成した予約を削除する。失敗しても本来のテスト結果を隠さないよう警告に留める。
+	// 削除対象は開始前との差分で決めるため、直列実行（workers: 1）が前提。
+	test.afterAll( async () => {
+		// 開始前の予約 ID を控えられていない場合は、自分が作った予約を特定できないので何も消さない。
+		if ( bookingIdsBefore === null ) {
+			return;
+		}
+		const before = bookingIdsBefore;
+		try {
+			const created = listBookingIds().filter(
+				( id ) => ! before.includes( id )
+			);
+			if ( created.length ) {
+				wpCliArgs( [ 'post', 'delete', ...created, '--force' ] );
+			}
+		} catch ( e ) {
+			console.warn( 'Failed to clean up favorites bookings:', e );
+		}
+	} );
+
 	// テスト用の一般ユーザー（subscriber）を作成する。お気に入りはログイン必須のため。
 	test.beforeAll( async () => {
+		bookingIdsBefore = listBookingIds();
 		wpCliArgs( [
 			'user',
 			'create',
@@ -65,8 +109,10 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		await page.waitForLoadState( 'networkidle' );
 
 		// メニュー選択（新スタイル→旧スタイルの順でフォールバック）。
+		// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+		const menuId = getServiceMenuId();
 		const reserveButton = page.locator(
-			'.vkbm-menu-loop__button--reserve'
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
 		);
 		if ( await reserveButton.count() ) {
 			await reserveButton.first().click();
@@ -255,8 +301,10 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		await page.waitForLoadState( 'networkidle' );
 
 		// メニューを選択してフォーム編集状態にする。
+		// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+		const menuId = getServiceMenuId();
 		const reserveButton = page.locator(
-			'.vkbm-menu-loop__button--reserve'
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
 		);
 		if ( await reserveButton.count() ) {
 			await reserveButton.first().click();

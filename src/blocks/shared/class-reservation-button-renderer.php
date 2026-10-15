@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
 use function add_query_arg;
@@ -110,6 +111,8 @@ class Reservation_Button_Renderer {
 	/**
 	 * 指定プランの予約ページリンク（menu_id 付き）を組み立てる。
 	 *
+	 * 表示中の URL に有効な date / check_out_date があれば、リンクにも付けて予約画面へ引き継ぐ。
+	 *
 	 * @param WP_Post $post サービスメニュー投稿。
 	 * @return string 予約ページURL。予約ページ未設定時は空文字。
 	 */
@@ -120,9 +123,13 @@ class Reservation_Button_Renderer {
 			return '';
 		}
 
+		// 表示中の URL に選択済みの日付があれば、検証したうえで予約画面へ引き継ぐ。
 		return add_query_arg(
-			array(
-				'menu_id' => (string) $post->ID,
+			array_merge(
+				array(
+					'menu_id' => (string) $post->ID,
+				),
+				Menu_Date_Filter::carry_dates_from_request()
 			),
 			$reservation_url
 		);

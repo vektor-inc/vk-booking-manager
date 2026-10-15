@@ -53,6 +53,18 @@ class Industry_Presets {
 		'guests_unit_label',
 		'no_nomination_label',
 		'nomination_fee_label',
+		'guests_count_label',
+	);
+
+	/**
+	 * プリセットが持てる機能の識別子（features キーで指定できる値）。
+	 *
+	 * 他の機能（#571〜#577 の宿泊モードなど）は Industry_Presets::supports() だけを見て出し分ける。
+	 *
+	 * @var array<int, string>
+	 */
+	public const FEATURES = array(
+		'lodging',
 	);
 
 	/**
@@ -102,6 +114,10 @@ class Industry_Presets {
 					'value'   => '__default__',
 					'display' => true,
 				),
+				'guests_count_label'      => array(
+					'value'   => '__default__',
+					'display' => true,
+				),
 			),
 		),
 		'activity' => array(
@@ -142,6 +158,10 @@ class Industry_Presets {
 				'nomination_fee_label'    => array(
 					'value'   => '__default__',
 					'display' => false,
+				),
+				'guests_count_label'      => array(
+					'value'   => '__default__',
+					'display' => true,
 				),
 			),
 		),
@@ -184,6 +204,56 @@ class Industry_Presets {
 					'value'   => '__default__',
 					'display' => false,
 				),
+				'guests_count_label'      => array(
+					'value'   => '__default__',
+					'display' => true,
+				),
+			),
+		),
+		'lodging'  => array(
+			'label'    => 'Lodging',
+			'features' => array( 'lodging' ),
+			'fields'   => array(
+				'staff_enabled'           => array(
+					'value'   => true,
+					'display' => false,
+				),
+				'slot_capacity_enabled'   => array(
+					'value'   => true,
+					'display' => false,
+				),
+				'resource_label_singular' => array(
+					'value'   => 'Room',
+					'display' => true,
+				),
+				'resource_label_plural'   => array(
+					'value'   => 'Rooms',
+					'display' => true,
+				),
+				'resource_label_menu'     => array(
+					'value'   => 'Eligible rooms',
+					'display' => true,
+				),
+				'resource_menu_icon'      => array(
+					'value'   => 'dashicons-building',
+					'display' => false,
+				),
+				'guests_unit_label'       => array(
+					'value'   => null,
+					'display' => false,
+				),
+				'no_nomination_label'     => array(
+					'value'   => 'Any available room',
+					'display' => true,
+				),
+				'nomination_fee_label'    => array(
+					'value'   => '__default__',
+					'display' => false,
+				),
+				'guests_count_label'      => array(
+					'value'   => 'Number of guests staying',
+					'display' => true,
+				),
 			),
 		),
 	);
@@ -208,17 +278,23 @@ class Industry_Presets {
 		// ミス時のみ）ここで1回だけ組み立ててループへ渡す。static にすると翻訳テーブル自体が
 		// プロセス内で固定され、キャッシュキーに言語を含めても言語切り替えに追随できないため
 		// （#387 レビュー指摘・安藤案）。呼び出し頻度はメモ化により抑えられているため、
-		// __() の呼び出し回数はキャッシュミス1回あたり7回で済む。
+		// __() の呼び出し回数はキャッシュミス1回あたり十数回で済む。
 		$labels = array(
 			'Salon'           => __( 'Salon', 'vk-booking-manager' ),
 			'Activity / Tour' => __( 'Activity / Tour', 'vk-booking-manager' ),
 			'Seminar'         => __( 'Seminar', 'vk-booking-manager' ),
+			'Lodging'         => __( 'Lodging', 'vk-booking-manager' ),
 		);
 		$values = array(
-			'Staff'           => __( 'Staff', 'vk-booking-manager' ),
-			'Staff available' => __( 'Staff available', 'vk-booking-manager' ),
-			'Guide'           => __( 'Guide', 'vk-booking-manager' ),
-			'Instructor'      => __( 'Instructor', 'vk-booking-manager' ),
+			'Staff'                    => __( 'Staff', 'vk-booking-manager' ),
+			'Staff available'          => __( 'Staff available', 'vk-booking-manager' ),
+			'Guide'                    => __( 'Guide', 'vk-booking-manager' ),
+			'Instructor'               => __( 'Instructor', 'vk-booking-manager' ),
+			'Room'                     => __( 'Room', 'vk-booking-manager' ),
+			'Rooms'                    => __( 'Rooms', 'vk-booking-manager' ),
+			'Eligible rooms'           => __( 'Eligible rooms', 'vk-booking-manager' ),
+			'Any available room'       => __( 'Any available room', 'vk-booking-manager' ),
+			'Number of guests staying' => __( 'Number of guests staying', 'vk-booking-manager' ),
 		);
 
 		$custom_fields = array();
@@ -231,8 +307,9 @@ class Industry_Presets {
 
 		$presets = array(
 			'custom' => array(
-				'label'  => __( 'Custom', 'vk-booking-manager' ),
-				'fields' => $custom_fields,
+				'label'    => __( 'Custom', 'vk-booking-manager' ),
+				'features' => array(),
+				'fields'   => $custom_fields,
 			),
 		);
 
@@ -247,8 +324,9 @@ class Industry_Presets {
 				);
 			}
 			$presets[ $preset_key ] = array(
-				'label'  => self::translate_definition_label( (string) $definition['label'], $labels ),
-				'fields' => $fields,
+				'label'    => self::translate_definition_label( (string) $definition['label'], $labels ),
+				'features' => $definition['features'] ?? array(),
+				'fields'   => $fields,
 			);
 		}
 
@@ -263,7 +341,8 @@ class Industry_Presets {
 		// 読み飛ばし、custom が失われていれば再注入する（#387 レビュー指摘・安藤案）。
 		// custom がプルダウンから消えると、保存済み値が選択肢に無くなりブラウザが先頭の
 		// 選択肢を暗黙で選ぶため、保存するだけでプリセットが黙って切り替わってしまう。
-		$normalized                        = self::normalize_filtered_presets( $filtered, $presets, $custom_fields );
+		$normalized = self::normalize_filtered_presets( $filtered, $presets, $custom_fields );
+
 		self::$presets_cache[ $cache_key ] = $normalized;
 
 		return $normalized;
@@ -302,23 +381,63 @@ class Industry_Presets {
 				);
 			}
 
+			// features は FEATURES にある文字列だけ残す。custom は常に空へ強制する。購入済みの
+			// 利用者の多くは custom で運用しているため、custom に機能を持たせると既存の画面に
+			// 宿泊用の欄が増えてしまう（フィルターで custom に features を足されても無視する）。
+			$features = array();
+			if ( 'custom' !== (string) $preset_key && isset( $preset['features'] ) && is_array( $preset['features'] ) ) {
+				$features = array_values( array_intersect( self::FEATURES, array_filter( $preset['features'], 'is_string' ) ) );
+			}
+
 			$label                     = $preset['label'] ?? $preset_key;
 			$normalized[ $preset_key ] = array(
-				'label'  => is_scalar( $label ) ? (string) $label : (string) $preset_key,
-				'fields' => $fields,
+				'label'    => is_scalar( $label ) ? (string) $label : (string) $preset_key,
+				'features' => $features,
+				'fields'   => $fields,
 			);
 		}
 
 		if ( ! isset( $normalized['custom'] ) ) {
 			$normalized = array(
 				'custom' => array(
-					'label'  => __( 'Custom', 'vk-booking-manager' ),
-					'fields' => $custom_fields,
+					'label'    => __( 'Custom', 'vk-booking-manager' ),
+					'features' => array(),
+					'fields'   => $custom_fields,
 				),
 			) + $normalized;
 		}
 
 		return $normalized;
+	}
+
+	/**
+	 * 保存済みのプリセットが指定の機能を持つかを返す。
+	 *
+	 * 無料版では常に false。custom と、機能を持たないプリセットでも false になる。
+	 *
+	 * @param string $feature 機能の識別子（FEATURES のいずれか）。
+	 * @return bool
+	 */
+	public static function supports( string $feature ): bool {
+		if ( ! in_array( $feature, self::FEATURES, true ) || Pro_Upsell::is_free_edition() ) {
+			return false;
+		}
+
+		// 保存済みのプリセットキーだけを読む（設定全体の組み立ては不要なため）。
+		$stored   = get_option( Settings_Repository::OPTION_KEY, array() );
+		$settings = array(
+			'industry_preset' => is_array( $stored ) ? ( $stored['industry_preset'] ?? 'custom' ) : 'custom',
+		);
+		// custom は features を持たない（常に空）ため、既定値の組み立てや get_presets() を走らせずに返す。
+		if ( 'custom' === self::sanitize_preset_key( $settings['industry_preset'] ) ) {
+			return false;
+		}
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+
+		$preset_key = self::get_current_preset( $settings, $defaults );
+		$presets    = self::get_presets( $defaults );
+
+		return in_array( $feature, $presets[ $preset_key ]['features'] ?? array(), true );
 	}
 
 	/**

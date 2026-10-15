@@ -1,6 +1,6 @@
 .vkbm-shift-bulk-create {
-	background: #fff;
-	border: 1px solid #dcdcde;
+	background: var(--vkbm--admin--color--surface);
+	border: 1px solid var(--vkbm--admin--color--border);
 	border-radius: 4px;
 	padding: 16px;
 	margin: 12px 0 16px;
@@ -14,7 +14,7 @@
 
 .vkbm-shift-bulk-create__description {
 	margin: 0 0 12px;
-	color: #646970;
+	color: var(--vkbm--admin--color--text-tertiary);
 }
 
 .vkbm-shift-bulk-create__form {

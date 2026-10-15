@@ -1,5 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
-import { wpCliArgs, wpEvalPhp, loginAsAdmin } from '../utils/helpers';
+import {
+	wpCliArgs,
+	wpEvalPhp,
+	loginAsAdmin,
+	getServiceMenuId,
+} from '../utils/helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 
@@ -107,8 +112,10 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		await page.waitForLoadState( 'networkidle' );
 
 		// メニュー選択（新スタイル→旧スタイルの順でフォールバック）。
+		// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+		const menuId = getServiceMenuId();
 		const reserveButton = page.locator(
-			'.vkbm-menu-loop__button--reserve'
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
 		);
 		if ( await reserveButton.count() ) {
 			await reserveButton.first().click();

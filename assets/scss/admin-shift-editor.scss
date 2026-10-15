@@ -1,10 +1,12 @@
+@use "breakpoints" as *;
+
 .vkbm-shift-days {
 	margin-top: 1em;
 }
 
 .vkbm-shift-day-row > th,
 .vkbm-shift-day-row > td {
-	border-bottom: 1px solid #dcdcde;
+	border-bottom: 1px solid var(--vkbm--admin--color--border);
 }
 
 .vkbm-shift-day-label {
@@ -34,11 +36,11 @@
 
 .vkbm-shift-day-message {
 	margin-bottom: 8px;
-	color: #646970;
+	color: var(--vkbm--admin--color--text-tertiary);
 }
 
 .vkbm-shift-day-row.is-status-closed .vkbm-shift-day-message {
-	color: #d63638;
+	color: var(--vkbm--admin--color--danger);
 }
 
 .vkbm-shift-day-row.is-status-closed .vkbm-shift-add-slot {
@@ -52,4 +54,76 @@
 
 .vkbm-shift-period-suffix {
 	margin-right: 12px;
+}
+
+/* ==========================================================================
+   宿泊のときの販売日の編集（assets/js/shift-lodging-editor.js）
+   ========================================================================== */
+
+.vkbm-shift-lodging-description > p {
+	margin: 0 0 0.5em;
+	color: var(--vkbm--admin--color--text-tertiary);
+}
+
+.vkbm-shift-lodging-bulk {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 1em;
+}
+
+.vkbm-shift-lodging-bulk-status {
+	margin-top: 0.5em;
+	min-height: 1.5em;
+	color: var(--vkbm--admin--color--text-tertiary);
+}
+
+.vkbm-shift-lodging-days {
+	margin-inline: 0;
+	padding: 0;
+	border: 0;
+}
+
+.vkbm-shift-lodging-legend {
+	padding: 0;
+	font-weight: 600;
+}
+
+.vkbm-shift-lodging-row > th,
+.vkbm-shift-lodging-row > td {
+	border-bottom: 1px solid var(--vkbm--admin--color--border);
+}
+
+.vkbm-shift-lodging-date {
+	width: 180px;
+	white-space: nowrap;
+}
+
+.vkbm-shift-lodging-sale-label {
+	margin-inline-end: 12px;
+}
+
+/* 販売しない日は、背景色だけに頼らず「販売しない」の文字でも示す（文字は JS が出し分ける） */
+.vkbm-shift-lodging-row.is-off-sale {
+	background-color: var(--vkbm--admin--color--surface-secondary);
+}
+
+.vkbm-shift-lodging-off-label {
+	color: var(--vkbm--admin--color--text-tertiary);
+}
+
+/* WordPress の .form-table は 782px 以下で th・td を縦に積むため、日付とチェックを横並びのまま保つ
+   （宿泊用の表のクラスに限定。.form-table の指定より詳細度を上げて上書きする） */
+@include vkbm-bp-down($vkbm-bp-admin-sm) {
+
+	.vkbm-shift-lodging-days .vkbm-shift-lodging-row > th,
+	.vkbm-shift-lodging-days .vkbm-shift-lodging-row > td {
+		display: table-cell;
+		width: auto;
+		padding: 8px 10px;
+	}
+
+	.vkbm-shift-lodging-days .vkbm-shift-lodging-date {
+		white-space: normal;
+	}
 }

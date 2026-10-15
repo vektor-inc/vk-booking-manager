@@ -8,10 +8,15 @@ use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Customers\Customer_Flag_Booking_Guard;
+use VKBookingManager\Customers\Customer_Flag_Repository;
+use VKBookingManager\Customers\Customer_Flag_Service;
+use VKBookingManager\Tests\Customers\Customer_Flag_Options_Cleanup_Trait;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\Common\VKBM_Helper;
@@ -34,6 +39,8 @@ use function wp_set_current_user;
  * @group bookings
  */
 class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
+	use Customer_Flag_Options_Cleanup_Trait;
+
 	private const TRANSIENT_PREFIX = 'vkbm_draft_';
 	private const OWNER_COOKIE     = 'vkbm_draft_owner';
 
@@ -83,6 +90,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		update_option( 'timezone_string', $this->original_timezone_string );
 		// 指名機能の静的キャッシュをクリアして他テストへの影響を防ぐ。
 		Staff_Editor::clear_nomination_enabled_cache();
+		Industry_Presets::clear_cache();
 		parent::tearDown();
 	}
 
@@ -336,6 +344,121 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		$this->assertInstanceOf( WP_REST_Response::class, $response );
 	}
 
+	/**
+	 * #691: 予約確定の備考（memo）が下書きと同じ上限（1000 文字）で切り詰められて保存されることを検証する。
+	 */
+	public function test_create_booking_truncates_memo(): void {
+		$this->disable_nomination();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '1000 文字を超える備考は 1000 文字に切り詰められる',
+				'memo'                => str_repeat( 'あ', 1500 ),
+				'expected'            => str_repeat( 'あ', 1000 ),
+			),
+			array(
+				'test_condition_name' => '1000 文字ちょうどの備考はそのまま保存される（境界値）',
+				'memo'                => str_repeat( 'い', 1000 ),
+				'expected'            => str_repeat( 'い', 1000 ),
+			),
+			array(
+				'test_condition_name' => '「\」を含む備考は入力どおり保存される',
+				'memo'                => 'A\\B',
+				'expected'            => 'A\\B',
+			),
+			array(
+				'test_condition_name' => '上限以内の備考はそのまま保存される',
+				'memo'                => 'アレルギーあり',
+				'expected'            => 'アレルギーあり',
+			),
+		);
+
+		$start = '2024-07-01T10:00:00+09:00';
+		$end   = '2024-07-01T10:30:00+09:00';
+
+		foreach ( $test_cases as $case ) {
+			$menu_id  = $this->create_menu();
+			$staff_id = $this->create_staff();
+			$user_id  = $this->factory()->user->create();
+			wp_set_current_user( $user_id );
+			$_COOKIE[ self::OWNER_COOKIE ] = 'owner_memo';
+
+			$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+			$controller = $this->build_controller( $staff_id, $start, $end );
+			$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+			$request->set_param( 'memo', $case['memo'] );
+
+			$response = $controller->create_booking( $request );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+
+			$data       = $response->get_data();
+			$booking_id = isset( $data['booking_id'] ) ? (int) $data['booking_id'] : 0;
+			$this->assertGreaterThan( 0, $booking_id, $case['test_condition_name'] );
+			$this->assertSame(
+				$case['expected'],
+				(string) get_post_meta( $booking_id, '_vkbm_booking_note', true ),
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
+	 * #691: vkbm_draft_memo_max_length フィルターで上限を変えると、予約確定側の備考もその文字数で切れる。
+	 */
+	public function test_create_booking_truncates_memo_with_filtered_limit(): void {
+		$this->disable_nomination();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '上限を 10 にすると 10 文字に切り詰められる',
+				'memo'                => str_repeat( 'あ', 30 ),
+				'expected'            => str_repeat( 'あ', 10 ),
+			),
+			array(
+				'test_condition_name' => '上限ちょうど（10 文字）はそのまま保存される',
+				'memo'                => str_repeat( 'い', 10 ),
+				'expected'            => str_repeat( 'い', 10 ),
+			),
+		);
+
+		$start  = '2024-07-02T10:00:00+09:00';
+		$end    = '2024-07-02T10:30:00+09:00';
+		$filter = static function () {
+			return 10;
+		};
+		add_filter( 'vkbm_draft_memo_max_length', $filter );
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$menu_id  = $this->create_menu();
+				$staff_id = $this->create_staff();
+				wp_set_current_user( $this->factory()->user->create() );
+				$_COOKIE[ self::OWNER_COOKIE ] = 'owner_memo_filter';
+
+				$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+				$controller = $this->build_controller( $staff_id, $start, $end );
+				$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+				$request->set_param( 'token', $token );
+				$request->set_param( 'agree_terms', true );
+				$request->set_param( 'memo', $case['memo'] );
+
+				$response = $controller->create_booking( $request );
+				$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] );
+				$booking_id = (int) ( $response->get_data()['booking_id'] ?? 0 );
+				$this->assertGreaterThan( 0, $booking_id, $case['test_condition_name'] );
+				$this->assertSame(
+					$case['expected'],
+					(string) get_post_meta( $booking_id, '_vkbm_booking_note', true ),
+					$case['test_condition_name']
+				);
+			}
+		} finally {
+			remove_filter( 'vkbm_draft_memo_max_length', $filter );
+		}
+	}
+
 	public function test_confirmation_rejects_temporary_data_without_owner_cookie(): void {
 		$menu_id  = $this->create_menu();
 		$staff_id = $this->create_staff();
@@ -533,7 +656,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * get_staff_loads_for_slot: スロット内の既存予約からスタッフ別の担当人数を集計する処理を検証する。
+	 * get_staff_summaries_for_slot: スロット内の既存予約からスタッフ別の担当人数を集計する処理を検証する。
 	 *
 	 * 1予約は単一スタッフに割り当てられるため、担当スタッフ（resource_id）へ全人数を計上する
 	 * （人数メタが無い予約は1名扱い）。旧データの分配メタ（_vkbm_booking_staff_distribution）は
@@ -543,14 +666,14 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	 * staff (resource_id); missing guest meta counts as 1. The legacy distribution meta is ignored.
 	 * Cancelled / no-show bookings are excluded.
 	 */
-	public function test_get_staff_loads_for_slot(): void {
+	public function test_get_staff_summaries_for_slot(): void {
 		$staff_a    = $this->create_staff();
 		$staff_b    = $this->create_staff();
 		$slot_start = '2024-05-01 10:00:00';
 		$slot_end   = '2024-05-01 11:00:00';
 
 		$controller = $this->build_controller( $staff_a, $slot_start, $slot_end );
-		$method     = new ReflectionMethod( Booking_Confirmation_Controller::class, 'get_staff_loads_for_slot' );
+		$method     = new ReflectionMethod( Booking_Confirmation_Controller::class, 'get_staff_summaries_for_slot' );
 		$method->setAccessible( true );
 
 		$test_cases = array(
@@ -652,9 +775,19 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				}
 			}
 
+			// 担当人数（同一メニューの合計）だけを取り出して比較する。ケース間で同じスタッフ・枠を使い回すため、
+			// 前のケースの別メニュー予約だけを持つスタッフ（担当人数0）は比較から外す。
+			$summaries = $method->invoke( $controller, $menu_id, $slot_start, $slot_end );
 			$this->assertSame(
 				$case['expected'],
-				$method->invoke( $controller, $menu_id, $slot_start, $slot_end ),
+				array_filter(
+					array_map(
+						static function ( array $summary ): int {
+							return $summary['same_menu_guests'];
+						},
+						$summaries
+					)
+				),
 				$case['test_condition_name']
 			);
 		}
@@ -1181,16 +1314,29 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			array(
 				'test_condition_name'     => 'メニュー単位の指名設定なし（既定＝使う） => スタッフの指名料1000がそのまま保存される（#391導入前と同じ挙動）',
 				'menu_disable_nomination' => false,
+				'industry_preset'         => 'custom',
 				'expected_nomination_fee' => 1000,
+			),
+			array(
+				'test_condition_name'     => '宿泊のサイトは時間枠のプランでも指名料は0（スタッフに指名料が保存されていても加算しない・#736）',
+				'menu_disable_nomination' => false,
+				'industry_preset'         => 'lodging',
+				'expected_nomination_fee' => 0,
 			),
 			array(
 				'test_condition_name'     => 'サイト全体は指名ONだがこのメニューは指名を無効化 => 指名料は0（#391・確定コントローラ側の多層防御）',
 				'menu_disable_nomination' => true,
+				'industry_preset'         => 'custom',
 				'expected_nomination_fee' => 0,
 			),
 		);
 
 		foreach ( $test_cases as $index => $case ) {
+			$settings['industry_preset'] = $case['industry_preset'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Industry_Presets::clear_cache();
+			Staff_Editor::clear_nomination_enabled_cache();
+
 			$menu_id  = $this->create_menu();
 			$staff_id = $this->create_staff();
 			update_post_meta( $staff_id, Staff_Editor::META_NOMINATION_FEE, 1000 );
@@ -1634,6 +1780,100 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 顧客フラグで予約ブロックされた顧客は、予約確定で 403 と店舗が設定したメッセージを受け取ることを検証する。
+	 *
+	 * 予約管理の権限を持つユーザー（管理者・オーナーの代理予約）はブロックしない。
+	 */
+	public function test_create_booking_blocks_flagged_customer(): void {
+		$this->disable_nomination();
+
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+
+		$start = '2026-09-01T10:00:00+09:00';
+		$end   = '2026-09-01T10:30:00+09:00';
+
+		// ブロック種別を作り、予約者に割り当てる。
+		$flag_service = new Customer_Flag_Service();
+		$flag_service->save_types(
+			array(
+				array(
+					'id'             => 'blacklist',
+					'label'          => 'ブラックリスト',
+					'blocks_booking' => true,
+					'block_message'  => '現在ご予約をお受けできません。',
+				),
+			)
+		);
+		$guard = new Customer_Flag_Booking_Guard( $flag_service );
+		$guard->register();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'ブロック種別が付いた一般の予約者は 403 で確定できない（異常系）',
+				'conditions'          => array( 'is_admin' => false ),
+				'expected'            => array(
+					'blocked' => true,
+					'status'  => 403,
+					'message' => '現在ご予約をお受けできません。',
+				),
+			),
+			array(
+				'test_condition_name' => '予約管理の権限を持つユーザーはブロック種別が付いていてもブロックされない（正常系）',
+				'conditions'          => array( 'is_admin' => true ),
+				'expected'            => array( 'blocked' => false ),
+			),
+		);
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$user_id = $case['conditions']['is_admin'] ? $this->create_admin_user() : $this->factory()->user->create();
+				if ( $case['conditions']['is_admin'] ) {
+					// 管理者にはサービス経由でフラグを付けられないため、代理予約の除外を確かめる目的で割り当てを直接書き込む。
+					update_user_meta(
+						$user_id,
+						Customer_Flag_Repository::USER_META_ASSIGNMENT,
+						array(
+							'type_id' => 'blacklist',
+							'memo'    => '',
+						)
+					);
+				} else {
+					$flag_service->set_flag( $user_id, 'blacklist', '' );
+				}
+
+				wp_set_current_user( $user_id );
+				$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+
+				$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+				$controller = $this->build_controller( $staff_id, $start, $end );
+				$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+				$request->set_param( 'token', $token );
+				$request->set_param( 'agree_terms', true );
+
+				$response = $controller->create_booking( $request );
+
+				if ( $case['expected']['blocked'] ) {
+					$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+					$this->assertSame( 'vkbm_customer_flag_blocked', $response->get_error_code(), $case['test_condition_name'] );
+					$this->assertSame( $case['expected']['status'], $response->get_error_data()['status'] ?? 0, $case['test_condition_name'] );
+					$this->assertSame( $case['expected']['message'], $response->get_error_message(), $case['test_condition_name'] );
+				} else {
+					// ブロック判定より手前の別のエラーで通ってしまわないよう、予約が作成されたことまで確かめる。
+					$this->assertNotInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+					$this->assertGreaterThan( 0, (int) ( $response->get_data()['booking_id'] ?? 0 ), $case['test_condition_name'] );
+				}
+
+				wp_set_current_user( 0 );
+			}
+		} finally {
+			// 後続テストへ影響しないよう、登録したフィルターと顧客フラグのデータを片付ける。
+			remove_filter( 'vkbm_booking_block_check', array( $guard, 'block_flagged_customer' ), 10 );
+			$this->delete_all_flag_options();
+		}
+	}
+
+	/**
 	 * #411 安藤さんレビュー指摘の回帰テスト。
 	 *
 	 * revalidate_draft_slot() が get_daily_slots() から受け取った WP_Error（担当スタッフ未設定等の
@@ -1789,6 +2029,441 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			);
 		}
 	}
+
+	/**
+	 * 予約枠のロック行（options テーブルの _transient_vkbm_booking_mutex_*）の件数を数える。
+	 *
+	 * ロックは check_capacity_with_mutex() が INSERT IGNORE で options テーブルへ直接書き込むため、
+	 * オプションのキャッシュを通さず、直接 SQL で数える。
+	 *
+	 * @return int ロック行の件数。
+	 */
+	private function count_slot_lock_rows(): int {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- テストでロック行の有無を DB から直接確かめるため。
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( '_transient_vkbm_booking_mutex_' ) . '%'
+			)
+		);
+	}
+
+	/**
+	 * 予約投稿（公開状態を問わない）の件数を数える。
+	 *
+	 * @return int 予約投稿の件数。
+	 */
+	private function count_booking_posts(): int {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- テストで予約投稿が増えたかを DB から直接確かめるため。
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = %s",
+				Booking_Post_Type::POST_TYPE
+			)
+		);
+	}
+
+	/**
+	 * create_booking: vkbm_booking_post_created が「予約枠のロック解放後・仮予約データ削除前」に発火することを検証する。
+	 *
+	 * 決済プラグインはこのフックで決済サービスと通信することがあるため、ロックを保持したまま発火すると、
+	 * その間に同じ枠を予約しようとした人が「処理中（booking_busy）」で失敗してしまう。
+	 * そのため、wp_insert_post() の時点ではロックを保持していること（ロックで守る範囲は変わらないこと）、
+	 * フックの時点ではロックが解放済みで、予約メタは保存済み・仮予約データはまだ残っていることを確かめる。
+	 * 予約投稿の作成に失敗して早期 return した場合は発火しないことも確かめる。
+	 *
+	 * フックのコールバックが例外（RuntimeException・\Error）を投げても、予約はその時点で成立しているため、
+	 * 成功のレスポンスを返し、仮予約データの削除まで続けることを確かめる。
+	 * あわせて、エラーログに予約 ID と例外クラス名が残り、予約者のメールアドレス（個人情報）は残らないことも確かめる。
+	 */
+	public function test_create_booking_fires_post_created_after_lock_release(): void {
+		$this->disable_nomination();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '決済の確認フィルターなしで予約できた場合 => ロック解放後・仮予約データ削除前に 1 回だけ発火する',
+				'conditions'          => array(
+					'start'                => '2024-07-01T10:00:00+09:00',
+					'end'                  => '2024-07-01T10:30:00+09:00',
+					'add_payment_check'    => false,
+					'force_insert_failure' => false,
+					'hook_throws'          => null,
+				),
+				'expected'            => array(
+					'fired_count'               => 1,
+					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_hook'         => 0,
+					'base_total_price_at_hook'  => 1000,
+					'draft_exists_at_hook'      => true,
+					'draft_exists_after_return' => false,
+					'returns_response'          => true,
+					'booking_increase'          => 1,
+					'logged_exception_class'    => null,
+				),
+			),
+			array(
+				'test_condition_name' => '決済の確認フィルターが true を返して予約できた場合 => ロック解放後・仮予約データ削除前に 1 回だけ発火する',
+				'conditions'          => array(
+					'start'                => '2024-07-02T10:00:00+09:00',
+					'end'                  => '2024-07-02T10:30:00+09:00',
+					'add_payment_check'    => true,
+					'force_insert_failure' => false,
+					'hook_throws'          => null,
+				),
+				'expected'            => array(
+					'fired_count'               => 1,
+					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_hook'         => 0,
+					'base_total_price_at_hook'  => 1000,
+					'draft_exists_at_hook'      => true,
+					'draft_exists_after_return' => false,
+					'returns_response'          => true,
+					'booking_increase'          => 1,
+					'logged_exception_class'    => null,
+				),
+			),
+			array(
+				'test_condition_name' => 'フックのコールバックが RuntimeException を投げた場合 => 予約は成功として返り、仮予約データも削除され、ログに予約 ID と例外クラス名が残る',
+				'conditions'          => array(
+					'start'                => '2024-07-04T10:00:00+09:00',
+					'end'                  => '2024-07-04T10:30:00+09:00',
+					'add_payment_check'    => false,
+					'force_insert_failure' => false,
+					'hook_throws'          => \RuntimeException::class,
+				),
+				'expected'            => array(
+					'fired_count'               => 1,
+					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_hook'         => 0,
+					'base_total_price_at_hook'  => 1000,
+					'draft_exists_at_hook'      => true,
+					'draft_exists_after_return' => false,
+					'returns_response'          => true,
+					'booking_increase'          => 1,
+					'logged_exception_class'    => \RuntimeException::class,
+				),
+			),
+			array(
+				'test_condition_name' => 'フックのコールバックが \Error を投げた場合 => 予約は成功として返り、仮予約データも削除され、ログに予約 ID と例外クラス名が残る',
+				'conditions'          => array(
+					'start'                => '2024-07-05T10:00:00+09:00',
+					'end'                  => '2024-07-05T10:30:00+09:00',
+					'add_payment_check'    => false,
+					'force_insert_failure' => false,
+					'hook_throws'          => \Error::class,
+				),
+				'expected'            => array(
+					'fired_count'               => 1,
+					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_hook'         => 0,
+					'base_total_price_at_hook'  => 1000,
+					'draft_exists_at_hook'      => true,
+					'draft_exists_after_return' => false,
+					'returns_response'          => true,
+					'booking_increase'          => 1,
+					'logged_exception_class'    => \Error::class,
+				),
+			),
+			array(
+				'test_condition_name' => 'wp_insert_post() が失敗して早期 return した場合 => 発火せず、仮予約データも残る',
+				'conditions'          => array(
+					'start'                => '2024-07-03T10:00:00+09:00',
+					'end'                  => '2024-07-03T10:30:00+09:00',
+					'add_payment_check'    => false,
+					'force_insert_failure' => true,
+					'hook_throws'          => null,
+				),
+				'expected'            => array(
+					'fired_count'               => 0,
+					'lock_rows_at_insert'       => null,
+					'lock_rows_at_hook'         => null,
+					'base_total_price_at_hook'  => null,
+					'draft_exists_at_hook'      => null,
+					'draft_exists_after_return' => true,
+					'returns_response'          => false,
+					'booking_increase'          => 0,
+					'logged_exception_class'    => null,
+				),
+			),
+		);
+
+		// エラーログの出力先を一時ファイルへ切り替え、ログの中身を確かめられるようにする（PHPUnit の出力も汚さない）。
+		$original_error_log = ini_get( 'error_log' );
+		$log_file           = tempnam( get_temp_dir(), 'vkbm-post-created-log' );
+
+		try {
+			ini_set( 'error_log', $log_file ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- テスト中だけログの出力先を一時ファイルへ向け、終了時に元へ戻す。
+
+			foreach ( $test_cases as $index => $case ) {
+				// ケースごとにメニュー・担当・予約者・仮予約データを用意する。
+				$menu_id  = $this->create_menu();
+				$staff_id = $this->create_staff();
+				update_post_meta( $menu_id, '_vkbm_base_price', 1000 );
+				// ログにメールアドレスが残らないことを確かめるため、予約者のメールアドレスを固定する。
+				$customer_email = 'vkbm-post-created-' . $index . '@example.com';
+				wp_set_current_user( $this->factory()->user->create( array( 'user_email' => $customer_email ) ) );
+				$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+
+				$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $case['conditions']['start'], $case['conditions']['end'] );
+				$controller = $this->build_controller( $staff_id, $case['conditions']['start'], $case['conditions']['end'] );
+				$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+				$request->set_param( 'token', $token );
+				$request->set_param( 'agree_terms', true );
+
+				// 各時点で観測した値を記録する（発火しなかった時点は null のまま）。
+				$observed = array(
+					'fired_count'              => 0,
+					'lock_rows_at_insert'      => null,
+					'lock_rows_at_hook'        => null,
+					'base_total_price_at_hook' => null,
+					'draft_exists_at_hook'     => null,
+				);
+
+				// wp_insert_post() で予約投稿が作られた時点のロック行の件数を記録する。
+				$on_insert = function ( $post_id, $post ) use ( &$observed ): void {
+					if ( Booking_Post_Type::POST_TYPE === $post->post_type ) {
+						$observed['lock_rows_at_insert'] = $this->count_slot_lock_rows();
+					}
+				};
+				// vkbm_booking_post_created の時点のロック行・予約メタ・仮予約データを記録する。
+				$on_post_created = function ( $booking_id ) use ( &$observed, $token ): void {
+					++$observed['fired_count'];
+					$observed['lock_rows_at_hook']        = $this->count_slot_lock_rows();
+					$observed['base_total_price_at_hook'] = (int) get_post_meta( (int) $booking_id, '_vkbm_booking_base_total_price', true );
+					$observed['draft_exists_at_hook']     = false !== get_transient( self::TRANSIENT_PREFIX . $token );
+				};
+				// 観測用のコールバックより後（優先度 20）で、指定された種類の例外を投げる。
+				$hook_throws   = $case['conditions']['hook_throws'];
+				$throw_on_hook = static function () use ( $hook_throws ): void {
+					throw new $hook_throws( 'テスト用の例外（拡張プラグインの不具合を想定）' );
+				};
+				$payment_check = static function () {
+					return true;
+				};
+
+				add_action( 'wp_insert_post', $on_insert, 10, 2 );
+				add_action( 'vkbm_booking_post_created', $on_post_created, 10, 1 );
+				if ( null !== $hook_throws ) {
+					add_action( 'vkbm_booking_post_created', $throw_on_hook, 20, 0 );
+				}
+				if ( $case['conditions']['add_payment_check'] ) {
+					add_filter( 'vkbm_booking_payment_check', $payment_check );
+				}
+				if ( $case['conditions']['force_insert_failure'] ) {
+					// wp_insert_post() を強制的に 0（失敗）で返させる。
+					add_filter( 'wp_insert_post_empty_content', '__return_true' );
+				}
+
+				// ケースごとにログを空にしてから実行する。
+				file_put_contents( $log_file, '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- テスト用の一時ファイルを空にするだけ。
+				$bookings_before = $this->count_booking_posts();
+
+				try {
+					$response = $controller->create_booking( $request );
+				} finally {
+					// 後続のケースへ影響しないよう、登録したフックを外す。
+					remove_action( 'wp_insert_post', $on_insert, 10 );
+					remove_action( 'vkbm_booking_post_created', $on_post_created, 10 );
+					remove_action( 'vkbm_booking_post_created', $throw_on_hook, 20 );
+					remove_filter( 'vkbm_booking_payment_check', $payment_check );
+					remove_filter( 'wp_insert_post_empty_content', '__return_true' );
+				}
+
+				$this->assertSame( $case['expected']['fired_count'], $observed['fired_count'], $case['test_condition_name'] . '（発火回数）' );
+				$this->assertSame( $case['expected']['lock_rows_at_insert'], $observed['lock_rows_at_insert'], $case['test_condition_name'] . '（wp_insert_post 時点ではロックを保持していること）' );
+				$this->assertSame( $case['expected']['lock_rows_at_hook'], $observed['lock_rows_at_hook'], $case['test_condition_name'] . '（フック時点ではロックが解放済みであること）' );
+				$this->assertSame( $case['expected']['base_total_price_at_hook'], $observed['base_total_price_at_hook'], $case['test_condition_name'] . '（フック時点で予約メタが保存済みであること）' );
+				$this->assertSame( $case['expected']['draft_exists_at_hook'], $observed['draft_exists_at_hook'], $case['test_condition_name'] . '（フック時点で仮予約データが残っていること）' );
+				$this->assertSame(
+					$case['expected']['draft_exists_after_return'],
+					false !== get_transient( self::TRANSIENT_PREFIX . $token ),
+					$case['test_condition_name'] . '（処理後の仮予約データの有無）'
+				);
+				$this->assertSame( 0, $this->count_slot_lock_rows(), $case['test_condition_name'] . '（処理後にロックが残っていないこと）' );
+				$this->assertSame( $case['expected']['returns_response'], $response instanceof WP_REST_Response, $case['test_condition_name'] . '（成功のレスポンスを返すか）' );
+				$this->assertSame( $case['expected']['booking_increase'], $this->count_booking_posts() - $bookings_before, $case['test_condition_name'] . '（予約投稿の増加数）' );
+
+				// エラーログの中身を確かめる。
+				$log = (string) file_get_contents( $log_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- テスト用の一時ファイルを読むだけ。
+				if ( null === $case['expected']['logged_exception_class'] ) {
+					$this->assertStringNotContainsString( 'vkbm_booking_post_created', $log, $case['test_condition_name'] . '（例外が無ければログを残さない）' );
+				} else {
+					$booking_id = (int) ( $response->get_data()['booking_id'] ?? 0 );
+					$this->assertGreaterThan( 0, $booking_id, $case['test_condition_name'] . '（レスポンスに予約 ID を含む）' );
+					$this->assertStringContainsString( '[vkbm] vkbm_booking_post_created', $log, $case['test_condition_name'] . '（ログの接頭辞とフック名）' );
+					$this->assertStringContainsString( 'booking_id=' . $booking_id . ' ', $log, $case['test_condition_name'] . '（ログに予約 ID が残る）' );
+					$this->assertStringContainsString( 'exception=' . $case['expected']['logged_exception_class'] . ' ', $log, $case['test_condition_name'] . '（ログに例外クラス名が残る）' );
+					$this->assertStringNotContainsString( $customer_email, $log, $case['test_condition_name'] . '（ログに予約者のメールアドレスを残さない）' );
+				}
+			}
+		} finally {
+			// ログの出力先を元に戻し、一時ファイルを消す。
+			ini_set( 'error_log', false === $original_error_log ? '' : $original_error_log ); // phpcs:ignore WordPress.PHP.IniSet.Risky -- テスト開始前の値へ戻す。
+			wp_delete_file( $log_file );
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
+	 * create_booking: vkbm_booking_payment_check のコールバックが失敗しても予約枠のロックが残らないことを検証する。
+	 *
+	 * コールバックが例外（RuntimeException・\Error などの Throwable）を投げた場合もロックを解放しないと、
+	 * ロックの有効期限が切れるまで同じ枠を誰も予約できなくなる。例外・WP_Error のどちらでも、
+	 * ロックが残らず予約投稿も作られないこと、フィルターを外せば同じ仮予約データで予約し直せることを確かめる。
+	 * WP_Error を返したときに、そのエラーをそのまま返す既存の動作が変わらないことも確かめる。
+	 */
+	public function test_create_booking_releases_lock_when_payment_check_fails(): void {
+		$this->disable_nomination();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '決済の確認フィルターが未登録の場合 => 予約でき、ロックは残らない',
+				'conditions'          => array(
+					'start'         => '2024-08-01T10:00:00+09:00',
+					'end'           => '2024-08-01T10:30:00+09:00',
+					'payment_check' => 'none',
+				),
+				'expected'            => array(
+					'exception'        => null,
+					'error_code'       => null,
+					'booking_increase' => 1,
+					'retry_succeeds'   => null,
+				),
+			),
+			array(
+				'test_condition_name' => '決済の確認フィルターが true を返す場合 => 予約でき、ロックは残らない',
+				'conditions'          => array(
+					'start'         => '2024-08-02T10:00:00+09:00',
+					'end'           => '2024-08-02T10:30:00+09:00',
+					'payment_check' => 'true',
+				),
+				'expected'            => array(
+					'exception'        => null,
+					'error_code'       => null,
+					'booking_increase' => 1,
+					'retry_succeeds'   => null,
+				),
+			),
+			array(
+				'test_condition_name' => '決済の確認フィルターが WP_Error を返す場合 => そのエラーを返し、ロックは残らず予約も作られず、再予約できる',
+				'conditions'          => array(
+					'start'         => '2024-08-03T10:00:00+09:00',
+					'end'           => '2024-08-03T10:30:00+09:00',
+					'payment_check' => 'wp_error',
+				),
+				'expected'            => array(
+					'exception'        => null,
+					'error_code'       => 'vkbm_test_payment_failed',
+					'booking_increase' => 0,
+					'retry_succeeds'   => true,
+				),
+			),
+			array(
+				'test_condition_name' => '決済の確認フィルターが RuntimeException を投げる場合 => ロックは残らず予約も作られず、再予約できる',
+				'conditions'          => array(
+					'start'         => '2024-08-04T10:00:00+09:00',
+					'end'           => '2024-08-04T10:30:00+09:00',
+					'payment_check' => 'runtime_exception',
+				),
+				'expected'            => array(
+					'exception'        => \RuntimeException::class,
+					'error_code'       => null,
+					'booking_increase' => 0,
+					'retry_succeeds'   => true,
+				),
+			),
+			array(
+				'test_condition_name' => '決済の確認フィルターが \Error を投げる場合 => ロックは残らず予約も作られず、再予約できる',
+				'conditions'          => array(
+					'start'         => '2024-08-05T10:00:00+09:00',
+					'end'           => '2024-08-05T10:30:00+09:00',
+					'payment_check' => 'error',
+				),
+				'expected'            => array(
+					'exception'        => \Error::class,
+					'error_code'       => null,
+					'booking_increase' => 0,
+					'retry_succeeds'   => true,
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// ケースごとにメニュー・担当・予約者・仮予約データを用意する。
+			$menu_id  = $this->create_menu();
+			$staff_id = $this->create_staff();
+			wp_set_current_user( $this->factory()->user->create() );
+			$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+
+			$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $case['conditions']['start'], $case['conditions']['end'] );
+			$controller = $this->build_controller( $staff_id, $case['conditions']['start'], $case['conditions']['end'] );
+			$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+
+			// 条件に応じた決済の確認フィルターのコールバックを用意する（none は登録しない）。
+			$payment_check = null;
+			switch ( $case['conditions']['payment_check'] ) {
+				case 'true':
+					$payment_check = static function () {
+						return true;
+					};
+					break;
+				case 'wp_error':
+					$payment_check = static function () {
+						return new WP_Error( 'vkbm_test_payment_failed', 'テスト用の決済エラー', array( 'status' => 402 ) );
+					};
+					break;
+				case 'runtime_exception':
+					$payment_check = static function () {
+						throw new \RuntimeException( 'テスト用の例外（決済サービスとの通信失敗を想定）' );
+					};
+					break;
+				case 'error':
+					$payment_check = static function () {
+						throw new \Error( 'テスト用の \Error（決済プラグインの不具合を想定）' );
+					};
+					break;
+			}
+
+			$bookings_before = $this->count_booking_posts();
+			$response        = null;
+			$thrown          = null;
+			if ( null !== $payment_check ) {
+				add_filter( 'vkbm_booking_payment_check', $payment_check );
+			}
+			try {
+				$response = $controller->create_booking( $request );
+			} catch ( \Throwable $e ) {
+				$thrown = $e;
+			} finally {
+				// 再予約はフィルターを外した状態で行うため、ここで外しておく。
+				if ( null !== $payment_check ) {
+					remove_filter( 'vkbm_booking_payment_check', $payment_check );
+				}
+			}
+
+			$this->assertSame( $case['expected']['exception'], null === $thrown ? null : get_class( $thrown ), $case['test_condition_name'] . '（投げられた例外）' );
+			$this->assertSame( $case['expected']['error_code'], $response instanceof WP_Error ? $response->get_error_code() : null, $case['test_condition_name'] . '（返されたエラーコード）' );
+			$this->assertSame( $case['expected']['booking_increase'], $this->count_booking_posts() - $bookings_before, $case['test_condition_name'] . '（増えた予約投稿の件数）' );
+			$this->assertSame( 0, $this->count_slot_lock_rows(), $case['test_condition_name'] . '（ロック行が残っていないこと）' );
+
+			// 失敗したケースは、フィルターを外して同じ仮予約データで予約し直せることを確かめる。
+			if ( null !== $case['expected']['retry_succeeds'] ) {
+				$retry_response = $controller->create_booking( $request );
+				$this->assertSame(
+					$case['expected']['retry_succeeds'],
+					$retry_response instanceof WP_REST_Response,
+					$case['test_condition_name'] . '（再予約の結果: ' . ( $retry_response instanceof WP_Error ? $retry_response->get_error_code() : 'OK' ) . '）'
+				);
+				$this->assertSame( 0, $this->count_slot_lock_rows(), $case['test_condition_name'] . '（再予約後にロック行が残っていないこと）' );
+			}
+		}
+
+		wp_set_current_user( 0 );
+	}
 }
 
 class Booking_Notification_Service_Test_Double extends Booking_Notification_Service {
@@ -1806,6 +2481,17 @@ class Booking_Notification_Service_Test_Double extends Booking_Notification_Serv
 }
 
 class Availability_Service_Test_Double extends Availability_Service {
+
+	/**
+	 * 受付下限の判定は空き枠の差し替え対象外（#655）。親コンストラクタを呼ばないダブルでも落ちないよう、常に「下限内」とする。
+	 *
+	 * @param int    $menu_id  メニュー投稿 ID。
+	 * @param string $start_at 枠の開始日時。
+	 * @return bool
+	 */
+	public function is_before_booking_cutoff( int $menu_id, string $start_at ): bool {
+		return false;
+	}
 	/** @var array<string, mixed> */
 	private array $slot;
 
@@ -1828,6 +2514,17 @@ class Availability_Service_Test_Double extends Availability_Service {
  * revalidate_draft_slot() のエラーマスキングを検証するために使う。
  */
 class Availability_Service_Error_Test_Double extends Availability_Service {
+
+	/**
+	 * 受付下限の判定は空き枠の差し替え対象外（#655）。親コンストラクタを呼ばないダブルでも落ちないよう、常に「下限内」とする。
+	 *
+	 * @param int    $menu_id  メニュー投稿 ID。
+	 * @param string $start_at 枠の開始日時。
+	 * @return bool
+	 */
+	public function is_before_booking_cutoff( int $menu_id, string $start_at ): bool {
+		return false;
+	}
 	public function get_daily_slots( array $args ) {
 		return new WP_Error(
 			'staff_not_configured',

@@ -121,7 +121,7 @@ class Pro_Upsell {
 		}
 
 		return sprintf(
-			'<p class="description vkbm-pro-upsell"><span class="dashicons dashicons-lock" aria-hidden="true" style="vertical-align:middle;"></span> %1$s <a href="%2$s" target="_blank" rel="noopener noreferrer">%3$s</a></p>',
+			'<p class="description vkbm-pro-upsell"><span class="dashicons dashicons-lock vkbm-pro-upsell__icon" aria-hidden="true"></span> %1$s <a href="%2$s" target="_blank" rel="noopener noreferrer">%3$s</a></p>',
 			esc_html( $message ),
 			esc_url( self::get_pro_url() ),
 			esc_html__( 'Learn more about Pro', 'vk-booking-manager' )
@@ -140,7 +140,7 @@ class Pro_Upsell {
 		}
 
 		return sprintf(
-			'<div class="notice notice-info inline vkbm-pro-upsell-banner" style="margin:12px 0;"><p>%1$s <a href="%2$s" class="button button-primary" target="_blank" rel="noopener noreferrer" style="margin-left:8px;">%3$s</a></p></div>',
+			'<div class="notice notice-info inline vkbm-pro-upsell-banner"><p>%1$s <a href="%2$s" class="button button-primary vkbm-pro-upsell-banner__link" target="_blank" rel="noopener noreferrer">%3$s</a></p></div>',
 			esc_html__( 'Staff nomination, auto-assignment, and other advanced features are available in the Pro edition.', 'vk-booking-manager' ),
 			esc_url( self::get_pro_url() ),
 			esc_html__( 'Upgrade to Pro', 'vk-booking-manager' )

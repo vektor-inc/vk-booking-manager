@@ -26,10 +26,9 @@
 }
 
 /*
- * 基本料金のラベル（#515）。「Basic price」＋税込ラベルで英語表記が長くなり、他のラベルと
- * 同じ固定10em幅・nowrapのままだと入力欄に重なるおそれがあるため、このラベルだけ折り返しを許容する
- * （design-rules「日本語で10文字を超える場合はnowrap必須ではない」と同じ考え方）。折り返しても
- * 列幅（10em）の内側で改行されるだけなので、入力欄への重なりは起きない。
+ * 基本料金のラベル。「Basic price」＋税込ラベルで英語表記が長くなり、他のラベルと
+ * 同じ固定10em幅・nowrapのままだと入力欄に重なるおそれがあるため、このラベルだけ折り返しを許容する。
+ * 折り返しても列幅（10em）の内側で改行されるだけなので、入力欄への重なりは起きない。
  */
 .inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > label .vkbm-qe-base-price-title {
 	white-space: normal;
@@ -60,7 +59,7 @@
 }
 
 /*
- * 料金区分で設定されているメニューの行だけ表示する注記（#515）。
+ * 料金区分で設定されているメニューの行だけ表示する注記。
  * バッファの説明文（vkbm-qe-buffer-after-description）と同じく、grid の1列目幅（10em）+
  * 列間（8px）分を左マージンとして再現し、基本料金の入力欄の列に揃える。
  */
@@ -70,7 +69,7 @@
 
 /*
  * 説明文とリンクの間の余白は `<br>` ではなく、2つの p のマージンで作る
- * （design-rules の「`<br />` で余白を作らない」）。p の既定マージンをリセットしたうえで、
+ * （`<br>` だと余白を CSS で調整できないため）。p の既定マージンをリセットしたうえで、
  * 説明文とリンクの間だけ小さめの余白（4px）を明示する。
  */
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-price-tiers-notice-text,
@@ -88,7 +87,7 @@
 	max-height: 10em;
 	overflow: auto;
 	border: 1px solid #c3c4c7;
-	background: #fff;
+	background: var(--vkbm--admin--color--surface);
 	padding: 6px 8px;
 }
 
@@ -111,7 +110,7 @@
 }
 
 /**
- * 担当できるリソース（#485）。ラジオ2択＋個別チェックリストを label ではなく div で囲むため、
+ * 担当できるリソース。ラジオ2択＋個別チェックリストを label ではなく div で囲むため、
  * 他の項目（.inline-edit-group > label）と同じ 10em ＋ 1fr のグリッドで見出しと入力列を揃える。
  */
 .inline-edit-row .vkbm-service-menu-quick-edit .inline-edit-group > .vkbm-qe-staff {
@@ -136,7 +135,7 @@
 
 /*
  * ラジオ（すべて／選ぶ）は縦に積む。余白は「コントロール＋ラベル間（6px）< 選択肢間（8px）<
- * 選択肢群と個別チェックリストの間（12px）」の3段にする（design-rules の余白階層）。
+ * 選択肢群と個別チェックリストの間（12px）」の3段にする。グループの境界が分かるよう、内側ほど狭く外側ほど広くする。
  */
 .inline-edit-row .vkbm-service-menu-quick-edit .vkbm-qe-staff-mode {
 	display: flex;

@@ -333,7 +333,8 @@ trait Rate_Limit_Trait {
 	 * Get client IP address for rate limiting purposes.
 	 *
 	 * レート制限用のクライアントIPを取得する。
-	 * 信頼できるプロキシ経由のリクエストの場合のみ X-Forwarded-For を採用する。
+	 * 信頼できるプロキシ経由のリクエストの場合のみ X-Forwarded-For を採用し、
+	 * 右端から辿って信頼プロキシに含まれない最初のアドレスを返す。
 	 * `vkbm_trusted_proxy_ips` フィルタで信頼するプロキシIPを指定可能。
 	 *
 	 * @return string
@@ -360,15 +361,55 @@ trait Rate_Limit_Trait {
 			&& ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] )
 			&& in_array( $remote_addr, $trusted_proxies, true )
 		) {
-			// 信頼できるプロキシ経由の場合のみ XFF を採用する。
+			// 信頼できるプロキシ経由の場合のみ XFF を参照する。
+			// 先頭側はクライアントが自由に書ける偽装可能な値なので、右端から辿る。
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized below.
-			$candidates   = explode( ',', sanitize_text_field( (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
-			$forwarded_ip = trim( (string) ( $candidates[0] ?? '' ) );
-			$forwarded_ip = (string) preg_replace( '/[^0-9a-fA-F:\\.]/', '', $forwarded_ip );
+			$candidates = explode( ',', sanitize_text_field( (string) wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) );
+
+			// 右端から見て、信頼プロキシでない最初のアドレスを採用する（空要素は飛ばす）。
+			foreach ( array_reverse( $candidates ) as $candidate ) {
+				$candidate = trim( (string) $candidate );
+				if ( '' === $candidate ) {
+					continue;
+				}
+
+				// IP として読めない値に当たったら、左側（偽装可能な部分）へ進まず探索を止める。
+				$candidate = $this->normalize_forwarded_address( $candidate );
+				if ( '' === $candidate ) {
+					break;
+				}
+
+				if ( in_array( $candidate, $trusted_proxies, true ) ) {
+					continue;
+				}
+				$forwarded_ip = $candidate;
+				break;
+			}
 		}
 
 		$ip = '' !== $forwarded_ip ? $forwarded_ip : $remote_addr;
 
 		return is_string( $ip ) ? $ip : '';
+	}
+
+	/**
+	 * Normalize an X-Forwarded-For entry to a bare IP address.
+	 *
+	 * X-Forwarded-For の1要素から、ポートと IPv6 の角括弧を外して IP アドレスだけにする。
+	 * IP として妥当でない場合は空文字を返す。
+	 *
+	 * @param string $value X-Forwarded-For の1要素（trim 済み）。
+	 * @return string 妥当な IP アドレス。妥当でなければ空文字。
+	 */
+	private function normalize_forwarded_address( string $value ): string {
+		if ( preg_match( '/^\[([0-9a-fA-F:.]+)\](?::\d+)?$/', $value, $matches ) ) {
+			// 角括弧付き IPv6（ポートが付く場合を含む）。
+			$value = $matches[1];
+		} elseif ( preg_match( '/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $value, $matches ) ) {
+			// ポート付き IPv4。
+			$value = $matches[1];
+		}
+
+		return false !== filter_var( $value, FILTER_VALIDATE_IP ) ? $value : '';
 	}
 }

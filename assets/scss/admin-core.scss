@@ -1,8 +1,10 @@
 /**
- * VK Booking Manager admin-only styles.
+ * VK Booking Manager 管理画面専用のスタイル。
  *
  * 管理画面専用のスタイルはここに追加してください。
  */
+
+@use "breakpoints" as *;
 
 .vkbm-booking-meta {
 
@@ -46,10 +48,6 @@
 	margin: 0;
 	padding: 0;
 	list-style: none;
-
-	li {
-		text-box: none;
-	}
 }
 
 .vkbm-booking-attachments__item {
@@ -95,7 +93,7 @@
 	gap: 0.5rem;
 	max-width: min(90vw, 960px);
 	max-height: 90vh;
-	background: #fff;
+	background: var(--vkbm--admin--color--surface);
 	border-radius: 6px;
 	padding: 0.75rem;
 	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
@@ -117,30 +115,23 @@
 /**
  * 管理画面の金額入力欄（基本料金・区分料金・貸切料金・指名料・合計請求額）。
  *
- * WordPress コアの `.small-text` は type="number" で 65px 固定のため、
- * 14800 のような 5 桁以上の金額を入れると数値が右端で見切れて読めなくなる。
- * 金額は所要時間や人数より桁が伸びやすいので、7 桁（100万円台）まで
- * スピナー込みで収まる幅を与える。
- *
- * コア側の `input[type="number"].small-text`（詳細度 (0,2,1)）を上書きする必要があるため、
- * 同じ詳細度まで要素＋属性セレクタで合わせている（本スタイルはコア CSS より後に読み込まれる）。
+ * WordPress コアの `.small-text` は type="number" で幅が固定され、5 桁以上の金額が見切れるため、
+ * 7 桁（100万円台）までスピナー込みで収まる幅を与える。
+ * コアの `input[type="number"].small-text`（詳細度 (0,2,1)）と同じ詳細度にそろえ、
+ * コア CSS より後に読み込まれることで後勝ちにしている。読み込み順を変えないこと。
  */
 input[type="number"].vkbm-price-input {
 	width: 8em;
 }
 
 /**
- * サービスメニュー編集：基本料金の入力欄（#514）。
+ * サービスメニュー編集：基本料金の入力欄。
  *
- * 料金区分（price tiers）が1件以上登録されているときは、基本料金は使われず区分料金で
- * 計算されるため、readonly にしたうえで見た目もグレーアウトし「入力しても無効」と
- * 一見して分かるようにする（.vkbm-email-verification-badge--unverified と同じ配色を再利用）。
- * disabled ではなく readonly にしているため、コア CSS の `:disabled` セレクタは効かない。
- * #514レビュー対応（植草・低）: 背景色だけでなく枠線の色も変えて、readonly への切り替わりに
- * 気づきやすくする（背景色のみだと薄いグレーの変化に気づきにくいユーザーがいるため）。
- * #514再レビュー対応（植草・中）: border-strong（#d0d7de）は背景色 border-medium（#e0e4e8）との
- * コントラスト比が約1.14:1しかなく、通常時の枠線より薄くなり「気づきやすくする」意図と逆効果
- * だったため、背景色に対して3:1以上のコントラストを持つ text-tertiary（#646970。約4.33:1）に変更。
+ * 料金区分が 1 件以上あると基本料金は使われないため、readonly にして見た目もグレーアウトし、
+ * 入力しても無効だと分かるようにする（.vkbm-email-verification-badge--unverified と配色をそろえる）。
+ * disabled ではなく readonly のため、コア CSS の `:disabled` セレクタは効かない。
+ * 背景色だけだと readonly への切り替わりに気づきにくいため、枠線の色も変える。
+ * 枠線は背景色に対して 3:1 以上のコントラストが必要なので、border-strong ではなく text-tertiary を使う。
  */
 input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 	background-color: var(--vkbm--admin--color--border-medium, #e0e4e8);
@@ -155,10 +146,6 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 	label {
 		display: block;
 		margin-bottom: 5px;
-	}
-
-	input:is([type="number"],[type="text"]) {
-		margin-bottom: var(--vkbm--spacing--xs);
 	}
 }
 
@@ -217,14 +204,56 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 
 .vkbm-price-tier-row {
 	display: flex;
-	align-items: center;
+	flex-wrap: wrap;
+	align-items: flex-end;
 	gap: 8px;
-	margin-bottom: var(--vkbm--spacing--xs);
+
+	// 区分の中（区分名・料金の欄・削除ボタン）は 8px、区分と区分の間は 24px にして、区分ごとのまとまりを見せる（余白の階層ルール）.
+	margin-bottom: var(--vkbm--spacing--md);
 }
 
 // 区分料金の単位（通貨記号・税込ラベル）は入力欄に詰めて表示する.
-.vkbm-price-tier-unit,
-.vkbm-price-tier-tax {
+.vkbm-price-tier-unit {
+	white-space: nowrap;
+}
+
+/**
+ * サービスメニュー編集：泊のプランの料金（平日・休前日・特定日の 3 つ）。
+ * 基本料金の欄と料金区分の各行で共通。3 つの欄は 1 つのまとまりとして並べ、狭い幅ではまとまりごと折り返す.
+ */
+.vkbm-night-rate-fields {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px 12px;
+}
+
+.vkbm-night-rate-field {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 4px;
+
+	// display を指定しているため、hidden 属性による非表示を明示する（泊以外の予約の単位では非表示にする）.
+	&[hidden] {
+		display: none;
+	}
+}
+
+.vkbm-night-rate-caption {
+	color: var(--vkbm--admin--color--text-secondary, #50575e);
+	font-size: 13px;
+	white-space: nowrap;
+
+	&[hidden] {
+		display: none;
+	}
+}
+
+// 入力欄と単位（通貨記号・「/ 1名・1泊」）は 1 つのまとまりにし、折り返しは欄の境界で起こす.
+.vkbm-night-rate-input-row {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	white-space: nowrap;
 }
 
@@ -254,11 +283,10 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /**
- * 「貸し切り予約」ON時に「予約者による貸切指定」を排他で無効化した見た目（#388）。
+ * 「貸し切り予約」ON 時に「予約者による貸切指定」を排他で無効化した見た目。
  * JS（service-menu-editor.js の syncExclusiveWhenBookedExclusivity）が付け外しする。
- * input の disabled だけでは隣接するラベル文言・貸切料金欄の見出しや単位が通常色のまま
- * 残ってしまうため、opacity を下げて「ここは無効」と一見して分かるようにする
- * （.vkbm-button.is-disabled と同じ opacity 値・.is-using-basic と同じ考え方に揃える）。
+ * input の disabled だけでは隣接するラベル文言や単位が通常色のまま残るため、
+ * opacity を下げて無効だと分かるようにする（.vkbm-button.is-disabled と opacity の値をそろえる）。
  */
 .vkbm-exclusive-user-selectable-label.is-disabled,
 .vkbm-exclusive-fee-fields.is-disabled {
@@ -292,56 +320,36 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /**
- * 予約編集画面：担当欄の下に表示する「希望タグ」表示（#431）。
+ * 予約編集画面：担当欄の下に表示する「希望タグ」表示。
  *
- * WordPress コアの `.form-table td p { margin-top: 4px; margin-bottom: 0; }`
- * （詳細度 (0,1,2)）が効いているため、直後の人数入力欄（.vkbm-booking-guests）との間が
- * 4px しか空かず、担当が希望タグを持っていて担当変更の警告
- * （vkbm-booking-resource-tag-warning）が表示されないときに詰まって見える。
- * 警告表示時は .vkbm-alert の背景・パディングで視覚的に区切られるため発生しない。
- * 担当欄の説明群（希望タグ表示）と、次の情報グループ（人数入力）の境界を独立した
- * グループとして見せるため、グループ間の余白を追加する（.vkbm-reservation-day-custom と
- * 同じ考え方）。隣接する要素の margin は既定で collapse するため、次要素側の
- * margin-top（4px）より大きい値を指定すれば実際の間隔として反映される。
- * この指定の詳細度は (0,2,2)（クラス2つ: .form-table, .vkbm-booking-resource-tag／
- * 要素2つ: td, p）で、上書き対象のコア指定 `.form-table td p`（(0,1,2)）を上回るため
- * `!important` なしで上書きできる。`.form-table td p` を要素セレクタごと明示しているのは
- * 詳細度を合わせるためではなく、上書き対象のコア指定をそのまま書き写して分かりやすくする
- * ため（input[type="number"].vkbm-price-input と同じ考え方）。
+ * WordPress コアの `.form-table td p`（詳細度 (0,1,2)）の margin-top: 4px のままだと、
+ * 直後の人数入力欄（.vkbm-booking-guests）との間が詰まって見えるため、グループ間の余白を追加する。
+ * 詳細度 (0,2,2) でコア指定を上回るので `!important` は不要。
+ * `.form-table td p` を要素セレクタごと書いているのは、上書き対象のコア指定を明示するため。
  */
 .form-table td p.vkbm-booking-resource-tag {
 	margin-bottom: var(--vkbm--spacing--sm);
 }
 
 /**
- * 予約編集画面：担当欄の下に表示する人数の行（#446 / 安藤さん・植草さん再レビュー対応）。
+ * 予約編集画面：担当欄の下に表示する人数の行。
  *
- * 重なりの本当の原因は common.scss の `*[class*="vkbm-"]:where(:is(h1,…,p,li,dt,dd))
- * { text-box: trim-both text; }` だった。この指定が `<p class="vkbm-booking-guests">`
- * にも当たり、`<p>` の高さが文字の高さ（約17px）まで切り詰められるため、入力欄
- * ケースでは `<label>` 内の入力欄（WordPress コアの `label input.small-text {
- * margin-top: -4px; }` 込みの実効高さ約36px）が `<p>` の範囲から大きくはみ出し、
- * 直後の説明文と重なっていた（実測: 約7.3px）。この段落だけ `text-box: none` で
- * trim を解除すると `<p>` の高さが本来の36pxに戻り、入力欄が収まって重ならなく
- * なる（安藤さんの再計測・こちらの実測で確認）。入力欄の上端はコアの
- * `margin-top: -4px` 分だけ `<p>` よりわずかにはみ出すが、上の注記・下の説明文の
- * どちらとも重ならない。
- * 「人数: N名」のテキスト表示ケース（$vkbm_guests_locked）にも同じ理由で trim が
- * 当たっており、`text-box: none` は入力欄の有無で分岐せず同じルールを当ててよい
- * （表示順・空白の扱いに影響しないため）。
- * あわせて、担当欄の説明群（注記・希望タグ表示）と人数入力という別々の情報グループの
- * 境界が分かるよう、前後に独立した余白も追加する（.vkbm-booking-resource-tag と同じ
- * 考え方。隣接する要素の margin は既定で collapse するため、値が大きい側がそのまま
- * 間隔になる）。
+ * common.scss の text-box（`<p>` の高さを文字の高さまで切り詰める指定）は、WordPress コアのフォームに
+ * 差し込む部品（`.vkbm-booking-meta` など）には適用しない。適用すると入力欄が `<p>` からはみ出し、
+ * 直後の説明文と重なるため。新しいメタボックス用の部品を追加するときは、common.scss の
+ * `$vkbm-admin-component-roots`（text-box を適用しない側）に入れること。
+ * 担当欄の説明群と人数入力は別の情報グループなので、前後に余白を追加して境界を分ける
+ * （隣接する margin は collapse するため、値が大きい側が実際の間隔になる）。
  */
 .form-table td p.vkbm-booking-guests {
-	text-box: none;
 	margin-top: var(--vkbm--spacing--xs);
 	margin-bottom: var(--vkbm--spacing--xs);
 }
 
 .vkbm-booking-quick-edit {
 
+	// コアの `#wpbody-content .inline-edit-row-page .inline-edit-col-right { margin-top: 27px }`
+	// （ID セレクタを含む）に勝つため、ここも ID セレクタが必要。クラスだけでは詳細度で負け、27px のままになる。
 	#wpbody-content .inline-edit-row-page & {
 		margin-top: 15px;
 	}
@@ -352,10 +360,10 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 	}
 
 	/**
-	 * #477 安藤さん・植草さんレビュー対応: 担当スタッフ未割当のため枠を消費する
-	 * ステータスが選べないことを伝える通知（booking-quick-edit.js が動的に挿入）。
+	 * 担当スタッフ未割当のため枠を消費するステータスが選べないことを伝える通知
+	 * （booking-quick-edit.js が動的に挿入）。
 	 * プルダウン（select.vkbm-qe-booking-status）と .vkbm-alert の間に余白を設け、
-	 * 選択肢と説明が地続きにならないようにする（design-rules.md「余白」）。
+	 * 選択肢と説明が地続きにならないようにする。
 	 */
 	.vkbm-qe-resource-required-notice {
 		margin-top: var(--vkbm--spacing--sm);
@@ -363,60 +371,7 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /**
- * 予約編集画面：スタッフ別人数配分リピーター。
- */
-.vkbm-staff-distribution {
-
-	&__table {
-		// 列を内容幅に詰めて左寄せにし、削除を人数のすぐ右へ近づける。
-		width: auto;
-		margin: 0 0 8px;
-		border-collapse: collapse;
-
-		// すべてのセルを左寄せ・上下中央・左パディング0にして、
-		// 見出しとデータ（プルダウン／入力欄／削除）の左端を揃える。
-		th,
-		td {
-			padding: 4px 24px 4px 0;
-			text-align: left;
-			vertical-align: middle;
-		}
-
-		// フォーム要素の既定マージンを消して左端ずれを防ぐ。
-		select,
-		input {
-			margin: 0;
-		}
-	}
-
-	&__guests {
-		width: 5em;
-	}
-
-	&__remove {
-		// 「削除」が縦に折り返さないようにする。
-		white-space: nowrap;
-		color: #b32d2e;
-
-		&:hover,
-		&:focus {
-			color: #8a1f1f;
-		}
-	}
-
-	&__total {
-		font-weight: 600;
-	}
-}
-
-// スタッフ選択の幅を指定し、form-table の `select { width: 100% }` を上書きする。
-.vkbm-booking-meta .form-table .vkbm-staff-distribution__staff {
-	width: 14em;
-	max-width: 100%;
-}
-
-/**
- * サービスメニュー編集画面「〇〇連携」メタボックスの担当できるリソース（#485）。
+ * サービスメニュー編集画面「〇〇連携」メタボックスの担当できるリソース。
  * fieldset + legend で「すべて」「選ぶ」のラジオ2択と、「選ぶ」のときだけ表示する
  * 個別チェックリストをグループ化する。余白は
  * 「コントロール＋ラベル間 < 選択肢間 < 選択肢群と隣接グループ間」の3段で付ける。
@@ -485,7 +440,7 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /* ==========================================================================
-   メール認証バッジ（issue #507）
+   メール認証バッジ
    ユーザー一覧の「メール認証」列に表示する。未認証＝グレー、手動承認・
    メール未確認＝アンバー。alert.scss の warning 系トークンを再利用する。
    ========================================================================== */
@@ -506,4 +461,221 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 .vkbm-email-verification-badge--manual {
 	background: var(--vkbm--color--warning-bg, #fff3cd);
 	color: var(--vkbm--color--warning-text, #664d03);
+}
+
+/* ==========================================================================
+   Pro 版の案内（無料版のみ表示）
+   ========================================================================== */
+.vkbm-pro-upsell__icon {
+	vertical-align: middle;
+}
+
+/* WordPress 本体の .notice の余白指定に勝つため、クラスを重ねて詳細度を上げている。 */
+.notice.vkbm-pro-upsell-banner {
+	margin: 12px 0;
+}
+
+.vkbm-pro-upsell-banner__link {
+	margin-left: 8px;
+}
+
+/* ==========================================================================
+   予約編集画面
+   ========================================================================== */
+.vkbm-booking-guest-tiers {
+	margin: 4px 0 0;
+}
+
+.vkbm-booking-service-change-toggle {
+	display: block;
+	margin-bottom: 6px;
+}
+
+/* ==========================================================================
+   予約編集画面: 予約者の検索・変更
+   ========================================================================== */
+.vkbm-reserver {
+
+	// 親の td（テーブルセル）の最小幅を、中身（検索パネル）で押し広げない。
+	min-width: 0;
+	max-width: 100%;
+
+	// 表示・非表示は hidden 属性で切り替える。.button などの display より優先させる。
+	[hidden] {
+		display: none;
+	}
+}
+
+.vkbm-reserver__name,
+.vkbm-reserver__email {
+	margin: 0;
+}
+
+.vkbm-reserver__email {
+	margin-top: 2px;
+	color: var(--vkbm--admin--color--text-tertiary);
+	font-size: 13px;
+}
+
+.vkbm-reserver__actions {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 12em), 1fr));
+	gap: 8px;
+	margin-top: 12px;
+
+	// 狭い幅で段が分かれても端がそろうよう、同じ幅の列に並べる。ラベルが長いときは折り返す。
+	.button {
+		height: auto;
+		min-height: 30px;
+		line-height: 1.4;
+		padding-top: 5px;
+		padding-bottom: 5px;
+		text-align: center;
+		white-space: normal;
+	}
+}
+
+.vkbm-reserver__notice {
+	margin: 0;
+
+	// 空のときに余白だけ残らないよう、文言があるときだけ上に余白を付ける。
+	// 読み上げのため要素自体は常に DOM に置く（display: none にしない）。
+	&:where(:not(:empty)) {
+		margin-top: 12px;
+	}
+}
+
+/* 検索パネル
+   ========================================================================== */
+.vkbm-reserver__panel {
+	box-sizing: border-box;
+	max-width: min(40em, 100%);
+	margin-top: 12px;
+	padding: 16px;
+	border: 1px solid var(--vkbm--admin--color--border);
+	background: var(--vkbm--admin--color--surface);
+}
+
+.vkbm-reserver__panel-label {
+	display: block;
+	margin-bottom: 4px;
+	font-weight: 600;
+}
+
+.vkbm-reserver__panel .description {
+	margin: 0 0 8px;
+}
+
+.vkbm-reserver__search {
+	display: flex;
+	gap: 8px;
+
+	// .regular-text は width: 25em を持つ。テーブルセル内では、その 25em が最小幅として
+	// 親セルを押し広げ、メタボックスの右へはみ出させる。基準幅を 0 にして残り幅を埋めさせる。
+	.regular-text {
+		flex: 1 1 0;
+		width: 0;
+		min-width: 0;
+		max-width: 100%;
+		margin: 0;
+	}
+}
+
+.vkbm-reserver__status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 20px;
+	margin: 12px 0 0;
+
+	.spinner {
+		float: none;
+		margin: 0;
+	}
+
+	// 検索中以外はスピナーの場所を空けない。
+	.spinner:where(:not(.is-active)) {
+		display: none;
+	}
+}
+
+.vkbm-reserver__results {
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+
+	li {
+		margin: 0 0 4px;
+	}
+}
+
+.vkbm-reserver__option {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 44px;
+	padding: 6px 12px;
+	border: 1px solid var(--vkbm--admin--color--border);
+	border-radius: 3px;
+	background: var(--vkbm--admin--color--surface);
+	color: var(--vkbm--admin--color--text);
+	text-align: left;
+	cursor: pointer;
+
+	&:hover {
+		background: var(--vkbm--admin--color--surface-secondary);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--vkbm--admin--color--accent);
+		outline-offset: 1px;
+	}
+}
+
+.vkbm-reserver__option-name,
+.vkbm-reserver__option-email {
+	display: block;
+}
+
+.vkbm-reserver__option-email {
+	color: var(--vkbm--admin--color--text-tertiary);
+	font-size: 13px;
+}
+
+.vkbm-reserver__option-badge {
+	color: var(--vkbm--admin--color--accent-hover);
+	font-size: 12px;
+}
+
+// 候補どうしの間隔（4px）より大きく空け、候補リストとは別グループとして見せる。
+// WordPress 標準の `.wp-core-ui .button { margin: 0 }` と詳細度が同じ（0,2,0）ため、
+// 後から読み込まれるこの指定で上書きする。
+.vkbm-reserver__panel .vkbm-reserver__close {
+	margin-top: 12px;
+}
+
+@include vkbm-bp-down($vkbm-bp-admin-sm) {
+
+	.vkbm-reserver__actions {
+		grid-template-columns: 1fr;
+	}
+
+	.vkbm-reserver__panel .vkbm-reserver__close {
+		box-sizing: border-box;
+		width: 100%;
+		text-align: center;
+	}
+
+	.vkbm-reserver__search {
+		flex-direction: column;
+
+		.regular-text {
+			width: 100%;
+		}
+
+		.button {
+			width: 100%;
+			text-align: center;
+		}
+	}
 }

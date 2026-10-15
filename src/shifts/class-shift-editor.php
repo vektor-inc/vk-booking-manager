@@ -124,7 +124,7 @@ class Shift_Editor {
 	public function add_meta_box(): void {
 		add_meta_box(
 			'vkbm-shift-editor',
-			__( 'Shift details', 'vk-booking-manager' ),
+			Shift_Lodging_Editor::is_lodging_screen() ? __( 'Days on sale', 'vk-booking-manager' ) : __( 'Shift details', 'vk-booking-manager' ),
 			array( $this, 'render_meta_box' ),
 			Shift_Post_Type::POST_TYPE,
 			'normal',
@@ -150,12 +150,19 @@ class Shift_Editor {
 		$resource_posts  = $this->get_resource_posts();
 
 		$days_json = wp_json_encode( $days_for_editor );
+
+		// 見出し・選択肢は、呼び方の設定（スタッフ・客室など）に従った名称を使う。
+		$is_lodging     = Shift_Lodging_Editor::is_lodging_screen();
+		$resource_label = vkbm_get_resource_label_singular();
+		/* translators: %s: label of the resource (e.g. room). */
+		$select_resource_label = sprintf( __( 'Select %s', 'vk-booking-manager' ), $resource_label );
 		?>
+		<input type="hidden" name="vkbm_shift[<?php echo esc_attr( Shift_Lodging_Editor::SCREEN_MODE_FIELD ); ?>]" value="<?php echo esc_attr( Shift_Lodging_Editor::get_current_screen_mode() ); ?>" />
 		<p>
-			<label for="vkbm-shift-resource"><?php esc_html_e( 'Staff (resources)', 'vk-booking-manager' ); ?></label><br />
+			<label for="vkbm-shift-resource"><?php echo esc_html( $resource_label ); ?></label><br />
 			<?php if ( Staff_Editor::is_enabled() ) : ?>
 				<select id="vkbm-shift-resource" name="vkbm_shift[resource_id]" class="widefat">
-					<option value="0"><?php esc_html_e( 'Select staff', 'vk-booking-manager' ); ?></option>
+					<option value="0"><?php echo esc_html( $select_resource_label ); ?></option>
 					<?php foreach ( $resource_posts as $resource ) : ?>
 						<option value="<?php echo esc_attr( (string) $resource->ID ); ?>" <?php selected( $resource_id, $resource->ID ); ?>>
 							<?php echo esc_html( vkbm_get_resource_display_name( (int) $resource->ID ) ); ?>
@@ -177,7 +184,7 @@ class Shift_Editor {
 				<?php endforeach; ?>
 			</select>
 			<span class="vkbm-shift-period-suffix"><?php esc_html_e( 'year', 'vk-booking-manager' ); ?></span>
-			<label class="screen-reader-text" for="vkbm-shift-month"><?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?></label>
+			<label class="screen-reader-text" for="vkbm-shift-month"><?php echo esc_html_x( 'Month', 'shift period', 'vk-booking-manager' ); ?></label>
 			<select id="vkbm-shift-month" name="vkbm_shift[month]">
 				<?php for ( $m = 1; $m <= 12; $m++ ) : ?>
 					<option value="<?php echo esc_attr( (string) $m ); ?>" <?php selected( $month, $m ); ?>>
@@ -185,8 +192,16 @@ class Shift_Editor {
 					</option>
 				<?php endfor; ?>
 			</select>
-			<span class="vkbm-shift-period-suffix"><?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?></span>
+			<span class="vkbm-shift-period-suffix"><?php echo esc_html_x( 'month', 'date unit', 'vk-booking-manager' ); ?></span>
 		</div>
+
+		<?php
+		if ( $is_lodging ) {
+			$sale_flags = Shift_Lodging_Editor::build_sale_flags( $days_for_editor, $year, $month );
+			( new Shift_Lodging_Editor() )->render_days_editor( (string) wp_json_encode( (object) $sale_flags ) );
+			return;
+		}
+		?>
 
 		<input type="hidden" id="vkbm-shift-days-json" name="vkbm_shift[days_json]" value="<?php echo esc_attr( (string) $days_json ); ?>" />
 
@@ -293,17 +308,28 @@ class Shift_Editor {
 			return;
 		}
 
+		// 画面を開いたあとに業種が切り替わっていたら、食い違った形式で上書きしないよう何も保存しない。
+		$submitted_screen_mode = isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] )
+			? sanitize_key( (string) wp_unslash( $_POST['vkbm_shift'][ Shift_Lodging_Editor::SCREEN_MODE_FIELD ] ?? '' ) )
+			: '';
+		if ( ! Shift_Lodging_Editor::matches_current_screen_mode( $submitted_screen_mode ) ) {
+			return;
+		}
+
 		$payload = array(
-			'resource_id' => 0,
-			'year'        => 0,
-			'month'       => 0,
-			'days_json'   => '',
+			'resource_id'    => 0,
+			'year'           => 0,
+			'month'          => 0,
+			'days_json'      => '',
+			'sale_days_json' => '',
 		);
 		if ( isset( $_POST['vkbm_shift'] ) && is_array( $_POST['vkbm_shift'] ) ) {
 			$payload['resource_id'] = absint( wp_unslash( $_POST['vkbm_shift']['resource_id'] ?? 0 ) );
 			$payload['year']        = absint( wp_unslash( $_POST['vkbm_shift']['year'] ?? 0 ) );
 			$payload['month']       = absint( wp_unslash( $_POST['vkbm_shift']['month'] ?? 0 ) );
 			$payload['days_json']   = sanitize_text_field( (string) wp_unslash( $_POST['vkbm_shift']['days_json'] ?? '' ) );
+
+			$payload['sale_days_json'] = sanitize_text_field( (string) wp_unslash( $_POST['vkbm_shift'][ Shift_Lodging_Editor::SALE_DAYS_FIELD ] ?? '' ) );
 		}
 		$resource_id = $payload['resource_id'];
 		$year        = $payload['year'];
@@ -313,7 +339,13 @@ class Shift_Editor {
 		$resource_id = $this->sanitize_resource_id( $resource_id );
 		$year        = $this->sanitize_year( $year );
 		$month       = $this->sanitize_month( $month );
-		$days        = $this->sanitize_days_json( $days_json, $year, $month );
+
+		if ( Shift_Lodging_Editor::is_lodging_screen() ) {
+			// 宿泊: 月の全日を、前の値とつなぎ合わせた状態付きで保存する。
+			$days = $this->build_lodging_days_for_save( $post_id, $payload['sale_days_json'], $resource_id, $year, $month );
+		} else {
+			$days = $this->sanitize_days_json( $days_json, $year, $month );
+		}
 
 		if ( empty( $days ) ) {
 			$days = $this->derive_days_from_template( $resource_id, $year, $month );
@@ -372,6 +404,21 @@ class Shift_Editor {
 
 		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 
+		// 宿泊のときは、販売日用の JS（新規ファイル）だけを読み込む。
+		if ( Shift_Lodging_Editor::is_lodging_screen() ) {
+			wp_enqueue_script(
+				'vkbm-shift-lodging-editor',
+				$base_url . 'assets/js/shift-lodging-editor.js',
+				array( 'jquery' ),
+				VKBM_VERSION,
+				true
+			);
+
+			wp_localize_script( 'vkbm-shift-lodging-editor', 'vkbmShiftLodgingEditor', ( new Shift_Lodging_Editor() )->build_script_config( $state ) );
+
+			return;
+		}
+
 		// 時刻・時間帯の検査処理（shift-editor.js が window.vkbmShiftTimeUtils として使う）。
 		wp_enqueue_script(
 			'vkbm-shift-time-utils',
@@ -409,8 +456,10 @@ class Shift_Editor {
 				'initialYear'      => $state['year'],
 				'initialMonth'     => $state['month'],
 				'strings'          => array(
-					'daySuffix'     => __( 'Sun', 'vk-booking-manager' ),
-					'noResource'    => __( 'Please select staff (resources).', 'vk-booking-manager' ),
+					/* translators: %s: day of the month (e.g. 15). */
+					'dayFormat'     => _x( '%s', 'day of the month label', 'vk-booking-manager' ), // phpcs:ignore WordPress.WP.I18n.NoEmptyStrings -- 英語では日付をそのまま表示し、日本語では「%s日」にするための書式文字列。
+					/* translators: %s: label of the resource (e.g. room). */
+					'noResource'    => sprintf( _x( 'Please select %s.', 'resource', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
 					'statusLabel'   => __( 'Operational status', 'vk-booking-manager' ),
 					'closedMessage' => __( 'You cannot set the time zone in this status.', 'vk-booking-manager' ),
 					'weekdayShort'  => array(
@@ -429,6 +478,50 @@ class Shift_Editor {
 				),
 			)
 		);
+	}
+
+	/**
+	 * 宿泊の保存値を組み立てる。
+	 *
+	 * つなぎ合わせのもとにする値は、客室・年・月がすべて同じ保存済みの値。それが無いとき
+	 * （新しい月・客室、年月が違うとき）は、初期値の作り方の結果を使う（定休日の日を触らずに
+	 * 保存したら regular_holiday のまま残すため）。
+	 * 送信された販売日の値が空・不正なときは、つなぎ合わせのもとにした値をそのまま使う。
+	 *
+	 * @param int    $post_id        シフトの投稿 ID。
+	 * @param string $sale_days_json 送信された販売日の JSON（日 => 販売するか）。
+	 * @param int    $resource_id    客室（リソース）ID。
+	 * @param int    $year           年。
+	 * @param int    $month          月。
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function build_lodging_days_for_save( int $post_id, string $sale_days_json, int $resource_id, int $year, int $month ): array {
+		if ( $year <= 0 || $month <= 0 ) {
+			return array();
+		}
+
+		// 保存済みの値は、客室・年・月がすべて同じときだけ使う。
+		$base_days      = array();
+		$is_same_period = (int) get_post_meta( $post_id, self::META_RESOURCE, true ) === $resource_id
+			&& (int) get_post_meta( $post_id, self::META_YEAR, true ) === $year
+			&& (int) get_post_meta( $post_id, self::META_MONTH, true ) === $month;
+		if ( $is_same_period ) {
+			$stored = get_post_meta( $post_id, self::META_DAYS, true );
+			if ( is_array( $stored ) ) {
+				$base_days = $this->normalize_day_entries( $stored, $year, $month );
+			}
+		}
+
+		if ( empty( $base_days ) ) {
+			$base_days = $this->derive_days_from_template( $resource_id, $year, $month );
+		}
+
+		$flags = Shift_Lodging_Editor::parse_sale_flags( $sale_days_json, $year, $month );
+		if ( null === $flags ) {
+			return $base_days;
+		}
+
+		return Shift_Lodging_Editor::build_days_for_save( $flags, $base_days, $this->derive_open_slots_by_day( $resource_id, $year, $month ) );
 	}
 
 	/**
@@ -465,7 +558,13 @@ class Shift_Editor {
 		$month       = isset( $_POST['month'] ) ? (int) $_POST['month'] : 0;
 
 		if ( $resource_id <= 0 ) {
-			wp_send_json_error( array( 'message' => __( 'Please select a staff member.', 'vk-booking-manager' ) ), 400 );
+			wp_send_json_error(
+				array(
+					/* translators: %s: label of the resource (e.g. room). */
+					'message' => sprintf( _x( 'Please select %s.', 'resource', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
+				),
+				400
+			);
 		}
 
 		$days = $this->derive_days_from_template( $resource_id, $year, $month );
@@ -499,7 +598,18 @@ class Shift_Editor {
 		<div class="vkbm-shift-bulk-create">
 			<h2 class="vkbm-shift-bulk-create__title"><?php esc_html_e( 'Add shifts in bulk', 'vk-booking-manager' ); ?></h2>
 			<p class="vkbm-shift-bulk-create__description">
-				<?php esc_html_e( 'Register the shifts for the specified month as a draft for all staff members at once.', 'vk-booking-manager' ); ?>
+				<?php
+				// 1翻訳関数=1文のため、2文を別々に翻訳してから続けて出す。
+				echo esc_html(
+					sprintf(
+						/* translators: %s: label of the resource (e.g. room). */
+						__( 'Register draft shifts for the specified month for each %s at once.', 'vk-booking-manager' ),
+						vkbm_get_resource_label_singular()
+					)
+				);
+				echo ' ';
+				esc_html_e( 'Drafts are not used for reservations until they are published.', 'vk-booking-manager' );
+				?>
 			</p>
 			<form method="post" action="<?php echo esc_url( $action_url ); ?>" class="vkbm-shift-bulk-create__form">
 				<?php wp_nonce_field( self::BULK_NONCE_ACTION, self::BULK_NONCE_NAME ); ?>
@@ -1077,6 +1187,8 @@ class Shift_Editor {
 			max( 0, $created ),
 			max( 0, $skipped )
 		);
+		// 下書きのままでは予約に使われないことを、1翻訳関数=1文のため別に翻訳して続ける。
+		$message .= ' ' . __( 'They are not used for reservations until published.', 'vk-booking-manager' );
 		?>
 		<div class="notice notice-success is-dismissible">
 			<p><?php echo esc_html( $message ); ?></p>
@@ -1482,6 +1594,7 @@ class Shift_Editor {
 
 		$template      = $template_repository->get_template( $resource_id );
 		$holiday_rules = $this->get_provider_holiday_rules();
+		$is_lodging    = Shift_Lodging_Editor::is_lodging_screen();
 
 		if ( empty( $template ) ) {
 			return $this->derive_days_from_provider( $year, $month );
@@ -1495,11 +1608,7 @@ class Shift_Editor {
 
 		for ( $day = 1; $day <= $days_in_month; $day++ ) {
 			$weekday_key    = $this->get_weekday_key( (int) gmdate( 'w', gmmktime( 0, 0, 0, $month, $day, $year ) ) );
-			$template_slots = $this->normalize_slot_collection( $template_days[ $weekday_key ] ?? array() );
-
-			if ( empty( $template_slots ) && $use_provider_hours ) {
-				$template_slots = $this->get_provider_day_slots( $provider_settings, $weekday_key );
-			}
+			$template_slots = $this->resolve_template_weekday_slots( $template_days, $use_provider_hours, $provider_settings, $weekday_key );
 
 			$status = $this->determine_default_day_status( $weekday_key, $year, $month, $day, $holiday_rules );
 
@@ -1507,12 +1616,66 @@ class Shift_Editor {
 				$status = self::DAY_STATUS_TEMPORARY_OPEN;
 			}
 
-			if ( ! empty( $template_slots ) || $this->is_closed_status( $status ) ) {
+			// 宿泊では、定休日でない日は時間帯が空でも open のデータを必ず作る（販売する日として残すため）。
+			if ( ! empty( $template_slots ) || $this->is_closed_status( $status ) || $is_lodging ) {
 				$derived[ $day ] = $this->build_day_entry( $status, $template_slots );
 			}
 		}
 
 		return $derived;
+	}
+
+	/**
+	 * 客室のシフトテンプレートの、曜日ごとの時間帯を返す。
+	 *
+	 * テンプレートにその曜日の時間帯が無く、基本営業時間の利用が有効なときは基本営業時間で補う。
+	 *
+	 * @param array<string, mixed> $template_days      テンプレートの曜日キー => 時間帯。
+	 * @param bool                 $use_provider_hours 基本営業時間で補うか。
+	 * @param array<string, mixed> $provider_settings  基本設定。
+	 * @param string               $weekday_key        曜日キー（sun, mon, ...）。
+	 * @return array<int, array<string, string>>
+	 */
+	private function resolve_template_weekday_slots( array $template_days, bool $use_provider_hours, array $provider_settings, string $weekday_key ): array {
+		$template_slots = $this->normalize_slot_collection( $template_days[ $weekday_key ] ?? array() );
+
+		if ( empty( $template_slots ) && $use_provider_hours ) {
+			$template_slots = $this->get_provider_day_slots( $provider_settings, $weekday_key );
+		}
+
+		return $template_slots;
+	}
+
+	/**
+	 * 日ごとの「販売する日にしたときの時間帯」を返す（定休日・臨時休業の日も含む）。
+	 *
+	 * 優先順位は derive_days_from_template() と同じで、客室のシフトテンプレートがあればその時間帯、
+	 * 無ければ基本営業時間の時間帯。どちらも無い日は空の配列。
+	 *
+	 * @param int $resource_id 客室（リソース）ID。
+	 * @param int $year        年。
+	 * @param int $month       月（1〜12）。
+	 * @return array<int, array<int, array<string, string>>> 日（1 から月末）=> 時間帯の一覧。
+	 */
+	private function derive_open_slots_by_day( int $resource_id, int $year, int $month ): array {
+		$template_repository = $this->get_resource_template_repository();
+		$template            = ( $resource_id > 0 && $template_repository ) ? $template_repository->get_template( $resource_id ) : array();
+		$provider_settings   = $this->get_provider_settings();
+		$template_days       = is_array( $template['days'] ?? null ) ? $template['days'] : array();
+		$use_provider_hours  = ! empty( $template['use_provider_hours'] );
+		$days_in_month       = (int) wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) );
+		$slots_by_day        = array();
+
+		for ( $day = 1; $day <= $days_in_month; $day++ ) {
+			$weekday_key = $this->get_weekday_key( (int) gmdate( 'w', gmmktime( 0, 0, 0, $month, $day, $year ) ) );
+
+			// テンプレートが無ければ基本営業時間、あればテンプレート（足りない曜日は設定に応じて基本営業時間）。
+			$slots_by_day[ $day ] = empty( $template )
+				? $this->get_provider_day_slots( $provider_settings, $weekday_key )
+				: $this->resolve_template_weekday_slots( $template_days, $use_provider_hours, $provider_settings, $weekday_key );
+		}
+
+		return $slots_by_day;
 	}
 
 	/**
@@ -1527,13 +1690,15 @@ class Shift_Editor {
 		$holiday_rules     = $this->get_provider_holiday_rules();
 		$days_in_month     = (int) wp_date( 't', gmmktime( 0, 0, 0, $month, 1, $year ) );
 		$derived           = array();
+		$is_lodging        = Shift_Lodging_Editor::is_lodging_screen();
 
 		for ( $day = 1; $day <= $days_in_month; $day++ ) {
 			$weekday_key = $this->get_weekday_key( (int) gmdate( 'w', gmmktime( 0, 0, 0, $month, $day, $year ) ) );
 			$day_slots   = $this->get_provider_day_slots( $provider_settings, $weekday_key );
 			$status      = $this->determine_default_day_status( $weekday_key, $year, $month, $day, $holiday_rules );
 
-			if ( ! empty( $day_slots ) || $this->is_closed_status( $status ) ) {
+			// 宿泊では、定休日でない日は時間帯が空でも open のデータを必ず作る（販売する日として残すため）。
+			if ( ! empty( $day_slots ) || $this->is_closed_status( $status ) || $is_lodging ) {
 				$derived[ $day ] = $this->build_day_entry( $status, $day_slots );
 			}
 		}

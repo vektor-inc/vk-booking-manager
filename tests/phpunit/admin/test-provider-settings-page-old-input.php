@@ -28,9 +28,9 @@ use WP_UnitTestCase;
 class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 
 	/**
-	 * 再表示用の値を受け渡す transient のキー（Provider_Settings_Page と同じ値）。
+	 * 再表示用の値を受け渡す transient のキー（Provider_Settings_Page と同じ値。末尾にユーザー ID を付ける）。
 	 */
-	private const OLD_INPUT_TRANSIENT = 'vkbm_provider_settings_previous_input';
+	private const OLD_INPUT_TRANSIENT_PREFIX = 'vkbm_provider_settings_previous_input_';
 
 	/**
 	 * 管理者でログインし、設定画面を描画できる状態にする。
@@ -48,7 +48,7 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 	 */
 	protected function tearDown(): void {
 		delete_option( Settings_Repository::OPTION_KEY );
-		delete_transient( self::OLD_INPUT_TRANSIENT );
+		delete_transient( self::OLD_INPUT_TRANSIENT_PREFIX . get_current_user_id() );
 		$_GET = array();
 		wp_set_current_user( 0 );
 		parent::tearDown();
@@ -86,6 +86,25 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 				'expected'            => array(
 					'resource_tag_search_enabled' => false,
 					'shift_auto_register_months'  => 0,
+				),
+			),
+			array(
+				'test_condition_name' => '絞り込み検索 ON で日付で絞り込む ON => 送信値が復元される（無料版・Pro 版とも）',
+				'input'               => array(
+					'reservation_show_menu_search'    => '1',
+					'reservation_date_search_enabled' => '1',
+				),
+				'expected'            => array(
+					'reservation_date_search_enabled' => true,
+				),
+			),
+			array(
+				'test_condition_name' => '絞り込み検索 OFF で日付で絞り込む ON を送信 => 保存時と同じく日付で絞り込むは OFF になる',
+				'input'               => array(
+					'reservation_date_search_enabled' => '1',
+				),
+				'expected'            => array(
+					'reservation_date_search_enabled' => false,
 				),
 			),
 			array(
@@ -251,9 +270,9 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 
 		foreach ( $test_cases as $case ) {
 			// 入力エラー時に handle_form_submission() が行うのと同じく、再表示用の値を transient に置く。
-			delete_transient( self::OLD_INPUT_TRANSIENT );
+			delete_transient( self::OLD_INPUT_TRANSIENT_PREFIX . get_current_user_id() );
 			if ( null !== $case['input'] ) {
-				set_transient( self::OLD_INPUT_TRANSIENT, $method->invoke( $page, $case['input'] ), 30 );
+				set_transient( self::OLD_INPUT_TRANSIENT_PREFIX . get_current_user_id(), $method->invoke( $page, $case['input'] ), 30 );
 			}
 
 			ob_start();

@@ -104,7 +104,7 @@ class Resource_Schedule_Meta_Box {
 		<p>
 			<label>
 				<input type="checkbox" id="vkbm-resource-schedule-use-provider-hours" name="vkbm_resource_schedule[use_provider_hours]" value="1" <?php checked( ! empty( $template['use_provider_hours'] ) ); ?> />
-				<?php esc_html_e( "Use the same working hours as the store's business hours", 'vk-booking-manager' ); ?>
+				<?php esc_html_e( 'Use the business\'s opening hours', 'vk-booking-manager' ); ?>
 			</label>
 			<br />
 			<span class="description"><?php esc_html_e( 'If you uncheck it, you can set individual working hours for each day of the week.', 'vk-booking-manager' ); ?></span>

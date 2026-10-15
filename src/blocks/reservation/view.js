@@ -2,6 +2,7 @@ import domReady from '@wordpress/dom-ready';
 import { render } from '@wordpress/element';
 import { ReservationApp } from './app';
 import { registerRestFallbackMiddleware } from '../shared/rest-fallback';
+import { readDetailSource } from './components/service-menu-detail-source';
 
 const bootstrap = () => {
 	// パーマリンク設定はあるがサーバー側（.htaccess 等）に反映されていない環境向けの
@@ -43,6 +44,10 @@ const bootstrap = () => {
 		const initialRegistrationErrorKey =
 			dataset.vkbmRegistrationErrorKey ?? '';
 
+		// #635: サーバーが埋め込んだサービスメニューの詳細表示（本文・カード）。
+		// render() で中身が置き換わる前に、ここで取り出しておく。
+		const initialDetail = readDetailSource( node );
+
 		const props = {
 			defaultMenuId: Number( defaultMenuId ) || 0,
 			defaultStaffId: Number( defaultResourceId ) || 0,
@@ -50,6 +55,7 @@ const bootstrap = () => {
 			initialLoginError,
 			initialLoginErrorMessage,
 			initialRegistrationErrorKey,
+			initialDetail,
 		};
 
 		render( <ReservationApp { ...props } />, node );

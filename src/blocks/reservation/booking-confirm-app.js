@@ -1,5 +1,7 @@
 import { __ } from '@wordpress/i18n';
 import {
+	lazy,
+	Suspense,
 	useCallback,
 	useEffect,
 	useMemo,
@@ -11,9 +13,20 @@ import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
 import { formatCurrency, normalizePriceValue } from '../shared/pricing';
 import { resolveLoginState } from '../shared/auth';
 import { resolveApiErrorMessage } from '../shared/rest-error-message';
+import {
+	isBookingTimeConflict,
+	isDraftUnavailable,
+	normalizeBookingError,
+	notifyBookingFailed,
+	parseJsonWithFallback,
+} from './booking-confirm-error';
 import { sanitizeDraftToken } from '../shared/draft-token';
 import { formatGuestsCount } from '../shared/guests';
 import { BookingSummaryItems } from './components/booking-summary-items';
+import {
+	BookingStayDatetime,
+	isStayBooking,
+} from './components/booking-stay-datetime';
 import {
 	buildPriceTierRows,
 	buildServiceBasicFeeRow,
@@ -22,8 +35,20 @@ import {
 	sumPriceTierSubtotals,
 } from './pricing-breakdown';
 import { ReservationHeader } from './components/reservation-header';
+import { ReservationFooter } from './components/reservation-footer';
+import {
+	buildFooterModel,
+	extractFooterSettings,
+} from './components/footer-model';
 import { PricingRowLabel } from './components/pricing-row-label';
 import { BookingCompleteNotice } from './components/booking-complete-notice';
+
+// 宿泊予約の確認画面のサマリは別チャンクに分け、宿泊の予約を確認するときだけ読み込む。
+const LodgingConfirmSummary = lazy( () =>
+	import(
+		/* webpackChunkName: "lodging-confirm-summary" */ './lodging/lodging-confirm-summary'
+	)
+);
 
 const getQueryParam = ( key ) => {
 	if ( typeof window === 'undefined' ) {
@@ -148,54 +173,12 @@ const buildApiPath = ( base, query = {} ) => {
 	return `${ base }?${ params.toString() }`;
 };
 
-const buildLogoutFallbackUrl = ( reservationPageUrl = '' ) => {
+const buildLogoutFallbackUrl = () => {
 	if ( typeof window === 'undefined' ) {
 		return '/wp-login.php?action=logout';
 	}
-	const target =
-		typeof reservationPageUrl === 'string' &&
-		reservationPageUrl.trim() !== ''
-			? reservationPageUrl
-			: window.location.href;
-	const redirect = encodeURIComponent( target );
+	const redirect = encodeURIComponent( window.location.href );
 	return `/wp-login.php?action=logout&redirect_to=${ redirect }`;
-};
-
-const parseJsonWithFallback = ( raw ) => {
-	const fallbackError = new Error(
-		__( 'The response is not a valid JSON response.', 'vk-booking-manager' )
-	);
-
-	if ( typeof raw !== 'string' ) {
-		throw fallbackError;
-	}
-
-	const trimmed = raw.trim();
-	if ( ! trimmed ) {
-		throw fallbackError;
-	}
-
-	try {
-		return JSON.parse( trimmed );
-	} catch ( error ) {
-		let start = trimmed.indexOf( '{' );
-		let end = trimmed.lastIndexOf( '}' );
-
-		if ( start === -1 || end === -1 || end < start ) {
-			start = trimmed.indexOf( '[' );
-			end = trimmed.lastIndexOf( ']' );
-		}
-
-		if ( start === -1 || end === -1 || end < start ) {
-			throw fallbackError;
-		}
-
-		try {
-			return JSON.parse( trimmed.slice( start, end + 1 ) );
-		} catch ( innerError ) {
-			throw fallbackError;
-		}
-	}
 };
 
 const SummaryRow = ( { label, value, valueClassName } ) => (
@@ -265,6 +248,7 @@ export const BookingConfirmApp = ( {
 	const [ customerName, setCustomerName ] = useState( '' );
 	const [ customerPhone, setCustomerPhone ] = useState( '' );
 	const [ providerNote, setProviderNote ] = useState( '' );
+	const [ paymentMethod, setPaymentMethod ] = useState( 'onsite' );
 	const [ canManageReservations, setCanManageReservations ] = useState(
 		Boolean( userBootstrap?.canManageReservations )
 	);
@@ -283,7 +267,10 @@ export const BookingConfirmApp = ( {
 	const [ pendingCompleteMessage, setPendingCompleteMessage ] =
 		useState( '' );
 	const [ providerName, setProviderName ] = useState( '' );
+	// 予約画面と同じフッター（#796）。キャンセルポリシー・利用規約の本文は上の state と同じ値。
+	const [ footerSettings, setFooterSettings ] = useState( null );
 	const [ providerLogoUrl, setProviderLogoUrl ] = useState( '' );
+	const [ providerLogoWidth, setProviderLogoWidth ] = useState( 0 );
 	const [ showProviderLogo, setShowProviderLogo ] = useState( false );
 	const [ showProviderName, setShowProviderName ] = useState( false );
 	const [ resourceLabelSingular, setResourceLabelSingular ] = useState(
@@ -554,6 +541,7 @@ export const BookingConfirmApp = ( {
 						? response.terms_of_service
 						: ''
 				);
+				setFooterSettings( extractFooterSettings( response ) );
 				setProviderPaymentMethod(
 					typeof response?.payment_method === 'string'
 						? response.payment_method
@@ -574,6 +562,11 @@ export const BookingConfirmApp = ( {
 					typeof response?.provider_logo_url === 'string'
 						? response.provider_logo_url
 						: ''
+				);
+				setProviderLogoWidth(
+					Number( response?.provider_logo_width ) > 0
+						? Number( response.provider_logo_width )
+						: 0
 				);
 				setShowProviderLogo(
 					Boolean( response?.reservation_show_provider_logo )
@@ -1133,7 +1126,7 @@ export const BookingConfirmApp = ( {
 			} );
 	};
 
-	const handleConfirm = () => {
+	const handleConfirm = async () => {
 		if ( ! draftToken ) {
 			return;
 		}
@@ -1198,6 +1191,42 @@ export const BookingConfirmApp = ( {
 			payload.customer_phone = customerPhone;
 			payload.internal_note = providerNote;
 		}
+		if ( window.vkbmPaymentConfig?.payment_enabled ) {
+			payload.payment_method = paymentMethod;
+		}
+
+		// 決済プラグインが window.vkbmOnBeforeConfirm を設定している場合に呼び出す。
+		// - false を返すと処理を中断（プラグイン側が決済エラーを表示）。
+		// - オブジェクトを返すと payload にマージする（例: payment_intent_id を追加）。
+		let paymentHookMerged = false;
+		if ( typeof window.vkbmOnBeforeConfirm === 'function' ) {
+			let hookResult;
+			try {
+				hookResult = await window.vkbmOnBeforeConfirm( payload, draft );
+			} catch ( hookError ) {
+				setSubmitError(
+					hookError?.message ||
+						__(
+							'An error occurred during payment processing.',
+							'vk-booking-manager'
+						)
+				);
+				setSubmitting( false );
+				return;
+			}
+			if ( hookResult === false ) {
+				setSubmitting( false );
+				return;
+			}
+			if ( hookResult && typeof hookResult === 'object' ) {
+				Object.assign( payload, hookResult );
+				paymentHookMerged = true;
+			}
+		}
+
+		// 予約が作成されたか（予約 API が成功応答を返したか）。
+		// 成功後の画面遷移などで例外が起きても、予約失敗の通知を送らないために使う。
+		let bookingCreated = false;
 
 		apiFetch( {
 			path: '/vkbm/v1/bookings',
@@ -1206,6 +1235,12 @@ export const BookingConfirmApp = ( {
 			parse: false,
 		} )
 			.then( async ( response ) => {
+				// 成功応答（2xx）なら、この時点で予約は作成済み。本文の読み取りに失敗しても
+				// 予約失敗の通知を送らないよう、本文を読む前に記録する。
+				if ( response.ok ) {
+					bookingCreated = true;
+				}
+
 				const raw = await response.text();
 				let parsed;
 				try {
@@ -1215,29 +1250,8 @@ export const BookingConfirmApp = ( {
 				}
 
 				if ( ! response.ok ) {
-					const conflictMessage = __(
-						'A reservation for the same date and time already exists. Please change the date and time.',
-						'vk-booking-manager'
-					);
-					const rawConflict =
-						typeof raw === 'string' &&
-						( raw.includes( 'booking_time_conflict' ) ||
-							raw.includes(
-								'A reservation for the same date and time already exists.'
-							) );
-					const isConflict =
-						response?.status === 409 ||
-						parsed?.code === 'booking_time_conflict' ||
-						rawConflict;
-					const message =
-						( isConflict ? conflictMessage : parsed?.message ) ||
-						( parsed?.code
-							? `${ parsed.code } (HTTP ${ response.status })`
-							: `HTTP ${ response.status }` ) ||
-						__(
-							'Confirmation of reservation failed. Please try again later.',
-							'vk-booking-manager'
-						);
+					// apiFetch（parse: false）は HTTP エラー時に reject するため通常ここには来ないが、
+					// 念のため catch 側と同じ形（status / code / message）の失敗として扱う。
 					// Log error only in development mode
 					if ( process.env.NODE_ENV === 'development' ) {
 						// eslint-disable-next-line no-console
@@ -1247,7 +1261,15 @@ export const BookingConfirmApp = ( {
 							raw,
 						} );
 					}
-					throw new Error( message );
+					const failureError = new Error(
+						typeof parsed?.message === 'string'
+							? parsed.message
+							: ''
+					);
+					failureError.code =
+						typeof parsed?.code === 'string' ? parsed.code : '';
+					failureError.status = response.status;
+					throw failureError;
 				}
 
 				setCreatedStatus( parsed?.status || '' );
@@ -1281,31 +1303,52 @@ export const BookingConfirmApp = ( {
 					navigate();
 				}
 			} )
-			.catch( ( error ) => {
-				const conflictMessage = __(
-					'A reservation for the same date and time already exists. Please change the date and time.',
-					'vk-booking-manager'
-				);
-				const errorMessage =
-					typeof error?.message === 'string' ? error.message : '';
-				const errorStatus = error?.data?.status || error?.status;
-				const isConflict =
-					error?.code === 'booking_time_conflict' ||
-					errorStatus === 409 ||
-					errorMessage.includes(
-						'A reservation for the same date and time already exists.'
+			.catch( async ( error ) => {
+				// HTTP エラー（Response）・通信エラー・解析失敗のいずれでも、code / message を取り出す。
+				const failure = await normalizeBookingError( error );
+
+				// 決済プラグインの結果を payload にマージしていて、予約が作られなかった場合だけ、
+				// 決済プラグインへ失敗を伝える（window.vkbmOnBookingFailed。仮押さえの取り消しに使われる）。
+				// エラー表示を遅らせないよう、フックの完了は待たない（notifyBookingFailed() の説明を参照）。
+				if ( paymentHookMerged && ! bookingCreated ) {
+					notifyBookingFailed( payload, failure );
+				}
+
+				// 「同じ日時の予約があります」は、エラーコード booking_time_conflict のときだけ表示する。
+				// 409 はほかの理由（空き枠の変化・リソースタグの不一致・決済の二重使用など）でも返るため、
+				// それ以外は REST のエラーメッセージをそのまま表示する。
+				if ( isBookingTimeConflict( failure ) ) {
+					setSubmitError(
+						__(
+							'A reservation for the same date and time already exists. Please change the date and time.',
+							'vk-booking-manager'
+						)
 					);
+					return;
+				}
+
+				// 仮予約データの有効期限切れなどで使えない場合は、読み込み処理の予備の文言（同じ msgid）を使い、
+				// 予約ページからやり直すよう案内する（サーバーの「予約一時データが見つかりません。」は
+				// 次の行動が分からないため）。
+				if ( isDraftUnavailable( failure ) ) {
+					setSubmitError(
+						__(
+							"Couldn't load temporary reservation data. Please try again from the reservation page.",
+							'vk-booking-manager'
+						)
+					);
+					return;
+				}
+
 				setSubmitError(
-					isConflict
-						? conflictMessage
-						: resolveApiErrorMessage(
-								error,
-								__(
-									'Confirmation of reservation failed. Please try again later.',
-									'vk-booking-manager'
-								),
-								canManageReservations
-						  )
+					resolveApiErrorMessage(
+						failure,
+						__(
+							'Confirmation of reservation failed. Please try again later.',
+							'vk-booking-manager'
+						),
+						canManageReservations
+					)
 				);
 			} )
 			.finally( () => setSubmitting( false ) );
@@ -1355,6 +1398,10 @@ export const BookingConfirmApp = ( {
 				<div className="vkbm-alert vkbm-alert__danger" role="alert">
 					{ loadError }
 				</div>
+				{ /* 設定を取得済みのときだけ出す（未取得なら model が null で何も出ない）。 */ }
+				<ReservationFooter
+					model={ buildFooterModel( footerSettings ) }
+				/>
 			</div>
 		);
 	}
@@ -1395,11 +1442,7 @@ export const BookingConfirmApp = ( {
 		staff?.name ||
 		noNominationLabel;
 
-	const logoutHref =
-		logoutUrl ||
-		buildLogoutFallbackUrl(
-			resolvedReservationPageUrl || reservationPageUrl
-		);
+	const logoutHref = logoutUrl || buildLogoutFallbackUrl();
 	const showSuccessMessage = success && ! redirectUrl;
 
 	const renderMemoField = () => {
@@ -1455,8 +1498,16 @@ export const BookingConfirmApp = ( {
 				? providerTermsOfService
 				: '';
 
+		// 決済プラグインが有効なときは、案内文が空でも決済方法の選択肢を出すためブロックを表示する。
+		const isPaymentEnabled = Boolean(
+			window.vkbmPaymentConfig?.payment_enabled
+		);
+
 		const hasAgreements = Boolean(
-			cancellationPolicyText || termsOfServiceText || paymentMethodText
+			cancellationPolicyText ||
+				termsOfServiceText ||
+				paymentMethodText ||
+				isPaymentEnabled
 		);
 
 		return (
@@ -1523,17 +1574,77 @@ export const BookingConfirmApp = ( {
 								</div>
 							</div>
 						) }
-						{ paymentMethodText && (
+						{ /* 決済方法: 見出し → 選択肢（決済プラグイン有効時のみ） → 事業者の案内文（入力時のみ）の順に並べる。 */ }
+						{ ( paymentMethodText || isPaymentEnabled ) && (
 							<div className="vkbm-agreement">
-								<h3 className="vkbm-agreement__title">
+								<h3
+									id="vkbm-payment-method-guest-label"
+									className="vkbm-agreement__title"
+								>
 									{ __(
 										'Payment method',
 										'vk-booking-manager'
 									) }
 								</h3>
-								<div className="vkbm-agreement__body">
-									{ paymentMethodText }
-								</div>
+								{ isPaymentEnabled && (
+									<div
+										className="vkbm-confirm__payment-method-options"
+										role="radiogroup"
+										aria-labelledby="vkbm-payment-method-guest-label"
+										// 案内文があるときだけ説明として関連付ける（空なら属性自体を出さない）。
+										aria-describedby={
+											paymentMethodText
+												? 'vkbm-payment-method-guest-description'
+												: undefined
+										}
+									>
+										<label htmlFor="vkbm-payment-method-guest-onsite">
+											<input
+												type="radio"
+												id="vkbm-payment-method-guest-onsite"
+												name="vkbm-payment-method-guest"
+												value="onsite"
+												checked={
+													paymentMethod === 'onsite'
+												}
+												onChange={ () =>
+													setPaymentMethod( 'onsite' )
+												}
+											/>
+											{ __(
+												'On-site payment',
+												'vk-booking-manager'
+											) }
+										</label>
+										<label htmlFor="vkbm-payment-method-guest-card">
+											<input
+												type="radio"
+												id="vkbm-payment-method-guest-card"
+												name="vkbm-payment-method-guest"
+												value="card"
+												checked={
+													paymentMethod === 'card'
+												}
+												onChange={ () =>
+													setPaymentMethod( 'card' )
+												}
+											/>
+											{ __(
+												'Card payment (Stripe)',
+												'vk-booking-manager'
+											) }
+										</label>
+									</div>
+								) }
+								{ /* 案内文は選択中の決済方法にかかわらず常に表示する。 */ }
+								{ paymentMethodText && (
+									<div
+										id="vkbm-payment-method-guest-description"
+										className="vkbm-agreement__body"
+									>
+										{ paymentMethodText }
+									</div>
+								) }
 							</div>
 						) }
 					</div>
@@ -1595,6 +1706,20 @@ export const BookingConfirmApp = ( {
 
 	const hasGuestTiers =
 		Array.isArray( draft?.guest_tiers ) && draft.guest_tiers.length > 0;
+
+	// 宿泊（泊単位のプラン）の下書きか。サーバーが検証した泊の情報（draft.lodging）の有無で判定する。
+	// チェックイン／チェックアウトの日時・泊数・金額はサーバーの計算値をそのまま表示する。
+	const isLodgingDraft = Boolean( draft?.lodging );
+	const lodgingCheckIn = isLodgingDraft
+		? formatBookingDateTimeParts(
+				draft?.slot?.start_at || '',
+				'',
+				timezone
+		  )
+		: null;
+	const lodgingCheckOut = isLodgingDraft
+		? formatBookingDateTimeParts( draft?.slot?.end_at || '', '', timezone )
+		: null;
 
 	// 最小催行人数（グループ開催型）が設定された枠で、今回の予約を反映しても催行人数に満たない場合だけ
 	// 「開催されない可能性がある」旨を注記する。催行確定済み（充足済み）の枠では表示しない。
@@ -1662,6 +1787,7 @@ export const BookingConfirmApp = ( {
 				brandLinkHref={ brandLinkHref }
 				showLogo={ shouldShowLogo }
 				logoUrl={ providerLogoUrl }
+				logoWidth={ providerLogoWidth }
 				logoAlt={ brandLogoAlt }
 				showName={ shouldShowName }
 				brandName={ providerName }
@@ -1736,6 +1862,22 @@ export const BookingConfirmApp = ( {
 										booking?.end_at || '',
 										timezone
 									);
+								// 泊の予約は、チェックイン／チェックアウトの日時を2行で表示する。
+								const isStay = isStayBooking( booking );
+								const checkInParts = isStay
+									? formatBookingDateTimeParts(
+											booking?.start_at || '',
+											'',
+											timezone
+									  )
+									: null;
+								const checkOutParts = isStay
+									? formatBookingDateTimeParts(
+											booking?.end_at || '',
+											'',
+											timezone
+									  )
+									: null;
 								const statusKey = String(
 									booking?.status || ''
 								).trim();
@@ -1773,23 +1915,31 @@ export const BookingConfirmApp = ( {
 															) }
 														</span>
 													) }
-													{ bookingDatetimeParts.date && (
-														<span className="vkbm-confirm__date">
-															{
-																bookingDatetimeParts.date
-															}
-														</span>
+													{ isStay && (
+														<BookingStayDatetime
+															checkIn={ `${ checkInParts.date } ${ checkInParts.time }`.trim() }
+															checkOut={ `${ checkOutParts.date } ${ checkOutParts.time }`.trim() }
+														/>
 													) }
-													{ bookingDatetimeParts.time && (
-														<span className="vkbm-confirm__time">
-															{ bookingDatetimeParts.date
-																? ' '
-																: '' }
-															{
-																bookingDatetimeParts.time
-															}
-														</span>
-													) }
+													{ ! isStay &&
+														bookingDatetimeParts.date && (
+															<span className="vkbm-confirm__date">
+																{
+																	bookingDatetimeParts.date
+																}
+															</span>
+														) }
+													{ ! isStay &&
+														bookingDatetimeParts.time && (
+															<span className="vkbm-confirm__time">
+																{ bookingDatetimeParts.date
+																	? ' '
+																	: '' }
+																{
+																	bookingDatetimeParts.time
+																}
+															</span>
+														) }
 												</div>
 												{ booking?.can_cancel && (
 													<button
@@ -1851,156 +2001,233 @@ export const BookingConfirmApp = ( {
 			{ authMode !== 'bookings' && (
 				<>
 					<div className="vkbm-confirm__summary">
-						{ ( datetimeParts.date || datetimeParts.time ) && (
-							<div className="vkbm-confirm__summary-title">
-								<div
-									className="vkbm-confirm__datetime"
-									aria-label={ __(
-										'Reservation date and time',
-										'vk-booking-manager'
-									) }
-								>
-									{ datetimeParts.date && (
-										<span className="vkbm-confirm__date">
-											{ datetimeParts.date }
-										</span>
-									) }
-									{ datetimeParts.time && (
-										<span className="vkbm-confirm__time">
-											{ datetimeParts.date ? ' ' : '' }
-											{ datetimeParts.time }
-										</span>
-									) }
-								</div>
-							</div>
-						) }
-						<SummaryRow
-							label={ __( 'Menu', 'vk-booking-manager' ) }
-							value={ menuName }
-						/>
-						{ /* 料金区分メニュー: 区分ごとに「区分名（単価 × 人数）」と小計を表示する（0名の区分は省略）。 */ }
-						{ hasGuestTiers ? (
-							<>
-								{ pricingSummary.tierRows.map(
-									( tierRow, index ) => (
-										<SummaryRow
-											key={ index }
-											label={
-												// #503: 「（単価 × 人数）」の括弧の途中で改行させない（予約画面と同じ）。
-												<PricingRowLabel
-													label={ tierRow.label }
-													labelParts={
-														tierRow.labelParts
-													}
-												/>
-											}
-											value={ tierRow.value }
-										/>
-									)
-								) }
-								<SummaryRow
-									label={ guestsCountLabel }
-									value={ formatGuestsCount(
+						{ isLodgingDraft ? (
+							<Suspense
+								fallback={
+									<p
+										className="vkbm-alert vkbm-alert__info"
+										role="status"
+									>
+										{ __(
+											'Loading…',
+											'vk-booking-manager'
+										) }
+									</p>
+								}
+							>
+								<LodgingConfirmSummary
+									menuName={ menuName }
+									roomLabel={ resourceLabelSingular }
+									roomName={ staffName }
+									checkIn={ lodgingCheckIn }
+									checkOut={ lodgingCheckOut }
+									nights={
+										Number( draft.lodging.nights ) || 0
+									}
+									guestsLabel={ guestsCountLabel }
+									guestsText={ formatGuestsCount(
 										Number( draft.guests ),
 										guestsUnitLabel
 									) }
-								/>
-							</>
-						) : (
-							Number( draft?.guests ) > 1 && (
-								<SummaryRow
-									label={ guestsCountLabel }
-									value={ formatGuestsCount(
-										Number( draft.guests ),
-										guestsUnitLabel
-									) }
-								/>
-							)
-						) }
-						{ nominationEnabledForMenu && (
-							<SummaryRow
-								label={ resourceLabelSingular }
-								value={ staffName }
-							/>
-						) }
-						{ /* 基本料金は指名機能の ON/OFF に関わらず常に表示する（#247）。ただし料金区分メニューでは区分ごとの小計が上に表示され、この行は常に0円で冗長になるため非表示にする（#338）。 */ }
-						{ ! hasGuestTiers && (
-							<SummaryRow
-								label={
-									// #503: 「（単価 × 人数）」の括弧の途中で改行させない（予約画面と同じ）。
-									<PricingRowLabel
-										label={ pricingSummary.baseRowLabel }
-										labelParts={
-											pricingSummary.baseRowLabelParts
-										}
-									/>
-								}
-								value={ pricingSummary.baseLabel }
-							/>
-						) }
-						{ /* 指名料はこのメニューで指名機能 ON のときのみ表示する（#391）。 */ }
-						{ nominationEnabledForMenu && (
-							<SummaryRow
-								label={ nominationFeeLabel }
-								value={
-									pricingSummary.nominationLabel ||
-									formatCurrency(
-										0,
-										currencySymbol.trim() !== ''
-											? currencySymbol
-											: null
-									)
-								}
-							/>
-						) }
-						{ /* 貸し切り料金行（#305）。確認画面の draft は読み込み時に確定し以降変化しないため、他の行と同様に条件描画のみ（live region 不要）。 */ }
-						{ Boolean( draft?.user_exclusive ) &&
-							( Number( draft?.exclusive_fee ) > 0 ? (
-								<SummaryRow
-									label={ __(
-										'Private booking fee',
-										'vk-booking-manager'
-									) }
-									value={
-										typeof draft?.exclusive_fee_formatted ===
-											'string' &&
-										draft.exclusive_fee_formatted.trim() !==
-											''
-											? draft.exclusive_fee_formatted
+									pricePerNightText={
+										draft.lodging.price_per_night ===
+											undefined ||
+										draft.lodging.price_per_night ===
+											null ||
+										draft.lodging.price_per_night === ''
+											? ''
 											: formatCurrency(
 													Number(
-														draft.exclusive_fee
+														draft.lodging
+															.price_per_night
 													) || 0,
 													currencySymbol.trim() !== ''
 														? currencySymbol
 														: null
 											  )
 									}
+									nightBreakdown={
+										draft.lodging.night_breakdown
+									}
+									nightRates={ draft.lodging.night_rates }
+									isRateTiersEnabled={
+										draft.lodging.rate_tiers_enabled ===
+										true
+									}
+									locale={ userBootstrap?.locale }
+									currencySymbol={
+										currencySymbol.trim() !== ''
+											? currencySymbol
+											: null
+									}
+									totalText={
+										pricingSummary.totalLabel ||
+										pricingSummary.baseLabel
+									}
 								/>
-							) : (
+							</Suspense>
+						) : (
+							<>
+								{ ( datetimeParts.date ||
+									datetimeParts.time ) && (
+									<div className="vkbm-confirm__summary-title">
+										<div
+											className="vkbm-confirm__datetime"
+											aria-label={ __(
+												'Reservation date and time',
+												'vk-booking-manager'
+											) }
+										>
+											{ datetimeParts.date && (
+												<span className="vkbm-confirm__date">
+													{ datetimeParts.date }
+												</span>
+											) }
+											{ datetimeParts.time && (
+												<span className="vkbm-confirm__time">
+													{ datetimeParts.date
+														? ' '
+														: '' }
+													{ datetimeParts.time }
+												</span>
+											) }
+										</div>
+									</div>
+								) }
+								<SummaryRow
+									label={ __( 'Menu', 'vk-booking-manager' ) }
+									value={ menuName }
+								/>
+								{ /* 料金区分メニュー: 区分ごとに「区分名（単価 × 人数）」と小計を表示する（0名の区分は省略）。 */ }
+								{ hasGuestTiers ? (
+									<>
+										{ pricingSummary.tierRows.map(
+											( tierRow, index ) => (
+												<SummaryRow
+													key={ index }
+													label={
+														// #503: 「（単価 × 人数）」の括弧の途中で改行させない（予約画面と同じ）。
+														<PricingRowLabel
+															label={
+																tierRow.label
+															}
+															labelParts={
+																tierRow.labelParts
+															}
+														/>
+													}
+													value={ tierRow.value }
+												/>
+											)
+										) }
+										<SummaryRow
+											label={ guestsCountLabel }
+											value={ formatGuestsCount(
+												Number( draft.guests ),
+												guestsUnitLabel
+											) }
+										/>
+									</>
+								) : (
+									Number( draft?.guests ) > 1 && (
+										<SummaryRow
+											label={ guestsCountLabel }
+											value={ formatGuestsCount(
+												Number( draft.guests ),
+												guestsUnitLabel
+											) }
+										/>
+									)
+								) }
+								{ nominationEnabledForMenu && (
+									<SummaryRow
+										label={ resourceLabelSingular }
+										value={ staffName }
+									/>
+								) }
+								{ /* 基本料金は指名機能の ON/OFF に関わらず常に表示する（#247）。ただし料金区分メニューでは区分ごとの小計が上に表示され、この行は常に0円で冗長になるため非表示にする（#338）。 */ }
+								{ ! hasGuestTiers && (
+									<SummaryRow
+										label={
+											// #503: 「（単価 × 人数）」の括弧の途中で改行させない（予約画面と同じ）。
+											<PricingRowLabel
+												label={
+													pricingSummary.baseRowLabel
+												}
+												labelParts={
+													pricingSummary.baseRowLabelParts
+												}
+											/>
+										}
+										value={ pricingSummary.baseLabel }
+									/>
+								) }
+								{ /* 指名料はこのメニューで指名機能 ON のときのみ表示する（#391）。 */ }
+								{ nominationEnabledForMenu && (
+									<SummaryRow
+										label={ nominationFeeLabel }
+										value={
+											pricingSummary.nominationLabel ||
+											formatCurrency(
+												0,
+												currencySymbol.trim() !== ''
+													? currencySymbol
+													: null
+											)
+										}
+									/>
+								) }
+								{ /* 貸し切り料金行（#305）。確認画面の draft は読み込み時に確定し以降変化しないため、他の行と同様に条件描画のみ（live region 不要）。 */ }
+								{ Boolean( draft?.user_exclusive ) &&
+									( Number( draft?.exclusive_fee ) > 0 ? (
+										<SummaryRow
+											label={ __(
+												'Private booking fee',
+												'vk-booking-manager'
+											) }
+											value={
+												typeof draft?.exclusive_fee_formatted ===
+													'string' &&
+												draft.exclusive_fee_formatted.trim() !==
+													''
+													? draft.exclusive_fee_formatted
+													: formatCurrency(
+															Number(
+																draft.exclusive_fee
+															) || 0,
+															currencySymbol.trim() !==
+																''
+																? currencySymbol
+																: null
+													  )
+											}
+										/>
+									) : (
+										<SummaryRow
+											label={ __(
+												'Private booking',
+												'vk-booking-manager'
+											) }
+											value={ __(
+												'Private (exclusive use of this slot)',
+												'vk-booking-manager'
+											) }
+										/>
+									) ) }
+								{ /* 合計も指名機能の ON/OFF に関わらず常に表示する（#247）。 */ }
 								<SummaryRow
 									label={ __(
-										'Private booking',
+										'Total basic fee',
 										'vk-booking-manager'
 									) }
-									value={ __(
-										'Private (exclusive use of this slot)',
-										'vk-booking-manager'
-									) }
+									value={
+										pricingSummary.totalLabel ||
+										pricingSummary.baseLabel
+									}
+									valueClassName="vkbm-confirm__summary-item-value--price"
 								/>
-							) ) }
-						{ /* 合計も指名機能の ON/OFF に関わらず常に表示する（#247）。 */ }
-						<SummaryRow
-							label={ __(
-								'Total basic fee',
-								'vk-booking-manager'
-							) }
-							value={
-								pricingSummary.totalLabel ||
-								pricingSummary.baseLabel
-							}
-							valueClassName="vkbm-confirm__summary-item-value--price"
-						/>
+							</>
+						) }
 					</div>
 
 					{ ! isLoggedIn && (
@@ -2126,6 +2353,58 @@ export const BookingConfirmApp = ( {
 									) }
 								/>
 							</div>
+							{ window.vkbmPaymentConfig?.payment_enabled && (
+								<div className="vkbm-confirm__admin-field">
+									<span id="vkbm-payment-method-label">
+										{ __(
+											'Payment method',
+											'vk-booking-manager'
+										) }
+									</span>
+									<div
+										className="vkbm-confirm__payment-method-options"
+										role="radiogroup"
+										aria-labelledby="vkbm-payment-method-label"
+									>
+										<label htmlFor="vkbm-payment-method-onsite">
+											<input
+												type="radio"
+												id="vkbm-payment-method-onsite"
+												name="vkbm-payment-method"
+												value="onsite"
+												checked={
+													paymentMethod === 'onsite'
+												}
+												onChange={ () =>
+													setPaymentMethod( 'onsite' )
+												}
+											/>
+											{ __(
+												'On-site payment',
+												'vk-booking-manager'
+											) }
+										</label>
+										<label htmlFor="vkbm-payment-method-card">
+											<input
+												type="radio"
+												id="vkbm-payment-method-card"
+												name="vkbm-payment-method"
+												value="card"
+												checked={
+													paymentMethod === 'card'
+												}
+												onChange={ () =>
+													setPaymentMethod( 'card' )
+												}
+											/>
+											{ __(
+												'Card payment (Stripe)',
+												'vk-booking-manager'
+											) }
+										</label>
+									</div>
+								</div>
+							) }
 							<div className="vkbm-confirm__admin-field">
 								<label htmlFor="vkbm-confirm-provider-note">
 									{ __(
@@ -2216,6 +2495,7 @@ export const BookingConfirmApp = ( {
 					</div>
 				</>
 			) }
+			<ReservationFooter model={ buildFooterModel( footerSettings ) } />
 		</div>
 	);
 };

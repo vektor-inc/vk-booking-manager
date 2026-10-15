@@ -11,6 +11,7 @@ use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
+use WP_REST_Server;
 use WP_UnitTestCase;
 use function update_post_meta;
 use function update_user_meta;
@@ -30,6 +31,8 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 	private const META_KEY = '_vkbm_favorites';
 
 	protected function tearDown(): void {
+		global $wp_rest_server;
+		$wp_rest_server = null;
 		wp_set_current_user( 0 );
 		parent::tearDown();
 	}
@@ -373,6 +376,90 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 
 		// タグが除去され、前後の空白・改行がトリムされた値になること。
 		$this->assertSame( 'いつものやつ', $created['label'] );
+	}
+
+	/**
+	 * #691: label に含まれる「\」が、REST 経由でも入力どおり保存されること（二重 unslash をしない）。
+	 */
+	public function test_create_favorite_keeps_backslash_in_label(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$menu_id = $this->create_menu( 'カット' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '「\」を含む名前が入力どおり保存される',
+				'label'               => 'A\\B',
+				'expected'            => 'A\\B',
+			),
+			array(
+				'test_condition_name' => '「\」を含まない名前は変わらない',
+				'label'               => 'いつもの',
+				'expected'            => 'いつもの',
+			),
+		);
+
+		global $wp_rest_server;
+		$wp_rest_server = new WP_REST_Server();
+		( new User_Favorites_Controller() )->register();
+		do_action( 'rest_api_init', $wp_rest_server );
+
+		foreach ( $test_cases as $case ) {
+			delete_user_meta( $user_id, self::META_KEY );
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/favorites' );
+			$request->set_param( 'menu_id', $menu_id );
+			$request->set_param( 'label', $case['label'] );
+			$response = $wp_rest_server->dispatch( $request );
+			$this->assertSame( 201, $response->get_status(), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $response->get_data()['label'], $case['test_condition_name'] );
+
+			// 保存された値からも「\」が消えていないこと。
+			$stored = get_user_meta( $user_id, self::META_KEY, true );
+			$this->assertSame( $case['expected'], $stored[0]['label'], $case['test_condition_name'] . '（保存値）' );
+		}
+	}
+
+	/**
+	 * #691: label は REST の引数定義で 200 文字までに制限され、超過するリクエストは 400 で拒否されることを検証する。
+	 */
+	public function test_register_routes_label_max_length(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$menu_id = $this->create_menu( 'カット' );
+
+		// rest_api_init の中でルートを登録させるため、REST サーバーを作り直してフックを発火させる。
+		global $wp_rest_server;
+		$wp_rest_server = new WP_REST_Server();
+		( new User_Favorites_Controller() )->register();
+		do_action( 'rest_api_init', $wp_rest_server );
+		$server = $wp_rest_server;
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '201 文字の名前は 400 で拒否される',
+				'label'               => str_repeat( 'あ', 201 ),
+				'expected'            => 400,
+			),
+			array(
+				'test_condition_name' => '200 文字ちょうどの名前は受け付ける（境界値）',
+				'label'               => str_repeat( 'あ', 200 ),
+				'expected'            => 201,
+			),
+			array(
+				'test_condition_name' => '短い名前は受け付ける',
+				'label'               => 'いつもの',
+				'expected'            => 201,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			delete_user_meta( $user_id, self::META_KEY );
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/favorites' );
+			$request->set_param( 'menu_id', $menu_id );
+			$request->set_param( 'label', $case['label'] );
+			$response = $server->dispatch( $request );
+			$this->assertSame( $case['expected'], $response->get_status(), $case['test_condition_name'] );
+		}
 	}
 
 	/**

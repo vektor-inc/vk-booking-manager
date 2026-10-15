@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\Common\VKBM_Helper;
@@ -46,12 +47,29 @@ class User_Profile_Fields {
 	 * Register hooks.
 	 */
 	public function register(): void {
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'show_user_profile', array( $this, 'render_fields' ) );
 		add_action( 'edit_user_profile', array( $this, 'render_fields' ) );
 		add_action( 'personal_options_update', array( $this, 'save_fields' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'save_fields' ) );
 		add_filter( 'manage_users_columns', array( $this, 'register_verification_column' ) );
 		add_filter( 'manage_users_custom_column', array( $this, 'render_verification_column' ), 10, 3 );
+	}
+
+	/**
+	 * ユーザー一覧・プロフィール画面で管理画面用 CSS を読み込む。
+	 *
+	 * メール確認状況のバッジ（.vkbm-email-verification-badge）の CSS を読み込む。
+	 * 管理画面用 CSS を全画面で読み込むのをやめたため、ここで必要な画面だけに読み込む（issue #659）。
+	 *
+	 * @param string $hook_suffix 表示中の管理画面のフック名。
+	 */
+	public function enqueue_assets( string $hook_suffix ): void {
+		if ( ! in_array( $hook_suffix, array( 'users.php', 'profile.php', 'user-edit.php' ), true ) ) {
+			return;
+		}
+
+		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 	}
 
 	/**
@@ -109,7 +127,7 @@ class User_Profile_Fields {
 						max="12"
 						aria-label="<?php esc_attr_e( 'date of birth (month)', 'vk-booking-manager' ); ?>"
 					>
-					<?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?>
+					<?php echo esc_html_x( 'month', 'date unit', 'vk-booking-manager' ); ?>
 					<input
 						type="number"
 						class="small-text"
@@ -120,7 +138,7 @@ class User_Profile_Fields {
 						max="31"
 						aria-label="<?php esc_attr_e( 'date of birth (day)', 'vk-booking-manager' ); ?>"
 					>
-					<?php esc_html_e( 'Sun', 'vk-booking-manager' ); ?>
+					<?php echo esc_html_x( 'day', 'date unit', 'vk-booking-manager' ); ?>
 				</td>
 			</tr>
 		</table>

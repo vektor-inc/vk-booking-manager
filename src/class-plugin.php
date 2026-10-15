@@ -20,6 +20,8 @@ use VKBookingManager\Admin\Shift_Dashboard_Page;
 use VKBookingManager\Admin\User_Profile_Fields;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
+use VKBookingManager\Common\Mail_From;
+use VKBookingManager\Common\Scheduled_Events;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Blocks\Menu_Card_Block;
 use VKBookingManager\Blocks\Menu_Search_Block;
@@ -491,31 +493,6 @@ class Plugin {
 	}
 
 	/**
-	 * wp_mail() の送信元メールアドレスを no-reply@サイトドメインに統一する.
-	 *
-	 * パスワードリセットメールなど、WordPressコアが送信するメールの送信元を
-	 * 管理者アドレスではなく no-reply 形式に固定します。
-	 *
-	 * @param string $from_email 既存の送信元メールアドレス.
-	 * @return string
-	 */
-	public function filter_mail_from( string $from_email ): string {
-		$host = (string) wp_parse_url( network_home_url(), PHP_URL_HOST );
-		$host = trim( $host );
-
-		if ( '' === $host ) {
-			return $from_email;
-		}
-
-		$no_reply_email = sanitize_email( sprintf( 'no-reply@%s', $host ) );
-		if ( '' === $no_reply_email || ! is_email( $no_reply_email ) ) {
-			return $from_email;
-		}
-
-		return $no_reply_email;
-	}
-
-	/**
 	 * パスワードリセットメール送信時のみ送信元情報を上書きする.
 	 *
 	 * @param array<string,mixed> $email Password reset email arguments.
@@ -525,46 +502,9 @@ class Plugin {
 	 * @return array<string,mixed>
 	 */
 	public function filter_retrieve_password_notification_email( array $email, string $key, string $user_login, \WP_User $user_data ): array {
-		$from_name  = $this->filter_mail_from_name( 'WordPress' );
-		$from_email = $this->filter_mail_from( '' );
+		$from_name = $this->filter_mail_from_name( 'WordPress' );
 
-		if ( '' === $from_email || ! is_email( $from_email ) ) {
-			return $email;
-		}
-
-		$new_from_header = sprintf( 'From: %s <%s>', $from_name, $from_email );
-		$headers         = $email['headers'] ?? array();
-
-		if ( is_string( $headers ) ) {
-			$headers = preg_split( "/\r\n|\n|\r/", $headers );
-		}
-
-		if ( ! is_array( $headers ) ) {
-			$headers = array();
-		}
-
-		$normalized_headers = array();
-		foreach ( $headers as $header ) {
-			if ( ! is_string( $header ) ) {
-				continue;
-			}
-
-			$header = trim( $header );
-			if ( '' === $header ) {
-				continue;
-			}
-
-			if ( 0 === stripos( $header, 'From:' ) ) {
-				continue;
-			}
-
-			$normalized_headers[] = $header;
-		}
-
-		$normalized_headers[] = $new_from_header;
-		$email['headers']     = $normalized_headers;
-
-		return $email;
+		return Mail_From::apply_to_email( $email, $from_name );
 	}
 
 	/**
@@ -760,10 +700,12 @@ class Plugin {
 	/**
 	 * 無効化時の処理を実行する。
 	 *
-	 * シフトの自動登録用に登録した WP-Cron イベントを解除する。
+	 * シフトの自動登録・リマインダーメール・メールの再送・Google カレンダーへの反映用に登録した
+	 * WP-Cron イベントを解除する。
 	 */
 	public function deactivate(): void {
 		$this->shift_editor->clear_auto_register_schedule();
+		Scheduled_Events::clear_all();
 	}
 
 	/**

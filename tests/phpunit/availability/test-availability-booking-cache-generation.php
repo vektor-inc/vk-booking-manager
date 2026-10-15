@@ -279,7 +279,7 @@ class Availability_Booking_Cache_Generation_Test extends WP_UnitTestCase {
 		$method     = $reflection->getMethod( 'build_cache_key' );
 		$method->setAccessible( true );
 
-		return (string) $method->invoke( $service, $prefix, 3, array( 1, 2 ), $date_key, 'Asia/Tokyo', false );
+		return (string) $method->invoke( $service, $prefix, 3, array( 1, 2 ), $date_key, false );
 	}
 
 	/**

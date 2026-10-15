@@ -1,19 +1,10 @@
 /**
- * issue #324 の原因実証用スペック（4-0 ルール）。決定論的 red/green。
+ * issue #324 の月境界回帰テスト。通常の CI スイートで実行する。
  *
- * 目的:
- * - 「ブラウザ TZ（UTC）とシフト seeding 月（Asia/Tokyo）のズレ」が、JST 月初に
- *   予約カレンダーの初期表示月を1か月前へずらし、空き枠0件を引き起こすことを実証する。
- * - 修正（playwright.config.ts の timezoneId: 'Asia/Tokyo'）でこのズレが解消することを示す。
- *
- * 手法:
- * - 単一の Asia/Tokyo「対象月」だけにシフトを投入する（その前月にはシフト無し）。
- * - page.clock で JST 月初の瞬間（= UTC では前月の月末夜）にブラウザ時計を固定する。
- * - 2 つのブラウザコンテキストで同じ瞬間・同じ seeding に対しカレンダーを開く:
- *   - RED:   timezoneId='UTC'       → 初期表示月 = 前月（シフト無し）→ 空き枠0件
- *   - GREEN: timezoneId='Asia/Tokyo'→ 初期表示月 = 対象月（シフトあり）→ 空き枠>0
- *
- * このスペックは検証用（CI の通常スイートには含めない想定。ファイル名 *.proof.spec.ts）。
+ * JST 月初（UTC は前月末）にブラウザ時計とサイト日付を固定し、対象月だけに
+ * シフトを投入する。メニュー選択時の表示月は provider-settings の site_today で
+ * 決まるため、ブラウザ時計だけを変えて旧来の RED を期待すると実際の今月になる（#766）。
+ * UTC・Asia/Tokyo のどちらでもサイト日付の月を表示し、空き日を選べることを検証する。
  */
 import { test, expect, Browser } from '@playwright/test';
 import {
@@ -66,7 +57,7 @@ function computeBoundaryFixture(): {
 		targetYear += 1;
 	}
 
-	// 対象月の前月（= RED で UTC が表示してしまう、シフト無しの月）。
+	// 対象月の前月（UTC のブラウザ時計が示す、シフト無しの月）。
 	let prevMonth = targetMonth - 1;
 	let prevYear = targetYear;
 	if ( prevMonth < 1 ) {
@@ -197,21 +188,18 @@ function seedProofMenu( staffId: number ): void {
 
 /**
  * 指定 TZ・固定時刻のコンテキストで予約カレンダーを開き、
- * 初期表示月ラベルと「掴める日（selectable）」の件数を返す。
+ * 初期表示月ラベルと空き枠のある日数を返す。
  *
- * selectableCount は実 helper（selectAvailableCalendarDay）と同じ判定にする:
- * available（空き枠あり日）があればその件数、無ければ enabled 件数。
- * これにより「旧 helper が timeout する = selectable 0 件」を厳密に証明できる
- * （available のみだと、enabled フォールバックで掴めるケースを 0 と誤判定しうる）。
+ * 空き枠のある日だけを数え、月が合っていてもシフトが表示されない退行を検出する。
  *
  * @param browser    Playwright の Browser（newContext で TZ を切り替える）
  * @param timezoneId 適用するタイムゾーン（'UTC' / 'Asia/Tokyo'）
- * @return 初期表示月ラベルと selectable（available/enabled）日数
+ * @return 初期表示月ラベルと空き枠のある日数
  */
 async function openCalendar(
 	browser: Browser,
 	timezoneId: string
-): Promise< { monthLabel: string; selectableCount: number } > {
+): Promise< { monthLabel: string; availableDayCount: number } > {
 	const context = await browser.newContext( {
 		timezoneId,
 		locale: 'ja-JP',
@@ -221,7 +209,38 @@ async function openCalendar(
 	// ブラウザ時計を JST 月初の瞬間に固定（React 初期描画の new Date() を制御）。
 	await page.clock.setFixedTime( new Date( fixture.fixedInstantISO ) );
 
+	// 設定全体は実レスポンスを使い、サイト日付だけを固定時計に合わせる。
+	await page.route( '**/vkbm/v1/provider-settings*', async ( route ) => {
+		const response = await route.fetch();
+		expect( response.ok() ).toBe( true );
+		const settings = await response.json();
+		await route.fulfill( {
+			response,
+			json: {
+				...settings,
+				site_today: `${ fixture.targetYear }-${ String(
+					fixture.targetMonth
+				).padStart( 2, '0' ) }-01`,
+			},
+		} );
+	} );
+	// 時計の月が UTC では前月、東京では対象月であることも確認する。
+	const browserMonth = await page.evaluate( () => ( {
+		year: new Date().getFullYear(),
+		month: new Date().getMonth() + 1,
+	} ) );
+	expect( browserMonth ).toEqual(
+		timezoneId === 'UTC'
+			? { year: fixture.prevYear, month: fixture.prevMonth }
+			: { year: fixture.targetYear, month: fixture.targetMonth }
+	);
+
+	// 差し替え済みのサイト日付を受信してからメニューを選ぶ（遷移前に待機を登録）。
+	const providerSettingsResponse = page.waitForResponse(
+		'**/vkbm/v1/provider-settings*'
+	);
 	await page.goto( '/booking/' );
+	await providerSettingsResponse;
 	await page.waitForLoadState( 'networkidle' );
 
 	// 専用メニューの予約ボタンを押してカレンダーを開く。
@@ -243,31 +262,23 @@ async function openCalendar(
 		.waitFor( { state: 'detached', timeout: 15000 } )
 		.catch( () => {} );
 
-	// 初期表示月ラベル（例: "2026年7月"）。
+	// 初期表示月ラベル（例: "2026/7"）。
 	const monthLabel = (
 		await page.locator( '.vkbm-calendar__current' ).first().innerText()
 	).trim();
 
-	// 実 helper（selectAvailableCalendarDay）と同じ disabled 除外セレクタで
-	// available 日と enabled 日を数える。
+	// 空き枠のある日が描画されるまで待ち、単なる有効日の数で代用しない。
 	const availableDays = page.locator(
 		'.vkbm-calendar__day--available:not(:disabled):not([aria-disabled="true"]):not(.vkbm-calendar__day--disabled)'
 	);
-	const enabledDays = page.locator(
-		'.vkbm-calendar__day:not(:disabled):not([aria-disabled="true"]):not(.vkbm-calendar__day--disabled)'
-	);
-	// 件数が安定するまで少し待つ（meta ロード後の再レンダリング収束）。
-	await page.waitForTimeout( 2000 );
-	// helper と同じ優先順位: available があれば available 件数、無ければ enabled 件数。
-	const availableCount = await availableDays.count();
-	const selectableCount =
-		availableCount > 0 ? availableCount : await enabledDays.count();
+	await expect( availableDays.first() ).toBeVisible();
+	const availableDayCount = await availableDays.count();
 
 	await context.close();
-	return { monthLabel, selectableCount };
+	return { monthLabel, availableDayCount };
 }
 
-test.describe( 'issue #324 原因実証: ブラウザTZ/seeding月ズレ', () => {
+test.describe( 'issue #324 月境界: ブラウザTZとサイト日付', () => {
 	test.use( { storageState: { cookies: [], origins: [] } } );
 
 	test.beforeAll( () => {
@@ -308,43 +319,19 @@ test.describe( 'issue #324 原因実証: ブラウザTZ/seeding月ズレ', () =>
 		}
 	} );
 
-	test( 'RED: ブラウザTZ=UTC では前月（シフト無し）を表示し空き枠0件', async ( {
-		browser,
-	} ) => {
-		const { monthLabel, selectableCount } = await openCalendar(
+	for ( const timezoneId of [ 'UTC', 'Asia/Tokyo' ] ) {
+		test( `ブラウザTZ=${ timezoneId } でもサイト日付の対象月と空き日を表示する`, async ( {
 			browser,
-			'UTC'
-		);
-		// eslint-disable-next-line no-console
-		console.log(
-			`[RED utc] target=${ fixture.targetYear }/${ fixture.targetMonth } prev=${ fixture.prevYear }/${ fixture.prevMonth } displayedLabel="${ monthLabel }" selectableCount=${ selectableCount }`
-		);
-		// ja ロケールのラベルは "YYYY/M" 形式（calendar-grid.js の Intl.DateTimeFormat）。
-		// UTC では前月を表示してしまう（＝対象月ではなく prev 月）。
-		expect( monthLabel ).toBe(
-			`${ fixture.prevYear }/${ fixture.prevMonth }`
-		);
-		// 前月にはシフトが無いため掴める日は0件（＝旧ヘルパーが timeout する条件）。
-		// available だけでなく enabled フォールバックも含めて 0 であることを厳密に示す。
-		expect( selectableCount ).toBe( 0 );
-	} );
-
-	test( 'GREEN: ブラウザTZ=Asia/Tokyo では対象月（シフトあり）を表示し空き枠>0', async ( {
-		browser,
-	} ) => {
-		const { monthLabel, selectableCount } = await openCalendar(
-			browser,
-			'Asia/Tokyo'
-		);
-		// eslint-disable-next-line no-console
-		console.log(
-			`[GREEN tokyo] target=${ fixture.targetYear }/${ fixture.targetMonth } displayedLabel="${ monthLabel }" selectableCount=${ selectableCount }`
-		);
-		// Asia/Tokyo では対象月そのものを表示する（"YYYY/M" 形式）。
-		expect( monthLabel ).toBe(
-			`${ fixture.targetYear }/${ fixture.targetMonth }`
-		);
-		// 対象月にはシフトがあるため掴める日>0（修正後の挙動）。
-		expect( selectableCount ).toBeGreaterThan( 0 );
-	} );
+		} ) => {
+			const { monthLabel, availableDayCount } = await openCalendar(
+				browser,
+				timezoneId
+			);
+			// ブラウザの月が前月でも、サイト日付の対象月を表示する。
+			expect( monthLabel ).toBe(
+				`${ fixture.targetYear }/${ fixture.targetMonth }`
+			);
+			expect( availableDayCount ).toBeGreaterThan( 0 );
+		} );
+	}
 } );

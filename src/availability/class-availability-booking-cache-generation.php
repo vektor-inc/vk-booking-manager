@@ -102,6 +102,7 @@ use function substr;
 use function update_option;
 use function wp_is_post_autosave;
 use function wp_is_post_revision;
+use function wp_prime_option_caches;
 use function wp_timezone;
 
 /**
@@ -308,6 +309,64 @@ class Availability_Booking_Cache_Generation {
 		}
 
 		return self::sanitize_generation_value( get_option( self::daily_option_name( $date ), 0 ) );
+	}
+
+	/**
+	 * 複数日の daily 世代番号をまとめて返す。
+	 *
+	 * 各日の値は get_daily_generation() と同じ（未記録・形式不正・存在しない日付は0）。
+	 * 形式が正しい日付の option を wp_prime_option_caches() で1回の問い合わせにまとめて読み込んでから
+	 * get_daily_generation() を呼ぶため、日数に比例した問い合わせを避けつつ、
+	 * option のフィルターやキャッシュの扱いは1日ずつ読む場合と変わらない。
+	 * 重複した日付は1件にまとめる（戻り値のキーは日付のため）。
+	 *
+	 * @param array<int, string> $dates 'YYYY-MM-DD' 形式の日付の配列。
+	 * @return array<string, int> 日付をキー、世代番号を値とする配列（入力の日付の順。重複した日付は1件）。
+	 */
+	public static function get_daily_generations( array $dates ): array {
+		// 形式が正しい日付だけを対象に、option 名を集める。
+		$option_names = array();
+		foreach ( $dates as $date ) {
+			if ( self::is_valid_daily_key( (string) $date ) ) {
+				$option_names[ self::daily_option_name( (string) $date ) ] = true;
+			}
+		}
+
+		// option を1回の問い合わせでまとめて読み込む（読み込み済みのものは問い合わせない）。
+		if ( array() !== $option_names ) {
+			wp_prime_option_caches( array_keys( $option_names ) );
+		}
+
+		// 以降は option キャッシュから読まれるため、追加の問い合わせは発生しない。
+		$generations = array();
+		foreach ( $dates as $date ) {
+			$generations[ (string) $date ] = self::get_daily_generation( (string) $date );
+		}
+
+		return $generations;
+	}
+
+	/**
+	 * 期間（開始日〜終了日。両端を含む）の全日の世代番号を、1つのハッシュにまとめて返す。
+	 *
+	 * 期間の途中の日に入った予約でもキャッシュ名が変わるよう、泊の空き状況や日程の絞り込みの
+	 * キャッシュ名に混ぜる。日数によらず名前の長さが一定になるよう md5 にまとめる。
+	 *
+	 * @param string $from_date 開始日（Y-m-d）。
+	 * @param string $to_date   終了日（Y-m-d。開始日以降）。
+	 * @return string 期間の世代番号をまとめた md5 ハッシュ。
+	 */
+	public static function get_range_generation_hash( string $from_date, string $to_date ): string {
+		$dates  = array();
+		$cursor = new \DateTimeImmutable( $from_date, new \DateTimeZone( 'UTC' ) );
+		$last   = new \DateTimeImmutable( $to_date, new \DateTimeZone( 'UTC' ) );
+		while ( $cursor <= $last ) {
+			$dates[] = $cursor->format( 'Y-m-d' );
+			$cursor  = $cursor->modify( '+1 day' );
+		}
+
+		// 全日の世代番号を、1日ずつではなくまとめて読む。
+		return md5( implode( '-', array_values( self::get_daily_generations( $dates ) ) ) );
 	}
 
 	/**

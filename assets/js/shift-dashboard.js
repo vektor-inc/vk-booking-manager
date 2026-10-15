@@ -270,10 +270,10 @@
 						body: formData,
 					} )
 					.then( function ( response ) {
-						if ( ! response.ok ) {
-							throw new Error( 'http_error' );
-						}
-						return response.json();
+						// 400/409 のエラー応答にも message が入るため、本文を読んでから判定する。
+						return response.json().catch( function () {
+							return null;
+						} );
 					} )
 					.then( function ( payload ) {
 						if ( payload && payload.success ) {
@@ -287,7 +287,7 @@
 								payload.data.message ) ||
 							( settings.i18n && settings.i18n.error ) ||
 							'';
-						throw new Error( message || 'error' );
+						throw new Error( message );
 					} )
 					.catch( function ( error ) {
 						button.disabled = false;
@@ -301,6 +301,45 @@
 						);
 					} );
 			} );
+		} );
+	}
+
+	// 横にスクロールできる側に、フェード影用のクラスを付け外しする。
+	function attachScrollHints( root ) {
+		const wraps = toArray(
+			root.querySelectorAll( '.vkbm-schedule-table-wrap' )
+		);
+
+		wraps.forEach( function ( wrap ) {
+			const scroller = wrap.querySelector( '.vkbm-schedule-table' );
+			if ( ! scroller ) {
+				return;
+			}
+
+			function update() {
+				const maxScroll = scroller.scrollWidth - scroller.clientWidth;
+				const left = Math.abs( scroller.scrollLeft );
+				wrap.classList.toggle( 'is-scrollable-start', left > 1 );
+				wrap.classList.toggle(
+					'is-scrollable-end',
+					maxScroll - left > 1
+				);
+			}
+
+			scroller.addEventListener( 'scroll', update, { passive: true } );
+
+			if ( typeof window.ResizeObserver === 'function' ) {
+				const observer = new window.ResizeObserver( update );
+				observer.observe( scroller );
+				const inner = scroller.firstElementChild;
+				if ( inner ) {
+					observer.observe( inner );
+				}
+			} else {
+				window.addEventListener( 'resize', update );
+			}
+
+			update();
 		} );
 	}
 
@@ -376,6 +415,7 @@
 
 		attachConfirmHandlers( root );
 		attachModalHandlers( root );
+		attachScrollHints( root );
 	}
 
 	if ( document.readyState === 'loading' ) {

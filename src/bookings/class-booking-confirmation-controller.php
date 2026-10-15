@@ -19,6 +19,7 @@ use Exception;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Exclusive_Fee;
+use VKBookingManager\Common\Lodging_Price;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -39,7 +40,9 @@ use WP_REST_Server;
 use WP_Query;
 use WP_User;
 use function __;
+use function apply_filters;
 use function delete_post_meta;
+use function is_wp_error;
 use function delete_transient;
 use function get_post;
 use function get_post_meta;
@@ -53,6 +56,7 @@ use function current_user_can;
 use function get_current_user_id;
 use function vkbm_get_resource_label_plural;
 use function vkbm_get_resource_label_singular;
+use function vkbm_get_resource_tag_empty_message;
 use function wp_get_current_user;
 use function wp_insert_post;
 use function update_post_meta;
@@ -67,21 +71,16 @@ class Booking_Confirmation_Controller {
 	private const REST_NAMESPACE = 'vkbm/v1';
 	private const DRAFT_PREFIX   = 'vkbm_draft_';
 
-	private const META_DATE_START  = '_vkbm_booking_service_start';
-	private const META_DATE_END    = '_vkbm_booking_service_end';
-	private const META_RESOURCE_ID = '_vkbm_booking_resource_id';
 	// #431: 予約時にユーザーが指定したリソースタグ（希望タグ）のターム ID 配列。タグ未指定なら保存しない。
 	private const META_RESOURCE_TAG_IDS          = '_vkbm_booking_resource_tag_ids';
 	private const META_SERVICE_ID                = '_vkbm_booking_service_id';
 	private const META_CUSTOMER                  = '_vkbm_booking_customer_name';
 	private const META_CUSTOMER_TEL              = '_vkbm_booking_customer_tel';
 	private const META_CUSTOMER_MAIL             = '_vkbm_booking_customer_email';
-	private const META_STATUS                    = '_vkbm_booking_status';
 	private const META_NOTE                      = '_vkbm_booking_note';
 	private const META_INTERNAL_NOTE             = '_vkbm_booking_internal_note';
 	private const META_IS_PREFERRED              = '_vkbm_booking_is_staff_preferred';
 	private const META_NOMINATION_FEE            = '_vkbm_booking_nomination_fee';
-	private const META_DATE_TOTAL_END            = '_vkbm_booking_total_end';
 	private const META_SERVICE_BASE_PRICE        = '_vkbm_booking_service_base_price';
 	private const META_BASE_TOTAL_PRICE          = '_vkbm_booking_base_total_price';
 	private const META_GUESTS                    = '_vkbm_booking_guests';
@@ -262,10 +261,15 @@ class Booking_Confirmation_Controller {
 		// 方針をここでも揃えることで、下書き生成経路が将来変わっても後段（定員判定・
 		// META_RESOURCE_ID 保存）が無料版で古い／改竄された resource_id を受け取らない。
 		$staff_id = Staff_Editor::is_enabled() ? (int) ( $draft['resource_id'] ?? 0 ) : 0;
+		// 泊の下書き（チェックイン日・チェックアウト日・客室）かどうか。客室は常に下書きの resource_id を使う。
+		$is_lodging_draft = isset( $draft['lodging'] ) && is_array( $draft['lodging'] );
+		if ( $is_lodging_draft ) {
+			$staff_id = (int) ( $draft['resource_id'] ?? 0 );
+		}
 		// #431: 予約時に指定されたリソースタグ（ターム ID配列・AND条件）。下書きに保存済みの値をそのまま使う
 		// （利用者からの改竄を受け付けない。空配列はタグ絞り込みなしを意味する）。
 		// 正規化ルールは Resource_Tag_Id_List::normalize() に一元化している（同じ処理を複数箇所へ重複させないため）。
-		$tag_ids  = Resource_Tag_Id_List::normalize( $draft['resource_tag_ids'] ?? array() );
+		$tag_ids  = $is_lodging_draft ? array() : Resource_Tag_Id_List::normalize( $draft['resource_tag_ids'] ?? array() );
 		$slot     = isset( $draft['slot'] ) && is_array( $draft['slot'] ) ? $draft['slot'] : array();
 		$start_at = isset( $slot['start_at'] ) ? (string) $slot['start_at'] : '';
 		$end_at   = isset( $slot['end_at'] ) ? (string) $slot['end_at'] : '';
@@ -278,11 +282,41 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
+		// 顧客フラグによる予約ブロック判定。
+		// フロントからの予約（顧客本人）のみを対象とし、管理者・オーナーによる代理作成はブロックしない。
+		// 空き状況・capacity の再検証より前に判定し、ブロック対象の顧客を早期に弾く（設定メッセージを確実に返す）。
+		// 連携処理（顧客フラグ機能）が vkbm_booking_block_check フィルターで WP_Error を返した場合は確定を中止する。
+		if ( ! current_user_can( Capabilities::MANAGE_RESERVATIONS ) ) {
+			$block_check = apply_filters( 'vkbm_booking_block_check', null, get_current_user_id() );
+			if ( is_wp_error( $block_check ) ) {
+				return $block_check;
+			}
+		}
+
+		// 泊単位のプランを時間枠の下書きで確定させない（1枠ぶんの料金で泊の予約が確定してしまうのを防ぐ）。
+		if ( ! $is_lodging_draft && Lodging_Price::is_applicable( $menu_id ) ) {
+			return Lodging_Booking::dates_required_error();
+		}
+
 		// 料金区分が定義されているメニューは、人数を区分ごとの内訳から確定する。
 		// ラベル・料金は必ずサーバ保存メタを正とし、下書きに保存済みの人数のみ突き合わせる（改竄防止）。
 		$menu_price_tiers = $this->resolve_menu_price_tiers( $menu_id );
 		$guest_tiers      = array();
-		if ( ! empty( $menu_price_tiers ) ) {
+		if ( $is_lodging_draft ) {
+			// 泊の下書き: 人数と区分の内訳は Lodging_Booking::resolve_guests()（空き状況・下書きと同じ決め方）で、
+			// 現在のメニュー設定に対して決め直す。時間枠の決め方（resolve_guests）を通すと、設定が揃わない
+			// 泊のプランで人数が 1 名に丸められ、空室一覧で表示した料金より安い金額で確定してしまう。
+			$lodging_guests = Lodging_Booking::resolve_guests(
+				$menu_id,
+				isset( $draft['guests'] ) ? (int) $draft['guests'] : 1,
+				isset( $draft['guest_tiers'] ) && is_array( $draft['guest_tiers'] ) ? $draft['guest_tiers'] : array()
+			);
+			if ( is_wp_error( $lodging_guests ) ) {
+				return $lodging_guests;
+			}
+			$guests      = $lodging_guests['guests'];
+			$guest_tiers = $lodging_guests['guest_tiers'];
+		} elseif ( ! empty( $menu_price_tiers ) ) {
 			$stored_tiers = isset( $draft['guest_tiers'] ) && is_array( $draft['guest_tiers'] ) ? $draft['guest_tiers'] : array();
 			$guest_tiers  = Price_Tiers::resolve_guest_tiers( $menu_price_tiers, $stored_tiers );
 			// 区分人数の合計を予約人数とする（枠消費・後方互換集計に使う）。
@@ -327,7 +361,7 @@ class Booking_Confirmation_Controller {
 
 		// ユーザーによる貸し切り指定（#305）。下書きに保存されたユーザー選択フラグを取得する。
 		// フロントの抑止は迂回可能なため、サーバ側でフルゲート（メニュー設定・最小催行人数・空き枠）を再判定する。
-		$user_requested_exclusive = ! empty( $draft['user_exclusive'] );
+		$user_requested_exclusive = ! empty( $draft['user_exclusive'] ) && ! $is_lodging_draft;
 		$user_exclusive           = false;
 		$exclusive_fee            = 0;
 		if ( $user_requested_exclusive ) {
@@ -357,8 +391,11 @@ class Booking_Confirmation_Controller {
 			}
 		}
 
+		// 予約できる日（曜日・日付の指定）の判定は、従来どおり空き枠の再検証より前に行う。
+		// 後段の再検証で開始が空き枠と時刻として一致することを確かめるため、ここでの判定結果は
+		// 取り直した空き枠の開始で判定した場合と同じになる（#528）。
 		$reservation_day_type = (string) get_post_meta( $menu_id, self::MENU_META_RESERVATION_DAY_TYPE, true );
-		if ( '' !== $reservation_day_type && ! $this->is_reservation_day_allowed( $reservation_day_type, $start_at, $menu_id ) ) {
+		if ( ! $is_lodging_draft && '' !== $reservation_day_type && ! $this->is_reservation_day_allowed( $reservation_day_type, $start_at, $menu_id ) ) {
 			return new WP_Error(
 				'invalid_reservation_day',
 				__( 'The selected date cannot be reserved. Please choose another date.', 'vk-booking-manager' ),
@@ -366,16 +403,51 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-		$timezone = '';
-		if ( isset( $draft['meta'] ) && is_array( $draft['meta'] ) ) {
-			$timezone = sanitize_text_field( (string) ( $draft['meta']['timezone'] ?? '' ) );
+		// 改竄された下書きでシフト時刻の解釈を変えられないよう、サイト設定で上書きする。
+		$timezone = wp_timezone()->getName();
+
+		$lodging_stay = null;
+		if ( $is_lodging_draft ) {
+			// 泊の予約: 下書きに保存された日付・客室をサーバー側で検証し直し、日時・泊数・金額を計算し直す。
+			// 下書きに保存されたスロットの日時・金額は使わない。
+			$lodging_stay = Lodging_Booking::prepare(
+				$this->availability_service,
+				array(
+					'menu_id'        => $menu_id,
+					'resource_id'    => $staff_id,
+					'check_in_date'  => (string) ( $draft['lodging']['check_in_date'] ?? '' ),
+					'check_out_date' => (string) ( $draft['lodging']['check_out_date'] ?? '' ),
+					'guests'         => $guests,
+					'guest_tiers'    => $guest_tiers,
+				)
+			);
+			if ( is_wp_error( $lodging_stay ) ) {
+				return $lodging_stay;
+			}
+
+			$available_slot = array(
+				'start_at'             => $lodging_stay['check_in_at'],
+				'end_at'               => $lodging_stay['check_out_at'],
+				'service_end_at'       => $lodging_stay['check_out_at'],
+				'staff'                => array( 'id' => $lodging_stay['room_id'] ),
+				'assignable_staff_ids' => array( $lodging_stay['room_id'] ),
+				'auto_assign'          => false,
+			);
+		} else {
+			// Re-check availability for the selected slot before confirming. / 予約確定前に空きを再検証します.
+			$available_slot = $this->revalidate_draft_slot( $menu_id, $staff_id, $slot, $timezone, $tag_ids );
+			if ( is_wp_error( $available_slot ) ) {
+				return $available_slot;
+			}
 		}
 
-		// Re-check availability for the selected slot before confirming. / 予約確定前に空きを再検証します.
-		$available_slot = $this->revalidate_draft_slot( $menu_id, $staff_id, $slot, $timezone, $tag_ids );
-		if ( is_wp_error( $available_slot ) ) {
-			return $available_slot;
-		}
+		// 以降の判定・ロック・保存・予約タイトル・通知には、再検証で取り直した空き枠の日時を使う（#528）。
+		// 再検証で下書きの日時と時刻として一致することを確かめているため、通常の予約では値は変わらない。
+		$start_at               = isset( $available_slot['start_at'] ) ? (string) $available_slot['start_at'] : '';
+		$end_at                 = isset( $available_slot['end_at'] ) ? (string) $available_slot['end_at'] : '';
+		$slot['start_at']       = $start_at;
+		$slot['end_at']         = $end_at;
+		$slot['service_end_at'] = isset( $available_slot['service_end_at'] ) ? (string) $available_slot['service_end_at'] : '';
 
 		// Use the latest slot snapshot for staff assignment checks. / 最新の空き情報に基づいて指名判定を行います.
 		if ( isset( $available_slot['staff'] ) && is_array( $available_slot['staff'] ) ) {
@@ -434,8 +506,10 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
+			// 備考は下書きと同じ上限（vkbm_draft_memo_max_length）で切り詰める。
+			// Truncate memo with the same limit as the draft controller.
 			$user               = wp_get_current_user();
-			$memo               = sanitize_textarea_field( (string) ( $request['memo'] ?? '' ) );
+			$memo               = Booking_Draft_Controller::truncate_memo( sanitize_textarea_field( (string) ( $request['memo'] ?? '' ) ) );
 			$agree              = ! empty( $request['agree_terms'] );
 			$agree_cancellation = $request->has_param( 'agree_cancellation_policy' )
 				? ! empty( $request['agree_cancellation_policy'] )
@@ -505,26 +579,21 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-		if ( ! $can_override_contact && $this->has_user_conflict( (int) $user->ID, $start_at, $end_at ) ) {
-			return new WP_Error(
-				'booking_time_conflict',
-				__( 'A reservation for the same date and time already exists. Please change the date and time.', 'vk-booking-manager' ),
-				array( 'status' => 409 )
-			);
-		}
-		if ( $can_override_contact && $matched_user_id > 0 && $this->has_user_conflict( $matched_user_id, $start_at, $end_at ) ) {
-			return new WP_Error(
-				'booking_time_conflict',
-				__( 'A reservation for the same date and time already exists. Please change the date and time.', 'vk-booking-manager' ),
-				array( 'status' => 409 )
-			);
+		// ロック取得前の早期拒否。同時リクエスト対策の本判定は、ロック取得後に行う（下記）。
+		if ( $this->has_booking_user_conflict( $can_override_contact, (int) $user->ID, $matched_user_id, $start_at, $end_at ) ) {
+			return $this->create_user_conflict_error();
 		}
 
 		// 予約確定直前に capacity 上限を再チェック（簡易排他制御付き）。
 		// 自動割当時はロック保持下で、人数を収容できる単一スタッフをベストフィットで確定する（分割しない）。
 		// Re-check capacity just before confirming, with transient-based mutex.
 		// For auto-assignment, pick a single best-fit staff under the lock (no splitting).
-		$capacity_check = $this->check_capacity_with_mutex( $menu_id, $staff_id, $start_at, $end_at, $guests, $is_staff_preferred, $is_auto_assign ? $assignable_staff : array(), $user_exclusive );
+		if ( null !== $lodging_stay ) {
+			// 泊の予約: 客室 ID 単位のロックを取り、ロック中に期間全体の重なりと販売日を確かめる。
+			$capacity_check = $this->check_lodging_room_with_mutex( $lodging_stay );
+		} else {
+			$capacity_check = $this->check_capacity_with_mutex( $menu_id, $staff_id, $start_at, $end_at, $guests, $is_staff_preferred, $is_auto_assign ? $assignable_staff : array(), $user_exclusive );
+		}
 		if ( is_wp_error( $capacity_check ) ) {
 			return $capacity_check;
 		}
@@ -532,42 +601,91 @@ class Booking_Confirmation_Controller {
 		// 取得したロック（ロック名＋所有者トークン）は予約投稿の作成・メタ保存まで保持し、後段で必ず解放する。
 		$slot_lock_name  = (string) $capacity_check['name'];
 		$slot_lock_token = (string) $capacity_check['token'];
-		// 自動割当時はベストフィットで確定したスタッフIDを採用する。指名予約は渡した staff_id がそのまま返る。
-		$staff_id = (int) $capacity_check['staff_id'];
-		if ( $staff_id <= 0 ) {
-			$this->release_slot_mutex( $slot_lock_name, $slot_lock_token );
-			$singular = vkbm_get_resource_label_singular();
-			return new WP_Error(
-				'staff_assignment_failed',
-				sprintf(
-					/* translators: %s: Resource label (singular). */
-					__( 'Could not assign person %s. Please try a different frame.', 'vk-booking-manager' ),
-					$singular
-				),
-				array( 'status' => 409 )
-			);
-		}
 
-		// #431: 念のための最終チェック。空き枠計算（resolve_staff_ids()）の時点でタグを持つ
-		// リソースだけに候補を絞っているため通常はここで弾かれることは無いが、多層防御として
-		// 「割り当て結果のリソースが指定タグを『すべて』持っているか」をここでも確認する。
-		// 外れていれば 409 で予約を拒否する（取得済みロックは必ず解放してから返す）。
-		if ( ! Resource_Tag_Taxonomy::resource_has_all_tags( $staff_id, $tag_ids ) ) {
-			$this->release_slot_mutex( $slot_lock_name, $slot_lock_token );
-			return new WP_Error(
-				'resource_tag_unavailable',
-				sprintf(
-					/* translators: %s: resource label (plural), e.g. "Staff". */
-					__( 'There are no %s matching the selected conditions.', 'vk-booking-manager' ),
-					vkbm_get_resource_label_plural()
-				),
-				array( 'status' => 409 )
-			);
-		}
-
-		// 予約投稿の作成・メタ保存の途中で例外が発生してもロックが残らないよう、
-		// ロック取得から全メタ保存までを try/finally で囲み、finally で必ず解放する。
+		// ロック取得後の再確認・スタッフ確定・料金計算・決済の確認・予約投稿の作成・メタ保存の途中で
+		// 例外が発生してもロックが残らないよう、ロック取得直後から全メタ保存までを try/finally で囲み、finally で必ず解放する。
+		// 決済の確認（vkbm_booking_payment_check）のコールバックが例外を投げた場合も、ここで解放される。
+		// 解放はこの finally の1か所だけで行う（途中の return でも1回だけ解放される）。
 		try {
+			// 同じ利用者の同時リクエストが先に予約を確定している場合があるため、ロック取得後に重複予約をもう一度確認する（#692）。
+			// 上のロック前の確認だけでは、2件のリクエストが同時に確認を通り抜けて両方確定してしまう。
+			if ( $this->has_booking_user_conflict( $can_override_contact, (int) $user->ID, $matched_user_id, $start_at, $end_at ) ) {
+				return $this->create_user_conflict_error();
+			}
+
+			// 自動割当時はベストフィットで確定したスタッフIDを採用する。指名予約は渡した staff_id がそのまま返る。
+			$staff_id = (int) $capacity_check['staff_id'];
+			if ( $staff_id <= 0 ) {
+				$singular = vkbm_get_resource_label_singular();
+				return new WP_Error(
+					'staff_assignment_failed',
+					sprintf(
+						/* translators: %s: Resource label (singular). */
+						__( 'Could not assign person %s. Please try a different frame.', 'vk-booking-manager' ),
+						$singular
+					),
+					array( 'status' => 409 )
+				);
+			}
+
+			// #431: 念のための最終チェック。空き枠計算（resolve_staff_ids()）の時点でタグを持つ
+			// リソースだけに候補を絞っているため通常はここで弾かれることは無いが、多層防御として
+			// 「割り当て結果のリソースが指定タグを『すべて』持っているか」をここでも確認する。
+			// 外れていれば 409 で予約を拒否する（取得済みロックは finally で解放される）。
+			if ( ! Resource_Tag_Taxonomy::resource_has_all_tags( $staff_id, $tag_ids ) ) {
+				return new WP_Error(
+					'resource_tag_unavailable',
+					vkbm_get_resource_tag_empty_message(),
+					array( 'status' => 409 )
+				);
+			}
+
+			// 決済プラグインの payment_check フィルター用に wp_insert_post() より前に料金を確定する。
+			$service_base_price = max( 0, (int) get_post_meta( $menu_id, '_vkbm_base_price', true ) );
+			$nomination_fee     = isset( $draft['nomination_fee'] ) ? (int) $draft['nomination_fee'] : 0;
+			// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
+			// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
+			if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
+				$nomination_fee = 0;
+			}
+			$disable_nomination_fee = (string) get_post_meta( $menu_id, '_vkbm_disable_nomination_fee', true );
+			// 宿泊のサイトは時間枠のプランでも指名料を 0 円にする（下書きに残った金額も使わない）。
+			if ( '1' === $disable_nomination_fee || Lodging_Price::is_nomination_fee_disabled_for_site() ) {
+				$nomination_fee = 0;
+			} elseif ( $nomination_fee <= 0 && $is_staff_preferred && $staff_id > 0 ) {
+				$nomination_fee = $this->get_staff_nomination_fee( $menu_id, $staff_id );
+			}
+			// 料金区分が定義されている場合は Σ(区分料金 × 区分人数) + 指名料 + 貸し切り料金。
+			// 区分未定義は従来どおり サービス基本料金 × 人数 + 指名料 + 貸し切り料金（完全後方互換）。
+			// 料金はクライアントから送られた金額を信用せず、サーバ保存メタを正として再計算する。
+			if ( ! empty( $guest_tiers ) ) {
+				$base_total_price = max( 0, Price_Tiers::total_price( $guest_tiers ) + max( 0, $nomination_fee ) + max( 0, $exclusive_fee ) );
+			} else {
+				$base_total_price = max( 0, ( $service_base_price * $guests ) + max( 0, $nomination_fee ) + max( 0, $exclusive_fee ) );
+			}
+			if ( null !== $lodging_stay ) {
+				// 泊の予約は、サーバーの設定から計算した合計（（プランの料金＋客室の追加料金）× 泊数）を使う。
+				// 客室の追加料金は合計に含めるため、指名料としては保存しない。
+				$nomination_fee   = 0;
+				$base_total_price = (int) $lodging_stay['price']['total'];
+			}
+
+			/**
+			 * 決済プラグインが payment_intent_id を検証する拡張ポイント。
+			 * WP_Error を返すと予約の作成を中断し、そのまま REST レスポンスとして返す。
+			 * 予約枠のロックを保持したまま呼ばれる。例外を投げた場合もロックは finally で解放される。
+			 *
+			 * @param true|WP_Error   $result           判定結果。初期値は true（問題なし）。
+			 * @param WP_REST_Request $request          現在のリクエスト（payment_intent_id を含む場合がある）。
+			 * @param array           $draft            仮予約データ。
+			 * @param int             $base_total_price 指名料・貸し切り料金を含む基本料金合計（円）。
+			 */
+			$payment_check = apply_filters( 'vkbm_booking_payment_check', true, $request, $draft, $base_total_price );
+			if ( is_wp_error( $payment_check ) ) {
+				// ロックは finally で解放される。
+				return $payment_check;
+			}
+
 			$booking_id = wp_insert_post(
 				array(
 					'post_type'   => Booking_Post_Type::POST_TYPE,
@@ -596,18 +714,18 @@ class Booking_Confirmation_Controller {
 			$service_end_for_store = $this->format_datetime_for_storage( $service_end_at );
 
 			$start_meta_value = '' !== $start_for_storage ? $start_for_storage : $start_at;
-			update_post_meta( $booking_id, self::META_DATE_START, $start_meta_value );
+			update_post_meta( $booking_id, Booking_Overlap::META_START, $start_meta_value );
 
 			$service_end_value = '' !== $service_end_for_store ? $service_end_for_store : ( '' !== $service_end_at ? $service_end_at : ( '' !== $end_for_storage ? $end_for_storage : $end_at ) );
 			if ( $service_end_value ) {
-				update_post_meta( $booking_id, self::META_DATE_END, $service_end_value );
+				update_post_meta( $booking_id, Booking_Overlap::META_END, $service_end_value );
 			}
 			if ( '' !== $end_for_storage || '' !== $end_at ) {
 				$total_end_value = '' !== $end_for_storage ? $end_for_storage : $end_at;
-				update_post_meta( $booking_id, self::META_DATE_TOTAL_END, $total_end_value );
+				update_post_meta( $booking_id, Booking_Overlap::META_TOTAL_END, $total_end_value );
 			}
 			if ( $staff_id > 0 ) {
-				update_post_meta( $booking_id, self::META_RESOURCE_ID, $staff_id );
+				update_post_meta( $booking_id, Booking_Overlap::META_RESOURCE, $staff_id );
 			}
 			// #431: 予約時に指定したリソースタグ（希望タグ）のターム ID 配列を保存する。
 			// タグ未指定の予約はメタを保存しない（完了条件どおり）。
@@ -619,6 +737,17 @@ class Booking_Confirmation_Controller {
 			update_post_meta( $booking_id, self::META_SERVICE_ID, $menu_id );
 			// 予約人数を保存する（複数人一括予約）。単価×人数または区分料金合計の計算に用いる。
 			update_post_meta( $booking_id, self::META_GUESTS, $guests );
+			if ( null !== $lodging_stay ) {
+				// 泊数と1泊あたりの合計（部屋全体）を保存する。チェックイン・チェックアウトの日時は開始・終了のメタに保存済み。
+				update_post_meta( $booking_id, Lodging_Booking::META_NIGHTS, (int) $lodging_stay['nights'] );
+				// 泊ごとの内訳を固定で保存する。1泊あたりの合計は、すべての泊が同じ金額のときだけ保存する。
+				update_post_meta( $booking_id, Lodging_Booking::META_NIGHT_BREAKDOWN, $lodging_stay['price']['night_breakdown'] );
+				if ( null !== $lodging_stay['price']['price_per_night'] ) {
+					update_post_meta( $booking_id, Lodging_Booking::META_PRICE_PER_NIGHT, (int) $lodging_stay['price']['price_per_night'] );
+				} else {
+					delete_post_meta( $booking_id, Lodging_Booking::META_PRICE_PER_NIGHT );
+				}
+			}
 			// 貸し切り予約フラグを保存する。
 			// (1) 設定ON（_vkbm_exclusive_when_booked）のメニューでは予約確定時に自動で true を付与する（#304）。
 			// (2) ユーザーによる貸し切り指定（#305）でユーザーが貸切を選択し、フルゲートを通過した場合も true を付与する。
@@ -642,8 +771,6 @@ class Booking_Confirmation_Controller {
 			} else {
 				delete_post_meta( $booking_id, self::META_GUEST_TIERS );
 			}
-			$service_base_price = (int) get_post_meta( $menu_id, '_vkbm_base_price', true );
-			$service_base_price = max( 0, $service_base_price );
 			update_post_meta( $booking_id, self::META_SERVICE_BASE_PRICE, $service_base_price );
 			update_post_meta( $booking_id, self::META_CUSTOMER, $customer_name_value );
 			update_post_meta( $booking_id, self::META_CUSTOMER_MAIL, $customer_email );
@@ -652,44 +779,23 @@ class Booking_Confirmation_Controller {
 			} else {
 				delete_post_meta( $booking_id, self::META_CUSTOMER_TEL );
 			}
-			update_post_meta( $booking_id, self::META_STATUS, $initial_status );
+			update_post_meta( $booking_id, Booking_Overlap::META_STATUS, $initial_status );
 			update_post_meta( $booking_id, self::META_IS_PREFERRED, $is_staff_preferred ? '1' : '' );
 			update_post_meta( $booking_id, '_vkbm_booking_agreed_cancellation_policy', $agree_cancellation ? '1' : '' );
 			update_post_meta( $booking_id, '_vkbm_booking_agreed_terms_of_service', $agree_tos ? '1' : '' );
-			$nomination_fee = isset( $draft['nomination_fee'] ) ? (int) $draft['nomination_fee'] : 0;
-			// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
-			// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
-			if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
-				$nomination_fee = 0;
-			}
-			$disable_nomination_fee = (string) get_post_meta( $menu_id, '_vkbm_disable_nomination_fee', true );
-			if ( '1' === $disable_nomination_fee ) {
-				$nomination_fee = 0;
-			} elseif ( $nomination_fee <= 0 && $is_staff_preferred && $staff_id > 0 ) {
-				$nomination_fee = $this->get_staff_nomination_fee( $menu_id, $staff_id );
-			}
-
 			if ( $nomination_fee > 0 ) {
 				update_post_meta( $booking_id, self::META_NOMINATION_FEE, $nomination_fee );
 			} else {
 				delete_post_meta( $booking_id, self::META_NOMINATION_FEE );
 			}
 
-			// 基本料金合計を予約確定時に数値で確定保存する。
-			// 料金区分が定義されている場合は Σ(区分料金 × 区分人数) + 指名料。
-			// 区分未定義は従来どおり サービス基本料金 × 人数 + 指名料（完全後方互換）。
-			// 料金はクライアントから送られた金額を信用せず、サーバ保存メタを正として再計算する。
-			if ( ! empty( $guest_tiers ) ) {
-				$base_total_price = max( 0, Price_Tiers::total_price( $guest_tiers ) + max( 0, $nomination_fee ) + max( 0, $exclusive_fee ) );
-			} else {
-				$base_total_price = max( 0, ( $service_base_price * $guests ) + max( 0, $nomination_fee ) + max( 0, $exclusive_fee ) );
-			}
+			// 基本料金合計を予約確定時に数値で確定保存する（wp_insert_post 前に計算済みの値を使用）。
 			update_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, $base_total_price );
 			if ( '' !== $memo ) {
-				update_post_meta( $booking_id, self::META_NOTE, $memo );
+				update_post_meta( $booking_id, self::META_NOTE, wp_slash( $memo ) );
 			}
 			if ( '' !== $internal_note ) {
-				update_post_meta( $booking_id, self::META_INTERNAL_NOTE, $internal_note );
+				update_post_meta( $booking_id, self::META_INTERNAL_NOTE, wp_slash( $internal_note ) );
 			} else {
 				delete_post_meta( $booking_id, self::META_INTERNAL_NOTE );
 			}
@@ -697,6 +803,38 @@ class Booking_Confirmation_Controller {
 			// すべての予約メタを保存し終えた（または途中で離脱した）のでロックを解放する。
 			// 以降の通知処理はロック不要。
 			$this->release_slot_mutex( $slot_lock_name, $slot_lock_token );
+		}
+
+		/**
+		 * 予約の作成が完了したときに発火する拡張ポイント。
+		 * 予約枠のロック解放後・仮予約データ削除前に発火する（予約の全メタは保存済み）。
+		 * 予約投稿の作成やメタ保存の途中で処理を中断した場合（早期 return・例外）は発火しない。
+		 * 決済プラグインはこのフックで決済情報を予約に保存する。
+		 *
+		 * 予約はこの時点で成立しているため、コールバックが例外を投げても予約は成功として扱い、
+		 * エラーログに記録したうえで仮予約データの削除・通知・変更の通知を続ける。
+		 * 例外を投げたコールバックより後に登録されたコールバックは実行されない。
+		 *
+		 * @param int             $booking_id 作成した予約投稿の ID。
+		 * @param array           $draft      仮予約データ（メニュー・金額など）。
+		 * @param WP_REST_Request $request    元の REST リクエスト（payment_intent_id を含む）。
+		 */
+		try {
+			do_action( 'vkbm_booking_post_created', $booking_id, $draft, $request );
+		} catch ( \Throwable $e ) {
+			// 予約は作成済みのため、拡張側の例外で結果を覆さず、管理者が追跡できるようログだけ残す。
+			// 仮予約データ・リクエスト（個人情報を含む）とスタックトレース（引数の値を含むことがある）は記録しない。
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- 拡張プラグインの不具合を管理者が追跡できるよう記録する（個人情報は含めない）。
+			error_log(
+				sprintf(
+					'[vkbm] vkbm_booking_post_created callback failed. booking_id=%d exception=%s message=%s at=%s:%d',
+					(int) $booking_id,
+					get_class( $e ),
+					$e->getMessage(),
+					$e->getFile(),
+					$e->getLine()
+				)
+			);
 		}
 
 		delete_transient( $this->build_transient_key( $token ) );
@@ -759,18 +897,18 @@ class Booking_Confirmation_Controller {
 	}
 
 	/**
-	 * スロット内の各スタッフの担当人数を集計する（既存予約の配分から）。
+	 * スロット内の各スタッフについて、同一メニューの担当人数と別メニューの予約の有無を要約する。
 	 *
-	 * #394: クエリ本体は Staff_Load_Calculator（管理画面の担当スタッフ候補絞り込みと共通）へ集約し、
+	 * #394 / #656: クエリ本体と判定は Staff_Load_Calculator（空き枠の計算・管理画面と共通）へ集約し、
 	 * ここでは ISO8601 → サイトのタイムゾーンの 'Y-m-d H:i:s' への変換のみを担う薄いラッパーにする
-	 * （同じ判定ロジックを2箇所に写経しない）。
+	 * （同じ判定ロジックを複数箇所に写経しない）。
 	 *
 	 * @param int    $menu_id  サービスメニューID。
 	 * @param string $start_at スロット開始（ISO8601）。
 	 * @param string $end_at   スロット終了（ISO8601）。
-	 * @return array<int, int> staff_id => 担当人数。
+	 * @return array<int, array{same_menu_guests:int, has_other_menu:bool}> staff_id => 要約。予約が無いスタッフは含まれない。
 	 */
-	private function get_staff_loads_for_slot( int $menu_id, string $start_at, string $end_at ): array {
+	private function get_staff_summaries_for_slot( int $menu_id, string $start_at, string $end_at ): array {
 		$start_for_storage = $this->format_datetime_for_storage( $start_at );
 		$end_for_storage   = $this->format_datetime_for_storage( $end_at );
 		if ( '' === $start_for_storage ) {
@@ -780,7 +918,7 @@ class Booking_Confirmation_Controller {
 			$end_for_storage = $start_for_storage;
 		}
 
-		return Staff_Load_Calculator::get_staff_loads_for_slot( $menu_id, $start_for_storage, $end_for_storage );
+		return Staff_Load_Calculator::get_staff_summaries_for_slot( $menu_id, $start_for_storage, $end_for_storage );
 	}
 
 	/**
@@ -807,6 +945,7 @@ class Booking_Confirmation_Controller {
 			$end_for_storage = $start_for_storage;
 		}
 
+		// 重なりの条件は泊の空室判定と共有する（Booking_Overlap）。
 		$query = new WP_Query(
 			array(
 				'post_type'      => Booking_Post_Type::POST_TYPE,
@@ -814,55 +953,41 @@ class Booking_Confirmation_Controller {
 				'posts_per_page' => 1,
 				'no_found_rows'  => true,
 				'fields'         => 'ids',
-				'meta_query'     => array(
-					'relation' => 'AND',
-					// キャンセル・無断キャンセルの予約はスタッフ競合に含めない（実枠が空いていれば割り当て可能）。
-					array(
-						'relation' => 'OR',
-						array(
-							'key'     => self::META_STATUS,
-							'compare' => 'NOT EXISTS',
-						),
-						array(
-							'key'     => self::META_STATUS,
-							'value'   => array(
-								self::BOOKING_STATUS_CANCELLED,
-								self::BOOKING_STATUS_NO_SHOW,
-							),
-							'compare' => 'NOT IN',
-						),
-					),
-					array(
-						'key'     => self::META_RESOURCE_ID,
-						'value'   => $staff_id,
-						'compare' => '=',
-					),
-					array(
-						'key'     => self::META_DATE_START,
-						'value'   => $end_for_storage,
-						'compare' => '<',
-						'type'    => 'DATETIME',
-					),
-					array(
-						'relation' => 'OR',
-						array(
-							'key'     => self::META_DATE_TOTAL_END,
-							'value'   => $start_for_storage,
-							'compare' => '>',
-							'type'    => 'DATETIME',
-						),
-						array(
-							'key'     => self::META_DATE_END,
-							'value'   => $start_for_storage,
-							'compare' => '>',
-							'type'    => 'DATETIME',
-						),
-					),
-				),
+				'meta_query'     => Booking_Overlap::build_meta_query( array( $staff_id ), $start_for_storage, $end_for_storage ),
 			)
 		);
 
 		return $query->have_posts();
+	}
+
+	/**
+	 * 予約者本人（代理入力では電話番号で一致した会員）が、同じ時間帯に予約を持っているかを判定する。
+	 *
+	 * @param bool   $can_override_contact 予約管理権限による代理入力か。
+	 * @param int    $current_user_id      ログイン中のユーザーID。
+	 * @param int    $matched_user_id      代理入力で電話番号が一致した会員のユーザーID（一致なしは 0）。
+	 * @param string $start_at             枠の開始日時（ISO8601）。
+	 * @param string $end_at               枠の終了日時（ISO8601）。
+	 * @return bool 重複する予約があれば true。
+	 */
+	private function has_booking_user_conflict( bool $can_override_contact, int $current_user_id, int $matched_user_id, string $start_at, string $end_at ): bool {
+		// 代理入力では、一致した会員がいる場合だけ重複を確認する。
+		$target_user_id = $can_override_contact ? $matched_user_id : $current_user_id;
+
+		return $target_user_id > 0 && $this->has_user_conflict( $target_user_id, $start_at, $end_at );
+	}
+
+	/**
+	 * 同じ日時に予約が既にある場合のエラーを作る。
+	 *
+	 * @return WP_Error 409 の booking_time_conflict エラー。
+	 */
+	private function create_user_conflict_error(): WP_Error {
+		return new WP_Error(
+			'booking_time_conflict',
+			__( 'A reservation for the same date and time already exists. Please change the date and time.', 'vk-booking-manager' ),
+			array( 'status' => 409 )
+		);
 	}
 
 	/**
@@ -891,16 +1016,21 @@ class Booking_Confirmation_Controller {
 
 		$query = new WP_Query(
 			array(
-				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => array( 'publish' ),
-				'author'         => $user_id,
-				'posts_per_page' => 1,
-				'no_found_rows'  => true,
-				'fields'         => 'ids',
-				'meta_query'     => array(
+				'post_type'              => Booking_Post_Type::POST_TYPE,
+				'post_status'            => array( 'publish' ),
+				'author'                 => $user_id,
+				'posts_per_page'         => 1,
+				'no_found_rows'          => true,
+				'fields'                 => 'ids',
+				// 別リクエストが保存した予約をロック取得後の再確認で見落とさないよう、検索結果をキャッシュさせない（#692）。
+				// このプロセスのキャッシュの更新日時は別プロセスの保存では変わらず、0件の結果が残り続けるため。
+				'cache_results'          => false,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array(
 					'relation' => 'AND',
 					array(
-						'key'     => self::META_DATE_START,
+						'key'     => Booking_Overlap::META_START,
 						'value'   => $end_for_storage,
 						'compare' => '<',
 						'type'    => 'DATETIME',
@@ -908,13 +1038,13 @@ class Booking_Confirmation_Controller {
 					array(
 						'relation' => 'OR',
 						array(
-							'key'     => self::META_DATE_TOTAL_END,
+							'key'     => Booking_Overlap::META_TOTAL_END,
 							'value'   => $start_for_storage,
 							'compare' => '>',
 							'type'    => 'DATETIME',
 						),
 						array(
-							'key'     => self::META_DATE_END,
+							'key'     => Booking_Overlap::META_END,
 							'value'   => $start_for_storage,
 							'compare' => '>',
 							'type'    => 'DATETIME',
@@ -937,7 +1067,7 @@ class Booking_Confirmation_Controller {
 	 * @return int
 	 */
 	private function get_staff_nomination_fee( int $menu_id, int $staff_id ): int {
-		if ( $staff_id <= 0 ) {
+		if ( $staff_id <= 0 || Lodging_Price::is_nomination_fee_disabled_for_site() ) {
 			return 0;
 		}
 
@@ -1258,6 +1388,16 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
+		// #655: 空き枠はキャッシュ（最大1分）を通っているため、一致した枠でも受付下限（現在時刻 + 締切）より
+		// 前になっていることがある。キャッシュを通さず直接比べて、過ぎた枠での確定を防ぐ。
+		if ( $this->availability_service->is_before_booking_cutoff( $menu_id, $start_at ) ) {
+			return new WP_Error(
+				'slot_unavailable',
+				__( 'The selected slot is no longer available. Please choose another slot.', 'vk-booking-manager' ),
+				array( 'status' => 409 )
+			);
+		}
+
 		if ( $preferred_staff_id > 0 ) {
 			$matched_staff_id = isset( $match['staff']['id'] ) ? (int) $match['staff']['id'] : 0;
 			if ( 0 === $matched_staff_id || $matched_staff_id !== $preferred_staff_id ) {
@@ -1346,6 +1486,8 @@ class Booking_Confirmation_Controller {
 	 * Find matching slot from the availability snapshot.
 	 *
 	 * 空き一覧から一致する枠を取得します。
+	 * 枠の ID が一致した場合も、開始・終了が時刻として一致するときだけ一致とみなします（#528）。
+	 * 枠の ID が一致する枠が1件でもあれば、開始・終了だけで別の枠を探すことはしません。
 	 *
 	 * @param array<int, array<string, mixed>> $slots   Available slots.
 	 * @param string                           $slot_id Temporary reservation data slot ID.
@@ -1354,6 +1496,8 @@ class Booking_Confirmation_Controller {
 	 * @return array<string, mixed>|null
 	 */
 	private function find_matching_available_slot( array $slots, string $slot_id, string $start_at, string $end_at ): ?array {
+		// 枠の ID が一致する枠を探す。ID が一致しても開始・終了が一致しなければ採用しない。
+		$has_same_slot_id = false;
 		foreach ( $slots as $candidate ) {
 			if ( ! is_array( $candidate ) ) {
 				continue;
@@ -1361,24 +1505,60 @@ class Booking_Confirmation_Controller {
 
 			$candidate_id = isset( $candidate['slot_id'] ) ? (string) $candidate['slot_id'] : '';
 			if ( '' !== $slot_id && $candidate_id === $slot_id ) {
-				return $candidate;
+				$has_same_slot_id = true;
+				if ( $this->is_same_slot_time( $candidate, $start_at, $end_at ) ) {
+					return $candidate;
+				}
 			}
 		}
 
+		// 枠の ID は一致したが日時が一致しなかった場合は、一致なしとする。
+		if ( $has_same_slot_id ) {
+			return null;
+		}
+
+		// 枠の ID が見つからない場合は、従来どおり開始・終了が一致する枠を探す。
 		foreach ( $slots as $candidate ) {
 			if ( ! is_array( $candidate ) ) {
 				continue;
 			}
 
-			$candidate_start = isset( $candidate['start_at'] ) ? (string) $candidate['start_at'] : '';
-			$candidate_end   = isset( $candidate['end_at'] ) ? (string) $candidate['end_at'] : '';
-
-			if ( $candidate_start === $start_at && ( '' === $end_at || $candidate_end === $end_at ) ) {
+			if ( $this->is_same_slot_time( $candidate, $start_at, $end_at ) ) {
 				return $candidate;
 			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * Determine whether the candidate slot has the same start/end time as the draft.
+	 *
+	 * 空き枠の開始・終了が、下書きの開始・終了と時刻として一致するかを判定します。
+	 * タイムゾーンの書き方の違い（+09:00 と Z など）で一致しないと判定しないよう、
+	 * 文字列ではなくタイムスタンプで比べます。下書きの終了が空の場合は開始だけを比べます。
+	 *
+	 * @param array<string, mixed> $candidate Available slot.
+	 * @param string               $start_at  Temporary reservation data start datetime.
+	 * @param string               $end_at    Temporary reservation data end datetime.
+	 * @return bool 一致すれば true。どちらかが日時として読めない場合は false。
+	 */
+	private function is_same_slot_time( array $candidate, string $start_at, string $end_at ): bool {
+		$candidate_start = strtotime( isset( $candidate['start_at'] ) ? (string) $candidate['start_at'] : '' );
+		$draft_start     = strtotime( $start_at );
+		if ( false === $candidate_start || false === $draft_start || $candidate_start !== $draft_start ) {
+			return false;
+		}
+
+		// 下書きの終了が空の場合は、従来どおり開始だけで判定する（保存には空き枠の終了を使う）。
+		if ( '' === $end_at ) {
+			return true;
+		}
+
+		$candidate_end = strtotime( isset( $candidate['end_at'] ) ? (string) $candidate['end_at'] : '' );
+		$draft_end     = strtotime( $end_at );
+
+		return false !== $candidate_end && false !== $draft_end && $candidate_end === $draft_end;
 	}
 
 	/**
@@ -1411,7 +1591,128 @@ class Booking_Confirmation_Controller {
 		$mutex_key = sprintf( 'vkbm_booking_mutex_%d_%s', $menu_id, md5( $start_at . '|' . $end_at ) );
 
 		// DBレベルの排他制御: INSERT IGNORE でアトミックにロックを取得する。
-		// Atomic lock acquisition via INSERT IGNORE at the DB level.
+		$lock = $this->acquire_mutex_lock( $mutex_key );
+		if ( is_wp_error( $lock ) ) {
+			return $lock;
+		}
+		$option_name = $lock['name'];
+		$lock_token  = $lock['token'];
+
+		// 指名を使うメニューでは、貸切の排他を「メニュー全体」ではなく「担当スタッフ単位」で判定する
+		// （#392の「担当ごとに並行して予約できる」と整合させる。指名を使わないメニューの動きは
+		// 変えない＝引き続きメニュー全体で判定）。
+		$is_nomination_menu = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
+
+		// 貸し切り（枠を専有する）予約がこの時間帯に既に入っていれば、残席があっても受付停止する。
+		// API直叩き対策として、ロック取得後に最新状態で再判定する（フロントのスロット一覧での抑止とは別経路の多層防御）。
+		//
+		// 指名を使うメニューで、担当スタッフが未確定（自動割当・$is_staff_preferred=false）の場合は、
+		// この時点でスタッフスコープの判定ができない（メニュー全体で判定すると他の担当への予約まで
+		// 誤って止めてしまう）ため、ここでは判定せず下の自動割当ロジックへ委ねる。自動割当は
+		// has_staff_conflict()（担当スタッフ単位・貸切フラグの有無を問わずそのスタッフの予約全てを
+		// 見る、より厳格な判定）で候補を絞り込むため、貸切の有無に関わらず既に予約が入っている
+		// スタッフは候補から除外される。したがって自動割当の経路では本チェックを重複させる必要が無い。
+		$can_check_exclusive_guard_now = ! $is_nomination_menu || ( $is_staff_preferred && $staff_id > 0 );
+		if ( $can_check_exclusive_guard_now ) {
+			$exclusive_guard_staff_id = $is_nomination_menu ? $staff_id : 0;
+			if ( $this->slot_has_exclusive_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
+				$this->release_slot_mutex( $option_name, $lock_token );
+				return new WP_Error(
+					'capacity_exceeded',
+					__( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ),
+					array( 'status' => 409 )
+				);
+			}
+
+			// ユーザーによる貸し切り指定（#305）: ユーザーが貸切を選んだ場合、その枠に既に他の予約があれば貸切にできない。
+			// フロントでは booked_guests > 0 の枠の貸切チェックを無効化するが、API直叩きで迂回され得るため、
+			// ロック保持下で最新状態を再判定する（必須の多層防御）。最初の予約者のみ貸切指定できる仕様の担保。
+			// 自動割当（担当スタッフ未確定）の場合の扱いは上の $can_check_exclusive_guard_now と同じ理由で、
+			// has_staff_conflict() に委ねて重複させない。
+			if ( $user_exclusive && $this->slot_has_any_active_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
+				$this->release_slot_mutex( $option_name, $lock_token );
+				return new WP_Error(
+					'exclusive_unavailable',
+					__( 'This slot cannot be reserved exclusively because it already has a booking.', 'vk-booking-manager' ),
+					array( 'status' => 409 )
+				);
+			}
+		}
+
+		if ( $is_staff_preferred ) {
+			// 指名予約（1対1）：ロック取得後にスタッフの競合を再チェックして二重割り当てを防止する。
+			if ( $staff_id > 0 && $this->has_staff_conflict( $staff_id, $start_at, $end_at ) ) {
+				$this->release_slot_mutex( $option_name, $lock_token );
+				return new WP_Error(
+					'staff_unavailable',
+					__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),
+					array( 'status' => 409 )
+				);
+			}
+			$assigned_staff_id = $staff_id;
+		} else {
+			// 自動割当：ロック保持下の最新の残席で、人数を収容できる単一スタッフをベストフィットで確定する。
+			$candidates = ! empty( $assignable_staff )
+				? array_values( array_map( 'intval', $assignable_staff ) )
+				: ( $staff_id > 0 ? array( $staff_id ) : array() );
+
+			// max_capacity = 1 は1スタッフ1対1。メニューをまたいだ競合（同一スタッフが別メニューで予約済み）も除外する。
+			// #392: 指名を使うメニューは「指名なし」の自動割当でも1枠1組（貸切）扱いのため、max_capacity が
+			// 2以上でも同じ1対1判定（既にそのスタッフへ他メニュー含め予約があれば候補から除外）を適用する。
+			// この判定は貸切フラグの有無を問わず「そのスタッフに予約が1件でもあるか」を見るため、
+			// 上の $can_check_exclusive_guard_now で自動割当を対象外にした貸切ガードの役割も兼ねる。
+			$is_single_party = 1 === $max_capacity || $is_nomination_menu;
+			if ( $is_single_party ) {
+				$candidates = array_values(
+					array_filter(
+						$candidates,
+						function ( $sid ) use ( $start_at, $end_at ): bool {
+							return (int) $sid > 0 && ! $this->has_staff_conflict( (int) $sid, $start_at, $end_at );
+						}
+					)
+				);
+			}
+
+			// #656: 各候補の残席を、空き枠の計算・管理画面の競合判定と同じ共通関数で求める
+			// （別メニューの予約があるスタッフは定員に関わらず残席0）。予約の取得は1回のクエリ。
+			$summaries = $this->get_staff_summaries_for_slot( $menu_id, $start_at, $end_at );
+			// select_best_fit_staff() は「定員 − 負荷」で残りを数えるため、残席から逆算した負荷を渡す。
+			$loads = array();
+			foreach ( $candidates as $sid ) {
+				$remaining           = Staff_Load_Calculator::calculate_remaining( $max_capacity, $is_single_party, $summaries[ (int) $sid ] ?? array() );
+				$loads[ (int) $sid ] = $max_capacity - $remaining;
+			}
+
+			$assigned_staff_id = $this->select_best_fit_staff( $candidates, $loads, $guests, $max_capacity );
+			if ( $assigned_staff_id <= 0 ) {
+				$this->release_slot_mutex( $option_name, $lock_token );
+				return new WP_Error(
+					'capacity_exceeded',
+					__( 'This time slot is fully booked. Please choose another time.', 'vk-booking-manager' ),
+					array( 'status' => 409 )
+				);
+			}
+		}
+
+		// 成功時はロックを解放せず、ロック名・トークンと確定スタッフIDを呼び出し側へ返す。
+		// 予約投稿の作成とメタ保存まで同じロックを保持し、確定直前の競合（同時挿入による超過予約）を防ぐ。
+		return array(
+			'name'     => $option_name,
+			'token'    => $lock_token,
+			'staff_id' => $assigned_staff_id,
+		);
+	}
+
+	/**
+	 * ミューテックスロックを取得する（options テーブルへの INSERT IGNORE によるアトミックな取得）。
+	 *
+	 * 期限切れ（MUTEX_TIMEOUT 秒超）のロックは compare-and-swap で奪取する。最大3回、200ms 間隔で再試行する。
+	 * 取得できたロックは、呼び出し側が release_slot_mutex() で必ず解放する。
+	 *
+	 * @param string $mutex_key ロックのキー（transient 名。`_transient_` を付けた名前で options に保存する）。
+	 * @return array{name:string,token:string}|WP_Error ロック名と所有者トークン。取得できなければ 409 のエラー。
+	 */
+	private function acquire_mutex_lock( string $mutex_key ) {
 		global $wpdb;
 		$option_name = '_transient_' . $mutex_key;
 		// ロック所有者を識別する一意トークン。値は "token|timestamp" 形式で保存し、解放時に所有者を検証する。
@@ -1472,100 +1773,54 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-		// 指名を使うメニューでは、貸切の排他を「メニュー全体」ではなく「担当スタッフ単位」で判定する
-		// （#392の「担当ごとに並行して予約できる」と整合させる。指名を使わないメニューの動きは
-		// 変えない＝引き続きメニュー全体で判定）。
-		$is_nomination_menu = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
-
-		// 貸し切り（枠を専有する）予約がこの時間帯に既に入っていれば、残席があっても受付停止する。
-		// API直叩き対策として、ロック取得後に最新状態で再判定する（フロントのスロット一覧での抑止とは別経路の多層防御）。
-		//
-		// 指名を使うメニューで、担当スタッフが未確定（自動割当・$is_staff_preferred=false）の場合は、
-		// この時点でスタッフスコープの判定ができない（メニュー全体で判定すると他の担当への予約まで
-		// 誤って止めてしまう）ため、ここでは判定せず下の自動割当ロジックへ委ねる。自動割当は
-		// has_staff_conflict()（担当スタッフ単位・貸切フラグの有無を問わずそのスタッフの予約全てを
-		// 見る、より厳格な判定）で候補を絞り込むため、貸切の有無に関わらず既に予約が入っている
-		// スタッフは候補から除外される。したがって自動割当の経路では本チェックを重複させる必要が無い。
-		$can_check_exclusive_guard_now = ! $is_nomination_menu || ( $is_staff_preferred && $staff_id > 0 );
-		if ( $can_check_exclusive_guard_now ) {
-			$exclusive_guard_staff_id = $is_nomination_menu ? $staff_id : 0;
-			if ( $this->slot_has_exclusive_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
-				return new WP_Error(
-					'capacity_exceeded',
-					__( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ),
-					array( 'status' => 409 )
-				);
-			}
-
-			// ユーザーによる貸し切り指定（#305）: ユーザーが貸切を選んだ場合、その枠に既に他の予約があれば貸切にできない。
-			// フロントでは booked_guests > 0 の枠の貸切チェックを無効化するが、API直叩きで迂回され得るため、
-			// ロック保持下で最新状態を再判定する（必須の多層防御）。最初の予約者のみ貸切指定できる仕様の担保。
-			// 自動割当（担当スタッフ未確定）の場合の扱いは上の $can_check_exclusive_guard_now と同じ理由で、
-			// has_staff_conflict() に委ねて重複させない。
-			if ( $user_exclusive && $this->slot_has_any_active_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
-				return new WP_Error(
-					'exclusive_unavailable',
-					__( 'This slot cannot be reserved exclusively because it already has a booking.', 'vk-booking-manager' ),
-					array( 'status' => 409 )
-				);
-			}
-		}
-
-		if ( $is_staff_preferred ) {
-			// 指名予約（1対1）：ロック取得後にスタッフの競合を再チェックして二重割り当てを防止する。
-			if ( $staff_id > 0 && $this->has_staff_conflict( $staff_id, $start_at, $end_at ) ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
-				return new WP_Error(
-					'staff_unavailable',
-					__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),
-					array( 'status' => 409 )
-				);
-			}
-			$assigned_staff_id = $staff_id;
-		} else {
-			// 自動割当：ロック保持下の最新負荷で、人数を収容できる単一スタッフをベストフィットで確定する。
-			$candidates = ! empty( $assignable_staff )
-				? array_values( array_map( 'intval', $assignable_staff ) )
-				: ( $staff_id > 0 ? array( $staff_id ) : array() );
-
-			// 各スタッフの当該メニュー・時間帯の負荷（予約人数合計）。
-			$loads = $this->get_staff_loads_for_slot( $menu_id, $start_at, $end_at );
-
-			// max_capacity = 1 は1スタッフ1対1。メニューをまたいだ競合（同一スタッフが別メニューで予約済み）も除外する。
-			// #392: 指名を使うメニューは「指名なし」の自動割当でも1枠1組（貸切）扱いのため、max_capacity が
-			// 2以上でも同じ1対1判定（既にそのスタッフへ他メニュー含め予約があれば候補から除外）を適用する。
-			// この判定は貸切フラグの有無を問わず「そのスタッフに予約が1件でもあるか」を見るため、
-			// 上の $can_check_exclusive_guard_now で自動割当を対象外にした貸切ガードの役割も兼ねる。
-			if ( 1 === $max_capacity || $is_nomination_menu ) {
-				$candidates = array_values(
-					array_filter(
-						$candidates,
-						function ( $sid ) use ( $start_at, $end_at ): bool {
-							return (int) $sid > 0 && ! $this->has_staff_conflict( (int) $sid, $start_at, $end_at );
-						}
-					)
-				);
-			}
-
-			$assigned_staff_id = $this->select_best_fit_staff( $candidates, $loads, $guests, $max_capacity );
-			if ( $assigned_staff_id <= 0 ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
-				return new WP_Error(
-					'capacity_exceeded',
-					__( 'This time slot is fully booked. Please choose another time.', 'vk-booking-manager' ),
-					array( 'status' => 409 )
-				);
-			}
-		}
-
-		// 成功時はロックを解放せず、ロック名・トークンと確定スタッフIDを呼び出し側へ返す。
-		// 予約投稿の作成とメタ保存まで同じロックを保持し、確定直前の競合（同時挿入による超過予約）を防ぐ。
 		return array(
-			'name'     => $option_name,
-			'token'    => $lock_token,
-			'staff_id' => $assigned_staff_id,
+			'name'  => $option_name,
+			'token' => $lock_token,
+		);
+	}
+
+	/**
+	 * 泊の予約のために客室 ID 単位のロックを取り、ロック中に期間全体の重なりと販売日を確かめる。
+	 *
+	 * 時間枠のロックは「メニュー＋開始・終了の日時」単位のため、同じ客室でも別プラン・一部だけ重なる期間は別のロックになり、
+	 * 同時に確定すると両方が通りうる。泊の予約は客室 ID だけでロック名を決め、どのプランからの確定も1件ずつ処理する。
+	 * ロックを取得できた場合は解放せずに返す（予約の保存まで保持し、呼び出し側が release_slot_mutex() で解放する）。
+	 *
+	 * @param array<string, mixed> $lodging_stay Lodging_Booking::prepare() が返した検証済みの滞在の情報。
+	 * @return array{name:string,token:string,staff_id:int}|WP_Error ロックの情報と客室 ID。重なり・販売日の問題があれば 409 のエラー。
+	 */
+	private function check_lodging_room_with_mutex( array $lodging_stay ) {
+		$room_id = (int) $lodging_stay['room_id'];
+
+		$lock = $this->acquire_mutex_lock( sprintf( 'vkbm_booking_mutex_room_%d', $room_id ) );
+		if ( is_wp_error( $lock ) ) {
+			return $lock;
+		}
+
+		// ロック中に、チェックイン〜チェックアウト全体の重なりと販売日をやり直す。
+		if ( $this->has_staff_conflict( $room_id, (string) $lodging_stay['check_in_at'], (string) $lodging_stay['check_out_at'] ) ) {
+			$this->release_slot_mutex( $lock['name'], $lock['token'] );
+			return new WP_Error(
+				'staff_unavailable',
+				sprintf(
+					/* translators: %1$s: resource label (singular), e.g. "Room". %2$s: the same label. */
+					__( 'The selected %1$s is no longer available for these dates. Please choose different dates or another %2$s.', 'vk-booking-manager' ),
+					vkbm_get_resource_label_singular(),
+					vkbm_get_resource_label_singular()
+				),
+				array( 'status' => 409 )
+			);
+		}
+
+		if ( ! Lodging_Booking::is_stay_on_sale( $room_id, (string) $lodging_stay['check_in_date'], (string) $lodging_stay['check_out_date'] ) ) {
+			$this->release_slot_mutex( $lock['name'], $lock['token'] );
+			return Lodging_Booking::stay_not_on_sale_error();
+		}
+
+		return array(
+			'name'     => $lock['name'],
+			'token'    => $lock['token'],
+			'staff_id' => $room_id,
 		);
 	}
 
@@ -1857,11 +2112,11 @@ class Booking_Confirmation_Controller {
 			array(
 				'relation' => 'OR',
 				array(
-					'key'     => self::META_STATUS,
+					'key'     => Booking_Overlap::META_STATUS,
 					'compare' => 'NOT EXISTS',
 				),
 				array(
-					'key'     => self::META_STATUS,
+					'key'     => Booking_Overlap::META_STATUS,
 					'value'   => array(
 						self::BOOKING_STATUS_CANCELLED,
 						self::BOOKING_STATUS_NO_SHOW,
@@ -1870,7 +2125,7 @@ class Booking_Confirmation_Controller {
 				),
 			),
 			array(
-				'key'     => self::META_DATE_START,
+				'key'     => Booking_Overlap::META_START,
 				'value'   => $end_for_storage,
 				'compare' => '<',
 				'type'    => 'DATETIME',
@@ -1878,13 +2133,13 @@ class Booking_Confirmation_Controller {
 			array(
 				'relation' => 'OR',
 				array(
-					'key'     => self::META_DATE_TOTAL_END,
+					'key'     => Booking_Overlap::META_TOTAL_END,
 					'value'   => $start_for_storage,
 					'compare' => '>',
 					'type'    => 'DATETIME',
 				),
 				array(
-					'key'     => self::META_DATE_END,
+					'key'     => Booking_Overlap::META_END,
 					'value'   => $start_for_storage,
 					'compare' => '>',
 					'type'    => 'DATETIME',
@@ -1895,7 +2150,7 @@ class Booking_Confirmation_Controller {
 		// 指名を使うメニューでは担当スタッフ単位で「最初の予約者のみ貸切にできる」を判定する。
 		if ( $staff_id > 0 ) {
 			$meta_query[] = array(
-				'key'     => self::META_RESOURCE_ID,
+				'key'     => Booking_Overlap::META_RESOURCE,
 				'value'   => $staff_id,
 				'compare' => '=',
 			);
@@ -1915,7 +2170,7 @@ class Booking_Confirmation_Controller {
 		);
 
 		foreach ( $query->posts as $post_id ) {
-			$status = (string) get_post_meta( (int) $post_id, self::META_STATUS, true );
+			$status = (string) get_post_meta( (int) $post_id, Booking_Overlap::META_STATUS, true );
 			// キャンセル・無断キャンセルの予約は枠を消費しないため除外する。
 			if ( self::BOOKING_STATUS_CANCELLED === $status || self::BOOKING_STATUS_NO_SHOW === $status ) {
 				continue;
@@ -1933,7 +2188,7 @@ class Booking_Confirmation_Controller {
 	 * 既存の空き判定と同じく、publish かつ status が cancelled/no_show 以外の予約のみを対象とし、
 	 * その中で _vkbm_booking_exclusive が立っている予約がスロットに重複していれば true を返す。
 	 *
-	 * `$staff_id` を渡すと「メニューID＋時間帯」に加えて self::META_RESOURCE_ID
+	 * `$staff_id` を渡すと「メニューID＋時間帯」に加えて Booking_Overlap::META_RESOURCE
 	 * （`_vkbm_booking_resource_id`）も一致する予約だけを対象にする（スタッフ単位の判定）。
 	 * 省略（0）した場合は従来どおりメニュー全体で判定する。呼び出し元
 	 * （check_capacity_with_mutex()）が、指名を使うメニューのときだけ担当スタッフIDを渡す。
@@ -1975,11 +2230,11 @@ class Booking_Confirmation_Controller {
 			array(
 				'relation' => 'OR',
 				array(
-					'key'     => self::META_STATUS,
+					'key'     => Booking_Overlap::META_STATUS,
 					'compare' => 'NOT EXISTS',
 				),
 				array(
-					'key'     => self::META_STATUS,
+					'key'     => Booking_Overlap::META_STATUS,
 					'value'   => array(
 						self::BOOKING_STATUS_CANCELLED,
 						self::BOOKING_STATUS_NO_SHOW,
@@ -1988,7 +2243,7 @@ class Booking_Confirmation_Controller {
 				),
 			),
 			array(
-				'key'     => self::META_DATE_START,
+				'key'     => Booking_Overlap::META_START,
 				'value'   => $end_for_storage,
 				'compare' => '<',
 				'type'    => 'DATETIME',
@@ -1996,13 +2251,13 @@ class Booking_Confirmation_Controller {
 			array(
 				'relation' => 'OR',
 				array(
-					'key'     => self::META_DATE_TOTAL_END,
+					'key'     => Booking_Overlap::META_TOTAL_END,
 					'value'   => $start_for_storage,
 					'compare' => '>',
 					'type'    => 'DATETIME',
 				),
 				array(
-					'key'     => self::META_DATE_END,
+					'key'     => Booking_Overlap::META_END,
 					'value'   => $start_for_storage,
 					'compare' => '>',
 					'type'    => 'DATETIME',
@@ -2013,7 +2268,7 @@ class Booking_Confirmation_Controller {
 		// 指名を使うメニューでは担当スタッフ単位で貸切を判定する。
 		if ( $staff_id > 0 ) {
 			$meta_query[] = array(
-				'key'     => self::META_RESOURCE_ID,
+				'key'     => Booking_Overlap::META_RESOURCE,
 				'value'   => $staff_id,
 				'compare' => '=',
 			);
@@ -2032,7 +2287,7 @@ class Booking_Confirmation_Controller {
 		);
 
 		foreach ( $query->posts as $post_id ) {
-			$status = (string) get_post_meta( (int) $post_id, self::META_STATUS, true );
+			$status = (string) get_post_meta( (int) $post_id, Booking_Overlap::META_STATUS, true );
 			// キャンセル・無断キャンセルの予約は枠を消費しないため除外する（既存の空き判定と同じ方針）。
 			if ( self::BOOKING_STATUS_CANCELLED === $status || self::BOOKING_STATUS_NO_SHOW === $status ) {
 				continue;
@@ -2105,6 +2360,7 @@ class Booking_Confirmation_Controller {
 	 * NOTE: 同等のロジックを Booking_Draft_Controller::resolve_guests にも意図的に複製している。
 	 * 下書きと確定の2つの REST コントローラは独立しており、共有トレイト化すると両者を不要に結合させるため、
 	 * あえて各クラスに閉じた実装としている。仕様変更時は必ず両方を同じ式（上限 = max_capacity）で更新すること。
+	 * 泊単位のプラン向けの Lodging_Booking::get_max_guests()（3か所目。複数人一括予約の適用条件と上限の式は同じ）も併せて更新すること。
 	 *
 	 * @param int $menu_id   Service menu ID.
 	 * @param int $requested Requested number of guests.

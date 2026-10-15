@@ -16,15 +16,19 @@ namespace VKBookingManager\Tests\Admin;
 
 use VKBookingManager\Admin\Email_Log_Page;
 use VKBookingManager\Admin\Email_Log_Repository;
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_UnitTestCase;
 use function __;
+use function get_plugin_page_hookname;
 use function ob_get_clean;
 use function ob_start;
 use function sprintf;
 use function update_option;
+use function wp_dequeue_style;
 use function wp_set_current_user;
+use function wp_style_is;
 
 /**
  * @group admin
@@ -83,6 +87,7 @@ class Email_Log_Page_Rendering_Test extends WP_UnitTestCase {
 					__( 'Pending reservation (to customer)', 'vk-booking-manager' ),
 					sprintf( __( 'Reservation #%d', 'vk-booking-manager' ), $booking_id ),
 					__( 'Sent', 'vk-booking-manager' ),
+					'vkbm-email-log__status--sent',
 				),
 				'not_contains'        => array( 'vkbm-email-log__retry' ),
 			),
@@ -102,6 +107,7 @@ class Email_Log_Page_Rendering_Test extends WP_UnitTestCase {
 				),
 				'contains'            => array(
 					__( 'Failed', 'vk-booking-manager' ),
+					'vkbm-email-log__status--failed',
 					'vkbm-email-log__retry',
 					sprintf( __( 'Resend (attempt %d)', 'vk-booking-manager' ), 2 ),
 				),
@@ -138,7 +144,11 @@ class Email_Log_Page_Rendering_Test extends WP_UnitTestCase {
 					'max_attempts' => 0,
 					'booking_id'   => $booking_id,
 				),
-				'contains'            => array( __( 'Not sent', 'vk-booking-manager' ) ),
+				'contains'            => array(
+					__( 'Not sent', 'vk-booking-manager' ),
+					'vkbm-email-log__status vkbm-email-log__status--skipped',
+					'vkbm-email-log__error vkbm-email-log__error--skipped',
+				),
 				'not_contains'        => array( 'vkbm-email-log__retry' ),
 			),
 			array(
@@ -212,6 +222,8 @@ class Email_Log_Page_Rendering_Test extends WP_UnitTestCase {
 			foreach ( $case['contains'] as $needle ) {
 				$this->assertStringContainsString( $needle, $output, $case['test_condition_name'] . " => '{$needle}' を含むべき" );
 			}
+			// 色は PHP に直書きせず、クラスと CSS 変数で指定する。
+			$this->assertStringNotContainsString( 'style="color:', $output, $case['test_condition_name'] . ' => style 属性での色指定を含まないべき' );
 			foreach ( $case['not_contains'] as $needle ) {
 				$this->assertStringNotContainsString( $needle, $output, $case['test_condition_name'] . " => '{$needle}' を含まないべき" );
 			}
@@ -231,6 +243,8 @@ class Email_Log_Page_Rendering_Test extends WP_UnitTestCase {
 		$output = (string) ob_get_clean();
 
 		$this->assertStringContainsString( 'whether WordPress was able to process sending the email', $output );
+		$this->assertStringContainsString( 'tab=email#vkbm-email-delivery-help', $output, 'メール未着時の確認項目へのリンクが出ること' );
+		$this->assertStringContainsString( __( 'If emails are not being delivered', 'vk-booking-manager' ), $output, 'リンク名が出ること' );
 	}
 
 	/**
@@ -264,5 +278,26 @@ class Email_Log_Page_Rendering_Test extends WP_UnitTestCase {
 
 		$this->assertStringNotContainsString( '<script', $output, '件名・エラー・action_label の <script> が生のまま出力されないこと' );
 		$this->assertStringNotContainsString( 'javascript:', $output, 'action_url の javascript: スキームが出力に含まれないこと' );
+	}
+
+	/**
+	 * メール送信履歴ページでだけ、管理画面用 CSS（vkbm-admin）が読み込まれることを確認する。
+	 */
+	public function test_enqueue_assets_loads_admin_style_only_on_own_page(): void {
+		( new Common_Styles() )->register_styles();
+		wp_dequeue_style( Common_Styles::ADMIN_HANDLE );
+
+		$page = new Email_Log_Page();
+		$page->register_menu();
+
+		// 別の管理画面では読み込まない。
+		$page->enqueue_assets( 'index.php' );
+		$this->assertFalse( wp_style_is( Common_Styles::ADMIN_HANDLE, 'enqueued' ), '別の画面では読み込まないこと' );
+
+		// このページのフック名では読み込む。
+		$page->enqueue_assets( get_plugin_page_hookname( 'vkbm-email-log', 'vkbm-provider-settings' ) );
+		$this->assertTrue( wp_style_is( Common_Styles::ADMIN_HANDLE, 'enqueued' ), 'このページでは読み込むこと' );
+
+		wp_dequeue_style( Common_Styles::ADMIN_HANDLE );
 	}
 }

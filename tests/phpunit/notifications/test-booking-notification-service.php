@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\Notifications;
 
 use ReflectionMethod;
+use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_UnitTestCase;
@@ -201,7 +202,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'name'     => 'Sample Provider',
-					'mail'     => 'admin@example.com',
+					'mail'     => 'sender@example.com',
 					'reply_to' => 'provider@example.com',
 				),
 			),
@@ -218,7 +219,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'name'     => 'Sample Site',
-					'mail'     => 'admin@example.com',
+					'mail'     => 'sender@example.com',
 					'reply_to' => '',
 				),
 			),
@@ -235,7 +236,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'name'     => '予約 太郎',
-					'mail'     => 'admin@example.com',
+					'mail'     => 'sender@example.com',
 					'reply_to' => 'customer@example.com',
 				),
 			),
@@ -252,7 +253,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'name'     => 'Sample Provider',
-					'mail'     => 'admin@example.com',
+					'mail'     => 'sender@example.com',
 					'reply_to' => 'customer@example.com',
 				),
 			),
@@ -269,7 +270,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'name'     => '予約 太郎',
-					'mail'     => 'admin@example.com',
+					'mail'     => 'sender@example.com',
 					'reply_to' => '',
 				),
 			),
@@ -286,7 +287,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'name'     => 'Sample Provider',
-					'mail'     => 'admin@example.com',
+					'mail'     => 'sender@example.com',
 					'reply_to' => 'provider@example.com',
 				),
 			),
@@ -294,6 +295,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 
 		foreach ( $test_cases as $case ) {
 			update_option( 'admin_email', $case['admin_email'] );
+			update_option( Settings_Repository::OPTION_KEY, array( 'mail_from_email' => 'sender@example.com' ) );
 			$actual = $method->invoke( $service, $case['type'], $case['payload'] );
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
 		}
@@ -407,5 +409,61 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				$this->assertStringNotContainsString( $needle, $text, $case['name'] . " => '{$needle}' を含まないべき" );
 			}
 		}
+	}
+
+	/**
+	 * #651: handle_reminders() は「今」を実際の UTC の時刻として扱い、サイトのタイムゾーン
+	 * （Asia/Tokyo）の分だけ早く送らないこと。
+	 *
+	 * @dataProvider provider_handle_reminders_timezone
+	 *
+	 * @param string $test_condition_name テスト条件名。
+	 * @param int    $seconds_until_start 現在から予約開始までの秒数。
+	 * @param bool   $expected_sent       24 時間前リマインダーが送られる期待値。
+	 */
+	public function test_handle_reminders_timezone( string $test_condition_name, int $seconds_until_start, bool $expected_sent ): void {
+		update_option( Settings_Repository::OPTION_KEY, array( 'booking_reminder_hours' => array( 24 ) ) );
+
+		$booking_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		// 予約開始はサイトのタイムゾーン（Asia/Tokyo）の壁時計時刻で保存される。
+		update_post_meta( $booking_id, '_vkbm_booking_service_start', wp_date( 'Y-m-d H:i:s', time() + $seconds_until_start ) );
+		update_post_meta( $booking_id, '_vkbm_booking_service_end', wp_date( 'Y-m-d H:i:s', time() + $seconds_until_start + HOUR_IN_SECONDS ) );
+		update_post_meta( $booking_id, '_vkbm_booking_status', 'confirmed' );
+		update_post_meta( $booking_id, '_vkbm_booking_customer_email', 'customer@example.com' );
+		update_post_meta( $booking_id, '_vkbm_booking_customer_name', 'テスト太郎' );
+
+		$mail_count = 0;
+		$filter     = static function () use ( &$mail_count ) {
+			++$mail_count;
+			return true;
+		};
+		add_filter( 'pre_wp_mail', $filter );
+
+		try {
+			$service = new Booking_Notification_Service( new Settings_Repository() );
+			$service->handle_reminders();
+		} finally {
+			remove_filter( 'pre_wp_mail', $filter );
+		}
+
+		$sent = get_post_meta( $booking_id, '_vkbm_booking_reminder_sent', true );
+		$this->assertSame( $expected_sent, is_array( $sent ) && 1 === count( $sent ), $test_condition_name . '（送信記録）' );
+		$this->assertSame( $expected_sent ? 1 : 0, $mail_count, $test_condition_name . '（メール送信数）' );
+	}
+
+	/**
+	 * @return array<int, array<int, int|string|bool>>
+	 */
+	public function provider_handle_reminders_timezone(): array {
+		return array(
+			array( '開始の24時間前ちょうどなら24時間前リマインダーを送る', 24 * HOUR_IN_SECONDS, true ),
+			array( '開始の23時間59分前なら送信窓内なので送る', 24 * HOUR_IN_SECONDS - 60, true ),
+			array( '開始の33時間前は送信窓の外なので送らない', 33 * HOUR_IN_SECONDS, false ),
+		);
 	}
 }

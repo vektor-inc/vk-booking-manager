@@ -80,6 +80,46 @@ class Settings_Repository_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * お支払いの案内（provider_payment_method）の初期値が、サイトの言語ごとに
+	 * カード決済と併用しても矛盾しない文章になっていることを検証する（#540）。
+	 */
+	public function test_get_default_settings(): void {
+		$test_cases = [
+			[
+				'test_condition_name' => '日本語サイトの場合 => 日本語の初期値',
+				'locale'              => 'ja',
+				'expected'            => 'ご来店時のお支払いには、現金・クレジットカード・交通系ICカードがご利用いただけます。',
+			],
+			[
+				'test_condition_name' => '英語サイトの場合 => 英語の初期値',
+				'locale'              => 'en_US',
+				'expected'            => 'For payment at the store, we accept cash, credit cards, and transit IC cards.',
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			// サイトの言語を locale フィルターで差し替えてから初期値を取得する。
+			// （テスト環境に言語パックが無くても判定できるよう、switch_to_locale() は使わない）
+			$locale        = $case['locale'];
+			$locale_filter = static function () use ( $locale ): string {
+				return $locale;
+			};
+			add_filter( 'locale', $locale_filter );
+
+			$default_settings = ( new Settings_Repository() )->get_default_settings();
+
+			// 次のケースへ影響を残さないよう、フィルターを取り除く。
+			remove_filter( 'locale', $locale_filter );
+
+			$this->assertSame(
+				$case['expected'],
+				$default_settings['provider_payment_method'],
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
 	 * provider_max_advance_booking_days のデフォルト値と保存値の取得テスト。
 	 */
 	public function test_get_settings_max_advance_booking_days(): void {

@@ -3,9 +3,6 @@
 	"description": "WordPress booking manager plugin.",
 	"type": "wordpress-plugin",
 	"license": "GPL-2.0-or-later",
-	"require": {
-		"yahnis-elsts/plugin-update-checker": "^5.0"
-	},
 	"autoload": {
 		"classmap": [
 			"src/"

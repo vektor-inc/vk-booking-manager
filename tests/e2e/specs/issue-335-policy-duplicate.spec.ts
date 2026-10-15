@@ -30,7 +30,7 @@
  *   global-setup が投入する既定値へ復元して他 spec への状態リークを防ぐ。
  */
 import { test, expect, Page } from '@playwright/test';
-import { wpEvalPhp } from '../utils/helpers';
+import { wpEvalPhp, getServiceMenuId } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';
 import { selectAvailableCalendarDay } from '../utils/calendar-helpers';
 
@@ -64,18 +64,21 @@ async function gotoConfirmScreen( page: Page ) {
 	await page.waitForLoadState( 'networkidle' );
 
 	// 予約ボタン（メニューカードの「予約に進む」）の出現を待つ。
-	const reserveButtons = page.locator( '.vkbm-menu-loop__button--reserve' );
-	await reserveButtons
-		.first()
-		.waitFor( { state: 'visible', timeout: 15000 } );
+	// 先頭カードではなく data-menu-id で global-setup の「Service Menu 1」を指定する。
+	// 他テストが残したメニュー（担当スタッフ無し等）が先頭に来ても巻き込まれないようにするため（#566）。
+	const menuId = getServiceMenuId();
+	const reserveButton = page.locator(
+		`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+	);
+	await reserveButton.waitFor( { state: 'visible', timeout: 15000 } );
 
 	// 予約ボタンのクリック前に calendar-meta のレスポンス待ちをセットアップする。
 	const calendarMetaResponse = page.waitForResponse(
 		( res ) => /calendar-meta/.test( res.url() ),
 		{ timeout: 15000 }
 	);
-	// 最初のメニューの予約ボタンを押す。
-	await reserveButtons.first().click();
+	// 「Service Menu 1」の予約ボタンを押す。
+	await reserveButton.click();
 
 	// 空き枠のある日を選ぶ（共有ヘルパーでフレーク回避）。
 	await selectAvailableCalendarDay( page, calendarMetaResponse );

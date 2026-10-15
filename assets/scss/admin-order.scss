@@ -1,0 +1,31 @@
+/* ==========================================================================
+   並べ替え画面（投稿タイプ一覧・タクソノミー一覧）
+   ========================================================================== */
+
+/* 投稿とタームの並べ替えは見た目を揃えるため .vkbm-order-* を共有する。
+   画面ごとに分けたいときはクラスを増やさず親要素のクラスで絞ること。 */
+
+/* 並べ替えが有効な画面でのみ「移動」カーソルにする。
+   post-order.js / term-order.js が初期化時に body へ vkbm-sortable-list を付ける。 */
+.vkbm-sortable-list .column-primary .row-title,
+.vkbm-sortable-list .column-title .row-title {
+	cursor: move;
+}
+
+.vkbm-order-row--dirty td {
+	background-color: #fff8e5;
+}
+
+.vkbm-order-status {
+	font-size: 12px;
+	color: var(--vkbm--admin--color--text-tertiary);
+	margin-left: 12px;
+}
+
+.vkbm-order-status.is-error {
+	color: var(--vkbm--admin--color--danger);
+}
+
+.vkbm-order-status.is-success {
+	color: var(--vkbm--admin--color--success);
+}

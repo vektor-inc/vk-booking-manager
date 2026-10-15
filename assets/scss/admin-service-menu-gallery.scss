@@ -1,0 +1,107 @@
+/* ==========================================================================
+   サービスメニュー編集画面: サブ画像欄
+   ========================================================================== */
+
+.vkbm-gallery {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.vkbm-gallery__list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.vkbm-gallery__item {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 96px;
+	margin: 0;
+	cursor: grab;
+}
+
+.vkbm-gallery__thumb {
+	position: relative;
+	width: 96px;
+	height: 96px;
+}
+
+.vkbm-gallery__image {
+	display: block;
+	width: 96px;
+	height: 96px;
+	object-fit: cover;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+}
+
+.vkbm-gallery__remove {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.7);
+	color: #fff;
+	font-size: 18px;
+	line-height: 28px;
+	cursor: pointer;
+}
+
+.vkbm-gallery__move {
+	display: flex;
+	justify-content: space-between;
+}
+
+.vkbm-gallery__move-button {
+	min-width: 44px;
+	min-height: 28px;
+	padding: 0;
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	background: var(--vkbm--admin--color--surface);
+	color: #2c3338;
+	cursor: pointer;
+
+	&:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+}
+
+.vkbm-gallery__remove:focus-visible,
+.vkbm-gallery__move-button:focus-visible {
+	outline: 2px solid var(--vkbm--admin--color--accent);
+	outline-offset: 2px;
+}
+
+.vkbm-gallery__toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.vkbm-gallery__status:empty {
+	display: none;
+}
+
+.vkbm-gallery__status {
+	margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+	.vkbm-gallery__item.ui-sortable-helper {
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	}
+}

@@ -11,39 +11,107 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Admin\Pro_Upsell;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 
 /**
- * Get the configured singular label for resources (default: Staff).
+ * 呼び方（単数・複数・メニュー名）を既定値で表示する必要があるかを返す。
  *
- * @return string
+ * 呼び方の入力欄は Pro 版にしか無いため、無料版では保存値があっても既定値で表示する（保存値は消さない）。
+ * Pro_Upsell::is_free_edition() は呼ぶたびにプラグイン本体のファイルを読み直すため、結果をリクエスト内で覚える。
+ *
+ * @return bool 既定値で表示する（無料版）なら true。
  */
-function vkbm_get_resource_label_singular(): string {
+function vkbm_should_use_default_resource_labels(): bool {
+	static $cached = null;
+
+	// 初回のみ判定し、以降は覚えた結果を返す。
+	if ( null === $cached ) {
+		$cached = Pro_Upsell::is_free_edition();
+	}
+
+	return $cached;
+}
+
+/**
+ * 保存されている呼び方（単数）をそのまま返す（無料版でも既定値へ置き換えない）。
+ *
+ * 管理画面で「Pro 版で設定された呼び方」を案内するための取得用。表示用には vkbm_get_resource_label_singular() を使う。
+ *
+ * @return string 保存値。未保存・空文字の場合は既定値。
+ */
+function vkbm_get_saved_resource_label_singular(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$default    = __( 'Staff', 'vk-booking-manager' );
-	$label      = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : $default;
-	$label      = trim( $label );
+	$label      = isset( $settings['resource_label_singular'] ) ? trim( (string) $settings['resource_label_singular'] ) : '';
 
 	return '' !== $label ? $label : $default;
 }
 
 /**
+ * 保存されている呼び方（複数）をそのまま返す（無料版でも既定値へ置き換えない）。
+ *
+ * @return string 保存値。未保存・空文字の場合は既定値。
+ */
+function vkbm_get_saved_resource_label_plural(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$default    = __( 'Staff', 'vk-booking-manager' );
+	$label      = isset( $settings['resource_label_plural'] ) ? trim( (string) $settings['resource_label_plural'] ) : '';
+
+	return '' !== $label ? $label : $default;
+}
+
+/**
+ * 保存されている呼び方（メニュー名）をそのまま返す（無料版でも既定値へ置き換えない）。
+ *
+ * @return string 保存値。未保存・空文字の場合は既定値。
+ */
+function vkbm_get_saved_resource_label_menu(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$default    = __( 'Staff available', 'vk-booking-manager' );
+	$label      = isset( $settings['resource_label_menu'] ) ? trim( (string) $settings['resource_label_menu'] ) : '';
+
+	return '' !== $label ? $label : $default;
+}
+
+/**
+ * Get the configured singular label for resources (default: Staff).
+ * 無料版では保存値ではなく既定値を返す。
+ *
+ * @return string
+ */
+function vkbm_get_resource_label_singular(): string {
+	$default = __( 'Staff', 'vk-booking-manager' );
+
+	// 無料版は呼び方を変えられないため、保存値があっても既定値で表示する。
+	if ( vkbm_should_use_default_resource_labels() ) {
+		return $default;
+	}
+
+	return vkbm_get_saved_resource_label_singular();
+}
+
+/**
  * Get the configured plural label for resources (default: Staff).
+ * 無料版では保存値ではなく既定値を返す。
  *
  * @return string
  */
 function vkbm_get_resource_label_plural(): string {
-	$repository = new Settings_Repository();
-	$settings   = $repository->get_settings();
-	$default    = __( 'Staff', 'vk-booking-manager' );
-	$label      = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : $default;
-	$label      = trim( $label );
+	$default = __( 'Staff', 'vk-booking-manager' );
 
-	if ( '' === $label ) {
-		return vkbm_get_resource_label_singular();
+	// 無料版は呼び方を変えられないため、保存値があっても既定値で表示する。
+	if ( vkbm_should_use_default_resource_labels() ) {
+		return $default;
 	}
+
+	// 保存値が空・未保存の場合は、取得関数が既定値を返す。
+	$label = vkbm_get_saved_resource_label_plural();
 
 	$singular = vkbm_get_resource_label_singular();
 	// If the plural label is still the default and singular has been customized,
@@ -55,6 +123,64 @@ function vkbm_get_resource_label_plural(): string {
 	}
 
 	return $label;
+}
+
+/**
+ * リソースタグ絞り込みで該当リソースが無いときの表示文言を返す。
+ *
+ * 業種プリセットごとの自然な表現と、無料版を含むリソース複数名の実効値をここで解決し、
+ * 予約画面と予約確定時のエラーで同じ完成済み文言を使えるようにする。
+ *
+ * @return string ローカライズ済みの表示文言。
+ */
+function vkbm_get_resource_tag_empty_message(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$defaults   = $repository->get_default_settings();
+	$preset     = Industry_Presets::get_current_preset( $settings, $defaults );
+	$plural     = vkbm_get_resource_label_plural();
+
+	// 宿泊は客室などの無生物を想定した表現にする。
+	if ( 'lodging' === $preset ) {
+		return sprintf(
+			/* translators: %s: リソースの複数名（例: 客室）。 */
+			__( 'No %s are available matching the selected conditions.', 'vk-booking-manager' ),
+			$plural
+		);
+	}
+
+	// 定義済みの人物を扱う業種は、人が不在であることを伝える表現にする。
+	if ( in_array( $preset, array( 'salon', 'activity', 'seminar' ), true ) ) {
+		return sprintf(
+			/* translators: %s: リソースの複数名（例: スタッフ、ガイド、講師）。 */
+			__( 'There are no %s matching the selected conditions.', 'vk-booking-manager' ),
+			$plural
+		);
+	}
+
+	// カスタム・無料版・未知の業種は、対象の種類に依存しない短い表現へ倒す。
+	return sprintf(
+		/* translators: %s: リソースの複数名。 */
+		__( 'No matching %s.', 'vk-booking-manager' ),
+		$plural
+	);
+}
+
+/**
+ * Get the configured menu-card label for available resources (default: Staff available).
+ * メニューカードの「担当できる〇〇」に使う呼び方を返す。無料版では保存値ではなく既定値を返す。
+ *
+ * @return string
+ */
+function vkbm_get_resource_label_menu(): string {
+	$default = __( 'Staff available', 'vk-booking-manager' );
+
+	// 無料版は呼び方を変えられないため、保存値があっても既定値で表示する。
+	if ( vkbm_should_use_default_resource_labels() ) {
+		return $default;
+	}
+
+	return vkbm_get_saved_resource_label_menu();
 }
 
 /**

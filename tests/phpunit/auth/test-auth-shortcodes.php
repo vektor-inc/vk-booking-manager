@@ -245,6 +245,76 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		$_SERVER = $previous_server;
 	}
 
+	/**
+	 * プロフィールのパスワード・メール変更通知で送信元アドレスだけを差し替えることを検証する。
+	 */
+	public function test_profile_change_email_from_address(): void {
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+		$captured_mails  = array();
+		$mail_filter     = static function ( $return, array $mail ) use ( &$captured_mails ) {
+			$captured_mails[] = $mail;
+			return true;
+		};
+		add_filter( 'pre_wp_mail', $mail_filter, 10, 2 );
+		update_option( Settings_Repository::OPTION_KEY, array( 'mail_from_email' => 'sender@example.com' ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'パスワード変更通知の送信元アドレスを差し替える',
+				'user_login'          => 'profile_password_notice',
+				'old_email'           => 'password-old@example.com',
+				'new_email'           => 'password-old@example.com',
+				'new_password'        => 'new-password-123',
+			),
+			array(
+				'test_condition_name' => 'メール変更通知の送信元アドレスを差し替える',
+				'user_login'          => 'profile_email_notice',
+				'old_email'           => 'email-old@example.com',
+				'new_email'           => 'email-new@example.com',
+				'new_password'        => '',
+			),
+		);
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$captured_mails = array();
+				$user_id        = $this->factory()->user->create(
+					array(
+						'user_login' => $case['user_login'],
+						'user_email' => $case['old_email'],
+					)
+				);
+				wp_set_current_user( $user_id );
+
+				$_SERVER['REQUEST_METHOD'] = 'POST';
+				$_POST                     = array(
+					'vkbm_profile_form'       => '1',
+					'vkbm_profile_nonce'      => wp_create_nonce( 'vkbm_profile_form' ),
+					'user_email'              => $case['new_email'],
+					'kana_name'               => 'わだ',
+					'phone_number'            => '090-0000-0000',
+					'new_password'            => $case['new_password'],
+					'new_password_confirm'    => $case['new_password'],
+				);
+
+				$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+				$shortcodes = new Testable_Auth_Shortcodes( $service );
+				$shortcodes->handle_form_submission();
+
+				$this->assertNotEmpty( $captured_mails, $case['test_condition_name'] );
+				$headers = $captured_mails[0]['headers'] ?? array();
+				$headers = is_array( $headers ) ? $headers : preg_split( "/\r\n|\n|\r/", (string) $headers );
+				$this->assertContains( 'From: <sender@example.com>', $headers, $case['test_condition_name'] );
+			}
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter, 10 );
+			delete_option( Settings_Repository::OPTION_KEY );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+		}
+	}
+
 	public function test_registration_errors_persist_after_post_for_existing_email(): void {
 		// Ensure registration is enabled for this test. / テスト用にユーザー登録を有効化。
 		$original_registration = get_option( 'users_can_register' );
@@ -2895,6 +2965,64 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			$this->assertInstanceOf( \WP_User::class, $after, '再設定後はログインできる' );
 		} finally {
 			( new Settings_Repository() )->update_settings( $original_settings );
+		}
+	}
+
+	/**
+	 * メール認証リンクの有効期限（#650）: 期限が保存されていない・0・過去の場合は認証済みにならず、未来の場合だけ認証済みになること。
+	 */
+	public function test_handle_email_verification_treats_missing_expiry_as_expired(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '有効期限が保存されていない => 期限切れとして扱い認証しない',
+				'expires'             => null,
+				'expected_verified'   => false,
+			),
+			array(
+				'test_condition_name' => '有効期限が 0 => 期限切れとして扱い認証しない',
+				'expires'             => 0,
+				'expected_verified'   => false,
+			),
+			array(
+				'test_condition_name' => '有効期限が過去 => 認証しない',
+				'expires'             => time() - HOUR_IN_SECONDS,
+				'expected_verified'   => false,
+			),
+			array(
+				'test_condition_name' => '有効期限が未来 => 認証済みになる',
+				'expires'             => time() + HOUR_IN_SECONDS,
+				'expected_verified'   => true,
+			),
+		);
+
+		$repository   = new Settings_Repository();
+		$previous_get = $_GET;
+
+		try {
+			$service = new Settings_Service( $repository, new Settings_Sanitizer() );
+
+			foreach ( $test_cases as $index => $case ) {
+				$user_id = self::factory()->user->create( array( 'user_login' => 'verify_expiry_user_' . $index ) );
+				$token   = 'token-' . $index;
+
+				// 認証前の状態（未認証・トークンのハッシュ・有効期限）を用意する。
+				update_user_meta( $user_id, Email_Verification::META_STATUS, '0' );
+				update_user_meta( $user_id, 'vkbm_email_verify_token_hash', hash( 'sha256', $token ) );
+				if ( null !== $case['expires'] ) {
+					update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, $case['expires'] );
+				}
+
+				$_GET = array( 'vkbm_verify_email' => $token );
+
+				// リダイレクトで exit しないテスト用サブクラスで、メール内のリンクを開いた処理を走らせる。
+				$shortcodes = new Testable_Auth_Shortcodes( $service );
+				$shortcodes->handle_email_verification();
+
+				$status = get_user_meta( $user_id, Email_Verification::META_STATUS, true );
+				$this->assertSame( $case['expected_verified'], Email_Verification::STATUS_VERIFIED === $status, $case['test_condition_name'] );
+			}
+		} finally {
+			$_GET = $previous_get;
 		}
 	}
 }

@@ -428,7 +428,7 @@
 			const rowHtml = dayRowTemplate.replace( /__DAY__/g, dayKey );
 			const $row = $( rowHtml );
 			const weekday = getWeekdayLabel( year, month, day );
-			const dayLabel = `${ day }${ config.strings?.daySuffix || '' }${
+			const dayLabel = `${ ( config.strings?.dayFormat || '%s' ).replace( /%(?:1\$)?s/, day ) }${
 				weekday ? ' (' + weekday + ')' : ''
 			}`;
 			const defaultTemplate = getDefaultTemplateForDay(

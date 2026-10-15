@@ -319,3 +319,17 @@ export const buildPriceTierRows = ( {
 			amount: tier.price * tier.count,
 		} ) );
 };
+
+/**
+ * プランカードに出す料金の内訳の行を決める。
+ *
+ * 泊単位のプラン（宿泊用の画面）では、人数・料金は宿泊用の画面が持つ人数で
+ * 泊数分を計算して出す。プランカードの内訳は時間枠の人数（既定 1 名）で計算されて
+ * 食い違うため、行を出さない。時間枠のプランは行をそのまま返す。
+ *
+ * @param {Array}   rows          時間枠の人数で組み立てた内訳の行。
+ * @param {boolean} isLodgingMenu 泊単位のプランかどうか。
+ * @return {Array} プランカードに渡す行。
+ */
+export const resolvePlanPricingRows = ( rows, isLodgingMenu ) =>
+	isLodgingMenu ? [] : rows;

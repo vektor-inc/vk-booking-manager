@@ -1,3 +1,9 @@
+@use "breakpoints" as *;
+
+// =============================================================================
+// ヘッダー・画面全体のレイアウト
+// =============================================================================
+
 .vkbm-shift-dashboard {
 	color: var(--vkbm--admin--color--text);
 }
@@ -14,7 +20,7 @@
 	margin: 0;
 }
 
-@media (max-width: 782px) {
+@include vkbm-bp-down($vkbm-bp-admin-sm) {
 
 	.vkbm-shift-dashboard__heading {
 		position: static;
@@ -45,7 +51,6 @@
 	--vkbm-axis-width: 80px;
 	--vkbm-resource-columns: 3;
 	--vkbm-resource-min-width: 220px;
-	overflow-x: auto;
 }
 
 .vkbm-calendar-header {
@@ -84,6 +89,36 @@
 	flex-wrap: wrap;
 }
 
+// 日付ナビが 1 段に収まらない幅では、ナビとビュー切替を縦に積み、各段のボタンを幅いっぱいに
+// 等分して左右の端を揃える（折り返しで端がずれる状態にしない）。
+// 画面幅ではなく表示領域（2 カラムのときは左のカラム）の幅で決めるため、コンテナクエリを使う。
+// 560px は、日付・前日・翌日・日・月が 1 段に並ぶのに必要な幅。
+.vkbm-day-view,
+.vkbm-month-view {
+	container-type: inline-size;
+}
+
+@container (max-width: 560px) {
+
+	.vkbm-calendar-header,
+	.vkbm-calendar-header__nav {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.vkbm-calendar-header__actions,
+	.vkbm-calendar-header__views {
+		flex-wrap: nowrap;
+	}
+
+	.vkbm-calendar-header__actions > *,
+	.vkbm-calendar-header__views > * {
+		flex: 1 1 0%;
+		justify-content: center;
+		text-align: center;
+	}
+}
+
 .vkbm-calendar-header__views .button.is-active {
 	background-color: var(--vkbm--admin--color--accent);
 	color: #fff;
@@ -95,6 +130,58 @@
 	--vkbm-resource-columns: 3;
 	--vkbm-resource-min-width: 220px;
 	overflow-x: auto;
+
+	&:focus-visible {
+		// 親の overflow で外側が切れないよう、アウトラインを内側に描く。
+		outline: 2px solid var(--vkbm--admin--color--accent);
+		outline-offset: -2px;
+	}
+}
+
+// 横スクロールできることを示すフェード影
+// -----------------------------------------------------------------------------
+
+.vkbm-schedule-table-wrap {
+	position: relative;
+	// グリッドの子として表の最小幅に押し広げられないようにする。
+	min-width: 0;
+	// 表の外周に、表内の区切り線と同じ線を引いて表の範囲を示す。
+	border: 1px solid var(--vkbm--admin--color--border);
+
+	&::before,
+	&::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 24px;
+		pointer-events: none;
+		opacity: 0;
+		z-index: 3;
+	}
+
+	&::before {
+		left: 0;
+		background: linear-gradient(to right, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0));
+	}
+
+	&::after {
+		right: 0;
+		background: linear-gradient(to left, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0));
+	}
+
+	&.is-scrollable-start::before,
+	&.is-scrollable-end::after {
+		opacity: 1;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+
+		&::before,
+		&::after {
+			transition: opacity 0.15s ease;
+		}
+	}
 }
 
 .vkbm-schedule-table__inner {
@@ -123,7 +210,7 @@
 	align-items: start;
 }
 
-@media (min-width: 960px) {
+@include vkbm-bp-up($vkbm-bp-admin-md) {
 
 	.vkbm-shift-dashboard__layout {
 		grid-template-columns: minmax(0, 1fr) 320px;
@@ -136,6 +223,9 @@
 	border-radius: 8px;
 	overflow: hidden;
 }
+
+// 通知パネル
+// -----------------------------------------------------------------------------
 
 .vkbm-shift-dashboard__panel {
 	background: var(--vkbm--admin--color--surface);
@@ -221,6 +311,10 @@
 	align-items: center;
 }
 
+// =============================================================================
+// 日表示グリッド（時間軸・担当者ごとの列）
+// =============================================================================
+
 .vkbm-timeline-header {
 	grid-column: 1 / -1;
 	display: grid;
@@ -277,11 +371,6 @@
 	font-size: var(--vkbm--admin--font-size--xs);
 }
 
-.vkbm-resource-card--partial .vkbm-resource-card__status {
-	background: #fff4e5;
-	color: #9b5b00;
-}
-
 .vkbm-resource-card--off .vkbm-resource-card__status {
 	background: #f3f4f6;
 	color: var(--vkbm--admin--color--text-tertiary);
@@ -293,8 +382,10 @@
 }
 
 .vkbm-resource-card__name {
-	font-size: var(--vkbm--admin--font-size--xl);
-	font-weight: 600;
+	font-size: var(--vkbm--admin--font-size--base);
+	font-weight: 400;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
 	color: var(--vkbm--admin--color--text);
 }
 
@@ -322,6 +413,11 @@
 	display: grid;
 	grid-auto-rows: var(--hour-height, 56px);
 	grid-column: 1;
+}
+
+// 宿泊では0時から24時まで表示するため、1時間の高さを抑えて一覧性を保つ。
+.vkbm-day-view__content--lodging {
+	--hour-height: 36px;
 }
 
 .vkbm-timeline-grid__time {
@@ -379,6 +475,10 @@
 	text-align: center;
 }
 
+// =============================================================================
+// シフト枠・予約カード
+// =============================================================================
+
 .vkbm-shift-block {
 	--vkbm-shift-bg: #e8f4ff;
 	--vkbm-shift-border: #bfdbfe;
@@ -405,24 +505,13 @@
 }
 
 .vkbm-shift-block--edge-top {
-	border-top-left-radius: var(--vkbm-border-radius--sm, 4px);
-	border-top-right-radius: var(--vkbm-border-radius--sm, 4px);
+	border-top-left-radius: var(--vkbm--radius--sm, 4px);
+	border-top-right-radius: var(--vkbm--radius--sm, 4px);
 }
 
 .vkbm-shift-block--edge-bottom {
-	border-bottom-left-radius: var(--vkbm-border-radius--sm, 4px);
-	border-bottom-right-radius: var(--vkbm-border-radius--sm, 4px);
-}
-
-.vkbm-shift-block--break {
-	--vkbm-shift-bg: #fdf4f0;
-	--vkbm-shift-border: #f8d4c2;
-	color: #9b5b00;
-}
-
-.vkbm-shift-block--partial {
-	--vkbm-shift-bg: #f5f5ff;
-	--vkbm-shift-border: #d3d4ff;
+	border-bottom-left-radius: var(--vkbm--radius--sm, 4px);
+	border-bottom-right-radius: var(--vkbm--radius--sm, 4px);
 }
 
 .vkbm-bookings {
@@ -440,7 +529,7 @@
 	top: max(0px, calc((var(--booking-start) - var(--start, var(--timeline-start, 9))) * var(--hour-height, 56px) - var(--vkbm-booking-offset, 0px)));
 	height: calc((var(--booking-end) - var(--booking-start)) * var(--hour-height, 56px));
 	background: var(--vkbm--admin--color--surface);
-	border-radius: var(--vkbm-border-radius--sm, 4px);
+	border-radius: var(--vkbm--radius--sm, 4px);
 	border: 1px solid var(--vkbm--admin--color--border-strong);
 	padding: 6px 10px;
 	display: flex;
@@ -449,6 +538,26 @@
 	font-size: var(--vkbm--admin--font-size--sm);
 	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
 	overflow: hidden;
+}
+
+.vkbm-booking-card--continues {
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+}
+
+.vkbm-booking-card__stay-label {
+	align-self: flex-start;
+	border: 1px solid currentcolor;
+	border-radius: var(--vkbm--radius--sm, 4px);
+	padding: 1px 4px;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.vkbm-booking-card__continuing {
+	font-size: var(--vkbm--admin--font-size--xs);
+	font-weight: 600;
+	color: var(--vkbm--admin--color--text-secondary);
 }
 
 .vkbm-booking-card__summary {
@@ -478,6 +587,28 @@
 	color: var(--vkbm--admin--color--text-secondary);
 }
 
+// 顧客フラグの印（日表示・月表示の予約カード共通）。種別名は title と読み上げでだけ伝える（受付の画面を顧客に覗かれても意味が分からないように）。
+// 予約ブロックの種別だけ赤くし、ブロック中の顧客の予約に気づけるようにする。
+// inline-block にしてカード（リンク）の下線が印の下に引かれないようにする（flex や block にすると中のアイコンに下線が伝わる）。
+.vkbm-customer-flag-mark {
+	display: inline-block;
+	align-self: center;
+	margin-left: 2px;
+	line-height: 1;
+	vertical-align: middle;
+	color: var(--vkbm--admin--color--text-secondary);
+}
+
+.vkbm-customer-flag-mark .dashicons {
+	width: 14px;
+	height: 14px;
+	font-size: 14px;
+}
+
+.vkbm-customer-flag-mark--blocks {
+	color: #a72222;
+}
+
 // 最小催行人数（グループ開催型）が未達の枠のテキストラベル。
 // 色だけに頼らずテキストでも未達を示す（アクセシビリティ要件）。
 // 文字色は白〜淡背景上で 4.5:1 以上のコントラストを確保できる濃い橙系を使う。
@@ -491,54 +622,25 @@
 	border-color: #83c5ff;
 }
 
-.vkbm-booking-card--warning {
-	border-color: #f0b429;
-	background: #fff9eb;
-}
-
-.vkbm-booking-card--warning .vkbm-booking-card__customer {
-	color: #8c5800;
-}
-
-.vkbm-booking-card--available {
-	border-style: dashed;
-	border-color: #a7aaad;
-	color: var(--vkbm--admin--color--text-secondary);
-}
-
-.vkbm-booking-card--overlap {
-	border-color: #dc3232;
-	background: #fff5f5;
-}
-
-.vkbm-booking-card--overlap .vkbm-booking-card__customer {
-	color: #a72222;
-}
-
 .vkbm-booking-card--pending {
-	border-color: #f0b429;
-	background: #fff5d6;
-}
-
-.vkbm-booking-card--note {
-	border-color: #7c3aed;
-	background: #f5f3ff;
+	border-color: var(--vkbm--admin--status-pending-border);
+	background: var(--vkbm--admin--status-pending-bg);
 }
 
 .vkbm-booking-card--cancelled {
 	border-style: dashed;
-	border-color: #ced4da;
-	background: #f6f7f8;
-	color: #6b7280;
+	border-color: var(--vkbm--admin--status-cancelled-border);
+	background: var(--vkbm--admin--status-cancelled-bg);
+	color: var(--vkbm--admin--status-cancelled-text);
 }
 
 .vkbm-booking-card--no-show {
-	border-color: #dc3232;
-	background: #ffecec;
+	border-color: var(--vkbm--admin--status-no-show-border);
+	background: var(--vkbm--admin--status-no-show-bg);
 }
 
 .vkbm-booking-card--no-show .vkbm-booking-card__customer {
-	color: #a72222;
+	color: var(--vkbm--admin--status-no-show-text);
 }
 
 // 最小催行人数（グループ開催型）が未達の枠の可視化。
@@ -550,27 +652,9 @@
 	outline-offset: 1px;
 }
 
-.vkbm-off-duty {
-	position: absolute;
-	top: 0;
-	left: 16px;
-	right: 16px;
-	height: calc((var(--off-duty-end, var(--timeline-start)) - var(--timeline-start)) * var(--hour-height, 56px));
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--vkbm--admin--color--text-disabled);
-	font-size: var(--vkbm--admin--font-size--sm);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	pointer-events: none;
-}
-
-.vkbm-off-duty__label {
-	padding: 4px 10px;
-	border-radius: 999px;
-	background: var(--vkbm--admin--color--border-light);
-}
+// =============================================================================
+// 月表示
+// =============================================================================
 
 .vkbm-month-calendar {
 	display: grid;
@@ -720,20 +804,33 @@
 	color: var(--vkbm--admin--color--text-secondary);
 }
 
+.vkbm-month-booking--compact {
+	padding: 4px 8px;
+	border-radius: 4px;
+}
+
+.vkbm-month-booking--compact .vkbm-month-booking__time {
+	font-size: var(--vkbm--admin--font-size--xs);
+}
+
+.vkbm-month-booking--compact .vkbm-month-booking__customer:empty {
+	display: none;
+}
+
 .vkbm-month-booking--confirmed {
 	background: #f0f7ff;
 	border-color: #b5d4f3;
 }
 
 .vkbm-month-booking--pending {
-	background: #fff5d6;
-	border-color: #f0b429;
+	background: var(--vkbm--admin--status-pending-bg);
+	border-color: var(--vkbm--admin--status-pending-border);
 }
 
 .vkbm-month-booking--cancelled {
-	background: #f6f7f8;
-	border-color: #ced4da;
-	color: #6b7280;
+	background: var(--vkbm--admin--status-cancelled-bg);
+	border-color: var(--vkbm--admin--status-cancelled-border);
+	color: var(--vkbm--admin--status-cancelled-text);
 }
 
 .vkbm-month-booking--cancelled .vkbm-month-booking__customer,
@@ -742,9 +839,9 @@
 }
 
 .vkbm-month-booking--no-show {
-	background: #ffecec;
-	border-color: #dc3232;
-	color: #a72222;
+	background: var(--vkbm--admin--status-no-show-bg);
+	border-color: var(--vkbm--admin--status-no-show-border);
+	color: var(--vkbm--admin--status-no-show-text);
 }
 
 .vkbm-month-booking--no-show .vkbm-month-booking__customer,
@@ -752,29 +849,7 @@
 	color: inherit;
 }
 
-.vkbm-month-view__insights {
-	border-top: 1px solid var(--vkbm--admin--color--border-medium);
-	padding-top: 16px;
-	display: grid;
-	gap: 10px;
-}
-
-.vkbm-month-view__insights-title {
-	margin: 0;
-	font-size: var(--vkbm--admin--font-size--base);
-	font-weight: 600;
-}
-
-.vkbm-month-view__insights-list {
-	margin: 0;
-	padding-left: 18px;
-	color: var(--vkbm--admin--color--text-secondary);
-	font-size: var(--vkbm--admin--font-size--sm);
-	display: grid;
-	gap: 6px;
-}
-
-// 「+N件」バッジ / "+N" badge for hidden bookings.
+// 「+N 件」バッジ（表示しきれない予約の件数）。
 .vkbm-bookings__more-badge {
 	position: absolute;
 	right: 0;
@@ -804,7 +879,10 @@
 	}
 }
 
-// モーダル / Modal for all bookings list.
+// =============================================================================
+// モーダル（その日の予約一覧）
+// =============================================================================
+
 .vkbm-booking-modal {
 	position: fixed;
 	inset: 0;
@@ -942,18 +1020,10 @@
 	grid-column: 1 / -1;
 }
 
-@media screen and (max-width: 1280px) {
+// 日表示の画面幅調整
+// -----------------------------------------------------------------------------
 
-	.vkbm-shift-dashboard__layout {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.vkbm-shift-dashboard__summary {
-		position: static;
-	}
-}
-
-@media screen and (max-width: 960px) {
+@include vkbm-bp-down($vkbm-bp-admin-md) {
 
 	.vkbm-day-view__content {
 		--vkbm-axis-width: 64px;

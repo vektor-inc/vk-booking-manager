@@ -1,7 +1,7 @@
 <?php
 /**
  * Load plugin textdomain.
- * This file is excluded from free edition GitHub releases for WordPress.org compliance.
+ * 無料版・Pro 版のどちらの配布物にも含まれる。
  *
  * @package VKBookingManager
  */

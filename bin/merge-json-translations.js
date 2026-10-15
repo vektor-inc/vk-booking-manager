@@ -82,6 +82,23 @@ if (
 				)
 		: [];
 
+	// 宿泊用の画面（lodging/）は別チャンクに分かれるが、翻訳は app.js の JSON にまとめて読み込まれる
+	// （チャンクは WordPress に登録されたスクリプトではなく、専用の翻訳 JSON を持てないため）。
+	const lodgingDir = path.join(
+		__dirname,
+		'..',
+		'src',
+		'blocks',
+		'reservation',
+		'lodging'
+	);
+	const lodgingFiles = fs.existsSync( lodgingDir )
+		? fs
+				.readdirSync( lodgingDir )
+				.filter( ( file ) => file.endsWith( '.js' ) )
+				.map( ( file ) => `src/blocks/reservation/lodging/${ file }` )
+		: [];
+
 	// app.js にバンドルされる reservation 配下の追加コンポーネントもマージ対象に含める。
 	// WordPress 側では build/blocks/reservation/view.js のハッシュで翻訳JSONを探すが、
 	// 本プラグインでは filter_script_translation_file() で app.js の JSON を返す設計のため、
@@ -95,11 +112,16 @@ if (
 		// #503: 料金欄の「サービス基本料金（単価 × 人数）」の見出し。app.js / booking-confirm-app.js の
 		// 両方から import され app.js にバンドルされるため、ここに含める。
 		'src/blocks/reservation/pricing-breakdown.js',
+		// 予約作成 API の失敗を扱うヘルパー（booking-confirm-app.js から import され app.js にバンドルされる）。
+		'src/blocks/reservation/booking-confirm-error.js',
+		// リソースタグ絞り込み0件時の文言を扱うヘルパー（app.js から import され同じバンドルに入る）。
+		'src/blocks/reservation/resource-tag-empty-message.js',
 	];
 
 	const sourcesToMerge = [
 		...bookingUiFiles,
 		...reservationComponentFiles,
+		...lodgingFiles,
 		...reservationBundledFiles,
 	];
 

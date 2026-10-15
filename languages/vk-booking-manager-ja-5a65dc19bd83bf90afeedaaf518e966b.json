@@ -22,6 +22,9 @@
 			"Other conditions": [
 				"その他条件"
 			],
+			"Logo image": [
+				"ロゴ画像"
+			],
 			"Private booking fee": [
 				"貸切料金"
 			],
@@ -33,9 +36,6 @@
 			],
 			"I agree to the terms of use": [
 				"利用規約に同意します"
-			],
-			"There are no %s matching the selected conditions.": [
-				"条件に該当する%sがいません。"
 			],
 			"Loading form…": [
 				"フォームを読み込み中…"
@@ -61,6 +61,9 @@
 			"Cancel": [
 				"キャンセル"
 			],
+			"Loading…": [
+				"読み込み中…"
+			],
 			"This menu requires a minimum of %d guests.": [
 				"このメニューは最低 %d 名からのお申し込みです。"
 			],
@@ -69,6 +72,18 @@
 			],
 			"Please choose another time slot.": [
 				"別の時間帯を選択してください。"
+			],
+			"There are no service menus available for the selected dates.": [
+				"選んだ日程で予約できるサービスメニューはありません。"
+			],
+			"Change the dates or clear the dates to show all service menus.": [
+				"日程を変えるか、日付の指定を外すと、すべてのサービスメニューが表示されます。"
+			],
+			"There are no service menus available on the selected date.": [
+				"選んだ日に予約できるサービスメニューはありません。"
+			],
+			"Change the date or clear the date to show all service menus.": [
+				"日付を変えるか、日付の指定を外すと、すべてのサービスメニューが表示されます。"
 			],
 			"There are no service menus available for the selected %s.": [
 				"選択した%sで予約できるサービスメニューがありません。"
@@ -109,6 +124,12 @@
 			"Could not delete the favorite.": [
 				"お気に入りを削除できませんでした。"
 			],
+			"The details of the specified service menu cannot be displayed.": [
+				"指定されたサービスメニューの詳細は表示できません。"
+			],
+			"Temporary reservation data save failed.": [
+				"仮予約データの保存に失敗しました。"
+			],
 			"The editor does not transition to the confirmation page.": [
 				"エディターが確認ページに遷移しません。"
 			],
@@ -118,14 +139,8 @@
 			"Please select the quantity.": [
 				"数量を選択してください。"
 			],
-			"Temporary reservation data save failed.": [
-				"仮予約データの保存に失敗しました。"
-			],
 			"Failed to save reservation details. Please try again later.": [
 				"予約詳細の保存に失敗しました。後でもう一度お試しください。"
-			],
-			"Logo image": [
-				"ロゴ画像"
 			],
 			"Reservation block navigation": [
 				"予約ブロックナビゲーション"
@@ -135,6 +150,9 @@
 			],
 			"return": [
 				"戻る"
+			],
+			"Back to the list": [
+				"一覧に戻る"
 			],
 			"Please check our cancellation policy before booking.": [
 				"予約前にキャンセルポリシーをご確認ください。"
@@ -147,9 +165,6 @@
 			],
 			"Book the same again": [
 				"同じ内容で予約する"
-			],
-			"Loading…": [
-				"読み込み中…"
 			],
 			"There are no reservations to display.": [
 				"表示する予約はありません。"
@@ -171,6 +186,18 @@
 			],
 			"Loading service menu…": [
 				"サービスメニューを読み込み中"
+			],
+			"The date you had selected has passed.": [
+				"選んでいた日付は過ぎています。"
+			],
+			"Please select the date again.": [
+				"日付を選び直してください。"
+			],
+			"The date you selected (%s) cannot be booked for this menu.": [
+				"選んでいた%sは、このメニューでは予約できません。"
+			],
+			"Please select another date.": [
+				"別の日付を選んでください。"
 			],
 			"Not selected": [
 				"未選択"
@@ -265,20 +292,98 @@
 			"%d more to confirm": [
 				"あと%d名で開催"
 			],
+			"Select": [
+				"選択"
+			],
+			"Date": [
+				"日付"
+			],
 			"Menu": [
 				"メニュー"
 			],
 			"Select menu": [
 				"メニューを選択"
 			],
+			"Check-in %1$s - Check-out %2$s (%3$s)": [
+				"チェックイン %1$s ～ チェックアウト %2$s（%3$s）"
+			],
+			"%d night": [
+				"%d泊"
+			],
+			"Number of nights": [
+				"泊数"
+			],
 			"%s Resource Tag": [
 				"%s リソースタグ"
+			],
+			"Please select today or a later date.": [
+				"今日以降の日付を選んでください。"
+			],
+			"Only the service menus that can be booked on the selected date are shown.": [
+				"選んだ日に予約できるサービスメニューだけを表示します。"
+			],
+			"Clear the date": [
+				"日付の指定を外す"
+			],
+			"The date has been cleared.": [
+				"日付の指定を外しました。"
+			],
+			"Please select a check-out date that is after the check-in date.": [
+				"チェックアウト日はチェックイン日の翌日以降を選んでください。"
+			],
+			"You can book up to %d nights in a single booking.": [
+				"1回に予約できるのは%d泊までです。"
+			],
+			"Please select a check-out date within %d nights.": [
+				"チェックアウト日は%d泊以内の日付を選んでください。"
+			],
+			"Select dates to see only the service menus that can be booked for those dates.": [
+				"日程を選ぶと、その日程で予約できるサービスメニューだけを表示します。"
+			],
+			"Check-in date": [
+				"チェックイン日"
+			],
+			"Check-out date": [
+				"チェックアウト日"
+			],
+			"Clear the dates": [
+				"日付の指定を外す"
+			],
+			"The dates have been cleared.": [
+				"日程の指定を外しました。"
 			],
 			"Please select a menu.": [
 				"メニューを選択してください。"
 			],
 			"Loading menu information…": [
 				"メニューの情報読み込み中..."
+			],
+			"Check-in": [
+				"チェックイン"
+			],
+			"Check-out": [
+				"チェックアウト"
+			],
+			"Cancellation policy": [
+				"キャンセルポリシー"
+			],
+			"System Terms of Use": [
+				"システム利用規約"
+			],
+			"Privacy policy": [
+				"プライバシーポリシー"
+			],
+			"TEL %s": [
+				"TEL %s"
+			],
+			"Website": [
+				"ウェブサイト"
+			],
+			"Close": [
+				"閉じる"
+			],
+			"%s (opens in a new tab)": [
+				"%s（新しいタブで開きます）"
 			],
 			"Log in": [
 				"ログイン"
@@ -298,14 +403,119 @@
 			"Confirm reservation": [
 				"予約内容確認"
 			],
-			"Payment method": [
-				"決済方法"
+			"%s~": [
+				"%s〜"
 			],
-			"Cancellation policy": [
-				"キャンセルポリシー"
+			"Select the check-in date.": [
+				"チェックイン日を選んでください。"
 			],
-			"System Terms of Use": [
-				"システム利用規約"
+			"Check-in: %s. Next, select the check-out date.": [
+				"チェックイン: %s。次にチェックアウト日を選んでください。"
+			],
+			"Check-in: %1$s, check-out: %2$s. Select a date to choose again.": [
+				"チェックイン: %1$s、チェックアウト: %2$s。日付を押すと選び直せます。"
+			],
+			"Checking available rooms…": [
+				"空いている客室を確認しています…"
+			],
+			"%d room is available.": [
+				"空いている客室は%d件です。"
+			],
+			"The number of guests can be from %1$s to %2$s.": [
+				"宿泊人数は %1$s から %2$s までです。"
+			],
+			"The number of guests can be up to %s.": [
+				"宿泊人数は %s までです。"
+			],
+			"The rate is %s per room per night. It does not change with the number of guests.": [
+				"料金は 1室1泊あたり %s です。宿泊人数で料金は変わりません。"
+			],
+			"The rate is %s per guest per night.": [
+				"料金は 1名1泊あたり %s です。"
+			],
+			"However, the rate varies by day, such as pre-holidays and special dates.": [
+				"ただし、休前日や特定日など、日によって料金が変わります。"
+			],
+			"Select your dates and a room to see the rate for each night.": [
+				"日程と客室を選ぶと、泊ごとの料金を表示します。"
+			],
+			"The dates you had selected have passed.": [
+				"選んでいた日程は過ぎています。"
+			],
+			"Please select your dates again.": [
+				"日程を選び直してください。"
+			],
+			"The dates you selected (%1$s, %2$s) cannot be booked for this plan because no rooms are available or they are outside the booking period.": [
+				"選んでいた日程（%1$sから%2$s）は、このプランでは空きがないか受付期間外のため予約できません。"
+			],
+			"Reselect dates": [
+				"日程を選び直す"
+			],
+			"The room you selected is no longer available. Please select again.": [
+				"選んでいた客室は選べなくなりました。もう一度お選びください。"
+			],
+			"Total amount": [
+				"合計金額"
+			],
+			"Rate by night": [
+				"泊ごとの料金"
+			],
+			"Rate per night": [
+				"1泊あたりの料金"
+			],
+			"Not selectable (past date)": [
+				"過去の日付のため選べません"
+			],
+			"Included in your stay": [
+				"宿泊期間に含まれます"
+			],
+			"%1$s, %2$s": [
+				"%1$s、%2$s"
+			],
+			"Enter the number of guests to see available rooms.": [
+				"宿泊人数を入力すると、空いている客室を表示します。"
+			],
+			"No rooms are available for the selected dates. Please change the dates and select again.": [
+				"選んだ期間に空いている客室がありません。日程を変えて、もう一度お選びください。"
+			],
+			"%1$d night total %2$s": [
+				"%1$d泊合計 %2$s"
+			],
+			"Available rooms": [
+				"空いている客室"
+			],
+			"Regular": [
+				"平日"
+			],
+			"Pre-holiday": [
+				"休前日"
+			],
+			"Special date": [
+				"特定日"
+			],
+			"Special date (%s)": [
+				"特定日（%s）"
+			],
+			"%1$s (%2$s)": [
+				"%1$s（%2$s）"
+			],
+			"%2$s %1$d night": [
+				"%2$s %1$d泊"
+			],
+			"separator between nights per rate\u0004, ": [
+				"・"
+			],
+			"Rate category for each night": [
+				"泊ごとの料金区分"
+			],
+			"See each night": [
+				"泊ごとに見る"
+			],
+			"Plan price %1$s + room surcharge %2$s": [
+				"プラン料金 %1$s + 客室の追加料金 %2$s"
+			],
+			"Breakdown by night": [
+				"泊ごとの内訳"
 			],
 			"Private booking": [
 				"貸し切り予約"
@@ -331,9 +541,6 @@
 			"We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.": [
 				"ご予約内容を確認のうえ、予約確定のご連絡をメールでお送りします。確定のメールが届くまで、しばらくお待ちください。この画面は閉じていただいて構いません。"
 			],
-			"The response is not a valid JSON response.": [
-				"有効な JSON 応答ではありません。"
-			],
 			"The URL does not include a temporary reservation data parameter. Please try again from the reservation page.": [
 				"URLに一時予約データパラメータが含まれていません。予約ページからもう一度お試しください。"
 			],
@@ -342,6 +549,9 @@
 			],
 			"Could not add to favorites.": [
 				"お気に入りに登録できませんでした。"
+			],
+			"An error occurred during payment processing.": [
+				"決済処理中にエラーが発生しました。"
 			],
 			"Confirmation of reservation failed. Please try again later.": [
 				"予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
@@ -357,6 +567,15 @@
 			],
 			"I agree to the cancellation policy": [
 				"キャンセルポリシーに同意します"
+			],
+			"Payment method": [
+				"決済方法"
+			],
+			"On-site payment": [
+				"現地決済"
+			],
+			"Card payment (Stripe)": [
+				"カード決済"
 			],
 			"Save these details so you can quickly book the same thing again next time (add to favorites)": [
 				"この予約内容で次回もすぐ予約できるようにする（お気に入り登録）"
@@ -405,6 +624,12 @@
 			],
 			"%1$s (%2$s × %3$s)": [
 				"%1$s（%2$s × %3$s）"
+			],
+			"The response is not a valid JSON response.": [
+				"有効な JSON 応答ではありません。"
+			],
+			"There are no %s matching the selected conditions.": [
+				"条件に該当する%sがいません。"
 			]
 		}
 	}

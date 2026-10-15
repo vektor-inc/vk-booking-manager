@@ -17,76 +17,76 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
 
-		$raw = [
-			'provider_name'           => '  Foo <script>alert(1)</script> ',
-			'provider_address'        => " 東京都新宿区1-2-3 サンプルビル<script>\n別館",
-			'provider_phone'          => '03-1234-5678<script>',
-			'provider_business_hours' => "10:00-19:00\n<script>alert(1)</script>",
-			'provider_website_url'    => 'https://example.com/<script>',
-			'provider_email'          => 'info+alias@example.com ',
-			'provider_logo_id'        => '42foo',
-			'provider_regular_holidays' => [
-				[
+		$raw = array(
+			'provider_name'                  => '  Foo <script>alert(1)</script> ',
+			'provider_address'               => " 東京都新宿区1-2-3 サンプルビル<script>\n別館",
+			'provider_phone'                 => '03-1234-5678<script>',
+			'provider_business_hours'        => "10:00-19:00\n<script>alert(1)</script>",
+			'provider_website_url'           => 'https://example.com/<script>',
+			'provider_email'                 => 'info+alias@example.com ',
+			'provider_logo_id'               => '42foo',
+			'provider_regular_holidays'      => array(
+				array(
 					'frequency' => 'nth-2',
 					'weekday'   => 'tue',
-				],
-				[
+				),
+				array(
 					'frequency' => 'invalid',
 					'weekday'   => 'fri',
-				],
-				[
+				),
+				array(
 					'frequency' => 'weekly',
 					'weekday'   => 'sun',
-				],
-			],
-			'provider_business_hours_basic' => [
-				[
+				),
+			),
+			'provider_business_hours_basic'  => array(
+				array(
 					'start_hour'   => '09',
 					'start_minute' => '00',
 					'end_hour'     => '12',
 					'end_minute'   => '00',
-				],
-				[
+				),
+				array(
 					'start_hour'   => '13',
 					'start_minute' => '00',
 					'end_hour'     => '18',
 					'end_minute'   => '00',
-				],
-			],
-		'provider_business_hours_weekly' => [
-			'mon' => [
-				'use_custom' => '',
-			],
-			'sun' => [
-				'use_custom' => '1',
-				'time_slots' => [
-						[
+				),
+			),
+			'provider_business_hours_weekly' => array(
+				'mon' => array(
+					'use_custom' => '',
+				),
+				'sun' => array(
+					'use_custom' => '1',
+					'time_slots' => array(
+						array(
 							'start_hour'   => '11',
 							'start_minute' => '00',
 							'end_hour'     => '16',
 							'end_minute'   => '00',
-						],
-					],
-				],
-			'wed' => [
-				'use_custom' => '1',
-				'time_slots' => [
-						[
+						),
+					),
+				),
+				'wed' => array(
+					'use_custom' => '1',
+					'time_slots' => array(
+						array(
 							'start_hour'   => '10',
 							'start_minute' => '00',
 							'end_hour'     => '12',
 							'end_minute'   => '30',
-						],
-						[
+						),
+						array(
 							'start_hour'   => '14',
 							'start_minute' => '00',
 							'end_hour'     => '19',
 							'end_minute'   => '00',
-						],
-					],
-				],
-			],
-		];
+						),
+					),
+				),
+			),
+		);
 
 		$result = $sanitizer->sanitize( $raw, $defaults );
 
@@ -104,94 +104,333 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$this->assertSame( sanitize_email( $raw['provider_email'] ), $result['provider_email'] );
 		$this->assertSame( 42, $result['provider_logo_id'] );
 		$this->assertSame(
-			[
-				[
+			array(
+				array(
 					'frequency' => 'nth-2',
 					'weekday'   => 'tue',
-				],
-				[
+				),
+				array(
 					'frequency' => 'weekly',
 					'weekday'   => 'sun',
-				],
-			],
+				),
+			),
 			$result['provider_regular_holidays']
 		);
 		$this->assertSame(
-			[
-				[
+			array(
+				array(
 					'start' => '09:00',
 					'end'   => '12:00',
-				],
-				[
+				),
+				array(
 					'start' => '13:00',
 					'end'   => '18:00',
-				],
-			],
+				),
+			),
 			$result['provider_business_hours_basic']
 		);
 		$this->assertSame(
-			[
+			array(
 				'use_custom' => false,
-				'time_slots' => [],
-			],
+				'time_slots' => array(),
+			),
 			$result['provider_business_hours_weekly']['mon']
 		);
 		$this->assertSame(
-			[
+			array(
 				'use_custom' => false,
-				'time_slots' => [],
-			],
+				'time_slots' => array(),
+			),
 			$result['provider_business_hours_weekly']['sun']
 		);
 		$this->assertSame(
-			[
+			array(
 				'use_custom' => true,
-				'time_slots' => [
-					[
+				'time_slots' => array(
+					array(
 						'start' => '10:00',
 						'end'   => '12:30',
-					],
-					[
+					),
+					array(
 						'start' => '14:00',
 						'end'   => '19:00',
-					],
-				],
-			],
+					),
+				),
+			),
 			$result['provider_business_hours_weekly']['wed']
 		);
-		$this->assertSame( [], $sanitizer->get_errors() );
+		$this->assertSame( array(), $sanitizer->get_errors() );
 	}
 
 	public function test_sanitize_handles_missing_values_with_defaults(): void {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
 
-		$test_cases = [
-			[
+		$test_cases = array(
+			array(
 				'test_condition_name' => 'empty_payload_uses_expected_fallbacks',
-				'conditions'          => [
-					'options' => [],
-				],
-				'expected'            => [
-					'provider_email'                          => (string) get_option( 'admin_email' ),
-					'reservation_show_menu_list'              => false,
+				'conditions'          => array(
+					'options' => array(),
+				),
+				'expected'            => array(
+					'provider_email'                  => (string) get_option( 'admin_email' ),
+					'reservation_show_menu_list'      => false,
 					'registration_email_verification_enabled' => false,
-					'membership_redirect_wp_register'         => false,
-					'auth_rate_limit_enabled'                 => false,
-					'design_primary_color'                    => $defaults['design_primary_color'],
-					'design_reservation_button_color'         => $defaults['design_reservation_button_color'],
-					'design_radius_md'                        => $defaults['design_radius_md'],
-				],
-			],
-		];
+					'membership_redirect_wp_register' => false,
+					'auth_rate_limit_enabled'         => false,
+					'design_primary_color'            => $defaults['design_primary_color'],
+					'design_menu_card_catch_color'    => $defaults['design_menu_card_catch_color'],
+					'design_reservation_button_color' => $defaults['design_reservation_button_color'],
+					'design_menu_card_price_color'    => '',
+					'design_header_logo_width'        => '',
+					'design_menu_search_style'        => 'plain',
+					'design_radius_md'                => $defaults['design_radius_md'],
+				),
+			),
+		);
 
 		foreach ( $test_cases as $case ) {
-			$result = $sanitizer->sanitize( [], $defaults );
+			$result = $sanitizer->sanitize( array(), $defaults );
 
 			foreach ( $case['expected'] as $key => $value ) {
 				$this->assertSame( $value, $result[ $key ], $case['test_condition_name'] );
 			}
 		}
+	}
+
+	/**
+	 * 送信元メールアドレスは空欄と単一の有効値だけを受け付けることを検証する。
+	 */
+	public function test_sanitize_mail_from_email(): void {
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+		$cases    = array(
+			array(
+				'input'     => '',
+				'expected'  => '',
+				'has_error' => false,
+			),
+			array(
+				'input'     => 'sender@example.com',
+				'expected'  => 'sender@example.com',
+				'has_error' => false,
+			),
+			array(
+				'input'     => '  sender@example.com  ',
+				'expected'  => 'sender@example.com',
+				'has_error' => false,
+			),
+			array(
+				'input'     => 'invalid',
+				'expected'  => '',
+				'has_error' => true,
+			),
+			array(
+				'input'     => "sender@example.com\nBcc:bad@example.com",
+				'expected'  => '',
+				'has_error' => true,
+			),
+			array(
+				'input'     => array( 'sender@example.com' ),
+				'expected'  => '',
+				'has_error' => true,
+			),
+		);
+
+		foreach ( $cases as $case ) {
+			$sanitizer = new Settings_Sanitizer();
+			$result    = $sanitizer->sanitize( array( 'mail_from_email' => $case['input'] ), $defaults );
+			$this->assertSame( $case['expected'], $result['mail_from_email'] );
+			$this->assertSame( $case['has_error'], ! empty( $sanitizer->get_errors() ) );
+		}
+	}
+
+	/**
+	 * design_menu_card_catch_color（サービスメニューのカードのキャッチコピーの文字色）が
+	 * 16 進数カラーのみ保存され、不正値・空は空文字になることを検証する。
+	 */
+	public function test_sanitize_design_menu_card_catch_color(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '正しい 16 進数カラーはそのまま保持される',
+				'input'               => '#112233',
+				'expected'            => '#112233',
+			),
+			array(
+				'test_condition_name' => '不正な値は空文字になる',
+				'input'               => 'red',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '空文字は未指定として空文字のまま保持される',
+				'input'               => '',
+				'expected'            => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( array( 'design_menu_card_catch_color' => $case['input'] ), $defaults );
+			$this->assertSame( $case['expected'], $result['design_menu_card_catch_color'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * design_menu_card_price_color（サービスメニューカードの料金の色）が
+	 * 16 進数カラーのみ保存され、不正値・空は空文字になることを検証する。
+	 */
+	public function test_sanitize_design_menu_card_price_color(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '正しい 16 進数カラーはそのまま保持される',
+				'input'               => '#aa3300',
+				'expected'            => '#aa3300',
+			),
+			array(
+				'test_condition_name' => '3 桁の 16 進数カラーもそのまま保持される',
+				'input'               => '#a30',
+				'expected'            => '#a30',
+			),
+			array(
+				'test_condition_name' => '不正な値は空文字になる',
+				'input'               => 'red',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => 'CSS を閉じて別の規則を埋め込む値は空文字になる',
+				'input'               => '#fff;}body{display:none}',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '空文字は未指定として空文字のまま保持される',
+				'input'               => '',
+				'expected'            => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( array( 'design_menu_card_price_color' => $case['input'] ), $defaults );
+			$this->assertSame( $case['expected'], $result['design_menu_card_price_color'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * design_header_logo_width（ヘッダーのロゴ画像の横幅）が、正の整数のみ保存され、
+	 * 未入力・0・数値でない値は空文字（指定なし）、上限超過は上限に丸められることを検証する。
+	 */
+	public function test_sanitize_design_header_logo_width(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '正の整数はそのまま保存される',
+				'input'               => '180',
+				'expected'            => 180,
+			),
+			array(
+				'test_condition_name' => '数値文字列の小数は整数に丸められる',
+				'input'               => '120.8',
+				'expected'            => 120,
+			),
+			array(
+				'test_condition_name' => '空文字は指定なしとして空文字になる',
+				'input'               => '',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '0 は指定なしとして空文字になる',
+				'input'               => '0',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '負の値は指定なしとして空文字になる',
+				'input'               => '-50',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '数値でない値は指定なしとして空文字になる',
+				'input'               => 'abc',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '上限ちょうどはそのまま保存される',
+				'input'               => (string) Settings_Sanitizer::DESIGN_HEADER_LOGO_WIDTH_MAX,
+				'expected'            => Settings_Sanitizer::DESIGN_HEADER_LOGO_WIDTH_MAX,
+			),
+			array(
+				'test_condition_name' => '上限を超える値は上限に丸められる',
+				'input'               => '99999',
+				'expected'            => Settings_Sanitizer::DESIGN_HEADER_LOGO_WIDTH_MAX,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( array( 'design_header_logo_width' => $case['input'] ), $defaults );
+			$this->assertSame( $case['expected'], $result['design_header_logo_width'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * design_menu_search_style（絞り込み検索のデザイン）が、選択肢（plain / framed）の値だけを受け付け、
+	 * 未送信・空文字・選択肢外・文字列以外は plain になることを検証する。
+	 */
+	public function test_sanitize_design_menu_search_style(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'framed はそのまま保存される',
+				'input'               => array( 'design_menu_search_style' => 'framed' ),
+				'expected'            => 'framed',
+			),
+			array(
+				'test_condition_name' => 'plain はそのまま保存される',
+				'input'               => array( 'design_menu_search_style' => 'plain' ),
+				'expected'            => 'plain',
+			),
+			array(
+				'test_condition_name' => '未送信は plain になる',
+				'input'               => array(),
+				'expected'            => 'plain',
+			),
+			array(
+				'test_condition_name' => '空文字は plain になる',
+				'input'               => array( 'design_menu_search_style' => '' ),
+				'expected'            => 'plain',
+			),
+			array(
+				'test_condition_name' => '選択肢外の値は plain になる',
+				'input'               => array( 'design_menu_search_style' => 'unknown' ),
+				'expected'            => 'plain',
+			),
+			array(
+				'test_condition_name' => '文字列以外（配列）は plain になる',
+				'input'               => array( 'design_menu_search_style' => array( 'framed' ) ),
+				'expected'            => 'plain',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+			$this->assertSame( $case['expected'], $result['design_menu_search_style'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 選択肢の定義が、初期値（plain）と枠で囲う（framed）を含み、初期値が選択肢に入っていることを検証する。
+	 */
+	public function test_design_menu_search_style_choices(): void {
+		$choices = Settings_Sanitizer::get_design_menu_search_style_choices();
+
+		$this->assertArrayHasKey( 'plain', $choices );
+		$this->assertArrayHasKey( 'framed', $choices );
+		$this->assertArrayHasKey( Settings_Sanitizer::DESIGN_MENU_SEARCH_STYLE_DEFAULT, $choices );
 	}
 
 	/**
@@ -240,9 +479,9 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
 
 		$result = $sanitizer->sanitize(
-			[
+			array(
 				'provider_email' => 'invalid-email',
-			],
+			),
 			$defaults
 		);
 
@@ -254,21 +493,21 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
 
 		$result = $sanitizer->sanitize(
-			[
-				'provider_business_hours_weekly' => [
-					'mon' => [
+			array(
+				'provider_business_hours_weekly' => array(
+					'mon' => array(
 						'use_custom' => '1',
-						'time_slots' => [
-							[
+						'time_slots' => array(
+							array(
 								'start_hour'   => '09',
 								'start_minute' => '15', // invalid minute.
 								'end_hour'     => '08',
 								'end_minute'   => '50',
-							],
-						],
-					],
-				],
-			],
+							),
+						),
+					),
+				),
+			),
 			$defaults
 		);
 
@@ -276,7 +515,7 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 
 		$this->assertNotEmpty( $errors );
 		$this->assertTrue( $result['provider_business_hours_weekly']['mon']['use_custom'] );
-		$this->assertSame( [], $result['provider_business_hours_weekly']['mon']['time_slots'] );
+		$this->assertSame( array(), $result['provider_business_hours_weekly']['mon']['time_slots'] );
 	}
 
 	/**
@@ -291,21 +530,21 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 
 		// カスタムラベルが正しくサニタイズされることを確認する。
 		$result = $sanitizer->sanitize(
-			[ 'closed_day_label' => '  定休日 <script>alert(1)</script> ' ],
+			array( 'closed_day_label' => '  定休日 <script>alert(1)</script> ' ),
 			$defaults
 		);
 		$this->assertSame( sanitize_text_field( '  定休日 <script>alert(1)</script> ' ), $result['closed_day_label'] );
 
 		// 空文字のまま保存できることを確認する。
 		$result_empty = $sanitizer->sanitize(
-			[ 'closed_day_label' => '' ],
+			array( 'closed_day_label' => '' ),
 			$defaults
 		);
 		$this->assertSame( '', $result_empty['closed_day_label'] );
 
 		// 未送信の場合はデフォルト値（空文字）になることを確認する。
 		$result_missing = $sanitizer->sanitize(
-			[],
+			array(),
 			$defaults
 		);
 		$this->assertSame( '', $result_missing['closed_day_label'] );
@@ -325,7 +564,7 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		// 無料版では指名機能が常に無効のため、送信値に関わらず false へ強制される。
 		// Pro 版では送信値どおり true が保存される。
 		$result_enabled = $sanitizer->sanitize(
-			[ 'staff_enabled' => '1' ],
+			array( 'staff_enabled' => '1' ),
 			$defaults
 		);
 		if ( Pro_Upsell::is_free_edition() ) {
@@ -336,14 +575,14 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 
 		// staff_enabled を無効（空文字）で送信した場合。
 		$result_disabled = $sanitizer->sanitize(
-			[ 'staff_enabled' => '' ],
+			array( 'staff_enabled' => '' ),
 			$defaults
 		);
 		$this->assertFalse( $result_disabled['staff_enabled'] );
 
 		// staff_enabled が送信されない場合（チェックボックス未チェック相当）。
 		$result_missing = $sanitizer->sanitize(
-			[],
+			array(),
 			$defaults
 		);
 		$this->assertFalse( $result_missing['staff_enabled'] );
@@ -427,52 +666,52 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
 
-		$test_cases = [
-			[
+		$test_cases = array(
+			array(
 				'test_condition_name' => '指名無効時にラベルが hidden フィールドで送信された場合 => カスタムラベルが保持される',
-				'conditions'          => [
-					'input' => [
-						'staff_enabled'       => '',
+				'conditions'          => array(
+					'input' => array(
+						'staff_enabled'        => '',
 						'no_nomination_label'  => '指名なし',
 						'nomination_fee_label' => '指名料',
-					],
-				],
-				'expected'            => [
+					),
+				),
+				'expected'            => array(
 					'no_nomination_label'  => '指名なし',
 					'nomination_fee_label' => '指名料',
 					'staff_enabled'        => false,
-				],
-			],
-			[
+				),
+			),
+			array(
 				'test_condition_name' => '指名有効時にラベルがテキストフィールドで送信された場合 => カスタムラベルが保持される',
-				'conditions'          => [
-					'input' => [
-						'staff_enabled'       => '1',
+				'conditions'          => array(
+					'input' => array(
+						'staff_enabled'        => '1',
 						'no_nomination_label'  => 'お任せ',
 						'nomination_fee_label' => '指名手数料',
-					],
-				],
-				'expected'            => [
+					),
+				),
+				'expected'            => array(
 					'no_nomination_label'  => 'お任せ',
 					'nomination_fee_label' => '指名手数料',
 					// 無料版では指名機能が常に無効へ強制されるため false、Pro 版は送信値どおり true。
 					'staff_enabled'        => ! Pro_Upsell::is_free_edition(),
-				],
-			],
-			[
+				),
+			),
+			array(
 				'test_condition_name' => '指名無効時にラベルが送信されない場合 => デフォルト値になる（フォールバック）',
-				'conditions'          => [
-					'input' => [
+				'conditions'          => array(
+					'input' => array(
 						'staff_enabled' => '',
-					],
-				],
-				'expected'            => [
+					),
+				),
+				'expected'            => array(
 					'no_nomination_label'  => $defaults['no_nomination_label'],
 					'nomination_fee_label' => $defaults['nomination_fee_label'],
 					'staff_enabled'        => false,
-				],
-			],
-		];
+				),
+			),
+		);
 
 		foreach ( $test_cases as $case ) {
 			$result = $sanitizer->sanitize( $case['conditions']['input'], $defaults );
@@ -544,6 +783,42 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * #633: 「予約ページの表示要素」の「フッター」は、既定値が OFF で、
+	 * 送信値どおりに保存される（未送信なら OFF）ことを検証する。
+	 */
+	public function test_sanitize_reservation_show_footer(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		// 既定値は非表示（更新しただけで既存サイトの予約ページへ突然フッターが出ないようにする）。
+		$this->assertFalse( $defaults['reservation_show_footer'] );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '未送信 => false',
+				'input'               => array(),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => 'チェックあり（1）=> true',
+				'input'               => array( 'reservation_show_footer' => '1' ),
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '他の表示要素だけチェック => フッターは false',
+				'input'               => array( 'reservation_show_provider_name' => '1' ),
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+
+			$this->assertSame( $case['expected'], $result['reservation_show_footer'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * #431: 「リソースタグ検索」（resource_tag_search_enabled）は「絞り込み検索」
 	 * （reservation_show_menu_search）の子項目のため、親がOFFなら送信値に関わらず
 	 * 強制的にOFFになることを検証する。また、リソースタグ機能自体が Pro 版限定のため、
@@ -589,6 +864,54 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 			$result   = $sanitizer->sanitize( $case['input'], $defaults );
 			$expected = $is_free ? false : $case['expected_pro'];
 			$this->assertSame( $expected, $result['resource_tag_search_enabled'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 「日付で絞り込む」（reservation_date_search_enabled）は「絞り込み検索」
+	 * （reservation_show_menu_search）の子項目のため、親がOFFなら送信値に関わらず
+	 * 強制的にOFFになることを検証する。無料版・Pro 版のどちらでも同じ結果になる。
+	 */
+	public function test_sanitize_reservation_date_search_enabled_requires_parent_checkbox(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$this->assertFalse( $defaults['reservation_date_search_enabled'], '既定値は OFF。' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '親（絞り込み検索）ON・子（日付で絞り込む）ON送信 => ON',
+				'input'               => array(
+					'reservation_show_menu_search'    => '1',
+					'reservation_date_search_enabled' => '1',
+				),
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '親（絞り込み検索）OFF・子（日付で絞り込む）ON送信 => 親がOFFのため強制OFF',
+				'input'               => array(
+					'reservation_show_menu_search'    => '',
+					'reservation_date_search_enabled' => '1',
+				),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '親・子ともに未送信 => OFF（境界値）',
+				'input'               => array(),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '親ON・子未送信（子だけ未チェック） => OFF',
+				'input'               => array(
+					'reservation_show_menu_search' => '1',
+				),
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+			$this->assertSame( $case['expected'], $result['reservation_date_search_enabled'], $case['test_condition_name'] );
 		}
 	}
 }

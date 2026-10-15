@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Uninstall\Uninstaller;
 use function __;
 
 /**
@@ -20,6 +21,26 @@ use function __;
  */
 class Settings_Repository {
 	public const OPTION_KEY = 'vkbm_provider_settings';
+
+	/**
+	 * サービスメニュー詳細ページの表示方法の設定キー（#635）。
+	 */
+	public const KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE = 'service_menu_detail_display_mode';
+
+	/**
+	 * 詳細ページの表示方法: 予約ブロック内で表示する。
+	 */
+	public const DETAIL_DISPLAY_MODE_BLOCK = 'block';
+
+	/**
+	 * 詳細ページの表示方法: WordPress の個別投稿として表示する（従来の動作）。
+	 */
+	public const DETAIL_DISPLAY_MODE_TEMPLATE = 'template';
+
+	/**
+	 * 詳細ページの表示方法として保存してよい値。
+	 */
+	public const DETAIL_DISPLAY_MODES = array( self::DETAIL_DISPLAY_MODE_BLOCK, self::DETAIL_DISPLAY_MODE_TEMPLATE );
 
 	/**
 	 * Option key used for persistence.
@@ -50,15 +71,16 @@ class Settings_Repository {
 			'provider_name'                              => '',
 			'provider_address'                           => '',
 			'provider_phone'                             => '',
+			// お支払いの案内。カード決済を有効にした場合もそのまま表示されるため、
+			// 来店時の支払いに限った内容であることが分かる書き方にしている（#540）。
+			// 過去の初期値は Payment_Instructions::get_legacy_default_texts() を参照。
 			'provider_payment_method'                    => $is_japanese
 				? __(
-					'ご来店時に店舗にてお支払いください。
-現金、クレジットカード、交通系ICカードがご利用いただけます。',
+					'ご来店時のお支払いには、現金・クレジットカード・交通系ICカードがご利用いただけます。',
 					'vk-booking-manager'
 				)
 				: __(
-					'Please pay at the store when you visit.
-You can use cash, credit cards, and transportation ICs.',
+					'For payment at the store, we accept cash, credit cards, and transit IC cards.',
 					'vk-booking-manager'
 				),
 			'resource_label_singular'                    => __( 'Staff', 'vk-booking-manager' ),
@@ -87,13 +109,24 @@ You can use cash, credit cards, and transportation ICs.',
 			'provider_allow_staff_overlap_admin'         => false,
 			'provider_website_url'                       => '',
 			'provider_email'                             => '',
+			'mail_from_email'                            => '',
 			'shift_alert_months'                         => 1,
 			// シフトの自動登録設定。0=無効（既定）、1〜3=翌月〜3ヶ月先までを自動登録する。
 			// 未保存時は既定の0（無効）が適用されるため、導入前の既存サイトの挙動は変わらない。
 			'shift_auto_register_months'                 => 0,
 			'booking_reminder_hours'                     => array(),
+			// プラグイン削除時の片付け。既定は「残す（Google連携情報は削除）」。
+			// 既存のサイトが何も変えずにプラグインを削除したとき、予約データが消えないようにするため。
+			'uninstall_cleanup'                          => Uninstaller::MODE_KEEP,
 			'design_primary_color'                       => '',
+			'design_menu_card_catch_color'               => '',
 			'design_reservation_button_color'            => '',
+			// サービスメニューカードの料金の色。空は未指定（既存の濃い赤のまま）。
+			'design_menu_card_price_color'               => '',
+			// ヘッダーに表示する店舗ロゴ画像の横幅（px）。空は未指定（現状の表示幅のまま）。
+			'design_header_logo_width'                   => '',
+			// 絞り込み検索のデザイン（plain / framed）。選択肢は Settings_Sanitizer::get_design_menu_search_style_choices() で定義する。
+			'design_menu_search_style'                   => 'plain',
 			'design_radius_md'                           => 8,
 			'provider_logo_id'                           => 0,
 			'provider_cancellation_policy'               => $is_japanese
@@ -177,10 +210,17 @@ Contact us: Please contact our store.",
 			// #431: 「リソースタグ検索」。絞り込み検索（reservation_show_menu_search）の子項目。
 			// Pro版限定・既定は false（未保存の既存サイトでは表示しない）。
 			'resource_tag_search_enabled'                => false,
+			// 「日付で絞り込む」。絞り込み検索（reservation_show_menu_search）の子項目。
+			// 無料版・Pro 版の両方で使える。既定は false（既存サイトの表示を変えない）。
+			'reservation_date_search_enabled'            => false,
 			'reservation_show_menu_list'                 => true,
 			'reservation_menu_list_display_mode'         => 'card',
+			// #635: サービスメニュー詳細ページの表示方法。実効値は get_settings() が保存状況に応じて決める。
+			'service_menu_detail_display_mode'           => 'block',
 			'reservation_show_provider_logo'             => false,
 			'reservation_show_provider_name'             => false,
+			// #633: 予約ブロック末尾のフッター（店舗情報・規約リンク）。既存の表示要素と同じく初期値は非表示。
+			'reservation_show_footer'                    => false,
 			'currency_symbol'                            => '',
 			'tax_label_text'                             => __( '(tax included)', 'vk-booking-manager' ),
 			'provider_regular_holidays'                  => array(),
@@ -202,6 +242,10 @@ Contact us: Please contact our store.",
 			// この機能は指名機能OFF時のみ利用可能な仕様のため、両者を組み合わせて判定する。
 			// 旧キー名は multiple_guests_enabled（読み取り側で旧キーへのフォールバックを持つ）。
 			'slot_capacity_enabled'                      => true,
+			// #737: 宿泊プランの料金区分。休前日とする曜日（初期値は土曜のみ）と、特定日の期間 [ { start, end, label } ]。
+			// 宿泊以外の業種へ切り替えても値は消さず、料金の計算に使わないだけにする（#570 の方針）。
+			'lodging_pre_holiday_weekdays'               => array( 'sat' ),
+			'lodging_special_dates'                      => array(),
 		);
 	}
 
@@ -211,7 +255,9 @@ Contact us: Please contact our store.",
 	 * @return array<string, mixed>
 	 */
 	public function get_settings(): array {
-		$stored = get_option( $this->option_key, array() );
+		// 設定が一度も保存されていない（新規インストール）かどうかを、保存値の有無で判定する。
+		$stored          = get_option( $this->option_key, false );
+		$has_saved_value = false !== $stored;
 
 		if ( ! is_array( $stored ) ) {
 			$stored = array();
@@ -219,6 +265,8 @@ Contact us: Please contact our store.",
 
 		$defaults = $this->get_default_settings();
 		$settings = array_merge( $defaults, $stored );
+
+		$settings[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] = $this->resolve_service_menu_detail_display_mode( $stored, $has_saved_value );
 		$settings = Industry_Presets::apply_effective_values( $settings, $defaults );
 
 		$settings['provider_business_hours_basic'] = $this->normalize_business_hours_basic(
@@ -230,6 +278,28 @@ Contact us: Please contact our store.",
 		);
 
 		return $settings;
+	}
+
+	/**
+	 * サービスメニュー詳細ページの表示方法の実効値を決める（#635）。
+	 *
+	 * 既存サイトの見え方を変えないため、保存状況に応じて次のように決める。
+	 * - 保存値がある: 保存値（許可外の値は従来の動作の 'template'）
+	 * - 設定は保存済みだがこのキーが無い（既存サイト）: 'template'
+	 * - 設定が一度も保存されていない（新規インストール）: 'block'
+	 *
+	 * @param array<string,mixed> $stored          保存済みの設定（未保存なら空配列）。
+	 * @param bool                $has_saved_value 設定のオプション自体が保存されているか。
+	 * @return string 'block' または 'template'。
+	 */
+	private function resolve_service_menu_detail_display_mode( array $stored, bool $has_saved_value ): string {
+		if ( ! array_key_exists( self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE, $stored ) ) {
+			return $has_saved_value ? self::DETAIL_DISPLAY_MODE_TEMPLATE : self::DETAIL_DISPLAY_MODE_BLOCK;
+		}
+
+		$mode = is_string( $stored[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] ) ? $stored[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] : '';
+
+		return in_array( $mode, self::DETAIL_DISPLAY_MODES, true ) ? $mode : self::DETAIL_DISPLAY_MODE_TEMPLATE;
 	}
 
 	/**

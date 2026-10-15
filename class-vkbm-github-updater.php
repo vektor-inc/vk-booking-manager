@@ -60,6 +60,27 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		private $github_api_result;
 
 		/**
+		 * $github_api_result が transient（保存済みの値）由来かどうか。
+		 *
+		 * @var bool
+		 */
+		private $github_api_from_cache = false;
+
+		/**
+		 * 最新リリース情報を保存する transient のキー。
+		 *
+		 * @var string
+		 */
+		const RELEASE_TRANSIENT_KEY = 'vkbm_github_updater_release';
+
+		/**
+		 * 最新リリース情報の transient の保存秒数。
+		 *
+		 * @var int
+		 */
+		const RELEASE_TRANSIENT_TTL = 6 * HOUR_IN_SECONDS;
+
+		/**
 		 * Constructor.
 		 *
 		 * @param string $plugin_file Plugin file path.
@@ -88,13 +109,35 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 
 		/**
 		 * Get information regarding our plugin from GitHub.
+		 *
+		 * 同一リクエスト内では取得済みの結果（$this->github_api_result）を再利用する。
+		 * ただし transient 由来の結果は、$use_cache が false の呼び出し（定期の更新確認）では
+		 * 再利用せず、GitHub へ問い合わせ直す。
+		 * $use_cache が true のときは、GitHub へ問い合わせる前に transient を確認する。
+		 * 取得に成功した場合は、どちらの経路でも transient に保存する。
+		 *
+		 * @param bool $use_cache true なら transient に保存済みのリリース情報があればそれを使う。
 		 */
-		private function get_repository_info(): void {
+		private function get_repository_info( bool $use_cache = false ): void {
 			if ( ! empty( $this->github_api_result ) ) {
-				return;
+				// 保存済みの値をメモしている状態で最新の取得を求められた場合は、メモを捨てる。
+				if ( $use_cache || ! $this->github_api_from_cache ) {
+					return;
+				}
+				$this->github_api_result     = null;
+				$this->github_api_from_cache = false;
 			}
 
-			$url  = "https://api.github.com/repos/{$this->username}/{$this->repo}/releases";
+			if ( $use_cache ) {
+				$cached_release = $this->get_cached_release();
+				if ( null !== $cached_release ) {
+					$this->github_api_result     = $cached_release;
+					$this->github_api_from_cache = true;
+					return;
+				}
+			}
+
+			$url  = "https://api.github.com/repos/{$this->username}/{$this->repo}/releases?per_page=100";
 			$args = array(
 				'headers' => array(
 					'Accept' => 'application/vnd.github.v3+json',
@@ -119,7 +162,117 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 				return;
 			}
 
-			$this->github_api_result = $releases[0];
+			// ベータ版・下書きを除いた中で、バージョン番号が最大のリリースを採用する。
+			$latest_release = $this->select_latest_release( $releases );
+			if ( null === $latest_release ) {
+				return;
+			}
+
+			// 保存・参照するのは必要な項目だけに詰め直したものにする。
+			$compact_release = $this->compact_release( $latest_release );
+
+			$this->github_api_result     = $compact_release;
+			$this->github_api_from_cache = false;
+
+			// 取得に成功したときだけ保存する（失敗を保存すると、復旧後も古い失敗が残るため）。
+			// update_plugins はマルチサイトではネットワーク全体の site transient のため、こちらも揃える。
+			set_site_transient( self::RELEASE_TRANSIENT_KEY, $compact_release, self::RELEASE_TRANSIENT_TTL );
+		}
+
+		/**
+		 * リリース情報から、本プラグインが使う項目（tag_name・published_at・自分の zip）だけを残す。
+		 *
+		 * @param object $release select_latest_release() で選んだリリース。
+		 * @return object tag_name・published_at・assets（自分の zip のみ）を持つオブジェクト。
+		 */
+		private function compact_release( object $release ): object {
+			$compact               = new stdClass();
+			$compact->tag_name     = (string) $release->tag_name;
+			$compact->published_at = isset( $release->published_at ) && is_string( $release->published_at ) ? $release->published_at : '';
+			$compact->assets       = array();
+
+			if ( ! empty( $release->assets ) && is_array( $release->assets ) ) {
+				$package = $this->find_asset_package( $release->assets );
+				if ( '' !== $package ) {
+					$asset                       = new stdClass();
+					$asset->name                 = $this->asset_filename;
+					$asset->browser_download_url = $package;
+					$compact->assets[]           = $asset;
+				}
+			}
+
+			return $compact;
+		}
+
+		/**
+		 * transient に保存済みの最新リリース情報を取り出す。
+		 *
+		 * 壊れた値（オブジェクトでない・tag_name が空・published_at が文字列でない・
+		 * assets が配列でない、または assets の要素の name・URL が不正）は無いものとして扱い、
+		 * 呼び出し側が GitHub へ問い合わせ直せるよう null を返す。
+		 *
+		 * @return object|null 有効なリリース情報。無い・不正なら null。
+		 */
+		private function get_cached_release(): ?object {
+			$cached = get_site_transient( self::RELEASE_TRANSIENT_KEY );
+
+			if ( ! is_object( $cached ) || empty( $cached->tag_name ) || ! is_string( $cached->tag_name ) ) {
+				return null;
+			}
+
+			if ( isset( $cached->published_at ) && ! is_string( $cached->published_at ) ) {
+				return null;
+			}
+
+			if ( isset( $cached->assets ) ) {
+				if ( ! is_array( $cached->assets ) ) {
+					return null;
+				}
+				foreach ( $cached->assets as $asset ) {
+					if (
+						! is_object( $asset )
+						|| ! isset( $asset->name ) || ! is_string( $asset->name )
+						|| ! isset( $asset->browser_download_url ) || ! $this->is_valid_package_url( $asset->browser_download_url )
+					) {
+						return null;
+					}
+				}
+			}
+
+			return $cached;
+		}
+
+		/**
+		 * リリース一覧から、ベータ版（prerelease）・下書き（draft）を除いた最大バージョンのリリースを選ぶ。
+		 *
+		 * 一覧の並びは作成日時順のため、先頭を採用せず version_compare で最大のものを選ぶ。
+		 *
+		 * @param array $releases GitHub のリリース一覧（json_decode 後の配列）。
+		 * @return object|null 採用するリリース。該当が無ければ null。
+		 */
+		private function select_latest_release( array $releases ): ?object {
+			$latest_release = null;
+			$latest_version = '';
+
+			foreach ( $releases as $release ) {
+				// オブジェクトでない要素・タグ名の無い要素は対象外。
+				if ( ! is_object( $release ) || empty( $release->tag_name ) || ! is_string( $release->tag_name ) ) {
+					continue;
+				}
+
+				// ベータ版・下書きは対象外。
+				if ( ! empty( $release->prerelease ) || ! empty( $release->draft ) ) {
+					continue;
+				}
+
+				$version = $this->normalize_version( $release->tag_name );
+				if ( null === $latest_release || version_compare( $version, $latest_version, '>' ) ) {
+					$latest_release = $release;
+					$latest_version = $version;
+				}
+			}
+
+			return $latest_release;
 		}
 
 		/**
@@ -160,7 +313,8 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 			}
 
 			$this->init_plugin_data();
-			$this->get_repository_info();
+			// 定期の更新確認は、最新の状態を知るため transient を使わず毎回問い合わせる。
+			$this->get_repository_info( false );
 
 			$current_version = $this->normalize_version( (string) $this->plugin_data['Version'] );
 
@@ -247,12 +401,21 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		 * @return object|bool Updated plugin information.
 		 */
 		public function set_plugin_info( $false, $action, $response ) {
-			$this->init_plugin_data();
-			$this->get_repository_info();
-
-			if ( empty( $response->slug ) || $response->slug !== $this->plugin_slug ) {
+			// plugins_api は他のプラグイン・テーマの情報取得でも呼ばれるため、
+			// 詳細表示以外の action では GitHub に問い合わせない。
+			if ( 'plugin_information' !== $action ) {
 				return $false;
 			}
+
+			// slug の判定を GitHub API 呼び出しより前に行い、他のプラグインのときは問い合わせない。
+			$this->init_plugin_data();
+			if ( ! is_object( $response ) || empty( $response->slug ) || $response->slug !== $this->plugin_slug ) {
+				return $false;
+			}
+
+			// 詳細表示は transient のリリース情報で足りる。無いときだけ GitHub へ問い合わせる。
+			// 取得に失敗した場合はバージョンとダウンロードリンクを空にする（失敗は保存せず、次回また問い合わせる）。
+			$this->get_repository_info( true );
 
 			$response->last_updated = $this->github_api_result->published_at ?? '';
 			$response->slug         = $this->plugin_slug;
@@ -281,12 +444,33 @@ if ( ! class_exists( 'VKBM_GitHub_Updater' ) ) {
 		private function find_asset_package( array $assets ): string {
 			foreach ( $assets as $asset ) {
 				$name = is_object( $asset ) && isset( $asset->name ) ? (string) $asset->name : '';
-				if ( $name === $this->asset_filename && isset( $asset->browser_download_url ) ) {
-					return (string) $asset->browser_download_url;
+				if ( $name === $this->asset_filename && isset( $asset->browser_download_url ) && $this->is_valid_package_url( $asset->browser_download_url ) ) {
+					return $asset->browser_download_url;
 				}
 			}
 
 			return '';
+		}
+
+		/**
+		 * ダウンロード URL が、文字列・https・github.com ホストのすべてを満たすか確認する。
+		 *
+		 * wp_http_validate_url() は名前解決を行い、DNS 制限下で更新通知が消えるため使わない。
+		 *
+		 * @param mixed $url 確認する値。
+		 * @return bool 満たす場合 true。
+		 */
+		private function is_valid_package_url( $url ): bool {
+			if ( ! is_string( $url ) || '' === $url ) {
+				return false;
+			}
+
+			$parts = wp_parse_url( $url );
+			if ( ! is_array( $parts ) || ! isset( $parts['scheme'], $parts['host'] ) ) {
+				return false;
+			}
+
+			return 'https' === $parts['scheme'] && 'github.com' === strtolower( $parts['host'] );
 		}
 
 		/**

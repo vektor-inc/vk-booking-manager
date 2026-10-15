@@ -1,26 +1,123 @@
 /**
- * VK Booking Manager common styles.
+ * VK Booking Manager 共通スタイル。
  *
  * このファイルはプラグイン全体（フロント/管理画面）で読み込まれる前提の共通CSSです。
  * アプリ全体に効かせたいスタイルはここに追加してください。
  */
 
+@use "sass:list";
+@use "sass:string";
 
-*[class*="vkbm-"] {
+/* ==========================================================================
+   共通スコープ
 
-	&,
-	* {
-		box-sizing: border-box;
+   プラグインが出力する最上位ラッパーを明示的に列挙し、その内側だけを対象にする。
+   新しい最上位ラッパー（ブロックのルート、管理画面の独自コンテナなど）を追加したときは、
+   下の該当リストにクラスを追加すること。
+   ========================================================================== */
+
+// 予約ブロック・メニュー系ブロック・認証フォームなど、フロントに出力するルート。
+// 見出し・本文を自前で組むため、box-sizing / text-box / プレースホルダー色のすべてを適用する。
+// 先頭の2つのブロックルートは、class セレクターと同じ詳細度 (0,1,0) の属性セレクターで書く。
+// セレクターに `.wp-block` を含めると、ブロックエディターが外側の文書のこのスタイルシートを
+// キャンバスの末尾へ複製し、各ブロック自身の CSS を上書きしてしまうため。
+$vkbm-front-roots: (
+	"[class~=\"wp-block-vk-booking-manager-reservation\"]",
+	"[class~=\"wp-block-vk-booking-manager-reservation-button\"]",
+	".vkbm-reservation-block",
+	".vkbm-menu-card",
+	".vkbm-menu-loop",
+	".vkbm-menu-search",
+	".vkbm-buttons",
+	".vkbm-auth-card",
+	".vkbm-alert",
+	".vkbm-agreements",
+	".vkbm-footer-modal",
+	".vkbm-gallery-dialog"
+);
+
+// 管理画面で VKBM が全面を自前で組むページのルート（`<div class="wrap vkbm-...">`）。
+// box-sizing / text-box / プレースホルダー色を適用する。
+$vkbm-admin-page-roots: (
+	".vkbm-provider-settings",
+	".vkbm-shift-dashboard",
+	".vkbm-booking-modal",
+	".vkbm-guard-dialog",
+	".vkbm-style-guide"
+);
+
+// WordPress コアのフォーム（.form-table、メタボックス、クイック編集）の中に差し込む
+// VKBM の部品。コアの `p.description` や dt/dd と同居するため、box-sizing とプレースホルダー色
+// だけを適用し、text-box は適用しない（text-box 由来の高さ不具合の再発防止）。
+$vkbm-admin-component-roots: (
+	".vkbm-admin-price-tiers-list",
+	".vkbm-booking-attachments",
+	".vkbm-booking-meta",
+	".vkbm-booking-quick-edit",
+	".vkbm-customer-flag-mark",
+	".vkbm-email-verification-badge",
+	".vkbm-exclusive-fee-fields",
+	".vkbm-fixed-start-time-row",
+	".vkbm-gallery",
+	".vkbm-night-rate-fields",
+	".vkbm-notification-card",
+	".vkbm-notification-panel",
+	".vkbm-price-tiers-list",
+	".vkbm-reservation-day-custom",
+	".vkbm-reservation-day-fieldset",
+	".vkbm-resource-guard-notice",
+	".vkbm-schedule-container",
+	".vkbm-service-menu-field",
+	".vkbm-service-menu-staff",
+	".vkbm-setting-table",
+	".vkbm-shift-bulk-create",
+	".vkbm-shift-days"
+);
+
+$vkbm-box-roots: list.join(list.join($vkbm-front-roots, $vkbm-admin-page-roots), $vkbm-admin-component-roots);
+$vkbm-text-roots: list.join($vkbm-front-roots, $vkbm-admin-page-roots);
+
+// 各ルートに接尾辞を付けたセレクターのリストを作る（出力を1つのルールにまとめて CSS を小さく保つ）。
+@function vkbm-scoped($roots, $suffix: "") {
+	$result: ();
+
+	@each $root in $roots {
+		$result: list.append($result, string.unquote("#{$root}#{$suffix}"), comma);
 	}
 
-	&:where(:is(h1,h2,h3,h4,h5,h6,p,li,dt,dd)),
-	:is(dt,dd) {
-		text-box: trim-both text;
-	}
-	// プレースホルダーの文字色を指定
-	input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="submit"]))::placeholder {
-		color: #ccc;
-	}
+	@return $result;
+}
+
+$vkbm-text-where-roots: ();
+
+@each $root in $vkbm-text-roots {
+	$vkbm-text-where-roots: list.append($vkbm-text-where-roots, string.unquote(":where(#{$root})"), comma);
+}
+
+/* box-sizing
+   ========================================================================== */
+#{vkbm-scoped($vkbm-box-roots)},
+#{vkbm-scoped($vkbm-box-roots, " *")} {
+	box-sizing: border-box;
+}
+
+/* プレースホルダーの文字色
+   ========================================================================== */
+// 白地でコントラスト比 4.5:1 以上になる文字色（二次テキスト色）を使う。
+#{vkbm-scoped($vkbm-box-roots, " input:where(:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"file\"]):not([type=\"submit\"]))::placeholder")} {
+	color: var(--vkbm--color--text-secondary);
+}
+
+/* text-box（行の上下の余白を文字の高さに揃える）
+   ========================================================================== */
+// 見出し・本文を自前で組む要素にだけ適用する。ルート内の `dt` / `dd` はすべて、
+// 見出し・段落・リストは VKBM のクラスを持つ要素だけが対象（コアの `p.description` 等には当てない）。
+// ルートは `:where()` で包み、詳細度を (0,1,0) に抑える（個別の `text-box: normal` 指定、
+// 例: 予約ブロックのフッター `.vkbm-reservation-footer__info p` に負けないため）。
+#{vkbm-scoped($vkbm-text-where-roots, ":where(:is(h1,h2,h3,h4,h5,h6,p,li))[class*=\"vkbm-\"]")},
+#{vkbm-scoped($vkbm-text-where-roots, " :where(:is(h1,h2,h3,h4,h5,h6,p,li))[class*=\"vkbm-\"]")},
+#{vkbm-scoped($vkbm-text-where-roots, " :where(:is(dt,dd))")} {
+	text-box: trim-both text;
 }
 
 .vkbm-form__label--block {

@@ -84,6 +84,19 @@ class Availability_Cache_Generation {
 	);
 
 	/**
+	 * 空き枠の日時解釈へ影響する WordPress のサイト設定 option 名。
+	 *
+	 * timezone_string が空の場合は gmt_offset が wp_timezone() の基準になるため、
+	 * どちらの追加・更新・削除もキャッシュ無効化の対象にする。
+	 *
+	 * @var array<int, string>
+	 */
+	private const TARGET_SITE_OPTION_NAMES = array(
+		'timezone_string',
+		'gmt_offset',
+	);
+
+	/**
 	 * このリクエスト内で世代番号の加算予約（shutdown での書き込み）を既に行ったか。
 	 *
 	 * シフトの一括作成のように1リクエストで複数回 save_post が発火する場合でも、
@@ -125,6 +138,16 @@ class Availability_Cache_Generation {
 		// update_option()/add_option() 自体が発火しないため、無駄な世代番号更新も自然に避けられる。
 		add_action( 'add_option_' . Settings_Repository::OPTION_KEY, array( __CLASS__, 'handle_settings_saved' ) );
 		add_action( 'update_option_' . Settings_Repository::OPTION_KEY, array( __CLASS__, 'handle_settings_saved' ) );
+		add_action( 'delete_option_' . Settings_Repository::OPTION_KEY, array( __CLASS__, 'handle_settings_saved' ) );
+
+		// サイトのタイムゾーンは timezone_string が優先され、未設定時は gmt_offset が使われる。
+		// option の保存経路を限定せず、追加・更新・削除の全経路で古いタイムゾーンの
+		// 日次・月次キャッシュを参照しないよう、サイト全体の世代番号を進める。
+		foreach ( self::TARGET_SITE_OPTION_NAMES as $option_name ) {
+			add_action( 'add_option_' . $option_name, array( __CLASS__, 'handle_settings_saved' ) );
+			add_action( 'update_option_' . $option_name, array( __CLASS__, 'handle_settings_saved' ) );
+			add_action( 'delete_option_' . $option_name, array( __CLASS__, 'handle_settings_saved' ) );
+		}
 
 		// 重要: 世代番号自身の option（self::OPTION_NAME）に対して
 		// updated_option / update_option のような「全 option 共通」のフックは購読しないこと。

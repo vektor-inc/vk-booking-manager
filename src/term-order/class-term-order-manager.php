@@ -68,6 +68,18 @@ class Term_Order_Manager {
 	private $taxonomies;
 
 	/**
+	 * ensure_taxonomy_has_orders() を実行済みのタクソノミー（#712）.
+	 *
+	 * 管理画面では get_terms() のたびに pre_get_terms から呼ばれ、毎回 2 本の集計 SQL が走るため、
+	 * タクソノミーごとに 1 リクエスト 1 回に抑える。リクエスト途中で追加されたタームは
+	 * created_term フック側で並び順が付くため取りこぼさない。
+	 * インスタンスごとに持つので、テストで新しいインスタンスを作れば状態は引き継がれない.
+	 *
+	 * @var array<string, true>
+	 */
+	private $order_backfilled_taxonomies = array();
+
+	/**
 	 * Constructor.
 	 *
 	 * @param string[] $taxonomies Supported taxonomy slugs.
@@ -400,6 +412,11 @@ class Term_Order_Manager {
 	 */
 	private function ensure_taxonomy_has_orders( string $taxonomy ): void {
 		global $wpdb;
+
+		if ( isset( $this->order_backfilled_taxonomies[ $taxonomy ] ) ) {
+			return;
+		}
+		$this->order_backfilled_taxonomies[ $taxonomy ] = true;
 
 		$max_value = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->prepare(

@@ -1,2 +1,0 @@
-export declare function instrumentFirebase(): void;
-//# sourceMappingURL=instrumentation.d.ts.map

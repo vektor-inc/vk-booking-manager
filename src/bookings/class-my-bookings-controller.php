@@ -169,9 +169,26 @@ class My_Bookings_Controller {
 				'no_found_rows'          => true,
 				'ignore_sticky_posts'    => true,
 				'update_post_term_cache' => false,
-				'update_post_meta_cache' => false,
+				// ループ内で予約ごとに多数の post meta を読むため、一括先読みを有効にして問い合わせ回数を抑える。
+				'update_post_meta_cache' => true,
 			)
 		);
+
+		// ループ内で参照するメニューの meta（_vkbm_other_conditions / _vkbm_base_price ほか）を一括先読みする。
+		// 予約の meta は上の WP_Query で先読み済みのため、ここでのメニューID収集では追加の問い合わせは発生しない。
+		$menu_ids = array();
+		foreach ( $query->posts as $booking_post ) {
+			$menu_id = (int) get_post_meta( (int) $booking_post->ID, self::META_SERVICE_ID, true );
+			if ( $menu_id > 0 ) {
+				$menu_ids[ $menu_id ] = $menu_id;
+			}
+		}
+		if ( ! empty( $menu_ids ) ) {
+			$menu_ids = array_values( $menu_ids );
+			update_meta_cache( 'post', $menu_ids );
+			// メニュー名（get_the_title）・メニュー判定（get_post）用の投稿本体も一括先読みする（meta は直前で先読み済み。メニューのタームはここでは使わないため読まない）。
+			_prime_post_caches( $menu_ids, false, false );
+		}
 
 		$items = array();
 		foreach ( $query->posts as $booking_post ) {
@@ -243,6 +260,8 @@ class My_Bookings_Controller {
 				'id'                 => $booking_id,
 				'start_at'           => $start_at,
 				'end_at'             => $end_at,
+				// 泊の予約の泊数（予約に保存した値。泊の予約でなければ 0）。画面はこの値でチェックイン／チェックアウト表示に切り替える。
+				'nights'             => Lodging_Booking::get_booking_nights( $booking_id ),
 				// 過去の予約かどうか（開始日時が現在より前）。タイムゾーン依存の判定を
 				// サーバ側に寄せ、フロントの誤判定を防ぐ。「同じ内容で予約する」での
 				// 過去／今後セクションの振り分けに使う。

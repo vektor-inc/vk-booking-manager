@@ -318,6 +318,24 @@
 		update( true );
 	}
 
+	// 詳細ページの表示方法で「予約ブロック内で表示」を選んでいるときだけ、予約ページURLの注意文を見せる。
+	function initServiceMenuDetailDisplayModeNotice() {
+		const select = document.getElementById(
+			'vkbm-service-menu-detail-display-mode'
+		);
+		const notice = document.getElementById(
+			'vkbm-service-menu-detail-display-mode-notice'
+		);
+
+		if ( ! select || ! notice ) {
+			return;
+		}
+
+		select.addEventListener( 'change', function () {
+			notice.hidden = 'block' !== select.value;
+		} );
+	}
+
 	function updateBookingCancelModeState() {
 		const $mode = $( '#vkbm-provider-booking-cancel-mode' );
 		const $hoursField = $( '#vkbm-provider-booking-cancel-hours-field' );
@@ -329,7 +347,7 @@
 
 		const isHours = 'hours' === $mode.val();
 
-		$hoursField.toggle( isHours );
+		$hoursField.prop( 'hidden', ! isHours );
 		if ( $hoursInput.length ) {
 			$hoursInput.prop( 'disabled', ! isHours );
 		}
@@ -347,7 +365,7 @@
 			return;
 		}
 
-		$messageField.toggle( 'pending' === $mode.val() );
+		$messageField.prop( 'hidden', 'pending' !== $mode.val() );
 	}
 
 	function updateReservationMenuListModeState() {
@@ -360,7 +378,7 @@
 
 		const enabled = $checkbox.is( ':checked' );
 
-		$row.toggle( enabled );
+		$row.prop( 'hidden', ! enabled );
 		if ( $select.length ) {
 			$select.prop( 'disabled', ! enabled );
 		}
@@ -390,6 +408,24 @@
 		$child.prop( 'disabled', ! parentChecked );
 	}
 
+	// 「日付で絞り込む」は「絞り込み検索」の子項目。親のチェックが外れたら子も外し、
+	// 親がOFFの間は子を disabled にする（サーバー側 Settings_Sanitizer も親OFFなら強制OFF）。
+	function updateReservationDateSearchState() {
+		const $parent = $( '#vkbm-reservation-show-menu-search' );
+		const $child = $( '#vkbm-reservation-date-search-enabled' );
+		if ( ! $parent.length || ! $child.length ) {
+			return;
+		}
+
+		const parentChecked = $parent.is( ':checked' );
+
+		if ( ! parentChecked ) {
+			$child.prop( 'checked', false );
+		}
+
+		$child.prop( 'disabled', ! parentChecked );
+	}
+
 	function updatePrivacyPolicyModeState() {
 		const $select = $( '#vkbm-provider-privacy-policy-mode' );
 		const $urlField = $( '#vkbm-provider-privacy-policy-url-field' );
@@ -406,11 +442,11 @@
 		const isContent = 'content' === mode;
 
 		if ( $urlField.length ) {
-			$urlField.toggle( isUrl );
+			$urlField.prop( 'hidden', ! isUrl );
 		}
 
 		if ( $contentField.length ) {
-			$contentField.toggle( isContent );
+			$contentField.prop( 'hidden', ! isContent );
 		}
 	}
 
@@ -443,7 +479,7 @@
 			} )
 		);
 
-		$remove.show();
+		$remove.prop( 'hidden', false );
 	}
 
 	function clearLogo() {
@@ -453,7 +489,7 @@
 
 		$input.val( '' );
 		$preview.empty();
-		$remove.hide();
+		$remove.prop( 'hidden', true );
 	}
 
 	function openMediaFrame() {
@@ -507,6 +543,29 @@
 		$holidayTable.append( html );
 	}
 
+	/**
+	 * 特定日（宿泊プランの料金）の空の行を末尾に足し、日付入力へフォーカスを移す。
+	 */
+	function addLodgingSpecialDateRow() {
+		const $rows = $( '#vkbm-lodging-special-dates-rows' );
+		const template = getTemplateHtml(
+			'#vkbm-lodging-special-date-row-template'
+		);
+		if ( 0 === $rows.length || ! template ) {
+			return;
+		}
+
+		let index = parseInt( $rows.attr( 'data-next-index' ), 10 );
+		if ( isNaN( index ) ) {
+			index = $rows.children().length;
+		}
+		$rows.attr( 'data-next-index', index + 1 );
+
+		const $row = $( template.replace( /__INDEX__/g, index ) );
+		$rows.append( $row );
+		$row.find( 'input' ).first().trigger( 'focus' );
+	}
+
 	function getNextIndex( $field, $items ) {
 		let current = parseInt( $field.val(), 10 );
 
@@ -549,6 +608,28 @@
 		const html = reminderTemplate.replace( /__INDEX__/g, index );
 
 		$reminderList.append( html );
+		updateReminderRemoveLabel( $reminderList.children().last() );
+	}
+
+	/**
+	 * 予約リマインダーの行の「削除」ボタンに、入力中の時間を含む読み上げ用ラベルを設定する。
+	 *
+	 * @param {jQuery} $row 予約リマインダーの行。
+	 */
+	function updateReminderRemoveLabel( $row ) {
+		const hours = String( $row.find( 'input[type="number"]' ).val() || '' );
+		const l10n = window.vkbmProviderSettings || {};
+		const label =
+			'' === hours
+				? l10n.reminderRemoveLabelEmpty
+				: ( l10n.reminderRemoveLabel || '' ).replace( '%s', hours );
+
+		if ( label ) {
+			$row.find( '.vkbm-reminder-hours-remove' ).attr(
+				'aria-label',
+				label
+			);
+		}
 	}
 
 	function removeReminderRow( $button ) {
@@ -715,6 +796,30 @@
 
 	$( document ).on(
 		'click',
+		'#vkbm-lodging-special-date-add',
+		function ( event ) {
+			event.preventDefault();
+			addLodgingSpecialDateRow();
+		}
+	);
+
+	$( document ).on(
+		'click',
+		'.vkbm-lodging-special-date-remove',
+		function ( event ) {
+			event.preventDefault();
+			const $rows = $( '#vkbm-lodging-special-dates-rows' );
+			$( this ).closest( '.vkbm-lodging-special-date-row' ).remove();
+
+			// 行が無くなると保存時に項目が送られず、保存済みの値が残ってしまうため、空の行を 1 つ残す。
+			if ( 0 === $rows.children().length ) {
+				addLodgingSpecialDateRow();
+			}
+		}
+	);
+
+	$( document ).on(
+		'click',
 		'.vkbm-regular-holiday-remove',
 		function ( event ) {
 			event.preventDefault();
@@ -756,6 +861,16 @@
 		function ( event ) {
 			event.preventDefault();
 			removeReminderRow( $( this ) );
+		}
+	);
+
+	$( document ).on(
+		'input',
+		'.vkbm-reminder-hours__row input[type="number"]',
+		function () {
+			updateReminderRemoveLabel(
+				$( this ).closest( '.vkbm-reminder-hours__row' )
+			);
 		}
 	);
 
@@ -812,6 +927,7 @@
 		'#vkbm-reservation-show-menu-search',
 		function () {
 			updateResourceTagSearchState();
+			updateReservationDateSearchState();
 		}
 	);
 
@@ -823,7 +939,111 @@
 		}
 	);
 
+	/**
+	 * 店舗タブの「お支払いの案内」入力欄へフォーカスを移す（#540）。
+	 *
+	 * 入力欄は全タブ共通のフォームに含まれ、店舗タブ以外では CSS で非表示になっているため、
+	 * 表示されていない（offsetParent が null）ときは何もしない。
+	 *
+	 * @return {boolean} フォーカスを移せた場合は true。
+	 */
+	function focusPaymentInstructionsField() {
+		const field = document.getElementById( 'vkbm-provider-payment-method' );
+		if ( ! field || null === field.offsetParent ) {
+			return false;
+		}
+		field.focus();
+		return true;
+	}
+
+	// 上部の通知の「お支払いの案内を編集する」リンク。
+	// 店舗タブを表示中なら画面遷移せずに入力欄へフォーカスを移す。
+	// 他のタブでは通常どおり店舗タブへ遷移し、遷移後の読み込み時（下の初期化処理）にフォーカスを移す。
+	$( document ).on(
+		'click',
+		'.vkbm-payment-instructions-notice__link',
+		function ( event ) {
+			if ( focusPaymentInstructionsField() ) {
+				event.preventDefault();
+			}
+		}
+	);
+
+	/**
+	 * `#` 以降が指す設定行が別のタブにあるとき（設定項目を移動する前の旧 URL）、正しいタブの
+	 * 同じアンカーへ移動する。移動した場合は true を返す。
+	 *
+	 * @return {boolean} 移動した場合は true。
+	 */
+	function redirectToTabOfHashTarget() {
+		const redirectApi = window.vkbmProviderSettingsTabRedirect;
+		const hash = window.location.hash;
+		const $page = $( '.vkbm-provider-settings' );
+
+		if ( ! redirectApi || ! hash || 1 === hash.length || ! $page.length ) {
+			return false;
+		}
+
+		// ハッシュを CSS セレクターに渡すと記号で例外になりうるため、id で直接探す。
+		let targetId = hash.slice( 1 );
+		try {
+			targetId = decodeURIComponent( targetId );
+		} catch ( error ) {
+			return false;
+		}
+		const target = document.getElementById( targetId );
+		const row = target ? target.closest( 'tr' ) : null;
+
+		if ( ! row ) {
+			return false;
+		}
+
+		// 画面のタブ一覧に移動先が無いとき（拡張プラグインがタブを外した環境）は、再読み込みの繰り返しを防ぐため移動しない。
+		const availableTabs = $( '.nav-tab-wrapper a.nav-tab' )
+			.map( function () {
+				return new URL(
+					this.href,
+					window.location.href
+				).searchParams.get( 'tab' );
+			} )
+			.get();
+		const redirectTab = redirectApi.resolveRedirectTab(
+			String( $page.attr( 'data-active-tab' ) || '' ),
+			row.className,
+			availableTabs
+		);
+
+		if ( '' === redirectTab ) {
+			return false;
+		}
+
+		window.location.replace(
+			redirectApi.buildRedirectUrl( window.location.href, redirectTab )
+		);
+
+		return true;
+	}
+
 	$( function () {
+		if ( redirectToTabOfHashTarget() ) {
+			return;
+		}
+
+		// 「お支払いの案内を編集する」リンクで店舗タブへ遷移してきた場合は、入力欄へフォーカスを移す。
+		if ( '#vkbm-provider-payment-method' === window.location.hash ) {
+			focusPaymentInstructionsField();
+
+			// URL からハッシュを取り除く。フォームの送信先（action=""）は現在の URL のため、
+			// ハッシュが残ると保存後の画面も入力欄までスクロールし、「保存しました」の通知が画面外に出てしまう。
+			if ( window.history && window.history.replaceState ) {
+				window.history.replaceState(
+					null,
+					'',
+					window.location.pathname + window.location.search
+				);
+			}
+		}
+
 		holidayTemplate =
 			getTemplateHtml( '#vkbm-regular-holiday-row-template' ) || '';
 		$holidayTable = $( '#vkbm-regular-holiday-rows' );
@@ -858,9 +1078,11 @@
 		updateBookingCancelModeState();
 		updateReservationMenuListModeState();
 		updateResourceTagSearchState();
+		updateReservationDateSearchState();
 		updatePrivacyPolicyModeState();
 		initColorPicker();
 		initIconPickers();
 		initIndustryPreset();
+		initServiceMenuDetailDisplayModeNotice();
 	} );
 } )( jQuery );

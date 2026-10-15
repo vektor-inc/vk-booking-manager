@@ -60,8 +60,89 @@
 	const labelAria = i18n.priceTierLabelAria || '';
 	const priceAria = i18n.priceTierPriceAria || '';
 
+	// 宿泊のサイトでは、区分ごとの料金を「平日・休前日・特定日」の 3 つにする（#737）。
+	const supportsLodging = !! i18n.supportsLodging;
+
+	/**
+	 * 料金区分の行に入れる料金の欄（見出し＋入力）を作る。
+	 *
+	 * 見出しは入力欄の上に置く見た目用で、読み上げ用の名前は入力欄の aria-label が担う。
+	 * 見出しは泊の予約単位のときだけ見せる（時間枠のメニューでは平日の料金だけを見せる）。
+	 *
+	 * @param {string}  caption   見出しの文言。
+	 * @param {jQuery}  $input    料金の入力欄。
+	 * @param {boolean} isNight   予約の単位が「泊」を選択中か。
+	 * @param {boolean} nightOnly 欄ごと泊のときだけ見せるか（false は欄を常に見せ、見出しだけ泊のときに見せる）。
+	 * @return {jQuery} 料金の欄。
+	 */
+	function buildPriceTierRateField( caption, $input, isNight, nightOnly ) {
+		const $field = $( '<span class="vkbm-night-rate-field"></span>' );
+		const $caption = $(
+			'<span class="vkbm-night-rate-caption" aria-hidden="true"></span>'
+		).text( caption );
+
+		if ( nightOnly ) {
+			$field
+				.addClass( 'vkbm-booking-unit-night-only' )
+				.prop( 'hidden', ! isNight );
+		} else {
+			$caption
+				.addClass( 'vkbm-booking-unit-night-only' )
+				.prop( 'hidden', ! isNight );
+		}
+
+		// 入力欄と単位は 1 つのまとまりにして、狭い幅でも単位だけが次の行に落ちないようにする。
+		const $inputRow = $(
+			'<span class="vkbm-night-rate-input-row"></span>'
+		).append( $input );
+		if ( priceUnit !== '' ) {
+			$inputRow.append(
+				$( '<span class="vkbm-price-tier-unit"></span>' ).text(
+					priceUnit
+				)
+			);
+		}
+
+		return $field.append( $caption, $inputRow );
+	}
+
+	/**
+	 * 休前日・特定日の料金の欄の定義を返す。
+	 *
+	 * @return {Array<{key: string, caption: string, ariaLabel: string}>} 保存キー・見出し・読み上げ用の名前。
+	 */
+	function priceTierExtraRates() {
+		return [
+			{
+				key: 'pre_holiday_price',
+				caption: i18n.ratePreHoliday || '',
+				ariaLabel: i18n.priceTierPreHolidayAria || '',
+			},
+			{
+				key: 'special_price',
+				caption: i18n.rateSpecial || '',
+				ariaLabel: i18n.priceTierSpecialAria || '',
+			},
+		];
+	}
+
+	/**
+	 * 休前日・特定日の料金の入力欄を作る。
+	 *
+	 * @param {string} key       保存キー（pre_holiday_price / special_price）。
+	 * @param {string} ariaLabel 読み上げ用の名前。
+	 * @return {jQuery} 料金の入力欄。
+	 */
+	function buildPriceTierExtraInput( key, ariaLabel ) {
+		return $( '<input type="number" min="0" step="1" />' )
+			.attr( 'name', 'vkbm_service_menu[price_tiers][' + key + '][]' )
+			.addClass( 'small-text vkbm-price-input vkbm-price-tier-extra' )
+			.attr( 'aria-label', ariaLabel );
+	}
+
 	function buildPriceTierRow() {
 		const row = $( '<div class="vkbm-price-tier-row"></div>' );
+		const isNight = isNightUnitSelected();
 
 		$( '<input type="text" />' )
 			.attr( 'name', 'vkbm_service_menu[price_tiers][label][]' )
@@ -70,17 +151,38 @@
 			.attr( 'aria-label', labelAria )
 			.appendTo( row );
 
-		$( '<input type="number" min="0" step="1" />' )
+		const $rates = $( '<span class="vkbm-night-rate-fields"></span>' );
+
+		const $weekdayInput = $( '<input type="number" min="0" step="1" />' )
 			.attr( 'name', 'vkbm_service_menu[price_tiers][price][]' )
 			.addClass( 'small-text vkbm-price-input vkbm-price-tier-price' )
-			.attr( 'aria-label', priceAria )
-			.appendTo( row );
+			.attr( 'aria-label', priceAria );
+		if ( supportsLodging ) {
+			$rates.append(
+				buildPriceTierRateField(
+					i18n.rateRegular || '',
+					$weekdayInput,
+					isNight,
+					false
+				)
+			);
 
-		if ( priceUnit !== '' ) {
-			$( '<span class="vkbm-price-tier-unit"></span>' )
-				.text( priceUnit )
-				.appendTo( row );
+			priceTierExtraRates().forEach( function ( rate ) {
+				$rates.append(
+					buildPriceTierRateField(
+						rate.caption,
+						buildPriceTierExtraInput( rate.key, rate.ariaLabel ),
+						isNight,
+						true
+					)
+				);
+			} );
+		} else {
+			$rates.append(
+				buildPriceTierRateField( '', $weekdayInput, false, false )
+			);
 		}
+		row.append( $rates );
 
 		$(
 			'<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-price-tier-remove"></button>'
@@ -90,6 +192,20 @@
 
 		return row;
 	}
+
+	// 平日の料金を入力すると、休前日・特定日の空欄に灰色で出す平日の金額も合わせて更新する（#737）。
+	$( document ).on( 'input', '.vkbm-price-tier-price', function () {
+		$( this )
+			.closest( '.vkbm-price-tier-row' )
+			.find( '.vkbm-price-tier-extra' )
+			.attr( 'placeholder', $( this ).val() );
+	} );
+	$( document ).on( 'input', '#vkbm_service_menu_base_price', function () {
+		$( '.vkbm-night-base-price-extra' ).attr(
+			'placeholder',
+			$( this ).val()
+		);
+	} );
 
 	$( document ).on( 'click', '#vkbm-price-tier-add', function () {
 		$( '#vkbm-price-tiers-list' ).append( buildPriceTierRow() );
@@ -107,6 +223,27 @@
 	// 基本料金入力欄のグレーアウトに使う aria-describedby の id（PHP側の render_base_price_field() と一致させる）。
 	const BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID =
 		'vkbm-base-price-overridden-description';
+	// 基本料金の後ろに出す泊単位の単位表記の id（PHP側の render_base_price_field() と一致させる）。
+	const BASE_PRICE_UNIT_ID = 'vkbm-base-price-unit';
+
+	// 予約の単位が「泊」を選択中か（宿泊のサイトで、予約の単位ラジオがあるときだけ true）。
+	function isNightUnitSelected() {
+		return (
+			$(
+				'input[name="vkbm_service_menu[booking_unit]"]:checked'
+			).val() === 'night'
+		);
+	}
+
+	// 泊単位で、料金の単位が「1室1泊あたり」を選択中か。
+	function isPerRoomNightSelected() {
+		return (
+			isNightUnitSelected() &&
+			$(
+				'input[name="vkbm_service_menu[night_price_unit]"]:checked'
+			).val() === 'per_room'
+		);
+	}
 
 	/**
 	 * 区分名が「有効」（保存対象になる）かどうかを、保存側の判定基準に合わせて判定する。
@@ -165,17 +302,31 @@
 			} );
 		}
 
-		const overridden = tiersFieldVisible && hasActiveTier;
+		// 1室1泊あたりのプランは料金区分を使わないため、基本料金は常に有効（#572）。
+		const overridden =
+			tiersFieldVisible && hasActiveTier && ! isPerRoomNightSelected();
 		$input.prop( 'readonly', overridden );
 		$input.toggleClass( 'vkbm-base-price-overridden', overridden );
+		// 休前日・特定日の基本料金も、料金区分があるときは使われないため同じ見た目にする（#737）。
+		$( '.vkbm-night-base-price-extra' )
+			.prop( 'readonly', overridden )
+			.toggleClass( 'vkbm-base-price-overridden', overridden );
 		// #514レビュー対応（安藤 LOW）: aria-describedby はグレーアウト中（＝説明文が実際に
 		// 表示されている）ときだけ付与する。常時付与すると、非表示の説明文を支援技術に
 		// 関連付けてしまう。PHP側（render_base_price_field()）の初期出力とも合わせている。
+		// 泊単位のときは単位表記（「/ 1名・1泊」など）も説明として関連付ける（#572）。
+		const describedBy = [];
+		if (
+			isNightUnitSelected() &&
+			$( '#' + BASE_PRICE_UNIT_ID ).length > 0
+		) {
+			describedBy.push( BASE_PRICE_UNIT_ID );
+		}
 		if ( overridden ) {
-			$input.attr(
-				'aria-describedby',
-				BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID
-			);
+			describedBy.push( BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID );
+		}
+		if ( describedBy.length > 0 ) {
+			$input.attr( 'aria-describedby', describedBy.join( ' ' ) );
 		} else {
 			$input.removeAttr( 'aria-describedby' );
 		}
@@ -293,28 +444,38 @@
 		const showMultiGuestDependentFields =
 			allowMultipleGuests && meetsCapacity;
 		const hiddenMultiGuestDependentFields = ! showMultiGuestDependentFields;
+		// 1室1泊あたりのプランでは料金区分を使わない（#572）。
+		const hiddenPriceTiers =
+			hiddenMultiGuestDependentFields || isPerRoomNightSelected();
 		$( '#vkbm-min-capacity-field' ).prop(
 			'hidden',
 			hiddenMultiGuestDependentFields
 		);
 		syncMinCapacityFieldCopy();
-		$( '#vkbm-price-tiers-field' ).prop(
-			'hidden',
-			hiddenMultiGuestDependentFields
-		);
+		$( '#vkbm-price-tiers-field' ).prop( 'hidden', hiddenPriceTiers );
 
 		// 貸し切り予約・予約者による貸切指定も、最少催行人数・料金区分と同じ条件で出し分ける
 		// （以前は「指名を使わない」も条件に加えていたが、指名を使うメニューでも貸切設定を
 		// 利用できるようにする仕様変更で撤廃した）。
-		[
-			'#vkbm-exclusive-when-booked-field',
-			'#vkbm-exclusive-user-selectable-field',
-		].forEach( function ( selector ) {
-			const $field = $( selector );
-			if ( $field.length > 0 ) {
-				$field.prop( 'hidden', hiddenMultiGuestDependentFields );
-			}
-		} );
+		const $exclusiveWhenBookedField = $(
+			'#vkbm-exclusive-when-booked-field'
+		);
+		if ( $exclusiveWhenBookedField.length > 0 ) {
+			$exclusiveWhenBookedField.prop(
+				'hidden',
+				hiddenMultiGuestDependentFields
+			);
+		}
+		// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
+		const $exclusiveUserSelectableField = $(
+			'#vkbm-exclusive-user-selectable-field'
+		);
+		if ( $exclusiveUserSelectableField.length > 0 ) {
+			$exclusiveUserSelectableField.prop(
+				'hidden',
+				hiddenMultiGuestDependentFields || isNightUnitSelected()
+			);
+		}
 
 		// 料金区分の行の表示・非表示が変わったタイミングで、基本料金のグレーアウト表示も
 		// 再評価する（#514）。
@@ -697,4 +858,61 @@
 
 	// 初期表示時にも現在の選択へ揃える（PHP 側の初期 hidden・案内文と二重化しても無害）。
 	$( syncStaffAssignmentFields );
+
+	// 予約の単位（時間枠／泊）に合わせて行を hidden で出し分ける（#570）。
+	// 値は DOM に残すため、切り替えても入力は消えず、保存時にもそのまま送られる。
+	function syncBookingUnitFields() {
+		const $radios = $( 'input[name="vkbm_service_menu[booking_unit]"]' );
+		if ( $radios.length === 0 ) {
+			return;
+		}
+		const isNight = $radios.filter( ':checked' ).val() === 'night';
+		$( '.vkbm-booking-unit-slot-only' ).prop( 'hidden', isNight );
+		$( '.vkbm-booking-unit-night-only' ).prop( 'hidden', ! isNight );
+		syncNightPriceUnitFields();
+	}
+
+	// 泊単位の料金の単位（1名1泊あたり／1室1泊あたり）に合わせて、単位表記・料金区分の列見出し・
+	// 複数人一括予約の説明文を切り替え、料金区分と基本料金の表示も再評価する（#572）。
+	function syncNightPriceUnitFields() {
+		const isNight = isNightUnitSelected();
+		const isPerRoom = isPerRoomNightSelected();
+
+		const $suffix = $( '#' + BASE_PRICE_UNIT_ID );
+		if ( $suffix.length > 0 && i18n.nightPriceUnitPerGuest ) {
+			$suffix.text(
+				isPerRoom
+					? i18n.nightPriceUnitPerRoom
+					: i18n.nightPriceUnitPerGuest
+			);
+		}
+
+		const $head = $( '.vkbm-price-tier-head-price' );
+		if ( $head.length > 0 && i18n.priceHeadDefault ) {
+			$head.text( isNight ? i18n.priceHeadNight : i18n.priceHeadDefault );
+		}
+
+		const $note = $( '#vkbm-multiple-guests-price-note' );
+		if ( $note.length > 0 && i18n.multipleGuestsPriceNoteDefault ) {
+			$note.text(
+				isPerRoom
+					? i18n.multipleGuestsPriceNotePerRoom
+					: i18n.multipleGuestsPriceNoteDefault
+			);
+		}
+
+		syncMultipleGuestsDependentFields();
+	}
+
+	$( document ).on(
+		'change',
+		'input[name="vkbm_service_menu[booking_unit]"]',
+		syncBookingUnitFields
+	);
+	$( document ).on(
+		'change',
+		'input[name="vkbm_service_menu[night_price_unit]"]',
+		syncNightPriceUnitFields
+	);
+	$( syncBookingUnitFields );
 } )( jQuery );

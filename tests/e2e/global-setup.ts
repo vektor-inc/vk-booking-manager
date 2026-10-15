@@ -61,6 +61,24 @@ async function globalSetup() {
 		console.warn( 'Language setup:', e.message );
 	}
 
+	// サイトのタイムゾーンを Asia/Tokyo に固定する（issue #715）。
+	// 空き枠 REST の start_at は WP のサイトタイムゾーンで出力される（クエリの timezone は
+	// 出力形式に使われない）。wp-env の既定は UTC のため、未設定だと `T09:00:00+00:00` で返り、
+	// `+09:00` を前提にする spec（pr-311・issue-501 など）が枠を見つけられず失敗する。
+	// playwright.config.ts の timezoneId（Asia/Tokyo）とも揃える。
+	// Pin the site timezone: availability REST emits start_at in the WP site
+	// timezone, and wp-env defaults to UTC, which broke specs expecting +09:00.
+	try {
+		wpCliArgs( [ 'option', 'update', 'timezone_string', 'Asia/Tokyo' ], {
+			stdio: 'pipe',
+		} );
+		console.log( 'Site timezone set to Asia/Tokyo' );
+	} catch ( e: any ) {
+		throw new Error(
+			`Timezone setup failed — aborting global setup: ${ e.message }`
+		);
+	}
+
 	// テスト安定化のためテーマを Twenty Twenty-One に切り替え（失敗時は即時停止）
 	// Switch theme to Twenty Twenty-One for stable testing (fail-fast)
 	try {
@@ -82,7 +100,15 @@ async function globalSetup() {
 	// 既存テストデータのクリーンアップ（蓄積回避）
 	// Clean up existing test data to prevent accumulation
 	try {
+		// 予約（vkbm_booking）を最初に削除する。#473 以降、予約が 1 件でも紐づく
+		// スタッフ（vkbm_resource）は完全削除がブロックされるため、予約を残したまま
+		// スタッフを消そうとすると削除に失敗し、古いスタッフ・予約が実行のたびに蓄積する
+		// （蓄積した古いスタッフを getStaffId() 等が掴み、空き枠・定員系 spec が不安定になる。issue #715）。
+		// Delete bookings first: since #473 a staff post with any linked booking
+		// cannot be permanently deleted, so leftover bookings made cleanup fail
+		// and stale staff accumulated across runs (issue #715).
 		const cleanupPostTypes = [
+			'vkbm_booking',
 			'vkbm_resource',
 			'vkbm_service_menu',
 			'vkbm_shift',

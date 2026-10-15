@@ -13,7 +13,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Lodging_Rate;
 use VKBookingManager\Shifts\Shift_Editor;
+use VKBookingManager\Uninstall\Uninstaller;
+use function __;
 use function vkbm_sanitize_resource_menu_icon;
 
 /**
@@ -29,6 +32,33 @@ class Settings_Sanitizer {
 	 * （class-provider-settings-page.php）もこの定数を参照する。
 	 */
 	public const DESIGN_RADIUS_MD_MAX = 32;
+
+	/**
+	 * ヘッダーに表示する店舗ロゴ画像の横幅（design_header_logo_width）の上限（px）。
+	 *
+	 * 桁を間違えた入力（例: 10000）でヘッダーが横スクロールするのを防ぐための上限。
+	 */
+	public const DESIGN_HEADER_LOGO_WIDTH_MAX = 1000;
+
+	/**
+	 * 絞り込み検索のデザイン（design_menu_search_style）の初期値。
+	 */
+	public const DESIGN_MENU_SEARCH_STYLE_DEFAULT = 'plain';
+
+	/**
+	 * 絞り込み検索のデザインとして選べる値と、管理画面に表示するラベルの一覧を返す。
+	 *
+	 * デザインを追加するときは、ここに 1 行足す。サニタイズの許可リストと
+	 * BM設定画面のプルダウンの選択肢は、どちらもこの一覧から作る。
+	 *
+	 * @return array<string,string> 値 => ラベル。
+	 */
+	public static function get_design_menu_search_style_choices(): array {
+		return array(
+			self::DESIGN_MENU_SEARCH_STYLE_DEFAULT => __( 'Plain', 'vk-booking-manager' ),
+			'framed'                               => __( 'Surround with a frame', 'vk-booking-manager' ),
+		);
+	}
 
 	/**
 	 * 仮予約の完了画面の案内文の最大文字数。
@@ -167,20 +197,39 @@ class Settings_Sanitizer {
 		if ( \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ) {
 			$data['resource_tag_search_enabled'] = false;
 		}
+		// 「日付で絞り込む」チェックボックス。「絞り込み検索」の子項目のため、
+		// 親（reservation_show_menu_search）がOFFなら送信値に関わらず強制的にOFFにする（リソースタグ検索と同じ扱い）。
+		$data['reservation_date_search_enabled']    = ! empty( $input['reservation_date_search_enabled'] ) && $data['reservation_show_menu_search'];
 		$data['reservation_show_menu_list']         = ! empty( $input['reservation_show_menu_list'] );
 		$menu_list_display_mode                     = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? ( $data['reservation_menu_list_display_mode'] ?? 'card' ) ) );
 		$data['reservation_menu_list_display_mode'] = in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ? $menu_list_display_mode : 'card';
 		$data['reservation_show_provider_logo']     = ! empty( $input['reservation_show_provider_logo'] );
 		$data['reservation_show_provider_name']     = ! empty( $input['reservation_show_provider_name'] );
+		$data['reservation_show_footer']            = ! empty( $input['reservation_show_footer'] );
 		$currency_symbol_raw                        = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
 		$data['currency_symbol']                    = sanitize_text_field( $currency_symbol_raw );
 		$tax_label_raw                              = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
 		// Allow leading/trailing spaces, while stripping tags.
 		// 先頭・末尾の空白は維持しつつ、タグは除去します.
 		$data['tax_label_text'] = wp_kses( $tax_label_raw, array() );
+
+		// #635: サービスメニュー詳細ページの表示方法。許可外の値は従来の動作の 'template' にする。
+		$detail_mode_key          = Settings_Repository::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE;
+		$detail_display_mode      = sanitize_key( (string) ( $input[ $detail_mode_key ] ?? ( $data[ $detail_mode_key ] ?? Settings_Repository::DETAIL_DISPLAY_MODE_BLOCK ) ) );
+		$data[ $detail_mode_key ] = in_array( $detail_display_mode, Settings_Repository::DETAIL_DISPLAY_MODES, true ) ? $detail_display_mode : Settings_Repository::DETAIL_DISPLAY_MODE_TEMPLATE;
+
 		$data['provider_email'] = $this->sanitize_email( $data['provider_email'] );
 		if ( '' === $data['provider_email'] ) {
 			$data['provider_email'] = $this->sanitize_email( (string) get_option( 'admin_email' ) );
+		}
+		$mail_from_raw = $input['mail_from_email'] ?? ( $data['mail_from_email'] ?? '' );
+		$mail_from_raw = is_string( $mail_from_raw ) ? trim( $mail_from_raw ) : $mail_from_raw;
+		if ( ! is_string( $mail_from_raw ) || ( '' !== $mail_from_raw && ( false !== strpbrk( $mail_from_raw, "\r\n," ) || ! is_email( $mail_from_raw ) ) ) ) {
+			$this->errors[]                        = __( 'Please enter a valid sender email address.', 'vk-booking-manager' );
+			$this->field_errors['mail_from_email'] = __( 'Please enter a valid email address.', 'vk-booking-manager' );
+			$data['mail_from_email']               = (string) ( $defaults['mail_from_email'] ?? '' );
+		} else {
+			$data['mail_from_email'] = '' === $mail_from_raw ? '' : sanitize_email( $mail_from_raw );
 		}
 		$shift_alert_months         = $this->sanitize_non_negative_int(
 			$input['shift_alert_months'] ?? ( $data['shift_alert_months'] ?? 1 )
@@ -196,9 +245,26 @@ class Settings_Sanitizer {
 			$input['booking_reminder_hours'] ?? ( $data['booking_reminder_hours'] ?? array() )
 		);
 		$data['design_primary_color']            = $this->sanitize_color( $input['design_primary_color'] ?? ( $data['design_primary_color'] ?? '' ) );
+		$data['design_menu_card_catch_color']    = $this->sanitize_color( $input['design_menu_card_catch_color'] ?? ( $data['design_menu_card_catch_color'] ?? '' ) );
 		$data['design_reservation_button_color'] = $this->sanitize_color(
 			$input['design_reservation_button_color'] ?? ( $data['design_reservation_button_color'] ?? '' )
 		);
+		$data['design_menu_card_price_color']    = $this->sanitize_color(
+			$input['design_menu_card_price_color'] ?? ( $data['design_menu_card_price_color'] ?? '' )
+		);
+		// 未入力・0 は「指定なし」（現状の表示幅のまま）として空文字で保存する。
+		$header_logo_width_raw            = $input['design_header_logo_width'] ?? ( $data['design_header_logo_width'] ?? '' );
+		$header_logo_width                = $this->sanitize_non_negative_int( $header_logo_width_raw );
+		$data['design_header_logo_width'] = 0 === $header_logo_width
+			? ''
+			: min( self::DESIGN_HEADER_LOGO_WIDTH_MAX, $header_logo_width );
+		// 選択肢外の値は初期値（plain）として保存する。
+		$menu_search_style                       = isset( $input['design_menu_search_style'] ) && is_string( $input['design_menu_search_style'] )
+			? $input['design_menu_search_style']
+			: '';
+		$data['design_menu_search_style']        = array_key_exists( $menu_search_style, self::get_design_menu_search_style_choices() )
+			? $menu_search_style
+			: self::DESIGN_MENU_SEARCH_STYLE_DEFAULT;
 		$design_radius_raw                       = $input['design_radius_md'] ?? ( $data['design_radius_md'] ?? 8 );
 		$data['design_radius_md']                = '' === $design_radius_raw
 			? ''
@@ -267,6 +333,19 @@ class Settings_Sanitizer {
 			$data['slot_capacity_enabled'] = false;
 		}
 
+		// プラグイン削除時の片付け。許可した 2 つの値以外は「残す」に揃える（データを消す側には倒さない）。
+		$data['uninstall_cleanup'] = Uninstaller::normalize_mode(
+			$input['uninstall_cleanup'] ?? ( $data['uninstall_cleanup'] ?? Uninstaller::MODE_KEEP )
+		);
+
+		// 宿泊プランの料金区分（#737）。休前日とする曜日は、チェックが 1 つも無い（空配列）保存も有効な値として受け付ける。
+		$data['lodging_pre_holiday_weekdays'] = Lodging_Rate::normalize_weekdays(
+			$input['lodging_pre_holiday_weekdays'] ?? ( $data['lodging_pre_holiday_weekdays'] ?? array() )
+		);
+		$data['lodging_special_dates']        = $this->sanitize_lodging_special_dates(
+			$input['lodging_special_dates'] ?? ( $data['lodging_special_dates'] ?? array() )
+		);
+
 		$data['email_log_enabled'] = ! empty( $input['email_log_enabled'] );
 
 		$retention_raw = $input['email_log_retention_days'] ?? ( $data['email_log_retention_days'] ?? 1 );
@@ -276,6 +355,71 @@ class Settings_Sanitizer {
 		$data['email_log_retention_days'] = max( 1, $this->sanitize_non_negative_int( $retention_raw ) );
 
 		return $data;
+	}
+
+	/**
+	 * 特定日（宿泊プランの料金）の入力を検証して保存用の配列にする（#737）。
+	 *
+	 * - 開始日・終了日・名称がすべて空の行は、入力途中の空行として捨てる。
+	 * - 開始日・終了日のどちらかだけの行、実在しない日付の行、終了日が開始日より前の行はエラーにする。
+	 *   エラーの行は field_errors['lodging_special_dates'][行の番号] に入れ、画面の該当行に表示する。
+	 *
+	 * @param mixed $raw 生の入力。`[ 行の番号 => [ 'start' => ..., 'end' => ..., 'label' => ... ] ]` を想定する。
+	 * @return array<int, array{start: string, end: string, label: string}> 開始日の昇順に並べた特定日。
+	 */
+	private function sanitize_lodging_special_dates( $raw ): array {
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		$valid_rows = array();
+		foreach ( $raw as $index => $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+
+			$start_raw = isset( $row['start'] ) && is_scalar( $row['start'] ) ? trim( (string) $row['start'] ) : '';
+			$end_raw   = isset( $row['end'] ) && is_scalar( $row['end'] ) ? trim( (string) $row['end'] ) : '';
+			$label     = Lodging_Rate::normalize_label( $row['label'] ?? '' );
+
+			if ( '' === $start_raw && '' === $end_raw && '' === $label ) {
+				continue;
+			}
+
+			$start = Lodging_Rate::normalize_date( $start_raw );
+			$end   = Lodging_Rate::normalize_date( $end_raw );
+			if ( '' === $start || '' === $end ) {
+				$this->add_lodging_special_date_error( (string) $index, __( 'Please enter both the start date and the end date.', 'vk-booking-manager' ) );
+				continue;
+			}
+
+			if ( $end < $start ) {
+				$this->add_lodging_special_date_error( (string) $index, __( 'Please set the end date on or after the start date.', 'vk-booking-manager' ) );
+				continue;
+			}
+
+			$valid_rows[] = array(
+				'start' => $start,
+				'end'   => $end,
+				'label' => $label,
+			);
+		}
+
+		return Lodging_Rate::normalize_special_periods( $valid_rows );
+	}
+
+	/**
+	 * 特定日の行のエラーを記録する。
+	 *
+	 * @param string $index   行の番号（フォームの name に使った番号）。
+	 * @param string $message 行に表示するエラーメッセージ。
+	 */
+	private function add_lodging_special_date_error( string $index, string $message ): void {
+		$this->errors[] = $message;
+		if ( ! isset( $this->field_errors['lodging_special_dates'] ) || ! is_array( $this->field_errors['lodging_special_dates'] ) ) {
+			$this->field_errors['lodging_special_dates'] = array();
+		}
+		$this->field_errors['lodging_special_dates'][ $index ] = $message;
 	}
 
 	/**

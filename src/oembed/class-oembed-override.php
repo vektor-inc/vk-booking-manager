@@ -63,7 +63,11 @@ class OEmbed_Override {
 			$provider_name = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
 		}
 
-		$data['title']       = sprintf( '%s Web reservation', $provider_name );
+		$data['title'] = sprintf(
+			/* translators: %s: provider (site) name */
+			__( '%s Web reservation', 'vk-booking-manager' ),
+			$provider_name
+		);
 		$data['author_name'] = $provider_name;
 
 		return $data;

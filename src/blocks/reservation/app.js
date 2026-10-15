@@ -1,5 +1,7 @@
 import { __, sprintf } from '@wordpress/i18n';
 import {
+	lazy,
+	Suspense,
 	useCallback,
 	useEffect,
 	useId,
@@ -11,6 +13,24 @@ import apiFetch from '@wordpress/api-fetch';
 import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
 import { CalendarGrid, DailySlotList, SelectedPlanSummary } from './booking-ui';
 import {
+	filterMenusByIds,
+	isCarriedDateUnselectable,
+	isDateFilterAvailable,
+	isPastIncomingDate,
+	normalizeFilterDate,
+	resolveCarriedDate,
+	resolveCarriedStay,
+	resolveIncomingStay,
+	STAY_MAX_NIGHTS,
+	validateStay,
+} from './booking-ui/date-filter';
+import { joinSentences } from './booking-ui/join-sentences';
+import {
+	extractAssignableStaffIds,
+	filterLodgingStaffOptions,
+} from './booking-ui/staff-options';
+import { formatStayDate, getTodayIso } from './lodging/stay-dates';
+import {
 	extractMenuBasePrice,
 	formatCurrency,
 	normalizePriceValue,
@@ -21,14 +41,42 @@ import { BookingConfirmApp } from './booking-confirm-app';
 import {
 	buildPriceTierRows,
 	buildServiceBasicFeeRow,
+	resolvePlanPricingRows,
 	calculateBaseFeeTotal,
 	isMultiGuestFlatPricing,
 	sumPriceTierSubtotals,
 } from './pricing-breakdown';
 import { BookingSummaryItems } from './components/booking-summary-items';
+import {
+	BookingStayDatetime,
+	isStayBooking,
+} from './components/booking-stay-datetime';
 import { ReservationHeader } from './components/reservation-header';
+import { ReservationFooter } from './components/reservation-footer';
+import { ServiceMenuDetail } from './components/service-menu-detail';
+import {
+	DETAIL_STATUS_OK,
+	DETAIL_STATUS_UNAVAILABLE,
+	applyDateQuery,
+	buildListReturnUrl,
+	buildReservationUrlFromDetail,
+	isDetailViewUrl,
+} from './components/service-menu-detail-source';
+import {
+	buildFooterModel,
+	extractFooterSettings,
+} from './components/footer-model';
 import { sanitizeDraftToken } from '../shared/draft-token';
 import { sortTermsByOrder } from '../shared/term-order';
+import { resolveResourceTagEmptyMessage } from './resource-tag-empty-message';
+// 宿泊用の予約画面は別ファイル（別チャンク）に分け、泊単位のプランを選んだときだけ読み込む。
+// 宿泊を使わないサイトの予約ブロックが読み込む JavaScript・CSS を増やさないため。
+const LodgingBookingPanel = lazy( () =>
+	import(
+		/* webpackChunkName: "lodging-booking-panel" */ './lodging/lodging-booking-panel'
+	)
+);
+
 const parseQueryParams = () => {
 	if ( typeof window === 'undefined' ) {
 		return {};
@@ -46,6 +94,8 @@ const parseQueryParams = () => {
 			hasExplicitMenuId: menuId > 0,
 			staffId: Number( params.get( 'resource_id' ) ) || 0,
 			date: params.get( 'date' ) || '',
+			// 宿泊のチェックアウト日（date はチェックイン日）。
+			checkOutDate: params.get( 'check_out_date' ) || '',
 			auth: params.get( 'vkbm_auth' ) || '',
 			draft: sanitizeDraftToken( params.get( 'draft' ) || '' ),
 		};
@@ -96,6 +146,26 @@ const storeDraftToken = ( token, maxAge = 1800 ) => {
 	document.cookie = cookie;
 };
 
+// 下書きを保存する。Cookie のトークンの下書きが別の所有者のものだった場合
+// （ログイン中に始めた予約を、ログアウトして保存し直したときなど）はサーバーが 403
+// （forbidden_draft）を返すため、トークンを付けずに新しい下書きとして保存し直す。
+const saveDraftRequest = ( data ) =>
+	apiFetch( {
+		path: '/vkbm/v1/drafts',
+		method: 'POST',
+		data,
+	} ).catch( ( error ) => {
+		if ( data?.token && error?.code === 'forbidden_draft' ) {
+			const { token, ...dataWithoutToken } = data;
+			return apiFetch( {
+				path: '/vkbm/v1/drafts',
+				method: 'POST',
+				data: dataWithoutToken,
+			} );
+		}
+		throw error;
+	} );
+
 const useCollection = ( path, setState ) => {
 	useEffect( () => {
 		if ( ! path ) {
@@ -130,16 +200,11 @@ const getCurrentUrl = () => {
 	return window.location.href;
 };
 
-const buildLogoutFallbackUrl = ( reservationPageUrl = '' ) => {
+const buildLogoutFallbackUrl = () => {
 	if ( typeof window === 'undefined' ) {
 		return '/wp-login.php?action=logout';
 	}
-	const target =
-		typeof reservationPageUrl === 'string' &&
-		reservationPageUrl.trim() !== ''
-			? reservationPageUrl
-			: window.location.href;
-	const redirect = encodeURIComponent( target );
+	const redirect = encodeURIComponent( window.location.href );
 	return `/wp-login.php?action=logout&redirect_to=${ redirect }`;
 };
 
@@ -198,62 +263,6 @@ const buildRebookUrl = ( booking, reservationPageUrl = '' ) => {
 	}
 
 	return url.toString();
-};
-
-// メニュー（REST の vkbm_service_menu 1件）から、指名可能なスタッフID配列を正規化して取り出す。
-// メニュー選択・お気に入り適用・指名可能判定で共通利用する。
-// #485: サーバー側で「すべてのスタッフが担当できる」を公開中の全スタッフへ展開した
-// 読み取り専用フィールド vkbm_assignable_staff_ids を優先して使う（展開ロジックを
-// フロントで二重実装しないため。判定は Service_Menu_Post_Type::get_assignable_staff_ids() に集約）。
-// フィールドが無い（古いレスポンス等）場合のみ meta._vkbm_staff_ids へフォールバックする。
-const extractAssignableStaffIds = ( menu ) => {
-	const meta = menu?.meta;
-	const rawIds = Array.isArray( menu?.vkbm_assignable_staff_ids )
-		? menu.vkbm_assignable_staff_ids
-		: Array.isArray( meta?._vkbm_staff_ids ) && meta._vkbm_staff_ids.length
-		? meta._vkbm_staff_ids
-		: Array.isArray( meta?.vkbm_staff_ids ) && meta.vkbm_staff_ids.length
-		? meta.vkbm_staff_ids
-		: [];
-
-	return Array.from(
-		new Set(
-			rawIds
-				.map( ( value ) => {
-					if ( typeof value === 'number' ) {
-						return value;
-					}
-					if ( typeof value === 'string' ) {
-						return Number( value ) || 0;
-					}
-					return 0;
-				} )
-				.filter( ( id ) => id > 0 )
-		)
-	);
-};
-
-/**
- * 翻訳済みの2文を、文末が非 ASCII（日本語の句点「。」等）のときは半角スペース無しで、
- * 文末が ASCII のとき（英語など）は半角スペース区切りで連結する（#393）。
- *
- * 個別の記号を列挙する方式（句点・感嘆符・閉じ括弧…）だと、想定していない記号終わりの文で
- * 一貫しない挙動になる（例: 半角の閉じ括弧を列挙に含めると `…(bar)Please set…` のように
- * スペース無しで連結されてしまう）ため、末尾1文字が ASCII かどうかだけで判定する
- * （安藤レビュー指摘）。
- *
- * 翻訳済み文字列そのものに前後の空白を含めると
- * `@wordpress/i18n-no-flanking-whitespace` の ESLint ルールに反するため、
- * 結合はコード側（翻訳を通さない箇所）で行う。PHP側
- * （src/common/class-nomination-min-guests-message.php の join_sentences()）と同型のロジック。
- *
- * @param {string} sentenceA 1文目（すでに翻訳・sprintf済み）。
- * @param {string} sentenceB 2文目（すでに翻訳・sprintf済み）。
- * @return {string} 連結後の文字列。
- */
-const joinSentences = ( sentenceA, sentenceB ) => {
-	const endsWithAscii = /[\x00-\x7F]$/.test( sentenceA );
-	return endsWithAscii ? sentenceA + ' ' + sentenceB : sentenceA + sentenceB;
 };
 
 /**
@@ -399,6 +408,9 @@ export const ReservationApp = ( {
 	// view.js 経由でここまで渡す。初回の auth-form 取得時だけ REST の
 	// registration_error_key パラメータとして送る。トークン自体に個人情報は含まれない。
 	initialRegistrationErrorKey = '',
+	// #635: サーバーが埋め込んだサービスメニューの詳細表示（view.js が読み取ったもの）。
+	// 詳細表示の要求でなければ null。
+	initialDetail = null,
 } ) => {
 	const userBootstrap = useMemo( () => {
 		if ( typeof window === 'undefined' ) {
@@ -407,20 +419,85 @@ export const ReservationApp = ( {
 		return window.vkbmCurrentUserBootstrap || null;
 	}, [] );
 	const queryDefaults = useMemo( () => parseQueryParams(), [] );
-	const initialMenuId = queryDefaults.menuId || defaultMenuId || 0;
+	// #635: 詳細表示の URL（menu_id + vkbm_view=detail）で開いたときは、menu_id は
+	// 詳細に出すメニューを指すだけで、予約画面のメニュー選択には使わない。
+	const initialMenuId = initialDetail
+		? defaultMenuId || 0
+		: queryDefaults.menuId || defaultMenuId || 0;
 	// menu_id が明示指定されたリンク経由（お気に入り・再予約・予約に進むボタン等）の場合は、
 	// resource_id 未指定を「指名なし」として尊重し、デフォルトスタッフへフォールバックしない。
-	const initialStaffId = queryDefaults.hasExplicitMenuId
-		? queryDefaults.staffId || 0
-		: queryDefaults.staffId || defaultStaffId || 0;
+	const initialStaffId =
+		queryDefaults.hasExplicitMenuId && ! initialDetail
+			? queryDefaults.staffId || 0
+			: queryDefaults.staffId || defaultStaffId || 0;
 	const initialDate = queryDefaults.date || '';
-	const initialMonthDate = initialDate ? new Date( initialDate ) : new Date();
+	const initialTodayIso = getTodayIso();
+	// URL の日付は今日以降の実在日だけを初期値にする（過ぎた日付は、予約に進んだときの案内にだけ使う）。
+	const initialUsableDate = normalizeFilterDate(
+		initialDate,
+		initialTodayIso
+	);
+	const initialIsPastDate = isPastIncomingDate(
+		initialDate,
+		initialTodayIso
+	);
+	// 宿泊のチェックイン日・チェックアウト日。そろって今日以降の矛盾が無いときだけ初期値にする。
+	const initialStay = resolveIncomingStay(
+		initialDate,
+		queryDefaults.checkOutDate || '',
+		initialTodayIso
+	);
+	const initialMonthDate = initialUsableDate
+		? new Date( initialUsableDate )
+		: new Date();
 
 	const [ menuId, setMenuId ] = useState( initialMenuId );
+	// #635: サービスメニューの詳細表示を出しているか。予約に進むと false になり、
+	// ブラウザの「戻る」で詳細の履歴へ戻ると true に戻る。
+	const [ isDetailView, setIsDetailView ] = useState(
+		initialDetail?.status === DETAIL_STATUS_OK
+	);
+	// #635: 詳細を表示できなかったときの案内文。メニューを選んだら消す。
+	// 読み上げられるよう、空の role="status" 領域を先に描画してから、マウント後に中身を入れる。
+	const [ detailNoticeMessage, setDetailNoticeMessage ] = useState( '' );
+	const detailHeadingRef = useRef( null );
+	// 詳細表示から予約画面へ切り替えたあとのフォーカス先。
+	const reservationContentRef = useRef( null );
+	const wasDetailViewRef = useRef( isDetailView );
+	const originalDocumentTitleRef = useRef( null );
 	const [ staffId, setStaffId ] = useState( initialStaffId );
 	// #431: リソースタグ検索で選択中のタグ（タームID配列）。複数選択時は AND 条件。
 	const [ selectedTagIds, setSelectedTagIds ] = useState( [] );
-	const [ selectedDate, setSelectedDate ] = useState( initialDate );
+	const [ selectedDate, setSelectedDate ] = useState( initialUsableDate );
+	// 絞り込み検索で選んだ日付（YYYY-MM-DD。未指定は空文字）。予約カレンダーの選択日（selectedDate）とは
+	// 別に持ち、メニューを選んだときに selectedDate へ引き継ぐ。URL の date は今日以降の実在する日付だけ初期値にする。
+	const [ filterDate, setFilterDate ] = useState( initialUsableDate );
+	// メニューを選んだときに予約カレンダーへ引き継いだ日付。そのメニューで選べない日だったときに
+	// 選択日を空に戻す判定（下の useEffect）が済むまで保持する。
+	// menu_id と date が付いた直リンク（個別ページの「予約に進む」など）で開いたときも、同じ判定にかける。
+	const [ carriedDate, setCarriedDate ] = useState(
+		initialMenuId ? initialUsableDate : ''
+	);
+	// 宿泊のサイトの絞り込み検索で選んだ日程（YYYY-MM-DD。未指定は空文字）。入力途中の矛盾した組み合わせも持ち、
+	// 絞り込みに使うのは validateStay() が通ったときだけ。宿泊のサイトでは filterDate の代わりにこちらを使う。
+	// URL の date・check_out_date が、そろって今日以降の矛盾が無い日程のときは、その日程を初期値にする。
+	const [ stayFilter, setStayFilter ] = useState( initialStay );
+	// URL で受け取った日付が過ぎていて、絞り込みの初期値に使えなかったか。
+	// 予約に進んだときの案内（「選んでいた日付は過ぎています」）に使う。利用者が日付を選び直したら false にする。
+	const [ hasIncomingPastDate, setHasIncomingPastDate ] =
+		useState( initialIsPastDate );
+	// 引き継いだ日付で予約できなかったときの案内。時間枠のサイトでカレンダーの直上に出す。
+	// kind は 'unavailable'（選べない日だった）か 'past'（過ぎていた）、date は選べなかった日付。
+	const [ carryNotice, setCarryNotice ] = useState(
+		initialMenuId && initialIsPastDate ? { kind: 'past', date: '' } : null
+	);
+	// 泊のプランを選んだときに、宿泊の日程選択（LodgingBookingPanel）へ初期値として渡す日程。
+	// menu_id と日程が付いた直リンクで開いたときは、その日程を最初から渡す。
+	const [ carriedStay, setCarriedStay ] = useState(
+		initialMenuId ? initialStay : { checkIn: '', checkOut: '' }
+	);
+	// 日付で絞り込んだ結果の、表示するメニューの ID（menu-loop の応答）。日付未指定・未取得は null。
+	const [ dateMenuIds, setDateMenuIds ] = useState( null );
 	const [ selectedSlot, setSelectedSlot ] = useState( null );
 	// 予約人数（複数人一括予約）。複数人一括予約に対応したメニューでのみ使用する。既定は1。
 	const [ guests, setGuests ] = useState( 1 );
@@ -444,16 +521,33 @@ export const ReservationApp = ( {
 		showMenuSearch: false,
 		// #431: 「リソースタグ検索」。指名機能（staffEnabled）の ON/OFF とは独立に判定する。
 		resourceTagSearchEnabled: false,
+		dateSearchEnabled: false,
+		// 絞り込み検索の日付欄の種類。'date' は日付1つ、'stay' は宿泊のチェックイン日・チェックアウト日・泊数。
+		dateSearchMode: 'date',
+		// 宿泊の日程で選べる最大の泊数（1回に予約できる上限）。
+		lodgingMaxNights: STAY_MAX_NIGHTS,
+		// サイトのタイムゾーンでの今日（Y-m-d）。日付欄の「今日」に使う。取得前は空。
+		siteToday: '',
 		staffEnabled: false,
 		defaultStaffId: 0,
 		resourceLabelSingular: __( 'Staff', 'vk-booking-manager' ),
 		resourceLabelPlural: __( 'Staff', 'vk-booking-manager' ),
+		resourceTagEmptyMessage: '',
 		noNominationLabel: __( 'No preference', 'vk-booking-manager' ),
 		nominationFeeLabel: __( 'Nomination fee', 'vk-booking-manager' ),
 		showProviderLogo: false,
 		showProviderName: false,
+		// #633: 予約ブロック末尾のフッター。
+		showFooter: false,
+		footer: null,
+		cancellationPolicy: '',
+		termsOfService: '',
 		providerName: '',
 		providerLogoUrl: '',
+		// ヘッダーのロゴ画像の横幅（px）。0 は指定なし。
+		providerLogoWidth: 0,
+		// 絞り込み検索のデザイン（plain / framed）。REST の reservation_menu_search_style を受ける。
+		menuSearchStyle: 'plain',
 		closedDayLabel: '',
 		otherConditionsLabel: __( 'Other conditions', 'vk-booking-manager' ),
 		// 数量の見出し（複数人一括予約）。REST が実効値を返す。
@@ -467,6 +561,9 @@ export const ReservationApp = ( {
 		() => menus.find( ( menu ) => menu.id === menuId ),
 		[ menus, menuId ]
 	);
+	// 泊単位のプランか（#575）。REST の vkbm_lodging はサーバー側の宿泊判定（Service_Menu_Post_Type::is_night_unit()）
+	// を通った値で、泊単位でなければ null。宿泊用の画面へ切り替える分岐はこの値だけで行う。
+	const isLodgingMenu = Boolean( currentMenu?.vkbm_lodging );
 	// #391: このメニューで指名機能を使うか。
 	// サイト全体の指名機能スイッチ（providerSettings.staffEnabled）がONで、かつ
 	// メニュー単位の無効化メタ（_vkbm_disable_nomination）が立っていない場合のみ true。
@@ -481,7 +578,7 @@ export const ReservationApp = ( {
 	const staffSelectionEnabled = allowStaffSelection && menuNominationEnabled;
 
 	// #429 安藤レビュー指摘（低・再レビュー）: 絞り込み検索で「スタッフによるメニュー絞り込み」
-	// （staffFilteredMenus・menuOptionsHiddenByStaffFilter・menuListEmptyMessage・
+	// （staffFilteredMenus・menuOptionsHiddenByFilter・menuListEmptyMessage・
 	// menuListStaffId）を行ってよいか。allowStaffSelection が false（古いブロックに残った
 	// data-allow-staff-selection="0" 属性等で、スタッフ欄が ReadOnlyField 表示になっている場合を
 	// 含む）のときは、利用者がスタッフ選択を変更できず「指名なしに戻せば全件表示に戻る」という
@@ -564,7 +661,7 @@ export const ReservationApp = ( {
 	//   対応スタッフの中にタグを持つリソースが1人でも含まれるメニューだけ残す（AND条件）。
 	//   いずれもサーバー側 Menu_Loop_Block::is_menu_visible_for_tag_filter() と同じ判定に揃える。
 	const staffActive = staffFilterAllowed && staffFilterId > 0;
-	const staffFilteredMenus = useMemo( () => {
+	const staffTagFilteredMenus = useMemo( () => {
 		if (
 			menuId ||
 			! shouldShowMenuSearch ||
@@ -619,14 +716,49 @@ export const ReservationApp = ( {
 		resourceIdsForTagFilter,
 	] );
 
+	// 日付欄の「今日」。サイトのタイムゾーンの日付を優先し、取得前だけブラウザの日付を使う。
+	const todayIso = providerSettings.siteToday || getTodayIso();
+
+	// 日付欄を出してよいか（基本設定で ON、かつ絞り込み検索を表示する構成）。
+	// 宿泊のサイトのチェックイン・チェックアウト指定は、この判定を差し替えて足す。
+	const dateFilterAvailable = isDateFilterAvailable(
+		providerSettings.dateSearchEnabled,
+		shouldShowMenuSearch
+	);
+	// 宿泊のサイトか（日付1つの代わりに、チェックイン日・チェックアウト日・泊数で絞り込む）。
+	const stayFilterMode = providerSettings.dateSearchMode === 'stay';
+	const stayValidation = validateStay(
+		stayFilter,
+		providerSettings.lodgingMaxNights
+	);
+	// 実際に日付で絞り込み中か（日付欄が出ていて、日付が入っている。宿泊のサイトは日程がそろっていて矛盾が無い）。
+	// 宿泊のサイトで日程が矛盾しているときは絞り込みを実行せず、欄の直下のエラーで伝える。
+	const dateFilterActive =
+		dateFilterAvailable &&
+		( stayFilterMode ? stayValidation.isComplete : filterDate !== '' );
+	// 絞り込みに使う日付（宿泊のサイトはチェックイン日）とチェックアウト日。
+	const activeFilterDate = stayFilterMode ? stayFilter.checkIn : filterDate;
+	const activeFilterCheckOut = stayFilterMode ? stayFilter.checkOut : '';
+
+	// 日付を指定している間（メニュー未選択時）、「メニュー」プルダウンの選択肢を、
+	// サーバーが日付で絞り込んだ結果（menu-loop の menu_ids）と同じ内容にそろえる。
+	// ID を取得するまでは日付以外の絞り込みだけを適用する。
+	const staffFilteredMenus = useMemo(
+		() =>
+			! menuId && dateFilterActive
+				? filterMenusByIds( staffTagFilteredMenus, dateMenuIds )
+				: staffTagFilteredMenus,
+		[ menuId, dateFilterActive, staffTagFilteredMenus, dateMenuIds ]
+	);
+
 	// #429 植草レビュー指摘（低）: 「メニュー」プルダウンの選択肢が、絞り込み検索の
 	// スタッフ選択が原因で0件になっているかどうか。メニュー自体が1件も無いサイト
 	// （スタッフ選択と無関係）まで理由文言の対象にしないよう、menus.length > 0 も条件に含める。
 	// #431: タグ絞り込みが原因で0件になっている場合も同様に扱う。
-	const menuOptionsHiddenByStaffFilter =
+	const menuOptionsHiddenByFilter =
 		! menuId &&
 		shouldShowMenuSearch &&
-		( staffActive || tagFilterActive ) &&
+		( staffActive || tagFilterActive || dateFilterActive ) &&
 		menus.length > 0 &&
 		staffFilteredMenus.length === 0;
 
@@ -648,14 +780,33 @@ export const ReservationApp = ( {
 			resourceIdsForTagFilter &&
 			resourceIdsForTagFilter.length === 0
 		) {
-			return sprintf(
-				/* translators: %s: resource label (plural), customizable via basic settings. */
-				__(
-					'There are no %s matching the selected conditions.',
-					'vk-booking-manager'
-				),
-				providerSettings.resourceLabelPlural
-			);
+			return providerSettings.resourceTagEmptyMessage;
+		}
+
+		// 日付を指定していて、スタッフ・タグだけなら表示できるメニューがあるときは、日付が原因の0件として
+		// 「日付を変えるか、指定を外す」案内を出す。2文の結合は joinSentences() に揃える。
+		if ( dateFilterActive && staffTagFilteredMenus.length > 0 ) {
+			return stayFilterMode
+				? joinSentences(
+						__(
+							'There are no service menus available for the selected dates.',
+							'vk-booking-manager'
+						),
+						__(
+							'Change the dates or clear the dates to show all service menus.',
+							'vk-booking-manager'
+						)
+				  )
+				: joinSentences(
+						__(
+							'There are no service menus available on the selected date.',
+							'vk-booking-manager'
+						),
+						__(
+							'Change the date or clear the date to show all service menus.',
+							'vk-booking-manager'
+						)
+				  );
 		}
 
 		if ( shouldShowMenuSearch && staffFilterAllowed && staffFilterId > 0 ) {
@@ -693,6 +844,9 @@ export const ReservationApp = ( {
 		staffFilterId,
 		tagFilterActive,
 		resourceIdsForTagFilter,
+		dateFilterActive,
+		stayFilterMode,
+		staffTagFilteredMenus,
 	] );
 
 	// #429 安藤・植草レビュー指摘（低・再レビュー）: 絞り込み検索とサービスメニュー一覧を
@@ -829,6 +983,21 @@ export const ReservationApp = ( {
 					resourceTagSearchEnabled: Boolean(
 						settings?.resource_tag_search_enabled
 					),
+					dateSearchEnabled: Boolean(
+						settings?.reservation_date_search_enabled
+					),
+					dateSearchMode:
+						settings?.reservation_date_search_mode === 'stay'
+							? 'stay'
+							: 'date',
+					lodgingMaxNights:
+						Number( settings?.lodging_max_nights ) > 0
+							? Number( settings.lodging_max_nights )
+							: STAY_MAX_NIGHTS,
+					siteToday:
+						typeof settings?.site_today === 'string'
+							? settings.site_today
+							: '',
 					staffEnabled: Boolean( settings?.staff_enabled ),
 					defaultStaffId: Number( settings?.default_staff_id ) || 0,
 					showProviderLogo: Boolean(
@@ -837,6 +1006,7 @@ export const ReservationApp = ( {
 					showProviderName: Boolean(
 						settings?.reservation_show_provider_name
 					),
+					...extractFooterSettings( settings ),
 					resourceLabelSingular:
 						typeof settings?.resource_label_singular === 'string' &&
 						settings.resource_label_singular.trim() !== ''
@@ -851,6 +1021,8 @@ export const ReservationApp = ( {
 							  settings.resource_label_singular.trim() !== ''
 							? settings.resource_label_singular
 							: __( 'Staff', 'vk-booking-manager' ),
+					resourceTagEmptyMessage:
+						resolveResourceTagEmptyMessage( settings ),
 					noNominationLabel:
 						typeof settings?.no_nomination_label === 'string' &&
 						settings.no_nomination_label.trim() !== ''
@@ -869,6 +1041,15 @@ export const ReservationApp = ( {
 						typeof settings?.provider_logo_url === 'string'
 							? settings.provider_logo_url
 							: '',
+					providerLogoWidth:
+						Number( settings?.provider_logo_width ) > 0
+							? Number( settings.provider_logo_width )
+							: 0,
+					menuSearchStyle:
+						typeof settings?.reservation_menu_search_style ===
+						'string'
+							? settings.reservation_menu_search_style
+							: 'plain',
 					closedDayLabel:
 						typeof settings?.closed_day_label === 'string'
 							? settings.closed_day_label
@@ -963,22 +1144,32 @@ export const ReservationApp = ( {
 			};
 		}
 
-		if ( ! providerSettings.showMenuList || menuId ) {
+		// 詳細表示中はサービスメニュー一覧を出さないため、取得しない。
+		const menuListNeeded =
+			providerSettings.showMenuList && ! menuId && ! isDetailView;
+		// 「サービスメニュー一覧」を表示しないサイトでも、日付を指定している間は
+		// 「メニュー」プルダウンを日付で絞るため、表示するメニューの ID だけを取得する。
+		const dateMenuIdsNeeded =
+			dateFilterActive && ! menuId && ! isDetailView;
+
+		if ( ! menuListNeeded && ! dateMenuIdsNeeded ) {
 			setMenuList( {
 				html: '',
 				isLoading: false,
 				error: '',
 			} );
+			setDateMenuIds( null );
 			return () => {
 				isMounted = false;
 			};
 		}
 
-		setMenuList( {
-			html: '',
+		// 日付を変えた再取得中は直前の一覧を残し、読み込み中の表示を重ねる（ちらつき防止）。
+		setMenuList( ( current ) => ( {
+			html: dateFilterActive && menuListNeeded ? current.html : '',
 			isLoading: true,
 			error: '',
-		} );
+		} ) );
 
 		apiFetch( {
 			path: buildApiPath( '/vkbm/v1/menu-loop', {
@@ -990,6 +1181,14 @@ export const ReservationApp = ( {
 				resource_tag_ids: menuListTagIds.length
 					? menuListTagIds
 					: undefined,
+				date: dateFilterActive ? activeFilterDate : undefined,
+				// 宿泊のサイトはチェックイン日（date）にチェックアウト日を添える。
+				check_out_date:
+					dateFilterActive && stayFilterMode
+						? activeFilterCheckOut
+						: undefined,
+				// 一覧を表示しないときは HTML を作らせず、ID だけを受け取る。
+				ids_only: menuListNeeded ? undefined : 1,
 			} ),
 		} )
 			.then( ( response ) => {
@@ -998,10 +1197,15 @@ export const ReservationApp = ( {
 				}
 
 				setMenuList( {
-					html: response?.html || '',
+					html: menuListNeeded ? response?.html || '' : '',
 					isLoading: false,
 					error: '',
 				} );
+				setDateMenuIds(
+					dateFilterActive && Array.isArray( response?.menu_ids )
+						? response.menu_ids
+						: null
+				);
 			} )
 			.catch( ( error ) => {
 				if ( ! isMounted ) {
@@ -1026,8 +1230,13 @@ export const ReservationApp = ( {
 		providerSettingsLoaded,
 		providerSettings.showMenuList,
 		menuId,
+		isDetailView,
 		menuListStaffId,
 		menuListTagIds,
+		dateFilterActive,
+		stayFilterMode,
+		activeFilterDate,
+		activeFilterCheckOut,
 	] );
 
 	useEffect( () => {
@@ -1649,6 +1858,15 @@ export const ReservationApp = ( {
 	const availableStaffOptions = useMemo( () => {
 		let options = staffOptions;
 
+		// #761: プラン未選択時は、泊のプランの担当客室と選択中の客室に絞る。
+		if ( ! currentMenu ) {
+			options = filterLodgingStaffOptions(
+				options,
+				menus,
+				staffFilterId
+			);
+		}
+
 		// 無料版、またはこのメニューで指名機能OFFのときは選択可能スタッフの制限を解除する（#391）。
 		if ( menuNominationEnabled && assignableStaffIds.length > 0 ) {
 			const allowedIds = new Set( assignableStaffIds );
@@ -1665,6 +1883,9 @@ export const ReservationApp = ( {
 
 		return options;
 	}, [
+		currentMenu,
+		menus,
+		staffFilterId,
 		assignableStaffIds,
 		staffOptions,
 		menuNominationEnabled,
@@ -1740,7 +1961,8 @@ export const ReservationApp = ( {
 		( ( authMode === 'profile' || authMode === 'bookings' ) &&
 			isLoggedIn ) ||
 		( ! isLoggedIn && ( authMode === 'login' || authMode === 'register' ) );
-	const shouldShowReservation = ! shouldShowUserSection;
+	const shouldShowReservation = ! shouldShowUserSection && ! isDetailView;
+	const shouldShowDetail = ! shouldShowUserSection && isDetailView;
 	const hasMenuSelection = Boolean( menuId );
 
 	const applyTax = useCallback(
@@ -1968,8 +2190,10 @@ export const ReservationApp = ( {
 			},
 		];
 
-		return rows;
+		// 泊単位のプランは宿泊用の画面が人数と泊数で計算した金額を出すため、ここは出さない（#575）。
+		return resolvePlanPricingRows( rows, isLodgingMenu );
 	}, [
+		isLodgingMenu,
 		basePrice,
 		pricingGuestCount,
 		isMultiGuestFlat,
@@ -1988,7 +2212,7 @@ export const ReservationApp = ( {
 			buildApiPath( '/wp/v2/vkbm_service_menu', {
 				per_page: 100,
 				_fields:
-					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests,vkbm_assignable_staff_ids',
+					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests,vkbm_assignable_staff_ids,vkbm_lodging',
 				status: canViewPrivateMenus ? 'publish,private' : undefined,
 			} ),
 		[ canViewPrivateMenus ]
@@ -2144,7 +2368,13 @@ export const ReservationApp = ( {
 		: calendarError || slotError;
 
 	const fetchCalendar = useCallback( () => {
-		if ( ! menuId || ! monthCursor.year || ! monthCursor.month ) {
+		// 泊単位のプランは宿泊用の画面が自分で空室を取得するため、時間枠のカレンダーは取得しない。
+		if (
+			! menuId ||
+			isLodgingMenu ||
+			! monthCursor.year ||
+			! monthCursor.month
+		) {
 			setCalendarData( null );
 			setCalendarUnavailabilityReason( null );
 			return;
@@ -2201,6 +2431,7 @@ export const ReservationApp = ( {
 		effectiveResourceTagIds,
 		monthCursor,
 		canManageReservations,
+		isLodgingMenu,
 	] );
 
 	useEffect( () => {
@@ -2208,7 +2439,7 @@ export const ReservationApp = ( {
 	}, [ fetchCalendar ] );
 
 	useEffect( () => {
-		if ( ! menuId || ! selectedDate ) {
+		if ( ! menuId || ! selectedDate || isLodgingMenu ) {
 			setSlotData( [] );
 			return;
 		}
@@ -2281,6 +2512,7 @@ export const ReservationApp = ( {
 		selectedDate,
 		currentStaff,
 		canManageReservations,
+		isLodgingMenu,
 	] );
 
 	useEffect( () => {
@@ -2295,6 +2527,51 @@ export const ReservationApp = ( {
 			} );
 		}
 	}, [ selectedSlot ] );
+
+	// 絞り込みから引き継いだ日が、選んだメニューのカレンダーで選べない日だったときは、
+	// 別の日に差し替えず選択日を空に戻す。カレンダーの読み込みが済むまで判定を待つ。
+	useEffect( () => {
+		if ( ! carriedDate || ! menuId ) {
+			return;
+		}
+
+		// 泊のプランの日程は carriedStay / LodgingBookingPanel 側で判定する。時間枠用の carriedDate は使わない。
+		// 初期表示時はメニュー一覧の取得前でプランの種別が分からないため、取得後にここで空にする。
+		if ( isLodgingMenu ) {
+			setCarriedDate( '' );
+			return;
+		}
+
+		if (
+			! isCarriedDateUnselectable( carriedDate, menuId, calendarData )
+		) {
+			// 読み込み済みで選べる日なら引き継ぎ完了。まだ読み込み前なら次の更新を待つ。
+			if ( calendarData?.meta?.menu_id === menuId ) {
+				setCarriedDate( '' );
+			}
+			return;
+		}
+
+		setSelectedDate( ( current ) =>
+			current === carriedDate ? '' : current
+		);
+		setSelectedSlot( null );
+		// 別の日に差し替えず未選択に戻した理由を、カレンダーの直上で伝える。
+		setCarryNotice( { kind: 'unavailable', date: carriedDate } );
+		setCarriedDate( '' );
+	}, [ carriedDate, menuId, calendarData, isLodgingMenu ] );
+
+	// 一覧の取得前に保留していた宿泊の日程は、選んだメニューが泊のプランでないと分かった時点で捨てる。
+	useEffect( () => {
+		if ( ! currentMenu || isLodgingMenu ) {
+			return;
+		}
+		setCarriedStay( ( current ) =>
+			current.checkIn || current.checkOut
+				? { checkIn: '', checkOut: '' }
+				: current
+		);
+	}, [ currentMenu, isLodgingMenu ] );
 
 	const handleMonthChange = ( delta ) => {
 		setMonthCursor( ( current ) => {
@@ -2313,6 +2590,8 @@ export const ReservationApp = ( {
 		}
 		setSelectedDate( date );
 		setSelectedSlot( null );
+		// 日付を選び直したら、引き継げなかった案内は消す。
+		setCarryNotice( null );
 	};
 
 	const handleMenuChange = ( nextMenuId ) => {
@@ -2356,8 +2635,43 @@ export const ReservationApp = ( {
 			setStaffId( 0 );
 		}
 
+		// 絞り込み検索で日付を指定していれば、その日を予約カレンダーの選択日・表示月に引き継ぐ。
+		// 引き継いだ日がこのメニューで選べない日だったときは、下の useEffect が選択日を空に戻す。
+		// 宿泊のサイトでは、泊のプランへは日程全体を宿泊の日程選択に引き継ぐ（そのため予約カレンダーの選択日は空にする）。
+		// 時間枠のプランへはチェックイン日を引き継ぐ。
+		// URL から受け取った日付（詳細表示からの「予約に進む」）も引き継ぐため、基本設定の読み込みや日付欄の有無には依存せず、
+		// 絞り込みの日付が入っているかで判定する。
+		const nextMenuIsNightPlan = Boolean( nextMenu?.vkbm_lodging );
+		const carriedStayRange = resolveCarriedStay(
+			stayFilter,
+			providerSettings.lodgingMaxNights
+		);
+		let carriedFilterDate = filterDate;
+		if ( stayFilterMode ) {
+			carriedFilterDate = carriedStayRange.checkIn;
+		}
+		const carried = resolveCarriedDate(
+			! nextMenuIsNightPlan ? carriedFilterDate : '',
+			todayIso
+		);
+		// メニュー一覧の取得前（nextMenu が未取得）は泊のプランかどうか分からないため、日程を捨てずに保留する。
+		// 種類が分かった時点で、泊のプランでなければ下の useEffect が空にする。
+		setCarriedStay(
+			nextMenuIsNightPlan || ! nextMenu
+				? carriedStayRange
+				: { checkIn: '', checkOut: '' }
+		);
+		// 受け取った日付が過ぎていたときは、日付を選び直してもらう案内を出す（宿泊のプランは宿泊の日程選択が出す）。
+		setCarryNotice(
+			hasIncomingPastDate && ! nextMenuIsNightPlan && ! carried.date
+				? { kind: 'past', date: '' }
+				: null
+		);
+
 		setMenuId( nextMenuId );
-		setSelectedDate( '' );
+		setDetailNoticeMessage( '' );
+		setSelectedDate( carried.date );
+		setCarriedDate( carried.date );
 		setSelectedSlot( null );
 		setGuests( 1 );
 		// メニュー変更時は料金区分の人数もリセットする（区分構成が変わるため）。
@@ -2365,9 +2679,52 @@ export const ReservationApp = ( {
 		// メニュー変更時は貸し切り指定もリセットする（メニューごとに設定が異なるため）。
 		setUserExclusive( false );
 		setMonthCursor( {
-			year: new Date().getFullYear(),
-			month: new Date().getMonth() + 1,
+			year: carried.year,
+			month: carried.month,
 		} );
+	};
+
+	// 絞り込み検索で選んだ日付を表示中の URL へ反映する（履歴は増やさない）。
+	// 詳細ページへ移ってからブラウザの「戻る」で戻ったときに、日付が残った一覧が開くようにするため。
+	const syncDateQueryToUrl = ( date, checkOut ) => {
+		if ( typeof window === 'undefined' || isDetailView ) {
+			return;
+		}
+
+		try {
+			window.history.replaceState(
+				null,
+				'',
+				applyDateQuery( window.location.href, date, checkOut )
+			);
+		} catch ( error ) {
+			// URL を書き換えられない環境では、日付は画面内の状態だけで持つ。
+		}
+	};
+
+	// 絞り込み検索の日付欄を変更する。空文字は日付の指定を外す。
+	// ブラウザの日付入力は手入力で今日より前の日も入りうるため、ここでも今日以降に整える。
+	const handleFilterDateChange = ( value ) => {
+		const nextDate = normalizeFilterDate( value, todayIso );
+		setFilterDate( nextDate );
+		setHasIncomingPastDate( false );
+		syncDateQueryToUrl( nextDate, '' );
+	};
+
+	// 宿泊のサイトの絞り込み検索の日程（チェックイン日・チェックアウト日）を変更する。
+	// 日付欄が日付の組み立て（翌日の自動入力・泊数を保った移動）を済ませた値を渡してくるため、そのまま持つ。
+	const handleStayFilterChange = ( nextStay ) => {
+		setStayFilter( nextStay );
+		setHasIncomingPastDate( false );
+		const nextStayValidation = validateStay(
+			nextStay,
+			providerSettings.lodgingMaxNights
+		);
+		if ( nextStayValidation.isComplete ) {
+			syncDateQueryToUrl( nextStay.checkIn, nextStay.checkOut );
+		} else {
+			syncDateQueryToUrl( '', '' );
+		}
 	};
 
 	const handleStaffChange = ( nextStaffId ) => {
@@ -2534,6 +2891,19 @@ export const ReservationApp = ( {
 			}
 
 			handleMenuChange( nextId );
+			// #635: 詳細表示のカードから予約に進むときは、再読み込みせずに予約画面へ切り替える。
+			// ブラウザの「戻る」で詳細へ戻れるよう、履歴に積む。
+			if ( isDetailView ) {
+				window.history.pushState(
+					null,
+					'',
+					buildReservationUrlFromDetail(
+						window.location.href,
+						nextId
+					)
+				);
+				setIsDetailView( false );
+			}
 			const blockRoot = layoutRef.current?.closest?.(
 				'.vkbm-reservation-block'
 			);
@@ -2545,8 +2915,81 @@ export const ReservationApp = ( {
 				} );
 			}
 		},
-		[ handleMenuChange ]
+		[ handleMenuChange, isDetailView ]
 	);
+
+	// #635: ブラウザの「戻る」「進む」で、詳細表示と予約画面を行き来できるようにする。
+	// リスナーは1回だけ登録し、最新の状態を見る処理は ref 経由で呼ぶ。
+	const popStateHandlerRef = useRef( null );
+	popStateHandlerRef.current = () => {
+		if ( initialDetail?.status !== DETAIL_STATUS_OK ) {
+			return;
+		}
+
+		if ( isDetailViewUrl( window.location.search ) ) {
+			setMenuId( defaultMenuId || 0 );
+			setSelectedDate( '' );
+			setSelectedSlot( null );
+			setIsDetailView( true );
+			return;
+		}
+
+		const nextId =
+			Number(
+				new URLSearchParams( window.location.search ).get( 'menu_id' )
+			) || 0;
+		setIsDetailView( false );
+		if ( nextId ) {
+			handleMenuChange( nextId );
+		}
+	};
+	useEffect( () => {
+		const onPopState = () => popStateHandlerRef.current?.();
+		window.addEventListener( 'popstate', onPopState );
+		return () => window.removeEventListener( 'popstate', onPopState );
+	}, [] );
+
+	// #635: 詳細表示を出したら、フォーカスをメニュー名の見出しへ移し、
+	// タブのタイトルを「メニュー名 | 元のタイトル」にする。詳細表示をやめたら元に戻す。
+	useEffect( () => {
+		if ( typeof document === 'undefined' ) {
+			return;
+		}
+
+		if ( isDetailView && initialDetail?.title ) {
+			if ( originalDocumentTitleRef.current === null ) {
+				originalDocumentTitleRef.current = document.title;
+			}
+			document.title = `${ initialDetail.title } | ${ originalDocumentTitleRef.current }`;
+			detailHeadingRef.current?.focus( { preventScroll: true } );
+			return;
+		}
+
+		if ( originalDocumentTitleRef.current !== null ) {
+			document.title = originalDocumentTitleRef.current;
+		}
+
+		// 詳細表示から予約画面へ切り替えたときは、フォーカスが body に落ちないよう予約画面の内容領域へ移す。
+		if ( wasDetailViewRef.current ) {
+			reservationContentRef.current?.focus( { preventScroll: true } );
+		}
+	}, [ isDetailView, initialDetail ] );
+
+	useEffect( () => {
+		wasDetailViewRef.current = isDetailView;
+	}, [ isDetailView ] );
+
+	// 詳細を表示できなかった案内は、空の領域がマウントされたあとに差し込む。
+	useEffect( () => {
+		if ( initialDetail?.status === DETAIL_STATUS_UNAVAILABLE ) {
+			setDetailNoticeMessage(
+				__(
+					'The details of the specified service menu cannot be displayed.',
+					'vk-booking-manager'
+				)
+			);
+		}
+	}, [ initialDetail ] );
 
 	// 複数人一括予約メニューで満枠（選択可能人数が0）のスロットは予約へ進めない。
 	// 料金区分メニューは合計人数が 1〜選択可能上限の範囲にある場合のみ進める。
@@ -2559,6 +3002,36 @@ export const ReservationApp = ( {
 				( guestTiersTotalCount >= 1 &&
 					guestTiersTotalCount <= maxSelectableGuests ) ) &&
 			currentGuestCount >= nominationMinGuests
+	);
+
+	// 宿泊用の画面（#575）が組み立てた下書きの内容を保存し、確認画面へ移動する。
+	// 失敗時は reject し、エラーメッセージの表示は呼び出し側（宿泊用の画面）が行う。
+	const submitLodgingDraft = useCallback(
+		( lodgingPayload ) =>
+			saveDraftRequest( {
+				token: getDraftTokenFromCookie(),
+				...lodgingPayload,
+			} ).then( ( response ) => {
+				const token = sanitizeDraftToken( response?.token );
+				if ( ! token ) {
+					throw new Error(
+						__(
+							'Temporary reservation data save failed.',
+							'vk-booking-manager'
+						)
+					);
+				}
+
+				storeDraftToken( token, response?.expires_in || 1800 );
+
+				if ( typeof window !== 'undefined' ) {
+					const url = new URL( window.location.href );
+					url.searchParams.delete( 'vkbm_auth' );
+					url.searchParams.set( 'draft', token );
+					window.location.href = url.toString();
+				}
+			} ),
+		[]
 	);
 
 	const handleProceed = useCallback( () => {
@@ -2710,11 +3183,7 @@ export const ReservationApp = ( {
 			},
 		};
 
-		apiFetch( {
-			path: '/vkbm/v1/drafts',
-			method: 'POST',
-			data: payload,
-		} )
+		saveDraftRequest( payload )
 			.then( ( response ) => {
 				const token = sanitizeDraftToken( response?.token );
 				const expiresIn = response?.expires_in || 1800;
@@ -2809,9 +3278,7 @@ export const ReservationApp = ( {
 		variant: navVariant,
 		ariaLabel: navAriaLabel,
 		staffDashboardHref: shiftDashboardUrl || '',
-		logoutHref:
-			logoutUrl ||
-			buildLogoutFallbackUrl( providerSettings.reservationPageUrl ),
+		logoutHref: logoutUrl || buildLogoutFallbackUrl(),
 		onReturn: () => handleAuthLink( authMode || '' ),
 		returnLabel,
 		onBookings: () => handleAuthLink( 'bookings' ),
@@ -2822,6 +3289,14 @@ export const ReservationApp = ( {
 		isLoginActive: authMode === 'login',
 		onRegister: () => handleAuthLink( 'register' ),
 		isRegisterActive: authMode === 'register',
+		// #635: 詳細表示中は、ナビゲーションに「一覧に戻る」（予約ページの最初の状態）を足す。
+		listReturnHref: shouldShowDetail
+			? buildListReturnUrl(
+					initialDetail?.listUrl || '',
+					typeof window === 'undefined' ? '' : window.location.search
+			  )
+			: '',
+		listReturnLabel: __( 'Back to the list', 'vk-booking-manager' ),
 	};
 
 	if ( confirmDraftToken ) {
@@ -2867,6 +3342,14 @@ export const ReservationApp = ( {
 			booking?.start_at,
 			booking?.end_at
 		);
+		// 泊の予約は、チェックイン／チェックアウトの日時を2行で表示する。
+		const isStay = isStayBooking( booking );
+		const checkInParts = isStay
+			? formatBookingDateTimeParts( booking?.start_at, null )
+			: null;
+		const checkOutParts = isStay
+			? formatBookingDateTimeParts( booking?.end_at, null )
+			: null;
 		const statusKey = String( booking?.status || '' ).trim();
 		const isPending = statusKey.toLowerCase() === 'pending';
 		const isCancelled = statusKey.toLowerCase() === 'cancelled';
@@ -2901,12 +3384,18 @@ export const ReservationApp = ( {
 									{ __( 'Cancelled', 'vk-booking-manager' ) }
 								</span>
 							) }
-							{ datetimeParts.date && (
+							{ isStay && (
+								<BookingStayDatetime
+									checkIn={ `${ checkInParts.date } ${ checkInParts.time }`.trim() }
+									checkOut={ `${ checkOutParts.date } ${ checkOutParts.time }`.trim() }
+								/>
+							) }
+							{ ! isStay && datetimeParts.date && (
 								<span className="vkbm-confirm__date">
 									{ datetimeParts.date }
 								</span>
 							) }
-							{ datetimeParts.time && (
+							{ ! isStay && datetimeParts.time && (
 								<span className="vkbm-confirm__time">
 									{ datetimeParts.date ? ' ' : '' }
 									{ datetimeParts.time }
@@ -2979,13 +3468,25 @@ export const ReservationApp = ( {
 		! menuList.html &&
 		Boolean( menuListEmptyMessage );
 
+	// #633: 設定が ON で、表示する中身がある場合だけフッターを出す。
+	const footerModel = buildFooterModel( providerSettings );
+
+	// #790: フッターを出しているときだけ修飾クラスを付ける。画面下端に付ける処理は CSS（style.scss）が行う。
+	const attachFooterToBottom = Boolean( footerModel ) && ! isEditor;
+
 	return (
-		<div className="vkbm-reservation" ref={ layoutRef }>
+		<div
+			className={ `vkbm-reservation${
+				attachFooterToBottom ? ' vkbm-reservation--footer-bottom' : ''
+			}` }
+			ref={ layoutRef }
+		>
 			<ReservationHeader
 				showBrand={ shouldShowBrand }
 				brandLinkHref={ brandLinkHref }
 				showLogo={ shouldShowLogo }
 				logoUrl={ providerSettings.providerLogoUrl }
+				logoWidth={ providerSettings.providerLogoWidth }
 				logoAlt={ brandLogoAlt }
 				showName={ shouldShowName }
 				brandName={ providerSettings.providerName }
@@ -3084,8 +3585,23 @@ export const ReservationApp = ( {
 				</section>
 			) }
 
+			{ shouldShowDetail && (
+				<div className="vkbm-reservation-content vkbm-reservation-content--detail">
+					<ServiceMenuDetail
+						title={ initialDetail?.title || '' }
+						contentNode={ initialDetail?.contentNode || null }
+						cardNode={ initialDetail?.cardNode || null }
+						editLinkNode={ initialDetail?.editLinkNode || null }
+						headingRef={ detailHeadingRef }
+						onCardClick={ handleMenuLoopClick }
+					/>
+				</div>
+			) }
+
 			{ shouldShowReservation && (
 				<div
+					ref={ reservationContentRef }
+					tabIndex={ -1 }
 					className={ [
 						'vkbm-reservation-content',
 						isEditor && 'vkbm-reservation-content--is-editor',
@@ -3093,6 +3609,16 @@ export const ReservationApp = ( {
 						.filter( Boolean )
 						.join( ' ' ) }
 				>
+					<div
+						className="vkbm-reservation-content__detail-notice"
+						role="status"
+					>
+						{ detailNoticeMessage && (
+							<p className="vkbm-alert vkbm-alert__warning">
+								{ detailNoticeMessage }
+							</p>
+						) }
+					</div>
 					{ providerSettingsLoaded &&
 						isLoggedIn &&
 						favoritesError && (
@@ -3175,6 +3701,11 @@ export const ReservationApp = ( {
 						<>
 							{ ( menuId || shouldShowMenuSearch ) && (
 								<SelectedPlanSummary
+									// デザイン設定のデザイン（枠で囲うなど）は、「絞り込み検索」の ON/OFF に関係なく、
+									// この検索欄が表示されているすべての画面（メニュー選択後を含む）へ同じように当てる（#787）。
+									searchStyle={
+										providerSettings.menuSearchStyle
+									}
 									menuId={ menuId }
 									staffId={ staffId }
 									menus={ staffFilteredMenus }
@@ -3199,7 +3730,7 @@ export const ReservationApp = ( {
 										providerSettings.noNominationLabel
 									}
 									menuUnavailableMessage={
-										menuOptionsHiddenByStaffFilter
+										menuOptionsHiddenByFilter
 											? menuListEmptyMessage
 											: ''
 									}
@@ -3232,14 +3763,47 @@ export const ReservationApp = ( {
 									showMenuList={
 										providerSettings.showMenuList
 									}
+									// 絞り込み検索の日付欄。メニュー未選択のときだけ出す。
+									showDateFilter={
+										dateFilterAvailable &&
+										! stayFilterMode &&
+										! menuId
+									}
+									filterDate={ filterDate }
+									filterDateMin={ todayIso }
+									showStayFilter={
+										dateFilterAvailable &&
+										stayFilterMode &&
+										! menuId
+									}
+									stayCheckIn={ stayFilter.checkIn }
+									stayCheckOut={ stayFilter.checkOut }
+									onStayChange={ handleStayFilterChange }
+									stayMaxNights={
+										providerSettings.lodgingMaxNights
+									}
+									onFilterDateChange={
+										handleFilterDateChange
+									}
+									locale={ userBootstrap?.locale }
 								/>
 							) }
 							{ ! menuId &&
 								providerSettings.showMenuList &&
 								( menuList.html ? (
+									// 日付を変えた再取得中は直前の一覧を残して薄く表示し、読み込み中であることを伝える。
 									<section
-										className="vkbm-reservation-content__menu-list"
+										className={
+											menuList.isLoading
+												? 'vkbm-reservation-content__menu-list vkbm-reservation-content__menu-list--loading'
+												: 'vkbm-reservation-content__menu-list'
+										}
 										aria-live="polite"
+										aria-busy={
+											menuList.isLoading
+												? 'true'
+												: undefined
+										}
 										onClick={ handleMenuLoopClick }
 										dangerouslySetInnerHTML={ {
 											__html: menuList.html,
@@ -3288,9 +3852,52 @@ export const ReservationApp = ( {
 						</>
 					) }
 
-					{ hasMenuSelection && (
+					{ /* 泊単位のプラン: チェックイン日・チェックアウト日・客室・人数を選ぶ宿泊用の画面（#575）。
+					     時間枠のカレンダー・時間枠一覧・選択中の表示は、下の2つの条件から外す。 */ }
+					{ hasMenuSelection && isLodgingMenu && (
+						<Suspense
+							fallback={
+								<p
+									className="vkbm-alert vkbm-alert__info"
+									role="status"
+								>
+									{ __( 'Loading…', 'vk-booking-manager' ) }
+								</p>
+							}
+						>
+							<LodgingBookingPanel
+								key={ menuId }
+								menuId={ menuId }
+								menuTitle={
+									currentMenu?.title?.rendered ??
+									currentMenu?.title ??
+									''
+								}
+								lodging={ currentMenu.vkbm_lodging }
+								locale={ userBootstrap?.locale }
+								guestsCountLabel={
+									providerSettings.guestsCountLabel
+								}
+								guestsUnitLabel={
+									providerSettings.guestsUnitLabel
+								}
+								currencySymbol={
+									providerSettings.currencySymbol || null
+								}
+								resourceLabelSingular={
+									providerSettings.resourceLabelSingular
+								}
+								isEditor={ isEditor }
+								initialCheckIn={ carriedStay.checkIn }
+								initialCheckOut={ carriedStay.checkOut }
+								isCarriedDatePast={ hasIncomingPastDate }
+								onSubmitDraft={ submitLodgingDraft }
+							/>
+						</Suspense>
+					) }
+					{ hasMenuSelection && ! isLodgingMenu && (
 						<div className="vkbm-reservation-content__body">
-							{ /* #411: 管理者・サイトオーナー・サロンオーナー向けの診断バナー。
+							{ /* #411: 管理者・サイトオーナー・事業者向けの診断バナー。
 							     一般訪問者にはサーバー側でフィールド自体が付与されないため、
 							     常に空文字になり hidden のまま何も表示されない。
 							     role="status" + aria-live="polite" は、利用者の操作結果ではなく
@@ -3315,6 +3922,44 @@ export const ReservationApp = ( {
 									/>
 								</svg>
 								<p>{ adminDiagnosticMessage }</p>
+							</div>
+							{ /* 引き継いだ日付で予約できなかったことの案内。領域は常設し、中身だけを入れ替える（フォーカスは移さない）。 */ }
+							<div
+								className="vkbm-reservation-content__carry-notice"
+								role="status"
+							>
+								{ carryNotice && (
+									<p className="vkbm-alert vkbm-alert__warning vkbm-alert--compact">
+										{ carryNotice.kind === 'past'
+											? joinSentences(
+													__(
+														'The date you had selected has passed.',
+														'vk-booking-manager'
+													),
+													__(
+														'Please select the date again.',
+														'vk-booking-manager'
+													)
+											  )
+											: joinSentences(
+													sprintf(
+														/* translators: %s: the date that was carried over and cannot be booked. */
+														__(
+															'The date you selected (%s) cannot be booked for this menu.',
+															'vk-booking-manager'
+														),
+														formatStayDate(
+															carryNotice.date,
+															userBootstrap?.locale
+														)
+													),
+													__(
+														'Please select another date.',
+														'vk-booking-manager'
+													)
+											  ) }
+									</p>
+								) }
 							</div>
 							<CalendarGrid
 								year={ monthCursor.year }
@@ -3358,7 +4003,7 @@ export const ReservationApp = ( {
 						</div>
 					) }
 
-					{ hasMenuSelection && (
+					{ hasMenuSelection && ! isLodgingMenu && (
 						<div
 							className="vkbm-plan-summary__status vkbm-plan-summary__status--detached"
 							ref={ actionSectionRef }
@@ -3814,6 +4459,12 @@ export const ReservationApp = ( {
 							</div>
 						</div>
 					) }
+				</div>
+			) }
+
+			{ footerModel && (
+				<div className="vkbm-reservation__footer-area">
+					<ReservationFooter model={ footerModel } />
 				</div>
 			) }
 		</div>

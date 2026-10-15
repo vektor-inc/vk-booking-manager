@@ -85,7 +85,7 @@ class Availability_Cache_Generation_Test extends WP_UnitTestCase {
 		$method     = $reflection->getMethod( 'build_cache_key' );
 		$method->setAccessible( true );
 
-		return (string) $method->invoke( $service, 'calendar', 3, $staff_ids, '2026-04', 'Asia/Tokyo', $is_staff_preferred );
+		return (string) $method->invoke( $service, 'calendar', 3, $staff_ids, '2026-04', $is_staff_preferred );
 	}
 
 	/**
@@ -518,5 +518,106 @@ class Availability_Cache_Generation_Test extends WP_UnitTestCase {
 			$expected = $case['expected_bumped'] ? 1 : 0;
 			$this->assertSame( $expected, Availability_Cache_Generation::get_generation(), $case['test_condition_name'] );
 		}
+	}
+
+	/**
+	 * サイトのタイムゾーン設定の追加・更新・削除で、日次・月次キャッシュが新しい世代へ切り替わることを確認する。
+	 */
+	public function test_generation_bumps_on_site_timezone_change(): void {
+		$service    = new Availability_Service();
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'timezone_string を追加した場合 => 日次・月次キャッシュを再生成する（正常系）',
+				'option_name'         => 'timezone_string',
+				'before_value'        => null,
+				'operation'           => 'add',
+				'after_value'         => 'Asia/Tokyo',
+			),
+			array(
+				'test_condition_name' => 'timezone_string を更新した場合 => 日次・月次キャッシュを再生成する（正常系）',
+				'option_name'         => 'timezone_string',
+				'before_value'        => 'Asia/Tokyo',
+				'operation'           => 'update',
+				'after_value'         => 'America/New_York',
+			),
+			array(
+				'test_condition_name' => 'timezone_string を削除した場合 => gmt_offset 基準の日次・月次キャッシュを再生成する（境界値）',
+				'option_name'         => 'timezone_string',
+				'before_value'        => 'Asia/Tokyo',
+				'operation'           => 'delete',
+				'after_value'         => null,
+			),
+			array(
+				'test_condition_name' => 'gmt_offset を更新した場合 => timezone_string 未設定時の日次・月次キャッシュを再生成する（正常系）',
+				'option_name'         => 'gmt_offset',
+				'before_value'        => 0,
+				'operation'           => 'update',
+				'after_value'         => 9,
+			),
+		);
+
+		$original_timezone_string = get_option( 'timezone_string', null );
+		$original_gmt_offset      = get_option( 'gmt_offset', null );
+
+		foreach ( $test_cases as $case ) {
+			// 各ケースの開始状態を作った際の無効化予約を消化してから、世代番号を0へ揃える。
+			delete_option( 'timezone_string' );
+			if ( null !== $case['before_value'] ) {
+				update_option( $case['option_name'], $case['before_value'] );
+			} else {
+				delete_option( $case['option_name'] );
+			}
+			$this->flush_shutdown();
+			delete_option( Availability_Cache_Generation::OPTION_NAME );
+
+			$daily_key_before   = $this->call_build_cache_key_for_date( $service, 'daily', '2026-04-01' );
+			$monthly_key_before = $this->call_build_cache_key_for_date( $service, 'calendar', '2026-04' );
+			set_transient( $daily_key_before, array( 'timezone' => 'stale' ), MINUTE_IN_SECONDS );
+			set_transient( $monthly_key_before, array( 'timezone' => 'stale' ), 5 * MINUTE_IN_SECONDS );
+
+			if ( 'delete' === $case['operation'] ) {
+				delete_option( $case['option_name'] );
+			} else {
+				update_option( $case['option_name'], $case['after_value'] );
+			}
+			$this->flush_shutdown();
+
+			$daily_key_after   = $this->call_build_cache_key_for_date( $service, 'daily', '2026-04-01' );
+			$monthly_key_after = $this->call_build_cache_key_for_date( $service, 'calendar', '2026-04' );
+			$this->assertSame( 1, Availability_Cache_Generation::get_generation(), $case['test_condition_name'] . ' : 世代番号' );
+			$this->assertNotSame( $daily_key_before, $daily_key_after, $case['test_condition_name'] . ' : 日次キャッシュキー' );
+			$this->assertNotSame( $monthly_key_before, $monthly_key_after, $case['test_condition_name'] . ' : 月次キャッシュキー' );
+			$this->assertFalse( get_transient( $daily_key_after ), $case['test_condition_name'] . ' : 日次の旧キャッシュを参照しない' );
+			$this->assertFalse( get_transient( $monthly_key_after ), $case['test_condition_name'] . ' : 月次の旧キャッシュを参照しない' );
+
+			delete_transient( $daily_key_before );
+			delete_transient( $monthly_key_before );
+		}
+
+		delete_option( 'timezone_string' );
+		delete_option( 'gmt_offset' );
+		if ( null !== $original_timezone_string ) {
+			update_option( 'timezone_string', $original_timezone_string );
+		}
+		if ( null !== $original_gmt_offset ) {
+			update_option( 'gmt_offset', $original_gmt_offset );
+		}
+		$this->flush_shutdown();
+	}
+
+	/**
+	 * 指定種別・日付の日次または月次キャッシュキーを返す。
+	 *
+	 * @param Availability_Service $service  対象インスタンス。
+	 * @param string               $prefix   キャッシュ種別。
+	 * @param string               $date_key 日付または年月。
+	 * @return string キャッシュキー。
+	 */
+	private function call_build_cache_key_for_date( Availability_Service $service, string $prefix, string $date_key ): string {
+		$reflection = new ReflectionClass( $service );
+		$method     = $reflection->getMethod( 'build_cache_key' );
+		$method->setAccessible( true );
+
+		return (string) $method->invoke( $service, $prefix, 3, array( 1, 2 ), $date_key, false );
 	}
 }

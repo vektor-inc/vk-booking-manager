@@ -1,6 +1,6 @@
 .vkbm-setting-table {
 	width: 100%;
-	background-color: #fff;
+	background-color: var(--vkbm--admin--color--surface);
 	border-collapse: collapse;
 }
 
@@ -32,7 +32,7 @@
 
 .vkbm-setting-table tbody tr + tr th,
 .vkbm-setting-table tbody tr + tr td {
-	border-top: 1px solid #dcdcde;
+	border-top: 1px solid var(--vkbm--admin--color--border);
 }
 
 .vkbm-setting-table .vkbm-shift-day-row.is-holiday th,
@@ -47,7 +47,7 @@
 }
 
 /* ==========================================================================
-   サービスメニュー一覧：料金区分の一覧表示（#515）
+   サービスメニュー一覧：料金区分の一覧表示
    ========================================================================== */
 
 /*
@@ -69,5 +69,14 @@
 }
 
 .vkbm-admin-price-tiers-price {
+	white-space: nowrap;
+}
+
+// 金額と単位（「¥10,000〜 / 1名・1泊」）は別々の塊にして、折り返しは「 / 」の境目で起こるようにする。
+.vkbm-admin-price-tiers-price--unit {
+	white-space: normal;
+}
+
+.vkbm-price-chunk {
 	white-space: nowrap;
 }

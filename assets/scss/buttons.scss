@@ -1,3 +1,5 @@
+@use "mixins" as *;
+
 .vkbm-button {
 	text-box: trim-both text;
 	align-items: center;
@@ -17,7 +19,9 @@
 	user-select: none;
 	white-space: nowrap;
 
-	&:not(.vkbm-button__link) {
+	// テーマの `a:hover { text-decoration: underline }` や `.entry-body a` などのリンク下線指定より
+	// 常に優先させるため、リンク風ボタン（.vkbm-button__link）以外は !important で下線なしに固定する。
+	&:where(:not(.vkbm-button__link)) {
 		text-decoration: none !important;
 	}
 }
@@ -39,16 +43,13 @@
 // ボタン内の読み上げ専用テキスト（無効理由など）を視覚的に隠す。
 // テーマ側で screen-reader-text が未定義でも確実に隠れるよう自前で定義する。
 .vkbm-button .screen-reader-text {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	margin: -1px;
-	padding: 0;
-	overflow: hidden;
-	border: 0;
-	clip: rect(1px, 1px, 1px, 1px);
-	clip-path: inset(50%);
-	word-wrap: normal !important;
+
+	@include vkbm-visually-hidden;
+
+	// コアの .screen-reader-text（word-wrap: normal !important）と同じ意味の指定。単語の途中で折り返すと
+	// 1 文字ずつ読み上げられる支援技術があるため、コアに合わせて !important で固定する
+	// （overflow-wrap は word-wrap の標準名）。
+	overflow-wrap: normal !important;
 }
 
 .vkbm-button__xs {
@@ -74,31 +75,10 @@ a.vkbm-button__primary {
 	color: #fff;
 }
 
-.vkbm-plan-summary__action.vkbm-button__primary {
-	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
-}
-
 .vkbm-button__primary:hover {
 
-	/* background only (keep text color) */
-	background: color-mix(in srgb, var(--vkbm--color--primary, #2563eb) 75%, #000);
-}
-
-.vkbm-plan-summary__action.vkbm-button__primary:hover {
-	background:
-		color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb))
-		75%, #000);
-}
-
-.vkbm-menu-loop__button--reserve {
-	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
-	color: #fff;
-}
-
-.vkbm-menu-loop__button--reserve:hover {
-	background:
-		color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb))
-		75%, #000);
+	/* 背景だけ暗くする（文字色は変えない） */
+	@include vkbm-hover-darken(var(--vkbm--color--primary, #2563eb));
 }
 
 .vkbm-button__secondary,
@@ -108,7 +88,8 @@ a.vkbm-button__secondary {
 }
 
 .vkbm-button__secondary:hover {
-	background: color-mix(in srgb, var(--vkbm--color--secondary, #222) 75%, #000);
+
+	@include vkbm-hover-darken(var(--vkbm--color--secondary, #222));
 }
 
 .vkbm-button__danger,
@@ -118,7 +99,8 @@ a.vkbm-button__danger {
 }
 
 .vkbm-button__danger:hover {
-	background: color-mix(in srgb, var(--wp--preset--color--danger, #dc3545) 75%, #000);
+
+	@include vkbm-hover-darken(var(--wp--preset--color--danger, #dc3545));
 }
 
 .vkbm-button__link {
@@ -171,7 +153,7 @@ a.vkbm-button__danger {
 	color: #fff;
 }
 
-/* Prefer background-only hover for solid buttons (filter affects text too). */
+/* ソリッドボタンは背景だけ暗くする（filter は文字色にも効くため使わない）。 */
 .vkbm-button:where(:not([class*="outline"])):hover {
 	filter: none;
 }
@@ -196,7 +178,7 @@ a.vkbm-button__danger {
 	justify-content: flex-end;
 }
 
-/* Optional: stretch items to the same height when needed (e.g. button groups in toolbars). */
+/* 高さをそろえたいときに使う（例: ツールバー内のボタン群）。 */
 .vkbm-buttons__stretch {
 	align-items: stretch;
 }

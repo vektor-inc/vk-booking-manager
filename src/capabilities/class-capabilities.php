@@ -25,7 +25,6 @@ final class Capabilities {
 	public const VIEW_SERVICE_MENUS       = 'vkbm_view_service_menus';
 	public const MANAGE_STAFF             = 'vkbm_manage_staff';
 	public const EDIT_OWN_STAFF_PROFILE   = 'vkbm_edit_own_staff_profile';
-	public const MANAGE_NOTIFICATIONS     = 'vkbm_manage_notifications';
 	public const MANAGE_SYSTEM_SETTINGS   = 'vkbm_manage_system_settings';
 
 	/**
@@ -42,13 +41,16 @@ final class Capabilities {
 			self::VIEW_SERVICE_MENUS       => true,
 			self::MANAGE_STAFF             => true,
 			self::EDIT_OWN_STAFF_PROFILE   => true,
-			self::MANAGE_NOTIFICATIONS     => true,
 			self::MANAGE_SYSTEM_SETTINGS   => true,
 		);
 	}
 
 	/**
 	 * Returns the default capability map for salon staff role.
+	 *
+	 * 現在どのロールにも付与していない（スタッフ用ロールは未実装で、この関数の呼び出し元も無い）。
+	 * この中の `vkbm_manage_own_reservations` を持つユーザーは、`Auth_Shortcodes::is_booking_customer()` で
+	 * 予約者（お客様）として扱われなくなる。将来ロールへ付与するときは、予約者の判定への影響を確認すること。
 	 *
 	 * @return array<string, bool>
 	 */

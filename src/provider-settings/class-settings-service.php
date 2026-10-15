@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Staff\Staff_Editor;
+use VKBookingManager\Uninstall\Uninstaller;
 use WP_Error;
 
 /**
@@ -64,56 +65,40 @@ class Settings_Service {
 	}
 
 	/**
-	 * Return missing required setting keys for the provider settings screen.
-	 *
-	 * @return array<int, string>
-	 */
-	public function get_missing_required_settings(): array {
-		$settings = $this->repository->get_settings();
-		$missing  = array();
-
-		$provider_name = isset( $settings['provider_name'] ) ? trim( (string) $settings['provider_name'] ) : '';
-		if ( '' === $provider_name ) {
-			$missing[] = 'provider_name';
-		}
-
-		$regular_holidays_disabled = ! empty( $settings['provider_regular_holidays_disabled'] );
-		$regular_holidays          = $settings['provider_regular_holidays'] ?? array();
-		if ( ! $regular_holidays_disabled && ( ! is_array( $regular_holidays ) || array() === $regular_holidays ) ) {
-			$missing[] = 'provider_regular_holidays';
-		}
-
-		$basic = $settings['provider_business_hours_basic'] ?? array();
-		if ( ! is_array( $basic ) || array() === $basic ) {
-			$missing[] = 'provider_business_hours_basic';
-		}
-
-		$reservation_page_url = isset( $settings['reservation_page_url'] ) ? trim( (string) $settings['reservation_page_url'] ) : '';
-		if ( '' === $reservation_page_url ) {
-			$missing[] = 'reservation_page_url';
-		}
-
-		return $missing;
-	}
-
-	/**
-	 * Whether provider settings has any missing required values.
-	 */
-	public function has_missing_required_settings(): bool {
-		return array() !== $this->get_missing_required_settings();
-	}
-
-	/**
 	 * Sanitize and persist settings data.
 	 *
 	 * @param array<string, mixed> $raw_settings Raw settings payload.
 	 * @return bool|WP_Error
 	 */
 	public function save_settings( array $raw_settings ) {
-		$defaults  = $this->repository->get_default_settings();
-		$current   = $this->repository->get_settings();
+		$defaults = $this->repository->get_default_settings();
+		$current  = $this->repository->get_settings();
+		// #635: 詳細ページの表示方法が送られなかった場合（REST 経由の一部項目の更新など）は、
+		// 既定値ではなく現在の実効値を引き継ぎ、既存サイトの設定が意図せず変わらないようにする。
+		$detail_mode_key = Settings_Repository::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE;
+		if ( ! array_key_exists( $detail_mode_key, $raw_settings ) && isset( $current[ $detail_mode_key ] ) ) {
+			$raw_settings[ $detail_mode_key ] = $current[ $detail_mode_key ];
+		}
+		// 削除時の片付けが送られなかった場合は、既定値（残す）ではなく現在の保存値を引き継ぎ、
+		// 「すべて削除する」が黙って「残す」に戻らないようにする。
+		if ( ! array_key_exists( 'uninstall_cleanup', $raw_settings ) && isset( $current['uninstall_cleanup'] ) ) {
+			$raw_settings['uninstall_cleanup'] = $current['uninstall_cleanup'];
+		}
+		// 休前日の曜日・特定日（#737）は、宿泊の業種でだけ画面に欄が出る。欄が無い保存（別のタブ・宿泊以外の業種・REST など）で
+		// 送られなかったときは、既定値ではなく保存済みの値を引き継ぎ、入力済みの値を消さない。
+		foreach ( array( 'lodging_pre_holiday_weekdays', 'lodging_special_dates' ) as $lodging_key ) {
+			if ( ! array_key_exists( $lodging_key, $raw_settings ) && isset( $current[ $lodging_key ] ) ) {
+				$raw_settings[ $lodging_key ] = $current[ $lodging_key ];
+			}
+		}
 		$sanitized = $this->sanitizer->sanitize( $raw_settings, $defaults );
 		$sanitized = Industry_Presets::apply_transition( $current, $sanitized, $raw_settings, $defaults );
+
+		// 「プラグイン削除時の片付け」は、データを消す設定のため manage_options を持つ利用者だけが変更できる。
+		// 権限が無い利用者の保存では、項目が送られないため、既存の値を保持する。
+		if ( ! current_user_can( 'manage_options' ) ) {
+			$sanitized['uninstall_cleanup'] = Uninstaller::normalize_mode( $current['uninstall_cleanup'] ?? Uninstaller::MODE_KEEP );
+		}
 
 		$errors       = $this->sanitizer->get_errors();
 		$field_errors = $this->sanitizer->get_field_errors();

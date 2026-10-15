@@ -1,231 +1,178 @@
+@use "breakpoints" as *;
+
+// =============================================================================
+// 基本設定画面のタブ見出し
+// =============================================================================
+// タブが多く、画面幅が狭いと途中から複数段に折り返す。WordPress 本体の .nav-tab は
+// 下枠が無く段の間隔も 0 のため、折り返すと上の段と下の段がくっついて 1 つの塊に見える。
+// WordPress 本体は 782px 以下では各タブを下枠付き・上余白 10px に切り替えて独立させるので、
+// それより広い幅でだけ、同じ考え方で段ごとに下枠と段の間隔を付ける。
+// 1 段のときは見た目を変えない（下枠は下線に重ねる）。
+@include vkbm-bp-up($vkbm-bp-admin-sm) {
+
+	.vkbm-provider-settings__tabs.nav-tab-wrapper {
+		display: flex;
+		flex-wrap: wrap;
+		row-gap: 8px;
+
+		// WordPress 本体のクリアフィックス用の擬似要素（flex では余分な段になる）を消す
+		&::after {
+			content: none;
+		}
+
+		// 選択中のタブは WordPress 本体の指定（下枠を背景色にして下線を消す）のまま使う
+		.nav-tab:where(:not(.nav-tab-active)) {
+			margin-bottom: -1px;
+			border-bottom: 1px solid #c3c4c7; // WordPress 本体の .nav-tab の枠線の色
+		}
+	}
+}
+
+// =============================================================================
+// 基本設定画面のタブ内容
+// =============================================================================
+// 切り替えるタブの一覧。タブを足すときは、ここに名前を1つ足すだけで切替の CSS が揃う
+// （PHP 側は、そのタブの行に vkbm-provider-settings__tab-{名前} を付ける）。
+$vkbm-provider-settings-tabs: store, system, email, registration, consent, design, advanced, faq, license;
+
 .vkbm-provider-settings {
 
-	&[data-active-tab="store"] {
+	// タブの切り替え
+	// -----------------------------------------------------------------------------
+	// data-active-tab 以外のタブ用の行を隠す。
+	@each $active in $vkbm-provider-settings-tabs {
 
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq,
-		.vkbm-provider-settings__tab-license {
-			display: none;
-		}
+		@each $other in $vkbm-provider-settings-tabs {
 
-		.vkbm-regular-holidays-table {
-			margin-top: 1em;
-			margin-bottom: 10px;
-			border-collapse: collapse;
+			@if $active != $other {
 
-			.column-actions {
-				width: 100px;
-				text-align: center;
-			}
-
-			th {
-				font-weight: 400;
-				text-align: left;
-			}
-
-			th,
-			td {
-				padding: 6px 8px;
-				vertical-align: middle;
-			}
-
-			select {
-				width: auto;
-				min-width: 9em;
-			}
-		}
-
-		.vkbm-business-hours-table {
-			margin-top: 8px;
-
-			th,
-			td {
-				vertical-align: middle;
-			}
-
-			.column-use-basic {
-				width: 220px;
-			}
-		}
-
-		.vkbm-business-hours-row {
-
-			&.is-using-basic {
-
-				.vkbm-business-hours-slot-list,
-				.vkbm-business-hours-remove-slot {
-					opacity: 0.6;
-				}
-			}
-
-			&.is-regular-holiday {
-				background-color: #f8f8f8;
-
-				.vkbm-business-hours-note {
-					display: inline-block;
-					margin-left: 6px;
-					padding: 2px 6px;
-					font-size: 12px;
-					background: #ececec;
-					border-radius: 3px;
-				}
-			}
-		}
-
-		.vkbm-basic-business-hours {
-			display: flex;
-			flex-direction: column;
-			gap: 12px;
-		}
-
-		.vkbm-business-hours-basic-add-slot {
-			align-self: flex-start;
-		}
-
-		.vkbm-business-hours-remove-slot,
-		.vkbm-business-hours-basic-remove-slot {
-			margin-left: auto;
-		}
-
-		.vkbm-provider-logo-preview {
-			margin-bottom: 12px;
-			min-height: 80px;
-			display: flex;
-			align-items: center;
-			justify-content: flex-start;
-
-			img.vkbm-provider-logo-image {
-				max-width: 220px;
-				height: auto;
-				border: 1px solid #dcdcde;
-				padding: 4px;
-				background: #fff;
-			}
-		}
-	}
-
-	&[data-active-tab="system"] {
-
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq,
-		.vkbm-provider-settings__tab-license {
-			display: none;
-		}
-	}
-
-	&[data-active-tab="license"] {
-
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq {
-			display: none;
-		}
-	}
-
-	&[data-active-tab="registration"] {
-
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq,
-		.vkbm-provider-settings__tab-license {
-			display: none;
-		}
-	}
-
-	&[data-active-tab="design"] {
-
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq,
-		.vkbm-provider-settings__tab-license {
-			display: none;
-		}
-	}
-
-	&[data-active-tab="advanced"] {
-
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-faq,
-		.vkbm-provider-settings__tab-license {
-			display: none;
-		}
-	}
-
-	&[data-active-tab="faq"] {
-
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-consent,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-license {
-			display: none;
-		}
-
-		.vkbm-provider-settings__faq {
-			margin: 0 0 var(--vkbm--spacing--md);
-			padding-left: 25px;
-
-			dt {
-				font-weight: 600;
-				margin: 0 0 1em;
-
-				&::before {
-					position: absolute;
-					margin-left: -25px;
-					content: "Q: ";
-				}
-			}
-
-			dd {
-				margin: 0 0 var(--vkbm--spacing--sm);
-
-				p {
-					margin-bottom: var(--vkbm--spacing--xs);
-				}
-
-				&::before {
-					position: absolute;
-					margin-left: -25px;
-					content: "A: ";
+				&[data-active-tab="#{$active}"] .vkbm-provider-settings__tab-#{$other} {
+					display: none;
 				}
 			}
 		}
 	}
 
-	&[data-active-tab="consent"] {
+	// 店舗タブの定休日・営業時間・ロゴ
+	// -----------------------------------------------------------------------------
+	.vkbm-regular-holidays-table {
+		margin-top: 1em;
+		margin-bottom: 10px;
+		border-collapse: collapse;
 
-		.vkbm-provider-settings__tab-store,
-		.vkbm-provider-settings__tab-system,
-		.vkbm-provider-settings__tab-registration,
-		.vkbm-provider-settings__tab-design,
-		.vkbm-provider-settings__tab-advanced,
-		.vkbm-provider-settings__tab-faq,
-		.vkbm-provider-settings__tab-license {
-			display: none;
+		.column-actions {
+			width: 100px;
+			text-align: center;
+		}
+
+		th {
+			font-weight: 400;
+			text-align: left;
+		}
+
+		th,
+		td {
+			padding: 6px 8px;
+			vertical-align: middle;
+		}
+
+		select {
+			width: auto;
+			min-width: 9em;
+		}
+	}
+
+	.vkbm-business-hours-table {
+		margin-top: 8px;
+
+		th,
+		td {
+			vertical-align: middle;
+		}
+
+		.column-use-basic {
+			width: 220px;
+		}
+	}
+
+	.vkbm-business-hours-row.is-using-basic .vkbm-business-hours-slot-list,
+	.vkbm-business-hours-row.is-using-basic .vkbm-business-hours-remove-slot {
+		opacity: 0.6;
+	}
+
+	.vkbm-business-hours-row.is-regular-holiday {
+		background-color: #f8f8f8;
+	}
+
+	.vkbm-business-hours-row.is-regular-holiday .vkbm-business-hours-note {
+		display: inline-block;
+		margin-left: 6px;
+		padding: 2px 6px;
+		font-size: 12px;
+		background: #ececec;
+		border-radius: 3px;
+	}
+
+	.vkbm-basic-business-hours {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.vkbm-business-hours-basic-add-slot {
+		align-self: flex-start;
+	}
+
+	.vkbm-business-hours-remove-slot,
+	.vkbm-business-hours-basic-remove-slot {
+		margin-left: auto;
+	}
+
+	.vkbm-provider-logo-preview {
+		margin-bottom: 12px;
+		min-height: 80px;
+		display: flex;
+		align-items: center;
+		justify-content: flex-start;
+	}
+
+	img.vkbm-provider-logo-image {
+		max-width: 220px;
+		height: auto;
+		border: 1px solid var(--vkbm--admin--color--border);
+		padding: 4px;
+		background: var(--vkbm--admin--color--surface);
+	}
+
+	// よくある質問タブ
+	// -----------------------------------------------------------------------------
+	.vkbm-provider-settings__faq {
+		margin: 0 0 var(--vkbm--spacing--md);
+		padding-left: 25px;
+
+		dt {
+			font-weight: 600;
+			margin: 0 0 1em;
+		}
+
+		dt::before {
+			position: absolute;
+			margin-left: -25px;
+			content: "Q: ";
+		}
+
+		dd {
+			margin: 0 0 var(--vkbm--spacing--sm);
+		}
+
+		dd p {
+			margin-bottom: var(--vkbm--spacing--xs);
+		}
+
+		dd::before {
+			position: absolute;
+			margin-left: -25px;
+			content: "A: ";
 		}
 	}
 
@@ -241,13 +188,122 @@
 		}
 	}
 
+	// hidden 属性で出し分ける要素のうち、WordPress 本体の display 指定（.button の inline-block）が
+	// 属性の既定の非表示に勝ってしまうものへ、非表示を明示する。
+	.button[hidden] {
+		display: none;
+	}
+
+	// 「仮予約にする」のときだけ表示する案内文の入力欄（hidden 属性で出し分け）。
+	.vkbm-provider-settings__pending-message-field {
+		margin-top: 1rem;
+
+		textarea {
+			margin-top: 0.25rem;
+		}
+	}
+
+	// common.scss の text-box（vkbm- クラスの p の上下を文字の高さに揃える指定）を打ち消し、クラス追加前の行の高さを保つ。
+	.vkbm-provider-settings__standard-text {
+		text-box: normal;
+		margin-top: 0.5rem;
+	}
+
+	// 同上（text-box を打ち消して、クラス追加前の行の高さを保つ）。
+	.vkbm-provider-settings__field-lead {
+		text-box: normal;
+		margin-top: 0;
+		margin-bottom: 0.5rem;
+	}
+
+	.vkbm-provider-settings__cancel-hours-field {
+		margin-left: 0.75rem;
+	}
+
+	.vkbm-provider-settings__privacy-policy-field {
+		margin-top: 0.75rem;
+	}
+
+	// 「予約ページの表示要素」の説明文リスト。p.description と同じ見た目で、項目ごとに disc の印を付ける。
+	// 上余白はチェックボックス間（6px）より大きくし、チェックボックス群と説明文を別グループに見せる。
+	.vkbm-provider-settings__description-list {
+		margin: 12px 0 0;
+		padding-left: 1.5em;
+		color: var(--vkbm--admin--color--text-tertiary);
+		list-style: disc;
+
+		li {
+			margin: 0 0 4px;
+		}
+	}
+
 	.vkbm-provider-settings__checkbox-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
 	}
 
-	// #431: 親チェックボックス（例: 「絞り込み検索」）に属する子項目（例: 「リソースタグ検索」）を
+	// システムタブの宿泊プランの休前日・特定日
+	// -----------------------------------------------------------------------------
+	// 「休前日とする曜日」と「特定日」は別のまとまり。まとまりの間（40px）は、まとまりの中の行の間（24px）より広く空ける。
+	.vkbm-lodging-rate-group {
+		margin: 0 0 calc(var(--vkbm--spacing--lg) + var(--vkbm--spacing--xs));
+		padding: 0;
+		border: 0;
+
+		> legend {
+			margin-bottom: var(--vkbm--spacing--xs);
+			padding: 0;
+			font-weight: 600;
+		}
+	}
+
+	.vkbm-lodging-rate-weekdays {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 16px;
+	}
+
+	// 余白の階層は「行の中 8〜12px < 行どうし 24px < まとまりどうし 40px」。行どうしを md にして行ごとのまとまりを見せる.
+	.vkbm-lodging-special-date-row {
+		margin-bottom: var(--vkbm--spacing--md);
+	}
+
+	// 削除ボタンの既定マージンを外し、親の align-items: flex-end で入力欄の下端に揃える.
+	.vkbm-lodging-special-date-remove {
+		margin: 0;
+	}
+
+	// 開始日・終了日は 1 つのまとまりとして折り返す（開始日と終了日が別の段に離れないようにする）。
+	.vkbm-lodging-special-date-fields,
+	.vkbm-lodging-special-date-range {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 8px 12px;
+	}
+
+	.vkbm-lodging-special-date-range {
+		display: inline-flex;
+	}
+
+	.vkbm-lodging-special-date-field {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		// WordPress 本体の `.form-table td fieldset label`（margin: 0.35em 0 0.5em !important）が欄に上下マージンを足すため、!important で打ち消し、見えている間隔を値どおりにする.
+		margin: 0 !important;
+
+		> span {
+			white-space: nowrap;
+		}
+	}
+
+	.vkbm-lodging-special-date-row .vkbm-alert {
+		margin: var(--vkbm--spacing--xs) 0 0;
+	}
+
+	// 親チェックボックス（例: 「絞り込み検索」）に属する子項目（例: 「リソースタグ検索」）を
 	// インデントして親子関係を視覚的に示す。
 	.vkbm-inline-checkbox--child {
 		margin-left: 1.5em;
@@ -269,7 +325,7 @@
 	.vkbm-field-errors {
 		margin: 0;
 		padding-left: 1.2em;
-		color: #d63638;
+		color: var(--vkbm--admin--color--danger);
 		font-size: 13px;
 		width: 100%;
 
@@ -301,8 +357,8 @@
 		}
 
 		&.is-selected {
-			border-color: #2271b1;
-			box-shadow: 0 0 0 1px #2271b1;
+			border-color: var(--vkbm--admin--color--accent);
+			box-shadow: 0 0 0 1px var(--vkbm--admin--color--accent);
 		}
 	}
 
@@ -317,7 +373,7 @@
 		width: 24px;
 		height: 24px;
 		font-size: 24px;
-		color: #1d2327;
+		color: var(--vkbm--admin--color--text);
 	}
 
 	/* 業種プリセットの自動設定要約
@@ -326,8 +382,8 @@
 		margin-top: var(--vkbm--spacing--sm);
 		padding: var(--vkbm--spacing--sm) var(--vkbm--spacing--md);
 
-		/* 背景 #f0f6fc に対するコントラスト比は約3.75:1で、
-		   UIコンポーネント境界線に必要な WCAG 2.1 AA 基準 3:1 を満たす。 */
+		/* 枠線は背景 #f0f6fc に対して、UI コンポーネント境界線に必要な
+		   WCAG 2.1 AA 基準 3:1 を満たす色にする。 */
 		border-left: 4px solid #3582c4;
 		background: #f0f6fc;
 	}
@@ -355,12 +411,35 @@
 		}
 	}
 
-	.vkbm-industry-preset-applied-message {
-		margin-top: var(--vkbm--spacing--xs);
-		color: #2271b1;
+	// 詳細ページの表示方法の説明。選択肢名を太字の見出しにして、説明を分けて見せる。
+	.vkbm-detail-display-mode-help {
+		max-width: 40em;
+		margin: var(--vkbm--spacing--sm) 0;
+
+		dt {
+			margin-top: var(--vkbm--spacing--sm);
+			font-weight: 600;
+		}
+
+		dt:first-child {
+			margin-top: 0;
+		}
+
+		dd {
+			margin: var(--vkbm--spacing--xs) 0 0;
+		}
 	}
 
-	// #475: 「連携」タブ（Google カレンダー連携）。
+	.vkbm-detail-display-mode-notice {
+		color: var(--vkbm--admin--color--danger);
+	}
+
+	.vkbm-industry-preset-applied-message {
+		margin-top: var(--vkbm--spacing--xs);
+		color: var(--vkbm--admin--color--accent);
+	}
+
+	// 「連携」タブ（Google カレンダー連携）。
 	// このタブだけは、他タブと共有している保存フォームの外に描画される。
 	.vkbm-google-calendar {
 

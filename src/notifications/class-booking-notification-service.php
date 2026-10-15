@@ -15,7 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Admin\Email_Log_Repository;
+use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Common\Mail_Error_Capture;
+use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -29,7 +31,6 @@ use function add_action;
 use function add_filter;
 use function admin_url;
 use function __;
-use function current_time;
 use function get_user_by;
 use function get_option;
 use function get_post;
@@ -178,8 +179,8 @@ class Booking_Notification_Service {
 		}
 
 		$max_hours = max( $reminder_hours );
-		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
-		$now        = current_time( 'timestamp' );
+		// 実際の UTC のタイムスタンプ。parse_datetime_to_timestamp() の戻り値と同じ基準で比較する（サイトのタイムゾーンの分だけずらさない）。
+		$now        = time();
 		$window_end = $now + ( $max_hours * HOUR_IN_SECONDS ) + self::REMINDER_WINDOW;
 		$start_min  = wp_date( 'Y-m-d H:i:s', $now );
 		$start_max  = wp_date( 'Y-m-d H:i:s', $window_end );
@@ -440,7 +441,7 @@ class Booking_Notification_Service {
 		return array(
 			'to'           => '',
 			'skip_reason'  => __( 'Not sent because neither the representative email address nor the WordPress administration email address is a valid email address.', 'vk-booking-manager' ),
-			'action_url'   => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-provider-email' ),
+			'action_url'   => admin_url( 'admin.php?page=vkbm-provider-settings&tab=email#vkbm-provider-email' ),
 			'action_label' => __( 'Set the representative email address', 'vk-booking-manager' ),
 		);
 	}
@@ -635,8 +636,9 @@ class Booking_Notification_Service {
 		$headers     = $this->build_headers( (string) $mail_header['reply_to'] );
 
 		// WordPress 標準の from / from_name フィルターで送信者情報を設定する。
-		$from_mail_filter = static function () use ( $mail_header ) {
-			return (string) $mail_header['mail'];
+		$from_mail_filter = static function ( $current_from ) use ( $mail_header ): string {
+			$resolved_from = (string) $mail_header['mail'];
+			return '' !== $resolved_from ? $resolved_from : (string) $current_from;
 		};
 		$from_name_filter = static function () use ( $from_name ) {
 			return $from_name;
@@ -744,7 +746,7 @@ class Booking_Notification_Service {
 	 * @return array{name:string,mail:string,reply_to:string}
 	 */
 	private function get_mail_header( string $type, array $payload ): array {
-		$from_mail = sanitize_email( (string) get_option( 'admin_email' ) );
+		$from_mail = Mail_From::resolve();
 
 		$provider_name = trim( (string) ( $payload['provider_name'] ?? '' ) );
 		$site_name     = trim( (string) ( $payload['site_name'] ?? '' ) );
@@ -848,22 +850,30 @@ class Booking_Notification_Service {
 		if ( $nomination_enabled && '' === $staff_title ) {
 			$staff_title = vkbm_get_no_nomination_label();
 		}
-		$duration = $this->get_menu_duration( $menu_id );
+		// 泊の予約（予約に泊数が保存されている）は、日時の行をチェックイン／チェックアウトにし、
+		// 所要時間の行を泊数に置き換える。判定は予約側の保存データで行い、メニューやサイトの現在の設定は見ない。
+		$nights = Lodging_Booking::get_booking_nights( $booking_id );
+		if ( $nights > 0 ) {
+			$duration = Lodging_Booking::format_nights_label( $nights );
+		} else {
+			$duration = $this->get_menu_duration( $menu_id );
+		}
 		// 料金区分が定義されている予約は、確定保存済みの基本料金合計（区分料金合計＋指名料）をそのまま表示する。
 		// 区分未定義は従来どおり 基本料金 × 人数（＋指名料）で表示する。
-		if ( ! empty( $guest_tiers ) && metadata_exists( 'post', $booking_id, '_vkbm_booking_base_total_price' ) ) {
+		if ( ( ! empty( $guest_tiers ) || $nights > 0 ) && metadata_exists( 'post', $booking_id, '_vkbm_booking_base_total_price' ) ) {
 			$base_total  = max( 0, (int) get_post_meta( $booking_id, '_vkbm_booking_base_total_price', true ) );
 			$price_label = $this->format_price_with_tax_label( $base_total );
 		} else {
 			$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $guests );
 		}
-		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? trim( (string) $settings['resource_label_singular'] ) : '';
-		if ( '' === $resource_label_singular ) {
-			$resource_label_singular = __( 'Staff', 'vk-booking-manager' );
-		}
+		// 無料版では保存値ではなく既定値を返す共通関数を通す。
+		$resource_label_singular = vkbm_get_resource_label_singular();
 		// Use the shared helper to get the duration label with fallback.
 		// 共通ヘルパーを使用して所要時間ラベルを取得する（フォールバック付き）。
 		$duration_label_heading = vkbm_get_duration_label();
+		if ( $nights > 0 ) {
+			$duration_label_heading = __( 'Number of nights', 'vk-booking-manager' );
+		}
 
 		$booking_author_name = $this->resolve_booking_author_name( $booking );
 
@@ -893,7 +903,7 @@ class Booking_Notification_Service {
 			'booking_id'                   => $booking_id,
 			'menu_title'                   => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
 			'staff_title'                  => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
-			'reservation_datetime'         => $this->format_reservation_datetime_range( $start, $end ),
+			'reservation_datetime'         => $nights > 0 ? $this->format_stay_datetime_range( $start, $end ) : $this->format_reservation_datetime_range( $start, $end ),
 			'duration_label'               => $duration,
 			'guests'                       => $guests,
 			'guest_tiers'                  => $guest_tiers,
@@ -1275,6 +1285,27 @@ class Booking_Notification_Service {
 		}
 
 		return wp_date( 'D', $timestamp, $timezone );
+	}
+
+	/**
+	 * 泊の予約のチェックイン／チェックアウト日時を1行に整形します。
+	 * 通知メールは運営者が書いた本文に差し込まれるため、改行せず「／」で区切ります。
+	 *
+	 * @param string $check_in  DB 保存形式のチェックイン日時文字列.
+	 * @param string $check_out DB 保存形式のチェックアウト日時文字列.
+	 * @return string
+	 */
+	private function format_stay_datetime_range( string $check_in, string $check_out ): string {
+		if ( '' === $check_in || '' === $check_out ) {
+			return __( 'Not set', 'vk-booking-manager' );
+		}
+
+		return sprintf(
+			/* translators: 1: Check-in date and time, 2: Check-out date and time. */
+			__( 'Check-in %1$s / Check-out %2$s', 'vk-booking-manager' ),
+			$this->format_datetime_with_weekday( $check_in ),
+			$this->format_datetime_with_weekday( $check_out )
+		);
 	}
 
 	/**

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   リソース（スタッフ）削除ガードのダイアログ・通知（issue #262）
+   リソース（スタッフ）削除ガードのダイアログ・通知
    ネイティブ confirm() の代わりに使うアクセシブルなアラートダイアログ。
    ========================================================================== */
 
@@ -20,7 +20,7 @@
 	max-width: calc(100vw - 48px);
 	max-height: calc(100vh - 96px);
 	overflow-y: auto;
-	background: #fff;
+	background: var(--vkbm--admin--color--surface);
 	border-radius: 8px;
 	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
 	padding: 20px 24px;
@@ -91,8 +91,7 @@
 	.vkbm-resource-guard-notice__list {
 		margin: 0.5em 0 0;
 		padding-left: 1.2em;
-		// 一括操作で件数が多いと縦に伸び続けるため、上限を設けてスクロールに切り替える
-		// （植草レビュー指摘・issue #262）。
+		// 一括操作で件数が多いと縦に伸び続けるため、上限を設けてスクロールに切り替える。
 		max-height: 12em;
 		overflow-y: auto;
 

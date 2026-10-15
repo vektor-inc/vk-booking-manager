@@ -20,11 +20,13 @@ use VKBookingManager\ProviderSettings\Settings_Sanitizer;
  * Enqueues common CSS for the whole plugin.
  */
 class Common_Styles {
-	public const FRONTEND_HANDLE  = 'vkbm-frontend';
-	public const AUTH_HANDLE      = 'vkbm-auth';
-	public const ADMIN_HANDLE     = 'vkbm-admin';
-	public const EDITOR_HANDLE    = 'vkbm-editor';
-	public const VARIABLES_HANDLE = 'vkbm-variables';
+	public const FRONTEND_HANDLE   = 'vkbm-frontend';
+	public const COMPONENTS_HANDLE = 'vkbm-components';
+	public const AUTH_HANDLE       = 'vkbm-auth';
+	public const ADMIN_HANDLE      = 'vkbm-admin';
+	public const NOTICE_HANDLE     = 'vkbm-admin-notice';
+	public const EDITOR_HANDLE     = 'vkbm-editor';
+	public const VARIABLES_HANDLE  = 'vkbm-variables';
 
 	/**
 	 * カスタムプロパティのインライン CSS を既に付与したかどうか。
@@ -46,7 +48,8 @@ class Common_Styles {
 	 * Register hooks.
 	 */
 	public function register(): void {
-		add_action( 'init', array( $this, 'register_styles' ) );
+		// block.json の style が参照するハンドルは、ブロック登録（init の既定優先度）より前に登録しておく。
+		add_action( 'init', array( $this, 'register_styles' ), 5 );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend' ) );
 		add_action( 'enqueue_block_assets', array( $this, 'enqueue_variables' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin' ) );
@@ -95,25 +98,26 @@ class Common_Styles {
 	/**
 	 * Enqueue common styles for admin.
 	 *
+	 * 全管理画面で呼ばれるため、ここでは `:root` カスタムプロパティ（`enqueue_variables()`）
+	 * だけを読み込む。管理画面用バンドル（`vkbm-admin`、約48KB）は VKBM の画面でのみ必要なので、
+	 * 各画面のクラスが自分の `admin_enqueue_scripts` で `wp_enqueue_style( ADMIN_HANDLE )` する
+	 * （issue #659）。全画面に出る通知用の CSS は `vkbm-admin-notice`（Setup_Notices が読み込む）。
+	 *
+	 * 通常の管理画面（VKBM の基本設定・シフト管理・スタイルガイド等）では
+	 * コアの `wp_common_block_scripts_and_styles()` が
+	 * `is_admin() && ! wp_should_load_block_editor_scripts_and_styles()` で
+	 * 早期リターンし、`enqueue_block_assets` が発火しない
+	 * （`wp_should_load_block_editor_scripts_and_styles()` は実質
+	 * `$current_screen->is_block_editor()`）。そのため `enqueue_block_assets` だけに
+	 * 任せると、設定値のインライン CSS（プライマリカラー・角丸）が付与されない
+	 * （issue #420 差し戻し）。ブロックエディター画面では `enqueue_block_assets` も
+	 * 発火するため二重に呼ばれるが、`apply_custom_properties()` 側のガードで無害化する。
+	 *
 	 * @param string $hook_suffix Current admin page hook.
 	 */
 	public function enqueue_admin( string $hook_suffix ): void {
 		unset( $hook_suffix );
 
-		$this->register_styles();
-		wp_enqueue_style( self::ADMIN_HANDLE );
-
-		// 通常の管理画面（VKBM の基本設定・シフト管理・スタイルガイド等）では
-		// コアの `wp_common_block_scripts_and_styles()` が
-		// `is_admin() && ! wp_should_load_block_editor_scripts_and_styles()` で
-		// 早期リターンし、`enqueue_block_assets` が発火しない
-		// （`wp_should_load_block_editor_scripts_and_styles()` は実質
-		// `$current_screen->is_block_editor()`）。そのため `enqueue_variables()`
-		// のみに任せると、`vkbm-variables.min.css` 自体は `vkbm-admin` の
-		// `$deps` 経由で読み込まれても、設定値のインライン CSS
-		// （プライマリカラー・角丸）が一度も付与されない（issue #420 差し戻し）。
-		// ブロックエディター画面では `enqueue_block_assets` も発火するため
-		// 二重に呼ばれるが、`apply_custom_properties()` 側のガードで無害化する。
 		$this->enqueue_variables();
 	}
 
@@ -136,16 +140,28 @@ class Common_Styles {
 		// 他バンドルはこれに依存させ（$deps）、常にこれより後に読み込まれるようにする。
 		$this->register_style( self::VARIABLES_HANDLE, 'vkbm-variables.min.css', array(), $base, $default_version );
 
-		$deps = array( self::VARIABLES_HANDLE );
-		$map  = array(
-			self::FRONTEND_HANDLE => 'vkbm-frontend.min.css',
-			self::AUTH_HANDLE     => 'vkbm-auth.min.css',
-			self::EDITOR_HANDLE   => 'vkbm-editor.min.css',
-			self::ADMIN_HANDLE    => 'vkbm-admin.min.css',
+		// 依存関係はバンドルごとに異なる。
+		// - vkbm-frontend / vkbm-admin: :root（vkbm-variables）のみ。
+		// - vkbm-components: ボタン・アラート・ユーティリティなど、ブロックと認証フォームで共有する部品。
+		// box-sizing などの共通指定（vkbm-frontend）も一緒に読み込ませる。各ブロックの block.json の
+		// style と vkbm-auth の $deps から参照され、ブロックが無いページには読み込まれない（issue #660）。
+		// - vkbm-auth: 認証フォーム固有の部分のみ。部品は vkbm-components から取る。
+		// - vkbm-admin-notice: 全管理画面に出る通知専用。vkbm-admin は VKBM の画面だけで読み込む（issue #659）。
+		// - vkbm-editor: ブロックエディター用の補正のみ。部品の CSS は含めず、vkbm-auth 経由で vkbm-components に依存して
+		// 各ブロックの CSS より前に1回だけ読み込ませる。vkbm-admin に依存させると、依存関係をたどってすべてのブロック
+		// エディターに vkbm-admin が読み込まれ、VKBM の画面だけで読み込む方針（issue #659）に反するため依存させない。
+		$variables_deps = array( self::VARIABLES_HANDLE );
+		$map            = array(
+			self::FRONTEND_HANDLE   => array( 'vkbm-frontend.min.css', $variables_deps ),
+			self::COMPONENTS_HANDLE => array( 'vkbm-components.min.css', array( self::VARIABLES_HANDLE, self::FRONTEND_HANDLE ) ),
+			self::AUTH_HANDLE       => array( 'vkbm-auth.min.css', array( self::VARIABLES_HANDLE, self::COMPONENTS_HANDLE ) ),
+			self::ADMIN_HANDLE      => array( 'vkbm-admin.min.css', $variables_deps ),
+			self::EDITOR_HANDLE     => array( 'vkbm-editor.min.css', array( self::VARIABLES_HANDLE, self::AUTH_HANDLE ) ),
+			self::NOTICE_HANDLE     => array( 'vkbm-admin-notice.min.css', $variables_deps ),
 		);
 
-		foreach ( $map as $handle => $file ) {
-			$this->register_style( $handle, $file, $deps, $base, $default_version );
+		foreach ( $map as $handle => $definition ) {
+			$this->register_style( $handle, $definition[0], $definition[1], $base, $default_version );
 		}
 	}
 
@@ -172,6 +188,13 @@ class Common_Styles {
 			$deps,
 			$version
 		);
+
+		// vkbm-components は小さい（約5KB）ため、ファイルがあるときは HTML への直接埋め込み
+		// （インライン化）の対象にして、予約ページの CSS リクエストを減らす（issue #660）。
+		// コアは path の指定されたスタイルを、サイズが styles_inline_size_limit 以下のときだけ埋め込む。
+		if ( self::COMPONENTS_HANDLE === $handle && file_exists( $path ) ) {
+			wp_style_add_data( $handle, 'path', $path );
+		}
 	}
 
 	/**
@@ -209,16 +232,19 @@ class Common_Styles {
 
 		$properties = array();
 
-		$primary_color = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
-		if ( '' !== $primary_color ) {
-			$properties['--vkbm--color--primary'] = $primary_color;
-		}
-
-		$reservation_button_color = isset( $settings['design_reservation_button_color'] )
-			? (string) $settings['design_reservation_button_color']
-			: '';
-		if ( '' !== $reservation_button_color ) {
-			$properties['--vkbm--color--reservation-action'] = $reservation_button_color;
+		// 色は保存時だけでなく出力直前にも sanitize_hex_color() で検証し、空や不正な値は出力しない
+		// （保存済みの値が直接書き換えられても、インライン CSS に任意の文字列が入らないようにするため）。
+		$color_properties = array(
+			'design_primary_color'            => '--vkbm--color--primary',
+			'design_menu_card_catch_color'    => '--vkbm--color--menu-card-catch',
+			'design_menu_card_price_color'    => '--vkbm--color--menu-card-price',
+			'design_reservation_button_color' => '--vkbm--color--reservation-action',
+		);
+		foreach ( $color_properties as $setting_key => $property_name ) {
+			$color = isset( $settings[ $setting_key ] ) ? sanitize_hex_color( (string) $settings[ $setting_key ] ) : null;
+			if ( is_string( $color ) && '' !== $color ) {
+				$properties[ $property_name ] = $color;
+			}
 		}
 
 		$radius_raw = $settings['design_radius_md'] ?? null;

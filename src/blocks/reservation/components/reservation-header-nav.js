@@ -16,6 +16,8 @@ export const ReservationHeaderNav = ( {
 	isLoginActive = false,
 	onRegister = null,
 	isRegisterActive = false,
+	listReturnHref = '',
+	listReturnLabel = '',
 } ) => {
 	let navItems = [];
 	if ( variant === 'staff' ) {
@@ -89,6 +91,21 @@ export const ReservationHeaderNav = ( {
 				ariaPressed: isRegisterActive,
 				isActive: isRegisterActive,
 			},
+		];
+	}
+
+	// #635: サービスメニューの詳細表示中は、先頭に「一覧に戻る」を足す（既存のナビはそのまま残す）。
+	if ( listReturnHref && variant !== 'return' ) {
+		navItems = [
+			{
+				key: 'list-return',
+				type: 'link',
+				label:
+					listReturnLabel ||
+					__( 'Back to the list', 'vk-booking-manager' ),
+				href: listReturnHref,
+			},
+			...navItems,
 		];
 	}
 

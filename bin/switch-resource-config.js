@@ -1,6 +1,7 @@
 const fs = require( 'fs' );
 const path = require( 'path' );
 const { injectGeneratedFileBanner } = require( './lib/generated-file-banner' );
+const { removeFreeExcludedPaths } = require( './lib/free-excluded-paths' );
 
 const edition = process.argv[ 2 ];
 if ( edition !== 'free' && edition !== 'pro' ) {
@@ -149,6 +150,14 @@ if ( edition === 'free' ) {
 			'Removed class-free-version-deactivator.php from free edition'
 		);
 	}
+
+	// Pro 版専用のファイル（Pro 版の自動更新・Google カレンダー連携など）を削除する。
+	// 読み込み行は目印で削除済みで、クラスを使う側は class_exists で確認しているため、
+	// 削除しても Fatal エラーにならない。
+	const removedPaths = removeFreeExcludedPaths( distRoot );
+	removedPaths.forEach( ( removedPath ) => {
+		console.log( `Removed ${ removedPath } from free edition` );
+	} );
 
 	const freeReadmePath = path.join( distRoot, 'README-FREE.md' );
 	const readmePath = path.join( distRoot, 'README.md' );

@@ -14,15 +14,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Query;
 
 /**
  * 予約編集画面とシフト・予約表で共有する、状態を持たない競合判定クラス。
  *
- * Staff_Load_Calculator と同じ予約負荷の数え方を使うため、判定仕様を変更する場合は両方を一緒に直すこと。
+ * 同一メニューの残席は、空き枠の計算・予約確定と共通の Staff_Load_Calculator::summarize_staff_bookings() /
+ * calculate_remaining() で求める（#656）。残席の判定仕様を変えるときはその2つを直すこと。
+ * 単純な時間重複（overlap）の判定はこのクラスが持つ。
  */
 class Staff_Conflict_Detector {
+	/** 枠を消費しないステータス（担当スタッフのチェック対象外）。Booking_Admin の同名定数もここを参照する。 */
+	public const STATUS_CANCELLED = 'cancelled';
+	public const STATUS_NO_SHOW   = 'no_show';
+
 	public const REASON_OVERLAP               = 'overlap';
 	public const REASON_INSUFFICIENT_CAPACITY = 'insufficient_capacity';
 
@@ -121,8 +128,8 @@ class Staff_Conflict_Detector {
 		$guests          = max( 1, (int) ( $target['guests'] ?? 1 ) );
 		$capacity        = max( 1, (int) ( $menu_capacities[ $service_id ] ?? 1 ) );
 		$is_single_party = 1 === $capacity || ! empty( $nominations[ $service_id ] );
-		$same_menu_load  = 0;
 		$has_overlap     = false;
+		$active_overlaps = array();
 
 		if ( $resource_id <= 0 || '' === $start || '' === $end ) {
 			return array();
@@ -148,18 +155,18 @@ class Staff_Conflict_Detector {
 					$has_overlap = true;
 				}
 			}
-			// #394 の残数判定はフロントの自動割当と揃え、キャンセル・無断キャンセル以外を負荷に含める。
-			if ( ! $is_single_party && (int) ( $other['service_id'] ?? 0 ) === $service_id && ! in_array( $status, array( 'cancelled', 'no_show' ), true ) ) {
-				$same_menu_load += max( 1, (int) ( $other['guests'] ?? 1 ) );
-			}
+			// 残席の判定に使う候補。キャンセル・無断キャンセルの除外は summarize_staff_bookings() が行う。
+			$active_overlaps[] = $other;
 		}
 
 		$reasons = array();
 		if ( $has_overlap ) {
 			$reasons[] = self::REASON_OVERLAP;
 		}
+		// 残席は空き枠の計算・予約確定と同じ基準（#656。別メニューの予約があれば残席0）で数える。
 		// 旧実装の Staff_Load_Calculator と同様、同一メニューの負荷があるスタッフだけを残数判定する。
-		if ( ! $is_single_party && $same_menu_load > 0 && ( $capacity - $same_menu_load ) < $guests ) {
+		$summary = Staff_Load_Calculator::summarize_staff_bookings( $service_id, $active_overlaps );
+		if ( ! $is_single_party && $summary['same_menu_guests'] > 0 && Staff_Load_Calculator::calculate_remaining( $capacity, false, $summary ) < $guests ) {
 			$reasons[] = self::REASON_INSUFFICIENT_CAPACITY;
 		}
 		return $reasons;
@@ -203,6 +210,104 @@ class Staff_Conflict_Detector {
 			}
 		}
 		return $staff_ids;
+	}
+
+	/**
+	 * 指定ステータスが、担当スタッフの未割当チェック・競合チェックの対象かどうかを判定する。
+	 *
+	 * キャンセル・無断キャンセルの予約は枠を消費しないため対象外。編集画面の保存・クイック編集・
+	 * シフト・予約表の「確定」ボタン（#652）が同じ基準を使うよう、判定をここに集約している。
+	 *
+	 * @param string $status 予約ステータス。
+	 * @return bool チェック対象なら true。
+	 */
+	public static function is_staff_check_target_status( string $status ): bool {
+		return self::STATUS_CANCELLED !== $status && self::STATUS_NO_SHOW !== $status;
+	}
+
+	/**
+	 * チェック対象のステータスで、担当スタッフが未割当かどうかを判定する。
+	 *
+	 * @param string $status      予約ステータス。
+	 * @param int    $resource_id 担当スタッフID（0 以下なら未割当）。
+	 * @return bool 保存・確定を止めるべき未割当なら true。
+	 */
+	public static function is_staff_unassigned( string $status, int $resource_id ): bool {
+		return self::is_staff_check_target_status( $status ) && $resource_id <= 0;
+	}
+
+	/**
+	 * 指定スタッフが、その日時・メニュー・人数で他の予約と競合するかどうかを判定する。
+	 *
+	 * @param int    $resource_id 担当スタッフID。
+	 * @param int    $post_id     判定から除外する予約ID。
+	 * @param string $start       開始日時。
+	 * @param string $end         終了日時。
+	 * @param int    $service_id  メニューID。
+	 * @param int    $guests      人数。
+	 * @return bool 競合するなら true。
+	 */
+	public static function is_staff_in_conflict( int $resource_id, int $post_id, string $start, string $end, int $service_id = 0, int $guests = 1 ): bool {
+		return in_array( $resource_id, self::get_conflicting_staff_ids( $post_id, $start, $end, $service_id, $guests ), true );
+	}
+
+	/**
+	 * 基本設定「管理画面でのスタッフ重複を許可する」が ON かどうかを返す。
+	 *
+	 * @return bool 許可されていれば true。
+	 */
+	public static function is_staff_overlap_allowed_in_admin(): bool {
+		$settings = ( new Settings_Repository() )->get_settings();
+		return ! empty( $settings['provider_allow_staff_overlap_admin'] );
+	}
+
+	/**
+	 * 担当スタッフ未割当で保存・確定を止めたときの利用者向けメッセージを返す。
+	 *
+	 * @return string メッセージ。
+	 */
+	public static function get_staff_required_message(): string {
+		$label = vkbm_get_resource_label_singular();
+
+		$message = sprintf(
+			/* translators: %s: resource label. */
+			__( 'No %s is assigned, so the reservation was not saved.', 'vk-booking-manager' ),
+			$label
+		);
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。
+		$message .= ' ' . sprintf(
+			/* translators: %s: resource label. */
+			__( 'Please assign at least one %s.', 'vk-booking-manager' ),
+			$label
+		);
+
+		return $message;
+	}
+
+	/**
+	 * 担当スタッフの競合で保存・確定を止めたときの利用者向けメッセージを返す。
+	 *
+	 * @param int $staff_id 競合したスタッフID。
+	 * @return string メッセージ。
+	 */
+	public static function get_staff_conflict_error_message( int $staff_id ): string {
+		$label = vkbm_get_resource_label_singular();
+		$name  = $staff_id > 0 ? (string) get_the_title( $staff_id ) : '';
+
+		if ( '' !== $name ) {
+			return sprintf(
+				/* translators: 1: resource label, 2: resource name */
+				__( 'The selected %1$s (%2$s) cannot be specified because there is another reservation in the same time slot.', 'vk-booking-manager' ),
+				$label,
+				$name
+			);
+		}
+
+		return sprintf(
+			/* translators: %s: resource label */
+			__( 'The selected %1$s cannot be specified because there is another reservation in the same time slot.', 'vk-booking-manager' ),
+			$label
+		);
 	}
 
 	/**
@@ -272,6 +377,12 @@ class Staff_Conflict_Detector {
 		// 一括取得時に正規化済みの値は、DateTimeImmutable を再生成せずそのまま比較に使う。
 		if ( 1 === preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $value ) ) {
 			return $value;
+		}
+
+		// 秒無し・T 区切りなどは共通の正規化で整える。整えられない形だけ従来どおり DateTimeImmutable で解釈する。
+		$normalized = Booking_Datetime::normalize( $value );
+		if ( '' !== $normalized ) {
+			return $normalized;
 		}
 
 		try {

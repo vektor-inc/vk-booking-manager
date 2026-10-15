@@ -578,8 +578,12 @@ async function gotoFrontSlotSummary( page: Page ): Promise< void > {
 	await page.waitForLoadState( 'domcontentloaded' );
 
 	// メニューカードの「予約に進む」をクリック（a タグのこともあるため role に依存しない）。
+	// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+	const menuId = getServiceMenuId();
 	const reserveLink = page
-		.locator( '.vkbm-menu-loop__button--reserve' )
+		.locator(
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+		)
 		.first();
 	await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
 	await reserveLink.click();
@@ -1044,8 +1048,12 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 async function gotoFrontSlotSummaryUntilSlots( page: Page ): Promise< void > {
 	await page.goto( '/booking/' );
 	await page.waitForLoadState( 'domcontentloaded' );
+	// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+	const menuId = getServiceMenuId();
 	const reserveLink = page
-		.locator( '.vkbm-menu-loop__button--reserve' )
+		.locator(
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+		)
 		.first();
 	await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
 	await reserveLink.click();

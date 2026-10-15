@@ -839,8 +839,11 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 
 		// メニューカードの「予約に進む」リンク（vkbm-menu-loop__button--reserve）をクリックすると、
 		// 同ページ内で予約ブロックがプラン要約＋カレンダー表示に切り替わる。
+		// 先頭カードではなく data-menu-id でこの describe のメニューを指定する（#566）。
 		const reserveLink = page
-			.locator( '.vkbm-menu-loop__button--reserve' )
+			.locator(
+				`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+			)
 			.first();
 		await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
 		await reserveLink.click();
@@ -1181,7 +1184,14 @@ async function gotoConfirmScreenForFirstSlot(
 ): Promise< void > {
 	await page.goto( '/booking/' );
 	await page.waitForLoadState( 'domcontentloaded' );
-	await page.locator( '.vkbm-menu-loop__button--reserve' ).first().click();
+	// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+	const menuId = getServiceMenuId();
+	await page
+		.locator(
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+		)
+		.first()
+		.click();
 	await page
 		.locator( '.vkbm-calendar' )
 		.first()

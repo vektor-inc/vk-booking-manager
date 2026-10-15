@@ -15,14 +15,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
+use VKBookingManager\Common\Nomination_Min_Guests_Message;
+use VKBookingManager\Common\Lodging_Rate;
+use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Weekday_Rule;
+use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Payment_Instructions;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
+use VKBookingManager\Uninstall\Uninstaller;
 use function vkbm_get_default_resource_menu_icon;
+use function vkbm_get_resource_label_singular;
 use function vkbm_sanitize_resource_menu_icon;
 
 /**
@@ -32,6 +40,16 @@ class Provider_Settings_Page {
 	private const MENU_SLUG    = 'vkbm-provider-settings';
 	private const NONCE_ACTION = 'vkbm_provider_settings_save';
 	private const NONCE_NAME   = 'vkbm_provider_settings_nonce';
+
+	/**
+	 * 入力エラー時の送信値を一時保存する transient キーの接頭辞（末尾にユーザー ID を付ける）。
+	 */
+	private const OLD_INPUT_TRANSIENT_PREFIX = 'vkbm_provider_settings_previous_input_';
+
+	/**
+	 * 項目ごとのエラーを一時保存する transient キーの接頭辞（末尾にユーザー ID を付ける）。
+	 */
+	private const FIELD_ERRORS_TRANSIENT_PREFIX = 'vkbm_provider_settings_field_errors_';
 
 	/**
 	 * 入力エラー時の再表示で、保存時と同じサニタイズ（Settings_Sanitizer::sanitize()）の結果から
@@ -44,7 +62,9 @@ class Provider_Settings_Page {
 	 */
 	private const OLD_INPUT_KEYS_FROM_SANITIZER = array(
 		'tax_label_text',
+		'service_menu_detail_display_mode',
 		'resource_tag_search_enabled',
+		'reservation_date_search_enabled',
 		'resource_tag_display_enabled',
 		'provider_slot_step_minutes',
 		'provider_allow_staff_overlap_admin',
@@ -58,8 +78,13 @@ class Provider_Settings_Page {
 		'provider_privacy_policy_content',
 		'shift_alert_months',
 		'shift_auto_register_months',
+		'uninstall_cleanup',
 		'design_primary_color',
+		'design_menu_card_catch_color',
 		'design_reservation_button_color',
+		'design_menu_card_price_color',
+		'design_header_logo_width',
+		'design_menu_search_style',
 		'design_radius_md',
 	);
 
@@ -254,7 +279,7 @@ class Provider_Settings_Page {
 			}
 
 			$old_input = $this->sanitize_old_input( $payload );
-			set_transient( 'vkbm_provider_settings_previous_input', $old_input, 30 );
+			set_transient( $this->get_old_input_transient_key(), $old_input, 30 );
 		} else {
 			// 削除指定を新しいキーより優先し、空欄または未送信なら保存済みキーを維持する。
 			if ( $delete_license_key ) {
@@ -274,8 +299,8 @@ class Provider_Settings_Page {
 				__( 'Basic settings saved.', 'vk-booking-manager' ),
 				'updated'
 			);
-			delete_transient( 'vkbm_provider_settings_field_errors' );
-			delete_transient( 'vkbm_provider_settings_previous_input' );
+			delete_transient( $this->get_field_errors_transient_key() );
+			delete_transient( $this->get_old_input_transient_key() );
 
 			// 設定の保存が成功した場合にのみ、シフトの自動登録をその場で実行する（安藤レビュー指摘T1）。
 			$this->maybe_run_shift_auto_register();
@@ -283,19 +308,26 @@ class Provider_Settings_Page {
 
 		set_transient( 'settings_errors', get_settings_errors(), 30 );
 		if ( ! empty( $field_errors ) ) {
-			set_transient( 'vkbm_provider_settings_field_errors', $field_errors, 30 );
+			set_transient( $this->get_field_errors_transient_key(), $field_errors, 30 );
 		} else {
-			delete_transient( 'vkbm_provider_settings_field_errors' );
+			delete_transient( $this->get_field_errors_transient_key() );
 		}
 
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
-		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		$allowed_tabs = array( 'store', 'system', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $this->show_integration_tab() ) {
 			$allowed_tabs[] = 'integration';
 		}
 		if ( class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE ) && current_user_can( 'manage_options' ) ) {
 			$allowed_tabs[] = 'license';
 		}
+		/**
+		 * 許可されるタブスラッグの一覧。拡張プラグインが独自タブを追加できる拡張ポイント。
+		 * 拡張プラグインはここに独自タブのスラッグを追加し、保存後のリダイレクトで表示中のタブを維持する。
+		 *
+		 * @param string[] $allowed_tabs 保存後のリダイレクトで維持してよいタブスラッグの一覧。
+		 */
+		$allowed_tabs = apply_filters( 'vkbm_provider_settings_allowed_tabs', $allowed_tabs );
 		if ( ! in_array( $active_tab, $allowed_tabs, true ) ) {
 			$active_tab = '';
 		}
@@ -354,16 +386,27 @@ class Provider_Settings_Page {
 		wp_enqueue_media();
 		wp_enqueue_script( 'jquery' );
 		wp_enqueue_style( 'wp-color-picker' );
+		// 旧位置の URL を開いたときに正しいタブへ移すための判定処理（#629）。provider-settings.js より先に読み込む。
+		wp_enqueue_script(
+			'vkbm-provider-settings-tab-redirect',
+			VKBM_PLUGIN_DIR_URL . 'assets/js/provider-settings-tab-redirect.js',
+			array(),
+			defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0',
+			true
+		);
 		wp_enqueue_script(
 			'vkbm-provider-settings',
 			VKBM_PLUGIN_DIR_URL . 'assets/js/provider-settings.js',
-			array( 'jquery', 'media-editor', 'wp-color-picker' ),
+			array( 'jquery', 'media-editor', 'wp-color-picker', 'vkbm-provider-settings-tab-redirect' ),
 			$settings_js_version,
 			true
 		);
 		$vkbm_provider_settings_l10n = array(
-			'logoFrameTitle'  => __( 'Select logo image', 'vk-booking-manager' ),
-			'logoFrameButton' => __( 'Select', 'vk-booking-manager' ),
+			'logoFrameTitle'           => __( 'Select logo image', 'vk-booking-manager' ),
+			'logoFrameButton'          => __( 'Select', 'vk-booking-manager' ),
+			// 予約リマインダーの「削除」ボタンの読み上げ用ラベル（時間の入力に合わせて JS が更新する）。
+			'reminderRemoveLabel'      => self::get_reminder_remove_label( '%s' ),
+			'reminderRemoveLabelEmpty' => self::get_reminder_remove_label( '' ),
 		);
 
 		// 無料版では業種プリセットの選択欄自体を表示しない（Pro_Upsell::get_feature_notice_html()
@@ -410,7 +453,7 @@ class Provider_Settings_Page {
 				return;
 			}
 			var toggle = function () {
-				panel.style.display = checkbox.checked ? 'none' : '';
+				panel.hidden = checkbox.checked;
 			};
 			checkbox.addEventListener('change', toggle);
 			toggle();
@@ -432,6 +475,82 @@ class Provider_Settings_Page {
 		wp_add_inline_script( 'vkbm-provider-settings', $license_key_delete_toggle, 'after' );
 
 		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
+	}
+
+	/**
+	 * 店舗タブの「お支払いの案内」入力欄の説明文を組み立てる。
+	 *
+	 * 常に表示する2文に、カード決済などのオンライン決済が有効なときだけ、
+	 * どちらの決済方法を選んだお客様にも表示される旨の2文を続ける（#540）。
+	 * 翻訳関数は1文ずつに分け、結合は Nomination_Min_Guests_Message::join_sentences()
+	 * （日本語は区切りなし・英語は半角スペース区切り）で行う。
+	 *
+	 * @param bool $online_payment_enabled オンライン決済が有効な場合は true。
+	 * @return string エスケープ前の説明文。
+	 */
+	private static function get_payment_instructions_description( bool $online_payment_enabled ): string {
+		// 常に表示する説明。
+		$sentences = array(
+			__( 'Enter payment information for customers (for example, payment methods accepted at the store and receipts).', 'vk-booking-manager' ),
+			__( 'This is shown in the "Payment method" section of the booking confirmation screen.', 'vk-booking-manager' ),
+		);
+
+		// オンライン決済が有効なときだけ続けて表示する説明。
+		if ( $online_payment_enabled ) {
+			$sentences[] = __( 'Because card payment is enabled, this text is shown to customers regardless of which payment method they choose.', 'vk-booking-manager' );
+			$sentences[] = __( 'If some information applies only to payment at the store, make that clear, for example by starting with "For payment at the store, ...".', 'vk-booking-manager' );
+		}
+
+		// 1文ずつ、言語に合った区切りで連結する。
+		return array_reduce(
+			array_slice( $sentences, 1 ),
+			array( Nomination_Min_Guests_Message::class, 'join_sentences' ),
+			$sentences[0]
+		);
+	}
+
+	/**
+	 * お支払いの案内が旧初期値のままのときに、BM 設定画面の上部へ出す通知の HTML を返す。
+	 *
+	 * 店舗タブの入力欄へ移るリンクを付ける。閉じるボタンは付けない（案内文を書き換えて保存すれば消える）。
+	 * リンクのクリック時・移動後に入力欄へフォーカスを移す処理は assets/js/provider-settings.js が行う。
+	 *
+	 * @param string $store_tab_url 店舗タブの URL（アンカーなし）。
+	 * @return string エスケープ済みの HTML。
+	 */
+	private static function get_payment_instructions_page_notice_html( string $store_tab_url ): string {
+		// 2文を言語に合った区切りで連結する。
+		$message = Nomination_Min_Guests_Message::join_sentences(
+			__( 'Card payment is enabled, but "Payment instructions" still contains the default text written for paying at the store.', 'vk-booking-manager' ),
+			__( 'This text is also shown to customers who choose card payment, so please revise it to fit both payment methods.', 'vk-booking-manager' )
+		);
+
+		return sprintf(
+			'<div class="notice notice-warning vkbm-payment-instructions-notice"><p>%1$s <a href="%2$s" class="vkbm-payment-instructions-notice__link">%3$s</a></p></div>',
+			esc_html( $message ),
+			esc_url( $store_tab_url . '#vkbm-provider-payment-method' ),
+			esc_html__( 'Edit payment instructions', 'vk-booking-manager' )
+		);
+	}
+
+	/**
+	 * お支払いの案内が旧初期値のままのときに、入力欄のすぐ下へ出す注意の HTML を返す。
+	 *
+	 * WordPress の管理画面スクリプトが通知を画面上部へ移動させないよう、inline クラスを付けている。
+	 *
+	 * @return string エスケープ済みの HTML。
+	 */
+	private static function get_payment_instructions_field_notice_html(): string {
+		// 2文を言語に合った区切りで連結する。
+		$message = Nomination_Min_Guests_Message::join_sentences(
+			__( 'This is still the default text written for paying at the store.', 'vk-booking-manager' ),
+			__( 'It is also shown to customers who choose card payment, so please revise it.', 'vk-booking-manager' )
+		);
+
+		return sprintf(
+			'<div class="notice notice-warning inline vkbm-payment-instructions-field-notice" id="vkbm-provider-payment-method-notice"><p>%s</p></div>',
+			esc_html( $message )
+		);
 	}
 
 	/**
@@ -501,17 +620,28 @@ class Provider_Settings_Page {
 
 		$settings = $this->settings_service->get_settings();
 		self::maybe_notify_design_radius_md_clamped( $settings );
+
+		// オンライン決済が有効かどうか。説明文の出し分けと見直し通知の判定の両方に使うため、1回だけ求める。
+		$online_payment_enabled = Payment_Instructions::is_online_payment_enabled();
+
+		// お支払いの案内の見直し通知は「保存されている」案内文で判定する。
+		// 後続の処理で入力エラー時の直前入力（transient）により $settings を上書きするため、その前に判定しておく。
+		$show_payment_instructions_notice = Payment_Instructions::should_show_legacy_default_notice(
+			isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '',
+			$online_payment_enabled
+		);
+
 		$defaults = $this->settings_service->get_default_settings();
 		// 無料版では選択欄自体を表示しない（Pro_Upsell::get_feature_notice_html() に差し替える）
 		// ため、フィルター適用・翻訳ルックアップを伴う get_presets() を無駄に呼ばない
 		// （#387 レビュー指摘・安藤 LOW-8）。
 		$presets   = Pro_Upsell::is_free_edition() ? array() : Industry_Presets::get_presets( $defaults );
-		$old_input = get_transient( 'vkbm_provider_settings_previous_input' );
+		$old_input = get_transient( $this->get_old_input_transient_key() );
 		if ( is_array( $old_input ) ) {
 			foreach ( $old_input as $key => $value ) {
 				$settings[ $key ] = $value;
 			}
-			delete_transient( 'vkbm_provider_settings_previous_input' );
+			delete_transient( $this->get_old_input_transient_key() );
 		}
 		$logo_id                          = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
 		$booking_cancel_mode              = isset( $settings['provider_booking_cancel_mode'] ) ? (string) $settings['provider_booking_cancel_mode'] : 'hours';
@@ -553,16 +683,20 @@ class Provider_Settings_Page {
 		$hour_options        = $this->get_hour_options();
 		$end_hour_options    = $this->get_end_hour_options();
 		$minute_options      = $this->get_minute_options();
-		$field_errors        = get_transient( 'vkbm_provider_settings_field_errors' );
+		$field_errors        = get_transient( $this->get_field_errors_transient_key() );
 
 		if ( false === $field_errors || ! is_array( $field_errors ) ) {
 			$field_errors = array();
 		} else {
-			delete_transient( 'vkbm_provider_settings_field_errors' );
+			delete_transient( $this->get_field_errors_transient_key() );
 		}
 
 		$basic_field_errors           = is_array( $field_errors['basic'] ?? null ) ? $field_errors['basic'] : array();
 		$weekly_field_errors          = is_array( $field_errors['weekly'] ?? null ) ? $field_errors['weekly'] : array();
+		$mail_from_error              = is_string( $field_errors['mail_from_email'] ?? null ) ? $field_errors['mail_from_email'] : '';
+		$mail_from_email              = isset( $settings['mail_from_email'] ) && is_string( $settings['mail_from_email'] ) ? $settings['mail_from_email'] : '';
+		$default_mail_from            = Mail_From::resolve_default();
+		$default_mail_from_no_reply   = '' !== Mail_From::resolve_default_from_url( network_home_url() );
 		$next_holiday_index           = count( $regular_holidays );
 		$email_verification_enabled   = ! empty( $settings['registration_email_verification_enabled'] );
 		$membership_redirect_enabled  = ! empty( $settings['membership_redirect_wp_register'] );
@@ -589,7 +723,9 @@ class Provider_Settings_Page {
 		$slot_capacity_enabled   = Staff_Editor::is_slot_capacity_enabled();
 		$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
 		$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
-		$resource_label_menu     = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : __( 'Staff available', 'vk-booking-manager' );
+		// 無料版の案内の内容。判定は1回だけ行う。
+		$free_resource_label_notice = self::get_free_edition_resource_label_notice();
+		$resource_label_menu        = isset( $settings['resource_label_menu'] ) ? (string) $settings['resource_label_menu'] : __( 'Staff available', 'vk-booking-manager' );
 		// リソース管理メニューのアイコン（Dashicons クラス名）。未設定・不正値はデフォルトへ正規化する。
 		$resource_menu_icon         = vkbm_sanitize_resource_menu_icon( $settings['resource_menu_icon'] ?? '' );
 		$resource_menu_icon_presets = $this->get_resource_menu_icon_presets();
@@ -632,9 +768,19 @@ class Provider_Settings_Page {
 		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
 			$privacy_policy_mode = 'none';
 		}
+		$service_menu_detail_display_mode = isset( $settings[ Settings_Repository::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] ) ? sanitize_key( (string) $settings[ Settings_Repository::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] ) : Settings_Repository::DETAIL_DISPLAY_MODE_TEMPLATE;
+		if ( ! in_array( $service_menu_detail_display_mode, Settings_Repository::DETAIL_DISPLAY_MODES, true ) ) {
+			$service_menu_detail_display_mode = Settings_Repository::DETAIL_DISPLAY_MODE_TEMPLATE;
+		}
+
+		// 「予約ブロック内で表示」は、予約ページURLが自サイトのURLとして設定されているときだけ働く。
+		$is_reservation_page_url_usable = '' !== Service_Menu_Detail_Link::resolve_usable_reservation_page_url( (string) ( $settings['reservation_page_url'] ?? '' ) );
+
 		$reservation_menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
 		$shift_alert_months                 = isset( $settings['shift_alert_months'] ) ? (int) $settings['shift_alert_months'] : 1;
 		$shift_auto_register_months         = isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0;
+		$uninstall_cleanup                  = Uninstaller::normalize_mode( $settings['uninstall_cleanup'] ?? Uninstaller::MODE_KEEP );
+		$show_uninstall_cleanup             = current_user_can( 'manage_options' );
 		$booking_reminder_hours             = $settings['booking_reminder_hours'] ?? array();
 		if ( ! is_array( $booking_reminder_hours ) ) {
 			$booking_reminder_hours = array();
@@ -658,31 +804,44 @@ class Provider_Settings_Page {
 			$booking_reminder_rows       = array( '' );
 			$booking_reminder_next_index = 1;
 		}
-		$design_primary_color            = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
-		$design_reservation_button_color = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
-		$design_radius_md                = self::clamp_design_radius_md_for_display( $settings );
-		$currency_symbol                 = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
-		$tax_label_text                  = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
-		$currency_placeholder            = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
-		$has_saved_license_key           = '' !== (string) get_option( 'vk-booking-manager-pro-license-key', '' );
-		$is_pro_edition                  = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		$show_license_tab                = $is_pro_edition && current_user_can( 'manage_options' );
+		$design_primary_color             = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
+		$design_menu_card_catch_color     = isset( $settings['design_menu_card_catch_color'] ) ? (string) $settings['design_menu_card_catch_color'] : '';
+		$design_reservation_button_color  = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
+		$design_menu_card_price_color     = isset( $settings['design_menu_card_price_color'] ) ? (string) $settings['design_menu_card_price_color'] : '';
+		$design_header_logo_width         = isset( $settings['design_header_logo_width'] ) ? (string) $settings['design_header_logo_width'] : '';
+		$design_menu_search_style         = isset( $settings['design_menu_search_style'] ) ? (string) $settings['design_menu_search_style'] : Settings_Sanitizer::DESIGN_MENU_SEARCH_STYLE_DEFAULT;
+		$design_menu_search_style_choices = Settings_Sanitizer::get_design_menu_search_style_choices();
+		$design_radius_md                 = self::clamp_design_radius_md_for_display( $settings );
+		$currency_symbol                  = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$tax_label_text                   = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		$currency_placeholder             = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
+		$has_saved_license_key            = '' !== (string) get_option( 'vk-booking-manager-pro-license-key', '' );
+		$is_pro_edition                   = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		$show_license_tab                 = $is_pro_edition && current_user_can( 'manage_options' );
 		// 「連携」タブ（Google カレンダー連携）は Pro 版限定（issue #475）。
 		$show_integration_tab = $this->show_integration_tab();
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
 			$reservation_menu_list_display_mode = 'card';
 		}
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
-		$allowed_tabs = array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		$allowed_tabs = array( 'store', 'system', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $show_integration_tab ) {
 			$allowed_tabs[] = 'integration';
 		}
 		if ( $show_license_tab ) {
 			$allowed_tabs[] = 'license';
 		}
+		// 本体のタブ一覧（拡張プラグインが追加したタブを含まない）を、フィルターを通す前に控えておく。
+		// 本体の保存フォーム（「変更を保存」ボタン）は本体のタブでだけ出力するために使う。
+		$core_tabs = $allowed_tabs;
+		// このフィルターの説明は handle_form_submission() 内の vkbm_provider_settings_allowed_tabs を参照。
+		$allowed_tabs = apply_filters( 'vkbm_provider_settings_allowed_tabs', $allowed_tabs );
 		if ( ! in_array( $active_tab, $allowed_tabs, true ) ) {
 			$active_tab = 'store';
 		}
+		// 拡張プラグインのタブでは、本体の保存フォームを出さない（拡張プラグインは独自のフォームを
+		// vkbm_provider_settings_extra_content で出力するため。「連携」タブ（issue #475）と同じ考え方）。
+		$is_core_tab = in_array( $active_tab, $core_tabs, true );
 
 		$base_url = add_query_arg(
 			array(
@@ -702,13 +861,19 @@ class Provider_Settings_Page {
 					href="<?php echo esc_url( add_query_arg( 'tab', 'store', $base_url ) ); ?>"
 					class="nav-tab<?php echo 'store' === $active_tab ? ' nav-tab-active' : ''; ?>"
 				>
-					<?php esc_html_e( 'Store basic information', 'vk-booking-manager' ); ?>
+					<?php esc_html_e( 'Business information', 'vk-booking-manager' ); ?>
 				</a>
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'system', $base_url ) ); ?>"
 					class="nav-tab<?php echo 'system' === $active_tab ? ' nav-tab-active' : ''; ?>"
 				>
 					<?php esc_html_e( 'System settings', 'vk-booking-manager' ); ?>
+				</a>
+				<a
+					href="<?php echo esc_url( add_query_arg( 'tab', 'email', $base_url ) ); ?>"
+					class="nav-tab<?php echo 'email' === $active_tab ? ' nav-tab-active' : ''; ?>"
+				>
+					<?php esc_html_e( 'Email settings', 'vk-booking-manager' ); ?>
 				</a>
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'registration', $base_url ) ); ?>"
@@ -728,6 +893,17 @@ class Provider_Settings_Page {
 				>
 					<?php esc_html_e( 'design settings', 'vk-booking-manager' ); ?>
 				</a>
+				<?php
+				/**
+				 * 設定ページのタブナビゲーションに追加タブリンクを挿入する拡張ポイント。
+				 * デザインタブの直後・FAQ タブの直前に発火する。
+				 * 拡張プラグインはここに <a class="nav-tab"> 要素を出力する。
+				 *
+				 * @param string $active_tab 表示中のタブスラッグ。
+				 * @param string $base_url   タブのリンク URL を組み立てるための基準 URL。
+				 */
+				do_action( 'vkbm_provider_settings_extra_tabs', $active_tab, $base_url );
+				?>
 				<a
 					href="<?php echo esc_url( add_query_arg( 'tab', 'faq', $base_url ) ); ?>"
 					class="nav-tab<?php echo 'faq' === $active_tab ? ' nav-tab-active' : ''; ?>"
@@ -758,6 +934,12 @@ class Provider_Settings_Page {
 				<?php endif; ?>
 			</h2>
 			<?php settings_errors( self::MENU_SLUG ); ?>
+			<?php
+			// カード決済が有効なのに、お支払いの案内が旧初期値のままのときは、どのタブでも上部に見直しを促す通知を出す（#540）。
+			if ( $show_payment_instructions_notice ) {
+				echo self::get_payment_instructions_page_notice_html( add_query_arg( 'tab', 'store', $base_url ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 出力はメソッド内でエスケープ済み.
+			}
+			?>
 
 			<?php if ( 'integration' === $active_tab && $show_integration_tab ) : ?>
 				<?php
@@ -765,7 +947,7 @@ class Provider_Settings_Page {
 				// 連携のボタンを押した時点で別タブの入力内容まで保存されてしまうため（issue #475）。
 				$this->google_calendar_panel->render();
 				?>
-			<?php else : ?>
+			<?php elseif ( $is_core_tab ) : ?>
 			<form method="post" action="">
 				<?php wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME ); ?>
 				<table class="form-table" role="presentation">
@@ -782,7 +964,12 @@ class Provider_Settings_Page {
 									name="vkbm_provider_settings[provider_name]"
 									value="<?php echo esc_attr( $settings['provider_name'] ?? '' ); ?>"
 								/>
-								<p class="description"><?php esc_html_e( 'This is the name used in notification emails and screen displays.', 'vk-booking-manager' ); ?></p>
+								<p class="description">
+									<?php esc_html_e( 'This is the name shown to customers.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'Enter a store name, facility name, trade name, or similar.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'If you operate as an individual, your personal name is also acceptable.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'It is used as the sender name of notification emails and in the header.', 'vk-booking-manager' ); ?>
+								</p>
 							</td>
 						</tr>
 
@@ -824,7 +1011,7 @@ class Provider_Settings_Page {
 							<td>
 								<textarea
 									class="large-text"
-									rows="3"
+									rows="6"
 									id="vkbm-provider-business-hours"
 									name="vkbm_provider_settings[provider_business_hours]"
 								><?php echo esc_textarea( $settings['provider_business_hours'] ?? '' ); ?></textarea>
@@ -834,7 +1021,10 @@ class Provider_Settings_Page {
 
 						<tr class="vkbm-provider-settings__tab-store">
 							<th scope="row">
-								<label for="vkbm-provider-payment-method"><?php esc_html_e( 'Payment method', 'vk-booking-manager' ); ?></label>
+								<?php
+								// 予約確認画面の見出し「決済方法」（Payment method）とは別の文字列にしている（#540）。
+								?>
+								<label for="vkbm-provider-payment-method"><?php esc_html_e( 'Payment instructions', 'vk-booking-manager' ); ?></label>
 							</th>
 							<td>
 								<textarea
@@ -842,8 +1032,15 @@ class Provider_Settings_Page {
 									rows="4"
 									id="vkbm-provider-payment-method"
 									name="vkbm_provider_settings[provider_payment_method]"
+									aria-describedby="<?php echo esc_attr( $show_payment_instructions_notice ? 'vkbm-provider-payment-method-notice vkbm-provider-payment-method-description' : 'vkbm-provider-payment-method-description' ); ?>"
 								><?php echo esc_textarea( $payment_method ); ?></textarea>
-								<p class="description"><?php esc_html_e( 'Enter payment instructions and supported payment methods (cash, credit card, IC, etc.) when visiting the store.', 'vk-booking-manager' ); ?></p>
+								<?php
+								// 旧初期値のままのときは、入力欄のすぐ下にも見直しを促す注意を出す（#540）。
+								if ( $show_payment_instructions_notice ) {
+									echo self::get_payment_instructions_field_notice_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 出力はメソッド内でエスケープ済み.
+								}
+								?>
+								<p class="description" id="vkbm-provider-payment-method-description"><?php echo esc_html( self::get_payment_instructions_description( $online_payment_enabled ) ); ?></p>
 							</td>
 						</tr>
 
@@ -862,7 +1059,7 @@ class Provider_Settings_Page {
 									/>
 									<?php esc_html_e( 'No regular holidays', 'vk-booking-manager' ); ?>
 								</label>
-								<div id="vkbm-regular-holiday-settings" <?php echo $regular_holidays_disabled ? 'style="display:none;"' : ''; ?>>
+								<div id="vkbm-regular-holiday-settings" <?php echo $regular_holidays_disabled ? 'hidden' : ''; ?>>
 									<table class="vkbm-setting-table vkbm-regular-holidays-table">
 									<thead>
 										<tr>
@@ -961,7 +1158,11 @@ class Provider_Settings_Page {
 					// phpcs:enable
 					?>
 				</template>
-									<p class="description"><?php esc_html_e( 'Register the business hours that are common to the entire facility.', 'vk-booking-manager' ); ?></p>
+									<?php if ( Industry_Presets::supports( 'lodging' ) ) : ?>
+										<p class="description"><?php esc_html_e( 'This setting is not used for the availability of lodging plans.', 'vk-booking-manager' ); ?><?php esc_html_e( ' If you also use time slot plans, such as day-use baths or private baths, register the time ranges here.', 'vk-booking-manager' ); ?><?php esc_html_e( ' The registered time ranges become the reservation slots of the time slot plans.', 'vk-booking-manager' ); ?></p>
+									<?php else : ?>
+										<p class="description"><?php esc_html_e( 'Register the business hours that are common to the entire facility.', 'vk-booking-manager' ); ?></p>
+									<?php endif; ?>
 								</div>
 							</td>
 						</tr>
@@ -1086,7 +1287,26 @@ class Provider_Settings_Page {
 										<?php endforeach; ?>
 									</tbody>
 								</table>
-								<p class="description"><?php esc_html_e( 'On holidays and days before holidays, shifts are generated based on basic business hours or individual settings.', 'vk-booking-manager' ); ?></p>
+								<?php
+								// 1つの __() に複数の文を入れないよう、文ごとに分けてから連結する。
+								// 2文目は英語表示時のみ先頭に半角スペースが要るため、msgid 側に含めている。
+								$shift_screen_link = sprintf(
+									'<a href="%1$s">%2$s</a>',
+									esc_url( admin_url( 'edit.php?post_type=' . \VKBookingManager\PostTypes\Shift_Post_Type::POST_TYPE ) ),
+									esc_html__( 'shift screen', 'vk-booking-manager' )
+								);
+
+								$holiday_rows_description = __( 'The settings in the holiday and day-before-holiday rows are not currently used when creating shifts.', 'vk-booking-manager' );
+
+								$holiday_rows_description .= __( ' Holidays and days before holidays follow the regular weekday hours.', 'vk-booking-manager' );
+
+								$holiday_rows_description .= sprintf(
+									/* translators: %s: link to the shift screen. */
+									__( ' To change the hours for a specific day, set them on the %s.', 'vk-booking-manager' ),
+									$shift_screen_link
+								);
+								?>
+								<p class="description"><?php echo wp_kses( $holiday_rows_description, array( 'a' => array( 'href' => array() ) ) ); ?></p>
 							</td>
 						</tr>
 
@@ -1137,6 +1357,8 @@ class Provider_Settings_Page {
 									</select>
 									<p class="description"><?php esc_html_e( 'When you select an industry, only the items commonly used in that industry are displayed, with representative values entered in advance. Other items are configured automatically and are no longer displayed on this screen.', 'vk-booking-manager' ); ?></p>
 									<p class="description"><?php esc_html_e( 'Select "Custom" to configure all items individually (initial state).', 'vk-booking-manager' ); ?></p>
+									<p class="description"><?php esc_html_e( 'If you select "Lodging", you can create plans by the night in service menus, and customers choose a check-in date, check-out date, and room on the reservation screen.', 'vk-booking-manager' ); ?></p>
+									<p class="description"><?php esc_html_e( 'If you switch from "Lodging" to another industry, plans set by the night are handled as time slot plans.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Days that were set as sale days in "Lodging" have no time slots, so no vacancies appear for time slot plans until you set the time slots in the shift of each month.', 'vk-booking-manager' ); ?></p>
 									<div class="vkbm-industry-preset-summary" hidden>
 										<button type="button" class="button-link vkbm-industry-preset-summary__toggle" aria-expanded="false" aria-controls="vkbm-industry-preset-summary-content"></button>
 										<div id="vkbm-industry-preset-summary-content" class="vkbm-industry-preset-summary__content" hidden>
@@ -1202,6 +1424,17 @@ class Provider_Settings_Page {
 											/>
 											<?php esc_html_e( 'Filter search', 'vk-booking-manager' ); ?>
 										</label>
+										<?php // 「日付で絞り込む」は「絞り込み検索」の子項目のため、インデントして表示する。無料版・Pro 版の両方で使える。 ?>
+										<label class="vkbm-inline-checkbox vkbm-inline-checkbox--child">
+											<input
+												type="checkbox"
+												id="vkbm-reservation-date-search-enabled"
+												name="vkbm_provider_settings[reservation_date_search_enabled]"
+												value="1"
+												<?php checked( ! empty( $settings['reservation_date_search_enabled'] ) ); ?>
+											/>
+											<?php esc_html_e( 'Filter by date', 'vk-booking-manager' ); ?>
+										</label>
 										<?php if ( $is_pro_edition ) : ?>
 											<?php // #431: 「リソースタグ検索」は「絞り込み検索」の子項目のため、インデントして表示する。 ?>
 											<label class="vkbm-inline-checkbox vkbm-inline-checkbox--child">
@@ -1225,15 +1458,53 @@ class Provider_Settings_Page {
 											/>
 											<?php esc_html_e( 'Service menu list', 'vk-booking-manager' ); ?>
 										</label>
+										<?php // #633: 店舗情報と規約リンクを予約ブロックの末尾に表示する。 ?>
+										<label class="vkbm-inline-checkbox">
+											<input
+												type="checkbox"
+												id="vkbm-reservation-show-footer"
+												name="vkbm_provider_settings[reservation_show_footer]"
+												value="1"
+												<?php checked( ! empty( $settings['reservation_show_footer'] ) ); ?>
+											/>
+											<?php esc_html_e( 'Footer', 'vk-booking-manager' ); ?>
+										</label>
 									</div>
-									<p class="description">
-										<?php esc_html_e( 'If neither "Filter search" nor "Service menu list" is checked, only the filter search (selecting the menu, etc. from dropdowns) will be displayed.', 'vk-booking-manager' ); ?>
-									</p>
+									<ul class="description vkbm-provider-settings__description-list">
+										<li>
+											<?php esc_html_e( 'If neither "Filter search" nor "Service menu list" is checked, only the filter search (selecting the menu, etc. from dropdowns) will be displayed.', 'vk-booking-manager' ); ?>
+										</li>
+										<li>
+											<?php
+											/* translators: Prefix label shown before the description of the "Filter by date" checkbox. Includes the colon separator. */
+											esc_html_e( 'Filter by date:', 'vk-booking-manager' );
+											?>
+											<?php esc_html_e( 'Adds a date field to the filter search. Only the service menus that can be booked on the selected date are shown in the list and the menu dropdown.', 'vk-booking-manager' ); ?>
+											<?php esc_html_e( 'On lodging sites, the check-in date, check-out date, and number of nights fields are displayed instead of the date field.', 'vk-booking-manager' ); ?>
+										</li>
+										<li>
+											<?php
+											/* translators: Prefix label shown before the description of the "Footer" checkbox. Includes the colon separator. */
+											esc_html_e( 'Footer:', 'vk-booking-manager' );
+											?>
+											<?php esc_html_e( 'Displays the business information (business name, address, phone number, and business hours text) and links to the cancellation policy, system terms of use, and privacy policy at the end of the reservation block.', 'vk-booking-manager' ); ?>
+											<?php esc_html_e( 'When the website URL differs from the reservation page URL, a "Website" link is also displayed at the left end of the links.', 'vk-booking-manager' ); ?>
+											<br />
+											<?php
+											printf(
+												/* translators: 1: link to the "Business information" tab, 2: link to the "User consent items" tab. */
+												esc_html__( 'The displayed content uses the values entered in %1$s and %2$s.', 'vk-booking-manager' ),
+												'<a href="' . esc_url( add_query_arg( 'tab', 'store', $base_url ) ) . '">' . esc_html__( 'Business information', 'vk-booking-manager' ) . '</a>',
+												'<a href="' . esc_url( add_query_arg( 'tab', 'consent', $base_url ) ) . '">' . esc_html__( 'User consent items', 'vk-booking-manager' ) . '</a>'
+											);
+											?>
+										</li>
+									</ul>
 							</td>
 						</tr>
 
 								<?php if ( 'system' === $active_tab ) : ?>
-									<tr class="vkbm-provider-settings__tab-system" id="vkbm-reservation-menu-list-display-mode-row" style="<?php echo ! empty( $settings['reservation_show_menu_list'] ) ? '' : 'display:none;'; ?>">
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-reservation-menu-list-display-mode-row" <?php echo ! empty( $settings['reservation_show_menu_list'] ) ? '' : 'hidden'; ?>>
 										<th scope="row">
 											<label for="vkbm-reservation-menu-list-display-mode"><?php esc_html_e( 'Service menu display mode', 'vk-booking-manager' ); ?></label>
 										</th>
@@ -1249,6 +1520,50 @@ class Provider_Settings_Page {
 													<?php esc_html_e( 'text', 'vk-booking-manager' ); ?>
 												</option>
 											</select>
+										</td>
+									</tr>
+								<?php endif; ?>
+
+								<?php if ( 'system' === $active_tab ) : ?>
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-service-menu-detail-display-mode-row">
+										<th scope="row">
+											<label for="vkbm-service-menu-detail-display-mode"><?php esc_html_e( 'Service menu detail page display method', 'vk-booking-manager' ); ?></label>
+										</th>
+										<td>
+											<select
+												id="vkbm-service-menu-detail-display-mode"
+												name="vkbm_provider_settings[service_menu_detail_display_mode]"
+												aria-describedby="vkbm-service-menu-detail-display-mode-help"
+											>
+												<option value="block" <?php selected( $service_menu_detail_display_mode, 'block' ); ?>>
+													<?php esc_html_e( 'Display within the reservation block', 'vk-booking-manager' ); ?>
+												</option>
+												<option value="template" <?php selected( $service_menu_detail_display_mode, 'template' ); ?>>
+													<?php esc_html_e( 'Display as a WordPress individual post', 'vk-booking-manager' ); ?>
+												</option>
+											</select>
+											<dl class="vkbm-detail-display-mode-help" id="vkbm-service-menu-detail-display-mode-help">
+												<dt><?php esc_html_e( 'Display within the reservation block', 'vk-booking-manager' ); ?></dt>
+												<dd>
+													<?php esc_html_e( 'The detail page of a service menu is displayed inside the reservation block of the reservation page.', 'vk-booking-manager' ); ?><br>
+													<?php esc_html_e( 'Customers can proceed to the reservation screen without leaving the reservation page.', 'vk-booking-manager' ); ?><br>
+													<?php esc_html_e( 'The reservation page URL must be set.', 'vk-booking-manager' ); ?>
+												</dd>
+												<dt><?php esc_html_e( 'Display as a WordPress individual post', 'vk-booking-manager' ); ?></dt>
+												<dd>
+													<?php esc_html_e( 'The detail page of a service menu is displayed as an individual post of WordPress.', 'vk-booking-manager' ); ?><br>
+													<?php esc_html_e( 'The appearance depends on the post template of your theme.', 'vk-booking-manager' ); ?>
+												</dd>
+											</dl>
+											<p class="description"><?php esc_html_e( 'If "Use" is turned off for "Details page" of a service menu, the detail page of that service menu is not displayed in either method.', 'vk-booking-manager' ); ?></p>
+											<?php if ( ! $is_reservation_page_url_usable ) : ?>
+												<?php // 「予約ブロック内で表示」を選んでいるときだけ見せる（選択の切り替えには assets/js/provider-settings.js が追従する）。 ?>
+												<p class="description vkbm-detail-display-mode-notice" id="vkbm-service-menu-detail-display-mode-notice" <?php echo 'block' === $service_menu_detail_display_mode ? '' : 'hidden'; ?>>
+													<?php esc_html_e( 'Please set the reservation page URL to a URL of this site.', 'vk-booking-manager' ); ?>
+													<?php esc_html_e( 'Until then, service menus are displayed as individual posts of WordPress even if "Display within the reservation block" is selected.', 'vk-booking-manager' ); ?>
+													<a href="#vkbm-reservation-page-url"><?php esc_html_e( 'Set the reservation page URL', 'vk-booking-manager' ); ?></a>
+												</p>
+											<?php endif; ?>
 										</td>
 									</tr>
 								<?php endif; ?>
@@ -1290,6 +1605,80 @@ class Provider_Settings_Page {
 									</tr>
 								<?php endif; ?>
 
+								<?php if ( 'system' === $active_tab && Industry_Presets::supports( 'lodging' ) ) : ?>
+									<?php
+									// #737: 宿泊の業種でだけ、宿泊プランの休前日・特定日を設定する欄を出す。
+									$lodging_pre_holiday_weekdays = Lodging_Rate::normalize_weekdays( $settings['lodging_pre_holiday_weekdays'] ?? array() );
+									$lodging_special_rows         = $this->prepare_lodging_special_date_rows( $settings['lodging_special_dates'] ?? array() );
+									$lodging_special_errors       = is_array( $field_errors['lodging_special_dates'] ?? null ) ? $field_errors['lodging_special_dates'] : array();
+									?>
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-lodging-rate-row">
+										<th scope="row"><?php esc_html_e( 'Pre-holidays and special dates (lodging plan prices)', 'vk-booking-manager' ); ?></th>
+										<td>
+											<fieldset class="vkbm-lodging-rate-group">
+												<legend><?php esc_html_e( 'Days of the week treated as pre-holidays', 'vk-booking-manager' ); ?></legend>
+												<?php // チェックが 1 つも無い保存でも、項目が送られたと判別できるように空の値を先に送る。 ?>
+												<input type="hidden" name="vkbm_provider_settings[lodging_pre_holiday_weekdays][]" value="" />
+												<div class="vkbm-lodging-rate-weekdays">
+													<?php foreach ( Lodging_Rate::WEEKDAY_KEYS as $weekday_key ) : ?>
+														<label class="vkbm-inline-checkbox">
+															<input
+																type="checkbox"
+																name="vkbm_provider_settings[lodging_pre_holiday_weekdays][]"
+																value="<?php echo esc_attr( $weekday_key ); ?>"
+																<?php checked( in_array( $weekday_key, $lodging_pre_holiday_weekdays, true ) ); ?>
+															/>
+															<?php echo esc_html( $business_day_labels[ $weekday_key ] ); ?>
+														</label>
+													<?php endforeach; ?>
+												</div>
+												<p class="description"><?php esc_html_e( 'Nights that start on the selected days of the week are priced as pre-holidays. A night before a public holiday is always a pre-holiday, whatever the day of the week.', 'vk-booking-manager' ); ?></p>
+											</fieldset>
+
+											<fieldset class="vkbm-lodging-rate-group">
+												<legend><?php esc_html_e( 'Special dates', 'vk-booking-manager' ); ?></legend>
+												<div id="vkbm-lodging-special-dates-rows" class="vkbm-lodging-special-dates" data-next-index="<?php echo esc_attr( (string) ( max( array_map( 'intval', array_keys( $lodging_special_rows ) ) ) + 1 ) ); ?>">
+													<?php foreach ( $lodging_special_rows as $special_index => $special_row ) : ?>
+														<?php
+														$special_row_error = is_string( $lodging_special_errors[ (string) $special_index ] ?? null ) ? $lodging_special_errors[ (string) $special_index ] : '';
+														$special_row_html  = $this->render_lodging_special_date_row( (string) $special_index, $special_row, $special_row_error );
+														echo $special_row_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Markup escaped within method.
+														?>
+													<?php endforeach; ?>
+												</div>
+												<button type="button" class="button button-secondary" id="vkbm-lodging-special-date-add">
+													<?php esc_html_e( '+ Add period', 'vk-booking-manager' ); ?>
+												</button>
+												<template id="vkbm-lodging-special-date-row-template">
+													<?php
+													$special_row_template = $this->render_lodging_special_date_row(
+														'__INDEX__',
+														array(
+															'start' => '',
+															'end'   => '',
+															'label' => '',
+														),
+														''
+													);
+													echo $special_row_template; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Output used as template.
+													?>
+												</template>
+												<p class="description"><?php esc_html_e( 'Nights that start on a day in the period, including the end date, are priced as special dates. If the special date price of a plan is empty, the night is priced as a pre-holiday or a weekday instead.', 'vk-booking-manager' ); ?></p>
+											</fieldset>
+
+											<p class="description">
+												<?php
+												printf(
+													/* translators: %s: link to the service menu list. */
+													esc_html__( 'Set the regular, pre-holiday, and special date prices of each plan on the edit screen of each %s.', 'vk-booking-manager' ),
+													'<a href="' . esc_url( admin_url( 'edit.php?post_type=' . Service_Menu_Post_Type::POST_TYPE ) ) . '">' . esc_html__( 'service menu', 'vk-booking-manager' ) . '</a>'
+												);
+												?>
+											</p>
+										</td>
+									</tr>
+								<?php endif; ?>
+
 								<tr class="vkbm-provider-settings__tab-system">
 									<th scope="row">
 										<label for="vkbm-slot-step-minutes"><?php esc_html_e( 'Reservation slot time', 'vk-booking-manager' ); ?></label>
@@ -1305,6 +1694,9 @@ class Provider_Settings_Page {
 											<option value="30" <?php selected( $slot_step_minutes, 30 ); ?>><?php esc_html_e( '30 minutes', 'vk-booking-manager' ); ?></option>
 											<option value="60" <?php selected( $slot_step_minutes, 60 ); ?>><?php esc_html_e( '60 minutes', 'vk-booking-manager' ); ?></option>
 										</select>
+										<?php if ( Industry_Presets::supports( 'lodging' ) ) : ?>
+											<p class="description"><?php esc_html_e( 'This setting applies only to time slot plans.', 'vk-booking-manager' ); ?><?php esc_html_e( ' It is not used for lodging plans.', 'vk-booking-manager' ); ?></p>
+										<?php endif; ?>
 									</td>
 								</tr>
 
@@ -1324,6 +1716,9 @@ class Provider_Settings_Page {
 										/> <?php esc_html_e( 'minutes', 'vk-booking-manager' ); ?>
 										<p class="description"><?php esc_html_e( 'During the service time plus the buffer time, new reservations will not be accepted.', 'vk-booking-manager' ); ?></p>
 										<p class="description"><?php esc_html_e( 'If there is an input for each service menu, that will take priority.', 'vk-booking-manager' ); ?></p>
+										<?php if ( Industry_Presets::supports( 'lodging' ) ) : ?>
+											<p class="description"><?php esc_html_e( 'This setting applies only to time slot plans.', 'vk-booking-manager' ); ?><?php esc_html_e( ' It is not used for lodging plans.', 'vk-booking-manager' ); ?></p>
+										<?php endif; ?>
 									</td>
 								</tr>
 
@@ -1393,7 +1788,8 @@ class Provider_Settings_Page {
 								<?php // 仮予約の完了画面の案内文。「仮予約にする」選択時のみ表示する（切り替えは assets/js/provider-settings.js）。値は即時確定に戻しても保持する。 ?>
 								<div
 									id="vkbm-provider-booking-complete-message-pending-field"
-									style="margin-top:1rem;<?php echo 'pending' === $booking_status_mode_current ? '' : 'display:none;'; ?>"
+									class="vkbm-provider-settings__pending-message-field"
+									<?php echo 'pending' === $booking_status_mode_current ? '' : 'hidden'; ?>
 								>
 									<label for="vkbm-provider-booking-complete-message-pending"><strong><?php esc_html_e( 'Guidance text for tentative reservation completion', 'vk-booking-manager' ); ?></strong></label>
 									<textarea
@@ -1402,7 +1798,6 @@ class Provider_Settings_Page {
 										class="large-text"
 										rows="4"
 										maxlength="<?php echo esc_attr( (string) Settings_Sanitizer::BOOKING_COMPLETE_MESSAGE_MAX_LENGTH ); ?>"
-										style="margin-top:0.25rem;"
 									><?php echo esc_textarea( $booking_complete_message_pending ); ?></textarea>
 									<p class="description">
 										<?php esc_html_e( 'This text is displayed below the heading "Your tentative reservation has been received." on the screen shown after a tentative reservation is completed.', 'vk-booking-manager' ); ?><br />
@@ -1411,7 +1806,7 @@ class Provider_Settings_Page {
 										<?php esc_html_e( 'HTML tags cannot be used, and line breaks are displayed as entered.', 'vk-booking-manager' ); ?><br />
 										<?php esc_html_e( 'The text of emails does not change.', 'vk-booking-manager' ); ?>
 									</p>
-									<p class="description" style="margin-top:0.5rem;">
+									<p class="description vkbm-provider-settings__standard-text">
 										<?php esc_html_e( 'Standard text:', 'vk-booking-manager' ); ?>
 										<?php echo esc_html( ( new Settings_Repository() )->get_default_booking_complete_message_pending() ); ?>
 									</p>
@@ -1424,7 +1819,7 @@ class Provider_Settings_Page {
 									<label for="vkbm-provider-booking-cancel-mode"><?php esc_html_e( 'Reservation cancellation', 'vk-booking-manager' ); ?></label>
 								</th>
 							<td>
-								<p class="description" style="margin-top:0;margin-bottom:0.5rem;">
+								<p class="description vkbm-provider-settings__field-lead">
 									<?php esc_html_e( 'Cancellation of reservations via the web by users', 'vk-booking-manager' ); ?>
 								</p>
 								<select
@@ -1440,7 +1835,8 @@ class Provider_Settings_Page {
 								</select>
 								<span
 									id="vkbm-provider-booking-cancel-hours-field"
-									style="margin-left:0.75rem;<?php echo 'none' === $booking_cancel_mode ? 'display:none;' : ''; ?>"
+									class="vkbm-provider-settings__cancel-hours-field"
+									<?php echo 'none' === $booking_cancel_mode ? 'hidden' : ''; ?>
 								>
 									<input
 										type="number"
@@ -1478,23 +1874,6 @@ class Provider_Settings_Page {
 
 
 
-							<tr class="vkbm-provider-settings__tab-store">
-								<th scope="row">
-									<label for="vkbm-provider-email"><?php esc_html_e( 'Representative email address', 'vk-booking-manager' ); ?></label>
-								</th>
-							<td>
-								<input
-									type="email"
-									class="regular-text"
-									id="vkbm-provider-email"
-									name="vkbm_provider_settings[provider_email]"
-									value="<?php echo esc_attr( $settings['provider_email'] ?? '' ); ?>"
-								/>
-								<p class="description"><?php esc_html_e( 'This is used as the reply address when sending notification emails.', 'vk-booking-manager' ); ?></p>
-								<?php // #510: 事業者向け通知の宛先が空/不正な場合に管理者メールへフォールバックすることを明記する。 ?>
-								<p class="description"><?php esc_html_e( 'If left blank, notification emails to the provider are sent to the WordPress administration email address (Settings > General).', 'vk-booking-manager' ); ?></p>
-							</td>
-						</tr>
 
 						<tr class="vkbm-provider-settings__tab-registration">
 							<th scope="row"><?php esc_html_e( 'membership', 'vk-booking-manager' ); ?></th>
@@ -1627,7 +2006,7 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 						<tr class="vkbm-provider-settings__tab-store">
-							<th scope="row"><?php esc_html_e( 'Store logo image', 'vk-booking-manager' ); ?></th>
+							<th scope="row"><?php esc_html_e( 'Logo image', 'vk-booking-manager' ); ?></th>
 							<td>
 								<div id="vkbm-provider-logo-preview-container" class="vkbm-provider-logo-preview">
 									<?php
@@ -1649,7 +2028,7 @@ class Provider_Settings_Page {
 									type="button"
 									class="button button-secondary"
 									id="vkbm-provider-logo-remove"
-									<?php echo $logo_id > 0 ? '' : 'style="display:none;"'; ?>
+									<?php echo $logo_id > 0 ? '' : 'hidden'; ?>
 								>
 									<?php esc_html_e( 'delete image', 'vk-booking-manager' ); ?>
 								</button>
@@ -1710,7 +2089,8 @@ class Provider_Settings_Page {
 								</p>
 								<div
 									id="vkbm-provider-privacy-policy-url-field"
-									style="margin-top:0.75rem;<?php echo 'url' === $privacy_policy_mode ? '' : 'display:none;'; ?>"
+									class="vkbm-provider-settings__privacy-policy-field"
+									<?php echo 'url' === $privacy_policy_mode ? '' : 'hidden'; ?>
 								>
 									<label for="vkbm-provider-privacy-policy-url" class="vkbm-form__label--block">
 										<?php esc_html_e( 'Privacy policy page URL', 'vk-booking-manager' ); ?>
@@ -1725,7 +2105,8 @@ class Provider_Settings_Page {
 								</div>
 								<div
 									id="vkbm-provider-privacy-policy-content-field"
-									style="margin-top:0.75rem;<?php echo 'content' === $privacy_policy_mode ? '' : 'display:none;'; ?>"
+									class="vkbm-provider-settings__privacy-policy-field"
+									<?php echo 'content' === $privacy_policy_mode ? '' : 'hidden'; ?>
 								>
 									<label for="vkbm-provider-privacy-policy-content" class="vkbm-form__label--block">
 										<?php esc_html_e( 'Privacy policy', 'vk-booking-manager' ); ?>
@@ -1756,62 +2137,6 @@ class Provider_Settings_Page {
 								/>
 								<?php esc_html_e( 'Display an alert if a shift for the next month is not registered.', 'vk-booking-manager' ); ?>
 								<p class="description"><?php esc_html_e( 'Displayed if there is an unregistered month within the specified number of months including the current month.', 'vk-booking-manager' ); ?></p>
-							</td>
-						</tr>
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-booking-reminder-hours-0"><?php esc_html_e( 'Reservation reminder email', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<div class="vkbm-reminder-hours">
-									<input
-										type="hidden"
-										id="vkbm-booking-reminder-next-index"
-										value="<?php echo esc_attr( (string) $booking_reminder_next_index ); ?>"
-									/>
-									<div class="vkbm-reminder-hours__list" id="vkbm-booking-reminder-hours-list">
-										<?php foreach ( $booking_reminder_rows as $index => $hours ) : ?>
-											<div class="vkbm-reminder-hours__row">
-												<input
-													type="number"
-													class="small-text"
-													id="vkbm-booking-reminder-hours-<?php echo esc_attr( (string) $index ); ?>"
-													name="vkbm_provider_settings[booking_reminder_hours][<?php echo esc_attr( (string) $index ); ?>]"
-													min="1"
-													step="1"
-													value="<?php echo esc_attr( '' === $hours ? '' : (string) $hours ); ?>"
-												/>
-												<span class="vkbm-reminder-hours__suffix"><?php esc_html_e( 'hours before', 'vk-booking-manager' ); ?></span>
-												<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger">
-													<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
-												</button>
-											</div>
-										<?php endforeach; ?>
-									</div>
-									<button type="button" class="button vkbm-reminder-hours-add">
-										<?php esc_html_e( 'Add time', 'vk-booking-manager' ); ?>
-									</button>
-									<p class="description">
-										<?php esc_html_e( 'Sends reminder emails to customers before their reservation time.', 'vk-booking-manager' ); ?>
-									</p>
-								</div>
-								<template id="vkbm-booking-reminder-template">
-									<div class="vkbm-reminder-hours__row">
-										<input
-											type="number"
-											class="small-text"
-											id="vkbm-booking-reminder-hours-__INDEX__"
-											name="vkbm_provider_settings[booking_reminder_hours][__INDEX__]"
-											min="1"
-											step="1"
-											value=""
-										/>
-										<span class="vkbm-reminder-hours__suffix"><?php esc_html_e( 'hours before', 'vk-booking-manager' ); ?></span>
-										<button type="button" class="button-link vkbm-reminder-hours-remove">
-											<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
-										</button>
-									</div>
-								</template>
 							</td>
 						</tr>
 
@@ -2018,6 +2343,36 @@ class Provider_Settings_Page {
 									</td>
 								</tr>
 							<?php endif; ?>
+						<?php elseif ( null !== $free_resource_label_notice ) : ?>
+							<?php // 無料版には呼び方の入力欄が無いため、Pro 版で設定済みの呼び方があるときだけ、入力欄の位置に理由を常時表示する（閉じられない）。 ?>
+							<tr class="vkbm-provider-settings__tab-system">
+								<th scope="row"><?php esc_html_e( 'Resource name (singular)', 'vk-booking-manager' ); ?></th>
+								<td>
+									<p class="description">
+										<?php
+										if ( '' !== $free_resource_label_notice['label'] ) {
+											echo esc_html(
+												sprintf(
+													/* translators: 1: resource label saved while using the Pro edition, 2: default resource label shown in the free edition. */
+													__( 'The resource name is set to "%1$s" in the Pro edition. The free edition displays "%2$s". The setting is saved, and the Pro edition displays the resource name you set when it is activated.', 'vk-booking-manager' ),
+													$free_resource_label_notice['label'],
+													__( 'Staff', 'vk-booking-manager' )
+												)
+											);
+										} else {
+											echo esc_html(
+												sprintf(
+													/* translators: 1: default resource name, 2: default menu card label. */
+													__( 'The resource name has been changed in the Pro edition. The free edition displays the defaults ("%1$s" and "%2$s"). The setting is saved, and the Pro edition displays the resource name you set when it is activated.', 'vk-booking-manager' ),
+													__( 'Staff', 'vk-booking-manager' ),
+													__( 'Staff available', 'vk-booking-manager' )
+												)
+											);
+										}
+										?>
+									</p>
+								</td>
+							</tr>
 						<?php endif; ?>
 
 						<tr class="vkbm-provider-settings__tab-system" data-industry-field="guests_unit_label" data-industry-label="<?php echo esc_attr__( 'Quantity unit', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_unit_label' ) ); ?>>
@@ -2148,7 +2503,7 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 
-						<tr class="vkbm-provider-settings__tab-system">
+						<tr class="vkbm-provider-settings__tab-system" data-industry-field="guests_count_label" data-industry-label="<?php echo esc_attr__( 'Quantity label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_count_label' ) ); ?>>
 							<th scope="row">
 								<label for="vkbm-guests-count-label"><?php esc_html_e( 'Quantity label', 'vk-booking-manager' ); ?></label>
 							</th>
@@ -2241,6 +2596,44 @@ class Provider_Settings_Page {
 						</tr>
 						<tr class="vkbm-provider-settings__tab-design">
 							<th scope="row">
+								<label for="vkbm-design-menu-card-catch-color"><?php esc_html_e( 'Text color of the catchphrase on service menu cards', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="vkbm-color-picker"
+									id="vkbm-design-menu-card-catch-color"
+									name="vkbm_provider_settings[design_menu_card_catch_color]"
+									value="<?php echo esc_attr( $design_menu_card_catch_color ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Use as the text color of the catchphrase shown on service menu cards (--vkbm--color--menu-card-catch).', 'vk-booking-manager' ); ?>
+									<br />
+									<?php esc_html_e( "If not specified, the theme's contrast color (--wp--preset--color--contrast) will be used. If the theme has no contrast color, a dark gray (#222) is used.", 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-design">
+							<th scope="row">
+								<label for="vkbm-design-menu-card-price-color"><?php esc_html_e( 'Price text color on service menu cards', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="vkbm-color-picker"
+									id="vkbm-design-menu-card-price-color"
+									name="vkbm_provider_settings[design_menu_card_price_color]"
+									value="<?php echo esc_attr( $design_menu_card_price_color ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Use as the text color of the price shown on service menu cards (--vkbm--color--menu-card-price).', 'vk-booking-manager' ); ?>
+									<br />
+									<?php esc_html_e( 'If not specified, a dark red (#d11c1c) is used.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-design">
+							<th scope="row">
 								<label for="vkbm-design-reservation-button-color"><?php esc_html_e( 'Proceed to reservation button color', 'vk-booking-manager' ); ?></label>
 							</th>
 							<td>
@@ -2260,6 +2653,30 @@ class Provider_Settings_Page {
 						</tr>
 						<tr class="vkbm-provider-settings__tab-design">
 							<th scope="row">
+								<label for="vkbm-design-header-logo-width"><?php esc_html_e( 'Width of the logo image in the header', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="number"
+									class="small-text"
+									id="vkbm-design-header-logo-width"
+									name="vkbm_provider_settings[design_header_logo_width]"
+									min="1"
+									max="<?php echo esc_attr( (string) Settings_Sanitizer::DESIGN_HEADER_LOGO_WIDTH_MAX ); ?>"
+									step="1"
+									value="<?php echo esc_attr( $design_header_logo_width ); ?>"
+								/> px
+								<p class="description">
+									<?php esc_html_e( 'Displays the logo image in the header of the booking page at this width (px).', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'The height follows the aspect ratio.', 'vk-booking-manager' ); ?>
+									<br />
+									<?php esc_html_e( 'If left blank, the logo is displayed at the same size as before.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'The logo image is shown when "logo image" is turned on in "Reservation page display elements".', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-design">
+							<th scope="row">
 								<label for="vkbm-design-radius-md"><?php esc_html_e( 'Basic size of rounded corners', 'vk-booking-manager' ); ?></label>
 							</th>
 							<td>
@@ -2274,6 +2691,26 @@ class Provider_Settings_Page {
 									value="<?php echo esc_attr( (string) $design_radius_md ); ?>"
 								/> px
 								<p class="description"><?php esc_html_e( 'Applies to the rounded corners of buttons, cards, and time slots on the booking page. Set to 0 for square corners (no rounding).', 'vk-booking-manager' ); ?></p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-design">
+							<th scope="row">
+								<label for="vkbm-design-menu-search-style"><?php esc_html_e( 'Design of the search', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<select
+									id="vkbm-design-menu-search-style"
+									name="vkbm_provider_settings[design_menu_search_style]"
+								>
+									<?php foreach ( $design_menu_search_style_choices as $style_value => $style_label ) : ?>
+										<option value="<?php echo esc_attr( (string) $style_value ); ?>" <?php selected( $design_menu_search_style, $style_value ); ?>>
+											<?php echo esc_html( $style_label ); ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'When you select "Surround with a frame", the search on the booking page is surrounded by the same border as service menu cards.', 'vk-booking-manager' ); ?>
+								</p>
 							</td>
 						</tr>
 						<tr class="vkbm-provider-settings__tab-advanced">
@@ -2299,19 +2736,175 @@ class Provider_Settings_Page {
 									</option>
 								</select>
 								<p class="description">
-									<?php esc_html_e( 'At the time of saving, and then once a day after that, shifts are automatically registered as published (not draft) for each registered staff member, for any month without a registered shift, from the current month through the selected month ahead, using the same logic as bulk shift registration.', 'vk-booking-manager' ); ?>
+									<?php
+									echo esc_html(
+										sprintf(
+											/* translators: %s: resource label (singular), e.g. "staff" or "room". */
+											__( 'At the time of saving, and then once a day after that, shifts are automatically registered as published (not draft) for each %s, for any month without a registered shift, from the current month through the selected month ahead, using the same logic as bulk shift registration.', 'vk-booking-manager' ),
+											vkbm_get_resource_label_singular()
+										)
+									);
+									?>
 								</p>
 								<p class="description">
 									<?php esc_html_e( 'A shift in the trash still counts as registered and is not re-created, but permanently deleting it will cause that month to be registered again the next time this runs.', 'vk-booking-manager' ); ?>
 								</p>
 							</td>
 						</tr>
+						<?php // データを消す設定のため、manage_options を持つ利用者にだけ表示する（保存側も同じ権限で制限している）。 ?>
+						<?php if ( $show_uninstall_cleanup ) : ?>
 						<tr class="vkbm-provider-settings__tab-advanced">
-							<th scope="row"><?php esc_html_e( 'Email debug', 'vk-booking-manager' ); ?></th>
+							<th scope="row">
+								<label for="vkbm-uninstall-cleanup"><?php esc_html_e( 'Cleanup when the plugin is deleted', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<select
+									id="vkbm-uninstall-cleanup"
+									name="vkbm_provider_settings[uninstall_cleanup]"
+								>
+									<option value="<?php echo esc_attr( Uninstaller::MODE_KEEP ); ?>" <?php selected( $uninstall_cleanup, Uninstaller::MODE_KEEP ); ?>>
+										<?php esc_html_e( 'Keep (Google integration data is deleted)', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="<?php echo esc_attr( Uninstaller::MODE_DELETE_ALL ); ?>" <?php selected( $uninstall_cleanup, Uninstaller::MODE_DELETE_ALL ); ?>>
+										<?php esc_html_e( 'Delete everything', 'vk-booking-manager' ); ?>
+									</option>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'Specify how settings and booking data are handled when VK Booking Manager is uninstalled.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'If you choose "Delete everything", all data including booking data will be deleted. This cannot be undone after deletion.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<?php endif; ?>
+						<tr class="vkbm-provider-settings__tab-email">
+							<th scope="row">
+								<label for="vkbm-provider-email"><?php esc_html_e( 'Representative email address', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="email"
+									class="regular-text"
+									id="vkbm-provider-email"
+									name="vkbm_provider_settings[provider_email]"
+									value="<?php echo esc_attr( $settings['provider_email'] ?? '' ); ?>"
+								/>
+								<p class="description"><?php esc_html_e( 'This is mainly used as the reply-to email address for customer replies to booking notification emails and other emails sent by this booking system.', 'vk-booking-manager' ); ?></p>
+								<?php // #510: 事業者向け通知の宛先が空/不正な場合に管理者メールへフォールバックすることを明記する。 ?>
+								<p class="description"><?php esc_html_e( 'If left blank, notification emails to the provider are sent to the WordPress administration email address (Settings > General).', 'vk-booking-manager' ); ?></p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-email">
+							<th scope="row">
+								<label for="vkbm-mail-from-email"><?php esc_html_e( 'Sender email address', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="email"
+									class="regular-text"
+									id="vkbm-mail-from-email"
+									name="vkbm_provider_settings[mail_from_email]"
+									value="<?php echo esc_attr( $mail_from_email ); ?>"
+									aria-describedby="vkbm-mail-from-email-description<?php echo '' !== $mail_from_error ? ' vkbm-mail-from-email-error' : ''; ?><?php echo Mail_From::is_free_email( $mail_from_email ) ? ' vkbm-mail-from-email-warning' : ''; ?>"
+								/>
+								<?php if ( '' !== $mail_from_error ) : ?>
+									<p id="vkbm-mail-from-email-error" class="vkbm-alert vkbm-alert__danger" role="alert"><?php echo esc_html( $mail_from_error ); ?></p>
+								<?php endif; ?>
+								<p id="vkbm-mail-from-email-description" class="description">
+									<?php esc_html_e( 'This is the sender email address for emails sent by this booking system.', 'vk-booking-manager' ); ?>
+									<?php if ( '' !== $default_mail_from ) : ?>
+										<?php if ( $default_mail_from_no_reply ) : ?>
+											<?php /* translators: %s: default sender email address. */ ?>
+											<?php echo esc_html( sprintf( __( 'If left blank, email is sent from %s (replies to this address cannot be received).', 'vk-booking-manager' ), $default_mail_from ) ); ?>
+										<?php else : ?>
+											<?php /* translators: %s: default sender email address. */ ?>
+											<?php echo esc_html( sprintf( __( 'If left blank, email is sent from %s.', 'vk-booking-manager' ), $default_mail_from ) ); ?>
+										<?php endif; ?>
+									<?php endif; ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'If the booking site uses a subdomain, enter an address on that domain whose email authentication settings, such as SPF and DKIM, have been configured.', 'vk-booking-manager' ); ?>
+								</p>
+								<?php if ( Mail_From::is_free_email( $mail_from_email ) ) : ?>
+									<p id="vkbm-mail-from-email-warning" class="vkbm-alert vkbm-alert__warning" role="status">
+										<?php esc_html_e( "Caution: Because the sender email address is a free email service such as Gmail or Yahoo! Mail, user registration and booking emails will generally not be delivered to users (they may not even reach the spam folder). Enter an email address on the same domain as the site, or use an SMTP plugin such as WP Mail SMTP to send through this address's account and turn on “Force From Email”.", 'vk-booking-manager' ); ?>
+										<?php
+										$email_delivery_help_link = sprintf(
+											'<a href="%1$s">%2$s</a>',
+											esc_url( '#vkbm-email-delivery-help' ),
+											esc_html__( 'If emails are not being delivered', 'vk-booking-manager' )
+										);
+										/* translators: %s: link to the email delivery checklist. */
+										echo wp_kses( sprintf( __( 'For details, see “%s”.', 'vk-booking-manager' ), $email_delivery_help_link ), array( 'a' => array( 'href' => array() ) ) );
+										?>
+									</p>
+								<?php endif; ?>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-email">
+							<th scope="row">
+								<label for="vkbm-booking-reminder-hours-0"><?php esc_html_e( 'Reservation reminder email', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<div class="vkbm-reminder-hours">
+									<input
+										type="hidden"
+										id="vkbm-booking-reminder-next-index"
+										value="<?php echo esc_attr( (string) $booking_reminder_next_index ); ?>"
+									/>
+									<div class="vkbm-reminder-hours__list" id="vkbm-booking-reminder-hours-list">
+										<?php foreach ( $booking_reminder_rows as $index => $hours ) : ?>
+											<div class="vkbm-reminder-hours__row">
+												<input
+													type="number"
+													class="small-text"
+													id="vkbm-booking-reminder-hours-<?php echo esc_attr( (string) $index ); ?>"
+													name="vkbm_provider_settings[booking_reminder_hours][<?php echo esc_attr( (string) $index ); ?>]"
+													min="1"
+													step="1"
+													value="<?php echo esc_attr( '' === $hours ? '' : (string) $hours ); ?>"
+												/>
+												<span class="vkbm-reminder-hours__suffix"><?php esc_html_e( 'hours before', 'vk-booking-manager' ); ?></span>
+												<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-reminder-hours-remove" aria-label="<?php echo esc_attr( self::get_reminder_remove_label( '' === $hours ? '' : (string) $hours ) ); ?>">
+													<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
+												</button>
+											</div>
+										<?php endforeach; ?>
+									</div>
+									<button type="button" class="button vkbm-reminder-hours-add">
+										<?php esc_html_e( 'Add time', 'vk-booking-manager' ); ?>
+									</button>
+									<p class="description">
+										<?php esc_html_e( 'Sends reminder emails to customers before their reservation time.', 'vk-booking-manager' ); ?>
+									</p>
+								</div>
+								<template id="vkbm-booking-reminder-template">
+									<div class="vkbm-reminder-hours__row">
+										<input
+											type="number"
+											class="small-text"
+											id="vkbm-booking-reminder-hours-__INDEX__"
+											name="vkbm_provider_settings[booking_reminder_hours][__INDEX__]"
+											min="1"
+											step="1"
+											value=""
+										/>
+										<span class="vkbm-reminder-hours__suffix"><?php esc_html_e( 'hours before', 'vk-booking-manager' ); ?></span>
+										<button type="button" class="button-link vkbm-reminder-hours-remove" aria-label="<?php echo esc_attr( self::get_reminder_remove_label( '' ) ); ?>">
+											<?php esc_html_e( 'Remove', 'vk-booking-manager' ); ?>
+										</button>
+									</div>
+								</template>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-email">
+							<th scope="row"><?php esc_html_e( 'Email log', 'vk-booking-manager' ); ?></th>
 							<td>
 								<label class="vkbm-inline-checkbox">
 									<input
 										type="checkbox"
+										id="vkbm-email-log-enabled"
 										name="vkbm_provider_settings[email_log_enabled]"
 										value="1"
 										<?php checked( $email_log_enabled ); ?>
@@ -2324,7 +2917,7 @@ class Provider_Settings_Page {
 								</p>
 							</td>
 						</tr>
-						<tr class="vkbm-provider-settings__tab-advanced">
+						<tr class="vkbm-provider-settings__tab-email">
 							<th scope="row">
 								<label for="vkbm-email-log-retention-days"><?php esc_html_e( 'Email log retention period', 'vk-booking-manager' ); ?></label>
 							</th>
@@ -2350,26 +2943,11 @@ class Provider_Settings_Page {
 							</th>
 							<td>
 								<dl class="vkbm-provider-settings__faq">
-									<dt><?php esc_html_e( 'Even after registering as a new user, the user does not receive a confirmation email.', 'vk-booking-manager' ); ?></dt>
-									<dd>
-										<p>
-											<?php esc_html_e( 'To authenticate the email sender and prevent tampering, emails that do not have DKIM settings on the server may not even reach the spam folder.', 'vk-booking-manager' ); ?><br />
-											<?php esc_html_e( "Especially if the user's email address is gmail, it will not arrive.", 'vk-booking-manager' ); ?>
-										</p>
-										<p><?php esc_html_e( 'Please check the following with the site administrator.', 'vk-booking-manager' ); ?></p>
-										<ul class="ul-disc">
-											<li><?php esc_html_e( 'Is DKIM configured on the server side for the domain where this system is running?', 'vk-booking-manager' ); ?></li>
-										</ul>
-									</dd>
+									<?php $this->render_email_delivery_help( 'vkbm-email-delivery-help-faq', add_query_arg( 'tab', 'email', $base_url ) . '#vkbm-mail-from-email', $email_log_enabled, add_query_arg( 'tab', 'email', $base_url ) . '#vkbm-email-log-enabled', true ); ?>
 								</dl>
 							</td>
 						</tr>
 					<?php if ( $show_license_tab ) : ?>
-						<?php if ( 'license' === $active_tab ) : ?>
-						<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
-						<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
-						<input type="hidden" name="vkbm_provider_settings[tax_label_text]" value="<?php echo esc_attr( $tax_label_text ); ?>" />
-						<?php endif; ?>
 						<tr class="vkbm-provider-settings__tab-license">
 							<th scope="row">
 								<label for="vkbm-license-key"><?php esc_html_e( 'License key', 'vk-booking-manager' ); ?></label>
@@ -2413,6 +2991,25 @@ class Provider_Settings_Page {
 					</tbody>
 				</table>
 
+				<?php
+				// サービスメニューの表示方法・通貨記号・税表記の入力欄は「システム」タブのときだけ描画される。
+				// 保存時、送信されなかった項目は初期値で埋められるため、ほかのタブ（ライセンスタブを含む）で
+				// 保存したときも 3 項目が初期値に戻らないよう、現在値を hidden で一緒に送る（issue #556）。
+				?>
+				<?php
+				// 送信元メールアドレスの入力欄は「メール設定」タブの行にあるため、ほかのタブで保存しても
+				// 保存済みの値が消えないよう、現在値を hidden で送る。メール設定タブでは入力欄の値を使うため出さない。
+				?>
+				<?php if ( 'email' !== $active_tab ) : ?>
+					<input type="hidden" name="vkbm_provider_settings[mail_from_email]" value="<?php echo esc_attr( $mail_from_email ); ?>" />
+				<?php endif; ?>
+				<?php if ( 'system' !== $active_tab ) : ?>
+					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
+					<input type="hidden" name="vkbm_provider_settings[service_menu_detail_display_mode]" value="<?php echo esc_attr( $service_menu_detail_display_mode ); ?>" />
+					<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
+					<input type="hidden" name="vkbm_provider_settings[tax_label_text]" value="<?php echo esc_attr( $tax_label_text ); ?>" />
+				<?php endif; ?>
+
 				<?php if ( Pro_Upsell::is_free_edition() && ! Staff_Editor::is_nomination_enabled() ) : ?>
 					<?php
 					// 指名機能が無効でも、ラベルの保存値を維持するために hidden フィールドで送信する。
@@ -2423,11 +3020,117 @@ class Provider_Settings_Page {
 				<?php endif; ?>
 
 				<?php submit_button( __( 'Save changes', 'vk-booking-manager' ) ); ?>
+
+				<?php if ( 'email' === $active_tab ) : ?>
+					<?php // メールが届かない場合の案内は、再読み込みで入力中の値が消えないよう、送信元メールアドレスへのリンクをページ内アンカーにする。 ?>
+					<div class="vkbm-provider-settings__email-help">
+						<?php $this->render_email_delivery_help( 'vkbm-email-delivery-help', '#vkbm-mail-from-email', $email_log_enabled, '', false ); ?>
+					</div>
+				<?php endif; ?>
 			</form>
 			<?php endif; ?>
+
+			<?php
+			/**
+			 * メインフォームの外（ページ wrapper div 内）に追加コンテンツを挿入する拡張ポイント。
+			 * 拡張プラグインはここに独自の <form> をレンダリングする（メインフォームとは別 nonce）。
+			 * 拡張プラグインのタブ（本体にないタブ）では、本体のメインフォームと「変更を保存」ボタンは出力されない。
+			 *
+			 * @param string $active_tab 表示中のタブスラッグ。
+			 */
+			do_action( 'vkbm_provider_settings_extra_content', $active_tab );
+			?>
 		</div>
 		<?php
 	}
+
+	/**
+	 * 予約リマインダーの「削除」ボタンの読み上げ用ラベルを返す。
+	 *
+	 * 全行が同じ「削除」と読み上げられないよう、時間が入力済みの行は「◯時間前を削除」にする。
+	 *
+	 * @param string $hours 行に入力されている時間（未入力は空文字）。
+	 * @return string 読み上げ用ラベル。
+	 */
+	private static function get_reminder_remove_label( string $hours ): string {
+		if ( '' === $hours ) {
+			return __( 'Remove', 'vk-booking-manager' );
+		}
+
+		/* translators: %s: number of hours before the reservation. */
+		return sprintf( __( 'Remove the reminder %s hours before', 'vk-booking-manager' ), $hours );
+	}
+
+	/**
+	 * 「メールが届かない場合」の確認手順を出力する。
+	 *
+	 * 「FAQ」タブ（dl 内の dt / dd）と「メール設定」タブ（見出し h2 と本文）の両方から呼ぶ共通パーツ。
+	 * 同じページ内で id が重複しないよう、見出しの id は呼び出し側から受け取る。
+	 *
+	 * @param string $anchor_id           見出しに付けるアンカー id。
+	 * @param string $mail_from_url       「送信元メールアドレス」設定へのリンク先 URL（ページ内アンカーでもよい）。
+	 * @param bool   $email_log_enabled   メールログが有効かどうか。無効のときは有効にする案内を出す。
+	 * @param string $email_log_setting_url メールログの設定へのリンク先 URL。空文字のときは「このタブ」で有効にする案内にする。
+	 * @param bool   $is_faq_item         true のとき dt / dd として出力する。false のとき h2 と div として出力する。
+	 */
+	private function render_email_delivery_help( string $anchor_id, string $mail_from_url, bool $email_log_enabled, string $email_log_setting_url, bool $is_faq_item ): void {
+		$email_log_url = admin_url( 'admin.php?page=vkbm-email-log' );
+		$heading       = __( 'If emails are not being delivered', 'vk-booking-manager' );
+
+		// 見出しと本文の囲みを、呼び出し元（FAQ / メール設定タブ）に合わせて出し分ける。
+		if ( $is_faq_item ) {
+			echo '<dt id="' . esc_attr( $anchor_id ) . '">' . esc_html( $heading ) . '</dt><dd>';
+		} else {
+			echo '<h2 id="' . esc_attr( $anchor_id ) . '">' . esc_html( $heading ) . '</h2><div class="vkbm-provider-settings__email-help-body">';
+		}
+		?>
+		<p><?php esc_html_e( 'If registration confirmation emails or booking notification emails are not being delivered, check the following items in order from the top.', 'vk-booking-manager' ); ?></p>
+		<ol>
+			<li>
+				<?php if ( $email_log_enabled ) : ?>
+					<strong><a href="<?php echo esc_url( $email_log_url ); ?>"><?php esc_html_e( 'Check the Email Log', 'vk-booking-manager' ); ?></a></strong> — <?php esc_html_e( 'Open "BM settings" > "Email Log" in the admin menu and check the "Status" column for the email that did not arrive.', 'vk-booking-manager' ); ?>
+				<?php else : ?>
+					<strong><?php esc_html_e( 'Turn on the Email Log', 'vk-booking-manager' ); ?></strong> —
+					<?php
+					if ( '' !== $email_log_setting_url ) {
+						$email_log_setting_link = sprintf(
+							'<a href="%1$s">%2$s</a>',
+							esc_url( $email_log_setting_url ),
+							esc_html__( 'BM settings > Email settings > Email log', 'vk-booking-manager' )
+						);
+						/* translators: %s: link to the email log setting. */
+						echo wp_kses( sprintf( __( 'Turn on "Enable email log" in %s and save the settings.', 'vk-booking-manager' ), $email_log_setting_link ), array( 'a' => array( 'href' => array() ) ) );
+					} else {
+						esc_html_e( 'Turn on "Enable email log" on this tab and save the settings.', 'vk-booking-manager' );
+					}
+					?>
+					<?php esc_html_e( 'Open "BM settings" > "Email Log" in the admin menu and check the "Status" column for the email that did not arrive.', 'vk-booking-manager' ); ?>
+				<?php endif; ?>
+				<ul class="ul-disc">
+					<li><?php esc_html_e( 'If it shows "Failed" or "Not sent": the email could not be sent.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Check the message shown in the "Error" column.', 'vk-booking-manager' ); ?></li>
+					<li><?php esc_html_e( 'If it shows "Sent": the email was sent.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'It was either rejected on the receiving side or sorted into the spam folder.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Continue with the items below.', 'vk-booking-manager' ); ?></li>
+				</ul>
+			</li>
+			<li><strong><?php esc_html_e( 'Check the spam folder', 'vk-booking-manager' ); ?></strong> — <?php esc_html_e( 'Ask the recipient to check whether the email is in their spam folder.', 'vk-booking-manager' ); ?></li>
+			<li>
+				<strong><?php esc_html_e( 'Use a sender email address on the same domain as the site', 'vk-booking-manager' ); ?></strong> — <?php esc_html_e( 'If the sender is a free email address such as Gmail or Yahoo! Mail, emails will generally not be delivered.', 'vk-booking-manager' ); ?>
+				<?php
+				$sender_email_setting_link = sprintf(
+					'<a href="%1$s">%2$s</a>',
+					esc_url( $mail_from_url ),
+					esc_html__( 'BM settings > Email settings > Sender email address', 'vk-booking-manager' )
+				);
+				/* translators: %s: link to the sender email address setting. */
+				echo wp_kses( sprintf( __( 'In %s, set an email address on the same domain as the site.', 'vk-booking-manager' ), $sender_email_setting_link ), array( 'a' => array( 'href' => array() ) ) );
+				?>
+			</li>
+			<li><strong><?php esc_html_e( 'Set up SPF and DKIM on the server', 'vk-booking-manager' ); ?></strong> — <?php esc_html_e( 'SPF and DKIM are mechanisms that prove an email was sent from a legitimate sender.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Without them, emails (especially those sent to Gmail) may not even reach the spam folder.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Configure them in your hosting control panel.', 'vk-booking-manager' ); ?></li>
+			<li><strong><?php esc_html_e( 'If emails still do not arrive, send via SMTP', 'vk-booking-manager' ); ?></strong> — <?php esc_html_e( 'Use a plugin such as WP Mail SMTP to send emails through a mail server.', 'vk-booking-manager' ); ?></li>
+		</ol>
+		<?php
+		echo $is_faq_item ? '</dd>' : '</div>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 固定の閉じタグ.
+	}
+
 	/**
 	 * Day labels used for business hours table.
 	 *
@@ -2632,6 +3335,42 @@ class Provider_Settings_Page {
 	}
 
 	/**
+	 * 無料版の基本設定画面に出す、呼び方の案内の内容を返す。
+	 *
+	 * 無料版で、保存されている呼び方（単数・複数・メニュー名）のいずれかが初期値から変わっているときだけ返す。
+	 * 単数・複数のどちらかが変わっていれば、その値（単数を優先）を 'label' に入れる。
+	 * メニュー名だけが変わっている場合は 'label' が空文字になり、呼び方を差し込まない文言を使う。
+	 * Pro 版、または初期値のままの場合は null を返す（案内を出さない）。
+	 *
+	 * @return array{label:string}|null 案内の内容。案内が不要なら null。
+	 */
+	private static function get_free_edition_resource_label_notice(): ?array {
+		// Pro 版では入力欄が出るため案内は不要。
+		if ( ! Pro_Upsell::is_free_edition() ) {
+			return null;
+		}
+
+		$default_name = __( 'Staff', 'vk-booking-manager' );
+		$singular     = vkbm_get_saved_resource_label_singular();
+		$plural       = vkbm_get_saved_resource_label_plural();
+
+		// 単数・複数のうち、初期値から変えられている呼び方を探す（単数を優先）。
+		if ( $singular !== $default_name ) {
+			return array( 'label' => $singular );
+		}
+		if ( $plural !== $default_name ) {
+			return array( 'label' => $plural );
+		}
+
+		// メニュー名だけが変えられている場合。
+		if ( vkbm_get_saved_resource_label_menu() !== __( 'Staff available', 'vk-booking-manager' ) ) {
+			return array( 'label' => '' );
+		}
+
+		return null;
+	}
+
+	/**
 	 * 業種プリセットの対象行に付与する hidden 属性を返す。
 	 *
 	 * @param array<int, string> $hidden_fields 表示しない項目のキー一覧。
@@ -2671,6 +3410,28 @@ class Provider_Settings_Page {
 			'dashicons-pets',
 			'dashicons-clock',
 		);
+	}
+
+	/**
+	 * 入力エラー時の送信値を一時保存する transient のキーを返す。
+	 *
+	 * 複数の管理者が同時に操作しても、別の管理者の入力内容が復元されないよう、ユーザー単位にする。
+	 *
+	 * @return string
+	 */
+	private function get_old_input_transient_key(): string {
+		return self::OLD_INPUT_TRANSIENT_PREFIX . get_current_user_id();
+	}
+
+	/**
+	 * 項目ごとのエラーを一時保存する transient のキーを返す。
+	 *
+	 * 複数の管理者が同時に操作しても、別の管理者の項目エラーが表示されないよう、ユーザー単位にする。
+	 *
+	 * @return string
+	 */
+	private function get_field_errors_transient_key(): string {
+		return self::FIELD_ERRORS_TRANSIENT_PREFIX . get_current_user_id();
 	}
 
 	/**
@@ -2736,8 +3497,10 @@ class Provider_Settings_Page {
 		$output['reservation_menu_list_display_mode']             = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? 'card' ) );
 		$output['reservation_show_provider_logo']                 = ! empty( $input['reservation_show_provider_logo'] );
 		$output['reservation_show_provider_name']                 = ! empty( $input['reservation_show_provider_name'] );
+		$output['reservation_show_footer']                        = ! empty( $input['reservation_show_footer'] );
 		$output['currency_symbol']                                = sanitize_text_field( $input['currency_symbol'] ?? '' );
 		$output['provider_email']                                 = sanitize_text_field( $input['provider_email'] ?? '' );
+		$output['mail_from_email']                                = is_string( $input['mail_from_email'] ?? null ) ? sanitize_text_field( $input['mail_from_email'] ) : '';
 		$output['provider_logo_id']                               = isset( $input['provider_logo_id'] ) ? absint( $input['provider_logo_id'] ) : 0;
 		$output['provider_cancellation_policy']                   = sanitize_textarea_field( $input['provider_cancellation_policy'] ?? '' );
 		$output['provider_terms_of_service']                      = sanitize_textarea_field( $input['provider_terms_of_service'] ?? '' );
@@ -2754,6 +3517,13 @@ class Provider_Settings_Page {
 		$output['menu_loop_reserve_button_label']                 = sanitize_text_field( $input['menu_loop_reserve_button_label'] ?? '' );
 		$output['menu_loop_detail_button_label']                  = sanitize_text_field( $input['menu_loop_detail_button_label'] ?? '' );
 		$output['closed_day_label']                               = sanitize_text_field( $input['closed_day_label'] ?? '' );
+		// 宿泊プランの休前日の曜日・特定日（#737）。欄が送られた保存だけ、直前の入力を復元する（送られなければ保存済みの値の表示に任せる）。
+		if ( array_key_exists( 'lodging_pre_holiday_weekdays', $input ) ) {
+			$output['lodging_pre_holiday_weekdays'] = Lodging_Rate::normalize_weekdays( $input['lodging_pre_holiday_weekdays'] );
+		}
+		if ( array_key_exists( 'lodging_special_dates', $input ) ) {
+			$output['lodging_special_dates'] = $this->sanitize_lodging_special_dates_input( $input['lodging_special_dates'] );
+		}
 
 		// 上限・既定値・親子項目の連動（例: 絞り込み検索が OFF ならリソースタグ検索も OFF）を
 		// 保存時と食い違わせないよう、保存時と同じ Settings_Sanitizer を通した値で復元する。
@@ -3333,6 +4103,127 @@ class Provider_Settings_Page {
 			'hour'   => $matches[1],
 			'minute' => $matches[2],
 		);
+	}
+
+	/**
+	 * 特定日（宿泊プランの料金）の保存済みの値を、フォームの行の形に整える。
+	 *
+	 * 保存済みの特定日はすべて行にする。1 件も無いときは、入力欄を見せるために空の行を 1 つ返す。
+	 * 検証エラーの再表示では、エラーの行の番号をそのまま使えるよう、送信時の番号（キー）を保つ。
+	 *
+	 * @param mixed $raw 保存済み、または再表示する入力の特定日。
+	 * @return array<int|string, array{start: string, end: string, label: string}> 行の番号 => 行の値。
+	 */
+	private function prepare_lodging_special_date_rows( $raw ): array {
+		$rows = array();
+		if ( is_array( $raw ) ) {
+			foreach ( $raw as $index => $row ) {
+				if ( ! is_array( $row ) ) {
+					continue;
+				}
+				$rows[ $index ] = array(
+					'start' => isset( $row['start'] ) && is_scalar( $row['start'] ) ? (string) $row['start'] : '',
+					'end'   => isset( $row['end'] ) && is_scalar( $row['end'] ) ? (string) $row['end'] : '',
+					'label' => isset( $row['label'] ) && is_scalar( $row['label'] ) ? (string) $row['label'] : '',
+				);
+			}
+		}
+
+		if ( array() === $rows ) {
+			$rows[0] = array(
+				'start' => '',
+				'end'   => '',
+				'label' => '',
+			);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * 特定日（宿泊プランの料金）の入力を、検証エラーの再表示用に整える。
+	 *
+	 * 保存時の検証（Settings_Sanitizer）で弾かれた行も、利用者が直せるよう残す。日付の形式だけを確かめ、
+	 * 終了日が開始日より前の行などもそのまま返す。
+	 *
+	 * @param mixed $raw 送信された特定日。
+	 * @return array<int|string, array{start: string, end: string, label: string}> 行の番号 => 行の値。
+	 */
+	private function sanitize_lodging_special_dates_input( $raw ): array {
+		if ( ! is_array( $raw ) ) {
+			return array();
+		}
+
+		$rows = array();
+		foreach ( $raw as $index => $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$rows[ $index ] = array(
+				'start' => Lodging_Rate::normalize_date( $row['start'] ?? '' ),
+				'end'   => Lodging_Rate::normalize_date( $row['end'] ?? '' ),
+				'label' => Lodging_Rate::normalize_label( $row['label'] ?? '' ),
+			);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * 特定日（宿泊プランの料金）の 1 行を出力する。
+	 *
+	 * @param string                $index 行の番号。
+	 * @param array<string, string> $value 行の値（start, end, label）。
+	 * @param string                $error この行のエラーメッセージ。無ければ空文字。
+	 * @return string
+	 */
+	private function render_lodging_special_date_row( string $index, array $value, string $error ): string {
+		$name_base = 'vkbm_provider_settings[lodging_special_dates][' . $index . ']';
+		$error_id  = 'vkbm-lodging-special-date-error-' . $index;
+
+		ob_start();
+		?>
+		<div class="vkbm-lodging-special-date-row">
+			<div class="vkbm-lodging-special-date-fields">
+				<span class="vkbm-lodging-special-date-range">
+					<label class="vkbm-lodging-special-date-field">
+						<span><?php esc_html_e( 'Start date', 'vk-booking-manager' ); ?></span>
+						<input
+							type="date"
+							name="<?php echo esc_attr( $name_base ); ?>[start]"
+							value="<?php echo esc_attr( $value['start'] ?? '' ); ?>"
+							<?php echo '' !== $error ? 'aria-invalid="true" aria-describedby="' . esc_attr( $error_id ) . '"' : ''; ?>
+						/>
+					</label>
+					<label class="vkbm-lodging-special-date-field">
+						<span><?php esc_html_e( 'End date', 'vk-booking-manager' ); ?></span>
+						<input
+							type="date"
+							name="<?php echo esc_attr( $name_base ); ?>[end]"
+							value="<?php echo esc_attr( $value['end'] ?? '' ); ?>"
+							<?php echo '' !== $error ? 'aria-invalid="true" aria-describedby="' . esc_attr( $error_id ) . '"' : ''; ?>
+						/>
+					</label>
+				</span>
+				<label class="vkbm-lodging-special-date-field vkbm-lodging-special-date-label">
+					<span><?php esc_html_e( 'Name (optional)', 'vk-booking-manager' ); ?></span>
+					<input
+						type="text"
+						class="regular-text"
+						name="<?php echo esc_attr( $name_base ); ?>[label]"
+						value="<?php echo esc_attr( $value['label'] ?? '' ); ?>"
+						maxlength="<?php echo esc_attr( (string) Lodging_Rate::SPECIAL_LABEL_MAX_LENGTH ); ?>"
+						placeholder="<?php esc_attr_e( 'e.g. New Year holidays', 'vk-booking-manager' ); ?>"
+					/>
+				</label>
+				<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-lodging-special-date-remove"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button>
+			</div>
+			<?php if ( '' !== $error ) : ?>
+				<p id="<?php echo esc_attr( $error_id ); ?>" class="vkbm-alert vkbm-alert__danger" role="alert"><?php echo esc_html( $error ); ?></p>
+			<?php endif; ?>
+		</div>
+		<?php
+		return (string) ob_get_clean();
 	}
 
 	/**

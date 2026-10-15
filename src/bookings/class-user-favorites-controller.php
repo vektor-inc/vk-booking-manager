@@ -36,7 +36,7 @@ use function rest_ensure_response;
 use function sanitize_text_field;
 use function update_user_meta;
 use function wp_generate_uuid4;
-use function wp_unslash;
+use function wp_slash;
 
 /**
  * 「いつもの」機能。よく使うメニューとスタッフの組み合わせをユーザーごとに保存する。
@@ -92,8 +92,9 @@ class User_Favorites_Controller {
 							'default' => 0,
 						),
 						'label'       => array(
-							'type'    => 'string',
-							'default' => '',
+							'type'      => 'string',
+							'default'   => '',
+							'maxLength' => Booking_Draft_Controller::LABEL_MAX_LENGTH,
 						),
 					),
 				),
@@ -189,7 +190,7 @@ class User_Favorites_Controller {
 		}
 
 		// ラベルは任意。未指定ならメニュー名（＋スタッフ名）を既定値にする。
-		$label = sanitize_text_field( (string) wp_unslash( (string) $request->get_param( 'label' ) ) );
+		$label = sanitize_text_field( (string) $request->get_param( 'label' ) );
 		if ( '' === $label ) {
 			$label = $this->build_default_label( $menu_id, $resource_id );
 		}
@@ -288,7 +289,7 @@ class User_Favorites_Controller {
 			return;
 		}
 
-		update_user_meta( $user_id, self::META_KEY, array_values( $favorites ) );
+		update_user_meta( $user_id, self::META_KEY, wp_slash( array_values( $favorites ) ) );
 	}
 
 	/**

@@ -10,6 +10,7 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
@@ -65,6 +66,7 @@ class Booking_Admin_Guests_Test extends WP_UnitTestCase {
 			update_option( Settings_Repository::OPTION_KEY, $this->original_settings );
 		}
 		Staff_Editor::clear_nomination_enabled_cache();
+		Industry_Presets::clear_cache();
 		parent::tearDown();
 	}
 
@@ -428,6 +430,16 @@ class Booking_Admin_Guests_Test extends WP_UnitTestCase {
 		$test_cases = array(
 			array(
 				'test_condition_name' => '人数を1から3へ変更 => 基本料金合計 = 1000×3+500',
+				'industry_preset'     => 'custom',
+				'max_capacity'        => 5,
+				'existing_guests'     => 1,
+				'posted_guests'       => 3,
+				'expected_guests'     => 3,
+				'expected_base_total' => ( $base_price * 3 ) + $nomination_fee,
+			),
+			array(
+				'test_condition_name' => '宿泊のサイトでも過去の予約が保存している指名料は保つ => 基本料金合計 = 1000×3+500（#736）',
+				'industry_preset'     => 'lodging',
 				'max_capacity'        => 5,
 				'existing_guests'     => 1,
 				'posted_guests'       => 3,
@@ -436,6 +448,7 @@ class Booking_Admin_Guests_Test extends WP_UnitTestCase {
 			),
 			array(
 				'test_condition_name' => '人数を定員ちょうど5へ変更 => 基本料金合計 = 1000×5+500（境界値）',
+				'industry_preset'     => 'custom',
 				'max_capacity'        => 5,
 				'existing_guests'     => 1,
 				'posted_guests'       => 5,
@@ -445,6 +458,12 @@ class Booking_Admin_Guests_Test extends WP_UnitTestCase {
 		);
 
 		foreach ( $test_cases as $case ) {
+			$settings                    = get_option( Settings_Repository::OPTION_KEY );
+			$settings['industry_preset'] = $case['industry_preset'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			Industry_Presets::clear_cache();
+			Staff_Editor::clear_nomination_enabled_cache();
+
 			$menu_id = $this->create_menu();
 			update_post_meta( $menu_id, '_vkbm_base_price', $base_price );
 			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );

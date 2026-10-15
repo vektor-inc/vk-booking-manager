@@ -1,0 +1,54 @@
+/* ==========================================================================
+   メール送信履歴
+   ========================================================================== */
+
+/* 一覧の上のボタン行
+   ========================================================================== */
+.vkbm-email-log-actions {
+	margin-bottom: 20px;
+}
+
+/* 列幅
+   ========================================================================== */
+.vkbm-email-log__col-datetime {
+	width: 180px;
+}
+
+.vkbm-email-log__col-recipient {
+	width: 250px;
+}
+
+.vkbm-email-log__col-status {
+	width: 100px;
+}
+
+/* 状態の表示
+   ========================================================================== */
+.vkbm-email-log__status--sent {
+	color: var(--vkbm--admin--email-status-sent-text);
+}
+
+.vkbm-email-log__status--failed {
+	color: var(--vkbm--admin--email-status-failed-text);
+}
+
+.vkbm-email-log__status--skipped {
+	color: var(--vkbm--admin--email-status-skipped-text);
+}
+
+/* エラー欄
+   ========================================================================== */
+.vkbm-email-log__error {
+	font-size: var(--vkbm--admin--font-size--xs);
+	color: var(--vkbm--admin--email-status-failed-text);
+}
+
+/* 未送信は設定不足であり故障ではないため、失敗と同じ赤にせず中立色にする。
+   同じ詳細度のため、ソース順の後勝ちで上書きする（この位置より上へ移動しないこと）。 */
+.vkbm-email-log__error--skipped {
+	color: var(--vkbm--admin--color--text-secondary);
+}
+
+.vkbm-email-log__empty {
+	color: var(--vkbm--admin--color--text-tertiary);
+}

@@ -457,6 +457,17 @@ class User_Exclusive_Notification_Test_Double extends Booking_Notification_Servi
  * get_daily_slots を固定スロットで返すテストダブル（空き再検証を通すため）。
  */
 class User_Exclusive_Availability_Test_Double extends Availability_Service {
+
+	/**
+	 * 受付下限の判定は空き枠の差し替え対象外（#655）。親コンストラクタを呼ばないダブルでも落ちないよう、常に「下限内」とする。
+	 *
+	 * @param int    $menu_id  メニュー投稿 ID。
+	 * @param string $start_at 枠の開始日時。
+	 * @return bool
+	 */
+	public function is_before_booking_cutoff( int $menu_id, string $start_at ): bool {
+		return false;
+	}
 	/** @var array<string, mixed> */
 	private array $slot;
 

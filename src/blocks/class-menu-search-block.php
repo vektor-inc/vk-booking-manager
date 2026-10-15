@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Site_Url;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_Block;
@@ -223,17 +224,9 @@ class Menu_Search_Block {
 	 */
 	private function get_form_action_url(): string {
 		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( (string) $_SERVER['REQUEST_URI'] ) ) : '';
-		$host        = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['HTTP_HOST'] ) ) : '';
-		$url         = '';
 
-		if ( '' !== $host && '' !== $request_uri ) {
-			$scheme = is_ssl() ? 'https://' : 'http://';
-			$url    = $scheme . $host . $request_uri;
-		} elseif ( '' !== $request_uri ) {
-			$url = $request_uri;
-		} else {
-			$url = home_url( '/' );
-		}
+		// ホスト名はリクエストのヘッダー（HTTP_HOST）ではなくサイトの設定（home_url）から取り、パスとクエリだけをリクエストから引き継ぐ。
+		$url = '' !== $request_uri ? Site_Url::from_request_uri( $request_uri ) : home_url( '/' );
 
 		$url = remove_query_arg( self::REQUEST_KEY, $url );
 
@@ -404,7 +397,7 @@ class Menu_Search_Block {
 			}
 		}
 		if ( isset( $data['keyword'] ) ) {
-			$keyword = sanitize_text_field( (string) wp_unslash( $data['keyword'] ) );
+			$keyword = sanitize_text_field( (string) $data['keyword'] );
 		}
 
 		return array(

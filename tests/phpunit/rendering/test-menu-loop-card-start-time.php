@@ -14,7 +14,10 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\Frontend;
 
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_UnitTestCase;
 
 /**
@@ -29,11 +32,32 @@ class Menu_Loop_Card_Start_Time_Test extends WP_UnitTestCase {
 	private $block;
 
 	/**
+	 * テスト前の BM 設定（tear_down で復元する）。
+	 *
+	 * @var mixed
+	 */
+	private $original_settings = false;
+
+	/**
 	 * 各テスト前にブロックインスタンスを用意する。
 	 */
 	public function set_up(): void {
 		parent::set_up();
+		$this->original_settings = get_option( Settings_Repository::OPTION_KEY, false );
 		$this->block = new Menu_Loop_Block();
+	}
+
+	/**
+	 * 設定と業種プリセットのキャッシュを元に戻す（assert が途中で失敗しても必ず実行される）。
+	 */
+	public function tear_down(): void {
+		if ( false === $this->original_settings ) {
+			delete_option( Settings_Repository::OPTION_KEY );
+		} else {
+			update_option( Settings_Repository::OPTION_KEY, $this->original_settings );
+		}
+		Industry_Presets::clear_cache();
+		parent::tear_down();
 	}
 
 	/**
@@ -146,6 +170,66 @@ class Menu_Loop_Card_Start_Time_Test extends WP_UnitTestCase {
 
 			// 後始末（次のケースに影響しないようメタを削除する）。
 			delete_post_meta( $menu_id, '_vkbm_fixed_start_times' );
+		}
+	}
+
+	/**
+	 * 宿泊が有効なサイトで、予約の単位ごとに開始時間項目の表示が切り替わることを確認する（#602）。
+	 *
+	 * 泊のプランには編集画面で隠れた固定開始時刻が残っていても、開始時間項目を出さない。
+	 */
+	public function test_render_menu_card_for_lodging_site(): void {
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '宿泊は Pro 版限定のため、無料版ではスキップする。' );
+		}
+
+		$start_time_label = __( 'Start time', 'vk-booking-manager' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '宿泊が有効で泊のプランに固定開始時刻が残っている場合 => 開始時間項目は出力されない',
+				'industry_preset'     => 'lodging',
+				'booking_unit'        => Service_Menu_Post_Type::BOOKING_UNIT_NIGHT,
+				'expect_label'        => false,
+			),
+			array(
+				'test_condition_name' => '宿泊が有効で時間枠（予約の単位が未設定）のプランに固定開始時刻がある場合 => 開始時間項目が出力される',
+				'industry_preset'     => 'lodging',
+				'booking_unit'        => '',
+				'expect_label'        => true,
+			),
+			array(
+				'test_condition_name' => '宿泊が無効なサイトで泊の値が残っている場合 => 時間枠として扱い開始時間項目が出力される',
+				'industry_preset'     => 'custom',
+				'booking_unit'        => Service_Menu_Post_Type::BOOKING_UNIT_NIGHT,
+				'expect_label'        => true,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 業種プリセットを切り替える。
+			Industry_Presets::clear_cache();
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array_merge(
+					( new Settings_Repository() )->get_default_settings(),
+					array( 'industry_preset' => $case['industry_preset'] )
+				)
+			);
+
+			// 固定開始時刻を持つメニューを作り、予約の単位を設定する。
+			$menu_id = $this->create_menu_with_start_times( array( '09:00', '13:00' ) );
+			if ( '' !== $case['booking_unit'] ) {
+				update_post_meta( $menu_id, Service_Menu_Post_Type::META_BOOKING_UNIT, $case['booking_unit'] );
+			}
+
+			$output = $this->block->render_menu_card( $menu_id );
+
+			if ( $case['expect_label'] ) {
+				$this->assertStringContainsString( $start_time_label, $output, $case['test_condition_name'] );
+			} else {
+				$this->assertStringNotContainsString( $start_time_label, $output, $case['test_condition_name'] );
+			}
 		}
 	}
 }

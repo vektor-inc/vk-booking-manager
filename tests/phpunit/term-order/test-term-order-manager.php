@@ -314,4 +314,74 @@ class Term_Order_Manager_Test extends WP_UnitTestCase {
 			unregister_taxonomy( self::REST_TAXONOMY );
 		}
 	}
+
+	/**
+	 * issue #712: 並び順の補完は、同じタクソノミーにつき 1 リクエスト 1 回だけ実行される。
+	 * 2 回目以降の get_terms() では、補完用の SQL（並び順が未設定のターム検索）を発行しない。
+	 * ただしリクエスト途中で追加されたタームにも、created_term フックで並び順が付く。
+	 */
+	public function test_ensure_taxonomy_has_orders_runs_once_per_request(): void {
+		$term_a_id = self::factory()->term->create(
+			array(
+				'taxonomy' => self::TAXONOMY,
+				'name'     => 'Alpha',
+			)
+		);
+
+		$manager = new Term_Order_Manager( array( self::TAXONOMY ) );
+		$manager->register();
+		set_current_screen( 'edit-' . self::TAXONOMY );
+
+		$ensure_queries = 0;
+		$counter        = static function ( $sql ) use ( &$ensure_queries ) {
+			if ( is_string( $sql ) && false !== strpos( $sql, 'tm.term_id IS NULL' ) ) {
+				++$ensure_queries;
+			}
+			return $sql;
+		};
+		add_filter( 'query', $counter );
+
+		try {
+			$args = array(
+				'taxonomy'   => self::TAXONOMY,
+				'hide_empty' => false,
+				'fields'     => 'ids',
+			);
+			get_terms( $args );
+			$this->assertSame( 1, $ensure_queries, '1 回目は補完の SQL が走る' );
+
+			// リクエスト途中でタームが追加されても、created_term フックで並び順が付く。
+			$term_b_id = self::factory()->term->create(
+				array(
+					'taxonomy' => self::TAXONOMY,
+					'name'     => 'Bravo',
+				)
+			);
+
+			$terms = get_terms( $args );
+			$this->assertSame( 1, $ensure_queries, '2 回目の get_terms() では補完の SQL が走らない' );
+			$this->assertSame( array( $term_a_id, $term_b_id ), array_map( 'intval', $terms ), '追加したタームも並び順の末尾に入る' );
+			$this->assertNotSame( '', (string) get_term_meta( $term_b_id, Term_Order_Manager::META_KEY, true ) );
+		} finally {
+			remove_filter( 'query', $counter );
+		}
+
+		// 新しいリクエスト（新しいインスタンス）では、再び補完が走る。
+		$ensure_queries = 0;
+		add_filter( 'query', $counter );
+		try {
+			$other = new Term_Order_Manager( array( self::TAXONOMY ) );
+			$other->register();
+			get_terms(
+				array(
+					'taxonomy'   => self::TAXONOMY,
+					'hide_empty' => false,
+					'fields'     => 'ids',
+				)
+			);
+			$this->assertSame( 1, $ensure_queries, '新しいインスタンスでは再度補完が走る' );
+		} finally {
+			remove_filter( 'query', $counter );
+		}
+	}
 }

@@ -322,7 +322,7 @@ class Exclusive_Booking_Test extends WP_UnitTestCase {
 	 *
 	 * 同一スタッフが担当するメニューA・メニューBで、メニューAに貸し切り予約が入っているとき、
 	 * - メニューA の同時間帯スロットは exclusive_closed=true（受付停止）。
-	 * - メニューB の同時間帯スロットは exclusive_closed が立たず remaining>0（別メニューの貸し切りに影響されない）。
+	 * - メニューB の同時間帯スロットは exclusive_closed が立たない（別メニューの貸し切りで受付終了にはならない）。受け持ち中の担当者の残席は0（#656）だが、空き担当者がいれば残席が残る。
 	 *
 	 * service_id フィルタを外す（メニュー横断で閉じる）と、メニューB のアサートが FAIL する。
 	 */
@@ -344,15 +344,20 @@ class Exclusive_Booking_Test extends WP_UnitTestCase {
 		$menu_a   = $this->create_menu();
 		$menu_b   = $this->create_menu();
 
+		// メニューBだけを担当する空きスタッフ。メニューBの枠は、こちらの残席で受付可能になる（#656）。
+		$staff_free = $this->create_staff();
+
 		foreach ( array( $menu_a, $menu_b ) as $menu_id ) {
 			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
 			update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
 			update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
-			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 		}
+		update_post_meta( $menu_a, '_vkbm_staff_ids', array( $staff_id ) );
+		update_post_meta( $menu_b, '_vkbm_staff_ids', array( $staff_id, $staff_free ) );
 
 		// スタッフのシフト（当日 10:00-12:00 営業）を作成する。
 		$this->create_shift( $staff_id, $future_year, 12, $day, '10:00', '12:00' );
+		$this->create_shift( $staff_free, $future_year, 12, $day, '10:00', '12:00' );
 
 		// メニューA に貸し切り予約を1件投入する（10:00-11:00）。
 		$booking_id = $this->create_booking_post(
@@ -377,7 +382,7 @@ class Exclusive_Booking_Test extends WP_UnitTestCase {
 			array(
 				'menu_id'       => $menu_b,
 				'expect_closed' => false,
-				'label'         => 'メニューB（別メニュー）=> メニューAの貸し切りに影響されず受付可能',
+				'label'         => 'メニューB（別メニュー）=> メニューAの貸し切りに影響されず、空き担当者の残席で受付可能（担当者がメニューAを受け持ち中でも空き担当者は影響されない・#656）',
 			),
 		);
 
@@ -405,8 +410,10 @@ class Exclusive_Booking_Test extends WP_UnitTestCase {
 				$this->assertTrue( ! empty( $target['exclusive_closed'] ), $case['label'] );
 				$this->assertSame( 0, (int) $target['remaining'], $case['label'] . ' / remaining=0' );
 			} else {
+				// 貸し切りの閉じ方はメニュー単位（別メニューへは波及しない）。
 				$this->assertEmpty( $target['exclusive_closed'] ?? false, $case['label'] );
-				$this->assertGreaterThan( 0, (int) $target['remaining'], $case['label'] . ' / remaining>0' );
+				// 受け持ち中の担当者は残席0だが、メニューBだけを担当する空き担当者の残席（3）で受付できる。
+				$this->assertSame( 3, (int) $target['remaining'], $case['label'] . ' / remaining=3' );
 			}
 		}
 	}

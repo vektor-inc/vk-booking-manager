@@ -1,0 +1,539 @@
+@use "../../../../assets/scss/mixins" as *;
+
+// 文字を挟む余白を「見えている端どうしの距離」で指定するための関数。
+// line-height 1.4 の文字は、字面の上下に 0.2em ずつの見えない余白（ハーフレディング）が付く。
+// 狙いの見た目の距離から、挟まれた文字の数（$texts）ぶんのハーフレディングを差し引いて CSS の値にする。
+// 枠線・背景・ボタンなど見える端の側には差し引かない。
+@function visible-gap($px, $texts: 2) {
+
+	@return calc(#{$px} - #{0.2 * $texts}em);
+}
+
+/* ==========================================================================
+   宿泊プランの予約画面（泊単位のプランを選んだときだけ読み込む）
+   ========================================================================== */
+
+.vkbm-lodging {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+// 引き継いだ日程で予約できなかった案内が無いときは、領域（読み上げ用）だけ残して間隔を作らない。
+.vkbm-lodging__carry-notice:empty {
+	position: absolute;
+	width: 0;
+	height: 0;
+	overflow: hidden;
+}
+
+/* 範囲選択カレンダー
+   ========================================================================== */
+
+// 宿泊用のカレンダーの中だけで、日付マスの見た目を調整する。
+.vkbm-stay-calendar {
+
+	.vkbm-calendar__day {
+		min-height: 48px;
+		justify-content: center;
+		width: 100%;
+	}
+
+	.vkbm-calendar__day--past {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	// 途中の日は、枠線なしの淡い背景で期間を帯のように見せる。
+	.vkbm-calendar__day--range-between {
+		background: color-mix(in srgb, var(--vkbm--color--accent, #1d8fcb) 12%, transparent);
+	}
+
+	// 端の日（チェックイン日・チェックアウト日）は、濃い文字に淡い背景と枠線で示す。
+	// accent 色の上に白文字を載せるとコントラストが足りないため。
+	.vkbm-calendar__day--range-start,
+	.vkbm-calendar__day--range-end {
+		background: color-mix(in srgb, var(--vkbm--color--accent, #1d8fcb) 22%, transparent);
+		border: 2px solid var(--vkbm--color--accent, #1d8fcb);
+		color: var(--vkbm--color--text-primary, #333);
+		font-weight: 700;
+	}
+
+	.vkbm-calendar__day:focus-visible {
+		outline: 2px solid var(--vkbm--color--text-primary, #333);
+		outline-offset: -2px;
+	}
+}
+
+// 端の日の小ラベル（IN / OUT）。
+.vkbm-calendar__day-badge {
+	font-size: 0.625rem;
+	line-height: 1;
+	font-weight: 700;
+}
+
+.vkbm-stay-calendar .vkbm-calendar__nav[aria-disabled="true"] {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+// 画面には出さず、読み上げだけで知らせる文。
+.vkbm-lodging__sr-only {
+
+	@include vkbm-visually-hidden;
+}
+
+.vkbm-lodging__guide-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.vkbm-lodging__guide {
+	margin: 0;
+	font-size: var(--vkbm--font-size--sm, 0.875rem);
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+/* 空いている客室の候補
+   ========================================================================== */
+
+// 見出し（1行の文字）。見出しの下の見た目の間隔は 8px。
+// 下が枠付きのカード（空いている客室）なら見出しの字面側だけ、下が文字（泊ごとの料金区分）なら両側のハーフレディングを差し引く。
+.vkbm-lodging__heading {
+	margin: 0 0 visible-gap(8px, 1);
+	font-size: 1rem;
+	line-height: 1.4;
+}
+
+// 客室名と料金の見た目の間隔は 4px 前後（行の高さ 1.3 のハーフレディングだけで作り、gap は 0）。
+// 内側の余白は、客室名・料金の字面と枠線の距離が上下 12px・左右 16px になるようにする。
+// .vkbm-slot-list__item は他の予約画面と共通のため、ここ（.vkbm-lodging__room）だけで上書きする。
+.vkbm-slot-list__item.vkbm-lodging__room {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	width: 100%;
+	padding: calc(12px - 0.15em) 16px;
+	line-height: 1.3;
+}
+
+.vkbm-lodging__room-name {
+	font-weight: 700;
+}
+
+.vkbm-lodging__room-price {
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+/* 選択中の表示・確認画面
+   ========================================================================== */
+
+// 確認画面（LodgingConfirmSummary）でも使う、日程の見出し。
+.vkbm-lodging__summary-label {
+	font-weight: 700;
+}
+
+/* 選択中の表示（予約内容のボックス）
+   ========================================================================== */
+
+// .vkbm-plan-summary__status は宿泊以外の予約画面と共通のため、ここ（.vkbm-lodging__summary）の中だけで上書きする。
+// 余白の段階（見た目）: グループ内 8px < 内訳↔区切り線↔合計 16px < 同列グループ間 20px < 内容↔ボタン 24px < 列間・内側 28px。
+// 文字の行は line-height 1.4 にし、余白は親の gap で付ける（子の margin では足さない）。
+.vkbm-plan-summary__status.vkbm-lodging__summary {
+	display: flex;
+	flex-direction: column;
+	flex-wrap: nowrap;
+	align-items: stretch;
+	justify-content: flex-start;
+	// 内容（文字）↔ ボタン 24px。
+	gap: visible-gap(24px, 1);
+	// 上端は文字の字面から 28px、下端は右のボタンの背景から 28px、左右も 28px。
+	padding: visible-gap(28px, 1) 28px 28px;
+	border: 1px solid var(--vkbm--color--border);
+	border-radius: var(--vkbm--radius--md, 8px);
+	line-height: 1.4;
+
+	.vkbm-plan-summary__actions {
+		align-self: flex-end;
+		margin-left: 0;
+	}
+}
+
+// 2 列の上端をそろえる。左右の列どうしは 28px。
+.vkbm-lodging__summary-body {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+	column-gap: 28px;
+	row-gap: visible-gap(20px);
+}
+
+// 左の列（日程・客室と宿泊人数）と右の列（内訳・区切り線・合計金額）。
+.vkbm-lodging__summary-column {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	// 同じ列のグループどうし（日程 ↔ 客室・宿泊人数）20px。
+	gap: visible-gap(20px);
+}
+
+// 左の列は 2 つの dl が見出し列の幅を共有する（subgrid）。日程と客室・宿泊人数の間でも値の左端がそろい、
+// 英語の長い見出し（Number of guests など）でも、列が見出しの幅まで広がって値に重ならない。
+// subgrid 非対応のブラウザでは、このブロックごと無効にする。親は縦積み（.vkbm-lodging__summary-column）のままで、
+// 各 dl が自分の列定義（.vkbm-lodging__summary-list）を使う。値の左端が日程と客室でずれるだけで崩れない。
+@supports (grid-template-columns: subgrid) {
+
+	.vkbm-lodging__summary-column--stay {
+		display: grid;
+		grid-template-columns: minmax(7em, max-content) minmax(0, 1fr);
+		column-gap: 12px;
+		row-gap: visible-gap(20px);
+		align-content: start;
+
+		> * {
+			grid-column: 1 / -1;
+		}
+
+		> .vkbm-lodging__summary-list {
+			grid-template-columns: subgrid;
+		}
+	}
+}
+
+// 右の列は、内訳 ↔ 区切り線 ↔ 合計金額を 16px で 1 つの料金グループにする。
+.vkbm-lodging__summary-column--price {
+	gap: visible-gap(16px, 1);
+}
+
+.vkbm-lodging__summary-empty {
+	margin: 0;
+}
+
+// 見出し列は最低 7em（日本語の最長「チェックアウト」分）で、長い見出しがあれば広げ、値の左端をそろえる。
+.vkbm-lodging__summary-list {
+	display: grid;
+	grid-template-columns: minmax(7em, max-content) minmax(0, 1fr);
+	column-gap: 12px;
+	// グループ内の行どうし 8px。
+	row-gap: visible-gap(8px);
+	margin: 0;
+	padding: 0;
+}
+
+// このファイルの余白は visible-gap() で「行の高さの上下の余白（0.2em）を差し引いた見た目の間隔」を狙っている。
+// 共通 CSS（assets/scss/common.scss）は予約ブロック内の dt / dd と、vkbm- クラスの付いた p / 見出しに
+// text-box: trim-both を当てて、その上下の余白を消す。消えた要素にも差し引くと狙いより狭くなる（文字が重なる）ので、
+// 余白を visible-gap() で計算している要素だけ、ここで text-box: normal に戻す（共通 CSS の対象範囲は変えない）。
+.vkbm-lodging__summary :is(dt, dd, p),
+.vkbm-lodging__night-rates :is(h3, p),
+.vkbm-lodging__rooms-section > .vkbm-lodging__heading {
+	text-box: normal;
+}
+
+.vkbm-lodging__summary-list > .vkbm-lodging__summary-label {
+	margin: 0;
+	padding: 0;
+	font-weight: 400;
+	color: var(--vkbm--color--text-secondary, #666);
+	white-space: nowrap;
+}
+
+// テーマが dd に当てる左の padding（Twenty Twenty-One など）を打ち消し、値の左端を見出しの列にそろえる。
+.vkbm-lodging__summary-list > .vkbm-lodging__summary-value {
+	margin: 0;
+	padding: 0;
+	overflow-wrap: anywhere;
+}
+
+// 合計金額は見出しより大きい文字なので、文字の基準線をそろえる。
+.vkbm-lodging__summary-list--total {
+	align-items: baseline;
+}
+
+// 強調は合計金額の値だけ。行の高さは 20px の文字でも、上下の見えない余白が本文（16px, 1.4）と同じ 3.2px になる 1.32。
+.vkbm-lodging__summary-list--total > .vkbm-lodging__summary-value {
+	font-size: var(--vkbm--font-size--lg, 1.25rem);
+	font-weight: 700;
+	line-height: 1.32;
+}
+
+.vkbm-lodging__summary-rule {
+	height: 1px;
+	background: var(--vkbm--color--border);
+}
+
+// 泊ごとの内訳（ラベル ↔ 1 行目 8px、行どうし 8px）。
+.vkbm-lodging__breakdown {
+	display: flex;
+	flex-direction: column;
+	gap: visible-gap(8px);
+}
+
+.vkbm-lodging__breakdown-label {
+	margin: 0;
+	line-height: 1.4;
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+// ボックス自身の幅で 2 列 / 1 列を切り替えるための容器（画面幅ではなく、テーマの本文幅にも追従する）。
+.vkbm-lodging__summary-container {
+	container: vkbm-lodging-summary / inline-size;
+}
+
+// 1 列に積む指定（ボックスの内側 20px・積んだ列の間 20px、ボタンは幅 100%）。
+// 画面幅 640px 以下と、ボックスの幅が 2 列に足りないとき（列 20em 前後 × 2 + 列間 + 内側）の両方で使う。
+@mixin vkbm-lodging-summary-stacked {
+
+	.vkbm-plan-summary__status.vkbm-lodging__summary {
+		padding: visible-gap(20px, 1) 20px 20px;
+
+		.vkbm-plan-summary__actions {
+			align-self: stretch;
+			align-items: stretch;
+		}
+
+		.vkbm-plan-summary__action {
+			width: 100%;
+		}
+	}
+
+	.vkbm-lodging__summary-body {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 640px) {
+
+	@include vkbm-lodging-summary-stacked;
+}
+
+@container vkbm-lodging-summary (max-width: 46em) {
+
+	@include vkbm-lodging-summary-stacked;
+}
+
+// ボックスがさらに狭いとき（28em = 16px で 448px 以下。375px の画面では必ずここに入る）は、
+// 見出し（dt）を値（dd）の上に積む。横並びだと「2026年10月23日(金)」のように折り返さない日付が、
+// 見出し列（7em）と列間 12px を除いた残り幅に収まらず、右端で切れる。日付の途中では折り返さない。
+// 余白の段階（見た目）: 見出し ↔ 値 4px < 組どうし 12px < 同列グループ間 20px（日程 ↔ 客室）。
+@container vkbm-lodging-summary (max-width: 28em) {
+
+	.vkbm-lodging__summary-column--stay,
+	.vkbm-lodging__summary-column--stay > .vkbm-lodging__summary-list,
+	.vkbm-lodging__summary-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vkbm-lodging__summary-list {
+		row-gap: 0;
+	}
+
+	// 見出し ↔ 値は 1 つの組として近づける（行の高さの上下の余白を差し引いて、見えている文字どうし 4px）。
+	.vkbm-lodging__summary-list > .vkbm-lodging__summary-value {
+		margin-top: visible-gap(4px);
+	}
+
+	// 組どうし 12px。
+	.vkbm-lodging__summary-list > .vkbm-lodging__summary-value + .vkbm-lodging__summary-label {
+		margin-top: visible-gap(12px);
+	}
+}
+
+/* 泊ごとの区分・内訳
+   ========================================================================== */
+
+// 泊ごとの料金区分（日程を選んだ直後、客室一覧の上）。
+// 見出し ↔ 1行目 8px、行どうし 8px、最後の行 ↔ 次の見出し（空いている客室）24px。
+.vkbm-lodging__night-rates {
+	line-height: 1.4;
+
+	.vkbm-lodging__heading {
+		margin-bottom: visible-gap(8px);
+	}
+}
+
+// 見出しの間隔が 24px になるよう、親の gap（1rem）に足りない分だけ客室側の見出しの上へ足す。
+.vkbm-lodging__night-rates + .vkbm-lodging__rooms-section {
+	margin-top: visible-gap(8px);
+}
+
+.vkbm-lodging__night-summary {
+	margin: 0 0 visible-gap(8px);
+	line-height: 1.4;
+}
+
+// 日付・区分・単価の列を、行をまたいで揃える（li は列の枠にして中の要素を直接グリッドに載せる）。
+.vkbm-lodging__nights {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	column-gap: 1rem;
+	row-gap: visible-gap(8px);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+// 単価付きの一覧は、泊の行と補足文（.vkbm-lodging__night-note）でグループを分けるため、
+// 行の間隔は row-gap ではなく泊どうしの margin-top（--vkbm-night-gap）で付ける。
+.vkbm-lodging__nights--priced {
+	--vkbm-night-gap: 0.75rem;
+
+	grid-template-columns: max-content minmax(0, 1fr) max-content;
+	row-gap: 0;
+}
+
+.vkbm-lodging__night {
+	display: contents;
+}
+
+// 情報グループ内（泊の行と、その補足文）より、グループ間（次の泊の行）を広く空ける。
+// grid の row-gap では補足文の上下が同じ間隔になるため、泊の行の上に余白を持たせる。
+.vkbm-lodging__nights--priced .vkbm-lodging__night:not(:first-child) > :first-child,
+.vkbm-lodging__nights--priced .vkbm-lodging__night:not(:first-child) > :nth-child(2),
+.vkbm-lodging__nights--priced .vkbm-lodging__night:not(:first-child) > :nth-child(3):not(.vkbm-lodging__night-note) {
+	margin-top: var(--vkbm-night-gap);
+}
+
+// 区分は「特定日」と「（名称）」を折り返さない塊にして、境目でだけ折り返す。
+// 名称が列幅を超えるほど長いときは、名称側の塊の中で折り返す。
+.vkbm-lodging__rate-chunk {
+	display: inline-block;
+	max-width: 100%;
+}
+
+// 予約内容のボックスの中では、区分名（「休前日」など）を 1 字ずつ折らない。
+.vkbm-lodging__summary .vkbm-lodging__rate-chunk:not(.vkbm-lodging__rate-name) {
+	white-space: nowrap;
+}
+
+.vkbm-lodging__rate-name {
+	overflow-wrap: anywhere;
+}
+
+.vkbm-lodging__night-price {
+	text-align: right;
+	white-space: nowrap;
+}
+
+// 狭い幅では単価の列を設けず、1泊を「日付｜単価」の1行目と、区分を全幅で置く2行目にする。
+// 区分に列幅の制約が掛からないため、「特定日」「（名称）」が語の途中で折れない。
+// 単価は各泊の右端に置くので、泊どうしで金額の右端がそろう。
+@mixin vkbm-lodging-night-two-rows {
+
+	.vkbm-lodging__nights--priced {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vkbm-lodging__nights--priced > .vkbm-lodging__night {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) max-content;
+		grid-template-areas:
+			"date price"
+			"rate rate"
+			"note note";
+		column-gap: 1rem;
+		row-gap: 0;
+	}
+
+	.vkbm-lodging__nights--priced > .vkbm-lodging__night:not(:first-child) {
+		margin-top: var(--vkbm-night-gap);
+	}
+
+	// 1泊ぶんの行は同じ情報グループなので、泊の間の余白（上の margin-top）は付けない。
+	.vkbm-lodging__nights--priced > .vkbm-lodging__night > * {
+		margin-top: 0;
+	}
+
+	.vkbm-lodging__nights--priced > .vkbm-lodging__night:not(:first-child) > :first-child,
+	.vkbm-lodging__nights--priced > .vkbm-lodging__night:not(:first-child) > :nth-child(2),
+	.vkbm-lodging__nights--priced > .vkbm-lodging__night:not(:first-child) > :nth-child(3):not(.vkbm-lodging__night-note) {
+		margin-top: 0;
+	}
+
+	.vkbm-lodging__nights--priced .vkbm-lodging__night-date {
+		grid-area: date;
+	}
+
+	.vkbm-lodging__nights--priced .vkbm-lodging__night-rate {
+		grid-area: rate;
+	}
+
+	.vkbm-lodging__nights--priced .vkbm-lodging__night-price {
+		grid-area: price;
+	}
+
+	.vkbm-lodging__nights--priced .vkbm-lodging__night-note {
+		grid-area: note;
+		margin-top: -0.25rem;
+	}
+}
+
+// プラン料金と客室の追加料金の内訳は、その泊の行の下に補足として添える。
+.vkbm-lodging__night-note {
+	grid-column: 1 / -1;
+	// 行の文字の上下にある行間ぶんを打ち消し、見えている文字どうしを 4〜6px 程度まで近づける。
+	// 行の間隔は row-gap ではなく各行の margin-top で管理しているため、補足文の位置だけが動く。
+	margin-top: -0.25rem;
+	font-size: var(--vkbm--font-size--sm, 0.875rem);
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+// 開閉式の見出し（要約）は押せることが分かるようにし、開いた中身との間を空ける。
+.vkbm-lodging__details {
+
+	> summary {
+		cursor: pointer;
+	}
+
+	> summary + * {
+		margin-top: visible-gap(8px);
+	}
+}
+
+// 予約内容のボックスの内訳は、泊の行どうし 8px・補足文があるときは「行 ↔ 補足 約5px < 泊どうし 12px < 区切り線の上下 16px」。
+// 行は line-height 1.4 の文字なので、見えない上下の余白を差し引く。
+.vkbm-lodging__summary .vkbm-lodging__nights--priced {
+	--vkbm-night-gap: #{visible-gap(8px)};
+
+	line-height: 1.4;
+
+	&:has(.vkbm-lodging__night-note) {
+		--vkbm-night-gap: #{visible-gap(12px)};
+	}
+
+	.vkbm-lodging__night-note {
+		margin-top: calc(5px - 0.2em - 0.175rem);
+	}
+}
+
+// 狭いとき（画面幅 480px 以下、またはボックス自身の幅 28em 以下）の泊ごとの内訳は 2 段（日付・単価 / 区分）にする。
+// ボックスの外（画面幅だけの判定）とボックスの中（容器幅）の両方で使うので、ここ（ファイルの最後）で読み込む。
+// 余白の段階（見た目）: 1 泊の内側（日付・単価 ↔ 区分）4px < 泊どうし 12px。縦積みの見出し ↔ 値と同じ段階。
+@mixin vkbm-lodging-night-two-rows-spacing {
+
+	// 日付・単価の行の下端を、区分の行へ 4px まで近づける（行の高さの上下の余白を差し引く。2 つの文字の行どうし）。
+	.vkbm-lodging__nights--priced .vkbm-lodging__night-date,
+	.vkbm-lodging__nights--priced .vkbm-lodging__night-price {
+		margin-bottom: visible-gap(4px);
+	}
+
+	.vkbm-lodging__summary .vkbm-lodging__nights--priced,
+	.vkbm-lodging__summary .vkbm-lodging__nights--priced:has(.vkbm-lodging__night-note) {
+		--vkbm-night-gap: #{visible-gap(12px)};
+	}
+}
+
+@media (max-width: 480px) {
+
+	@include vkbm-lodging-night-two-rows;
+	@include vkbm-lodging-night-two-rows-spacing;
+}
+
+@container vkbm-lodging-summary (max-width: 28em) {
+
+	@include vkbm-lodging-night-two-rows;
+	@include vkbm-lodging-night-two-rows-spacing;
+}

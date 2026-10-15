@@ -172,6 +172,82 @@ class Price_Tiers_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * resolve_guest_tiers(): 区分ごとの人数の上限を超える極端に大きな値は上限に収め、合計が整数の範囲を超えない。
+	 */
+	public function test_resolve_guest_tiers_caps_extreme_counts(): void {
+		$menu_tiers = array(
+			array(
+				'label' => '大人',
+				'price' => 1000,
+			),
+			array(
+				'label' => '子供',
+				'price' => 500,
+			),
+		);
+		$max        = Price_Tiers::MAX_GUESTS_PER_TIER;
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '整数の最大値を2つ送っても、各区分は上限に収まり合計も整数',
+				'requested'           => array( PHP_INT_MAX, PHP_INT_MAX ),
+				'expected_total'      => $max * 2,
+			),
+			array(
+				'test_condition_name' => '巨大な数値の文字列（1e30）も上限に収まる',
+				'requested'           => array( '1e30', '1e30' ),
+				'expected_total'      => $max * 2,
+			),
+			array(
+				'test_condition_name' => 'オブジェクト形式の巨大な値も上限に収まる',
+				'requested'           => array(
+					array( 'count' => PHP_INT_MAX ),
+					array( 'count' => PHP_INT_MAX ),
+				),
+				'expected_total'      => $max * 2,
+			),
+			array(
+				'test_condition_name' => '負の巨大な数値の文字列（-1e19）も0に収まる',
+				'requested'           => array( '-1e19', '-1e19' ),
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => '負の巨大な数値（-1.0E+19）も0に収まる',
+				'requested'           => array( -1.0E+19, -1.0E+19 ),
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => 'オブジェクト形式の負の巨大な値も0に収まる',
+				'requested'           => array(
+					array( 'count' => '-1e19' ),
+					array( 'count' => -1.0E+19 ),
+				),
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => 'NAN と INF も0〜上限に収まる',
+				'requested'           => array( NAN, INF ),
+				'expected_total'      => $max,
+			),
+			array(
+				'test_condition_name' => '-INF は0に収まる',
+				'requested'           => array( -INF, -INF ),
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => '普通の人数は変わらない',
+				'requested'           => array( 3, 2 ),
+				'expected_total'      => 5,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$total = Price_Tiers::total_count( Price_Tiers::resolve_guest_tiers( $menu_tiers, $case['requested'] ) );
+			$this->assertSame( $case['expected_total'], $total, $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * resolve_guest_tiers(): サーバ保存メタを正としてクライアント人数を突き合わせる。
 	 */
 	public function test_resolve_guest_tiers(): void {
@@ -703,5 +779,168 @@ class Price_Tiers_Test extends WP_UnitTestCase {
 			Price_Tiers::is_menu_using_price_tiers( $menu_id ),
 			'無料版相当（Pro版チェック不通過）は、他の条件をすべて満たしていても false'
 		);
+	}
+
+	/**
+	 * 休前日・特定日の料金（任意）: 入力済みのときだけ保持し、空欄・未設定の行はキーを足さない（#737）。
+	 */
+	public function test_optional_prices(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'sanitize_tiers: 休前日・特定日の料金が入っている行は整数化して保存する',
+				'method'              => 'sanitize_tiers',
+				'input'               => array(
+					array(
+						'label'             => '大人',
+						'price'             => '12000',
+						'pre_holiday_price' => '15000',
+						'special_price'     => ' 20000 ',
+					),
+				),
+				'expected'            => array(
+					array(
+						'label'             => '大人',
+						'price'             => 12000,
+						'pre_holiday_price' => 15000,
+						'special_price'     => 20000,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'sanitize_tiers: 空欄は未設定（キーなし）、0 は 0 円、負数は 0、数値でない値は未設定',
+				'method'              => 'sanitize_tiers',
+				'input'               => array(
+					array(
+						'label'             => '大人',
+						'price'             => '12000',
+						'pre_holiday_price' => '',
+						'special_price'     => '0',
+					),
+					array(
+						'label'             => '子供',
+						'price'             => '6000',
+						'pre_holiday_price' => '-100',
+						'special_price'     => 'abc',
+					),
+				),
+				'expected'            => array(
+					array(
+						'label'         => '大人',
+						'price'         => 12000,
+						'special_price' => 0,
+					),
+					array(
+						'label'             => '子供',
+						'price'             => 6000,
+						'pre_holiday_price' => 0,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'sanitize_tiers: 休前日・特定日のキーが無い既存の行は今までと同じ形',
+				'method'              => 'sanitize_tiers',
+				'input'               => array(
+					array(
+						'label' => '大人',
+						'price' => '12000',
+					),
+				),
+				'expected'            => array(
+					array(
+						'label' => '大人',
+						'price' => 12000,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'normalize_tiers: 保存済みの休前日・特定日の料金を保持する',
+				'method'              => 'normalize_tiers',
+				'input'               => array(
+					array(
+						'label'             => '大人',
+						'price'             => 12000,
+						'pre_holiday_price' => 15000,
+					),
+					array(
+						'label' => '子供',
+						'price' => 6000,
+					),
+				),
+				'expected'            => array(
+					array(
+						'label'             => '大人',
+						'price'             => 12000,
+						'pre_holiday_price' => 15000,
+					),
+					array(
+						'label' => '子供',
+						'price' => 6000,
+					),
+				),
+			),
+			array(
+				'test_condition_name' => 'normalize_guest_tiers: 予約に保存した区分の内訳でも休前日・特定日の料金を保持する',
+				'method'              => 'normalize_guest_tiers',
+				'input'               => array(
+					array(
+						'label'         => '大人',
+						'price'         => 12000,
+						'count'         => 2,
+						'special_price' => 24000,
+					),
+				),
+				'expected'            => array(
+					array(
+						'label'         => '大人',
+						'price'         => 12000,
+						'count'         => 2,
+						'special_price' => 24000,
+					),
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], Price_Tiers::{$case['method']}( $case['input'] ), $case['test_condition_name'] );
+		}
+
+		// resolve_guest_tiers: 人数は送られた値、料金（休前日・特定日を含む）はメニューの保存値を使う。
+		$resolved = Price_Tiers::resolve_guest_tiers(
+			array(
+				array(
+					'label'             => '大人',
+					'price'             => 12000,
+					'pre_holiday_price' => 18000,
+				),
+				array(
+					'label' => '子供',
+					'price' => 6000,
+				),
+			),
+			array(
+				0 => 2,
+				1 => 1,
+			)
+		);
+		$this->assertSame(
+			array(
+				array(
+					'label'             => '大人',
+					'price'             => 12000,
+					'count'             => 2,
+					'pre_holiday_price' => 18000,
+				),
+				array(
+					'label' => '子供',
+					'price' => 6000,
+					'count' => 1,
+				),
+			),
+			$resolved,
+			'resolve_guest_tiers: 休前日・特定日の料金はメニューの保存値を引き継ぐ'
+		);
+
+		// 平日の料金の合計（total_price）は、休前日・特定日の料金の有無に影響されない。
+		$this->assertSame( 30000, Price_Tiers::total_price( $resolved ), 'total_price: 平日の料金で合計する' );
 	}
 }

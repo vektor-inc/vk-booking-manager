@@ -5,11 +5,23 @@ export const ReservationHeader = ( {
 	brandLinkHref = '',
 	showLogo = false,
 	logoUrl = '',
+	logoWidth = 0,
 	logoAlt = '',
 	showName = false,
 	brandName = '',
 	nav = null,
 } ) => {
+	// 横幅の指定があるときだけ、既定の高さ上限（max-height）を外して横幅を優先する。縦は比率維持。
+	const logoStyle =
+		logoWidth > 0
+			? {
+					width: `${ logoWidth }px`,
+					maxWidth: '100%',
+					maxHeight: 'none',
+					height: 'auto',
+			  }
+			: undefined;
+
 	const brand = showBrand ? (
 		brandLinkHref ? (
 			<a
@@ -20,6 +32,7 @@ export const ReservationHeader = ( {
 					<img
 						className="vkbm-reservation-header__brand-logo"
 						src={ logoUrl }
+						style={ logoStyle }
 						alt={ logoAlt }
 						loading="lazy"
 					/>
@@ -36,6 +49,7 @@ export const ReservationHeader = ( {
 					<img
 						className="vkbm-reservation-header__brand-logo"
 						src={ logoUrl }
+						style={ logoStyle }
 						alt={ logoAlt }
 						loading="lazy"
 					/>

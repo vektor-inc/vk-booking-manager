@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
 use function add_action;
@@ -22,7 +23,9 @@ use function get_post_meta;
 use function get_queried_object;
 use function is_preview;
 use function is_singular;
+use function sanitize_key;
 use function untrailingslashit;
+use function wp_unslash;
 use function wp_parse_str;
 use function wp_parse_url;
 use function wp_safe_redirect;
@@ -36,6 +39,10 @@ use function wp_validate_redirect;
  * そのまま表示すると本文がほぼ空のページになってしまう（#453）。
  * このクラスは `template_redirect` フックでこの状態を検知し、基本設定の予約ページURLへ
  * 302リダイレクトする。また、WordPress 標準の XML サイトマップから対象の投稿を除外する。
+ *
+ * #635: 基本設定で詳細ページを予約ブロック内で表示する設定にしているときは、
+ * 「詳細ページを使用する」がONのサービスメニューの個別ページも、予約ブロックの詳細表示へ
+ * 302リダイレクトし、サイトマップからはサービスメニューをすべて除外する。
  */
 class Service_Menu_Front_Redirect {
 
@@ -52,12 +59,21 @@ class Service_Menu_Front_Redirect {
 	private $settings_repository;
 
 	/**
+	 * 詳細ページのリンク先の判定（#635）。
+	 *
+	 * @var Service_Menu_Detail_Link
+	 */
+	private $detail_link;
+
+	/**
 	 * コンストラクタ。
 	 *
-	 * @param Settings_Repository|null $settings_repository 基本設定リポジトリ。省略時は新規生成する。
+	 * @param Settings_Repository|null      $settings_repository 基本設定リポジトリ。省略時は新規生成する。
+	 * @param Service_Menu_Detail_Link|null $detail_link         詳細ページのリンク先の判定。省略時は基本設定リポジトリから生成する。
 	 */
-	public function __construct( ?Settings_Repository $settings_repository = null ) {
+	public function __construct( ?Settings_Repository $settings_repository = null, ?Service_Menu_Detail_Link $detail_link = null ) {
 		$this->settings_repository = $settings_repository ?? new Settings_Repository();
+		$this->detail_link         = $detail_link ?? new Service_Menu_Detail_Link( $this->settings_repository );
 	}
 
 	/**
@@ -78,6 +94,14 @@ class Service_Menu_Front_Redirect {
 	public function filter_sitemap_query_args( array $query_args, string $post_type ): array {
 		// サービスメニュー以外のサイトマップには一切影響させない。
 		if ( Service_Menu_Post_Type::POST_TYPE !== $post_type ) {
+			return $query_args;
+		}
+
+		// #635: 詳細ページを予約ブロック内で表示するときは、個別ページが予約ページへ転送されるため、
+		// 転送されるURLを検索エンジンに載せないよう、サービスメニューをすべて除外する。
+		if ( $this->detail_link->is_block_display_enabled() ) {
+			$query_args['post__in'] = array( 0 );
+
 			return $query_args;
 		}
 
@@ -163,9 +187,10 @@ class Service_Menu_Front_Redirect {
 		}
 
 		// 「詳細ページを使用する」がONの場合は、詳細ページの内容をそのまま表示する.
+		// ただし #635: 詳細ページを予約ブロック内で表示する設定のときは、予約ブロックの詳細表示へ転送する.
 		$use_detail_page = (string) get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
 		if ( '1' === $use_detail_page ) {
-			return '';
+			return $this->resolve_block_detail_redirect_url( $post );
 		}
 
 		$reservation_url = $this->get_reservation_page_url();
@@ -191,6 +216,38 @@ class Service_Menu_Front_Redirect {
 		}
 
 		return $validated_url;
+	}
+
+	/**
+	 * 詳細ページを予約ブロック内で表示する設定のときの、詳細表示用URLを判定する（#635）。
+	 *
+	 * 予約ブロックの詳細表示に出せないメニュー（非公開で権限が無い・アーカイブ済み等）は、
+	 * 転送先で「表示できません」の案内になってしまうため、転送せず個別ページをそのまま表示する。
+	 * 予約ページURLがこの投稿自身の個別ページURLと同じ場合は、無限リダイレクトになるため転送しない。
+	 *
+	 * @param WP_Post $post 「詳細ページを使用する」がONのサービスメニュー投稿。
+	 * @return string 転送先の詳細表示用URL。転送不要な場合は空文字。
+	 */
+	private function resolve_block_detail_redirect_url( WP_Post $post ): string {
+		if ( ! $this->detail_link->is_block_display_enabled() || ! $this->detail_link->is_detail_viewable( $post ) ) {
+			return '';
+		}
+
+		// 予約ページURLがメニュー個別ページのURLに余分なクエリを足した形だと、詳細表示のURLもこの個別ページになる。
+		// すでに詳細表示のURLなら、転送を繰り返さない（OFF のメニューの従来の転送には影響させない）。
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 表示内容を切り替えるだけの読み取り専用パラメーター。
+		if ( isset( $_GET[ Service_Menu_Detail_Link::QUERY_VIEW ] ) && Service_Menu_Detail_Link::VIEW_DETAIL === sanitize_key( wp_unslash( (string) $_GET[ Service_Menu_Detail_Link::QUERY_VIEW ] ) ) ) {
+			return '';
+		}
+
+		$permalink = get_permalink( $post );
+		if ( is_string( $permalink ) && '' !== $permalink
+			&& $this->normalize_url_for_compare( $permalink ) === $this->normalize_url_for_compare( $this->detail_link->get_block_display_page_url() ) ) {
+			return '';
+		}
+
+		// 日付付きの URL を共有されたときに日付が落ちないよう、検証したうえで転送先へ引き継ぐ。
+		return $this->detail_link->get_detail_url( $post, Menu_Date_Filter::carry_dates_from_request() );
 	}
 
 	/**

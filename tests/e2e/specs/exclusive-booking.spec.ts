@@ -80,16 +80,47 @@ test.describe( '#304: 貸し切り予約', () => {
 	} );
 
 	test.afterAll( () => {
+		// 各後始末を個別に try/catch で囲む。どれかが例外を投げても、
+		// 後続の削除や setStaffEnabled の復元が飛ばないようにするため。
 		if ( exclusiveMenuId ) {
-			wpEvalPhp(
-				`wp_delete_post( ${ Number.parseInt(
-					exclusiveMenuId,
-					10
-				) }, true );`
-			);
+			try {
+				wpEvalPhp(
+					`wp_delete_post( ${ Number.parseInt(
+						exclusiveMenuId,
+						10
+					) }, true );`
+				);
+			} catch ( e ) {
+				console.warn( 'Failed to delete exclusive menu:', e );
+			}
 			exclusiveMenuId = '';
 		}
-		setStaffEnabled( originalStaffEnabled );
+		// B案テストが途中で失敗しても「Exclusive Off Menu」を残さないよう、
+		// 公開・下書きを問わずタイトル一致の投稿をすべて削除する（#566）。
+		// 残ると担当スタッフ無しメニューとして後続 spec の予約フローを巻き込んで落とす。
+		try {
+			wpEvalPhp(
+				`
+			$ids = get_posts( array(
+				'post_type'      => 'vkbm_service_menu',
+				'post_status'    => 'any',
+				'title'          => 'Exclusive Off Menu',
+				'posts_per_page' => -1,
+				'fields'         => 'ids',
+			) );
+			foreach ( $ids as $id ) {
+				wp_delete_post( (int) $id, true );
+			}
+		`
+			);
+		} catch ( e ) {
+			console.warn( 'Failed to delete "Exclusive Off Menu" posts:', e );
+		}
+		try {
+			setStaffEnabled( originalStaffEnabled );
+		} catch ( e ) {
+			console.warn( 'Failed to restore staff_enabled:', e );
+		}
 	} );
 
 	test( '編集画面で貸し切り予約チェックボックスが表示・保存される', async ( {
@@ -183,40 +214,61 @@ test.describe( '#304: 貸し切り予約', () => {
 		await loginAsAdmin( page );
 
 		// いったん複数人予約OFFのメニューを作る。
+		// 下書き（draft）で作る：管理者は下書きの編集画面を開けるため検証は成立し、
+		// 万一削除されずに残っても公開メニュー一覧・予約ページには出ない（#566）。
 		const offMenuId = wpEvalPhp(
 			`
 			$id = wp_insert_post( array(
 				'post_type'   => 'vkbm_service_menu',
-				'post_status' => 'publish',
+				'post_status' => 'draft',
 				'post_title'  => 'Exclusive Off Menu',
 			) );
 			echo $id;
 		`
 		).trim();
+		// 作成失敗（空文字・0 など）を try に入る前に検出する（seedExclusiveMenu と同じ形）。
+		if ( ! /^\d+$/.test( offMenuId ) || Number( offMenuId ) <= 0 ) {
+			throw new Error(
+				`Exclusive Off Menu creation failed: "${ offMenuId }"`
+			);
+		}
 
-		await page.goto(
-			`/wp-admin/post.php?post=${ Number.parseInt(
-				offMenuId,
-				10
-			) }&action=edit`
-		);
-		await page.waitForLoadState( 'domcontentloaded' );
+		try {
+			await page.goto(
+				`/wp-admin/post.php?post=${ Number.parseInt(
+					offMenuId,
+					10
+				) }&action=edit`
+			);
+			await page.waitForLoadState( 'domcontentloaded' );
 
-		// 複数人予約OFF なので貸し切り予約行は hidden 属性が付いている（B案・初期非表示）。
-		const exclusiveRow = page.locator(
-			'#vkbm-exclusive-when-booked-field'
-		);
-		await exclusiveRow.waitFor( { state: 'attached', timeout: 15000 } );
-		await expect
-			.poll( async () =>
-				exclusiveRow.evaluate( ( el ) => ( el as HTMLElement ).hidden )
-			)
-			.toBe( true );
-
-		// 後始末。
-		wpEvalPhp(
-			`wp_delete_post( ${ Number.parseInt( offMenuId, 10 ) }, true );`
-		);
+			// 複数人予約OFF なので貸し切り予約行は hidden 属性が付いている（B案・初期非表示）。
+			const exclusiveRow = page.locator(
+				'#vkbm-exclusive-when-booked-field'
+			);
+			await exclusiveRow.waitFor( { state: 'attached', timeout: 15000 } );
+			await expect
+				.poll( async () =>
+					exclusiveRow.evaluate(
+						( el ) => ( el as HTMLElement ).hidden
+					)
+				)
+				.toBe( true );
+		} finally {
+			// 後始末。検証が途中で失敗しても作成したメニューを削除する。
+			// 削除自体が失敗しても本来の失敗理由（タイムアウト等）を上書きしないよう警告に留める。
+			// 残っても afterAll のタイトル一致削除が拾う。
+			try {
+				wpEvalPhp(
+					`wp_delete_post( ${ Number.parseInt(
+						offMenuId,
+						10
+					) }, true );`
+				);
+			} catch ( e ) {
+				console.warn( 'Failed to delete Exclusive Off Menu:', e );
+			}
+		}
 	} );
 
 	test( '貸し切り予約が入った時間帯はフロントで予約受付終了になる', async ( {

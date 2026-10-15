@@ -15,11 +15,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Availability\Availability_Service;
+use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\TermOrder\Term_Order_Manager;
@@ -30,6 +33,8 @@ use function get_current_screen;
 use function get_post;
 use function get_term_meta;
 use function get_the_terms;
+use function absint;
+use function wp_attachment_is_image;
 use function is_wp_error;
 use function register_post_meta;
 use function register_rest_field;
@@ -72,6 +77,78 @@ class Service_Menu_Post_Type {
 	private const META_EXCLUSIVE_FEE_PER_PERSON    = '_vkbm_exclusive_fee_per_person';
 	private const META_EXCLUSIVE_FEE_EXEMPT_GUESTS = '_vkbm_exclusive_fee_exempt_guests';
 	private const META_PRICE_TIERS                 = '_vkbm_price_tiers';
+
+	/**
+	 * サブ画像（カード一覧に小さく並べる写真）の添付ID配列のメタキー（#623）。
+	 *
+	 * メイン画像はアイキャッチ画像のまま。このメタは並び順どおりの添付ID（整数配列）だけを持つ。
+	 */
+	public const META_GALLERY_IDS = '_vkbm_gallery_ids';
+
+	/**
+	 * 予約の単位のメタキー（#570）。
+	 *
+	 * 「泊」のときだけ BOOKING_UNIT_NIGHT を保存する。時間枠（既定）は保存しない（メタなし）。
+	 * Service_Menu_Editor など他クラスからも参照するため public にしている。
+	 */
+	public const META_BOOKING_UNIT = '_vkbm_booking_unit';
+
+	/**
+	 * 泊単位のプランの料金の単位のメタキー（#572）。
+	 *
+	 * 「1室1泊あたり」のときだけ NIGHT_PRICE_UNIT_PER_ROOM を保存する。
+	 * 「1名1泊あたり」（既定）は保存しない（メタなし）。
+	 */
+	public const META_NIGHT_PRICE_UNIT = '_vkbm_night_price_unit';
+
+	/**
+	 * 泊単位のプランの基本料金のうち、休前日の料金のメタキー（#737）。
+	 *
+	 * 空欄（未設定）のときは保存しない。未設定の泊は平日の料金（_vkbm_base_price）で計算する。
+	 */
+	public const META_NIGHT_PRICE_PRE_HOLIDAY = '_vkbm_night_price_pre_holiday';
+
+	/**
+	 * 泊単位のプランの基本料金のうち、特定日の料金のメタキー（#737）。
+	 *
+	 * 空欄（未設定）のときは保存しない。未設定の泊は休前日かどうかの判定へ進む。
+	 */
+	public const META_NIGHT_PRICE_SPECIAL = '_vkbm_night_price_special';
+
+	/**
+	 * 料金の単位「1名1泊あたり」（既定。保存はしない）。
+	 */
+	public const NIGHT_PRICE_UNIT_PER_GUEST = 'per_guest';
+
+	/**
+	 * 料金の単位「1室1泊あたり」の保存値。
+	 */
+	public const NIGHT_PRICE_UNIT_PER_ROOM = 'per_room';
+
+	/**
+	 * チェックイン時刻のメタキー（HH:MM）。未設定は DEFAULT_CHECK_IN_TIME。
+	 */
+	public const META_CHECK_IN_TIME = '_vkbm_check_in_time';
+
+	/**
+	 * チェックアウト時刻（最終宿泊日の翌日の時刻）のメタキー（HH:MM）。未設定は DEFAULT_CHECK_OUT_TIME。
+	 */
+	public const META_CHECK_OUT_TIME = '_vkbm_check_out_time';
+
+	/**
+	 * 予約の単位「泊」の保存値。
+	 */
+	public const BOOKING_UNIT_NIGHT = 'night';
+
+	/**
+	 * チェックイン時刻の既定値。
+	 */
+	public const DEFAULT_CHECK_IN_TIME = '15:00';
+
+	/**
+	 * チェックアウト時刻の既定値。
+	 */
+	public const DEFAULT_CHECK_OUT_TIME = '10:00';
 
 	/**
 	 * Staff title cache.
@@ -283,7 +360,19 @@ class Service_Menu_Post_Type {
 
 		switch ( $column ) {
 			case 'vkbm_price':
-				if ( $uses_price_tiers ) {
+				// 日によって料金が変わる泊のプランは、公開側のメニューカードと同じ「¥7,000〜 / 1名・1泊」の表記にする。
+				$lodging_price_rows = Lodging_Price_Display::get_menu_price_rows( $post_id );
+				if ( array() !== $lodging_price_rows ) {
+					$lodging_price_unit = self::get_night_price_unit( $post_id );
+					$rows               = array();
+					foreach ( $lodging_price_rows as $row ) {
+						$price_text = Lodging_Price_Display::format_price_with_unit_html( $row['price'], $row['is_from'], $lodging_price_unit );
+						$rows[]     = '' !== $row['label']
+							? sprintf( '<li>%1$s: <span class="vkbm-admin-price-tiers-price vkbm-admin-price-tiers-price--unit">%2$s</span></li>', esc_html( $row['label'] ), $price_text )
+							: sprintf( '<li><span class="vkbm-admin-price-tiers-price vkbm-admin-price-tiers-price--unit">%s</span></li>', $price_text );
+					}
+					echo wp_kses_post( '<ul class="vkbm-admin-price-tiers-list">' . implode( '', $rows ) . '</ul>' );
+				} elseif ( $uses_price_tiers ) {
 					// #515: 料金区分で設定されているメニューは、基本料金の代わりに区分を全件
 					// 「区分名: 料金」で縦に表示する（省略しない）。0円の区分も「0」と表示し「—」にはしない。
 					$tiers = Price_Tiers::normalize_tiers( get_post_meta( $post_id, self::META_PRICE_TIERS, true ) );
@@ -589,7 +678,8 @@ class Service_Menu_Post_Type {
 						// （どの行に適用されるか未確定）。メニュー単位の判定はできないため、
 						// サイト全体の指名機能スイッチのみで表示可否を決める（従来どおり）。
 						?>
-						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
+						<?php // 宿泊のサイトは客室ごとの追加料金を使わないため、この欄を出さない。 ?>
+						<?php if ( Staff_Editor::is_nomination_enabled() && ! Industry_Presets::supports( 'lodging' ) ) : ?>
 						<label>
 							<span class="title"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></span>
 							<span class="input-text-wrap">
@@ -809,7 +899,10 @@ class Service_Menu_Post_Type {
 		}
 		$this->update_meta_value( $post_id, self::META_OTHER_CONDITIONS, $other_conditions );
 		$this->update_meta_value( $post_id, self::META_RESERVATION_DAY_TYPE, $reservation_day_type );
-		$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
+		// 宿泊のサイトではこの欄を出さず送信されないため、保存済みの値を空で上書きしない。
+		if ( ! Industry_Presets::supports( 'lodging' ) ) {
+			$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
+		}
 	}
 
 	/**
@@ -1000,8 +1093,8 @@ class Service_Menu_Post_Type {
 		// 文字列IDは int 化、0以下と重複は除外）。実在する公開中のリソースかどうかは検証しない
 		// （フィルター側がリソースを追加する用途を塞がないため）。存在しないIDが混ざった場合の扱いは
 		// 呼び出し側で一様ではない。名前リスト表示（Menu_Loop_Block::render_meta_information()）や
-		// お気に入りの判定（User_Favorites_Controller::is_resource_assignable()）では get_posts の
-		// include や公開状態の確認で無視されるが、担当できるリソース数を数える箇所
+		// お気に入りの判定（User_Favorites_Controller::is_resource_assignable()）では、公開中リソース
+		// 一覧との突き合わせや公開状態の確認で無視されるが、担当できるリソース数を数える箇所
 		// （Booking_Confirmation_Controller::count_menu_staff()、Booking_Draft_Controller の
 		// $staff_count）は count() するだけで存在確認をしないため、フィルターが存在しないIDを
 		// 足すと複数人一括予約の上限人数が水増しされ得る（安藤レビュー LOW）。
@@ -1590,6 +1683,26 @@ class Service_Menu_Post_Type {
 			)
 		);
 
+		// サブ画像（#623）。添付IDを並び順どおりに持つ整数配列。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_GALLERY_IDS,
+			array(
+				'type'              => 'array',
+				'single'            => true,
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'integer' ),
+					),
+				),
+				'sanitize_callback' => array( self::class, 'sanitize_gallery_ids' ),
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
+			)
+		);
+
 		// 料金区分（大人料金・子供料金など）。複数人予約ON時のみ意味を持つ。
 		// 1件でも定義すると基本料金×人数ではなく区分料金で計算する（併用なし）。
 		// #392: 指名を使うメニューでも料金区分を利用できるようにするため、「指名OFF」条件は
@@ -1684,6 +1797,207 @@ class Service_Menu_Post_Type {
 				},
 			)
 		);
+
+		// 宿泊モードの予約単位・チェックイン／チェックアウト時刻（#570）。
+		// 宿泊の機能を使うサイト（Pro 版かつ業種プリセットが宿泊）以外では REST からも書き込めない。
+		$lodging_auth_callback = static function ( $allowed, $meta_key, $post_id ) {
+			return current_user_can( 'edit_post', $post_id ) && Industry_Presets::supports( 'lodging' );
+		};
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_BOOKING_UNIT,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): string {
+					return self::BOOKING_UNIT_NIGHT === $value ? self::BOOKING_UNIT_NIGHT : '';
+				},
+				'auth_callback'     => $lodging_auth_callback,
+			)
+		);
+		// 泊単位のプランの料金の単位（#572）。1室1泊あたりのときだけ per_room を保存する。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_NIGHT_PRICE_UNIT,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): string {
+					return self::NIGHT_PRICE_UNIT_PER_ROOM === $value ? self::NIGHT_PRICE_UNIT_PER_ROOM : '';
+				},
+				'auth_callback'     => $lodging_auth_callback,
+			)
+		);
+		foreach ( array( self::META_CHECK_IN_TIME, self::META_CHECK_OUT_TIME ) as $time_meta_key ) {
+			register_post_meta(
+				self::POST_TYPE,
+				$time_meta_key,
+				array(
+					'type'              => 'string',
+					'single'            => true,
+					'show_in_rest'      => true,
+					'sanitize_callback' => static function ( $value ): string {
+						return self::sanitize_time_value( $value );
+					},
+					'auth_callback'     => $lodging_auth_callback,
+				)
+			);
+		}
+	}
+
+	/**
+	 * 時刻文字列（HH:MM）を検証し、不正値は空文字を返す。
+	 *
+	 * @param mixed $value 入力値。
+	 * @return string 正しい HH:MM（00:00〜23:59）ならその値、それ以外は空文字。
+	 */
+	public static function sanitize_time_value( $value ): string {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+		$value = trim( $value );
+		return 1 === preg_match( '/^([01]\d|2[0-3]):[0-5]\d$/', $value ) ? $value : '';
+	}
+
+	/**
+	 * サブ画像の添付ID配列を保存用に整える。
+	 *
+	 * 整数化・0以下と重複の除去・画像ではない添付（存在しないIDを含む）の除外を行い、並び順は保つ。
+	 *
+	 * @param mixed $value 入力値（配列、またはカンマ区切りの文字列）。
+	 * @return array<int,int> 並び順を保った添付ID配列。
+	 */
+	public static function sanitize_gallery_ids( $value ): array {
+		// カンマ区切り文字列（hidden 欄の値）も配列として扱う。
+		if ( is_string( $value ) ) {
+			$value = explode( ',', $value );
+		}
+
+		if ( ! is_array( $value ) ) {
+			return array();
+		}
+
+		// 整数化して 0 と重複を除く（先に出たIDを残す）。
+		$ids = array();
+		foreach ( $value as $raw_id ) {
+			$id = is_scalar( $raw_id ) ? absint( $raw_id ) : 0;
+			if ( $id > 0 && ! in_array( $id, $ids, true ) ) {
+				$ids[] = $id;
+			}
+		}
+
+		// 画像として扱えない添付を除く。
+		return array_values(
+			array_filter(
+				$ids,
+				static function ( int $id ): bool {
+					return (bool) wp_attachment_is_image( $id );
+				}
+			)
+		);
+	}
+
+	/**
+	 * メニューに登録されたサブ画像の添付IDを、並び順どおりに返す。
+	 *
+	 * 削除済みの添付や画像ではない添付は除く。サブ画像の読み出しはこのメソッドに集約する。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return array<int,int> 並び順を保った添付ID配列（無ければ空配列）。
+	 */
+	public static function get_gallery_attachment_ids( int $menu_id ): array {
+		return self::sanitize_gallery_ids( get_post_meta( $menu_id, self::META_GALLERY_IDS, true ) );
+	}
+
+	/**
+	 * メニューの予約単位が「泊」として扱われるかを返す（#570）。
+	 *
+	 * 宿泊の機能を使わないサイトでは、メタが残っていても常に false（時間枠として扱う）。
+	 * 宿泊から他の業種へ切り替えても保存値は消さず、ここで効かせないだけにする。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 「泊」なら true。
+	 */
+	public static function is_night_unit( int $menu_id ): bool {
+		if ( $menu_id <= 0 || ! Industry_Presets::supports( 'lodging' ) ) {
+			return false;
+		}
+
+		return self::BOOKING_UNIT_NIGHT === get_post_meta( $menu_id, self::META_BOOKING_UNIT, true );
+	}
+
+	/**
+	 * 泊単位のメニューの料金の単位を返す（#572）。
+	 *
+	 * 宿泊が有効でない、または泊単位でないメニューでは、メタが残っていても常に1名1泊あたりを返す。
+	 * メタが無い・不正値のメニュー（#570 で泊に切り替えたもの）も1名1泊あたりとして扱う。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string NIGHT_PRICE_UNIT_PER_ROOM または NIGHT_PRICE_UNIT_PER_GUEST。
+	 */
+	public static function get_night_price_unit( int $menu_id ): string {
+		if ( ! self::is_night_unit( $menu_id ) ) {
+			return self::NIGHT_PRICE_UNIT_PER_GUEST;
+		}
+
+		return self::NIGHT_PRICE_UNIT_PER_ROOM === get_post_meta( $menu_id, self::META_NIGHT_PRICE_UNIT, true )
+			? self::NIGHT_PRICE_UNIT_PER_ROOM
+			: self::NIGHT_PRICE_UNIT_PER_GUEST;
+	}
+
+	/**
+	 * 保存されている料金の単位を、予約の単位に関わらず返す（#572）。
+	 *
+	 * 編集画面のラジオの初期選択専用。時間枠へ戻したメニューでも保存済みの選択を返し、
+	 * 再保存で選択が消えないようにする。宿泊が有効でなければ常に1名1泊あたり。
+	 * 料金計算など実際に使う値は get_night_price_unit() を使う。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string NIGHT_PRICE_UNIT_PER_ROOM または NIGHT_PRICE_UNIT_PER_GUEST。
+	 */
+	public static function get_stored_night_price_unit( int $menu_id ): string {
+		if ( $menu_id <= 0 || ! Industry_Presets::supports( 'lodging' ) ) {
+			return self::NIGHT_PRICE_UNIT_PER_GUEST;
+		}
+
+		return self::NIGHT_PRICE_UNIT_PER_ROOM === get_post_meta( $menu_id, self::META_NIGHT_PRICE_UNIT, true )
+			? self::NIGHT_PRICE_UNIT_PER_ROOM
+			: self::NIGHT_PRICE_UNIT_PER_GUEST;
+	}
+
+	/**
+	 * 泊単位のメニューの料金の単位が「1室1泊あたり」かを返す（#572）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 宿泊が有効な泊単位のメニューで、1室1泊あたりなら true。
+	 */
+	public static function is_night_price_per_room( int $menu_id ): bool {
+		return self::NIGHT_PRICE_UNIT_PER_ROOM === self::get_night_price_unit( $menu_id );
+	}
+
+	/**
+	 * メニューのチェックイン時刻（HH:MM）を返す。未設定・不正値は既定値。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string
+	 */
+	public static function get_check_in_time( int $menu_id ): string {
+		$value = self::sanitize_time_value( get_post_meta( $menu_id, self::META_CHECK_IN_TIME, true ) );
+		return '' !== $value ? $value : self::DEFAULT_CHECK_IN_TIME;
+	}
+
+	/**
+	 * メニューのチェックアウト時刻（最終宿泊日の翌日の HH:MM）を返す。未設定・不正値は既定値。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string
+	 */
+	public static function get_check_out_time( int $menu_id ): string {
+		$value = self::sanitize_time_value( get_post_meta( $menu_id, self::META_CHECK_OUT_TIME, true ) );
+		return '' !== $value ? $value : self::DEFAULT_CHECK_OUT_TIME;
 	}
 
 	/**
@@ -1714,6 +2028,7 @@ class Service_Menu_Post_Type {
 			self::META_PRICE_TIERS,
 			self::META_STAFF_IDS,
 			self::META_STAFF_ALL,
+			self::META_GALLERY_IDS,
 			'_vkbm_catch_copy',
 			'_vkbm_internal_memo',
 			'_vkbm_duration_minutes',
@@ -1726,6 +2041,12 @@ class Service_Menu_Post_Type {
 			'_vkbm_use_detail_page',
 			self::META_OTHER_CONDITIONS,
 			'_vkbm_fixed_start_times',
+			self::META_BOOKING_UNIT,
+			self::META_NIGHT_PRICE_UNIT,
+			self::META_NIGHT_PRICE_PRE_HOLIDAY,
+			self::META_NIGHT_PRICE_SPECIAL,
+			self::META_CHECK_IN_TIME,
+			self::META_CHECK_OUT_TIME,
 		);
 	}
 
@@ -1792,6 +2113,21 @@ class Service_Menu_Post_Type {
 			)
 		);
 
+		// 泊単位のプランの予約画面に必要な情報（#575）。泊単位でないメニュー・宿泊が有効でないサイトは null。
+		register_rest_field(
+			self::POST_TYPE,
+			'vkbm_lodging',
+			array(
+				'get_callback' => array( $this, 'get_lodging_rest_field' ),
+				'schema'       => array(
+					'description' => __( 'Reservation screen settings for a plan billed per night (null when the menu is not billed per night).', 'vk-booking-manager' ),
+					'type'        => array( 'object', 'null' ),
+					'context'     => array( 'view', 'edit' ),
+					'readonly'    => true,
+				),
+			)
+		);
+
 		// メニューを実際に担当できるリソースID配列（#485）。「すべてのリソースが担当できる」
 		// フラグを公開中の全リソースへ展開した結果を読み取り専用で返す。フロント（app.js の
 		// extractAssignableStaffIds）は meta._vkbm_staff_ids より先にこの値を使い、
@@ -1813,6 +2149,63 @@ class Service_Menu_Post_Type {
 					'readonly'    => true,
 				),
 			)
+		);
+	}
+
+	/**
+	 * REST レスポンス用に、泊単位のプランの予約画面に必要な情報を返す（#575）。
+	 *
+	 * 泊単位のプランかの判定は is_night_unit() だけを通す（宿泊が有効でないサイト・時間枠のメニューは null）。
+	 * 予約画面（app.js）はこの値が null かどうかで、宿泊用の画面に切り替えるかを決める。
+	 *
+	 * @param array<string, mixed> $post REST post data.
+	 * @return array{max_guests: int, guest_tiers: array<int, array{label: string, price: int}>, price_unit: string, base_price: int, has_variable_rate: bool, lowest_price: int, check_in_time: string, check_out_time: string}|null 泊単位のプランの情報。泊単位でなければ null。
+	 */
+	public function get_lodging_rest_field( array $post ): ?array {
+		$post_id = isset( $post['id'] ) ? (int) $post['id'] : 0;
+		if ( ! self::is_night_unit( $post_id ) ) {
+			return null;
+		}
+
+		$max_guests = Lodging_Booking::get_guest_limit( $post_id );
+		$base_price = (int) get_post_meta( $post_id, '_vkbm_base_price', true );
+
+		// カードの料金行は1回だけ計算し、「〜」の有無と最安の金額の両方に使う。
+		$price_summary = self::summarize_menu_price_rows( Lodging_Price_Display::get_menu_price_rows( $post_id ), $base_price );
+
+		return array(
+			'max_guests'        => $max_guests,
+			'guest_tiers'       => Lodging_Booking::get_menu_price_tiers( $post_id, $max_guests ),
+			'price_unit'        => self::get_night_price_unit( $post_id ),
+			'base_price'        => $base_price,
+			// 休前日・特定日の料金が平日と違う金額か、その場合の最安の金額。メニューのカードの「〜」の判定と金額（#738）と同じ値にそろえる。
+			'has_variable_rate' => $price_summary['has_variable_rate'],
+			'lowest_price'      => $price_summary['lowest_price'],
+			'check_in_time'     => self::get_check_in_time( $post_id ),
+			'check_out_time'    => self::get_check_out_time( $post_id ),
+		);
+	}
+
+	/**
+	 * メニューのカードの料金行から、日によって料金が変わるかと最安の金額を求める。
+	 *
+	 * 行が1つでも「〜」付き（is_from）なら変わるとみなし、最安は全行の金額の最小値。行が無い（年中同じ料金）ときは基本料金を返す。
+	 *
+	 * @param array<int, array{label: string, price: int, is_from: bool}> $rows       Lodging_Price_Display::get_menu_price_rows() の結果。
+	 * @param int                                                         $base_price 基本料金（平日）。
+	 * @return array{has_variable_rate: bool, lowest_price: int} 日によって変わるか、最安の金額。
+	 */
+	private static function summarize_menu_price_rows( array $rows, int $base_price ): array {
+		$has_variable_rate = false;
+		$prices            = array();
+		foreach ( $rows as $row ) {
+			$has_variable_rate = $has_variable_rate || ! empty( $row['is_from'] );
+			$prices[]          = (int) $row['price'];
+		}
+
+		return array(
+			'has_variable_rate' => $has_variable_rate,
+			'lowest_price'      => array() === $prices ? $base_price : min( $prices ),
 		);
 	}
 

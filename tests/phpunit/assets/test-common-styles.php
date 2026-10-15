@@ -47,6 +47,101 @@ class Common_Styles_Test extends WP_UnitTestCase {
 				'expected'            => ':root{--vkbm--color--reservation-action: #445566;}',
 			],
 			[
+				'test_condition_name' => 'menu_card_catch_color_only',
+				'conditions'          => [
+					'options' => [
+						'design_primary_color'            => '',
+						'design_menu_card_catch_color'    => '#778899',
+						'design_reservation_button_color' => '',
+						'design_radius_md'                => '',
+					],
+				],
+				'expected'            => ':root{--vkbm--color--menu-card-catch: #778899;}',
+			],
+			[
+				'test_condition_name' => 'menu_card_price_color_only',
+				'conditions'          => [
+					'options' => [
+						'design_menu_card_price_color' => '#aa3300',
+						'design_radius_md'             => '',
+					],
+				],
+				'expected'            => ':root{--vkbm--color--menu-card-price: #aa3300;}',
+			],
+			[
+				'test_condition_name' => 'menu_card_price_color_empty_outputs_nothing',
+				'conditions'          => [
+					'options' => [
+						'design_menu_card_price_color' => '',
+						'design_radius_md'             => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
+				'test_condition_name' => 'primary_color_with_injected_css_outputs_nothing',
+				'conditions'          => [
+					'options' => [
+						'design_primary_color' => '#fff;}body{display:none}',
+						'design_radius_md' => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
+				'test_condition_name' => 'menu_card_catch_color_with_injected_css_outputs_nothing',
+				'conditions'          => [
+					'options' => [
+						'design_menu_card_catch_color' => '#fff;}body{display:none}',
+						'design_radius_md' => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
+				'test_condition_name' => 'menu_card_price_color_with_injected_css_outputs_nothing',
+				'conditions'          => [
+					'options' => [
+						'design_menu_card_price_color' => '#fff;}body{display:none}',
+						'design_radius_md' => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
+				'test_condition_name' => 'reservation_button_color_with_injected_css_outputs_nothing',
+				'conditions'          => [
+					'options' => [
+						'design_reservation_button_color' => '#fff;}body{display:none}',
+						'design_radius_md' => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
+				'test_condition_name' => 'invalid_price_color_does_not_affect_valid_primary_color',
+				'conditions'          => [
+					'options' => [
+						'design_primary_color'         => '#112233',
+						'design_menu_card_price_color' => 'red',
+						'design_radius_md'             => '',
+					],
+				],
+				'expected'            => ':root{--vkbm--color--primary: #112233;}',
+			],
+			[
+				'test_condition_name' => 'menu_card_catch_color_empty_outputs_nothing',
+				'conditions'          => [
+					'options' => [
+						'design_primary_color'            => '',
+						'design_menu_card_catch_color'    => '',
+						'design_reservation_button_color' => '',
+						'design_radius_md'                => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
 				'test_condition_name' => 'empty_values',
 				'conditions'          => [
 					'options' => [
@@ -171,6 +266,10 @@ class Common_Styles_Test extends WP_UnitTestCase {
 				'test_condition_name' => 'vkbm-admin は vkbm-variables に依存する',
 				'handle'              => Common_Styles::ADMIN_HANDLE,
 			),
+			array(
+				'test_condition_name' => 'vkbm-admin-notice は vkbm-variables に依存する',
+				'handle'              => Common_Styles::NOTICE_HANDLE,
+			),
 		);
 
 		$registered = wp_styles()->registered;
@@ -183,6 +282,118 @@ class Common_Styles_Test extends WP_UnitTestCase {
 				$case['test_condition_name']
 			);
 		}
+	}
+
+	/**
+	 * 共通部品バンドル（vkbm-components）の依存関係を検証する（issue #660）。
+	 *
+	 * 各ブロックの block.json の style から参照されるため、ブロック登録より前
+	 * （init の優先度 5）にハンドルが登録される必要がある。また vkbm-auth は部品を
+	 * 持たず vkbm-components に依存する。vkbm-editor は補正のみで、部品は vkbm-auth 経由で
+	 * 先に読み込み、vkbm-admin には依存しない（issue #659）。
+	 */
+	public function test_register_styles_wires_components_auth_and_editor_dependencies(): void {
+		$styles = new Common_Styles();
+		$styles->register();
+		$styles->register_styles();
+
+		$this->assertSame(
+			5,
+			has_action( 'init', array( $styles, 'register_styles' ) ),
+			'register_styles() は block.json の style 解決より前（init 優先度 5）に実行される必要があります。'
+		);
+
+		$registered = wp_styles()->registered;
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'vkbm-components は vkbm-frontend（box-sizing 等の共通指定）に依存する',
+				'handle'              => Common_Styles::COMPONENTS_HANDLE,
+				'expected_dep'        => Common_Styles::FRONTEND_HANDLE,
+			),
+			array(
+				'test_condition_name' => 'vkbm-auth は vkbm-components に依存する',
+				'handle'              => Common_Styles::AUTH_HANDLE,
+				'expected_dep'        => Common_Styles::COMPONENTS_HANDLE,
+			),
+			array(
+				'test_condition_name' => 'vkbm-editor は vkbm-auth（経由で vkbm-components）に依存する',
+				'handle'              => Common_Styles::EDITOR_HANDLE,
+				'expected_dep'        => Common_Styles::AUTH_HANDLE,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertArrayHasKey( $case['handle'], $registered, $case['test_condition_name'] . '（ハンドル未登録）' );
+			$this->assertContains( $case['expected_dep'], $registered[ $case['handle'] ]->deps, $case['test_condition_name'] );
+			$this->assertContains( Common_Styles::VARIABLES_HANDLE, $registered[ $case['handle'] ]->deps, $case['test_condition_name'] . '（variables にも依存）' );
+		}
+
+		$this->assertNotContains( Common_Styles::ADMIN_HANDLE, $registered[ Common_Styles::EDITOR_HANDLE ]->deps, 'vkbm-editor は vkbm-admin に依存しない' );
+	}
+
+	/**
+	 * vkbm-components は、ファイルがあるとき HTML への直接埋め込み（インライン化）用の path を持つ。
+	 */
+	public function test_register_styles_sets_inline_path_for_components_when_file_exists(): void {
+		$path = VKBM_PLUGIN_DIR_PATH . 'build/assets/css/vkbm-components.min.css';
+
+		wp_deregister_style( Common_Styles::COMPONENTS_HANDLE );
+		( new Common_Styles() )->register_styles();
+
+		$registered = wp_styles()->registered[ Common_Styles::COMPONENTS_HANDLE ];
+		if ( file_exists( $path ) ) {
+			$this->assertSame( $path, $registered->extra['path'] ?? null, 'ファイルがあるのに path が設定されていません。' );
+		} else {
+			$this->assertArrayNotHasKey( 'path', $registered->extra, 'ファイルが無いのに path が設定されています。' );
+		}
+	}
+
+	/**
+	 * 予約ブロックと menu-card が menu-loop の CSS を読み込むハンドル（vkbm-shared-menu-card）が、
+	 * どちらの経路でも vkbm-components に依存していることを検証する（issue #660）。
+	 * menu-loop の style-index.css は共通部品を含まないため、依存が外れるとボタン等の見た目が欠ける。
+	 */
+	public function test_shared_menu_card_style_depends_on_components_on_both_paths(): void {
+		// 経路1: 予約ブロック。
+		wp_deregister_style( 'vkbm-shared-menu-card' );
+		$reservation = ( new \ReflectionClass( \VKBookingManager\Blocks\Reservation_Block::class ) )->newInstanceWithoutConstructor();
+		$method      = new \ReflectionMethod( $reservation, 'register_menu_loop_style' );
+		$method->setAccessible( true );
+		$method->invoke( $reservation );
+
+		$this->assertContains(
+			Common_Styles::COMPONENTS_HANDLE,
+			wp_styles()->registered['vkbm-shared-menu-card']->deps,
+			'予約ブロック経路の vkbm-shared-menu-card が vkbm-components に依存していません。'
+		);
+
+		// 経路2: menu-card ブロック（wp_enqueue_block_style 経由）。
+		// enqueue_block_assets を呼ぶと予約ブロックの処理が先に同ハンドルを登録し deps の検査が無効になるため、
+		// ブロック描画（render_block）を起点に登録される設定へ切り替え、enqueue_block_assets は呼ばない。
+		wp_deregister_style( 'vkbm-shared-menu-card' );
+		add_filter( 'should_load_separate_core_block_assets', '__return_true' );
+		$menu_card = ( new \ReflectionClass( \VKBookingManager\Blocks\Menu_Card_Block::class ) )->newInstanceWithoutConstructor();
+		$method    = new \ReflectionMethod( $menu_card, 'enqueue_shared_menu_loop_style' );
+		$method->setAccessible( true );
+		$method->invoke( $menu_card );
+
+		$parsed_block = array(
+			'blockName'    => 'vk-booking-manager/menu-card',
+			'attrs'        => array(),
+			'innerBlocks'  => array(),
+			'innerHTML'    => '',
+			'innerContent' => array(),
+		);
+		apply_filters( 'render_block', '', $parsed_block, new \WP_Block( $parsed_block ) );
+		remove_filter( 'should_load_separate_core_block_assets', '__return_true' );
+
+		$this->assertArrayHasKey( 'vkbm-shared-menu-card', wp_styles()->registered, 'menu-card 経路で vkbm-shared-menu-card が登録されていません。' );
+		$this->assertContains(
+			Common_Styles::COMPONENTS_HANDLE,
+			wp_styles()->registered['vkbm-shared-menu-card']->deps,
+			'menu-card 経路の vkbm-shared-menu-card が vkbm-components に依存していません。'
+		);
 	}
 
 	/**
@@ -259,6 +470,46 @@ class Common_Styles_Test extends WP_UnitTestCase {
 			$inline,
 			'通常の管理画面で設定値のインライン CSS が付与されていません。'
 		);
+	}
+
+	/**
+	 * enqueue_admin() は、全管理画面で呼ばれても管理画面用バンドル（vkbm-admin）を読み込まないことを
+	 * 検証する（issue #659）。
+	 *
+	 * vkbm-admin（約48KB）は VKBM の画面が自分で enqueue する。ここで読み込むと、投稿・固定ページ・
+	 * ユーザーなど無関係な画面でも毎回評価される。全画面で必要な :root カスタムプロパティ
+	 * （vkbm-variables）は引き続き読み込む。
+	 */
+	public function test_enqueue_admin_does_not_enqueue_admin_bundle(): void {
+		$styles = new Common_Styles();
+		$styles->register_styles();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'VKBM の画面でも vkbm-admin は enqueue_admin() では読み込まない',
+				'hook_suffix'         => 'toplevel_page_vkbm-shift-dashboard',
+			),
+			array(
+				'test_condition_name' => 'コアの投稿一覧でも vkbm-admin は読み込まない',
+				'hook_suffix'         => 'edit.php',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			wp_dequeue_style( Common_Styles::ADMIN_HANDLE );
+			wp_dequeue_style( Common_Styles::VARIABLES_HANDLE );
+
+			$styles->enqueue_admin( $case['hook_suffix'] );
+
+			$this->assertFalse(
+				wp_style_is( Common_Styles::ADMIN_HANDLE, 'enqueued' ),
+				$case['test_condition_name']
+			);
+			$this->assertTrue(
+				wp_style_is( Common_Styles::VARIABLES_HANDLE, 'enqueued' ),
+				$case['test_condition_name'] . '（vkbm-variables は読み込む）'
+			);
+		}
 	}
 
 	/**

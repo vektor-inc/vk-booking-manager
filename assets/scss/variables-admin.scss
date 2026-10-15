@@ -1,7 +1,7 @@
-// WordPress admin palette tokens.
-// Shared across all admin-* SCSS files via the vkbm-admin bundle.
+// WordPress 管理画面のパレットトークン。
+// vkbm-admin バンドル経由で、全ての admin-* SCSS から共有する。
 :root {
-	// Color tokens
+	// 色
 	--vkbm--admin--color--text: #1d2327;
 	--vkbm--admin--color--text-secondary: #50575e;
 	--vkbm--admin--color--text-tertiary: #646970;
@@ -16,8 +16,33 @@
 	--vkbm--admin--color--surface-secondary: #f6f7f7;
 	--vkbm--admin--color--accent: #2271b1;
 	--vkbm--admin--color--accent-hover: #135e96;
+	--vkbm--admin--color--danger: #d63638;
+	--vkbm--admin--color--success: #008a20;
 
-	// Font-size tokens
+	// 予約ステータス（保留・キャンセル・無断キャンセル）の色。
+	// シフト・予約表の日表示（.vkbm-booking-card--*）と月表示（.vkbm-month-booking--*）の両方が
+	// 同じ見た目になるよう、admin-shift-dashboard.scss の両ビューからここを参照する。
+	// 片方のビューにだけ色を直書きすると、同じステータスなのに日表示と月表示で色がずれる。
+	// 確定（confirmed）は日表示と月表示で意図的に色が違う（日: 枠線のみ / 月: 背景あり）ためここに含めない。
+	// 保留には文字色の指定が無いため、-text は定義しない。
+	--vkbm--admin--status-pending-bg: #fff5d6;
+	--vkbm--admin--status-pending-border: #f0b429;
+	--vkbm--admin--status-cancelled-bg: #f6f7f8;
+	--vkbm--admin--status-cancelled-border: #ced4da;
+	--vkbm--admin--status-cancelled-text: #6b7280;
+	--vkbm--admin--status-no-show-bg: #ffecec;
+	--vkbm--admin--status-no-show-border: #dc3232;
+	--vkbm--admin--status-no-show-text: #a72222;
+
+	// メール送信履歴の状態表示（送信済み・失敗・未送信）の文字色。
+	// 一覧は縞模様の行（#f6f7f7）にも載るため、白地・縞模様のどちらでもコントラスト比 4.5:1 以上を
+	// 保つ必要がある。--success / --danger は縞模様の行で 4.5:1 を下回るため流用せず、別の値にしている。
+	// 値を変えるときは、縞模様の行の上でも 4.5:1 を保つこと。
+	--vkbm--admin--email-status-sent-text: #008000;
+	--vkbm--admin--email-status-failed-text: #b32d2e;
+	--vkbm--admin--email-status-skipped-text: #8a6d00;
+
+	// フォントサイズ
 	--vkbm--admin--font-size--xs: 11px;
 	--vkbm--admin--font-size--sm: 12px;
 	--vkbm--admin--font-size--md: 13px;

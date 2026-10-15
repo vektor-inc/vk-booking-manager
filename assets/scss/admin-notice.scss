@@ -1,9 +1,26 @@
 /*
- * VK Booking Manager admin notices.
- * - Use vkbm-notice__{info|success|warning|danger} for variants.
- * - Add .is-dismissible to show close button.
- * - Add .is-dismissible-all to store dismissal globally (option) instead of per-user.
+ * VK Booking Manager 管理画面の通知。
+ * - バリエーションは vkbm-notice__{info|success|warning|danger} で指定する。
+ * - .is-dismissible を付けると閉じるボタンを表示する。
+ * - .is-dismissible-all を付けると、閉じた状態をユーザーごとではなく全体（option）に保存する。
  */
+
+/* このファイルは単独のバンドル（vkbm-admin-notice）としても全管理画面で読み込まれるため、
+   common.scss（box-sizing）や buttons.scss（.vkbm-buttons の並び）に頼らず、通知の中で必要な指定をここで持つ。 */
+@use "mixins" as *;
+
+.vkbm-notice,
+.vkbm-notice * {
+	box-sizing: border-box;
+}
+
+.vkbm-notice .vkbm-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	justify-content: flex-start;
+}
 
 .vkbm-notice {
 	position: relative;
@@ -13,7 +30,7 @@
 	border-left-width: 5px;
 	border-left-color: #c3c4c7;
 	border-radius: var(--vkbm--radius--md, 8px);
-	background: #fff;
+	background: var(--vkbm--color--bg-primary, #fff);
 	color: #0f172a;
 }
 
@@ -44,28 +61,31 @@
 	text-decoration: underline;
 }
 
+// 4 色の文字色・リンク色は .vkbm-alert（alert.scss）と共通のミキシン vkbm-status-colors（_mixins.scss）。
+// 既定色を片方だけ変えると警告の色がアラートと通知でずれるため、色の定義は _mixins.scss に 1 箇所だけ置く。
+// 通知は左の太線だけ別の色（WordPress のプリセット色）にするため、背景・枠は当てずに border-left-color を個別に指定する。
 .vkbm-notice__danger {
-	--vkbm--notice-link-color: var(--vkbm--color--danger-link, #842029);
+
+	@include vkbm-status-colors(danger, --vkbm--notice-link-color);
 	border-left-color: var(--wp--preset--color--danger, #dc3545);
-	color: var(--vkbm--color--danger-text, #842029);
 }
 
 .vkbm-notice__warning {
-	--vkbm--notice-link-color: var(--vkbm--color--warning-link, #664d03);
+
+	@include vkbm-status-colors(warning, --vkbm--notice-link-color);
 	border-left-color: var(--wp--preset--color--warning, #ffc107);
-	color: var(--vkbm--color--warning-text, #664d03);
 }
 
 .vkbm-notice__info {
-	--vkbm--notice-link-color: var(--vkbm--color--info-link, #055160);
+
+	@include vkbm-status-colors(info, --vkbm--notice-link-color);
 	border-left-color: var(--wp--preset--color--primary, #2563eb);
-	color: var(--vkbm--color--info-text, #055160);
 }
 
 .vkbm-notice__success {
-	--vkbm--notice-link-color: var(--vkbm--color--success-link, #0f5132);
+
+	@include vkbm-status-colors(success, --vkbm--notice-link-color);
 	border-left-color: var(--wp--preset--color--success, #198754);
-	color: var(--vkbm--color--success-text, #0f5132);
 }
 
 .vkbm-notice.is-dismissible {

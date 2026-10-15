@@ -51,7 +51,10 @@
       "padding": true
     }
   },
-  "style": "file:./style-index.css",
+  "style": [
+    "vkbm-components",
+    "file:./style-index.css"
+  ],
   "editorStyle": "file:./index.css",
   "editorScript": "file:./index.js"
 }

@@ -1,11 +1,19 @@
-@use "../../../assets/scss/index-blocks.scss" as *;
+@use "../../../assets/scss/breakpoints" as *;
+@use "../../../assets/scss/mixins" as *;
+
+// 絞り込み検索の 1 行入力欄（日付・泊数・メニュー・客室）の外形の高さ。タップ領域 44px 以上を満たす。
+$vkbm-plan-summary-control-height: 44px;
+
+/* ==========================================================================
+   ブロックの外枠・サービスメニューの詳細表示
+   ========================================================================== */
 
 .wp-block-vk-booking-manager-reservation {
 	display: block;
 }
 
 .vkbm-reservation-block {
-	scroll-margin-top: var(--vkbm--reservation-scroll-offset, 85px);
+	scroll-margin-top: var(--vkbm--reservation-scroll-offset, 100px);
 }
 
 
@@ -14,6 +22,90 @@
 	flex-direction: column;
 	gap: var(--vkbm--spacing--md);
 }
+
+// サービスメニューの詳細表示（メニュー名 → 本文 → カード）。
+.vkbm-reservation-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--vkbm--spacing--lg);
+}
+
+// 詳細見出しと編集リンク
+// -----------------------------------------------------------------------------
+.vkbm-reservation-detail__heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--vkbm--spacing--sm);
+	border-top: 1px solid var(--vkbm--color--primary);
+	border-bottom: 1px solid var(--vkbm--color--border);
+	background-color: #f5f5f5;
+	padding: var(--vkbm--spacing--sm) var(--vkbm--spacing--md);
+}
+
+// 見出しのメニュー名と同じ扱いにそろえ、帯の文字色をそのまま受け継ぐ。
+.vkbm-reservation-detail__edit-link {
+
+	.vkbm-menu-loop__edit-link {
+		display: inline-block;
+		white-space: nowrap;
+		color: inherit;
+	}
+
+	a {
+		color: inherit;
+
+		&:focus-visible {
+			outline: 2px solid currentcolor;
+			outline-offset: 2px;
+		}
+	}
+}
+
+// テーマの h1 装飾で見出しと編集リンクの並びが崩れないよう、値を明示する。
+.vkbm-reservation-detail .vkbm-reservation-detail__title {
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+	margin: 0;
+	padding: 0;
+	color: inherit;
+	background: none;
+	border: none;
+	font-size: var(--vkbm--font-size--lg);
+	font-weight: 700;
+	line-height: 1.5;
+}
+
+.vkbm-reservation-detail__title:focus,
+.vkbm-reservation-content:focus {
+	outline: none;
+}
+
+// 案内が無いときは、領域（読み上げ用）だけ残してレイアウトの間隔を作らない。
+.vkbm-reservation-content__detail-notice:empty {
+	position: absolute;
+	width: 0;
+	height: 0;
+	overflow: hidden;
+}
+
+// 引き継いだ日付で予約できなかった案内は、2列のうち片方に入らないよう行いっぱいに広げる。
+// 案内が無いときは、領域（読み上げ用）だけ残してレイアウトの間隔を作らない。
+.vkbm-reservation-content__carry-notice {
+	grid-column: 1 / -1;
+}
+
+.vkbm-reservation-content__carry-notice:empty {
+	position: absolute;
+	width: 0;
+	height: 0;
+	overflow: hidden;
+}
+
+/* ==========================================================================
+   予約画面の枠・ヘッダー
+   ========================================================================== */
 
 .vkbm-reservation {
 	display: flex;
@@ -83,11 +175,41 @@
 	}
 }
 
+/* ==========================================================================
+   プラン選択・料金サマリー
+   ========================================================================== */
+
 .vkbm-plan-summary {
 	display: flex;
 	flex-direction: column;
 	gap: 1rem;
 }
+
+// 絞り込み検索の欄（日程・プルダウン・タグ・案内文）のまとまり。
+// 枠 OFF のときも、まとまりの中の欄どうしの間隔は外側と同じ 1rem にして、見た目を変えない。
+.vkbm-plan-summary__search {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+// 「枠で囲う」設定: 枠は絞り込み検索の欄のまとまりにだけ付け、その下のメニューのプレビューと料金欄は囲わない（#778）。
+// 線・角丸はサービスメニューカード（.vkbm-menu-loop__card-item）と同じ値を使う。
+// 内側の余白（上下左右）は、枠の中の欄どうしの最大の間隔以上にする。欄どうしの間隔を広げるときは lg の余裕も見直すこと。
+.vkbm-plan-summary__search--framed {
+	border: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
+	border-radius: var(--vkbm--radius--md, 8px);
+	padding: var(--vkbm--spacing--lg);
+}
+
+// 枠の下端と次の要素の間は、枠の内側の余白より大きくする。
+// 親 .vkbm-plan-summary の gap に上乗せする値のため、gap や枠の padding を変えるときはここも見直すこと。
+.vkbm-plan-summary__search--framed + * {
+	margin-top: var(--vkbm--spacing--md);
+}
+
+// ログイン・会員登録パネル、メニューのプレビュー
+// -----------------------------------------------------------------------------
 
 .vkbm-user-section__title {
 	margin: 0 0 0.75rem;
@@ -137,12 +259,6 @@
 	margin-bottom: 1rem;
 }
 
-.vkbm-reservation-content__auth-loading,
-.vkbm-reservation-content__auth-error {
-	margin: 0;
-	font-size: 0.9rem;
-}
-
 .vkbm-reservation-content__auth-form {
 	margin-top: 0.5rem;
 }
@@ -160,31 +276,213 @@
 
 .vkbm-reservation-content__menu-preview-notice {
 	margin: 0;
-	color: #666;
+	color: var(--vkbm--color--text-secondary, #666);
 	font-size: 0.875rem;
 }
+
+// メニュー・担当者の選択
+// -----------------------------------------------------------------------------
 
 .vkbm-plan-summary__selectors {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	// 縦積みになる 375px 幅の段どうし（入力欄の下端 → 次のラベルの字面）を、見た目で約 18px にする。
+	// 入力欄 → 説明文（約 14px）より広く、日付のグループ → メニュー・客室のグループ（約 25px）より狭い。
 	gap: 1rem;
 }
 
 .vkbm-plan-summary__field {
 	display: flex;
 	flex-direction: column;
-	gap: 0.35rem;
+	// ラベル → 入力欄は最も近接させる（見えている端どうしで約 8px）。
+	// ラベルの字面の下には、行の高さ（下の line-height: 1.4）による余白が約 3px 付くため、gap は 4px にして合計を約 8px にする。
+	gap: 0.25rem;
+	// メニュー・客室の欄は label 要素のため、label に margin-bottom や font-weight を当てるテーマ
+	// （Twenty Twenty-One 等）の指定が欄ごと効いて、欄の下に余白が足される。
+	// 欄どうしの間隔は親（.vkbm-plan-summary__selectors）の gap だけで決めるため、margin と太さを明示する。
+	margin: 0;
 	font-size: 0.875rem;
+	font-weight: inherit;
 
 	select {
-		padding: 0.5rem;
+		// 日付欄（.vkbm-plan-summary__date-input）と外形の高さをそろえる（design-rules「並んだ入力欄の高さを揃える」）。
+		// ブラウザ標準の select は日付欄より低いため、高さを明示し、上下の padding は高さに任せて 0 にする。
+		box-sizing: border-box;
+		width: 100%;
+		height: $vkbm-plan-summary-control-height;
+		min-height: $vkbm-plan-summary-control-height;
+		padding-top: 0;
+		padding-bottom: 0;
 		border: 1px solid var(--vkbm--color--border);
 		border-radius: var(--vkbm--radius--sm, 4px);
+		font-size: inherit;
+		line-height: normal;
 	}
 }
 
-// #431: リソースタグ検索（サービスメニュー・リソースの絞り込みプルダウン直下のチェックボックス群）。
-// 選択肢群と隣接グループ（プルダウン欄・0件メッセージ等）との余白は、親 .vkbm-plan-summary の
+// 各欄のラベル。本文向けの大きな line-height を継承すると、字面の上下に見えない余白が付いて
+// ラベルと入力欄の間が広がるため、1 行で収まるラベルは行の高さを抑える（design-rules「行の高さで余白を広げない」）。
+.vkbm-plan-summary__field > .vkbm-plan-summary__label {
+	display: block;
+	// label 要素に font-size や margin-bottom を当てるテーマ（Twenty Twenty-One 等）に負けないよう明示する。
+	// 見出しの大きさは親（.vkbm-plan-summary__field の 0.875rem）に合わせ、メニュー・客室（label 内の span）と揃える。
+	// 見出し → 入力欄の間隔は親の gap だけで決め、テーマの margin-bottom を足さない。
+	margin: 0;
+	font-size: inherit;
+	// label 要素に font-weight を当てるテーマ（Twenty Twenty-One は 500）に負けないよう親から継承し、
+	// メニュー・客室（label 内の span）の見出しと太さをそろえる（design-rules「同一パネル内のフォーム様式の統一」）。
+	font-weight: inherit;
+	line-height: 1.4;
+}
+
+// 絞り込み検索の日付欄（ブラウザ標準の日付入力）。
+// プルダウン（select）と同じ見た目にそろえ、タップ領域は 44px 以上にする。
+// 色は指定しない（ブラウザ標準の配色のままにして、カレンダーアイコンが背景に沈まないようにする）。
+// 欄の下の補助テキスト・選んだ日付・解除ボタンは、欄と同じグループとして近接させる（親の gap のみ）。
+.vkbm-plan-summary__date-input {
+	box-sizing: border-box;
+	width: 100%;
+	height: $vkbm-plan-summary-control-height;
+	min-height: $vkbm-plan-summary-control-height;
+	padding-top: 0;
+	padding-bottom: 0;
+	border: 1px solid var(--vkbm--color--border);
+	border-radius: var(--vkbm--radius--sm, 4px);
+	font: inherit;
+	line-height: normal;
+}
+
+.vkbm-plan-summary__date-help,
+.vkbm-plan-summary__date-error {
+	margin: 0;
+	font-size: 0.8125rem;
+	// 折り返す文字なので行の高さは読みやすさのために 1.5 に固定し、テーマの本文の行の高さに間隔を左右されないようにする。
+	line-height: 1.5;
+}
+
+.vkbm-plan-summary__date-help {
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+// 入力欄の直下に置くエラー。色だけに頼らず、文言でも伝える。
+.vkbm-plan-summary__date-error {
+	color: var(--vkbm--color--danger-text, #842029);
+}
+
+// 説明文と「日付の指定を外す」を同じ行に置く。説明文は左、ボタンは右端（日付が選ばれているときだけ表示）。
+.vkbm-plan-summary__date-note {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.25rem 1rem;
+}
+
+.vkbm-plan-summary__date-note .vkbm-plan-summary__date-help {
+	flex: 1 1 12rem;
+}
+
+// テキストリンク風のボタン（button 要素）。右端に置き、狭い幅で次の行に落ちても右端に残す。
+// タップ領域は 44px 以上にし、上下の負の margin で見た目の位置（入力欄 → 説明文の間隔）を変えない。
+.vkbm-plan-summary__date-clear {
+	display: inline-flex;
+	align-items: center;
+	box-sizing: border-box;
+	min-height: 44px;
+	margin: -13px -0.5rem -13px auto;
+	padding: 0 0.5rem;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	font-size: 0.8125rem;
+	line-height: 1.5;
+	text-decoration: underline;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+// 日程・日付は画面には出さず、読み上げ（aria-live）専用にする。
+// display: none にすると読み上げ領域ごと失われるため、視覚的にのみ隠す共通ミキシンを使う。
+.vkbm-plan-summary__date-selected {
+
+	@include vkbm-visually-hidden;
+}
+
+// 宿泊のサイトの絞り込み検索（チェックイン日・チェックアウト日・泊数）。
+// メニュー・客室のプルダウンより上の独立した 1 行。スマートフォン幅でもチェックイン日とチェックアウト日は同じ段に置き、
+// 泊数は次の段に回す。タブレット幅以上は 3 欄を 1 段に並べる。
+// 欄の下のエラー・補助テキスト・選んだ日程・解除ボタンは、欄と同じグループとして近接させる（gap のみ）。
+.vkbm-plan-summary__stay {
+	display: flex;
+	flex-direction: column;
+	// 入力欄 → 説明文・日付の指定を外す（見えている端どうしで約 14px）。ラベル → 入力欄（約 8px）より広くする。
+	gap: 0.8125rem;
+	// 日付のグループ → メニュー・客室のグループは、親の gap（1rem）と合わせて見た目で約 25px にする。
+	// 検索欄 → 一覧（親グループ間、約 40px）より狭く、段内の間隔（約 18px）より広い。
+	// 時間枠の日付欄（--date）と必ず同じ値にそろえる（片方だけ変えない）。
+	margin-bottom: 0.25rem;
+}
+
+.vkbm-plan-summary__field--date {
+	margin-bottom: 0.25rem;
+}
+
+.vkbm-plan-summary__field--date .vkbm-plan-summary__date-note,
+.vkbm-plan-summary__field--date .vkbm-plan-summary__date-error {
+	// 入力欄 → 説明文は、親の gap（0.25rem）と合わせて box 上 13px（見た目で約 14px）にする。
+	// ラベル → 入力欄（約 8px）より広く、入力欄どうしの縦の間隔（約 18px）より狭い。
+	margin-top: 0.5625rem;
+}
+
+// 説明文・エラーの字面の上の余白。common.scss の text-box（p.vkbm-* の上下を字面に揃える指定）が効くブラウザでは
+// 行の高さによる上の余白は付かない。効かないブラウザ（text-box 未対応）だけ、ハーフレディング
+// （(1.5 - 1) × 13px ÷ 2 ≒ 3px）を差し引いて、見た目の間隔を同じにする。
+// 日付欄の下のエラーは上の .vkbm-plan-summary__field--date 用の margin-top と同じ詳細度のため、
+// 負けないよう、この指定は必ずそれより後ろに書く。上書きでその margin が消えないよう calc で差し引く。
+// 説明文は .vkbm-plan-summary__date-note（div）の中の p なので、div 側の margin はそのまま、p 側だけ差し引く。
+@supports not (text-box: trim-both text) {
+
+	.vkbm-plan-summary__date-help,
+	.vkbm-plan-summary__date-error {
+		margin-top: -3px;
+	}
+
+	.vkbm-plan-summary__field--date .vkbm-plan-summary__date-error {
+		margin-top: calc(0.5625rem - 3px);
+	}
+}
+
+.vkbm-plan-summary__stay-fields {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	// 横並びの入力欄どうしは 16px。スマートフォン幅の段間（日付の行 → 泊数。入力欄の下端 → 次のラベルの字面）は
+	// 同じグループ内なので、見た目で約 18px にする（入力欄 → 説明文の約 14px より広く、グループ間より狭い）。
+	gap: 1rem;
+
+	@include vkbm-bp-up($vkbm-bp-front-sm) {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 10rem);
+	}
+
+	// 日付入力が列の幅を押し広げて、チェックアウト日が次の段に落ちないようにする。
+	.vkbm-plan-summary__field {
+		min-width: 0;
+	}
+}
+
+// 検索欄 → 一覧は親グループ間なので、親の gap（1.5rem）と合わせて約 40px にする。
+.vkbm-reservation-content__menu-list {
+	margin-top: 1rem;
+}
+
+// 日付を変えた再取得中は、直前の一覧を残して薄くし、操作を受け付けない。
+.vkbm-reservation-content__menu-list--loading {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+// リソースタグ検索（サービスメニュー・リソースの絞り込みプルダウン直下のチェックボックス群）。
+// 選択肢群と隣接グループ（プルダウン欄・0件メッセージ等）との余白は、親 .vkbm-plan-summary__search の
 // flex gap（1rem）に委ね、ここでは margin を追加しない（余白階層の最上位＝最も広い間隔）。
 .vkbm-plan-summary__tag-filter {
 	margin: 0;
@@ -193,26 +491,15 @@
 	// fieldset 既定の min-width（コンテンツ幅に依存）を解除し、flex 親の中で崩れないようにする。
 	min-width: 0;
 
-	// #436: 見出し（legend）は視覚的には非表示にする。ただし display: none にすると
+	// 見出し（legend）は視覚的には非表示にする。ただし display: none にすると
 	// fieldset のアクセシブルネーム（チェックボックス群の見出しとしての読み上げ）まで
 	// 失われるため、screen-reader-text と同じ「視覚的にのみ隠す」手法を使う。
-	// テーマ側で screen-reader-text が未定義の場合にも確実に隠れるよう、
-	// assets/scss/buttons.scss の .vkbm-button .screen-reader-text と同じ手法を、
-	// 影響範囲をこの legend だけに絞って適用する（共用クラス vkbm-plan-summary__label
+	// テーマ側で screen-reader-text が未定義でも確実に隠れるよう、共通ミキシン vkbm-visually-hidden
+	// （_mixins.scss）を使い、影響範囲をこの legend だけに絞る（共用クラス vkbm-plan-summary__label
 	// 自体は他の見出し（メニュー／スタッフ）で引き続き使うため変更しない）。
-	// !important を避けるため、最後の行は word-wrap ではなく white-space: nowrap にしている。
 	> legend.vkbm-plan-summary__label {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		margin: -1px;
-		padding: 0;
-		overflow: hidden;
-		border: 0;
-		/* stylelint-disable-next-line property-no-deprecated -- 視覚的に隠す定番パターン（古いブラウザ向けに clip を併記） */
-		clip: rect(1px, 1px, 1px, 1px);
-		clip-path: inset(50%);
-		white-space: nowrap;
+
+		@include vkbm-visually-hidden;
 	}
 }
 
@@ -234,9 +521,12 @@
 }
 
 .vkbm-plan-summary__tag-filter-label {
-	// #431: リソースタグの文字の途中で改行しない（issue #431 完了条件）。
+	// リソースタグの文字の途中で改行しない。
 	white-space: nowrap;
 }
+
+// 料金の表示
+// -----------------------------------------------------------------------------
 
 .vkbm-plan-summary__pricing {
 	display: flex;
@@ -245,7 +535,7 @@
 	border: 1px solid var(--vkbm--color--border);
 	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 0.75rem 1rem;
-	background: #f9fafb;
+	background: var(--vkbm--color--bg-secondary, #f9fafb);
 }
 
 .vkbm-plan-summary__pricing--placeholder {
@@ -270,7 +560,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	// #503: 見出しが折り返すときも金額とくっつかないよう間隔を空ける。
+	// 見出しが折り返すときも金額とくっつかないよう間隔を空ける。
 	gap: 0.5rem;
 	font-size: 0.9rem;
 }
@@ -285,11 +575,11 @@
 
 .vkbm-plan-summary__pricing-value {
 	font-weight: 400;
-	// #503: 「¥30,000 (税込)」の金額と税表記の間で改行させない。
+	// 「¥30,000 (税込)」の金額と税表記の間で改行させない。
 	white-space: nowrap;
 }
 
-// #503: 料金の行の見出しの「（単価 × 人数）」部分は途中で改行させず、括弧の手前で折り返す
+// 料金の行の見出しの「（単価 × 人数）」部分は途中で改行させず、括弧の手前で折り返す
 // （予約画面の料金欄と確認画面で共通）。
 .vkbm-pricing-row-label__detail {
 	white-space: nowrap;
@@ -299,6 +589,9 @@
 	color: #c33;
 	font-weight: 600;
 }
+
+// ステータス行・操作ボタン
+// -----------------------------------------------------------------------------
 
 .vkbm-plan-summary__status {
 	display: flex;
@@ -330,11 +623,13 @@
 	align-items: flex-end;
 	gap: 0.35rem;
 	// 親 __status--detached が flex-wrap したとき（貸切ブロックが全幅で割り込む場合など）、
-	// 操作ボタンの行が左寄せにならず従来どおり右端に揃うよう、左マージンを auto で詰める。
+	// 操作ボタンの行が左寄せにならず右端に揃うよう、左マージンを auto で詰める。
 	margin-left: auto;
 }
 
-// 人数（複数人予約）選択欄.
+// 人数の選択（料金区分別）
+// -----------------------------------------------------------------------------
+
 .vkbm-plan-summary__guests {
 	display: flex;
 	align-items: center;
@@ -369,7 +664,7 @@
 	gap: 0.5rem;
 }
 
-// #430: ラベルを行内で伸縮させ、区分名は左端・料金は入力欄の直前（右端）に固定する。
+// ラベルを行内で伸縮させ、区分名は左端・料金は入力欄の直前（右端）に固定する。
 // これにより区分名の文字数が行ごとに違っても、金額の右端が縦に揃う。
 // 区分名・金額とも極端に長い場合は flex-wrap で折り返し、入力欄側へのはみ出しを防ぐ。
 .vkbm-plan-summary__guest-tier-label {
@@ -402,7 +697,10 @@
 	text-align: right;
 }
 
-// ユーザーによる貸し切り指定（#305）。人数入力の直下に配置するチェックと注記.
+// 貸切指定
+// -----------------------------------------------------------------------------
+
+// ユーザーによる貸し切り指定。人数入力の直下に配置するチェックと注記.
 // 親 __status--detached は flex 横並び（space-between）のため、貸切ブロックは縦長で押し潰されやすい。
 // flex-basis:100% で親 flex の1行を占有し、人数入力の下に折り返して全幅で縦積み表示させる。
 .vkbm-plan-summary__exclusive {
@@ -451,7 +749,7 @@
 }
 
 // 適用外人数到達時の淡色注記.
-// fallback は白背景で AA(4.5:1) を満たす #666（5.49:1）に統一する（#888 は 3.54:1 で不適合）.
+// fallback は白背景で AA(4.5:1) を満たす #666 に統一する.
 .vkbm-plan-summary__exclusive-note--muted {
 	color: var(--vkbm--color--text-secondary, #666);
 }
@@ -489,7 +787,7 @@
 }
 
 // 適用外人数到達で ¥0 になったときは淡色＋注記で「黙って消えた」ように見えないようにする.
-// fallback は白背景で AA(4.5:1) を満たす #666（5.49:1）に統一する（#888 は 3.54:1 で不適合）.
+// fallback は白背景で AA(4.5:1) を満たす #666 に統一する.
 .vkbm-plan-summary__exclusive-fee-value--muted {
 	font-weight: 400;
 	color: var(--vkbm--color--text-secondary, #666);
@@ -501,14 +799,18 @@
 	font-weight: 400;
 }
 
-.vkbm-plan-summary__action {
-	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--wp--preset--color--primary, #2563eb)));
+// 「予約に進む」ボタン・ヒント
+// -----------------------------------------------------------------------------
+
+// 「予約に進む」ボタンの背景色。共通の .vkbm-button__primary より優先して、
+// 基本設定の「予約ボタンの色」（--vkbm--color--reservation-action）を使う。
+.vkbm-plan-summary__action.vkbm-button__primary {
+	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
 }
 
-.vkbm-plan-summary__action:hover {
-	background:
-		color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, var(--wp--preset--color--primary, #2563eb)))
-		75%, #000);
+.vkbm-plan-summary__action.vkbm-button__primary:hover {
+
+	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)));
 }
 
 .vkbm-plan-summary__hint,
@@ -518,7 +820,7 @@
 }
 
 .vkbm-plan-summary__hint {
-	color: #666;
+	color: var(--vkbm--color--text-secondary, #666);
 }
 
 // 残枠超過など、操作の妨げとなる状態を伝えるヒント.
@@ -532,11 +834,15 @@
 	text-align: right;
 }
 
+/* ==========================================================================
+   カレンダー・時間枠
+   ========================================================================== */
+
 .vkbm-reservation-content__body {
 	display: grid;
 	gap: 1.5rem;
 
-	@media (min-width: 900px) {
+	@include vkbm-bp-up($vkbm-bp-front-md) {
 		grid-template-columns: 1.2fr 1fr;
 	}
 }
@@ -571,7 +877,7 @@
 	text-align: center;
 	padding: 0.5rem 0;
 	font-size: 0.875rem;
-	color: #666;
+	color: var(--vkbm--color--text-secondary, #666);
 }
 
 .vkbm-calendar__day {
@@ -626,7 +932,7 @@
 	border-radius: var(--vkbm--radius--md, 8px);
 	padding: var(--vkbm--spacing--xs);
 	text-align: left;
-	background: #fff;
+	background: var(--vkbm--color--bg-primary, #fff);
 	cursor: pointer;
 	font-size: var(--vkbm--font-size--sm, 0.75rem);
 	font-weight: 400;
@@ -636,7 +942,7 @@
 		box-shadow: 0 0 0 1px rgba(29, 143, 203, 0.3);
 	}
 
-	// 満枠スロットのスタイル / Fully booked slot styles.
+	// 満枠スロットのスタイル。
 	&.is-full {
 		background: #f0f0f0;
 		color: #767676;
@@ -645,7 +951,6 @@
 	}
 
 	// 貸し切り予約で受付終了になった枠のスタイル（満席と同じく無効状態で残す）。
-	// Closed slot due to a private (exclusive) booking; kept as a disabled state like full slots.
 	&.is-exclusive-closed {
 		background: #f0f0f0;
 		color: #767676;
@@ -654,18 +959,18 @@
 	}
 }
 
-// 残り枠数表示 / Remaining capacity display.
+// 残り枠数表示。
 .vkbm-slot-list__remaining {
 	font-size: var(--vkbm--font-size--xs, 0.75rem);
 	color: var(--vkbm--color--accent, #1d8fcb);
 	margin-top: 2px;
 
-	// 満枠時の表示 / Display when fully booked.
+	// 満枠時の表示。
 	&--full {
 		color: #999;
 	}
 
-	// 貸し切り予約で受付終了になった枠の表示 / Display when closed by an exclusive booking.
+	// 貸し切り予約で受付終了になった枠の表示。
 	// 無効背景（#f0f0f0）上で通常テキスト相当のコントラストを確保し、満枠（--full）と区別できるようにする。
 	&--closed {
 		color: #595959;
@@ -695,7 +1000,7 @@
 	padding: 1rem;
 	border: 1px dashed var(--vkbm--color--border);
 	border-radius: var(--vkbm--radius--md, 8px);
-	color: #666;
+	color: var(--vkbm--color--text-secondary, #666);
 }
 
 .vkbm-slot-list--alert {
@@ -709,7 +1014,7 @@
 	border: 1px dashed var(--vkbm--color--border);
 	padding: 1rem;
 	text-align: center;
-	color: #666;
+	color: var(--vkbm--color--text-secondary, #666);
 }
 
 .vkbm-reservation-content__error {
@@ -717,6 +1022,10 @@
 	color: #c33;
 	font-size: 0.875rem;
 }
+
+/* ==========================================================================
+   ヘッダーナビ
+   ========================================================================== */
 
 .vkbm-reservation-header__nav .vkbm-reservation-header__nav-link.is-active {
 	color: var(--vkbm--color--accent, #1d8fcb);
@@ -742,12 +1051,11 @@
 	border-radius: 0;
 }
 
-// #547: スマホ幅のヘッダーナビ。上方の「.nav-link + .nav-link」と同じ詳細度のため、ソース順の後勝ちで上書きしている（この位置より上へ移動しないこと）。
-// 区切り線は枠線のままだと 44px いっぱいに伸びるため、擬似要素で描く。
-@media (max-width: 767px) {
+// タブレット幅までのヘッダーナビ。上方の「.nav-link + .nav-link」と同じ詳細度のため、ソース順の後勝ちで上書きしている。この位置より上へ移動しないこと。
+// 押せる範囲（44px）を確保すると、枠線の区切り線は 44px いっぱいに伸びる。そのため、44px を確保する幅と同じ幅で、区切り線を擬似要素で描く。
+@include vkbm-bp-down($vkbm-bp-front-md) {
 
 	.vkbm-reservation-header__nav {
-		flex-wrap: wrap;
 
 		.vkbm-reservation-header__nav-link {
 			min-height: 44px;
@@ -772,6 +1080,18 @@
 	}
 }
 
+// スマホ幅ではリンクが 1 行に収まらないため折り返す。
+@include vkbm-bp-down($vkbm-bp-front-sm) {
+
+	.vkbm-reservation-header__nav {
+		flex-wrap: wrap;
+	}
+}
+
+/* ==========================================================================
+   予約確認・予約完了画面
+   ========================================================================== */
+
 .vkbm-confirm {
 	display: flex;
 	flex-direction: column;
@@ -782,7 +1102,7 @@
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
 	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 1rem;
-	background: #fff;
+	background: var(--vkbm--color--bg-primary, #fff);
 	container-type: inline-size;
 }
 
@@ -818,6 +1138,11 @@
 
 .vkbm-confirm__time {
 	white-space: nowrap;
+}
+
+// 泊の予約のチェックイン／チェックアウトは1行ずつ表示する。
+.vkbm-confirm__stay-line {
+	display: block;
 }
 
 // 「今後の予約」「過去の予約」セクションの見出し。
@@ -864,13 +1189,15 @@
 	}
 }
 
-// お気に入り（いつもの）クイック選択。
+// お気に入り（いつもの）クイック選択
+// -----------------------------------------------------------------------------
+
 .vkbm-favorites {
 	margin-bottom: 1.25rem;
 	padding: 0.75rem 1rem;
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
 	border-radius: var(--vkbm--radius--md, 8px);
-	background: #f9fafb;
+	background: var(--vkbm--color--bg-secondary, #f9fafb);
 }
 
 .vkbm-favorites__title {
@@ -907,8 +1234,8 @@
 	// 一段濃いグレーにしてボタンの輪郭が視認できるようにする。
 	border: 1px solid #adb5bd;
 	border-radius: 50%;
-	background: #fff;
-	color: var(--vkbm--color--text-muted, #666);
+	background: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--text-secondary, #666);
 	font-size: 1rem;
 	line-height: 1;
 	cursor: pointer;
@@ -928,6 +1255,9 @@
 .vkbm-favorites__status {
 	margin-bottom: 0.75rem;
 }
+
+// 予約内容の一覧
+// -----------------------------------------------------------------------------
 
 .vkbm-confirm__summary-item {
 	display: flex;
@@ -970,7 +1300,7 @@
 
 		&-title {
 			margin-bottom: 0.5rem;
-			// #503: 縦積みでは見出しが1行を占めるため折り返しを許し、長い見出しは「（単価 × 人数）」の括弧の手前で改行させる。
+			// 縦積みでは見出しが1行を占めるため折り返しを許し、長い見出しは「（単価 × 人数）」の括弧の手前で改行させる。
 			white-space: normal;
 		}
 
@@ -1059,11 +1389,14 @@
 		justify-content: center;
 	}
 
-	@media (max-width: 767px) {
+	@include vkbm-bp-down($vkbm-bp-front-sm) {
 
 		.vkbm-confirm__auth .vkbm-buttons {
 			gap: 0.75rem;
 		}
+	}
+
+	@include vkbm-bp-down($vkbm-bp-front-md) {
 
 		.vkbm-confirm__auth .vkbm-button {
 			min-height: 44px;
@@ -1084,6 +1417,15 @@
 		margin-top: 0.5rem;
 	}
 
+	/* 入力欄（ご要望・備考）
+	   ========================================================================== */
+
+	// 管理者向け入力欄（.vkbm-confirm__admin-field）と文字サイズを揃える。
+	// 未指定だとテーマ本文サイズを継承し、ラベルが大きく表示される。
+	.vkbm-confirm__form {
+		font-size: 0.9rem;
+	}
+
 	.vkbm-confirm__form textarea {
 		width: 100%;
 		min-height: 120px;
@@ -1097,7 +1439,7 @@
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 1rem;
-		background: #fff;
+		background: var(--vkbm--color--bg-primary, #fff);
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -1123,6 +1465,39 @@
 		resize: vertical;
 	}
 
+	/* 決済方法の選択肢（一般ユーザー向け・管理者向け共通）
+	   ========================================================================== */
+
+	// 選択肢を縦に積む。選択肢どうしの間隔は各行の min-height だけで取り、
+	// 見出しとの間隔より広く見えないようにする。
+	// 文字サイズは親要素に依存させず、配置場所が変わっても 0.9rem を保つ。
+	.vkbm-confirm__payment-method-options {
+		display: flex;
+		flex-direction: column;
+		font-size: 0.9rem;
+	}
+
+	// ラベル全体をクリック可能な 1 行にまとめ、タップしやすい行高（28px 相当）を確保する。
+	.vkbm-confirm__payment-method-options label {
+		display: flex;
+		align-items: center;
+		gap: 0.4em;
+		min-height: 1.75rem;
+		cursor: pointer;
+	}
+
+	// 文言が長くなってもラジオが潰れないよう縮小させない。
+	.vkbm-confirm__payment-method-options input[type="radio"] {
+		flex-shrink: 0;
+		margin: 0;
+	}
+
+	// 一般ユーザー向けは同意事項エリアの「決済方法」ブロック内に置く。
+	// 選択肢と案内文の間は、同意事項の「本文枠 ↔ チェック」と同じ 0.75rem にそろえる。
+	.vkbm-confirm__payment-method-options + .vkbm-agreement__body {
+		margin-top: 0.75rem;
+	}
+
 	.vkbm-confirm__terms {
 		display: flex;
 		align-items: center;
@@ -1136,4 +1511,289 @@
 		margin: 0;
 	}
 
+}
+
+/* ==========================================================================
+   予約ブロック末尾のフッター（店舗情報・規約リンク）
+   ========================================================================== */
+
+// 画面下端への配置は CSS だけで行う（#790）。次の条件をすべて満たすときだけ最小の高さを付ける。
+// - 「フッター」が ON（修飾クラスが付く。ブロックエディタ内では付かない）
+// - ブロックテーマのページ（.wp-site-blocks がある）
+// - テーマのヘッダー・フッター（テンプレートパーツ）が無い
+// 予約ブロック内にも header / footer 要素があるため、必ず .wp-block-template-part で絞る。
+// 条件外（クラシックテーマ、テーマのヘッダー／フッターがあるページ）では min-height を付けず、
+// フッターは中身の直後に来る。管理バーの高さの分は差し引く。
+// footer-area は flex の子で余白が外へ相殺されないため、下の footer の margin-top は area の中に収まる。
+.vkbm-reservation--footer-bottom {
+	box-sizing: border-box;
+}
+
+body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(footer.wp-block-template-part)) .vkbm-reservation--footer-bottom {
+	min-height: calc(100svh - var(--wp-admin--admin-bar--height, 0px));
+}
+
+.vkbm-reservation--footer-bottom > .vkbm-reservation__footer-area {
+	margin-top: auto;
+}
+
+.vkbm-reservation-footer {
+	box-sizing: border-box;
+	// 親の flex の gap（予約ブロックでは祖父の .vkbm-reservation の gap、md）に足して、直前の要素との区切りを明確に広げる。
+	// 親は flex の子（予約ブロックでは .vkbm-reservation__footer-area、確認画面では .vkbm-confirm の flex）で独立した書式の範囲を持つため、マージンは外へ相殺されない。
+	margin-top: var(--vkbm--spacing--lg, 2rem);
+	// 背景と上端の線は、ブロックの幅に関係なく画面の左右端まで広げる（#782）。
+	// 左右のマージンを画面端まで負に伸ばし、同じ分を左右の内側の余白で戻すことで、
+	// 店舗情報と規約リンクの左右端はブロックの中身（上のカードなど）と揃う。
+	// 内側の余白の下限（sm）は、ブロック自体が全幅のときに文字が画面端に付くのを防ぐため。
+	margin-right: calc(50% - 50vw);
+	margin-left: calc(50% - 50vw);
+	// 上下の内側の余白は、箱の中の最大の間隔（区切り線の上下 sm + sm = 2rem）以上の lg にする。
+	padding: var(--vkbm--spacing--lg, 2rem) max(calc(50vw - 50%), var(--vkbm--spacing--sm, 1rem));
+	border-top: 1px solid var(--vkbm--color--primary, #2563eb);
+	background: var(--vkbm--color--footer-bg, #f1f2f4);
+	color: var(--vkbm--color--footer-text, var(--vkbm--color--text-primary, #333));
+	font-size: var(--vkbm--font-size--sm, 0.875rem);
+	line-height: 1.7;
+}
+
+/* 共通指定（common.scss）は p など1要素ごとに上下の行間を切り落とす。
+   それをそのまま使うと、1行だけの p は行間が消えて詰まり、複数行の p だけ行間が残ってリズムが揃わない。
+   そのため情報ブロック全体の最初の行の上と最後の行の下だけを切り落とし、
+   中の p は切り落とさず、行間は line-height に任せる。 */
+.vkbm-reservation-footer__info {
+	text-box: trim-both text;
+}
+
+.vkbm-reservation-footer__info p {
+	margin: 0;
+	text-box: normal;
+}
+
+// 上のリセット（0,1,1）に負けないよう、クラスを重ねて詳細度を (0,2,0) にする。
+.vkbm-reservation-footer__info .vkbm-reservation-footer__name {
+	margin-bottom: var(--vkbm--spacing--sm, 1rem);
+	font-weight: 700;
+	font-size: var(--vkbm--font-size--md, 1rem);
+}
+
+.vkbm-reservation-footer__contact p + p {
+	margin-top: var(--vkbm--spacing--xs, 0.5rem);
+}
+
+.vkbm-reservation-footer__address,
+.vkbm-reservation-footer__hours {
+	white-space: pre-line;
+}
+
+// 住所・電話番号と営業時間の両方があるときだけ2列にする。スマホ幅では1列。
+.vkbm-reservation-footer__details--two-columns {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--vkbm--spacing--md, 1.5rem);
+
+	@include vkbm-bp-down($vkbm-bp-front-sm) {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--vkbm--spacing--sm, 1rem);
+	}
+}
+
+.vkbm-reservation-footer a,
+.vkbm-reservation-footer__link {
+	color: var(--vkbm--color--footer-link, var(--vkbm--color--footer-text, #333));
+}
+
+/* 規約リンク
+   ========================================================================== */
+.vkbm-reservation-footer__links {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 0 var(--vkbm--spacing--md, 1.5rem);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.vkbm-reservation-footer__info + .vkbm-reservation-footer__links {
+	margin-top: var(--vkbm--spacing--sm, 1rem);
+	padding-top: var(--vkbm--spacing--sm, 1rem);
+	border-top: 1px solid var(--vkbm--color--footer-border, var(--vkbm--color--border, #e0e0e0));
+}
+
+.vkbm-reservation-footer__links-item {
+	margin: 0;
+	padding: 0;
+}
+
+// ボタン・リンクは vkbm-button vkbm-button__sm vkbm-button__link を併用し、
+// テーマのボタン装飾（背景・文字色・枠・影・余白・フォント・hover 等）だけをここで打ち消してテキストリンクに見せる。
+// Twenty Twenty-One の button:not(:hover):not(:active):not(.has-background)（0,3,1）に確実に勝つため、
+// クラス4つ（0,4,0）に詳細度を上げている。!important は使わない。
+// 予約確認・予約完了画面（.vkbm-confirm）にも同じフッターを出すため、先頭の祖先に .vkbm-confirm も含める（#796）。
+// :is() の詳細度は引数の最大値（0,1,0）なので、全体は 0,4,0 のまま。
+:is(.vkbm-reservation, .vkbm-confirm) .vkbm-reservation-footer .vkbm-reservation-footer__links-item .vkbm-reservation-footer__link {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	color: var(--vkbm--color--footer-link, var(--vkbm--color--footer-text, #333));
+	font: inherit;
+	letter-spacing: inherit;
+	text-align: left;
+	text-decoration: none;
+	text-transform: none;
+	white-space: normal;
+	cursor: pointer;
+	user-select: auto;
+
+	&:hover,
+	&:focus,
+	&:active {
+		background: none;
+		border: 0;
+		box-shadow: none;
+		color: var(--vkbm--color--footer-link, var(--vkbm--color--footer-text, #333));
+		outline: none;
+	}
+
+	&:hover .vkbm-reservation-footer__link-text {
+		text-decoration: none;
+	}
+
+	// :focus の outline 打ち消しより後に置く（この位置より上へ移動しないこと）。
+	&:focus-visible {
+		outline: 2px solid var(--vkbm--color--footer-link, var(--vkbm--color--footer-text, #333));
+		outline-offset: 2px;
+	}
+}
+
+.vkbm-reservation-footer__link-text {
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+
+// スマホ: リンクを縦並びにし、行全体をタップ領域にして右端に「›」を出す。
+@include vkbm-bp-down($vkbm-bp-front-sm) {
+
+	.vkbm-reservation-footer__links {
+		display: block;
+	}
+
+	.vkbm-reservation-footer__links-item + .vkbm-reservation-footer__links-item {
+		border-top: 1px dashed var(--vkbm--color--footer-border, var(--vkbm--color--border, #e0e0e0));
+	}
+
+	:is(.vkbm-reservation, .vkbm-confirm) .vkbm-reservation-footer .vkbm-reservation-footer__links-item .vkbm-reservation-footer__link {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		box-sizing: border-box;
+		width: 100%;
+		min-height: 44px;
+		padding: var(--vkbm--spacing--xs, 0.5rem) 0;
+		text-decoration: none;
+	}
+
+	:is(.vkbm-reservation, .vkbm-confirm) .vkbm-reservation-footer .vkbm-reservation-footer__link::after {
+		content: "\203A";
+		margin-left: var(--vkbm--spacing--xs, 0.5rem);
+		font-size: var(--vkbm--font-size--lg, 1.25rem);
+		line-height: 1;
+		color: var(--vkbm--color--footer-text, var(--vkbm--color--text-primary, #333));
+		opacity: 0.6;
+	}
+}
+
+/* 規約モーダル
+   ========================================================================== */
+.vkbm-footer-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	padding: var(--vkbm--spacing--sm, 1rem);
+	background: rgb(0 0 0 / 50%);
+}
+
+.vkbm-footer-modal__dialog {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 640px;
+	max-height: 100%;
+	background: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--text-primary, #333);
+	border-radius: var(--vkbm--radius--md, 8px);
+	box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+}
+
+.vkbm-footer-modal__dialog:focus {
+	outline: none;
+}
+
+.vkbm-footer-modal__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--vkbm--spacing--sm, 1rem);
+	padding: var(--vkbm--spacing--xs, 0.5rem) var(--vkbm--spacing--sm, 1rem);
+	border-bottom: 1px solid var(--vkbm--color--border, #e0e0e0);
+}
+
+.vkbm-footer-modal__title {
+	margin: 0;
+	font-size: var(--vkbm--font-size--md, 1rem);
+	line-height: 1.4;
+}
+
+// 閉じるボタンもテーマのボタン装飾に負けないよう、クラス4つ（0,4,0）に詳細度を上げている。
+.vkbm-footer-modal .vkbm-footer-modal__dialog .vkbm-footer-modal__header .vkbm-footer-modal__close {
+	flex: 0 0 auto;
+	width: 44px;
+	height: 44px;
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	color: inherit;
+	font-family: inherit;
+	font-size: var(--vkbm--font-size--xl, 1.5rem);
+	line-height: 1;
+	text-transform: none;
+	cursor: pointer;
+
+	&:hover,
+	&:focus,
+	&:active {
+		background: none;
+		border: 0;
+		box-shadow: none;
+		color: inherit;
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--vkbm--color--footer-link, var(--vkbm--color--footer-text, #333));
+		outline-offset: -2px;
+	}
+}
+
+.vkbm-footer-modal__body {
+	padding: var(--vkbm--spacing--sm, 1rem);
+	overflow-y: auto;
+	white-space: pre-wrap;
+	font-size: var(--vkbm--font-size--sm, 0.875rem);
+	line-height: 1.7;
+	overscroll-behavior: contain;
 }

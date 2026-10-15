@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use function __;
@@ -28,6 +29,7 @@ use function absint;
 use function esc_url;
 use function get_edit_post_link;
 use function sprintf;
+use function wp_enqueue_style;
 
 /**
  * Handles the email log admin page.
@@ -59,6 +61,13 @@ class Email_Log_Page {
 	private $log_repository;
 
 	/**
+	 * add_submenu_page() が返す、このページのフック名。
+	 *
+	 * @var string
+	 */
+	private $page_hook = '';
+
+	/**
 	 * Constructor.
 	 *
 	 * @param string               $parent_slug    Parent admin menu slug.
@@ -79,6 +88,21 @@ class Email_Log_Page {
 		add_action( 'admin_init', array( $this, 'block_if_disabled' ), 1 );
 		add_action( 'admin_init', array( $this, 'maybe_prune_logs' ), 5 );
 		add_action( 'admin_init', array( $this, 'handle_clear_logs' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
+	}
+
+	/**
+	 * メール送信履歴ページの CSS（管理画面用バンドル）を読み込む。
+	 *
+	 * @param string $hook_suffix 表示中の管理画面のフック名。
+	 */
+	public function enqueue_assets( string $hook_suffix ): void {
+		// このページ以外では読み込まない。
+		if ( '' === $this->page_hook || $hook_suffix !== $this->page_hook ) {
+			return;
+		}
+
+		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 	}
 
 	/**
@@ -89,7 +113,7 @@ class Email_Log_Page {
 			return;
 		}
 
-		add_submenu_page(
+		$this->page_hook = (string) add_submenu_page(
 			$this->parent_slug,
 			__( 'Email Log', 'vk-booking-manager' ),
 			__( 'Email Log', 'vk-booking-manager' ),
@@ -158,8 +182,15 @@ class Email_Log_Page {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'vk-booking-manager' ) );
 		}
 
-		$logs    = $this->log_repository->get_logs();
-		$cleared = isset( $_GET['cleared'] ) && '1' === $_GET['cleared']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
+		$logs                    = $this->log_repository->get_logs();
+		$cleared                 = isset( $_GET['cleared'] ) && '1' === $_GET['cleared']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Display only.
+		$email_delivery_help_url = add_query_arg(
+			array(
+				'page' => 'vkbm-provider-settings',
+				'tab'  => 'email',
+			),
+			admin_url( 'admin.php' )
+		) . '#vkbm-email-delivery-help';
 
 		?>
 		<div class="wrap">
@@ -169,7 +200,15 @@ class Email_Log_Page {
 			<p class="description">
 				<?php echo esc_html__( 'This log only shows whether WordPress was able to process sending the email.', 'vk-booking-manager' ); ?>
 				<?php echo esc_html__( 'It does not record whether the email was actually delivered to the recipient.', 'vk-booking-manager' ); ?>
-				<?php echo esc_html__( 'If the status shows "Sent" but the email was not received, check the recipient\'s spam folder and the server\'s email settings (such as DKIM).', 'vk-booking-manager' ); ?>
+				<?php
+				$email_delivery_help_link = sprintf(
+					'<a href="%1$s">%2$s</a>',
+					esc_url( $email_delivery_help_url ),
+					esc_html__( 'If emails are not being delivered', 'vk-booking-manager' )
+				);
+				/* translators: %s: link to the email delivery checklist. */
+				echo wp_kses( sprintf( __( 'If the status shows "Sent" but the email was not received, see the checklist under “%s”.', 'vk-booking-manager' ), $email_delivery_help_link ), array( 'a' => array( 'href' => array() ) ) );
+				?>
 			</p>
 
 			<?php if ( $cleared ) : ?>
@@ -181,7 +220,7 @@ class Email_Log_Page {
 			<?php if ( empty( $logs ) ) : ?>
 				<p><?php echo esc_html__( 'No email logs found.', 'vk-booking-manager' ); ?></p>
 			<?php else : ?>
-				<div class="vkbm-email-log-actions" style="margin-bottom: 20px;">
+				<div class="vkbm-email-log-actions">
 					<a href="<?php echo esc_url( wp_nonce_url( add_query_arg( array( 'action' => 'clear' ), admin_url( 'admin.php?page=' . self::MENU_SLUG ) ), self::NONCE_ACTION, self::NONCE_NAME ) ); ?>" class="button" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to clear all logs?', 'vk-booking-manager' ) ); ?>');">
 						<?php echo esc_html__( 'Clear All Logs', 'vk-booking-manager' ); ?>
 					</a>
@@ -190,10 +229,10 @@ class Email_Log_Page {
 				<table class="wp-list-table widefat fixed striped">
 					<thead>
 						<tr>
-							<th style="width: 180px;"><?php echo esc_html__( 'Date/Time', 'vk-booking-manager' ); ?></th>
-							<th style="width: 250px;"><?php echo esc_html__( 'Recipient', 'vk-booking-manager' ); ?></th>
+							<th class="vkbm-email-log__col-datetime"><?php echo esc_html__( 'Date/Time', 'vk-booking-manager' ); ?></th>
+							<th class="vkbm-email-log__col-recipient"><?php echo esc_html__( 'Recipient', 'vk-booking-manager' ); ?></th>
 							<th><?php echo esc_html__( 'Subject', 'vk-booking-manager' ); ?></th>
-							<th style="width: 100px;"><?php echo esc_html__( 'Status', 'vk-booking-manager' ); ?></th>
+							<th class="vkbm-email-log__col-status"><?php echo esc_html__( 'Status', 'vk-booking-manager' ); ?></th>
 							<th><?php echo esc_html__( 'Error', 'vk-booking-manager' ); ?></th>
 						</tr>
 					</thead>
@@ -225,7 +264,7 @@ class Email_Log_Page {
 									<?php endif; ?>
 								</td>
 								<td>
-									<span style="color: <?php echo esc_attr( $status_meta['color'] ); ?>;"><?php echo esc_html( $status_meta['label'] ); ?></span>
+									<span class="vkbm-email-log__status vkbm-email-log__status--<?php echo esc_attr( $status_meta['status'] ); ?>"><?php echo esc_html( $status_meta['label'] ); ?></span>
 									<?php if ( $is_new_format_log ) : ?>
 										<?php echo $this->render_retry_line( $log ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped inside the helper. ?>
 									<?php endif; ?>
@@ -234,15 +273,14 @@ class Email_Log_Page {
 								// レビュー対応（#510 植草・安藤）: 再送案内文は "\n" で連結して保存しているため、
 								// nl2br() で改行を <br> として表示する（<code> は空白を折りたたむため、そのままでは
 								// 1行に繋がって読めなくなる）。未送信（skipped）は設定不足であり故障ではないため、
-								// 失敗（failed）と同じ赤 (#d63638) ではなく中立色 (#50575e) で表示する
-								// （白背景・縞模様行 #f6f7f7 のどちらでもコントラスト比 4.5:1 以上）。
-								$error_text_color = ( Email_Log_Repository::STATUS_SKIPPED === $status_meta['status'] ) ? '#50575e' : '#d63638';
+								// 失敗（failed）と同じ赤ではなく中立色で表示する（色は assets/scss/admin-email-log.scss）。
+								$error_class = 'vkbm-email-log__error' . ( Email_Log_Repository::STATUS_SKIPPED === $status_meta['status'] ? ' vkbm-email-log__error--skipped' : '' );
 								?>
 								<td>
 									<?php if ( ! empty( $log['error'] ) ) : ?>
-										<code style="font-size: 11px; color: <?php echo esc_attr( $error_text_color ); ?>;"><?php echo nl2br( esc_html( (string) $log['error'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- nl2br() only adds <br> after esc_html() already escaped the content. ?></code>
+										<code class="<?php echo esc_attr( $error_class ); ?>"><?php echo nl2br( esc_html( (string) $log['error'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- nl2br() only adds <br> after esc_html() already escaped the content. ?></code>
 									<?php else : ?>
-										<span style="color: #999;">—</span>
+										<span class="vkbm-email-log__empty">—</span>
 									<?php endif; ?>
 									<?php if ( ! empty( $log['action_url'] ) ) : ?>
 										<?php // #510: 植草（UX）レビュー対応。案内リンクは <code> の外に通常の文字として置き、リンク単体で行き先が分かる文言にする。 ?>
@@ -259,13 +297,13 @@ class Email_Log_Page {
 	}
 
 	/**
-	 * ログの状態（送信済み／失敗／未送信）に応じたラベルと文字色を返す。
+	 * ログの状態（送信済み／失敗／未送信）に応じたラベルを返す。
 	 *
 	 * 新形式（status キーあり）は status の値をそのまま使う。旧形式（status キー無し）は
 	 * success（真偽値）から sent/failed のいずれかに読み替える（skipped は旧形式には存在しない）。
 	 *
 	 * @param array<string, mixed> $log ログ1件分のデータ。
-	 * @return array{status:string,label:string,color:string}
+	 * @return array{status:string,label:string}
 	 */
 	private function resolve_status_meta( array $log ): array {
 		if ( array_key_exists( 'status', $log ) ) {
@@ -278,16 +316,13 @@ class Email_Log_Page {
 			case Email_Log_Repository::STATUS_SKIPPED:
 				return array(
 					'status' => $status,
-					// #510: アクセシビリティ基準（コントラスト比 4.5:1 以上）を満たす色。
 					'label'  => __( 'Not sent', 'vk-booking-manager' ),
-					'color'  => '#8a6d00',
 				);
 
 			case Email_Log_Repository::STATUS_FAILED:
 				return array(
 					'status' => $status,
 					'label'  => __( 'Failed', 'vk-booking-manager' ),
-					'color'  => '#b32d2e',
 				);
 
 			case Email_Log_Repository::STATUS_SENT:
@@ -295,7 +330,6 @@ class Email_Log_Page {
 				return array(
 					'status' => Email_Log_Repository::STATUS_SENT,
 					'label'  => __( 'Sent', 'vk-booking-manager' ),
-					'color'  => '#008000',
 				);
 		}
 	}

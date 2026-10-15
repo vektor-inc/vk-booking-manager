@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Holiday_Calendar;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
@@ -22,6 +23,7 @@ use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
@@ -39,6 +41,21 @@ class Setup_Notices {
 	private const SHIFT_META_MONTH = '_vkbm_shift_month';
 
 	/**
+	 * 「年月ごとにシフトがあるか」の判定結果を保存する transient のキー（#712）.
+	 */
+	private const SHIFT_EXISTS_TRANSIENT = 'vkbm_setup_notice_shift_exists';
+
+	/**
+	 * 上記 transient の期限（秒）.
+	 *
+	 * 保存・削除・公開状態・年月メタの変更では invalidate_shift_exists_cache() で必ず消すため、
+	 * 期限は「消し漏れ（直接 SQL での更新・インポートなど、フックを通らない変更）が起きても
+	 * 通知の誤りが長引かない」ための保険として短めにしている。短すぎると管理画面を開くたびに
+	 * 検索が走る（#712 の目的を果たせない）ため、管理者が続けて画面を操作する間は効く 5 分とした.
+	 */
+	private const SHIFT_EXISTS_TRANSIENT_TTL = 5 * MINUTE_IN_SECONDS;
+
+	/**
 	 * Cached result of has_missing_permalink_htaccess_rules() for the current request.
 	 * null は未判定、true/false は判定済みの結果.
 	 *
@@ -47,15 +64,148 @@ class Setup_Notices {
 	private ?bool $missing_permalink_htaccess_rules_cache = null;
 
 	/**
+	 * Cached result of get_missing_setup_items() for the current request（#712）.
+	 * null は未判定。render_notices() 内で is_setup_complete() と get_missing_setup_items_for_user() が
+	 * 同じ判定を重ねて行わないようにする.
+	 *
+	 * @var array<int, array<string, mixed>>|null
+	 */
+	private ?array $missing_setup_items_cache = null;
+
+	/**
+	 * Cached result of get_missing_shift_months() for the current request（#712）.
+	 * null は未判定.
+	 *
+	 * @var array<int, array{year:int,month:int}>|null
+	 */
+	private ?array $missing_shift_months_cache = null;
+
+	/**
+	 * has_shift_for_month() の判定結果（'年-月' => bool）。transient の中身を 1 リクエスト内で保持する.
+	 * null は transient 未読込.
+	 *
+	 * @var array<string, bool>|null
+	 */
+	private ?array $shift_exists_cache = null;
+
+	/**
+	 * shift_exists_cache に、まだ transient へ保存していない判定結果があるか.
+	 *
+	 * @var bool
+	 */
+	private bool $shift_exists_cache_dirty = false;
+
+	/**
+	 * このリクエストで transient を消し済みで、その後まだ書き込んでいないか.
+	 * 1 リクエストで複数のシフトを保存しても、delete_transient() を繰り返さないために持つ.
+	 *
+	 * @var bool
+	 */
+	private bool $shift_exists_transient_deleted = false;
+
+	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
 		add_action( 'admin_notices', array( $this, 'render_notices' ) );
 		add_action( 'admin_notices', array( $this, 'render_shift_auto_register_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_google_calendar_sync_broken_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_holiday_data_expiry_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_vkbm_dismiss_notice', array( $this, 'handle_dismiss' ) );
 		add_action( 'vkbm_shift_dashboard_notices', array( $this, 'render_shift_dashboard_notice' ) );
+
+		// シフトの変更で、保存済みの「シフトがあるか」の判定結果をすべて消す（どの月が変わったかは追わない）。
+		// WP-Cron の自動登録など管理画面以外の保存でも消えるよう、条件なしで登録する.
+		add_action( 'save_post_' . Shift_Post_Type::POST_TYPE, array( $this, 'invalidate_shift_exists_cache' ) );
+		add_action( 'deleted_post', array( $this, 'invalidate_shift_exists_cache_for_post' ), 10, 2 );
+		add_action( 'trashed_post', array( $this, 'invalidate_shift_exists_cache_for_post' ), 10, 1 );
+		add_action( 'untrashed_post', array( $this, 'invalidate_shift_exists_cache_for_post' ), 10, 1 );
+		add_action( 'transition_post_status', array( $this, 'invalidate_shift_exists_cache_on_transition' ), 10, 3 );
+		add_action( 'added_post_meta', array( $this, 'invalidate_shift_exists_cache_for_meta' ), 10, 3 );
+		add_action( 'updated_post_meta', array( $this, 'invalidate_shift_exists_cache_for_meta' ), 10, 3 );
+		add_action( 'deleted_post_meta', array( $this, 'invalidate_shift_exists_cache_for_meta' ), 10, 3 );
+
+		// transient が書き込まれたら、次の消去を省かないようフラグを下ろす（書き込みが他のインスタンスでも同じ）.
+		add_action( 'set_transient_' . self::SHIFT_EXISTS_TRANSIENT, array( $this, 'mark_shift_exists_transient_written' ) );
+	}
+
+	/**
+	 * Note that the transient was written, so the next invalidation deletes it again.
+	 */
+	public function mark_shift_exists_transient_written(): void {
+		$this->shift_exists_transient_deleted = false;
+	}
+
+	/**
+	 * Delete the saved "shift exists for month" results.
+	 */
+	public function invalidate_shift_exists_cache(): void {
+		if ( ! $this->shift_exists_transient_deleted ) {
+			delete_transient( self::SHIFT_EXISTS_TRANSIENT );
+			$this->shift_exists_transient_deleted = true;
+		} elseif ( ! has_action( 'shutdown', array( $this, 'flush_shift_exists_transient' ) ) ) {
+			// 消去を省いた場合、省いた後に別のリクエストが書き込んだ結果が残りうる（長いリクエストの途中など）.
+			// リクエストの終わりにもう一度だけ消す。1 件だけの保存では、ここに来ないため予約も入らない.
+			add_action( 'shutdown', array( $this, 'flush_shift_exists_transient' ), 0 );
+		}
+		$this->shift_exists_cache         = null;
+		$this->shift_exists_cache_dirty   = false;
+		$this->missing_shift_months_cache = null;
+	}
+
+	/**
+	 * Delete the saved results once more at the end of the request (shutdown).
+	 * Covers a result another request wrote after this request skipped its deletion.
+	 */
+	public function flush_shift_exists_transient(): void {
+		delete_transient( self::SHIFT_EXISTS_TRANSIENT );
+		$this->shift_exists_transient_deleted = true;
+	}
+
+	/**
+	 * Invalidate when the given post is a shift (trash / untrash / delete).
+	 *
+	 * @param int           $post_id Post ID.
+	 * @param \WP_Post|null $post    Post object (deleted_post passes it).
+	 */
+	public function invalidate_shift_exists_cache_for_post( $post_id, $post = null ): void {
+		$post_type = $post instanceof \WP_Post ? $post->post_type : get_post_type( (int) $post_id );
+		if ( Shift_Post_Type::POST_TYPE === $post_type ) {
+			$this->invalidate_shift_exists_cache();
+		}
+	}
+
+	/**
+	 * Invalidate when a shift's publish state changes.
+	 *
+	 * @param string   $new_status New status.
+	 * @param string   $old_status Old status.
+	 * @param \WP_Post $post       Post.
+	 */
+	public function invalidate_shift_exists_cache_on_transition( $new_status, $old_status, $post ): void {
+		if ( $new_status === $old_status ) {
+			return;
+		}
+		if ( $post instanceof \WP_Post && Shift_Post_Type::POST_TYPE === $post->post_type ) {
+			$this->invalidate_shift_exists_cache();
+		}
+	}
+
+	/**
+	 * Invalidate when a shift's year / month meta is added, updated or deleted.
+	 *
+	 * @param int|array $meta_id_or_ids Meta ID(s) (unused).
+	 * @param int       $post_id        Post ID.
+	 * @param string    $meta_key       Meta key.
+	 */
+	public function invalidate_shift_exists_cache_for_meta( $meta_id_or_ids, $post_id, $meta_key ): void {
+		if ( self::SHIFT_META_YEAR !== $meta_key && self::SHIFT_META_MONTH !== $meta_key ) {
+			return;
+		}
+		if ( Shift_Post_Type::POST_TYPE === get_post_type( (int) $post_id ) ) {
+			$this->invalidate_shift_exists_cache();
+		}
 	}
 
 	/**
@@ -151,14 +301,10 @@ class Setup_Notices {
 	public function enqueue_assets( string $hook_suffix ): void {
 		unset( $hook_suffix );
 
-		$has_setup_notice         = ! $this->is_setup_complete() && array() !== $this->get_missing_setup_items_for_user();
-		$has_shift_notice         = array() !== $this->get_missing_shift_months();
-		$has_auto_register_notice = Shift_Editor::is_shift_list_screen() && $this->has_shift_auto_register_enabled();
-		if ( ! $has_setup_notice && ! $has_shift_notice && ! $has_auto_register_notice ) {
-			return;
-		}
-
-		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
+		// 通知は全管理画面に出るため、通知専用の小さなバンドルだけを読み込む（issue #659）。
+		// 管理画面用の vkbm-admin（約48KB）は VKBM の画面が自分で読み込む。
+		// 通知の表示条件が複数あり、描画側と条件を二重管理しないよう、ここでは条件分岐しない。
+		wp_enqueue_style( Common_Styles::NOTICE_HANDLE );
 	}
 
 	/**
@@ -224,7 +370,7 @@ class Setup_Notices {
 			array(
 				'id'              => 'business_hours_basic',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
-				'is_missing'      => fn () => ! $this->has_basic_business_hours(),
+				'is_missing'      => fn () => $this->is_basic_business_hours_required() && ! $this->has_basic_business_hours(),
 				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Basic business hours', 'vk-booking-manager' ),
@@ -252,7 +398,7 @@ class Setup_Notices {
 				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
 				'primary_label'   => __( 'Representative email address', 'vk-booking-manager' ),
-				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-provider-email' ),
+				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=email#vkbm-provider-email' ),
 				'secondary_label' => '',
 				'secondary_url'   => '',
 				'action_style'    => 'link',
@@ -273,14 +419,24 @@ class Setup_Notices {
 
 		// スタッフ機能が有効な場合のみスタッフ設定を促す.
 		if ( Staff_Editor::is_enabled() ) {
+			$resource_label_singular = vkbm_get_resource_label_singular();
+			$resource_label_plural   = vkbm_get_resource_label_plural();
+
 			$items[] = array(
 				'id'              => 'staff',
 				'capability'      => Capabilities::MANAGE_STAFF,
 				'is_missing'      => fn () => ! $this->has_posts( Resource_Post_Type::POST_TYPE ),
-				'message'         => __( 'No staff members have been registered yet. First, add staff.', 'vk-booking-manager' ),
-				'primary_label'   => __( 'Add staff', 'vk-booking-manager' ),
+				'message'         => sprintf(
+					/* translators: 1: resource label (plural), e.g. "rooms". 2: resource label (singular), e.g. "room". */
+					__( 'No %1$s have been registered yet. First, add %2$s.', 'vk-booking-manager' ),
+					$resource_label_plural,
+					$resource_label_singular
+				),
+				/* translators: %s: resource label (singular), e.g. "room". */
+				'primary_label'   => sprintf( __( 'Add %s', 'vk-booking-manager' ), $resource_label_singular ),
 				'primary_url'     => admin_url( 'post-new.php?post_type=' . Resource_Post_Type::POST_TYPE ),
-				'secondary_label' => __( 'Staff list', 'vk-booking-manager' ),
+				/* translators: %s: resource label (plural), e.g. "rooms". */
+				'secondary_label' => sprintf( __( '%s list', 'vk-booking-manager' ), $resource_label_plural ),
 				'secondary_url'   => admin_url( 'edit.php?post_type=' . Resource_Post_Type::POST_TYPE ),
 			);
 		}
@@ -414,21 +570,16 @@ class Setup_Notices {
 	 */
 	private function get_failed_google_calendar_bookings( int $limit ): WP_Query {
 		return new WP_Query(
-			array(
-				'post_type'              => Booking_Post_Type::POST_TYPE,
-				'post_status'            => 'any',
-				'posts_per_page'         => $limit,
-				'orderby'                => 'modified',
-				'order'                  => 'DESC',
-				'fields'                 => 'ids',
-				'update_post_meta_cache' => false,
-				'update_post_term_cache' => false,
-				'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- 失敗フラグは post_status 等では表現できず、このメタキーでの絞り込みが必須.
-					array(
-						'key'   => Google_Calendar_Event_Sync::META_SYNC_FAILED,
-						'value' => '1',
-					),
-				),
+			array_merge(
+				Google_Calendar_Event_Sync::get_failed_booking_query_args(),
+				array(
+					'posts_per_page'         => $limit,
+					'orderby'                => 'modified',
+					'order'                  => 'DESC',
+					'fields'                 => 'ids',
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => false,
+				)
 			)
 		);
 	}
@@ -443,7 +594,10 @@ class Setup_Notices {
 	 * @return bool
 	 */
 	private function is_google_calendar_integration_reachable(): bool {
-		return Google_Calendar_Connect_Controller::is_integration_enabled()
+		// 無料版の配布物には Google カレンダー連携のファイルが無いため、クラスの有無も確認する。
+		return class_exists( Google_Calendar_Connect_Controller::class )
+			&& class_exists( Google_Calendar_Relay_Client::class )
+			&& Google_Calendar_Connect_Controller::is_integration_enabled()
 			&& ( new Google_Calendar_Relay_Client() )->is_configured();
 	}
 
@@ -626,6 +780,10 @@ class Setup_Notices {
 	 * @return array<int, array<string, mixed>>
 	 */
 	private function get_missing_setup_items(): array {
+		if ( null !== $this->missing_setup_items_cache ) {
+			return $this->missing_setup_items_cache;
+		}
+
 		$missing = array();
 		foreach ( $this->get_setup_items() as $item ) {
 			if ( ! isset( $item['is_missing'] ) || ! is_callable( $item['is_missing'] ) ) {
@@ -638,6 +796,8 @@ class Setup_Notices {
 
 			$missing[] = $item;
 		}
+
+		$this->missing_setup_items_cache = $missing;
 
 		return $missing;
 	}
@@ -689,6 +849,18 @@ class Setup_Notices {
 		}
 
 		return $total > 0;
+	}
+
+	/**
+	 * Whether basic business hours are required for the setup check.
+	 *
+	 * 宿泊では空きがシフトの販売日とプランのチェックイン・チェックアウト時刻で決まり、
+	 * 基本営業時間を使わないため必須にしない（#607）。無料版では supports() が false を返すため常に必須。
+	 *
+	 * @return bool
+	 */
+	private function is_basic_business_hours_required(): bool {
+		return ! Industry_Presets::supports( 'lodging' );
 	}
 
 	/**
@@ -755,6 +927,21 @@ class Setup_Notices {
 	 * @return array<int, array{year:int,month:int}>
 	 */
 	private function get_missing_shift_months(): array {
+		if ( null !== $this->missing_shift_months_cache ) {
+			return $this->missing_shift_months_cache;
+		}
+
+		$this->missing_shift_months_cache = $this->detect_missing_shift_months();
+
+		return $this->missing_shift_months_cache;
+	}
+
+	/**
+	 * Detect missing shift months (uncached).
+	 *
+	 * @return array<int, array{year:int,month:int}>
+	 */
+	private function detect_missing_shift_months(): array {
 		if ( ! $this->has_published_resources() ) {
 			return array();
 		}
@@ -787,7 +974,24 @@ class Setup_Notices {
 			);
 		}
 
+		// 月ごとに保存せず、ループの後に 1 回だけ保存する.
+		$this->save_shift_exists_cache();
+
 		return $missing;
+	}
+
+	/**
+	 * Save unsaved "shift exists for month" results to the transient (once).
+	 */
+	private function save_shift_exists_cache(): void {
+		if ( ! $this->shift_exists_cache_dirty || null === $this->shift_exists_cache ) {
+			return;
+		}
+
+		// 保存直前に別リクエストが消した結果を古い値で書き戻す可能性は残るが、期限が短いので影響は限定的.
+		set_transient( self::SHIFT_EXISTS_TRANSIENT, $this->shift_exists_cache, self::SHIFT_EXISTS_TRANSIENT_TTL );
+		$this->shift_exists_cache_dirty       = false;
+		$this->shift_exists_transient_deleted = false;
 	}
 
 	/**
@@ -812,6 +1016,33 @@ class Setup_Notices {
 	 * @return bool
 	 */
 	private function has_shift_for_month( int $year, int $month ): bool {
+		$key = $year . '-' . $month;
+
+		if ( null === $this->shift_exists_cache ) {
+			// 値は '年-月' => bool の配列。配列は未保存時の false と区別できる（空配列でも false にならない）.
+			$stored                   = get_transient( self::SHIFT_EXISTS_TRANSIENT );
+			$this->shift_exists_cache = is_array( $stored ) ? $stored : array();
+		}
+
+		if ( isset( $this->shift_exists_cache[ $key ] ) ) {
+			return (bool) $this->shift_exists_cache[ $key ];
+		}
+
+		$exists                           = $this->query_shift_for_month( $year, $month );
+		$this->shift_exists_cache[ $key ] = $exists;
+		$this->shift_exists_cache_dirty   = true;
+
+		return $exists;
+	}
+
+	/**
+	 * Query whether a published shift exists for the given month.
+	 *
+	 * @param int $year  Year.
+	 * @param int $month Month.
+	 * @return bool
+	 */
+	private function query_shift_for_month( int $year, int $month ): bool {
 		$posts = get_posts(
 			array(
 				'post_type'      => Shift_Post_Type::POST_TYPE,
@@ -976,6 +1207,101 @@ class Setup_Notices {
 			<p><?php echo wp_kses( $message, array( 'a' => array( 'href' => array() ) ) ); ?></p>
 		</div>
 		<?php
+	}
+
+	/**
+	 * 同梱の祝日データが対応する最終日を、今後の予約・シフトの範囲が超えるときに更新を促す。
+	 *
+	 * 閉じるボタンは付けない（更新するまで祝日が反映されないため、出し続ける）。
+	 * 表示範囲は Google カレンダー連携のお知らせに合わせ、シフトダッシュボードでは出さない。
+	 * プラグインの更新権限があればボタンを、店舗設定の権限だけなら管理者への依頼文を出す。
+	 */
+	public function render_holiday_data_expiry_notice(): void {
+		if ( $this->is_shift_dashboard_screen() ) {
+			return;
+		}
+
+		$can_update_plugins = current_user_can( 'update_plugins' );
+		if ( ! $can_update_plugins && ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			return;
+		}
+
+		$covered_until = Holiday_Calendar::get_covered_until();
+		if ( null === $covered_until ) {
+			return;
+		}
+
+		// 必要な最終日が同梱データの最終日以内なら、案内は不要。
+		$settings = ( new Settings_Repository() )->get_settings();
+		$required = self::get_holiday_data_required_until(
+			new \DateTimeImmutable( 'now', wp_timezone() ),
+			isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0,
+			isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0
+		);
+		if ( $required <= $covered_until ) {
+			return;
+		}
+
+		$covered_until_label = wp_date( (string) get_option( 'date_format' ), (int) strtotime( $covered_until . ' 12:00:00 UTC' ), new \DateTimeZone( 'UTC' ) );
+
+		// 1つの __() に複数の文を入れないよう、文ごとに分けてから連結する。
+		// 2文目は英語表示時のみ先頭に半角スペースが要るため、msgid 側に含めている。
+		$message = sprintf(
+			/* translators: %s: the last date covered by the bundled holiday data. */
+			__( 'The holiday data bundled with VK Booking Manager covers dates up to %s.', 'vk-booking-manager' ),
+			(string) $covered_until_label
+		);
+		$message .= __( ' Dates after this are not recognized as holidays.', 'vk-booking-manager' );
+		// 宿泊のサイトでは、祝日の前日の判定ができないため、休前日の料金にも影響する（#737）。
+		if ( Industry_Presets::supports( 'lodging' ) ) {
+			$message .= __( ' This also affects the pre-holiday pricing of lodging plans.', 'vk-booking-manager' );
+		}
+		$message .= __( ' Updating the plugin to the latest version will add holidays for the following years.', 'vk-booking-manager' );
+		?>
+		<div class="notice vkbm-notice vkbm-notice__warning">
+			<h3><?php echo esc_html__( 'Updating the holiday data is recommended', 'vk-booking-manager' ); ?></h3>
+			<p><?php echo esc_html( $message ); ?></p>
+			<?php if ( $can_update_plugins ) : ?>
+				<div class="vkbm-buttons">
+					<a class="button button-primary" href="<?php echo esc_url( admin_url( 'update-core.php' ) ); ?>">
+						<?php echo esc_html__( 'Update plugins', 'vk-booking-manager' ); ?>
+					</a>
+				</div>
+			<?php else : ?>
+				<p><?php echo esc_html__( 'Please ask the site administrator to update the plugin.', 'vk-booking-manager' ); ?></p>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * 祝日データが対応している必要がある最終日を求める。
+	 *
+	 * 次の 3 つのうち最も先の日を返す。
+	 * - 今日から 3 か月後
+	 * - 予約受付期間（日数）の最終日（0 は無制限のため対象外）
+	 * - シフト自動登録の月数で作られる最後の月の末日（無効なら対象外）
+	 *
+	 * @param \DateTimeImmutable $today                サイトのタイムゾーンでの今日。
+	 * @param int                $max_advance_days     予約受付期間（日数。0 は無制限）。
+	 * @param int                $auto_register_months シフト自動登録の月数（0 は無効）。
+	 * @return string Y-m-d 形式の日付。
+	 */
+	public static function get_holiday_data_required_until( \DateTimeImmutable $today, int $max_advance_days, int $auto_register_months ): string {
+		$dates = array( $today->modify( '+3 months' )->format( 'Y-m-d' ) );
+
+		if ( $max_advance_days > 0 ) {
+			$dates[] = $today->modify( sprintf( '+%d days', $max_advance_days ) )->format( 'Y-m-d' );
+		}
+
+		// 自動登録は当月から月数ぶん先の月まで作る。範囲は Shift_Editor の自動登録と同じ。
+		$months_ahead = Shift_Editor::normalize_auto_register_months( $auto_register_months );
+		if ( $months_ahead > 0 ) {
+			$first_of_month = $today->setDate( (int) $today->format( 'Y' ), (int) $today->format( 'n' ), 1 );
+			$dates[]        = $first_of_month->modify( sprintf( '+%d months', $months_ahead ) )->format( 'Y-m-t' );
+		}
+
+		return max( $dates );
 	}
 
 	/**

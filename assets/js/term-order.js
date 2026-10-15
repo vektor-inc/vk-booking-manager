@@ -25,7 +25,7 @@
 	};
 
 	const $status = $(
-		'<span class="vkbm-term-order-status" aria-live="polite"></span>'
+		'<span class="vkbm-order-status" aria-live="polite"></span>'
 	);
 	const $tablenav = $( '.tablenav.top .actions.bulkactions' ).first();
 
@@ -79,10 +79,10 @@
 					10
 				);
 				if ( originalIndex !== index ) {
-					$row.addClass( 'vkbm-term-order-row--dirty' );
+					$row.addClass( 'vkbm-order-row--dirty' );
 					dirtyRows += 1;
 				} else if ( ! state.saving && ! state.pendingSave ) {
-					$row.removeClass( 'vkbm-term-order-row--dirty' );
+					$row.removeClass( 'vkbm-order-row--dirty' );
 				}
 			} );
 
@@ -96,7 +96,7 @@
 			.each( function ( index, row ) {
 				const $row = $( row );
 				$row.attr( 'data-original-index', index );
-				$row.removeClass( 'vkbm-term-order-row--dirty' );
+				$row.removeClass( 'vkbm-order-row--dirty' );
 			} );
 	}
 
@@ -170,6 +170,9 @@
 	}
 
 	function initSortable() {
+		// 並べ替えが有効な画面でのみ「移動」カーソルを付けるため、body にクラスを付ける（issue #659）。
+		document.body.classList.add( 'vkbm-sortable-list' );
+
 		$table.sortable( {
 			items: '> tr:not(.inline-edit-row, .no-items)',
 			handle: '.row-title',

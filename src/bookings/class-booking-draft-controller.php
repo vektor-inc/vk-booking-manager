@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Common\Exclusive_Fee;
+use VKBookingManager\Common\Lodging_Price;
+use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Rate_Limit_Trait;
@@ -44,6 +46,8 @@ use function mb_substr;
 use function set_transient;
 use function number_format_i18n;
 use function get_post;
+use function get_post_field;
+use function wp_timezone;
 use function get_post_meta;
 use function is_array;
 use function is_user_logged_in;
@@ -227,10 +231,17 @@ class Booking_Draft_Controller {
 		// date は他の日時系と同じく 64 文字でキャップ（DoS 経路防止）。
 		// Cap top-level date to the same length as other datetime/slot identifier fields.
 		$date = isset( $params['date'] ) ? sanitize_text_field( (string) $params['date'] ) : '';
-		$date = $this->truncate_text( $date, self::SLOT_FIELD_MAX_LENGTH );
+		$date = self::truncate_text( $date, self::SLOT_FIELD_MAX_LENGTH );
 
 		if ( $menu_id <= 0 ) {
 			return new WP_Error( 'invalid_menu_id', __( 'Menu ID is invalid.', 'vk-booking-manager' ) );
+		}
+
+		// チェックイン日・チェックアウト日を含むリクエストは泊の経路。時間枠の経路には影響しない。
+		$is_lodging_request = Lodging_Booking::is_requested( is_array( $params ) ? $params : array() );
+		if ( ! $is_lodging_request && Lodging_Price::is_applicable( $menu_id ) ) {
+			// 泊単位のプランを時間枠の経路で予約させない（1枠ぶんの料金で泊の予約が確定してしまうのを防ぐ）。
+			return Lodging_Booking::dates_required_error();
 		}
 
 		$tax_enabled = true;
@@ -239,7 +250,7 @@ class Booking_Draft_Controller {
 		// memo は sanitize 済み文字列を静的上限で切り詰める（フィルタで上書き可能）。
 		// memo: sanitize then truncate using filterable static maximum length.
 		$memo                = isset( $params['memo'] ) ? sanitize_textarea_field( (string) $params['memo'] ) : '';
-		$memo                = $this->truncate_text( $memo, $this->get_memo_max_length() );
+		$memo                = self::truncate_memo( $memo );
 		$agreed              = ! empty( $params['agree_terms'] );
 		$agreed_cancellation = array_key_exists( 'agree_cancellation_policy', $params )
 			? ! empty( $params['agree_cancellation_policy'] )
@@ -250,15 +261,18 @@ class Booking_Draft_Controller {
 		// menu_label / staff_label は sanitize 後にラベル用の静的上限で切り詰める。
 		// Apply static label length cap after sanitize.
 		$menu_label         = isset( $params['menu_label'] ) ? sanitize_text_field( (string) $params['menu_label'] ) : '';
-		$menu_label         = $this->truncate_text( $menu_label, self::LABEL_MAX_LENGTH );
+		$menu_label         = self::truncate_text( $menu_label, self::LABEL_MAX_LENGTH );
 		$staff_label        = isset( $params['staff_label'] ) ? sanitize_text_field( (string) $params['staff_label'] ) : '';
-		$staff_label        = $this->truncate_text( $staff_label, self::LABEL_MAX_LENGTH );
+		$staff_label        = self::truncate_text( $staff_label, self::LABEL_MAX_LENGTH );
 		$is_staff_preferred = ! empty( $params['is_staff_preferred'] );
 
 		// このメニューで指名機能が無効の場合、指名フラグを強制的に false にする。
 		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
 		// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
-		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
+		if ( $is_lodging_request ) {
+			// 泊の経路では客室の指名が必須のため、resource_id を 0 へ正規化しない（客室は下の検証で確認する）。
+			$is_staff_preferred = false;
+		} elseif ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_id ) ) {
 			$is_staff_preferred = false;
 			// #412 A-5: 指名を使わないメニューでは、特定スタッフへの割り当て要求自体を
 			// サーバ側で自動割り当て（resource_id=0）へ正規化する。管理画面の説明文
@@ -272,13 +286,13 @@ class Booking_Draft_Controller {
 		// slot 系の識別子・日時文字列は sanitize 後に SLOT_FIELD_MAX_LENGTH で切り詰める。
 		// Slot identifier and timestamp strings: sanitize then truncate.
 		$slot_id     = isset( $slot['slot_id'] ) ? sanitize_text_field( (string) $slot['slot_id'] ) : '';
-		$slot_id     = $this->truncate_text( $slot_id, self::SLOT_FIELD_MAX_LENGTH );
+		$slot_id     = self::truncate_text( $slot_id, self::SLOT_FIELD_MAX_LENGTH );
 		$start_at    = isset( $slot['start_at'] ) ? sanitize_text_field( (string) $slot['start_at'] ) : '';
-		$start_at    = $this->truncate_text( $start_at, self::SLOT_FIELD_MAX_LENGTH );
+		$start_at    = self::truncate_text( $start_at, self::SLOT_FIELD_MAX_LENGTH );
 		$end_at      = isset( $slot['end_at'] ) ? sanitize_text_field( (string) $slot['end_at'] ) : '';
-		$end_at      = $this->truncate_text( $end_at, self::SLOT_FIELD_MAX_LENGTH );
+		$end_at      = self::truncate_text( $end_at, self::SLOT_FIELD_MAX_LENGTH );
 		$service_end = isset( $slot['service_end_at'] ) ? sanitize_text_field( (string) $slot['service_end_at'] ) : '';
-		$service_end = $this->truncate_text( $service_end, self::SLOT_FIELD_MAX_LENGTH );
+		$service_end = self::truncate_text( $service_end, self::SLOT_FIELD_MAX_LENGTH );
 		$duration    = isset( $slot['duration_minutes'] ) ? max( 0, (int) $slot['duration_minutes'] ) : 0;
 		$slot_staff  = isset( $slot['staff'] ) && is_array( $slot['staff'] ) ? $slot['staff'] : null;
 		// slot.staff.name もラベル系として 200 文字でキャップ（DoS 経路防止）。
@@ -286,7 +300,7 @@ class Booking_Draft_Controller {
 		$slot_staff = $slot_staff
 			? array(
 				'id'   => isset( $slot_staff['id'] ) ? (int) $slot_staff['id'] : 0,
-				'name' => $this->truncate_text(
+				'name' => self::truncate_text(
 					sanitize_text_field( (string) ( $slot_staff['name'] ?? '' ) ),
 					self::LABEL_MAX_LENGTH
 				),
@@ -295,7 +309,7 @@ class Booking_Draft_Controller {
 		// slot.staff_label はラベル用上限を適用。
 		// slot.staff_label uses the label length cap.
 		$slot_staff_label = isset( $slot['staff_label'] ) ? sanitize_text_field( (string) $slot['staff_label'] ) : '';
-		$slot_staff_label = $this->truncate_text( $slot_staff_label, self::LABEL_MAX_LENGTH );
+		$slot_staff_label = self::truncate_text( $slot_staff_label, self::LABEL_MAX_LENGTH );
 		// 巨大入力時の CPU 負荷を抑えるため、重複判定はハッシュセット（O(1)）で行い、
 		// 上限件数に達した時点でループを打ち切る（同 ID の大量送信での回避も封じる）。
 		// Use a hash set for O(1) deduplication and break out of the loop as soon as
@@ -328,7 +342,42 @@ class Booking_Draft_Controller {
 
 		// ユーザーによる貸し切り指定（#305）。フロントのチェックボックスの選択状態。
 		// フロント抑止は迂回可能なため、確定側と同じくサーバ側でフルゲートを再適用する（下記の guard 群）。
-		$user_requested_exclusive = ! empty( $params['user_exclusive'] );
+		$user_requested_exclusive = ! empty( $params['user_exclusive'] ) && ! $is_lodging_request;
+
+		// 泊の経路: 日付・客室・予約受付締切・販売日をサーバー側で検証し、チェックイン／チェックアウトの日時を決める。
+		// 送られてきたスロット・日時・金額は使わない（保存するのはサーバーで計算した値だけ）。
+		$lodging_stay = null;
+		if ( $is_lodging_request ) {
+			$lodging_stay = Lodging_Booking::prepare(
+				$this->availability_service,
+				array(
+					'menu_id'        => $menu_id,
+					'resource_id'    => $resource_id,
+					'check_in_date'  => isset( $params['check_in_date'] ) ? sanitize_text_field( (string) $params['check_in_date'] ) : '',
+					'check_out_date' => isset( $params['check_out_date'] ) ? sanitize_text_field( (string) $params['check_out_date'] ) : '',
+					'guests'         => isset( $params['guests'] ) ? (int) $params['guests'] : 1,
+					'guest_tiers'    => isset( $params['guest_tiers'] ) ? $params['guest_tiers'] : array(),
+				)
+			);
+			if ( is_wp_error( $lodging_stay ) ) {
+				return Lodging_Booking::mask_room_error_for_visitors( $lodging_stay );
+			}
+
+			$date             = $lodging_stay['check_in_date'];
+			$slot_id          = Lodging_Booking::SLOT_ID_PREFIX . $lodging_stay['check_in_date'] . '_' . $lodging_stay['check_out_date'];
+			$start_at         = $lodging_stay['check_in_at'];
+			$end_at           = $lodging_stay['check_out_at'];
+			$service_end      = $lodging_stay['check_out_at'];
+			$duration         = 0;
+			$assignable_staff = array( $lodging_stay['room_id'] );
+			$auto_assign      = false;
+			$slot_staff       = array(
+				'id'   => $lodging_stay['room_id'],
+				'name' => self::truncate_text( sanitize_text_field( (string) get_post_field( 'post_title', $lodging_stay['room_id'] ) ), self::LABEL_MAX_LENGTH ),
+			);
+			$staff_label      = (string) $slot_staff['name'];
+			$slot_staff_label = $staff_label;
+		}
 
 		if ( '' === $slot_id || '' === $start_at ) {
 			return new WP_Error( 'invalid_slot', __( 'Reservation slot information is incorrect.', 'vk-booking-manager' ) );
@@ -350,7 +399,7 @@ class Booking_Draft_Controller {
 		// $can_check_exclusive_guard_now と揃える。
 		$is_nomination_menu            = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
 		$can_check_exclusive_guard_now = ! $is_nomination_menu || ( $is_staff_preferred && $resource_id > 0 );
-		if ( $can_check_exclusive_guard_now ) {
+		if ( $can_check_exclusive_guard_now && ! $is_lodging_request ) {
 			$exclusive_guard_staff_id = $is_nomination_menu ? $resource_id : 0;
 			if ( $this->slot_has_exclusive_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
 				return new WP_Error(
@@ -361,15 +410,32 @@ class Booking_Draft_Controller {
 			}
 		}
 
-		$meta = isset( $params['meta'] ) && is_array( $params['meta'] ) ? $params['meta'] : array();
-		// meta.timezone も SLOT_FIELD_MAX_LENGTH（64 文字）でキャップ。
-		// meta.timezone is also capped by the slot-field length limit.
-		$timezone = isset( $meta['timezone'] ) ? sanitize_text_field( (string) $meta['timezone'] ) : '';
-		$timezone = $this->truncate_text( $timezone, self::SLOT_FIELD_MAX_LENGTH );
+		// 外部入力でシフト時刻の解釈を変えられないよう、予約方式を問わずサイト設定で上書きする。
+		$timezone = wp_timezone()->getName();
 
 		$token = $this->sanitize_token( isset( $params['token'] ) ? (string) $params['token'] : '' );
 		if ( '' === $token ) {
 			$token = $this->generate_token();
+		} else {
+			// クライアントが指定したトークンの下書きが既にある場合は、所有者を確認してから上書きする。
+			// 確認画面の URL（?draft=<token>）が Referer などで第三者に渡っても、他人の下書きを書き換えられないようにするため。
+			// 下書き・owner index への書き込みより前に判定する。所有者情報の無い古い下書きの補完を除き、拒否時は下書き本体・owner index を書き換えない。
+			// 匿名からログインへ変わるケースは、所有者 Cookie が残っているため can_access_draft() を通り、従来どおり上書きできる。
+			// When the client supplies an existing token, verify ownership before writing the draft or owner index
+			// so a leaked token cannot be used to overwrite someone else's draft.
+			// On rejection nothing is rewritten, except that legacy drafts without owner info get it backfilled first.
+			$existing_draft = get_transient( $this->build_transient_key( $token ) );
+			if ( is_array( $existing_draft ) ) {
+				$existing_draft = $this->backfill_draft_owner( $token, $existing_draft );
+
+				if ( ! $this->can_access_draft( $existing_draft ) ) {
+					return new WP_Error(
+						'forbidden_draft',
+						__( 'You do not have permission to access this temporary reservation data.', 'vk-booking-manager' ),
+						array( 'status' => 403 )
+					);
+				}
+			}
 		}
 
 		if ( '' === $staff_label && $resource_id <= 0 ) {
@@ -396,7 +462,13 @@ class Booking_Draft_Controller {
 		$has_price_tiers = ! empty( $menu_tiers );
 		$guest_tiers     = array();
 
-		if ( $has_price_tiers ) {
+		if ( null !== $lodging_stay ) {
+			// 泊の経路は時間枠の人数判定を通さず、Lodging_Booking::resolve_guests()（空き状況・確定と同じ決め方）で
+			// 決めた人数と区分を使う。1室1泊あたりのメニューに区分のデータが残っていても、区分は使わない。
+			$guest_tiers      = $lodging_stay['guest_tiers'];
+			$has_price_tiers  = ! empty( $guest_tiers );
+			$requested_guests = $lodging_stay['guests'];
+		} elseif ( $has_price_tiers ) {
 			// 区分ごとの人数をサーバ保存メタ（ラベル・料金）に突き合わせて確定する。
 			$requested_tiers  = isset( $params['guest_tiers'] ) ? $params['guest_tiers'] : array();
 			$guest_tiers      = Price_Tiers::resolve_guest_tiers( $menu_tiers, $requested_tiers );
@@ -431,6 +503,14 @@ class Booking_Draft_Controller {
 
 		// 安全網として 1〜最大人数の範囲にクランプする（上限超過は上で弾いている）。
 		$guests = $this->resolve_guests( $menu_id, $requested_guests );
+
+		// 泊の経路は、人数と区分の内訳を Lodging_Booking::resolve_guests()（空き状況・確定と同じ決め方。
+		// 上限超過は prepare() で拒否済み）で決めた値に統一する。上の時間枠の決め方は使わない。
+		if ( null !== $lodging_stay ) {
+			$guests          = $lodging_stay['guests'];
+			$guest_tiers     = $lodging_stay['guest_tiers'];
+			$has_price_tiers = ! empty( $guest_tiers );
+		}
 
 		// 指名を使うメニューの最低申し込み人数（受付制限。#393）。
 		// フロントの入力欄下限・警告表示は迂回可能なため、下書き保存時にもサーバ側で権威的に判定する。
@@ -532,6 +612,15 @@ class Booking_Draft_Controller {
 			'nomination_fee'            => $nomination_fee,
 			'owner_user_id'             => (int) get_current_user_id(),
 		);
+
+		if ( null !== $lodging_stay ) {
+			// 泊の予約のチェックイン日・チェックアウト日・泊数（サーバーで検証・計算した値）。金額は読み出し時・確定時に再計算する。
+			$payload['lodging'] = array(
+				'check_in_date'  => $lodging_stay['check_in_date'],
+				'check_out_date' => $lodging_stay['check_out_date'],
+				'nights'         => $lodging_stay['nights'],
+			);
+		}
 
 		if ( 0 === $payload['owner_user_id'] ) {
 			$payload['owner_key'] = $this->ensure_owner_cookie();
@@ -642,6 +731,11 @@ class Booking_Draft_Controller {
 			$payload['nomination_fee'] = 0;
 		}
 
+		// 宿泊のサイトは時間枠のプランでも指名料を 0 円にする（保存済みの下書きの金額も使わない）。
+		if ( Lodging_Price::is_nomination_fee_disabled_for_site() ) {
+			$payload['nomination_fee'] = 0;
+		}
+
 		$payload['nomination_fee']           = (int) ( $payload['nomination_fee'] ?? 0 );
 		$payload['nomination_fee_formatted'] = $this->format_currency_label(
 			$payload['nomination_fee'],
@@ -656,8 +750,30 @@ class Booking_Draft_Controller {
 			? Price_Tiers::normalize_tiers( get_post_meta( $menu_id_for_price, '_vkbm_price_tiers', true ) )
 			: array();
 		$has_price_tiers = ! empty( $menu_tiers );
+		$is_lodging_read = isset( $payload['lodging'] ) && is_array( $payload['lodging'] );
 
-		if ( $has_price_tiers ) {
+		if ( $is_lodging_read ) {
+			// 泊の下書きは確定と同じく Lodging_Booking::resolve_guests() で人数と区分を決める
+			// （1室1泊あたりのメニューは区分のデータが残っていても使わない）。
+			$lodging_guests = Lodging_Booking::resolve_guests(
+				$menu_id_for_price,
+				(int) ( $payload['guests'] ?? 1 ),
+				is_array( $payload['guest_tiers'] ?? null ) ? $payload['guest_tiers'] : array()
+			);
+			if ( is_wp_error( $lodging_guests ) ) {
+				return $lodging_guests;
+			}
+			$guests            = $lodging_guests['guests'];
+			$guest_tiers       = $lodging_guests['guest_tiers'];
+			$has_price_tiers   = ! empty( $guest_tiers );
+			$payload['guests'] = $guests;
+		}
+
+		if ( $is_lodging_read ) {
+			// 下の分岐（区分の合計・基本料金×人数）は泊の合計に使わない（泊の合計は後段で Lodging_Booking::calculate_price() が決める）。
+			$payload['guest_tiers'] = $this->format_guest_tiers_for_response( $guest_tiers, $tax_enabled );
+			$total_price            = 0;
+		} elseif ( $has_price_tiers ) {
 			// 保存済み内訳の人数を、現在のメニュー区分（ラベル・料金）に再突き合わせする。
 			$stored_tiers = is_array( $payload['guest_tiers'] ?? null ) ? $payload['guest_tiers'] : array();
 			$guest_tiers  = Price_Tiers::resolve_guest_tiers( $menu_tiers, $stored_tiers );
@@ -700,6 +816,40 @@ class Booking_Draft_Controller {
 		$payload['user_exclusive']          = $user_exclusive;
 		$payload['exclusive_fee']           = $exclusive_fee;
 		$payload['exclusive_fee_formatted'] = $this->format_currency_label( $exclusive_fee, $tax_enabled );
+
+		// 泊の予約は、泊数・1泊単価・合計金額をサーバーの設定から計算し直して返す（保存済みの金額は使わない）。
+		if ( isset( $payload['lodging'] ) && is_array( $payload['lodging'] ) && Lodging_Price::is_applicable( $menu_id_for_price ) ) {
+			$plan_inputs   = Lodging_Price::get_plan_inputs( $menu_id_for_price );
+			$lodging_price = Lodging_Booking::calculate_price(
+				$menu_id_for_price,
+				(int) ( $payload['resource_id'] ?? 0 ),
+				(string) ( $payload['lodging']['check_in_date'] ?? '' ),
+				(int) ( $payload['lodging']['nights'] ?? 0 ),
+				$guests,
+				$has_price_tiers ? $guest_tiers : array(),
+				$plan_inputs
+			);
+
+			// 休前日・特定日の料金を設定したプランだけ、確認画面に泊ごとの内訳を出す（night_rates は区分と特定日の名称）。
+			$stay_display = Lodging_Price_Display::build_stay_display(
+				$plan_inputs,
+				$has_price_tiers ? $guest_tiers : array(),
+				$lodging_price['night_breakdown']
+			);
+
+			$payload['lodging']['price_unit']               = $lodging_price['price_unit'];
+			$payload['lodging']['plan_price_per_night']     = $lodging_price['plan_price_per_night'];
+			$payload['lodging']['room_surcharge_per_night'] = $lodging_price['room_surcharge_per_night'];
+			$payload['lodging']['price_per_night']          = $lodging_price['price_per_night'];
+			$payload['lodging']['night_breakdown']          = $lodging_price['night_breakdown'];
+			$payload['lodging']['rate_tiers_enabled']       = $stay_display['enabled'];
+			$payload['lodging']['night_rates']              = $stay_display['night_rates'];
+			$total_price                                    = $lodging_price['total'];
+			$payload['nomination_fee']                      = 0;
+			$payload['nomination_fee_formatted']            = $this->format_currency_label( 0, $tax_enabled );
+			$payload['exclusive_fee']                       = 0;
+			$payload['exclusive_fee_formatted']             = $this->format_currency_label( 0, $tax_enabled );
+		}
 
 		$payload['total_price']           = $total_price;
 		$payload['total_price_formatted'] = $this->format_currency_label( $total_price, $tax_enabled );
@@ -1140,6 +1290,7 @@ class Booking_Draft_Controller {
 	 * NOTE: 同等のロジックを Booking_Confirmation_Controller::resolve_guests にも意図的に複製している。
 	 * 下書きと確定の2つの REST コントローラは独立しており、共有トレイト化すると両者を不要に結合させるため、
 	 * あえて各クラスに閉じた実装としている。仕様変更時は必ず両方を同じ式（上限 = max_capacity）で更新すること。
+	 * 泊単位のプラン向けの Lodging_Booking::get_max_guests()（3か所目。複数人一括予約の適用条件と上限の式は同じ）も併せて更新すること。
 	 *
 	 * @param int $menu_id        Service menu ID.
 	 * @param int $requested      Requested number of guests.
@@ -1284,7 +1435,7 @@ class Booking_Draft_Controller {
 	 * @return int
 	 */
 	private function get_staff_nomination_fee( int $menu_id, int $staff_id ): int {
-		if ( $staff_id <= 0 ) {
+		if ( $staff_id <= 0 || Lodging_Price::is_nomination_fee_disabled_for_site() ) {
 			return 0;
 		}
 
@@ -1352,7 +1503,7 @@ class Booking_Draft_Controller {
 	 * @param int    $max_length Maximum allowed length in characters.
 	 * @return string
 	 */
-	private function truncate_text( string $value, int $max_length ): string {
+	private static function truncate_text( string $value, int $max_length ): string {
 		if ( $max_length <= 0 ) {
 			return '';
 		}
@@ -1386,6 +1537,19 @@ class Booking_Draft_Controller {
 	}
 
 	/**
+	 * Truncate the memo to the resolved maximum length.
+	 *
+	 * 下書き保存と予約確定の両方から使う共通の切り詰め処理。
+	 * Shared by draft storage and booking confirmation.
+	 *
+	 * @param string $memo Sanitized memo text.
+	 * @return string
+	 */
+	public static function truncate_memo( string $memo ): string {
+		return self::truncate_text( $memo, self::resolve_memo_max_length() );
+	}
+
+	/**
 	 * Resolve the maximum length applied to the memo field.
 	 *
 	 * `vkbm_draft_memo_max_length` フィルタで上書き可能。
@@ -1412,15 +1576,6 @@ class Booking_Draft_Controller {
 		// 第三者フィルタが巨大値を返しても DoS 経路を再オープンしないよう絶対上限でクランプ。
 		// Clamp to the hard cap so a third-party filter cannot reopen the DoS path.
 		return min( $filtered, self::MEMO_HARD_MAX_LENGTH );
-	}
-
-	/**
-	 * Internal accessor that delegates to the public resolver.
-	 *
-	 * @return int
-	 */
-	private function get_memo_max_length(): int {
-		return self::resolve_memo_max_length();
 	}
 
 	/**

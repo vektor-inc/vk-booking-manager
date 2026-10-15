@@ -1,4 +1,4 @@
-@use "../../../assets/scss/index-blocks.scss" as *;
+@use "../../../assets/scss/mixins" as *;
 
 // 「予約に進む」ボタンブロックのラッパー。
 // ボタン本体の見た目は共通の .vkbm-button を流用する。
@@ -20,9 +20,8 @@
 	}
 
 	&:not(.has-background) .vkbm-reservation-button__link:hover {
-		background:
-			color-mix(in srgb, var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb))
-			75%, #000);
+
+		@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)));
 	}
 
 	// 文字色も同様に、ユーザーがコアの color supports で文字色を指定した場合
@@ -34,7 +33,7 @@
 	// 無効状態（オンライン予約不可）のボタンは既定の primary 着色を上書きし、
 	// 共通の .is-disabled（薄いグレー＋操作不可）の見た目を保つ。
 	&:not(.has-background) .vkbm-reservation-button__link.is-disabled {
-		background: var(--vkbm--color--muted, #6b7280);
+		background: var(--vkbm--color--text-secondary, #666);
 	}
 }
 

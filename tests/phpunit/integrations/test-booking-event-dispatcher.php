@@ -703,6 +703,8 @@ class Booking_Event_Dispatcher_Test extends WP_UnitTestCase {
 
 		$booking_id = $this->create_booking_post();
 		update_post_meta( $booking_id, self::META_STATUS, 'pending' );
+		// #652: 担当未割当の予約は確定できないため、担当スタッフを割り当てておく。
+		update_post_meta( $booking_id, self::META_RESOURCE_ID, 123 );
 
 		$_REQUEST['nonce']   = wp_create_nonce( 'vkbm_confirm_booking' );
 		$_POST['booking_id'] = $booking_id;
@@ -952,6 +954,17 @@ class Counting_Notification_Service_Double extends Booking_Notification_Service 
  * Availability_Service のテストダブル。固定の1枠だけを返す。
  */
 class Availability_Service_Test_Double extends Availability_Service {
+
+	/**
+	 * 受付下限の判定は空き枠の差し替え対象外（#655）。親コンストラクタを呼ばないダブルでも落ちないよう、常に「下限内」とする。
+	 *
+	 * @param int    $menu_id  メニュー投稿 ID。
+	 * @param string $start_at 枠の開始日時。
+	 * @return bool
+	 */
+	public function is_before_booking_cutoff( int $menu_id, string $start_at ): bool {
+		return false;
+	}
 	/** @var array<string, mixed> */
 	private array $slot;
 

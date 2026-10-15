@@ -15,13 +15,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Availability\Night_Strategy;
+use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Common\Staff_Conflict_Detector;
+use VKBookingManager\Customers\Customer_Flag_Service;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Shifts\Shift_Sale_Days;
 use WP_Post;
 use WP_Query;
 
@@ -63,7 +68,6 @@ class Shift_Dashboard_Page {
 	private const META_BOOKING_TEL       = '_vkbm_booking_customer_tel';
 	private const META_BOOKING_EMAIL     = '_vkbm_booking_customer_email';
 	private const META_BOOKING_STATUS    = '_vkbm_booking_status';
-	private const META_BOOKING_NOTE      = '_vkbm_booking_note';
 	private const META_BOOKING_GUESTS    = '_vkbm_booking_guests';
 
 	/**
@@ -115,20 +119,30 @@ class Shift_Dashboard_Page {
 	private $event_dispatcher;
 
 	/**
+	 * 予約カードに顧客フラグの印を出すための顧客フラグサービス。
+	 *
+	 * @var Customer_Flag_Service
+	 */
+	private $customer_flag_service;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param string                            $capability Capability required to access the page.
 	 * @param Booking_Notification_Service|null $notification_service 通知サービス（未指定時は従来どおり ajax_confirm_booking() で都度生成する）。
 	 * @param Booking_Event_Dispatcher|null     $event_dispatcher 予約の状態変化を外部連携へ橋渡しするディスパッチャー。
+	 * @param Customer_Flag_Service|null        $customer_flag_service 顧客フラグサービス。未指定なら既定実装を生成する。
 	 */
 	public function __construct(
 		string $capability = 'manage_options',
 		?Booking_Notification_Service $notification_service = null,
-		?Booking_Event_Dispatcher $event_dispatcher = null
+		?Booking_Event_Dispatcher $event_dispatcher = null,
+		?Customer_Flag_Service $customer_flag_service = null
 	) {
-		$this->capability           = $capability;
-		$this->notification_service = $notification_service;
-		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
+		$this->capability            = $capability;
+		$this->notification_service  = $notification_service;
+		$this->event_dispatcher      = $event_dispatcher ?? new Booking_Event_Dispatcher();
+		$this->customer_flag_service = $customer_flag_service ?? new Customer_Flag_Service();
 	}
 
 	/**
@@ -225,7 +239,17 @@ class Shift_Dashboard_Page {
 			$resource_names[ $resource->ID ] = vkbm_get_resource_display_name( (int) $resource->ID );
 		}
 
-		$bookings_map          = $this->get_bookings_for_day( $selected_date );
+		$bookings_map      = $this->get_bookings_for_day( $selected_date );
+		$has_stay_bookings = false;
+		foreach ( $bookings_map as $booking_rows ) {
+			foreach ( $booking_rows as $booking ) {
+				if ( '' !== (string) ( $booking['stay_type'] ?? '' ) ) {
+					$has_stay_bookings = true;
+					break 2;
+				}
+			}
+		}
+
 		$month_bookings        = $this->get_bookings_for_month( $year, $month );
 		$pending_notifications = $this->get_pending_booking_notifications();
 		$staff_conflicts       = $this->get_staff_conflict_notifications();
@@ -309,7 +333,7 @@ class Shift_Dashboard_Page {
 									data-vkbm-view="day"
 									aria-pressed="<?php echo $day_button_is_active ? 'true' : 'false'; ?>"
 								>
-									<?php esc_html_e( 'Sun', 'vk-booking-manager' ); ?>
+									<?php echo esc_html_x( 'Day', 'calendar view', 'vk-booking-manager' ); ?>
 								</button>
 								<button
 									type="button"
@@ -317,17 +341,24 @@ class Shift_Dashboard_Page {
 									data-vkbm-view="month"
 									aria-pressed="<?php echo $month_button_is_active ? 'true' : 'false'; ?>"
 								>
-									<?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?>
+									<?php echo esc_html_x( 'Month', 'calendar view', 'vk-booking-manager' ); ?>
 								</button>
 							</div>
 						</header>
 
 						<div
-							class="vkbm-day-view__content"
+							class="vkbm-day-view__content<?php echo $has_stay_bookings ? ' vkbm-day-view__content--lodging' : ''; ?>"
 							style="--vkbm-resource-columns: <?php echo esc_attr( (string) $resource_count ); ?>;"
 							data-vkbm-day="<?php echo esc_attr( $iso_date ); ?>"
 						>
-							<div class="vkbm-schedule-table" style="--vkbm-resource-columns: <?php echo esc_attr( (string) $resource_count ); ?>;">
+							<div class="vkbm-schedule-table-wrap">
+							<div
+								class="vkbm-schedule-table"
+								style="--vkbm-resource-columns: <?php echo esc_attr( (string) $resource_count ); ?>;"
+								tabindex="0"
+								role="region"
+								aria-label="<?php echo esc_attr__( 'Schedule table (scrollable horizontally)', 'vk-booking-manager' ); ?>"
+							>
 								<div class="vkbm-schedule-table__inner">
 									<header class="vkbm-timeline-header">
 										<div class="vkbm-timeline-header__time-label"><?php esc_html_e( 'time', 'vk-booking-manager' ); ?></div>
@@ -335,7 +366,9 @@ class Shift_Dashboard_Page {
 											<div class="vkbm-timeline-header__resource">
 												<div class="vkbm-resource-card vkbm-resource-card--<?php echo esc_attr( $resource_card['status_type'] ); ?>">
 													<div class="vkbm-resource-card__meta">
-														<span class="vkbm-resource-card__role"><?php echo esc_html( $resource_card['role'] ); ?></span>
+														<?php if ( '' !== $resource_card['role'] ) : ?>
+															<span class="vkbm-resource-card__role"><?php echo esc_html( $resource_card['role'] ); ?></span>
+														<?php endif; ?>
 														<span class="vkbm-resource-card__status"><?php echo esc_html( $resource_card['status'] ); ?></span>
 													</div>
 													<div class="vkbm-resource-card__name"><?php echo esc_html( $resource_card['name'] ); ?></div>
@@ -370,15 +403,9 @@ class Shift_Dashboard_Page {
 												);
 												?>
 												<div class="vkbm-resource-lane" style="<?php echo esc_attr( $lane_style ); ?>">
-													<?php if ( empty( $lane['shifts'] ) ) : ?>
+													<?php if ( empty( $lane['shifts'] ) && '' !== $lane['empty_label'] ) : ?>
 														<div class="vkbm-lane-empty">
-															<?php
-															if ( $lane['is_closed'] ) {
-																echo esc_html( $lane['status_label'] );
-															} else {
-																esc_html_e( 'Shift not set.', 'vk-booking-manager' );
-															}
-															?>
+															<?php echo esc_html( $lane['empty_label'] ); ?>
 														</div>
 													<?php endif; ?>
 
@@ -428,7 +455,13 @@ class Shift_Dashboard_Page {
 																		<?php else : ?>
 																			<div class="<?php echo esc_attr( implode( ' ', $booking_classes ) ); ?>" style="<?php echo esc_attr( $booking_style ); ?>">
 																		<?php endif; ?>
-																			<?php if ( ! empty( $booking['time'] ) || ! empty( $booking['customer'] ) ) : ?>
+																		<?php if ( ! empty( $booking['stay_label'] ) ) : ?>
+																			<span class="vkbm-booking-card__stay-label"><?php echo esc_html( $booking['stay_label'] ); ?></span>
+																		<?php endif; ?>
+																		<?php if ( ! empty( $booking['continuing'] ) ) : ?>
+																			<span class="vkbm-booking-card__continuing"><?php echo esc_html( $booking['continuing'] ); ?></span>
+																		<?php endif; ?>
+																		<?php if ( ! empty( $booking['time'] ) || ! empty( $booking['customer'] ) ) : ?>
 																				<span class="vkbm-booking-card__summary">
 																					<?php if ( ! empty( $booking['time'] ) ) : ?>
 																						<span class="vkbm-booking-card__time"><?php echo esc_html( $booking['time'] ); ?></span>
@@ -439,6 +472,7 @@ class Shift_Dashboard_Page {
 																					<?php if ( ! empty( $booking['customer'] ) ) : ?>
 																						<span class="vkbm-booking-card__customer"><?php echo esc_html( $booking['customer'] ); ?></span>
 																					<?php endif; ?>
+																					<?php $this->render_customer_flag_mark( $booking['customer_flag'] ?? null ); ?>
 																					<?php
 																					// 人数（>1）または受付上限（>1）のいずれかがあれば人数情報を表示する。
 																					// 上限を後から1へ減らしても、人数>1 の既存予約では人数表示を維持する。
@@ -578,6 +612,7 @@ class Shift_Dashboard_Page {
 									</div>
 								</div>
 							</div>
+							</div>
 						</div>
 					</section>
 					<?php $this->render_pending_notifications_panel( $pending_notifications, $staff_conflicts ); ?>
@@ -621,7 +656,7 @@ class Shift_Dashboard_Page {
 									data-vkbm-view="day"
 									aria-pressed="<?php echo $day_button_is_active ? 'true' : 'false'; ?>"
 								>
-									<?php esc_html_e( 'Sun', 'vk-booking-manager' ); ?>
+									<?php echo esc_html_x( 'Day', 'calendar view', 'vk-booking-manager' ); ?>
 								</button>
 								<button
 									type="button"
@@ -629,7 +664,7 @@ class Shift_Dashboard_Page {
 									data-vkbm-view="month"
 									aria-pressed="<?php echo $month_button_is_active ? 'true' : 'false'; ?>"
 								>
-									<?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?>
+									<?php echo esc_html_x( 'Month', 'calendar view', 'vk-booking-manager' ); ?>
 								</button>
 							</div>
 						</header>
@@ -676,12 +711,12 @@ class Shift_Dashboard_Page {
 																<?php if ( ! empty( $entry['url'] ) ) : ?>
 																	<a class="<?php echo esc_attr( implode( ' ', $entry_classes ) ); ?>" href="<?php echo esc_url( $entry['url'] ); ?>">
 																		<span class="vkbm-month-booking__time"><?php echo esc_html( $entry['time_line'] ); ?></span>
-																		<span class="vkbm-month-booking__customer"><?php echo esc_html( $entry['customer_line'] ); ?></span>
+																		<span class="vkbm-month-booking__customer"><?php echo esc_html( $entry['customer_line'] ); ?><?php $this->render_customer_flag_mark( $entry['customer_flag'] ?? null ); ?></span>
 																	</a>
 																<?php else : ?>
 																	<div class="<?php echo esc_attr( implode( ' ', $entry_classes ) ); ?>">
 																		<span class="vkbm-month-booking__time"><?php echo esc_html( $entry['time_line'] ); ?></span>
-																		<span class="vkbm-month-booking__customer"><?php echo esc_html( $entry['customer_line'] ); ?></span>
+																		<span class="vkbm-month-booking__customer"><?php echo esc_html( $entry['customer_line'] ); ?><?php $this->render_customer_flag_mark( $entry['customer_flag'] ?? null ); ?></span>
 																	</div>
 																<?php endif; ?>
 															<?php endforeach; ?>
@@ -1089,8 +1124,7 @@ class Shift_Dashboard_Page {
 			$lanes[] = array(
 				'resource_id'    => $resource_id,
 				'shifts'         => $shifts,
-				'status_label'   => $status_info['label'],
-				'is_closed'      => ( 'off' === $status_info['type'] ),
+				'empty_label'    => $this->resolve_empty_lane_label( $status_info ),
 				'timeline_start' => null,
 				'timeline_end'   => null,
 			);
@@ -1130,105 +1164,11 @@ class Shift_Dashboard_Page {
 	 * @return array<int, array>
 	 */
 	private function get_bookings_for_day( DateTimeImmutable $date ): array {
-		$timezone     = wp_timezone();
-		$start_of_day = $date->setTime( 0, 0, 0 );
-		$end_of_day   = $date->setTime( 23, 59, 59 );
+		$day_rows = $this->get_booking_occurrences_for_range( $date->setTime( 0, 0, 0 ), $date->setTime( 23, 59, 59 ) );
+		$map      = array();
 
-		$query = new WP_Query(
-			array(
-				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => array( 'publish' ),
-				'posts_per_page' => -1,
-				'no_found_rows'  => true,
-				'orderby'        => 'meta_value',
-				'order'          => 'ASC',
-				'meta_key'       => self::META_BOOKING_START,
-				'meta_query'     => array(
-					'relation' => 'AND',
-					array(
-						'key'     => self::META_BOOKING_START,
-						'value'   => array(
-							$start_of_day->format( 'Y-m-d H:i:s' ),
-							$end_of_day->format( 'Y-m-d H:i:s' ),
-						),
-						'compare' => 'BETWEEN',
-						'type'    => 'DATETIME',
-					),
-					array(
-						'key'     => self::META_BOOKING_RESOURCE,
-						'compare' => 'EXISTS',
-					),
-				),
-			)
-		);
-
-		$map             = array();
-		$start_of_day_ts = $start_of_day->getTimestamp();
-
-		if ( $query->have_posts() ) {
-			while ( $query->have_posts() ) {
-				$query->the_post();
-
-				$post_id     = get_the_ID();
-				$resource_id = (int) get_post_meta( $post_id, self::META_BOOKING_RESOURCE, true );
-
-				if ( $resource_id <= 0 ) {
-					continue;
-				}
-
-				$start_raw       = (string) get_post_meta( $post_id, self::META_BOOKING_START, true );
-				$service_end_raw = (string) get_post_meta( $post_id, self::META_BOOKING_END, true );
-				$total_end_raw   = (string) get_post_meta( $post_id, self::META_BOOKING_TOTAL_END, true );
-
-				if ( '' === $start_raw ) {
-					continue;
-				}
-
-				$start_dt       = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $start_raw, $timezone );
-				$service_end_dt = $service_end_raw ? DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $service_end_raw, $timezone ) : null;
-				$block_end_dt   = $total_end_raw ? DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $total_end_raw, $timezone ) : $service_end_dt;
-
-				if ( ! $start_dt ) {
-					continue;
-				}
-
-				if ( ! $block_end_dt || $block_end_dt <= $start_dt ) {
-					$block_end_dt = $start_dt->modify( '+30 minutes' );
-				}
-
-				$start_decimal = max( 0.0, ( $start_dt->getTimestamp() - $start_of_day_ts ) / 3600 );
-				$end_decimal   = max( $start_decimal + 0.25, ( $block_end_dt->getTimestamp() - $start_of_day_ts ) / 3600 );
-				$start_decimal = min( 24.0, $start_decimal );
-				$end_decimal   = min( 24.0, $end_decimal );
-
-				$service_id    = (int) get_post_meta( $post_id, self::META_BOOKING_SERVICE, true );
-				$service_title = $service_id > 0 ? get_the_title( $service_id ) : '';
-
-				$booking = array(
-					'post_id'       => $post_id,
-					'service_id'    => $service_id,
-					'start_decimal' => $start_decimal,
-					'end_decimal'   => $end_decimal,
-					'start_label'   => $start_dt->format( 'H:i' ),
-					'end_label'     => ( $service_end_dt ?? $block_end_dt )->format( 'H:i' ),
-					'time_range'    => sprintf(
-						'%s - %s',
-						$start_dt->format( 'H:i' ),
-						( $service_end_dt ?? $block_end_dt )->format( 'H:i' )
-					),
-					'customer'      => (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true ),
-					'service'       => $service_title,
-					'status'        => (string) get_post_meta( $post_id, self::META_BOOKING_STATUS, true ),
-					'note'          => (string) get_post_meta( $post_id, self::META_BOOKING_NOTE, true ),
-				);
-
-				// 1予約は単一スタッフに割り当てられるため、担当スタッフのレーンへ全人数でカードを展開する。
-				$lane_booking                 = $booking;
-				$lane_booking['staff_guests'] = max( 1, (int) get_post_meta( $post_id, self::META_BOOKING_GUESTS, true ) );
-				$map[ $resource_id ][]        = $lane_booking;
-			}
-
-			wp_reset_postdata();
+		foreach ( $day_rows[ $date->format( 'Y-m-d' ) ] ?? array() as $booking ) {
+			$map[ (int) $booking['resource_id'] ][] = $booking;
 		}
 
 		foreach ( $map as $resource_id => $rows ) {
@@ -1374,6 +1314,161 @@ class Shift_Dashboard_Page {
 	}
 
 	/**
+	 * 指定期間の日ごとに、客室・予約・IN／滞在中／OUT の表示データを組み立てる。
+	 *
+	 * 宿泊モードでは期間と一部でも重なる予約を取得し、泊の予約を滞在日ごとに展開する。
+	 * 宿泊以外では開始日時が期間内の予約だけを従来どおり開始日に置く。
+	 *
+	 * @param DateTimeImmutable $range_start 表示期間の開始。
+	 * @param DateTimeImmutable $range_end   表示期間の終了。
+	 * @return array<string, array<int, array<string, mixed>>> 日付をキーにした予約表示データ。
+	 */
+	private function get_booking_occurrences_for_range( DateTimeImmutable $range_start, DateTimeImmutable $range_end ): array {
+		$is_lodging  = Industry_Presets::supports( 'lodging' );
+		$start_raw   = $range_start->format( 'Y-m-d H:i:s' );
+		$end_raw     = $range_end->format( 'Y-m-d H:i:s' );
+		$start_floor = $range_start->modify( sprintf( '-%d days', Night_Strategy::MAX_NIGHTS ) )->format( 'Y-m-d H:i:s' );
+
+		$start_condition = array(
+			'key'     => self::META_BOOKING_START,
+			'value'   => $is_lodging ? array( $start_floor, $end_raw ) : array( $start_raw, $end_raw ),
+			'compare' => 'BETWEEN',
+			'type'    => 'DATETIME',
+		);
+		$meta_query      = array(
+			'relation' => 'AND',
+			$start_condition,
+			array(
+				'key'     => self::META_BOOKING_RESOURCE,
+				'compare' => 'EXISTS',
+			),
+		);
+		if ( $is_lodging ) {
+			$meta_query[] = array(
+				'key'     => self::META_BOOKING_TOTAL_END,
+				'value'   => $start_raw,
+				'compare' => '>',
+				'type'    => 'DATETIME',
+			);
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'      => Booking_Post_Type::POST_TYPE,
+				'post_status'    => array( 'publish' ),
+				'posts_per_page' => -1,
+				'no_found_rows'  => true,
+				'orderby'        => 'meta_value',
+				'order'          => 'ASC',
+				'meta_key'       => self::META_BOOKING_START,
+				'meta_query'     => $meta_query,
+			)
+		);
+
+		$timezone       = wp_timezone();
+		$range_first    = $range_start->setTime( 0, 0 );
+		$range_last     = $range_end->setTime( 0, 0 );
+		$stay_type_rank = array(
+			'out'  => 0,
+			'stay' => 1,
+			'in'   => 2,
+			''     => 3,
+		);
+		$rows           = array();
+
+		// 取得した予約を表示期間へ切り詰め、日ごとの表示行へ展開する。
+		foreach ( $query->posts as $post ) {
+			$post_id     = (int) $post->ID;
+			$resource_id = (int) get_post_meta( $post_id, self::META_BOOKING_RESOURCE, true );
+			$start       = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', (string) get_post_meta( $post_id, self::META_BOOKING_START, true ), $timezone );
+			$service_end = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', (string) get_post_meta( $post_id, self::META_BOOKING_END, true ), $timezone );
+			$total_end   = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', (string) get_post_meta( $post_id, self::META_BOOKING_TOTAL_END, true ), $timezone );
+			if ( $resource_id <= 0 || ! $start ) {
+				continue;
+			}
+			$label_end = $service_end ? $service_end : $total_end;
+			$block_end = $total_end ? $total_end : $service_end;
+			if ( ! $label_end || $label_end <= $start ) {
+				$label_end = $start->modify( '+30 minutes' );
+			}
+			if ( ! $block_end || $block_end <= $start ) {
+				$block_end = $start->modify( '+30 minutes' );
+			}
+
+			$is_stay    = $is_lodging && Lodging_Booking::is_stay_booking( $post_id ) && $total_end;
+			$stay_first = $start->setTime( 0, 0 );
+			$stay_last  = $total_end ? $total_end->setTime( 0, 0 ) : $stay_first;
+			if ( ! $is_stay && ( $stay_first < $range_first || $stay_first > $range_last ) ) {
+				continue;
+			}
+			$first_date = $is_stay && $range_first > $stay_first ? $range_first : $stay_first;
+			$last_date  = $is_stay && $range_last < $stay_last ? $range_last : ( $is_stay ? $stay_last : $first_date );
+			$service_id = (int) get_post_meta( $post_id, self::META_BOOKING_SERVICE, true );
+			$nights     = Lodging_Booking::get_booking_nights( $post_id );
+			$customer   = (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true );
+			$status     = (string) get_post_meta( $post_id, self::META_BOOKING_STATUS, true );
+			$guests     = max( 1, (int) get_post_meta( $post_id, self::META_BOOKING_GUESTS, true ) );
+			$service    = $service_id > 0 ? get_the_title( $service_id ) : '';
+			$edit_link  = get_edit_post_link( $post_id, '', true );
+			$edit_url   = $edit_link ? $edit_link : admin_url( sprintf( 'post.php?post=%d&action=edit', $post_id ) );
+
+			for ( $date = $first_date; $date <= $last_date; $date = $date->modify( '+1 day' ) ) {
+				$date_key  = $date->format( 'Y-m-d' );
+				$stay_type = '';
+				if ( $is_stay ) {
+					if ( $date_key === $start->format( 'Y-m-d' ) ) {
+						$stay_type = 'in';
+					} elseif ( $date_key === $total_end->format( 'Y-m-d' ) ) {
+						$stay_type = 'out';
+					} else {
+						$stay_type = 'stay';
+					}
+				}
+				$day_start           = $date->setTime( 0, 0 );
+				$start_decimal       = max( 0.0, min( 24.0, ( $start->getTimestamp() - $day_start->getTimestamp() ) / 3600 ) );
+				$end_decimal         = min( 24.0, max( $start_decimal + 0.25, ( $block_end->getTimestamp() - $day_start->getTimestamp() ) / 3600 ) );
+				$rows[ $date_key ][] = array(
+					'post_id'       => $post_id,
+					'resource_id'   => $resource_id,
+					'service_id'    => $service_id,
+					'start_decimal' => $start_decimal,
+					'end_decimal'   => $end_decimal,
+					'start_label'   => $start->format( 'H:i' ),
+					'end_label'     => $label_end->format( 'H:i' ),
+					'start_date'    => $start->format( 'm/d' ),
+					'end_date'      => $label_end->format( 'm/d' ),
+					'time_range'    => $is_stay
+						? sprintf(
+							/* translators: 1: check-in date, 2: check-in time, 3: check-out date, 4: check-out time, 5: formatted nights label. */
+							__( '%1$s %2$s → %3$s %4$s (%5$s)', 'vk-booking-manager' ),
+							$start->format( 'm/d' ),
+							$start->format( 'H:i' ),
+							$label_end->format( 'm/d' ),
+							$label_end->format( 'H:i' ),
+							Lodging_Booking::format_nights_label( $nights )
+						)
+						: sprintf( '%s - %s', $start->format( 'H:i' ), $label_end->format( 'H:i' ) ),
+					'stay_type'     => $stay_type,
+					'nights'        => $nights,
+					'stay_day'      => $is_stay ? max( 1, (int) $start->setTime( 0, 0 )->diff( $date )->days + 1 ) : 0,
+					'customer'      => $customer,
+					'service'       => $service,
+					'status'        => $status,
+					'staff_guests'  => $guests,
+					'edit_url'      => $edit_url,
+				);
+			}
+		}
+
+		foreach ( $rows as &$day_rows ) {
+			usort( $day_rows, static fn( array $a, array $b ): int => $stay_type_rank[ $a['stay_type'] ] <=> $stay_type_rank[ $b['stay_type'] ] );
+		}
+		unset( $day_rows );
+
+		return $rows;
+	}
+
+	/**
 	 * Retrieve bookings for the entire month grouped by day.
 	 *
 	 * @param int $year  Year.
@@ -1385,101 +1480,15 @@ class Shift_Dashboard_Page {
 		$first_day = new DateTimeImmutable( sprintf( '%04d-%02d-01', $year, $month ), $timezone );
 		$start     = $first_day->setTime( 0, 0, 0 );
 		$end       = $first_day->modify( 'last day of this month' )->setTime( 23, 59, 59 );
+		$rows      = $this->get_booking_occurrences_for_range( $start, $end );
+		$map       = array();
 
-		$query = new WP_Query(
-			array(
-				'post_type'      => Booking_Post_Type::POST_TYPE,
-				'post_status'    => array( 'publish' ),
-				'posts_per_page' => -1,
-				'no_found_rows'  => true,
-				'orderby'        => 'meta_value',
-				'order'          => 'ASC',
-				'meta_key'       => self::META_BOOKING_START,
-				'meta_query'     => array(
-					'relation' => 'AND',
-					array(
-						'key'     => self::META_BOOKING_START,
-						'value'   => array(
-							$start->format( 'Y-m-d H:i:s' ),
-							$end->format( 'Y-m-d H:i:s' ),
-						),
-						'compare' => 'BETWEEN',
-						'type'    => 'DATETIME',
-					),
-					array(
-						'key'     => self::META_BOOKING_RESOURCE,
-						'compare' => 'EXISTS',
-					),
-				),
-			)
-		);
-
-		$map = array();
-
-		if ( $query->have_posts() ) {
-			while ( $query->have_posts() ) {
-				$query->the_post();
-
-				$post_id     = get_the_ID();
-				$resource_id = (int) get_post_meta( $post_id, self::META_BOOKING_RESOURCE, true );
-
-				if ( $resource_id <= 0 ) {
-					continue;
-				}
-
-				$start_raw       = (string) get_post_meta( $post_id, self::META_BOOKING_START, true );
-				$service_end_raw = (string) get_post_meta( $post_id, self::META_BOOKING_END, true );
-				$total_end_raw   = (string) get_post_meta( $post_id, self::META_BOOKING_TOTAL_END, true );
-
-				if ( '' === $start_raw ) {
-					continue;
-				}
-
-				$start_dt       = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $start_raw, $timezone );
-				$service_end_dt = $service_end_raw ? DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $service_end_raw, $timezone ) : null;
-				$block_end_dt   = $total_end_raw ? DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $total_end_raw, $timezone ) : ( $service_end_dt ?? null );
-
-				if ( ! $start_dt ) {
-					continue;
-				}
-
-				if ( ! $block_end_dt || $block_end_dt <= $start_dt ) {
-					$block_end_dt = $start_dt->modify( '+30 minutes' );
-				}
-
-				$day_index = (int) $start_dt->format( 'j' );
-				if ( $day_index < 1 ) {
-					continue;
-				}
-
-				$edit_url = get_edit_post_link( $post_id, '', true );
-				if ( ! $edit_url ) {
-					$edit_url = admin_url( sprintf( 'post.php?post=%d&action=edit', $post_id ) );
-				}
-
-				$map[ $day_index ][] = array(
-					'post_id'     => $post_id,
-					'resource_id' => $resource_id,
-					'start_label' => $start_dt->format( 'H:i' ),
-					'end_label'   => ( $service_end_dt ?? $block_end_dt )->format( 'H:i' ),
-					'status'      => (string) get_post_meta( $post_id, self::META_BOOKING_STATUS, true ),
-					'customer'    => (string) get_post_meta( $post_id, self::META_BOOKING_CUSTOMER, true ),
-					'edit_url'    => $edit_url,
-				);
+		foreach ( $rows as $date_key => $bookings ) {
+			if ( 0 !== strpos( $date_key, $first_day->format( 'Y-m-' ) ) ) {
+				continue;
 			}
-
-			wp_reset_postdata();
-		}
-
-		foreach ( $map as $day => $rows ) {
-			usort(
-				$rows,
-				static function ( array $a, array $b ): int {
-					return strcmp( (string) $a['start_label'], (string) $b['start_label'] );
-				}
-			);
-
-			$map[ $day ] = array_values( $rows );
+			$day         = (int) substr( $date_key, 8, 2 );
+			$map[ $day ] = $bookings;
 		}
 
 		return $map;
@@ -1488,7 +1497,7 @@ class Shift_Dashboard_Page {
 	/**
 	 * Collect pending bookings that require confirmation.
 	 *
-	 * @return array<int, array<string, string>>
+	 * @return array<int, array<string, string|bool>>
 	 */
 	private function get_pending_booking_notifications(): array {
 		$timezone = wp_timezone();
@@ -1552,15 +1561,17 @@ class Shift_Dashboard_Page {
 					$date_format     = get_option( 'date_format' );
 					$time_format     = get_option( 'time_format' );
 					$notifications[] = array(
-						'id'         => (string) $post_id,
-						'time_label' => sprintf(
+						'id'          => (string) $post_id,
+						'time_label'  => sprintf(
 							'%s - %s',
 							wp_date( sprintf( '%s %s', $date_format, $time_format ), $start_dt->getTimestamp() ),
 							wp_date( $time_format, $block_end_dt->getTimestamp() )
 						),
-						'customer'   => $customer_name,
-						'staff'      => $resource_name,
-						'url'        => $edit_url,
+						'customer'    => $customer_name,
+						'staff'       => $resource_name,
+						'url'         => $edit_url,
+						// 担当未定の予約は、確定ボタンではなく担当者の割り当てへ誘導する（#652）。
+						'needs_staff' => $resource_id <= 0,
 					);
 			}
 
@@ -1672,8 +1683,9 @@ class Shift_Dashboard_Page {
 		$days_in_month = (int) $first_day->format( 't' );
 		$start_weekday = (int) $first_day->format( 'N' ); // 1 (Mon) .. 7 (Sun).
 
-		$weeks = array();
-		$week  = array();
+		$weeks      = array();
+		$week       = array();
+		$is_lodging = Industry_Presets::supports( 'lodging' );
 
 		for ( $i = 1; $i < $start_weekday; $i++ ) {
 			$week[] = array(
@@ -1705,9 +1717,18 @@ class Shift_Dashboard_Page {
 				}
 			}
 
-			$booking_count = isset( $monthly_bookings[ $day ] ) && is_array( $monthly_bookings[ $day ] ) ? count( $monthly_bookings[ $day ] ) : 0;
-			$cell_type     = $this->resolve_month_cell_type( $working_count, $closed_count, $resource_count, $booking_count );
-			$entries       = $this->format_month_cell_bookings( $monthly_bookings[ $day ] ?? array(), $resource_names );
+			$day_bookings = $monthly_bookings[ $day ] ?? array();
+			if ( $is_lodging ) {
+				$occupied_bookings = array_filter(
+					$day_bookings,
+					static fn( array $booking ): bool => 'out' !== ( $booking['stay_type'] ?? '' ) && ! in_array( (string) ( $booking['status'] ?? '' ), array( 'cancelled', 'no_show' ), true )
+				);
+				$booking_count     = count( array_unique( array_column( $occupied_bookings, 'resource_id' ) ) );
+			} else {
+				$booking_count = count( $day_bookings );
+			}
+			$cell_type = $this->resolve_month_cell_type( $working_count, $closed_count, $resource_count, $booking_count );
+			$entries   = $this->format_month_cell_bookings( $monthly_bookings[ $day ] ?? array(), $resource_names );
 
 			$cell_date = sprintf( '%04d-%02d-%02d', $year, $month, $day );
 
@@ -1753,7 +1774,7 @@ class Shift_Dashboard_Page {
 	 *
 	 * @param array<int, array<string, mixed>> $bookings Raw booking rows.
 	 * @param array<int, string>               $resource_names Resource display names.
-	 * @return array<int, array<string, string>>
+	 * @return array<int, array<string, mixed>> customer_flag は顧客フラグの印に使う値（get_card_customer_flag() の戻り値）。
 	 */
 	private function format_month_cell_bookings( array $bookings, array $resource_names ): array {
 		$entries = array();
@@ -1774,25 +1795,64 @@ class Shift_Dashboard_Page {
 			$staff_label    = $resource_names[ $resource_id ] ?? __( 'Person in charge not set', 'vk-booking-manager' );
 
 			$status_badge = $this->get_month_booking_status_badge( $status );
-			$time_label   = sprintf( '%s ～ %s', $start_label, $end_label );
+			$stay_type    = (string) ( $booking['stay_type'] ?? '' );
+			$nights       = (int) ( $booking['nights'] ?? 0 );
+			$stay_day     = (int) ( $booking['stay_day'] ?? 0 );
+			if ( 'in' === $stay_type ) {
+				$time_label = sprintf(
+					/* translators: 1: room, 2: check-in date, 3: check-in time, 4: check-out date, 5: check-out time, 6: formatted nights label. */
+					__( '%1$s IN %2$s %3$s ~ %4$s %5$s (%6$s)', 'vk-booking-manager' ),
+					$staff_label,
+					(string) ( $booking['start_date'] ?? '' ),
+					$start_label,
+					(string) ( $booking['end_date'] ?? '' ),
+					$end_label,
+					Lodging_Booking::format_nights_label( $nights )
+				);
+			} elseif ( 'stay' === $stay_type ) {
+				$time_label = sprintf(
+					/* translators: 1: room, 2: current night, 3: total nights. */
+					__( '%1$s Staying (night %2$d of %3$d)', 'vk-booking-manager' ),
+					$staff_label,
+					$stay_day,
+					$nights
+				);
+			} elseif ( 'out' === $stay_type ) {
+				$time_label = sprintf(
+					/* translators: 1: room, 2: check-out time. */
+					__( '%1$s OUT %2$s', 'vk-booking-manager' ),
+					$staff_label,
+					$end_label
+				);
+			} else {
+				$time_label = sprintf( '%s ～ %s', $start_label, $end_label );
+			}
 
 			if ( '' !== $status_badge ) {
 				$time_label .= sprintf( ' [ %s ]', $status_badge );
 			}
 
-			$customer_line = sprintf(
-				/* translators: 1: Customer name, 2: Staff name */
-				__( '%1$s / %2$s', 'vk-booking-manager' ),
-				$customer_label,
-				$staff_label
-			);
+			if ( 'in' === $stay_type ) {
+				$customer_line = $customer_label;
+			} elseif ( '' !== $stay_type ) {
+				$customer_line = '';
+			} else {
+				$customer_line = sprintf(
+					/* translators: 1: Customer name, 2: Staff name */
+					__( '%1$s / %2$s', 'vk-booking-manager' ),
+					$customer_label,
+					$staff_label
+				);
+			}
 
 			$entries[] = array(
 				'id'            => (string) ( $booking['post_id'] ?? '' ),
 				'time_line'     => $time_label,
 				'customer_line' => $customer_line,
+				// 宿泊の中日・OUT の小さな札は顧客名を出さないため、印も出さない。
+				'customer_flag' => '' !== $customer_line ? $this->get_card_customer_flag( (int) ( $booking['post_id'] ?? 0 ) ) : null,
 				'url'           => $url,
-				'class'         => 'vkbm-month-booking--' . $this->booking_status_to_month_modifier( $status ),
+				'class'         => 'vkbm-month-booking--' . $this->booking_status_to_month_modifier( $status ) . ( in_array( $stay_type, array( 'stay', 'out' ), true ) ? ' vkbm-month-booking--compact' : '' ),
 			);
 		}
 
@@ -1802,7 +1862,7 @@ class Shift_Dashboard_Page {
 	/**
 	 * Render the notifications panel shown alongside the dashboard views.
 	 *
-	 * @param array<int, array<string, string>>                                           $notifications Pending booking data.
+	 * @param array<int, array<string, string|bool>>                                      $notifications Pending booking data.
 	 * @param array{items:array<int, array<string, string>>,total:int,allow_overlap:bool} $staff_conflicts Staff conflict data.
 	 */
 	private function render_pending_notifications_panel( array $notifications, array $staff_conflicts = array() ): void {
@@ -1815,18 +1875,39 @@ class Shift_Dashboard_Page {
 			<div class="vkbm-notification-panel__inner">
 				<h2 class="vkbm-notification-panel__title"><?php esc_html_e( 'Notice', 'vk-booking-manager' ); ?></h2>
 				<?php if ( $has_conflicts ) : ?>
+					<?php $conflict_resource_label = vkbm_get_resource_label_singular(); ?>
 					<section class="vkbm-notification-panel__section vkbm-alert vkbm-alert__<?php echo $allow_overlap ? 'warning' : 'danger'; ?>" role="<?php echo $allow_overlap ? 'status' : 'alert'; ?>">
-						<h3><?php esc_html_e( 'Bookings the assigned staff cannot accommodate', 'vk-booking-manager' ); ?></h3>
+						<h3>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %s: resource label (singular), e.g. "staff". */
+									__( 'Bookings the assigned %s cannot accommodate', 'vk-booking-manager' ),
+									$conflict_resource_label
+								)
+							);
+							?>
+						</h3>
 						<p>
 							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: %s: resource label (singular), e.g. "staff". */
+									__( 'There are bookings the assigned %s cannot accommodate.', 'vk-booking-manager' ),
+									$conflict_resource_label
+								)
+							);
+							echo ' ';
 							if ( $allow_overlap ) {
-								esc_html_e( 'There are bookings the assigned staff cannot accommodate.', 'vk-booking-manager' );
-								echo ' ';
 								esc_html_e( 'They were saved because overlapping bookings are allowed, but we recommend reviewing the details.', 'vk-booking-manager' );
 							} else {
-								esc_html_e( 'There are bookings the assigned staff cannot accommodate.', 'vk-booking-manager' );
-								echo ' ';
-								esc_html_e( 'Please review the details and reassign the staff.', 'vk-booking-manager' );
+								echo esc_html(
+									sprintf(
+										/* translators: %s: resource label (singular), e.g. "staff". */
+										__( 'Please review the details and reassign the %s.', 'vk-booking-manager' ),
+										$conflict_resource_label
+									)
+								);
 							}
 							?>
 						</p>
@@ -1907,22 +1988,43 @@ class Shift_Dashboard_Page {
 											<div class="vkbm-notification-card__user"><?php echo esc_html( $user_line ); ?></div>
 										</div>
 										<div class="vkbm-notification-card__actions">
-											<?php if ( '' !== $url ) : ?>
+											<?php if ( ! empty( $notification['needs_staff'] ) ) : ?>
+												<?php
+												// 担当未定の行は行き先を割り当てリンク1つにまとめる。URL が空でも編集画面へ誘導できるようにする。
+												$assign_url = '' !== $url ? $url : admin_url( sprintf( 'post.php?post=%d&action=edit', (int) ( $notification['id'] ?? 0 ) ) );
+												?>
 												<a
-													class="button button-secondary button-small"
-													href="<?php echo esc_url( $url ); ?>"
+													class="button button-primary button-small"
+													href="<?php echo esc_url( $assign_url ); ?>"
 												>
-													<?php esc_html_e( 'Detail', 'vk-booking-manager' ); ?>
+													<?php
+													echo esc_html(
+														sprintf(
+															/* translators: %s: resource label. */
+															__( 'Assign %s', 'vk-booking-manager' ),
+															vkbm_get_resource_label_singular()
+														)
+													);
+													?>
 												</a>
-											<?php endif; ?>
-											<?php if ( ! empty( $notification['id'] ) ) : ?>
-												<button
-													type="button"
-													class="button button-primary button-small js-vkbm-notification-confirm"
-													data-booking-id="<?php echo esc_attr( (string) $notification['id'] ); ?>"
-												>
-													<?php esc_html_e( 'Confirmed', 'vk-booking-manager' ); ?>
-												</button>
+											<?php else : ?>
+												<?php if ( '' !== $url ) : ?>
+													<a
+														class="button button-secondary button-small"
+														href="<?php echo esc_url( $url ); ?>"
+													>
+														<?php esc_html_e( 'Detail', 'vk-booking-manager' ); ?>
+													</a>
+												<?php endif; ?>
+												<?php if ( ! empty( $notification['id'] ) ) : ?>
+													<button
+														type="button"
+														class="button button-primary button-small js-vkbm-notification-confirm"
+														data-booking-id="<?php echo esc_attr( (string) $notification['id'] ); ?>"
+													>
+														<?php esc_html_e( 'Confirmed', 'vk-booking-manager' ); ?>
+													</button>
+												<?php endif; ?>
 											<?php endif; ?>
 										</div>
 									</div>
@@ -2011,6 +2113,8 @@ class Shift_Dashboard_Page {
 	/**
 	 * Provide a formatted role/position for a resource.
 	 *
+	 * 役職（_vkbm_resource_role）→ 抜粋の順で返す。どちらも無ければ空文字（バッジを出さない）。
+	 *
 	 * @param WP_Post $resource Resource post.
 	 * @return string
 	 */
@@ -2027,7 +2131,66 @@ class Shift_Dashboard_Page {
 			return trim( $excerpt );
 		}
 
-		return __( 'Staff', 'vk-booking-manager' );
+		// 役職も抜粋も無い列は、固定の「スタッフ」を出さずバッジごと省く。
+		return '';
+	}
+
+	/**
+	 * 担当未割当のため確定を止めたときの利用者向けメッセージを返す。
+	 *
+	 * @return string メッセージ。
+	 */
+	private function get_confirm_staff_required_message(): string {
+		$label = vkbm_get_resource_label_singular();
+
+		$message = sprintf(
+			/* translators: %s: resource label. */
+			__( 'No %s is assigned, so the reservation was not confirmed.', 'vk-booking-manager' ),
+			$label
+		);
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。
+		$message .= ' ' . sprintf(
+			/* translators: %s: resource label. */
+			__( 'Please assign a %s in the reservation details.', 'vk-booking-manager' ),
+			$label
+		);
+
+		return $message;
+	}
+
+	/**
+	 * 担当の時間が重なるため確定を止めたときの利用者向けメッセージを返す。
+	 *
+	 * @param int $staff_id 競合した担当スタッフID。
+	 * @return string メッセージ。
+	 */
+	private function get_confirm_staff_conflict_message( int $staff_id ): string {
+		$label = vkbm_get_resource_label_singular();
+		$name  = (string) get_the_title( $staff_id );
+
+		if ( '' !== $name ) {
+			$message = sprintf(
+				/* translators: 1: resource label, 2: resource name. */
+				__( 'The %1$s (%2$s) has another reservation in the same time slot, so this reservation cannot be confirmed.', 'vk-booking-manager' ),
+				$label,
+				$name
+			);
+		} else {
+			$message = sprintf(
+				/* translators: %s: resource label. */
+				__( 'The %s has another reservation in the same time slot, so this reservation cannot be confirmed.', 'vk-booking-manager' ),
+				$label
+			);
+		}
+
+		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。
+		$message .= ' ' . sprintf(
+			/* translators: %s: resource label. */
+			__( 'Please change the %s in the reservation details.', 'vk-booking-manager' ),
+			$label
+		);
+
+		return $message;
 	}
 
 	/**
@@ -2062,6 +2225,44 @@ class Shift_Dashboard_Page {
 		$current_status = (string) get_post_meta( $booking_id, self::META_BOOKING_STATUS, true );
 		if ( self::BOOKING_STATUS_CONFIRMED === $current_status ) {
 			wp_send_json_success( array( 'status' => self::BOOKING_STATUS_CONFIRMED ) );
+		}
+
+		// #652: ステータスを更新して確定メールを送る前に、予約の編集画面・クイック編集と同じ
+		// 担当スタッフのガード（担当未割当・競合）を通す。確定メールは取り消せないため、更新より前に判定する。
+		$resource_id = (int) get_post_meta( $booking_id, self::META_BOOKING_RESOURCE, true );
+		if ( Staff_Conflict_Detector::is_staff_unassigned( self::BOOKING_STATUS_CONFIRMED, $resource_id ) ) {
+			wp_send_json_error(
+				array(
+					'code'    => 'staff_required',
+					'message' => $this->get_confirm_staff_required_message(),
+				),
+				400
+			);
+		}
+
+		// 終了日時は、バッファ込みの終了（total_end）とサービス終了（service_end）の遅い方で判定する。
+		// 形式は同じ 'Y-m-d H:i:s' のため文字列比較で足りる（片方が空なら max() は他方を返す）。
+		$conflict_end = max(
+			(string) get_post_meta( $booking_id, self::META_BOOKING_TOTAL_END, true ),
+			(string) get_post_meta( $booking_id, self::META_BOOKING_END, true )
+		);
+
+		$has_conflict = Staff_Conflict_Detector::is_staff_in_conflict(
+			$resource_id,
+			$booking_id,
+			(string) get_post_meta( $booking_id, self::META_BOOKING_START, true ),
+			$conflict_end,
+			(int) get_post_meta( $booking_id, self::META_BOOKING_SERVICE, true ),
+			max( 1, (int) get_post_meta( $booking_id, self::META_BOOKING_GUESTS, true ) )
+		);
+		if ( $has_conflict && ! Staff_Conflict_Detector::is_staff_overlap_allowed_in_admin() ) {
+			wp_send_json_error(
+				array(
+					'code'    => 'staff_conflict',
+					'message' => $this->get_confirm_staff_conflict_message( $resource_id ),
+				),
+				409
+			);
 		}
 
 		// #474: このメソッド自身のメタ書き込みより前にスナップショットを確保する（外部連携用の
@@ -2191,6 +2392,21 @@ class Shift_Dashboard_Page {
 	 * @return array{label:string,type:string}
 	 */
 	private function resolve_resource_status( string $status_key, int $slot_count, float $total_hours ): array {
+		// 宿泊の日表示では時間帯の有無ではなく、販売日の共通規則で状態を決める。
+		if ( Industry_Presets::supports( 'lodging' ) && self::STATUS_NOT_SET !== $status_key ) {
+			if ( Shift_Sale_Days::is_sale_entry( array( 'status' => $status_key ) ) ) {
+				return array(
+					'label' => __( 'Days on sale', 'vk-booking-manager' ),
+					'type'  => 'working',
+				);
+			}
+
+			return array(
+				'label' => __( 'Not on sale', 'vk-booking-manager' ),
+				'type'  => 'off',
+			);
+		}
+
 		if ( 0 === $slot_count ) {
 			if ( $this->is_closed_status( $status_key ) ) {
 				return array(
@@ -2216,6 +2432,25 @@ class Shift_Dashboard_Page {
 			'label' => __( 'Work schedule', 'vk-booking-manager' ),
 			'type'  => 'working',
 		);
+	}
+
+	/**
+	 * 時間帯の無いレーンに表示する文言を決める。
+	 *
+	 * @param array{label:string,type:string} $status_info 表示用の状態。
+	 * @return string 空の場合はレーンに文言を表示しない。
+	 */
+	private function resolve_empty_lane_label( array $status_info ): string {
+		if ( 'off' === $status_info['type'] ) {
+			return $status_info['label'];
+		}
+
+		// 宿泊の販売日は時間帯を持たないため、未設定の案内を表示しない。
+		if ( Industry_Presets::supports( 'lodging' ) && 'working' === $status_info['type'] ) {
+			return '';
+		}
+
+		return __( 'Shift not set.', 'vk-booking-manager' );
 	}
 
 	/**
@@ -2279,18 +2514,10 @@ class Shift_Dashboard_Page {
 	 * @return array<string, mixed>
 	 */
 	private function map_booking_to_card( array $booking ): array {
-		$status       = (string) ( $booking['status'] ?? self::BOOKING_STATUS_CONFIRMED );
-		$status_map   = $this->get_booking_status_labels();
-		$class        = $this->booking_status_to_class( $status );
-		$badges       = array();
-		$status_label = $status_map[ $status ] ?? '';
-
-		if ( self::BOOKING_STATUS_CONFIRMED !== $status && '' !== $status_label ) {
-			$badges[] = $status_label;
-		}
-
-		if ( ! empty( $booking['note'] ) ) {
-			$badges[] = (string) $booking['note'];
+		$status = (string) ( $booking['status'] ?? self::BOOKING_STATUS_CONFIRMED );
+		$class  = $this->booking_status_to_class( $status );
+		if ( in_array( (string) ( $booking['stay_type'] ?? '' ), array( 'stay', 'out' ), true ) ) {
+			$class .= ' vkbm-booking-card--continues';
 		}
 
 		$edit_url = '';
@@ -2306,10 +2533,32 @@ class Shift_Dashboard_Page {
 			}
 		}
 
+		$stay_type  = (string) ( $booking['stay_type'] ?? '' );
+		$customer   = (string) ( $booking['customer'] ?? '' );
+		$stay_label = '';
+		$continuing = '';
+		if ( 'in' === $stay_type ) {
+			$stay_label = sprintf( /* translators: %s: check-in time. */ __( 'IN %s~', 'vk-booking-manager' ), (string) ( $booking['start_label'] ?? '' ) );
+		} elseif ( 'stay' === $stay_type ) {
+			$stay_label = sprintf(
+				/* translators: 1: current night, 2: total nights. */
+				__( 'Staying (night %1$d of %2$d)', 'vk-booking-manager' ),
+				(int) ( $booking['stay_day'] ?? 0 ),
+				(int) ( $booking['nights'] ?? 0 )
+			);
+			$continuing = __( 'Continued from previous day', 'vk-booking-manager' );
+		} elseif ( 'out' === $stay_type ) {
+			$stay_label = sprintf( /* translators: %s: check-out time. */ __( 'OUT ~%s', 'vk-booking-manager' ), (string) ( $booking['end_label'] ?? '' ) );
+			$continuing = __( 'Continued from previous day', 'vk-booking-manager' );
+		}
+
 		return array(
 			'class'              => $class,
 			'time'               => $booking['time_range'] ?? '',
-			'customer'           => $booking['customer'] ?? '',
+			'stay_label'         => $stay_label,
+			'continuing'         => $continuing,
+			'customer'           => $customer,
+			'customer_flag'      => $this->get_card_customer_flag( (int) ( $booking['post_id'] ?? 0 ) ),
 			'service'            => $booking['service'] ?? '',
 			// 予約人数。複数スタッフへ配分された予約は、このレーン担当分（staff_guests）を表示する。
 			// 配分情報が無い場合は予約全体の人数を表示する（未設定の既存予約は1名）。
@@ -2324,13 +2573,62 @@ class Shift_Dashboard_Page {
 			'min_capacity'       => (int) ( $booking['min_capacity'] ?? 0 ),
 			'group_guests'       => (int) ( $booking['group_guests'] ?? 0 ),
 			'min_capacity_state' => (string) ( $booking['min_capacity_state'] ?? 'none' ),
-			'badges'             => $badges,
 			'start_decimal'      => $booking['start_decimal'] ?? 0,
 			'end_decimal'        => $booking['end_decimal'] ?? 0,
 			'url'                => $edit_url,
 			'overlap_index'      => $booking['overlap_index'] ?? 0,
 			'overlap_total'      => $booking['overlap_total'] ?? 1,
 		);
+	}
+
+	/**
+	 * 予約カードに出す顧客フラグ（予約者に割り当てられた種別名とブロック有無）を返す。
+	 *
+	 * @param int $booking_id 予約投稿 ID。
+	 * @return array{label: string, blocks_booking: bool}|null フラグが無い場合は null。
+	 */
+	private function get_card_customer_flag( int $booking_id ): ?array {
+		if ( $booking_id <= 0 ) {
+			return null;
+		}
+
+		$flag = $this->customer_flag_service->get_flag( (int) get_post_field( 'post_author', $booking_id ) );
+		if ( null === $flag ) {
+			return null;
+		}
+
+		return array(
+			'label'          => (string) $flag['label'],
+			'blocks_booking' => ! empty( $flag['blocks_booking'] ),
+		);
+	}
+
+	/**
+	 * 予約カード（日表示・月表示）に顧客フラグの印を出力する。
+	 *
+	 * 種別名は文字で出さず印だけを出す（受付の画面などを顧客に覗かれても意味が分からないように）。
+	 * 種別名はマウスを重ねたとき（title）と読み上げでだけ伝える。
+	 *
+	 * @param array{label: string, blocks_booking: bool}|null $flag get_card_customer_flag() の戻り値。
+	 * @return void
+	 */
+	private function render_customer_flag_mark( ?array $flag ): void {
+		if ( null === $flag ) {
+			return;
+		}
+
+		$classes = array( 'vkbm-customer-flag-mark' );
+		if ( ! empty( $flag['blocks_booking'] ) ) {
+			$classes[] = 'vkbm-customer-flag-mark--blocks';
+		}
+
+		/* translators: %s: 顧客フラグのラベル名。 */
+		$text = sprintf( __( 'Customer flag: %s', 'vk-booking-manager' ), (string) $flag['label'] );
+
+		echo '<span class="' . esc_attr( implode( ' ', $classes ) ) . '" title="' . esc_attr( $text ) . '">';
+		echo '<span class="dashicons dashicons-flag" aria-hidden="true"></span>';
+		echo '<span class="screen-reader-text">' . esc_html( $text ) . '</span>';
+		echo '</span>';
 	}
 
 	/**

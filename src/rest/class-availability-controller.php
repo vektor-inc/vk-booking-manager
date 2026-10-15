@@ -15,14 +15,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
-use VKBookingManager\Common\Nomination_Min_Guests_Message;
+use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Common\Resource_Tag_Id_List;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 use function __;
 use function current_user_can;
+use function in_array;
 use function is_array;
 
 /**
@@ -30,6 +32,22 @@ use function is_array;
  */
 class Availability_Controller {
 	private const NAMESPACE = 'vkbm/v1';
+
+	/**
+	 * 泊の空き状況で、訪問者自身の入力に起因するためマスクせずに返すエラーコード。
+	 *
+	 * @var array<int, string>
+	 */
+	private const LODGING_INPUT_ERROR_CODES = array(
+		'invalid_date',
+		'invalid_date_range',
+		'too_many_nights',
+		'date_in_past',
+		'date_beyond_max_advance',
+		'reservation_deadline_passed',
+		'guests_exceeded',
+		'guests_required',
+	);
 
 	/**
 	 * Availability service.
@@ -82,6 +100,22 @@ class Availability_Controller {
 				'args'                => $this->get_daily_args(),
 			)
 		);
+
+		// 泊単位のプランの空き状況。宿泊が有効でないサイトでは、未公開の機能の窓口が外部から
+		// 呼べないよう、ルート自体を登録しない（handle_lodging_availabilities() でも同じ判定を行う）。
+		// 「宿泊が有効か」は Industry_Presets::supports() だけを通し、業種プリセットのキーを独自に見ない。
+		if ( Industry_Presets::supports( 'lodging' ) ) {
+			register_rest_route(
+				self::NAMESPACE,
+				'/lodging-availabilities',
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'handle_lodging_availabilities' ),
+					'permission_callback' => '__return_true',
+					'args'                => $this->get_lodging_args(),
+				)
+			);
+		}
 	}
 
 	/**
@@ -147,7 +181,7 @@ class Availability_Controller {
 		}
 
 		// #411: 表示中の月に予約可能日が1件も無い場合の診断理由。管理者・サイトオーナー・
-		// サロンオーナー（vkbm_manage_system_settings）にのみレスポンスへ含める。
+		// 事業者（vkbm_manage_system_settings）にのみレスポンスへ含める。
 		// 非該当者にはフィールド自体を出力しない（CSSで隠す・フロント側だけの分岐は不可）。
 		//
 		// 診断処理（get_unavailability_reason）は日数×スタッフ数ぶんの WP_Query を発行しうるため、
@@ -220,22 +254,8 @@ class Availability_Controller {
 			);
 		}
 
-		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
-		// join_sentences()（#411 植草さんレビュー指摘: ハードコードの半角スペースで連結すると、
-		// 句点で終わる日本語文のあいだに不要な隙間ができるため、文末が非ASCIIかどうかで
-		// 区切り方を切り替える。この文言は一般訪問者全員が目にするため、診断バナー側と
-		// 同じロジック（src/common/class-nomination-min-guests-message.php の
-		// join_sentences()）を再利用して揃える）。
-		$message = Nomination_Min_Guests_Message::join_sentences(
-			__( 'We are not currently accepting reservations for this content.', 'vk-booking-manager' ),
-			__( 'Please choose a different menu, or contact the site administrator for assistance.', 'vk-booking-manager' )
-		);
-
-		return new WP_Error(
-			'reservation_unavailable',
-			$message,
-			array( 'status' => 400 )
-		);
+		// 汎用エラーは泊の予約の下書きと共通にする（文言の結合ルールは Lodging_Booking 側に記載）。
+		return Lodging_Booking::build_reservation_unavailable_error();
 	}
 
 	/**
@@ -261,6 +281,85 @@ class Availability_Controller {
 		}
 
 		return new WP_REST_Response( $data );
+	}
+
+	/**
+	 * Handle lodging availability request.
+	 *
+	 * 公開のエンドポイント。日付など訪問者自身の入力に起因するエラーはそのまま返し、
+	 * 内部設定を示すエラー（メニューの設定・担当客室など）は他の空き状況と同様に権限に応じてマスクする。
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_lodging_availabilities( WP_REST_Request $request ) {
+		$data = $this->service->get_lodging_availability(
+			array(
+				'menu_id'        => (int) $request['menu_id'],
+				'resource_id'    => isset( $request['resource_id'] ) ? (int) $request['resource_id'] : null,
+				'check_in_date'  => (string) $request['check_in_date'],
+				'check_out_date' => (string) $request['check_out_date'],
+				'guests'         => isset( $request['guests'] ) ? (int) $request['guests'] : 1,
+				'guest_tiers'    => isset( $request['guest_tiers'] ) ? $request['guest_tiers'] : array(),
+			)
+		);
+
+		if ( is_wp_error( $data ) ) {
+			// 宿泊が有効でないサイトは、存在しない窓口として 404 をそのまま返す。
+			if ( 'rest_no_route' === $data->get_error_code() ) {
+				return $data;
+			}
+
+			if ( in_array( $data->get_error_code(), self::LODGING_INPUT_ERROR_CODES, true ) ) {
+				return $data;
+			}
+
+			return $this->mask_error_for_public_visitors( $data );
+		}
+
+		return new WP_REST_Response( $data );
+	}
+
+	/**
+	 * Arguments for lodging availability endpoint.
+	 *
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function get_lodging_args(): array {
+		return array(
+			'menu_id'        => $this->get_calendar_args()['menu_id'],
+			'resource_id'    => $this->get_calendar_args()['resource_id'],
+			'check_in_date'  => array(
+				'required'    => true,
+				'type'        => 'string',
+				'description' => __( 'Check-in date (YYYY-MM-DD)', 'vk-booking-manager' ),
+				'pattern'     => '^\d{4}-\d{2}-\d{2}$',
+			),
+			'check_out_date' => array(
+				'required'    => true,
+				'type'        => 'string',
+				'description' => __( 'Check-out date (YYYY-MM-DD)', 'vk-booking-manager' ),
+				'pattern'     => '^\d{4}-\d{2}-\d{2}$',
+			),
+			'guests'         => array(
+				'required'    => false,
+				'type'        => 'integer',
+				'description' => __( 'Number of guests (used for per-guest pricing)', 'vk-booking-manager' ),
+				'minimum'     => 1,
+				'maximum'     => 99,
+				'default'     => 1,
+			),
+			'guest_tiers'    => array(
+				'required'    => false,
+				'type'        => 'array',
+				'description' => __( 'Number of guests per price tier (used for per-guest pricing when the menu has price tiers)', 'vk-booking-manager' ),
+				'items'       => array(
+					'type'    => 'integer',
+					'minimum' => 0,
+					'maximum' => 99,
+				),
+			),
+		);
 	}
 
 	/**
@@ -299,7 +398,7 @@ class Availability_Controller {
 			'timezone'         => array(
 				'required'    => false,
 				'type'        => 'string',
-				'description' => __( 'Time zone name (Site setting if not specified)', 'vk-booking-manager' ),
+				'description' => __( 'Accepted for backward compatibility but not used for calculations. Availability is always calculated in the site time zone.', 'vk-booking-manager' ),
 				'default'     => '',
 			),
 			// #431: リソースタグでの絞り込み（ターム ID配列）。指定した全タグを持つリソースのみが候補になる。

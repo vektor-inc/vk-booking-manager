@@ -195,32 +195,50 @@ export const getStaffId = (): string => {
 };
 
 /**
+ * global-setup.ts が作成する基本のサービスメニューのタイトル。
+ * Title of the baseline service menu created by global-setup.ts.
+ */
+export const GLOBAL_SETUP_SERVICE_MENU_TITLE = 'Service Menu 1';
+
+/**
  * サービスメニューの post ID を取得するヘルパー。
- * Helper to get the first published service menu post ID.
+ * Helper to get the post ID of the service menu created by global-setup.
+ *
+ * 「いちばん新しい公開メニュー」ではなく、global-setup.ts が作る
+ * 「Service Menu 1」をタイトルで探して返す。他の spec が作ったテスト用メニュー
+ * （担当スタッフ無し等）が後始末されずに残っても、別メニューを掴んで予約系テストが
+ * 連鎖失敗しないようにするため（#566）。global-setup は開始時に既存メニューを
+ * 全削除してから作り直すため、タイトル一致は通常1件。複数あれば最古（ID 最小）を返す。
+ * Looks the menu up by title instead of "newest published", so leftover menus from
+ * other specs cannot be picked up by mistake (#566).
  *
  * 戻り値は `/^\d+$/` で数値検証済みの文字列のみ返す。これにより
  * 呼び出し側で wpEvalPhp に埋め込んでも PHP リテラル外への脱出を防げる。
  * The return value is validated against `/^\d+$/` so it is safe to
  * interpolate into PHP code via wpEvalPhp (no literal-escape risk).
  *
- * @return 最初の公開済みサービスメニューの post ID（数値文字列のみ）
+ * @return 「Service Menu 1」の post ID（数値文字列のみ）
  */
 export const getServiceMenuId = (): string => {
-	const result = wpCliArgs( [
-		'post',
-		'list',
-		'--post_type=vkbm_service_menu',
-		'--post_status=publish',
-		'--field=ID',
-		'--format=ids',
-	] )
-		.trim()
-		.split( /\s+/ )[ 0 ];
+	const result = wpEvalPhp(
+		`
+		$ids = get_posts( array(
+			'post_type'      => 'vkbm_service_menu',
+			'post_status'    => 'publish',
+			'title'          => '${ GLOBAL_SETUP_SERVICE_MENU_TITLE }',
+			'posts_per_page' => 1,
+			'orderby'        => 'ID',
+			'order'          => 'ASC',
+			'fields'         => 'ids',
+		) );
+		echo $ids ? (int) $ids[0] : '';
+	`
+	).trim();
 	// 空文字または非数値は不正値として扱う（wpEvalPhp 埋め込みを堅牢化）
 	// Reject empty or non-numeric IDs to harden downstream wpEvalPhp interpolation
 	if ( ! result || ! /^\d+$/.test( result ) ) {
 		throw new Error(
-			`No published vkbm_service_menu found, or invalid ID returned: "${ result }". Ensure global setup has run.`
+			`Service menu "${ GLOBAL_SETUP_SERVICE_MENU_TITLE }" not found, or invalid ID returned: "${ result }". Ensure global setup has run.`
 		);
 	}
 	return result;

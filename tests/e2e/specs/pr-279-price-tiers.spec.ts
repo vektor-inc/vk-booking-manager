@@ -120,8 +120,8 @@ async function gotoTierPlanSummary( page: Page ) {
 	await selectAvailableCalendarDay( page, calendarMetaResponse );
 	await page.waitForTimeout( 1000 );
 
-	// 最初の時間枠を選ぶ。
-	const slots = page.locator( '.vkbm-slot-list__item' );
+	// 押せる最初の時間枠を選ぶ（先に走る spec が残した予約で先頭の枠が満枠のことがあるため）。
+	const slots = page.locator( '.vkbm-slot-list__item:not(:disabled)' );
 	await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
 	await slots.first().click();
 	await page.waitForTimeout( 1000 );

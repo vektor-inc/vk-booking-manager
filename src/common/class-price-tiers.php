@@ -36,6 +36,11 @@ class Price_Tiers {
 	public const MAX_TIERS = 20;
 
 	/**
+	 * 1区分あたりの人数の上限（極端に大きな値で合計が整数の範囲を超えないようにする）。
+	 */
+	public const MAX_GUESTS_PER_TIER = 9999;
+
+	/**
 	 * 区分名（ラベル）の最大文字数。
 	 *
 	 * @var int
@@ -51,7 +56,7 @@ class Price_Tiers {
 	 * - 件数は MAX_TIERS でクランプする。
 	 *
 	 * @param mixed $raw 生の料金区分入力。`[ [ 'label' => ..., 'price' => ... ], ... ]` を想定。
-	 * @return array<int, array{label: string, price: int}> 正規化済みの料金区分。
+	 * @return array<int, array{label: string, price: int, pre_holiday_price?: int, special_price?: int}> 正規化済みの料金区分。
 	 */
 	public static function sanitize_tiers( $raw ): array {
 		if ( ! is_array( $raw ) ) {
@@ -88,10 +93,12 @@ class Price_Tiers {
 			$price     = is_numeric( $price_raw ) ? (int) $price_raw : 0;
 			$price     = max( 0, $price );
 
-			$tiers[] = array(
+			$tier = array(
 				'label' => $label,
 				'price' => $price,
 			);
+			// 休前日・特定日の料金は任意。空欄・数値でない値は保存しない（平日の料金で計算される）。
+			$tiers[] = self::with_optional_prices( $tier, $row );
 
 			// 件数上限に達したら以降は無視する。
 			if ( count( $tiers ) >= self::MAX_TIERS ) {
@@ -109,7 +116,7 @@ class Price_Tiers {
 	 * サニタイズ済みメタを正として扱う場面（料金計算・表示）で使用する。
 	 *
 	 * @param mixed $raw get_post_meta() で取得した料金区分。
-	 * @return array<int, array{label: string, price: int}>
+	 * @return array<int, array{label: string, price: int, pre_holiday_price?: int, special_price?: int}>
 	 */
 	public static function normalize_tiers( $raw ): array {
 		if ( ! is_array( $raw ) ) {
@@ -130,9 +137,12 @@ class Price_Tiers {
 
 			$price = isset( $row['price'] ) && is_numeric( $row['price'] ) ? max( 0, (int) $row['price'] ) : 0;
 
-			$tiers[] = array(
-				'label' => $label,
-				'price' => $price,
+			$tiers[] = self::with_optional_prices(
+				array(
+					'label' => $label,
+					'price' => $price,
+				),
+				$row
 			);
 		}
 
@@ -147,7 +157,7 @@ class Price_Tiers {
 	 * 取得値が配列でない／ラベルが空の行は除外する。
 	 *
 	 * @param mixed $raw get_post_meta() で取得した区分内訳スナップショット。
-	 * @return array<int, array{label: string, price: int, count: int}>
+	 * @return array<int, array{label: string, price: int, count: int, pre_holiday_price?: int, special_price?: int}>
 	 */
 	public static function normalize_guest_tiers( $raw ): array {
 		if ( ! is_array( $raw ) ) {
@@ -169,10 +179,13 @@ class Price_Tiers {
 			$price = isset( $row['price'] ) && is_numeric( $row['price'] ) ? max( 0, (int) $row['price'] ) : 0;
 			$count = isset( $row['count'] ) && is_numeric( $row['count'] ) ? max( 0, (int) $row['count'] ) : 0;
 
-			$tiers[] = array(
-				'label' => $label,
-				'price' => $price,
-				'count' => $count,
+			$tiers[] = self::with_optional_prices(
+				array(
+					'label' => $label,
+					'price' => $price,
+					'count' => $count,
+				),
+				$row
 			);
 		}
 
@@ -246,10 +259,10 @@ class Price_Tiers {
 	 * - 人数はインデックス（区分の並び順）で突き合わせ、0 以上にクランプする。
 	 * - 結果は区分ごとに { label, price, count } を持つ確定スナップショットとして返す。
 	 *
-	 * @param array<int, array{label: string, price: int}> $menu_tiers   メニューの正規化済み料金区分（サーバ保存メタ）。
-	 * @param mixed                                        $requested    クライアントが送った区分人数。
-	 *                                                                   `[ index => count ]` または `[ [ 'count' => n ], ... ]` を許容する。
-	 * @return array<int, array{label: string, price: int, count: int}> 確定済みの区分内訳スナップショット。
+	 * @param array<int, array{label: string, price: int, pre_holiday_price?: int, special_price?: int}> $menu_tiers   メニューの正規化済み料金区分（サーバ保存メタ）。
+	 * @param mixed                                                                                      $requested    クライアントが送った区分人数。
+	 *                                                                                                                 `[ index => count ]` または `[ [ 'count' => n ], ... ]` を許容する。
+	 * @return array<int, array{label: string, price: int, count: int, pre_holiday_price?: int, special_price?: int}> 確定済みの区分内訳スナップショット。
 	 */
 	public static function resolve_guest_tiers( array $menu_tiers, $requested ): array {
 		$counts = self::extract_counts( $requested );
@@ -268,14 +281,45 @@ class Price_Tiers {
 			$price = isset( $tier['price'] ) && is_numeric( $tier['price'] ) ? max( 0, (int) $tier['price'] ) : 0;
 			$count = isset( $counts[ $index ] ) ? max( 0, (int) $counts[ $index ] ) : 0;
 
-			$snapshot[] = array(
-				'label' => $label,
-				'price' => $price,
-				'count' => $count,
+			$snapshot[] = self::with_optional_prices(
+				array(
+					'label' => $label,
+					'price' => $price,
+					'count' => $count,
+				),
+				$tier
 			);
 		}
 
 		return $snapshot;
+	}
+
+	/**
+	 * 区分の行に、休前日・特定日の料金（任意）を足す。
+	 *
+	 * 休前日・特定日の料金が入っている行にだけ `pre_holiday_price` / `special_price` を足す。
+	 * 空欄・未設定の行にはキーを足さない（今までの料金区分と同じ形のまま、平日の料金で計算される）。
+	 *
+	 * @param array<string, mixed> $tier 平日の料金までを持つ区分の行。
+	 * @param array<string, mixed> $row  休前日・特定日の料金を含みうる元の行。
+	 * @return array<string, mixed> 休前日・特定日の料金を足した区分の行。
+	 */
+	private static function with_optional_prices( array $tier, array $row ): array {
+		foreach ( array( 'pre_holiday_price', 'special_price' ) as $key ) {
+			$value = $row[ $key ] ?? null;
+			if ( is_string( $value ) ) {
+				$value = trim( $value );
+			}
+
+			// 空欄（未設定）と 0 円は別物。'' は未設定、'0' は 0 円として扱う。
+			if ( null === $value || '' === $value || ! is_numeric( $value ) ) {
+				continue;
+			}
+
+			$tier[ $key ] = max( 0, (int) $value );
+		}
+
+		return $tier;
 	}
 
 	/**
@@ -302,10 +346,10 @@ class Price_Tiers {
 
 			if ( is_array( $value ) ) {
 				// `[ 'count' => n ]` 形式。
-				$count = isset( $value['count'] ) && is_numeric( $value['count'] ) ? (int) $value['count'] : 0;
+				$count = isset( $value['count'] ) && is_numeric( $value['count'] ) ? (int) max( 0.0, min( (float) $value['count'], (float) self::MAX_GUESTS_PER_TIER ) ) : 0;
 			} elseif ( is_numeric( $value ) ) {
 				// `index => n` 形式。
-				$count = (int) $value;
+				$count = (int) max( 0.0, min( (float) $value, (float) self::MAX_GUESTS_PER_TIER ) );
 			} else {
 				$count = 0;
 			}
@@ -319,7 +363,7 @@ class Price_Tiers {
 	/**
 	 * 区分内訳スナップショットの合計人数を求める。
 	 *
-	 * @param array<int, array{label: string, price: int, count: int}> $guest_tiers 区分内訳。
+	 * @param array<int, array{label: string, price: int, count: int, pre_holiday_price?: int, special_price?: int}> $guest_tiers 区分内訳。
 	 * @return int 合計人数。
 	 */
 	public static function total_count( array $guest_tiers ): int {
@@ -338,7 +382,7 @@ class Price_Tiers {
 	 *
 	 * 指名料は含まない（呼び出し側で別途加算する）。料金はスナップショットの値を正とする。
 	 *
-	 * @param array<int, array{label: string, price: int, count: int}> $guest_tiers 区分内訳。
+	 * @param array<int, array{label: string, price: int, count: int, pre_holiday_price?: int, special_price?: int}> $guest_tiers 区分内訳。
 	 * @return int 区分料金の合計（0 以上）。
 	 */
 	public static function total_price( array $guest_tiers ): int {

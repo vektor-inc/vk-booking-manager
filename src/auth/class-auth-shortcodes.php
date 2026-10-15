@@ -16,9 +16,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\ProviderSettings\Provider_Display_Name;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_Error;
 use WP_Post;
@@ -170,8 +172,8 @@ class Auth_Shortcodes {
 	 */
 	public function register(): void {
 		add_action( 'init', array( $this, 'handle_form_submission' ) );
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'template_redirect', array( $this, 'handle_email_verification' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets_for_shortcode_page' ) );
 		add_action( 'login_form_register', array( $this, 'redirect_wp_register_to_vkbm' ) );
 		add_action( 'login_form_login', array( $this, 'redirect_wp_login_to_vkbm' ) );
 		// issue #512: フォールバック案内リンク（wp-login.php + vkbm_native_login=1）で
@@ -594,7 +596,8 @@ class Auth_Shortcodes {
 		$user    = $user[0];
 		$expires = (int) get_user_meta( $user->ID, 'vkbm_email_verify_expires', true );
 
-		if ( $expires && $expires < time() ) {
+		// 有効期限が保存されていない・0 の場合は、期限が分からないため期限切れとして扱う。
+		if ( $expires <= 0 || $expires < time() ) {
 			$this->set_verification_notice( __( 'The confirmation link has expired.', 'vk-booking-manager' ) );
 			return;
 		}
@@ -1331,7 +1334,17 @@ class Auth_Shortcodes {
 			$userdata['user_pass'] = $new_pass;
 		}
 
-		$update = wp_update_user( $userdata );
+		$user_matches = static function ( array $email_args, array $user_data ) use ( $user_id ): array {
+			return (int) ( $user_data['ID'] ?? 0 ) === $user_id ? Mail_From::apply_to_email( $email_args ) : $email_args;
+		};
+		add_filter( 'password_change_email', $user_matches, 10, 3 );
+		add_filter( 'email_change_email', $user_matches, 10, 3 );
+		try {
+			$update = wp_update_user( $userdata );
+		} finally {
+			remove_filter( 'password_change_email', $user_matches, 10 );
+			remove_filter( 'email_change_email', $user_matches, 10 );
+		}
 
 		if ( is_wp_error( $update ) ) {
 			// Save wp_update_user errors to cookie and redirect.
@@ -1566,28 +1579,32 @@ class Auth_Shortcodes {
 	}
 
 	/**
-	 * Builds the "contact the shop if the email does not arrive" notice lines, appending
-	 * the shop's phone number / email address from BM settings when configured (issue #507
+	 * Builds the "contact the provider if the email does not arrive" notice lines, appending
+	 * the provider's phone number / email address from BM settings when configured (issue #507
 	 * 論点3). Each line is rendered as its own paragraph by the caller (植草さんレビュー
 	 * 指摘: 電話・メールを1行に詰め込まず別行にする).
 	 *
 	 * @return array<int, string>
 	 */
 	private function get_verification_contact_lines(): array {
-		$lines = array(
-			__( 'If the email does not arrive, please check your spam folder and then contact the shop.', 'vk-booking-manager' ),
-		);
-
 		$settings = $this->settings_service->get_settings();
-		$phone    = isset( $settings['provider_phone'] ) ? trim( (string) $settings['provider_phone'] ) : '';
-		$email    = isset( $settings['provider_email'] ) ? trim( (string) $settings['provider_email'] ) : '';
+
+		$lines = array(
+			sprintf(
+				/* translators: %s: provider (site) name */
+				__( 'If the email does not arrive, please check your spam folder and then contact %s.', 'vk-booking-manager' ),
+				Provider_Display_Name::resolve( $settings )
+			),
+		);
+		$phone = isset( $settings['provider_phone'] ) ? trim( (string) $settings['provider_phone'] ) : '';
+		$email = isset( $settings['provider_email'] ) ? trim( (string) $settings['provider_email'] ) : '';
 
 		if ( '' !== $phone ) {
-			/* translators: %s: shop phone number. */
+			/* translators: %s: provider phone number. */
 			$lines[] = sprintf( __( 'Phone: %s', 'vk-booking-manager' ), $phone );
 		}
 		if ( '' !== $email && is_email( $email ) ) {
-			/* translators: %s: shop email address. */
+			/* translators: %s: provider email address. */
 			$lines[] = sprintf( __( 'Email: %s', 'vk-booking-manager' ), $email );
 		}
 
@@ -2098,7 +2115,29 @@ class Auth_Shortcodes {
 	}
 
 	/**
-	 * Ensures the stylesheet is loaded when the shortcode is used.
+	 * 表示中の投稿の本文に認証フォームのショートコードがあれば、描画前に CSS/JS を読み込む。
+	 *
+	 * クラシックテーマでは本文の描画中に積んだ CSS がフッター出力になり、
+	 * 一瞬スタイルの無いフォームが見えるため、wp_enqueue_scripts で先に読み込む。
+	 * 描画時の読み込み（render_*_form）は、本文以外に置かれた場合の保険として残す。
+	 *
+	 * @return void
+	 */
+	public function enqueue_assets_for_shortcode_page(): void {
+		$post = get_queried_object();
+		if ( ! $post instanceof WP_Post ) {
+			return;
+		}
+
+		if ( has_shortcode( (string) $post->post_content, 'vkbm_login_form' ) || has_shortcode( (string) $post->post_content, 'vkbm_register_form' ) ) {
+			$this->enqueue_assets();
+		}
+	}
+
+	/**
+	 * Enqueues the auth form stylesheet and script.
+	 *
+	 * 認証フォームの CSS/JS を読み込む。ショートコードの描画時と、予約ブロックの描画時に呼ばれる。
 	 */
 	public function enqueue_assets(): void {
 		wp_enqueue_style( Common_Styles::AUTH_HANDLE );
@@ -2387,7 +2426,7 @@ class Auth_Shortcodes {
 		$message .= sprintf( __( 'Link expires in %d hours.', 'vk-booking-manager' ), (int) ( self::EMAIL_TOKEN_TTL / HOUR_IN_SECONDS ) );
 
 		$headers    = array( 'Content-Type: text/plain; charset=UTF-8' );
-		$from_email = sanitize_email( (string) get_option( 'admin_email' ) );
+		$from_email = Mail_From::resolve();
 		if ( '' !== $from_email && is_email( $from_email ) ) {
 			$from_name = wp_specialchars_decode( (string) get_bloginfo( 'name' ), ENT_QUOTES );
 			$headers[] = sprintf( 'From: %s <%s>', $from_name, $from_email );
@@ -2704,7 +2743,7 @@ class Auth_Shortcodes {
 			>
 				<?php $this->render_birth_month_options( $birth_month ); ?>
 			</select>
-			<span class="vkbm-auth-form__unit"><?php esc_html_e( 'Mon', 'vk-booking-manager' ); ?></span>
+			<span class="vkbm-auth-form__unit"><?php echo esc_html_x( 'month', 'date unit', 'vk-booking-manager' ); ?></span>
 			<select
 				class="vkbm-auth-form__input"
 				id="<?php echo esc_attr( "vkbm-{$prefix}-birth-day" ); ?>"
@@ -2714,7 +2753,7 @@ class Auth_Shortcodes {
 			>
 				<?php $this->render_birth_day_options( $birth_day ); ?>
 			</select>
-			<span class="vkbm-auth-form__unit"><?php esc_html_e( 'Sun', 'vk-booking-manager' ); ?></span>
+			<span class="vkbm-auth-form__unit"><?php echo esc_html_x( 'day', 'date unit', 'vk-booking-manager' ); ?></span>
 		</div>
 		<?php
 	}

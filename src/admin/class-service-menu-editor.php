@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -20,6 +21,7 @@ use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Weekday_Rule;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 
@@ -88,6 +90,108 @@ class Service_Menu_Editor {
 	}
 
 	/**
+	 * サブ画像欄の文言を返す（PHP の初期描画と JS で同じ文言を使うため1か所に集約する）。
+	 *
+	 * @return array<string,string> キーごとの文言。
+	 */
+	private static function get_gallery_strings(): array {
+		return array(
+			'label'              => __( 'Sub images', 'vk-booking-manager' ),
+			'add'                => __( '+ Add images', 'vk-booking-manager' ),
+			'mediaTitle'         => __( 'Select sub images', 'vk-booking-manager' ),
+			'mediaButton'        => __( 'Add to sub images', 'vk-booking-manager' ),
+			/* translators: %d: number of images. */
+			'countSingular'      => __( '%d image', 'vk-booking-manager' ),
+			/* translators: %d: number of images. */
+			'countPlural'        => __( '%d images', 'vk-booking-manager' ),
+			/* translators: %d: position of the image in the list (starting from 1). */
+			'removeAria'         => __( 'Remove image %d from sub images', 'vk-booking-manager' ),
+			/* translators: %d: position of the image in the list (starting from 1). */
+			'moveEarlierAria'    => __( 'Move image %d earlier', 'vk-booking-manager' ),
+			/* translators: %d: position of the image in the list (starting from 1). */
+			'moveLaterAria'      => __( 'Move image %d later', 'vk-booking-manager' ),
+			'moveEarlier'        => __( 'Move earlier', 'vk-booking-manager' ),
+			'moveLater'          => __( 'Move later', 'vk-booking-manager' ),
+			/* translators: 1: new position of the image, 2: total number of images. */
+			'movedAnnounce'      => __( 'Moved to position %1$d of %2$d.', 'vk-booking-manager' ),
+			'removedAnnounce'    => __( 'Image removed.', 'vk-booking-manager' ),
+			'clear'              => __( 'Remove all', 'vk-booking-manager' ),
+			'cleared'            => __( 'All images removed.', 'vk-booking-manager' ),
+			'undo'               => __( 'Undo', 'vk-booking-manager' ),
+			'restoredAnnounce'   => __( 'All images restored.', 'vk-booking-manager' ),
+			/* translators: %d: number of images. */
+			'skippedSingular'    => __( '%d image that was already added was not added again.', 'vk-booking-manager' ),
+			/* translators: %d: number of images. */
+			'skippedPlural'      => __( '%d images that were already added were not added again.', 'vk-booking-manager' ),
+			'description'        => __( 'Shown as small images below the duration, capacity, and other details on the menu card. Clicking an image enlarges it.', 'vk-booking-manager' ),
+			'descriptionReorder' => __( 'To change the order, drag an image or use the move buttons.', 'vk-booking-manager' ),
+			'descriptionRemove'  => __( 'Removing an image here does not delete it from the media library.', 'vk-booking-manager' ),
+		);
+	}
+
+	/**
+	 * サブ画像欄（キャッチコピーの直後の行）を描画する。
+	 *
+	 * 画像の追加・削除・並び替えは assets/js/service-menu-gallery.js が行い、
+	 * 並び順どおりの添付IDを hidden 欄に「12,34,56」の形式で保持して保存時に送る。
+	 *
+	 * @param WP_Post $post 編集中のサービスメニュー。
+	 */
+	private function render_gallery_row( WP_Post $post ): void {
+		$strings        = self::get_gallery_strings();
+		$attachment_ids = Service_Menu_Post_Type::get_gallery_attachment_ids( $post->ID );
+		$total          = count( $attachment_ids );
+		?>
+		<tr class="vkbm-gallery-row">
+			<th scope="row">
+				<span id="vkbm-gallery-label"><?php echo esc_html( $strings['label'] ); ?></span>
+			</th>
+			<td>
+				<div class="vkbm-gallery" data-vkbm-gallery="1">
+					<ul class="vkbm-gallery__list" aria-labelledby="vkbm-gallery-label">
+						<?php foreach ( $attachment_ids as $index => $attachment_id ) : ?>
+							<?php $position = $index + 1; ?>
+							<li class="vkbm-gallery__item" data-id="<?php echo esc_attr( (string) $attachment_id ); ?>">
+								<div class="vkbm-gallery__thumb">
+									<?php
+									echo wp_get_attachment_image(
+										$attachment_id,
+										'thumbnail',
+										false,
+										array(
+											'class' => 'vkbm-gallery__image',
+											'alt'   => '',
+										)
+									);
+									?>
+									<button type="button" class="vkbm-gallery__remove" aria-label="<?php echo esc_attr( sprintf( $strings['removeAria'], $position ) ); ?>">&times;</button>
+								</div>
+								<div class="vkbm-gallery__move">
+									<button type="button" class="vkbm-gallery__move-button vkbm-gallery__move-earlier" title="<?php echo esc_attr( $strings['moveEarlier'] ); ?>" aria-label="<?php echo esc_attr( sprintf( $strings['moveEarlierAria'], $position ) ); ?>"<?php disabled( 1 === $position ); ?>><span aria-hidden="true">&larr;</span></button>
+									<button type="button" class="vkbm-gallery__move-button vkbm-gallery__move-later" title="<?php echo esc_attr( $strings['moveLater'] ); ?>" aria-label="<?php echo esc_attr( sprintf( $strings['moveLaterAria'], $position ) ); ?>"<?php disabled( $position === $total ); ?>><span aria-hidden="true">&rarr;</span></button>
+								</div>
+							</li>
+						<?php endforeach; ?>
+					</ul>
+					<div class="vkbm-gallery__toolbar">
+						<button type="button" class="button vkbm-gallery__add"><?php echo esc_html( $strings['add'] ); ?></button>
+						<span class="vkbm-gallery__count"><?php echo esc_html( sprintf( 1 === $total ? $strings['countSingular'] : $strings['countPlural'], $total ) ); ?></span>
+						<button type="button" class="button-link vkbm-gallery__clear"<?php echo $total >= 2 ? '' : ' hidden'; ?>><?php echo esc_html( $strings['clear'] ); ?></button>
+						<span class="vkbm-gallery__undo-notice" hidden>
+							<?php echo esc_html( $strings['cleared'] ); ?>
+							<button type="button" class="button-link vkbm-gallery__undo"><?php echo esc_html( $strings['undo'] ); ?></button>
+						</span>
+					</div>
+					<p class="vkbm-gallery__status" role="status"></p>
+					<input type="hidden" name="vkbm_service_menu[gallery_ids]" class="vkbm-gallery__input" value="<?php echo esc_attr( implode( ',', $attachment_ids ) ); ?>" />
+					<p class="description"><?php echo esc_html( $strings['description'] ); ?><br /><?php echo esc_html( $strings['descriptionReorder'] ); ?><br /><?php echo esc_html( $strings['descriptionRemove'] ); ?></p>
+				</div>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
 	 * Enqueue admin assets for service menu editor.
 	 *
 	 * @param string $hook Current admin page hook.
@@ -103,6 +207,9 @@ class Service_Menu_Editor {
 			return;
 		}
 
+		// サービスメニュー編集画面の独自 UI（料金・予約可能日・サブ画像など）の CSS（issue #659）。
+		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
+
 		$base_url = plugin_dir_url( VKBM_PLUGIN_FILE );
 		wp_enqueue_script(
 			'vkbm-service-menu-editor',
@@ -110,6 +217,21 @@ class Service_Menu_Editor {
 			array( 'jquery' ),
 			VKBM_VERSION,
 			true
+		);
+
+		// サブ画像欄（#623）。メディア選択画面・並び替え・読み上げに必要な依存を読み込む。
+		wp_enqueue_media();
+		wp_enqueue_script(
+			'vkbm-service-menu-gallery',
+			$base_url . 'assets/js/service-menu-gallery.js',
+			array( 'jquery', 'jquery-ui-sortable', 'wp-a11y' ),
+			VKBM_VERSION,
+			true
+		);
+		wp_localize_script(
+			'vkbm-service-menu-gallery',
+			'vkbmServiceMenuGallery',
+			array( 'i18n' => self::get_gallery_strings() )
 		);
 
 		wp_localize_script(
@@ -139,6 +261,20 @@ class Service_Menu_Editor {
 					// #485: 担当できるリソースが「選ぶ」かつチェック0件のときに role="status" 領域へ入れる案内文
 					// （PHP 初期描画 render_staff_meta_box() と同じ文言）。
 					'staffUnselectedNotice'             => self::get_staff_unselected_notice(),
+					// #572: 泊単位の料金の単位に合わせて JS で切り替える文言（PHP 初期描画と同じ文言）。
+					'nightPriceUnitPerGuest'            => self::get_night_price_unit_suffix( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_GUEST ),
+					'nightPriceUnitPerRoom'             => self::get_night_price_unit_suffix( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM ),
+					// #737: 泊のプランの料金区分（平日・休前日・特定日）の列の見出しと読み上げ用の名前。新しい行を JS で作るときに使う。
+					'supportsLodging'                   => Industry_Presets::supports( 'lodging' ),
+					'rateRegular'                       => __( 'Regular', 'vk-booking-manager' ),
+					'ratePreHoliday'                    => __( 'Pre-holiday', 'vk-booking-manager' ),
+					'rateSpecial'                       => __( 'Special date', 'vk-booking-manager' ),
+					'priceTierPreHolidayAria'           => __( 'Price (pre-holiday)', 'vk-booking-manager' ),
+					'priceTierSpecialAria'              => __( 'Price (special date)', 'vk-booking-manager' ),
+					'priceHeadDefault'                  => __( 'Price', 'vk-booking-manager' ),
+					'priceHeadNight'                    => __( 'Price (per guest, per night)', 'vk-booking-manager' ),
+					'multipleGuestsPriceNoteDefault'    => __( 'The price is multiplied by the number of people.', 'vk-booking-manager' ),
+					'multipleGuestsPriceNotePerRoom'    => __( 'The price does not change with the number of people.', 'vk-booking-manager' ),
 				),
 				// 料金区分の料金欄に表示する単位（通貨記号＋税込ラベル）。税込ラベルが空でも通貨記号は常時表示する。
 				'priceUnit' => '' !== VKBM_Helper::get_tax_included_label()
@@ -390,6 +526,8 @@ class Service_Menu_Editor {
 			</td>
 		</tr>
 		<?php
+		// キャッチコピーの直後にサブ画像欄を出す（#623）。
+		$this->render_gallery_row( $post );
 		// #514: 「基本料金」の行は、料金区分（price tiers）が入る位置の直前に置く必要があるため、
 		// render_conditions_meta_box() 側（料金区分の行の直前、または料金区分が表示されない
 		// 構成ではその位置に相当する末尾）で render_base_price_field() を呼び出す形に分離した。
@@ -443,15 +581,33 @@ class Service_Menu_Editor {
 		// #412 B-4: 上のチェックボックスと保存・再読込なしで即時連動させるため、行自体は常に描画し、
 		// 初期の表示/非表示は hidden 属性、以降の切り替えは service-menu-editor.js に任せる
 		// （複数人一括予約の従属欄と同じ「常に描画してJSでhiddenを出し分ける」方式）。
+		// 宿泊のサイトは客室ごとの追加料金を使わない（常に0円）ため、この行自体を出さない。保存済みの値は消さない。
+		// 行を出さないなら以降の判定は要らないため、メニュー単位の判定より先に抜ける。
+		if ( Industry_Presets::supports( 'lodging' ) ) {
+			return;
+		}
+
 		$is_nomination_enabled_for_menu = Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
+		$nomination_fee_description_id  = 'vkbm-disable-nomination-fee-description';
 		?>
 		<tr id="vkbm-disable-nomination-fee-field" <?php echo $is_nomination_enabled_for_menu ? '' : 'hidden'; ?>>
 			<th scope="row"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></th>
 			<td>
 				<label>
-					<input type="checkbox" name="vkbm_service_menu[disable_nomination_fee]" value="1" <?php checked( '1', $disable_nomination_fee ); ?> />
+					<input type="checkbox" name="vkbm_service_menu[disable_nomination_fee]" value="1" aria-describedby="<?php echo esc_attr( $nomination_fee_description_id ); ?>" <?php checked( '1', $disable_nomination_fee ); ?> />
 					<?php esc_html_e( 'Disable for this service menu', 'vk-booking-manager' ); ?>
 				</label>
+				<p class="description" id="<?php echo esc_attr( $nomination_fee_description_id ); ?>">
+					<?php
+					printf(
+						/* translators: %s: resource label (singular) */
+						esc_html__( 'This is the fee you enter on each %s\'s edit screen.', 'vk-booking-manager' ),
+						esc_html( vkbm_get_resource_label_singular() )
+					);
+					echo '<br>';
+					esc_html_e( 'When checked, it is not added to this service menu\'s price even if the customer nominates one.', 'vk-booking-manager' );
+					?>
+				</p>
 			</td>
 		</tr>
 		<?php
@@ -466,8 +622,21 @@ class Service_Menu_Editor {
 		$duration_minutes     = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
 		$buffer_after_minutes = get_post_meta( $post->ID, '_vkbm_buffer_after_minutes', true );
 		$other_conditions     = get_post_meta( $post->ID, self::META_OTHER_CONDITIONS, true );
+
+		// 宿泊の機能を使うサイトでだけ「予約の単位」とチェックイン／チェックアウト時刻を描画する（#570）。
+		// 「泊」のときは所要時間・サービス後バッファ・固定開始時刻の行を hidden にする（値は残す）。
+		$supports_lodging = Industry_Presets::supports( 'lodging' );
+		$is_night_unit    = Service_Menu_Post_Type::is_night_unit( $post->ID );
+		$slot_only_hidden = $is_night_unit ? 'hidden' : '';
+		// 泊単位で「1室1泊あたり」のプランは料金区分を使わない（#572）。
+		$is_per_room_night = Service_Menu_Post_Type::is_night_price_per_room( $post->ID );
+		if ( $supports_lodging ) {
+			$this->render_booking_unit_fields( $post, $is_night_unit );
+		} elseif ( ! Pro_Upsell::is_free_edition() && Service_Menu_Post_Type::BOOKING_UNIT_NIGHT === get_post_meta( $post->ID, Service_Menu_Post_Type::META_BOOKING_UNIT, true ) ) {
+			$this->render_booking_unit_inactive_notice();
+		}
 		?>
-		<tr>
+		<tr id="vkbm-duration-field" class="vkbm-booking-unit-slot-only" <?php echo esc_attr( $slot_only_hidden ); ?>>
 			<th scope="row">
 				<label for="vkbm_service_menu_duration_minutes"><?php esc_html_e( 'Time required (minutes)', 'vk-booking-manager' ); ?></label>
 			</th>
@@ -475,7 +644,7 @@ class Service_Menu_Editor {
 				<input type="number" id="vkbm_service_menu_duration_minutes" name="vkbm_service_menu[duration_minutes]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $duration_minutes ); ?>" />
 			</td>
 		</tr>
-		<tr>
+		<tr id="vkbm-buffer-after-field" class="vkbm-booking-unit-slot-only" <?php echo esc_attr( $slot_only_hidden ); ?>>
 			<th scope="row">
 				<label for="vkbm_service_menu_buffer_after"><?php esc_html_e( 'Post-service buffer (min)', 'vk-booking-manager' ); ?></label>
 			</th>
@@ -648,7 +817,15 @@ class Service_Menu_Editor {
 						<p class="description">
 							<?php esc_html_e( 'A single booking can reserve for multiple people by entering the number of people.', 'vk-booking-manager' ); ?><br>
 							<?php esc_html_e( 'The maximum number per booking is the time slot capacity, because each booking is assigned to a single staff member.', 'vk-booking-manager' ); ?><br>
-							<?php esc_html_e( 'The price is multiplied by the number of people.', 'vk-booking-manager' ); ?><br>
+							<span id="vkbm-multiple-guests-price-note">
+								<?php
+								if ( $is_per_room_night ) {
+									esc_html_e( 'The price does not change with the number of people.', 'vk-booking-manager' );
+								} else {
+									esc_html_e( 'The price is multiplied by the number of people.', 'vk-booking-manager' );
+								}
+								?>
+							</span><br>
 							<?php
 							printf(
 								/* translators: %s: Provider settings page link to customize the quantity heading and unit. */
@@ -671,12 +848,15 @@ class Service_Menu_Editor {
 					</td>
 				</tr>
 				<?php $this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields ); ?>
-				<?php $this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields ); ?>
 				<?php
+				// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
+				$this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields && ! $is_night_unit );
+				// 1室1泊あたりのプランは料金区分を使わないため、料金区分の行を出さない（#572）。
+				$show_price_tiers = $show_multi_guest_dependent_fields && ! $is_per_room_night;
 				// #514: 基本料金の行を料金区分の行の直前に配置する。
-				$this->render_base_price_field( $post, $show_multi_guest_dependent_fields );
+				$this->render_base_price_field( $post, $show_price_tiers );
+				$this->render_price_tiers_field( $post, $show_price_tiers );
 				?>
-				<?php $this->render_price_tiers_field( $post, $show_multi_guest_dependent_fields ); ?>
 			<?php endif; ?>
 		<?php else : ?>
 			<?php
@@ -700,7 +880,7 @@ class Service_Menu_Editor {
 			$this->render_base_price_field( $post, false );
 			?>
 		<?php endif; ?>
-		<?php $this->render_fixed_start_times_field( $post ); ?>
+		<?php $this->render_fixed_start_times_field( $post, $slot_only_hidden ); ?>
 		<?php
 	}
 
@@ -852,15 +1032,277 @@ class Service_Menu_Editor {
 	}
 
 	/**
+	 * 予約の単位とチェックイン／チェックアウト時刻を保存する（#570）。
+	 *
+	 * 宿泊の機能を使うサイトで、フォームに「予約の単位」が含まれているときだけ保存する。
+	 * それ以外（宿泊以外のサイト・項目が送られない保存）では既存のメタに触れない。
+	 *
+	 * @param int                  $post_id 投稿ID。
+	 * @param array<string, mixed> $data    送信された vkbm_service_menu 配列。
+	 */
+	private function save_booking_unit_meta( int $post_id, array $data ): void {
+		if ( ! Industry_Presets::supports( 'lodging' ) || ! isset( $data['booking_unit'] ) ) {
+			return;
+		}
+
+		// 「泊」のときだけ保存し、時間枠（既定）はメタを削除する。
+		if ( Service_Menu_Post_Type::BOOKING_UNIT_NIGHT === $data['booking_unit'] ) {
+			update_post_meta( $post_id, Service_Menu_Post_Type::META_BOOKING_UNIT, Service_Menu_Post_Type::BOOKING_UNIT_NIGHT );
+		} else {
+			delete_post_meta( $post_id, Service_Menu_Post_Type::META_BOOKING_UNIT );
+		}
+
+		// 料金の単位（#572）。「1室1泊あたり」のときだけ保存し、それ以外はメタを削除する。
+		// 予約の単位に関わらず保存する（時間枠へ戻しても選択を残すため。読み取り側が泊単位のときだけ使う）。
+		if ( isset( $data['night_price_unit'] ) ) {
+			if ( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === $data['night_price_unit'] ) {
+				update_post_meta( $post_id, Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT, Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM );
+			} else {
+				delete_post_meta( $post_id, Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT );
+			}
+		}
+
+		// 休前日・特定日の基本料金（#737）。予約の単位に関わらず保存する（時間枠へ戻しても入力値を残すため）。
+		// 空欄はメタを削除し、その泊は平日の料金（休前日の料金が空欄のとき）または休前日の判定（特定日の料金が空欄のとき）で計算する。
+		$night_price_fields = array(
+			'night_price_pre_holiday' => Service_Menu_Post_Type::META_NIGHT_PRICE_PRE_HOLIDAY,
+			'night_price_special'     => Service_Menu_Post_Type::META_NIGHT_PRICE_SPECIAL,
+		);
+		foreach ( $night_price_fields as $field_name => $meta_key ) {
+			if ( array_key_exists( $field_name, $data ) ) {
+				$this->update_meta_value( $post_id, $meta_key, $this->sanitize_numeric_value( $data, $field_name ) );
+			}
+		}
+
+		// 時刻は単位に関わらず保存する（時間枠へ戻しても入力値を残すため）。不正値は削除して既定へ戻す。
+		$time_fields = array(
+			'check_in'  => Service_Menu_Post_Type::META_CHECK_IN_TIME,
+			'check_out' => Service_Menu_Post_Type::META_CHECK_OUT_TIME,
+		);
+		foreach ( $time_fields as $name_base => $meta_key ) {
+			if ( ! isset( $data[ $name_base . '_hour' ] ) ) {
+				continue;
+			}
+			$time = $this->sanitize_time_selection( $data[ $name_base . '_hour' ], $data[ $name_base . '_minute' ] ?? '' );
+			$this->update_meta_value( $post_id, $meta_key, $time );
+		}
+	}
+
+	/**
+	 * 泊単位のメニューで使わない設定のメタを削除する（#572）。
+	 *
+	 * - 予約者が選ぶ貸切（貸切指定・貸切料金・適用外人数）は泊単位では使わない。
+	 * - 1室1泊あたりでは料金区分を使わない。値が残ると読み取り側の分岐漏れで1室料金に人数が掛かるため削除する。
+	 * 宿泊が有効でない、または時間枠のメニューでは何もしない。
+	 *
+	 * @param int $post_id 投稿ID。
+	 */
+	private function delete_night_unit_unsupported_meta( int $post_id ): void {
+		if ( ! Service_Menu_Post_Type::is_night_unit( $post_id ) ) {
+			return;
+		}
+
+		delete_post_meta( $post_id, self::META_EXCLUSIVE_USER_SELECTABLE );
+		delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_PER_PERSON );
+		delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS );
+
+		if ( Service_Menu_Post_Type::is_night_price_per_room( $post_id ) ) {
+			delete_post_meta( $post_id, self::META_PRICE_TIERS );
+		}
+	}
+
+	/**
+	 * 時・分のプルダウン値を HH:MM に組み立てる。不正値は空文字。
+	 *
+	 * @param mixed $hour   時の送信値。
+	 * @param mixed $minute 分の送信値。
+	 * @return string HH:MM、不正なら空文字。
+	 */
+	private function sanitize_time_selection( $hour, $minute ): string {
+		if ( ! is_scalar( $hour ) || ! is_scalar( $minute ) ) {
+			return '';
+		}
+
+		$hour   = sanitize_text_field( (string) $hour );
+		$minute = sanitize_text_field( (string) $minute );
+		if ( 1 !== preg_match( '/^\d{2}$/', $hour ) || 1 !== preg_match( '/^\d{2}$/', $minute ) ) {
+			return '';
+		}
+
+		return Service_Menu_Post_Type::sanitize_time_value( $hour . ':' . $minute );
+	}
+
+	/**
+	 * 「予約の単位」ラジオとチェックイン／チェックアウト時刻の行を出力する（#570）。
+	 *
+	 * 宿泊の機能を使うサイト（Industry_Presets::supports( 'lodging' )）でだけ呼ぶ。
+	 * 時刻の行は「時間枠」のときも hidden にするだけで DOM に残し、送信値を保持する
+	 * （時間枠へ戻しても入力した時刻が消えないようにするため）。
+	 *
+	 * @param WP_Post $post          Current post object.
+	 * @param bool    $is_night_unit 予約の単位が「泊」か。
+	 */
+	private function render_booking_unit_fields( WP_Post $post, bool $is_night_unit ): void {
+		$night_only_hidden = $is_night_unit ? '' : 'hidden';
+		$description_id    = 'vkbm-booking-unit-description';
+		?>
+		<tr id="vkbm-booking-unit-field">
+			<th scope="row"><?php esc_html_e( 'Booking unit', 'vk-booking-manager' ); ?></th>
+			<td>
+				<fieldset aria-describedby="<?php echo esc_attr( $description_id ); ?>">
+					<legend class="screen-reader-text"><?php esc_html_e( 'Booking unit', 'vk-booking-manager' ); ?></legend>
+					<label>
+						<input type="radio" name="vkbm_service_menu[booking_unit]" value="slot" <?php checked( false, $is_night_unit ); ?> />
+						<?php esc_html_e( 'Time slot', 'vk-booking-manager' ); ?>
+					</label>
+					&nbsp;
+					<label>
+						<input type="radio" name="vkbm_service_menu[booking_unit]" value="<?php echo esc_attr( Service_Menu_Post_Type::BOOKING_UNIT_NIGHT ); ?>" <?php checked( true, $is_night_unit ); ?> />
+						<?php esc_html_e( 'Nights', 'vk-booking-manager' ); ?>
+					</label>
+				</fieldset>
+				<p class="description" id="<?php echo esc_attr( $description_id ); ?>">
+					<?php esc_html_e( 'If you choose "Nights", bookings are accepted by check-in date and check-out date.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'If you choose "Nights" and save, the private booking by customer settings are deleted.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'If you choose "Nights", the time required, post-service buffer, and fixed start times fields are not used, so they are hidden.', 'vk-booking-manager' ); ?>
+				</p>
+			</td>
+		</tr>
+		<tr id="vkbm-check-in-time-field" class="vkbm-booking-unit-night-only" <?php echo esc_attr( $night_only_hidden ); ?>>
+			<th scope="row"><?php esc_html_e( 'Check-in time', 'vk-booking-manager' ); ?></th>
+			<td>
+				<?php $this->render_time_selects( 'check_in', Service_Menu_Post_Type::get_check_in_time( $post->ID ), __( 'Check-in time', 'vk-booking-manager' ) ); ?>
+			</td>
+		</tr>
+		<tr id="vkbm-check-out-time-field" class="vkbm-booking-unit-night-only" <?php echo esc_attr( $night_only_hidden ); ?>>
+			<th scope="row"><?php esc_html_e( 'Check-out time (departure day)', 'vk-booking-manager' ); ?></th>
+			<td>
+				<?php $this->render_time_selects( 'check_out', Service_Menu_Post_Type::get_check_out_time( $post->ID ), __( 'Check-out time', 'vk-booking-manager' ) ); ?>
+				<p class="description">
+					<?php esc_html_e( 'This is the time on the day after the last night of the stay.', 'vk-booking-manager' ); ?>
+				</p>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * 基本料金の入力欄の後ろに出す、泊単位の料金の単位表記を返す（#572）。
+	 *
+	 * @param string $night_price_unit 料金の単位（NIGHT_PRICE_UNIT_PER_ROOM / NIGHT_PRICE_UNIT_PER_GUEST）。
+	 * @return string 単位表記。
+	 */
+	public static function get_night_price_unit_suffix( string $night_price_unit ): string {
+		if ( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === $night_price_unit ) {
+			return __( '/ per room, per night', 'vk-booking-manager' );
+		}
+
+		return __( '/ per guest, per night', 'vk-booking-manager' );
+	}
+
+	/**
+	 * 「料金の単位」ラジオの行を出力する（#572）。
+	 *
+	 * 宿泊が有効なサイトでだけ呼ぶ。基本料金の行の直上に置く。時間枠のメニューでは hidden にするだけで
+	 * DOM に残す（泊へ切り替えたときに選択を保てるようにするため）。
+	 *
+	 * @param string $night_price_unit 現在の料金の単位。
+	 * @param bool   $is_night_unit    予約の単位が「泊」か。
+	 */
+	private function render_night_price_unit_field( string $night_price_unit, bool $is_night_unit ): void {
+		$is_per_room    = Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === $night_price_unit;
+		$description_id = 'vkbm-night-price-unit-description';
+		?>
+		<tr id="vkbm-night-price-unit-field" class="vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>>
+			<th scope="row"><?php esc_html_e( 'Price unit', 'vk-booking-manager' ); ?></th>
+			<td>
+				<fieldset aria-describedby="<?php echo esc_attr( $description_id ); ?>">
+					<legend class="screen-reader-text"><?php esc_html_e( 'Price unit', 'vk-booking-manager' ); ?></legend>
+					<label>
+						<input type="radio" name="vkbm_service_menu[night_price_unit]" value="<?php echo esc_attr( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_GUEST ); ?>" <?php checked( false, $is_per_room ); ?> />
+						<?php esc_html_e( 'Per guest, per night', 'vk-booking-manager' ); ?>
+					</label>
+					&nbsp;
+					<label>
+						<input type="radio" name="vkbm_service_menu[night_price_unit]" value="<?php echo esc_attr( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM ); ?>" <?php checked( true, $is_per_room ); ?> />
+						<?php esc_html_e( 'Per room, per night', 'vk-booking-manager' ); ?>
+					</label>
+				</fieldset>
+				<p class="description" id="<?php echo esc_attr( $description_id ); ?>">
+					<?php esc_html_e( 'If you choose "Per room, per night", enter the price of one room per night as the basic price. It is not multiplied by the number of guests.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'Price categories cannot be used with "Per room, per night". Price categories you have already set are deleted when you save.', 'vk-booking-manager' ); ?>
+				</p>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * 「泊」で保存されたメニューを宿泊以外のサイトで開いたときの案内を出力する（#570）。
+	 *
+	 * 欄が消えるだけで、泊のメニューが黙って時間枠として扱われるのを避けるための案内。
+	 */
+	private function render_booking_unit_inactive_notice(): void {
+		?>
+		<tr id="vkbm-booking-unit-inactive-notice">
+			<th scope="row"><?php esc_html_e( 'Booking unit', 'vk-booking-manager' ); ?></th>
+			<td>
+				<p class="description">
+					<?php esc_html_e( 'This menu is saved with the "Nights" booking unit. Because the industry preset is not "Lodging", it is currently handled as a time-slot menu.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'To switch back to "Lodging", change the industry preset to "Lodging" at the link below.', 'vk-booking-manager' ); ?><br>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-industry-preset' ) ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Industry preset on the General Settings page', 'vk-booking-manager' ); ?></a>
+				</p>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * 時と分（10分刻み）のプルダウンを出力する。固定開始時刻と同じ入力の形。
+	 *
+	 * @param string $name_base  フォーム名のベース（{$name_base}_hour / {$name_base}_minute）。
+	 * @param string $time       現在値（HH:MM）。
+	 * @param string $aria_label 時・分のプルダウンの aria-label に使う名前。
+	 */
+	private function render_time_selects( string $name_base, string $time, string $aria_label ): void {
+		$hour    = substr( $time, 0, 2 );
+		$minute  = substr( $time, 3, 2 );
+		$minutes = array( '00', '10', '20', '30', '40', '50' );
+		// REST などで10分刻み以外の値が保存されていても、値が変わらないよう選択肢に加える。
+		if ( ! in_array( $minute, $minutes, true ) ) {
+			$minutes[] = $minute;
+			sort( $minutes );
+		}
+		/* translators: %s: field name such as "Check-in time". */
+		$hour_label = sprintf( __( '%s (hour)', 'vk-booking-manager' ), $aria_label );
+		/* translators: %s: field name such as "Check-in time". */
+		$minute_label = sprintf( __( '%s (minute)', 'vk-booking-manager' ), $aria_label );
+		?>
+		<select name="vkbm_service_menu[<?php echo esc_attr( $name_base ); ?>_hour]" aria-label="<?php echo esc_attr( $hour_label ); ?>">
+			<?php for ( $h = 0; $h <= 23; $h++ ) : ?>
+				<option value="<?php echo esc_attr( sprintf( '%02d', $h ) ); ?>" <?php selected( sprintf( '%02d', $h ), $hour ); ?>><?php echo esc_html( sprintf( '%02d', $h ) ); ?></option>
+			<?php endfor; ?>
+		</select>
+		<span>:</span>
+		<select name="vkbm_service_menu[<?php echo esc_attr( $name_base ); ?>_minute]" aria-label="<?php echo esc_attr( $minute_label ); ?>">
+			<?php foreach ( $minutes as $min ) : ?>
+				<option value="<?php echo esc_attr( $min ); ?>" <?php selected( $min, $minute ); ?>><?php echo esc_html( $min ); ?></option>
+			<?php endforeach; ?>
+		</select>
+		<?php
+	}
+
+	/**
 	 * Render the fixed start times field.
 	 *
-	 * @param WP_Post $post Current post object.
+	 * @param WP_Post $post        Current post object.
+	 * @param string  $hidden_attr 行に付ける hidden 属性（非表示にしないときは空文字列）。
 	 */
-	private function render_fixed_start_times_field( WP_Post $post ): void {
+	private function render_fixed_start_times_field( WP_Post $post, string $hidden_attr = '' ): void {
 		$fixed_start_times = get_post_meta( $post->ID, self::META_FIXED_START_TIMES, true );
 		$fixed_start_times = is_array( $fixed_start_times ) ? $fixed_start_times : array();
 		?>
-		<tr>
+		<tr id="vkbm-fixed-start-times-field" class="vkbm-booking-unit-slot-only" <?php echo esc_attr( $hidden_attr ); ?>>
 			<th scope="row"><?php esc_html_e( 'Fixed start times', 'vk-booking-manager' ); ?></th>
 			<td>
 				<div id="vkbm-fixed-start-times-list">
@@ -1066,6 +1508,43 @@ class Service_Menu_Editor {
 			&& array() !== Price_Tiers::normalize_tiers( get_post_meta( $post->ID, self::META_PRICE_TIERS, true ) );
 
 		$description_id = 'vkbm-base-price-overridden-description';
+
+		// 宿泊が有効なサイトでは、泊単位のプランに「料金の単位」と基本料金の単位表記を出す（#572）。
+		$supports_lodging = Industry_Presets::supports( 'lodging' );
+		$is_night_unit    = Service_Menu_Post_Type::is_night_unit( $post->ID );
+		// ラジオと単位表記は、時間枠へ戻したメニューでも保存済みの選択を表示する。
+		$night_price_unit = Service_Menu_Post_Type::get_stored_night_price_unit( $post->ID );
+		$unit_suffix_id   = 'vkbm-base-price-unit';
+
+		// 基本料金の入力欄に関連付ける説明の ID（泊単位の単位表記、料金区分で上書き中の説明）。
+		$describedby_ids = array();
+		if ( $is_night_unit ) {
+			$describedby_ids[] = $unit_suffix_id;
+		}
+		if ( $has_active_tier ) {
+			$describedby_ids[] = $description_id;
+		}
+
+		if ( $supports_lodging ) {
+			$this->render_night_price_unit_field( $night_price_unit, $is_night_unit );
+		}
+
+		// 泊のプランの休前日・特定日の基本料金（#737）。空欄の欄には、平日の金額を灰色のプレースホルダーで示す。
+		$weekday_placeholder     = is_numeric( $base_price ) ? (string) (int) $base_price : '';
+		$night_base_extra_fields = array(
+			array(
+				'name'       => 'night_price_pre_holiday',
+				'caption'    => __( 'Pre-holiday', 'vk-booking-manager' ),
+				'aria_label' => __( 'Basic price (pre-holiday)', 'vk-booking-manager' ),
+				'value'      => (string) get_post_meta( $post->ID, Service_Menu_Post_Type::META_NIGHT_PRICE_PRE_HOLIDAY, true ),
+			),
+			array(
+				'name'       => 'night_price_special',
+				'caption'    => __( 'Special date', 'vk-booking-manager' ),
+				'aria_label' => __( 'Basic price (special date)', 'vk-booking-manager' ),
+				'value'      => (string) get_post_meta( $post->ID, Service_Menu_Post_Type::META_NIGHT_PRICE_SPECIAL, true ),
+			),
+		);
 		?>
 		<tr id="vkbm-base-price-field">
 			<th scope="row">
@@ -1079,24 +1558,74 @@ class Service_Menu_Editor {
 				</label>
 			</th>
 			<td>
-				<input
-					type="number"
-					id="vkbm_service_menu_base_price"
-					name="vkbm_service_menu[base_price]"
-					class="small-text vkbm-price-input<?php echo $has_active_tier ? ' vkbm-base-price-overridden' : ''; ?>"
-					min="0"
-					step="1"
-					value="<?php echo esc_attr( $base_price ); ?>"
-					<?php
-					// #514 レビュー対応（安藤・LOW）: aria-describedby はグレーアウト中（＝説明文が
-					// 実際に表示されている）ときだけ出力する。常時出力すると、非表示の説明文を
-					// 支援技術に関連付けてしまう。JS 側（syncBasePriceOverride()）も同じ考え方で
-					// 状態変化に合わせて属性ごと付け外しする。
-					if ( $has_active_tier ) {
-						echo 'aria-describedby="' . esc_attr( $description_id ) . '" readonly';
-					}
-					?>
-				/>
+				<?php // 泊のプランは「平日・休前日・特定日」の 3 つを 1 つのまとまりにして並べ、狭い画面ではまとまりごと折り返す（#737）。 ?>
+				<div class="vkbm-night-rate-fields">
+					<span class="vkbm-night-rate-field">
+						<?php if ( $supports_lodging ) : ?>
+							<span class="vkbm-night-rate-caption vkbm-booking-unit-night-only" aria-hidden="true" <?php echo $is_night_unit ? '' : 'hidden'; ?>><?php esc_html_e( 'Regular', 'vk-booking-manager' ); ?></span>
+						<?php endif; ?>
+						<input
+							type="number"
+							id="vkbm_service_menu_base_price"
+							name="vkbm_service_menu[base_price]"
+							class="small-text vkbm-price-input<?php echo $has_active_tier ? ' vkbm-base-price-overridden' : ''; ?>"
+							min="0"
+							step="1"
+							value="<?php echo esc_attr( $base_price ); ?>"
+							<?php
+							// #514 レビュー対応（安藤・LOW）: aria-describedby はグレーアウト中（＝説明文が
+							// 実際に表示されている）ときだけ出力する。常時出力すると、非表示の説明文を
+							// 支援技術に関連付けてしまう。JS 側（syncBasePriceOverride()）も同じ考え方で
+							// 状態変化に合わせて属性ごと付け外しする。
+							if ( array() !== $describedby_ids ) {
+								echo 'aria-describedby="' . esc_attr( implode( ' ', $describedby_ids ) ) . '"';
+							}
+							if ( $has_active_tier ) {
+								echo ' readonly';
+							}
+							?>
+						/>
+					</span>
+					<?php if ( $supports_lodging ) : ?>
+						<?php foreach ( $night_base_extra_fields as $extra_index => $extra_field ) : ?>
+							<span class="vkbm-night-rate-field vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>>
+								<span class="vkbm-night-rate-caption" aria-hidden="true"><?php echo esc_html( $extra_field['caption'] ); ?></span>
+								<?php // 入力欄と単位は 1 つのまとまりにして、狭い幅でも単位だけが次の行に落ちないようにする。 ?>
+								<span class="vkbm-night-rate-input-row">
+									<input
+										type="number"
+										name="vkbm_service_menu[<?php echo esc_attr( $extra_field['name'] ); ?>]"
+										class="small-text vkbm-price-input vkbm-night-base-price-extra<?php echo $has_active_tier ? ' vkbm-base-price-overridden' : ''; ?>"
+										min="0"
+										step="1"
+										value="<?php echo esc_attr( $extra_field['value'] ); ?>"
+										placeholder="<?php echo esc_attr( $weekday_placeholder ); ?>"
+										aria-label="<?php echo esc_attr( $extra_field['aria_label'] ); ?>"
+										<?php echo $has_active_tier ? 'readonly' : ''; ?>
+									/>
+									<?php if ( array_key_last( $night_base_extra_fields ) === $extra_index ) : ?>
+										<span id="<?php echo esc_attr( $unit_suffix_id ); ?>" class="vkbm-night-rate-suffix text-nowrap"><?php echo esc_html( self::get_night_price_unit_suffix( $night_price_unit ) ); ?></span>
+									<?php endif; ?>
+								</span>
+							</span>
+						<?php endforeach; ?>
+					<?php endif; ?>
+				</div>
+				<?php if ( $supports_lodging ) : ?>
+					<p class="description vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>>
+						<?php
+						printf(
+							/* translators: %s: link to the pre-holiday and special date settings on the provider settings page. */
+							esc_html__( 'If the pre-holiday price is empty, the regular price is used. If the special date price is empty, the night is priced as a pre-holiday or regular night. Set the days of the week and dates in %s.', 'vk-booking-manager' ),
+							sprintf(
+								'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+								esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-lodging-rate-row' ) ),
+								esc_html__( 'Pre-holidays and special dates on the General Settings page', 'vk-booking-manager' )
+							)
+						);
+						?>
+					</p>
+				<?php endif; ?>
 				<p class="description" id="<?php echo esc_attr( $description_id ); ?>" <?php echo $has_active_tier ? '' : 'hidden'; ?>>
 					<?php
 					// #514 レビュー対応（植草・中）: 料金区分欄側の説明文（render_price_tiers_field()）と
@@ -1127,9 +1656,16 @@ class Service_Menu_Editor {
 		// 料金欄の単位：税込ラベルが空でも通貨記号を常時表示する（design-rules の単位表示要件）。
 		$price_unit       = VKBM_Helper::get_currency_symbol();
 		$label_aria       = __( 'Price category name', 'vk-booking-manager' );
-		$price_aria       = __( 'Price', 'vk-booking-manager' );
+		$price_aria       = __( 'Price (regular)', 'vk-booking-manager' );
 		$label_head_label = __( 'Category name', 'vk-booking-manager' );
 		$price_head_label = __( 'Price', 'vk-booking-manager' );
+		// 泊単位のときは列見出しに単位を付ける（#572）。切り替えは JS が行う。
+		$is_night_unit = Service_Menu_Post_Type::is_night_unit( $post->ID );
+		if ( $is_night_unit ) {
+			$price_head_label = __( 'Price (per guest, per night)', 'vk-booking-manager' );
+		}
+		// 宿泊のサイトでは、区分ごとの料金を「平日・休前日・特定日」の 3 つにする（#737）。
+		$supports_lodging = Industry_Presets::supports( 'lodging' );
 		?>
 		<tr id="vkbm-price-tiers-field" <?php echo $show_field ? '' : 'hidden'; ?>>
 			<th scope="row"><?php esc_html_e( 'Price categories', 'vk-booking-manager' ); ?></th>
@@ -1151,16 +1687,48 @@ class Service_Menu_Editor {
 								placeholder="<?php esc_attr_e( 'Category name (e.g. Adult)', 'vk-booking-manager' ); ?>"
 								aria-label="<?php echo esc_attr( $label_aria ); ?>"
 							/>
-							<input
-								type="number"
-								name="vkbm_service_menu[price_tiers][price][]"
-								class="small-text vkbm-price-input vkbm-price-tier-price"
-								min="0"
-								step="1"
-								value="<?php echo esc_attr( (string) $tier['price'] ); ?>"
-								aria-label="<?php echo esc_attr( $price_aria ); ?>"
-							/>
-							<span class="vkbm-price-tier-unit"><?php echo esc_html( '' !== $tax_label ? $price_unit . $tax_label : $price_unit ); ?></span>
+							<span class="vkbm-night-rate-fields">
+								<span class="vkbm-night-rate-field">
+									<?php if ( $supports_lodging ) : ?>
+										<span class="vkbm-night-rate-caption vkbm-booking-unit-night-only" aria-hidden="true" <?php echo $is_night_unit ? '' : 'hidden'; ?>><?php esc_html_e( 'Regular', 'vk-booking-manager' ); ?></span>
+									<?php endif; ?>
+									<span class="vkbm-night-rate-input-row">
+										<input
+											type="number"
+											name="vkbm_service_menu[price_tiers][price][]"
+											class="small-text vkbm-price-input vkbm-price-tier-price"
+											min="0"
+											step="1"
+											value="<?php echo esc_attr( (string) $tier['price'] ); ?>"
+											aria-label="<?php echo esc_attr( $price_aria ); ?>"
+										/>
+										<span class="vkbm-price-tier-unit"><?php echo esc_html( '' !== $tax_label ? $price_unit . $tax_label : $price_unit ); ?></span>
+									</span>
+								</span>
+								<?php foreach ( self::get_price_tier_extra_fields() as $extra_key => $extra_field ) : ?>
+									<?php if ( $supports_lodging ) : ?>
+										<span class="vkbm-night-rate-field vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>>
+											<span class="vkbm-night-rate-caption" aria-hidden="true"><?php echo esc_html( $extra_field['caption'] ); ?></span>
+											<span class="vkbm-night-rate-input-row">
+												<input
+													type="number"
+													name="vkbm_service_menu[price_tiers][<?php echo esc_attr( $extra_key ); ?>][]"
+													class="small-text vkbm-price-input vkbm-price-tier-extra"
+													min="0"
+													step="1"
+													value="<?php echo esc_attr( isset( $tier[ $extra_key ] ) ? (string) $tier[ $extra_key ] : '' ); ?>"
+													placeholder="<?php echo esc_attr( (string) $tier['price'] ); ?>"
+													aria-label="<?php echo esc_attr( $extra_field['aria_label'] ); ?>"
+												/>
+												<span class="vkbm-price-tier-unit"><?php echo esc_html( '' !== $tax_label ? $price_unit . $tax_label : $price_unit ); ?></span>
+											</span>
+										</span>
+									<?php else : ?>
+										<?php // 宿泊以外の業種に切り替えても、入力済みの休前日・特定日の料金を消さないよう、値を送り直す（#570 の方針）。 ?>
+										<input type="hidden" name="vkbm_service_menu[price_tiers][<?php echo esc_attr( $extra_key ); ?>][]" value="<?php echo esc_attr( isset( $tier[ $extra_key ] ) ? (string) $tier[ $extra_key ] : '' ); ?>" />
+									<?php endif; ?>
+								<?php endforeach; ?>
+							</span>
 							<button type="button" class="vkbm-button vkbm-button__sm vkbm-button-outline vkbm-button-outline__danger vkbm-price-tier-remove"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button>
 						</div>
 					<?php endforeach; ?>
@@ -1172,6 +1740,26 @@ class Service_Menu_Editor {
 			</td>
 		</tr>
 		<?php
+	}
+
+	/**
+	 * 料金区分の行が持つ、休前日・特定日の料金の欄（#737）。
+	 *
+	 * キーは料金区分の行（Price_Tiers）に保存するキーと、フォームの name に使うキーを兼ねる。
+	 *
+	 * @return array<string, array{caption: string, aria_label: string}> キー => 欄の見出しと読み上げ用の名前。
+	 */
+	private static function get_price_tier_extra_fields(): array {
+		return array(
+			'pre_holiday_price' => array(
+				'caption'    => __( 'Pre-holiday', 'vk-booking-manager' ),
+				'aria_label' => __( 'Price (pre-holiday)', 'vk-booking-manager' ),
+			),
+			'special_price'     => array(
+				'caption'    => __( 'Special date', 'vk-booking-manager' ),
+				'aria_label' => __( 'Price (special date)', 'vk-booking-manager' ),
+			),
+		);
 	}
 
 	/**
@@ -1467,6 +2055,15 @@ class Service_Menu_Editor {
 		);
 
 			$this->update_meta_value( $post_id, '_vkbm_catch_copy', $catch_copy );
+		// サブ画像（#623）。フォームに欄が無い送信（欄の無い画面など）では既存の値を消さない。
+		if ( isset( $data['gallery_ids'] ) && is_string( $data['gallery_ids'] ) ) {
+			$this->update_meta_value(
+				$post_id,
+				Service_Menu_Post_Type::META_GALLERY_IDS,
+				Service_Menu_Post_Type::sanitize_gallery_ids( $data['gallery_ids'] ),
+				true
+			);
+		}
 		$this->update_meta_value( $post_id, '_vkbm_internal_memo', $internal_memo );
 		$this->update_meta_value( $post_id, self::META_OTHER_CONDITIONS, $other_conditions );
 		$this->update_meta_value( $post_id, '_vkbm_base_price', $base_price );
@@ -1483,7 +2080,10 @@ class Service_Menu_Editor {
 		delete_post_meta( $post_id, '_vkbm_online_available' );
 		$this->update_meta_value( $post_id, '_vkbm_is_archived', $archive );
 		$this->update_meta_value( $post_id, self::META_USE_DETAIL_PAGE, $use_detail_page );
-		$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
+		// 宿泊のサイトではこの欄を出さず送信されないため、保存済みの値を空で上書きしない（プリセットを戻したときに元へ戻すため）。
+		if ( ! Industry_Presets::supports( 'lodging' ) ) {
+			$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
+		}
 		$is_pro_edition = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
 
 		// メニュー単位の指名機能トグル（#391）。
@@ -1500,6 +2100,8 @@ class Service_Menu_Editor {
 				update_post_meta( $post_id, self::META_DISABLE_NOMINATION, true );
 			}
 		}
+
+		$this->save_booking_unit_meta( $post_id, $data );
 
 		// 予約枠の定員はPro版かつ予約枠の定員機能ON時のみ保存する。
 		//
@@ -1543,7 +2145,7 @@ class Service_Menu_Editor {
 				update_post_meta( $post_id, self::META_ALLOW_MULTIPLE_GUESTS, true );
 				// 料金区分は複数人一括予約ON時のみ保存する。空配列ならメタを削除する（基本料金×人数へ戻す）。
 				if ( ! empty( $price_tiers ) ) {
-					update_post_meta( $post_id, self::META_PRICE_TIERS, $price_tiers );
+					update_post_meta( $post_id, self::META_PRICE_TIERS, wp_slash( $price_tiers ) );
 				} else {
 					delete_post_meta( $post_id, self::META_PRICE_TIERS );
 				}
@@ -1624,6 +2226,8 @@ class Service_Menu_Editor {
 			delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_PER_PERSON );
 			delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS );
 		}
+		// 予約枠の定員機能がオフでフォームに貸切・料金区分の欄が無い構成でも、泊単位では使わない値を残さない。
+		$this->delete_night_unit_unsupported_meta( $post_id );
 		if ( Staff_Editor::is_enabled() ) {
 			// 個別選択は「すべて」選択中も消さずに保持する（「選ぶ」へ戻したとき以前の選択を復元するため。#485）。
 			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
@@ -1649,7 +2253,7 @@ class Service_Menu_Editor {
 			return '';
 		}
 
-		return sanitize_text_field( wp_unslash( (string) $data[ $key ] ) );
+		return sanitize_text_field( (string) $data[ $key ] );
 	}
 
 	/**
@@ -1664,7 +2268,7 @@ class Service_Menu_Editor {
 			return '';
 		}
 
-		return sanitize_textarea_field( wp_unslash( (string) $data[ $key ] ) );
+		return sanitize_textarea_field( (string) $data[ $key ] );
 	}
 
 	/**
@@ -1679,7 +2283,7 @@ class Service_Menu_Editor {
 			return '';
 		}
 
-		$raw = trim( (string) wp_unslash( $data[ $key ] ) );
+		$raw = trim( (string) $data[ $key ] );
 
 		if ( '' === $raw || ! is_numeric( $raw ) ) {
 			return '';
@@ -1702,7 +2306,7 @@ class Service_Menu_Editor {
 			return '';
 		}
 
-		$raw = trim( (string) wp_unslash( $data[ $key ] ) );
+		$raw = trim( (string) $data[ $key ] );
 
 		if ( '' === $raw || false === filter_var( $raw, FILTER_VALIDATE_INT ) ) {
 			return '';
@@ -1721,7 +2325,7 @@ class Service_Menu_Editor {
 		 */
 	private function sanitize_reservation_day_type( $raw ): string {
 		// 許容値への正規化（指定なし・土日限定・平日限定・曜日指定・日付指定）は共有ヘルパーに集約している。
-		$value = sanitize_text_field( wp_unslash( (string) $raw ) );
+		$value = sanitize_text_field( (string) $raw );
 		return Reservation_Day::sanitize_type( $value );
 	}
 
@@ -1805,8 +2409,8 @@ class Service_Menu_Editor {
 		$result = array();
 
 		foreach ( $hours as $index => $hour ) {
-			$h = (int) sanitize_text_field( wp_unslash( (string) $hour ) );
-			$m = (int) sanitize_text_field( wp_unslash( (string) ( $minutes[ $index ] ?? '0' ) ) );
+			$h = (int) sanitize_text_field( (string) $hour );
+			$m = (int) sanitize_text_field( (string) ( $minutes[ $index ] ?? '0' ) );
 
 			if ( $h < 0 || $h > 23 ) {
 				continue;
@@ -1829,26 +2433,31 @@ class Service_Menu_Editor {
 	/**
 	 * 料金区分のフォーム入力（label/price の並行配列）を正規化する。
 	 *
-	 * フォームは `price_tiers[label][]` と `price_tiers[price][]` を並行配列で送るため、
-	 * インデックスで突き合わせて `[ [ 'label' => ..., 'price' => ... ], ... ]` に変換してから
-	 * Price_Tiers::sanitize_tiers() へ委譲する（空行除去・負数クランプ・件数上限）。
+	 * フォームは `price_tiers[label][]`・`price_tiers[price][]`・`price_tiers[pre_holiday_price][]`・
+	 * `price_tiers[special_price][]` を並行配列で送るため、インデックスで突き合わせて
+	 * `[ [ 'label' => ..., 'price' => ..., 'pre_holiday_price' => ..., 'special_price' => ... ], ... ]` に変換してから
+	 * Price_Tiers::sanitize_tiers() へ委譲する（空行除去・負数クランプ・件数上限。休前日・特定日の料金は空欄なら保存しない）。
 	 *
 	 * @param mixed $raw 料金区分の生入力。
-	 * @return array<int, array{label: string, price: int}>
+	 * @return array<int, array{label: string, price: int, pre_holiday_price?: int, special_price?: int}>
 	 */
 	private function sanitize_price_tiers( $raw ): array {
 		if ( ! is_array( $raw ) ) {
 			return array();
 		}
 
-		$labels = isset( $raw['label'] ) && is_array( $raw['label'] ) ? array_values( $raw['label'] ) : array();
-		$prices = isset( $raw['price'] ) && is_array( $raw['price'] ) ? array_values( $raw['price'] ) : array();
+		$labels            = isset( $raw['label'] ) && is_array( $raw['label'] ) ? array_values( $raw['label'] ) : array();
+		$prices            = isset( $raw['price'] ) && is_array( $raw['price'] ) ? array_values( $raw['price'] ) : array();
+		$pre_holiday_price = isset( $raw['pre_holiday_price'] ) && is_array( $raw['pre_holiday_price'] ) ? array_values( $raw['pre_holiday_price'] ) : array();
+		$special_price     = isset( $raw['special_price'] ) && is_array( $raw['special_price'] ) ? array_values( $raw['special_price'] ) : array();
 
 		$rows = array();
 		foreach ( $labels as $index => $label ) {
 			$rows[] = array(
-				'label' => sanitize_text_field( wp_unslash( (string) $label ) ),
-				'price' => isset( $prices[ $index ] ) ? wp_unslash( (string) $prices[ $index ] ) : 0,
+				'label'             => sanitize_text_field( (string) $label ),
+				'price'             => isset( $prices[ $index ] ) && is_scalar( $prices[ $index ] ) ? (string) $prices[ $index ] : 0,
+				'pre_holiday_price' => isset( $pre_holiday_price[ $index ] ) && is_scalar( $pre_holiday_price[ $index ] ) ? (string) $pre_holiday_price[ $index ] : '',
+				'special_price'     => isset( $special_price[ $index ] ) && is_scalar( $special_price[ $index ] ) ? (string) $special_price[ $index ] : '',
 			);
 		}
 
@@ -1902,6 +2511,8 @@ class Service_Menu_Editor {
 			return;
 		}
 
-		update_post_meta( $post_id, $meta_key, $value );
+		// update_post_meta() は渡された値を unslash するため、先に slash して「\」が消えないようにする。
+		// update_post_meta() unslashes its input, so slash first to keep backslashes.
+		update_post_meta( $post_id, $meta_key, wp_slash( $value ) );
 	}
 }

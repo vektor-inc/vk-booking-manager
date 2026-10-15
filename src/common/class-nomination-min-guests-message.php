@@ -64,7 +64,7 @@ class Nomination_Min_Guests_Message {
 	 * 文で一貫しない挙動になる（例: 半角の閉じ括弧を列挙に含めると英語で
 	 * `…(bar)Please set…` のようにスペース無しで連結されてしまう）ため、末尾1文字が
 	 * ASCII かどうかだけで判定する（安藤レビュー指摘）。JS側
-	 * （`src/blocks/reservation/app.js` の `joinSentences()`）と同型のロジック。
+	 * （`src/blocks/reservation/booking-ui/join-sentences.js` の `joinSentences()`）と同型のロジック。
 	 *
 	 * @param string $sentence_a 1文目（すでに翻訳・sprintf済み）。
 	 * @param string $sentence_b 2文目（すでに翻訳・sprintf済み）。

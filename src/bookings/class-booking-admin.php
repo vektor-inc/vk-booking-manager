@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
@@ -35,7 +36,6 @@ use function admin_url;
 use function get_edit_post_link;
 use function get_edit_user_link;
 use function get_userdata;
-use function get_users;
 use function vkbm_get_resource_label_singular;
 use function vkbm_normalize_reservation_page_url;
 use function number_format_i18n;
@@ -46,6 +46,11 @@ use function number_format_i18n;
 class Booking_Admin {
 	private const NONCE_ACTION = 'vkbm_booking_meta';
 	private const NONCE_NAME   = '_vkbm_booking_meta_nonce';
+
+	/**
+	 * 予約者検索の Ajax アクション名（nonce アクション名にも同じ値を使う）。
+	 */
+	private const RESERVER_SEARCH_ACTION = 'vkbm_search_reservers';
 
 	private const META_DATE_START  = '_vkbm_booking_service_start';
 	private const META_DATE_END    = '_vkbm_booking_service_end';
@@ -72,8 +77,8 @@ class Booking_Admin {
 
 	private const STATUS_CONFIRMED              = 'confirmed';
 	private const STATUS_PENDING                = 'pending';
-	private const STATUS_CANCELLED              = 'cancelled';
-	private const STATUS_NO_SHOW                = 'no_show';
+	private const STATUS_CANCELLED              = Staff_Conflict_Detector::STATUS_CANCELLED;
+	private const STATUS_NO_SHOW                = Staff_Conflict_Detector::STATUS_NO_SHOW;
 	private const ADMIN_NOTICE_QUERY_VAR        = 'vkbm_booking_staff_conflict';
 	private const ADMIN_NOTICE_TRANSIENT_PREFIX = 'vkbm_booking_staff_conflict_';
 	private const ADMIN_NOTICE_TYPE_ERROR       = 'error';
@@ -156,6 +161,7 @@ class Booking_Admin {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_quick_edit_assets' ) );
 		add_action( 'wp_ajax_vkbm_conflicting_staff', array( $this, 'ajax_conflicting_staff' ) );
+		add_action( 'wp_ajax_' . self::RESERVER_SEARCH_ACTION, array( $this, 'ajax_search_reservers' ) );
 		add_action( 'admin_menu', array( $this, 'register_reservation_page_menu' ) );
 		add_action( 'admin_notices', array( $this, 'render_staff_conflict_notice' ) );
 		add_filter( 'manage_' . Booking_Post_Type::POST_TYPE . '_posts_columns', array( $this, 'register_columns' ) );
@@ -239,11 +245,23 @@ class Booking_Admin {
 			return;
 		}
 
+		// 予約編集画面の独自 UI（添付画像・担当配分・メタボックスなど）の CSS（issue #659）。
+		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
+
 		wp_enqueue_media();
 		wp_enqueue_script(
 			'vkbm-booking-admin',
 			VKBM_PLUGIN_DIR_URL . 'assets/js/booking-admin.js',
 			array(),
+			VKBM_VERSION,
+			true
+		);
+
+		// 予約者の検索・変更 UI。vkbmBookingAdmin（上の Ajax 設定）を使うため後から読み込む。
+		wp_enqueue_script(
+			'vkbm-booking-reserver-search',
+			VKBM_PLUGIN_DIR_URL . 'assets/js/booking-reserver-search.js',
+			array( 'vkbm-booking-admin' ),
 			VKBM_VERSION,
 			true
 		);
@@ -254,12 +272,66 @@ class Booking_Admin {
 			'vkbm-booking-admin',
 			'vkbmBookingAdmin',
 			array(
-				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-				'action'  => 'vkbm_conflicting_staff',
-				'nonce'   => wp_create_nonce( self::NONCE_ACTION ),
-				'postId'  => $current_post_id,
+				'ajaxUrl'  => admin_url( 'admin-ajax.php' ),
+				'action'   => 'vkbm_conflicting_staff',
+				'nonce'    => wp_create_nonce( self::NONCE_ACTION ),
+				'postId'   => $current_post_id,
+				'reserver' => array(
+					'action' => self::RESERVER_SEARCH_ACTION,
+					'nonce'  => wp_create_nonce( self::RESERVER_SEARCH_ACTION ),
+					'limit'  => Reserver_Search::MAX_RESULTS,
+					'i18n'   => $this->get_reserver_search_strings(),
+				),
 			)
 		);
+	}
+
+	/**
+	 * 予約者検索の UI（JavaScript）で表示する文言を返す。
+	 *
+	 * @return array<string, string>
+	 */
+	private function get_reserver_search_strings(): array {
+		return array(
+			'currentReserver' => __( 'Current reserver', 'vk-booking-manager' ),
+			'searching'       => __( 'Searching…', 'vk-booking-manager' ),
+			/* translators: %d: number of users found */
+			'foundSingular'   => _n( '%d user found.', '%d users found.', 1, 'vk-booking-manager' ),
+			/* translators: %d: number of users found */
+			'foundPlural'     => _n( '%d user found.', '%d users found.', 2, 'vk-booking-manager' ),
+			/* translators: %d: maximum number of users shown */
+			'tooMany'         => __( 'Showing the first %d users. Enter more of the name or email address to narrow the results.', 'vk-booking-manager' ),
+			'notFound'        => __( 'No users found. Try a different name or email address.', 'vk-booking-manager' ),
+			'error'           => __( 'Could not search users. Check your connection and search again.', 'vk-booking-manager' ),
+			'sessionExpired'  => __( 'Your session may have expired. Reload the page and try again.', 'vk-booking-manager' ),
+			/* translators: 1: current reserver name, 2: newly selected reserver name */
+			'changeNotice'    => __( 'Reserver will change from %1$s to %2$s when you save this reservation.', 'vk-booking-manager' ),
+			/* translators: %s: newly selected reserver name */
+			'setNotice'       => __( 'Reserver will be set to %s when you save this reservation.', 'vk-booking-manager' ),
+			'restoreNotice'   => __( 'Reserver change cancelled.', 'vk-booking-manager' ),
+		);
+	}
+
+	/**
+	 * Ajax: 予約者の候補となるユーザーを検索する（予約編集画面の「予約者を変更」用）。
+	 *
+	 * 返す項目は ID・表示ラベル・メールアドレスに絞る。
+	 */
+	public function ajax_search_reservers(): void {
+		// 権限と nonce を確認する。
+		if ( ! current_user_can( 'list_users' ) ) {
+			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
+		}
+
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, self::RESERVER_SEARCH_ACTION ) ) {
+			wp_send_json_error( array( 'message' => 'invalid_nonce' ), 403 );
+		}
+
+		// キーワードで検索して結果を返す。
+		$keyword = isset( $_POST['keyword'] ) ? sanitize_text_field( wp_unslash( $_POST['keyword'] ) ) : '';
+
+		wp_send_json_success( Reserver_Search::search( $keyword ) );
 	}
 
 	/**
@@ -318,6 +390,9 @@ class Booking_Admin {
 		if ( ! $screen || Booking_Post_Type::POST_TYPE !== $screen->post_type ) {
 			return;
 		}
+
+		// 予約一覧・クイック編集の独自 UI の CSS（issue #659）。
+		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 
 		// #477 植草さんレビュー対応（FAIL）: どの選択肢を disabled にすべきかの判定ロジックを
 		// Jest でテストできる純粋関数として切り出したファイル。booking-quick-edit.js より先に
@@ -482,6 +557,8 @@ class Booking_Admin {
 		$nomination_fee          = (int) get_post_meta( $post->ID, self::META_NOMINATION_FEE, true );
 		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
 		// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
+		// 宿泊のサイトでは新しい予約の指名料は確定時に 0 円で保存される。ここでは宿泊かどうかで 0 にせず、
+		// 過去の予約が保存している指名料をそのまま表示する（#736）。
 		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $service_id ) ) {
 			$nomination_fee = 0;
 		}
@@ -498,13 +575,14 @@ class Booking_Admin {
 		$has_billed_total_price = metadata_exists( 'post', $post->ID, self::META_BILLED_TOTAL_PRICE );
 		$billed_total_price     = $has_billed_total_price ? (int) get_post_meta( $post->ID, self::META_BILLED_TOTAL_PRICE, true ) : '';
 		$is_preferred           = '1' === (string) get_post_meta( $post->ID, self::META_IS_PREFERRED, true );
-		$author_options         = $this->get_booking_author_options( $post );
 		$attachment_ids         = $this->normalize_attachment_ids( get_post_meta( $post->ID, self::META_ATTACHMENTS, true ) );
 		$attachment_ids_csv     = implode( ',', $attachment_ids );
 
-		$start_date = $this->format_datetime_for_input( $start, 'date' );
-		$start_time = $this->format_datetime_for_input( $start, 'time' );
-		$end_time   = $this->format_datetime_for_input( $end, 'time' );
+		// 泊の予約は予約に保存した泊数で判定する（サイトの業種が変わっても保存した日時のまま表示する）。
+		$is_stay_booking = Lodging_Booking::is_stay_booking( $post->ID );
+		$start_date      = $this->format_datetime_for_input( $start, 'date' );
+		$start_time      = $this->format_datetime_for_input( $start, 'time' );
+		$end_time        = $this->format_datetime_for_input( $end, 'time' );
 
 		$resources        = $this->get_resources();
 		$services         = $this->get_service_menus();
@@ -527,31 +605,9 @@ class Booking_Admin {
 			<table class="form-table">
 				<tbody>
 					<tr>
-						<th scope="row"><label for="vkbm-booking-author"><?php esc_html_e( 'Reserver', 'vk-booking-manager' ); ?></label></th>
+						<th scope="row"><?php esc_html_e( 'Reserver', 'vk-booking-manager' ); ?></th>
 						<td>
-							<select id="vkbm-booking-author" name="vkbm_booking[author_id]">
-								<?php foreach ( $author_options as $author_id => $label ) : ?>
-									<option value="<?php echo esc_attr( (string) $author_id ); ?>" <?php selected( $author_id, (int) $post->post_author ); ?>>
-										<?php echo esc_html( $label ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-							<?php if ( $post->post_author ) : ?>
-								<?php
-								$author_url = add_query_arg(
-									array(
-										'post_type' => Booking_Post_Type::POST_TYPE,
-										'author'    => (int) $post->post_author,
-									),
-									admin_url( 'edit.php' )
-								);
-								?>
-								<p class="description">
-									<a class="button button-secondary" href="<?php echo esc_url( $author_url ); ?>">
-										<?php esc_html_e( 'List of reservations made by this person', 'vk-booking-manager' ); ?>
-									</a>
-								</p>
-							<?php endif; ?>
+							<?php $this->render_reserver_field( $post ); ?>
 						</td>
 					</tr>
 					<tr>
@@ -566,6 +622,15 @@ class Booking_Admin {
 							</select>
 						</td>
 					</tr>
+					<?php if ( $is_stay_booking ) : ?>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Stay', 'vk-booking-manager' ); ?></th>
+						<td>
+							<?php echo esc_html( $this->format_stay_datetime_admin( $post->ID, (string) $start, (string) $end ) ); ?>
+							<p class="description"><?php esc_html_e( 'The check-in and check-out date and time of a stay reservation cannot be changed on this screen. To change the dates, cancel this reservation and accept a new one.', 'vk-booking-manager' ); ?></p>
+						</td>
+					</tr>
+					<?php else : ?>
 					<tr>
 						<th scope="row"><label for="vkbm-booking-date"><?php esc_html_e( 'Reservation date', 'vk-booking-manager' ); ?></label></th>
 						<td>
@@ -586,6 +651,7 @@ class Booking_Admin {
 							</label>
 						</td>
 					</tr>
+					<?php endif; ?>
 					<?php $vkbm_singular = vkbm_get_resource_label_singular(); ?>
 					<tr>
 						<th scope="row">
@@ -760,7 +826,7 @@ class Booking_Admin {
 							 * 描画され、ブラウザのネイティブ制約検証で保存自体がブロックされてしまう
 							 * （機能OFFは人数編集対象外として扱う。save_post() の $guests_locked_by_capacity と対称）。
 							 */
-							$vkbm_guests_locked = ! empty( $guest_tiers ) || ( 1 === $vkbm_max_capacity && (int) $guests > 1 );
+							$vkbm_guests_locked = ! empty( $guest_tiers ) || ( 1 === $vkbm_max_capacity && (int) $guests > 1 ) || $is_stay_booking;
 							?>
 							<?php if ( $vkbm_guests_locked ) : ?>
 								<?php $vkbm_guests_unit = vkbm_get_guests_unit_label(); ?>
@@ -770,7 +836,7 @@ class Booking_Admin {
 								</p>
 								<?php if ( ! empty( $guest_tiers ) ) : ?>
 									<?php // 料金区分が定義されている予約は、人数編集の代わりに区分ごとの内訳を表示する（編集不可）。 ?>
-									<ul class="vkbm-booking-guest-tiers" style="margin: 4px 0 0;">
+									<ul class="vkbm-booking-guest-tiers">
 										<?php foreach ( $guest_tiers as $tier ) : ?>
 											<li>
 												<?php
@@ -886,7 +952,7 @@ class Booking_Admin {
 						<th scope="row"><label for="vkbm-booking-service"><?php esc_html_e( 'Menu', 'vk-booking-manager' ); ?></label></th>
 						<td>
 							<input type="hidden" name="vkbm_booking[service_id]" value="<?php echo esc_attr( (string) $service_id ); ?>" />
-							<label style="display:block; margin-bottom: 6px;">
+							<label class="vkbm-booking-service-change-toggle">
 								<input type="checkbox" id="vkbm-booking-allow-service-change" name="vkbm_booking[allow_service_change]" value="1" />
 								<?php esc_html_e( 'Change menu (exception)', 'vk-booking-manager' ); ?>
 							</label>
@@ -1131,6 +1197,12 @@ class Booking_Admin {
 
 		$start = ( $date && $start_time ) ? $this->combine_datetime( $date, $start_time ) : '';
 		$end   = ( $date && $end_time ) ? $this->combine_datetime( $date, $end_time ) : '';
+		if ( Lodging_Booking::is_stay_booking( $post_id ) ) {
+			// 泊の予約のチェックイン日時・チェックアウト日時は、この画面から変更できない。
+			// 日付の入力欄が1つだけの時間枠向けの値で上書きして、チェックアウト日が失われるのを防ぐ。
+			$start = (string) get_post_meta( $post_id, self::META_DATE_START, true );
+			$end   = (string) get_post_meta( $post_id, self::META_DATE_END, true );
+		}
 
 		$resource_id          = $data['resource_id'];
 		$service_id_locked    = $data['service_id'];
@@ -1174,7 +1246,9 @@ class Booking_Admin {
 		$saved_service_id          = (int) get_post_meta( $post_id, self::META_SERVICE_ID, true );
 		$existing_guests           = max( 1, (int) get_post_meta( $post_id, self::META_GUESTS, true ) );
 		$guests_locked_by_capacity = 1 === Staff_Conflict_Detector::get_menu_capacity( $saved_service_id ) && $existing_guests > 1;
-		if ( $has_saved_guest_tiers || $guests_locked_by_capacity ) {
+		// 泊の予約は人数・合計金額が予約確定時に泊数込みで決まっているため、人数も保存済みの値で固定する。
+		$is_stay_booking = Lodging_Booking::is_stay_booking( $post_id );
+		if ( $has_saved_guest_tiers || $guests_locked_by_capacity || $is_stay_booking ) {
 			$guests = $existing_guests;
 		} else {
 			// 料金区分未定義：指名の有無に関わらず、送信された人数を 1〜max_capacity にクランプする。
@@ -1199,14 +1273,13 @@ class Booking_Admin {
 			}
 
 			// 担当スタッフが割り当てられていない予約は、他予約でスタッフが埋まると対応できないため保存を中断する。
-			if ( $resource_id <= 0 ) {
+			if ( Staff_Conflict_Detector::is_staff_unassigned( $status, $resource_id ) ) {
 				$this->set_staff_required_notice( $post_id );
 				return;
 			}
 
-			$has_conflict        = in_array( $resource_id, $this->get_conflicting_staff_ids( $post_id, $start, $end, $service_id, $guests ), true );
-			$settings            = ( new Settings_Repository() )->get_settings();
-			$allow_overlap_admin = ! empty( $settings['provider_allow_staff_overlap_admin'] );
+			$has_conflict        = Staff_Conflict_Detector::is_staff_in_conflict( $resource_id, $post_id, $start, $end, $service_id, $guests );
+			$allow_overlap_admin = Staff_Conflict_Detector::is_staff_overlap_allowed_in_admin();
 
 			if ( $has_conflict && ! $allow_overlap_admin ) {
 				$this->set_staff_conflict_notice( $post_id, $resource_id, self::ADMIN_NOTICE_TYPE_ERROR );
@@ -1227,7 +1300,8 @@ class Booking_Admin {
 			$service_base_price = ( '' !== $raw_price && is_numeric( $raw_price ) ) ? max( 0, (int) $raw_price ) : '';
 		}
 
-		if ( $author_id > 0 && (int) $post->post_author !== $author_id ) {
+		// 予約者の変更は、検索 API と同じ list_users 権限を持つユーザーだけに許可する。
+		if ( $author_id > 0 && (int) $post->post_author !== $author_id && current_user_can( 'list_users' ) ) {
 			// Update booking author when a valid user is selected.
 			// 有効なユーザーが選択された場合に予約投稿者を更新する.
 			wp_update_post(
@@ -1269,7 +1343,10 @@ class Booking_Admin {
 		// 保存済みの区分内訳（Σ 区分料金 × 区分人数）＋指名料で合計を再計算する。
 		// 区分未定義は従来どおり 基本料金スナップショット × 人数 ＋指名料。
 		$saved_guest_tiers = $this->get_saved_guest_tiers( $post_id );
-		if ( ! empty( $saved_guest_tiers ) ) {
+		if ( $is_stay_booking && metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE ) ) {
+			// 泊の予約の合計は予約確定時に「（プラン料金＋客室の追加料金）× 泊数」で保存済み。ここでは作り直さず保持する。
+			$base_total_price = max( 0, (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true ) );
+		} elseif ( ! empty( $saved_guest_tiers ) ) {
 			$base_total_price = max( 0, Price_Tiers::total_price( $saved_guest_tiers ) + $nomination_fee_for_total );
 		} else {
 			$base_total_price = max( 0, ( $base_price_for_total * $guests ) + $nomination_fee_for_total );
@@ -1328,7 +1405,10 @@ class Booking_Admin {
 				$start = get_post_meta( $post_id, self::META_DATE_START, true );
 				$end   = get_post_meta( $post_id, self::META_DATE_END, true );
 
-				if ( $start ) {
+				if ( $start && $end && Lodging_Booking::is_stay_booking( $post_id ) ) {
+					// 泊の予約は、チェックイン日時〜チェックアウト日時と泊数を表示する。
+					echo esc_html( $this->format_stay_datetime_admin( $post_id, (string) $start, (string) $end ) );
+				} elseif ( $start ) {
 					echo esc_html( $this->format_datetime_admin( $start ) );
 					if ( $end ) {
 						echo esc_html( ' - ' . $this->format_datetime_admin( $end, 'time' ) );
@@ -1563,7 +1643,7 @@ class Booking_Admin {
 		// 何も変更されていないのに外部連携イベントが発火することはない。
 		if ( $status !== $previous_status && self::is_staff_check_target_status( $status ) ) {
 			$resource_id = (int) get_post_meta( $post_id, self::META_RESOURCE_ID, true );
-			if ( $resource_id <= 0 ) {
+			if ( Staff_Conflict_Detector::is_staff_unassigned( $status, $resource_id ) ) {
 				$this->set_staff_required_notice( $post_id );
 				return;
 			}
@@ -2070,7 +2150,7 @@ class Booking_Admin {
 	 * @return bool 担当スタッフの競合チェック・競合警告の対象なら true。
 	 */
 	public static function is_staff_check_target_status( string $status ): bool {
-		return self::STATUS_CANCELLED !== $status && self::STATUS_NO_SHOW !== $status;
+		return Staff_Conflict_Detector::is_staff_check_target_status( $status );
 	}
 
 	/**
@@ -2084,36 +2164,21 @@ class Booking_Admin {
 		$label = vkbm_get_resource_label_singular();
 		$name  = $staff_id > 0 ? (string) get_the_title( $staff_id ) : '';
 
-		if ( '' !== $name ) {
+		if ( self::ADMIN_NOTICE_TYPE_WARNING !== $notice_type ) {
+			$message = Staff_Conflict_Detector::get_staff_conflict_error_message( $staff_id );
+		} elseif ( '' !== $name ) {
 			$message = sprintf(
 				/* translators: 1: resource label, 2: resource name */
-				__( 'The selected %1$s (%2$s) cannot be specified because there is another reservation in the same time slot.', 'vk-booking-manager' ),
+				__( 'This %1$s (%2$s) has another reservation for the same time slot.', 'vk-booking-manager' ),
 				$label,
 				$name
 			);
 		} else {
 			$message = sprintf(
 				/* translators: %s: resource label */
-				__( 'The selected %1$s cannot be specified because there is another reservation in the same time slot.', 'vk-booking-manager' ),
+				__( 'This %1$s has other reservations for the same time slot.', 'vk-booking-manager' ),
 				$label
 			);
-		}
-
-		if ( self::ADMIN_NOTICE_TYPE_WARNING === $notice_type ) {
-			if ( '' !== $name ) {
-				$message = sprintf(
-					/* translators: 1: resource label, 2: resource name */
-					__( 'This %1$s (%2$s) has another reservation for the same time slot.', 'vk-booking-manager' ),
-					$label,
-					$name
-				);
-			} else {
-				$message = sprintf(
-					/* translators: %s: resource label */
-					__( 'This %1$s has other reservations for the same time slot.', 'vk-booking-manager' ),
-					$label
-				);
-			}
 		}
 
 		$this->push_admin_notice( $post_id, $message, $notice_type );
@@ -2144,19 +2209,7 @@ class Booking_Admin {
 	 * @param int $post_id 予約投稿ID。
 	 */
 	private function set_staff_required_notice( int $post_id ): void {
-		$label = vkbm_get_resource_label_singular();
-
-		$message = sprintf(
-			/* translators: %s: resource label. */
-			__( 'No %s is assigned, so the reservation was not saved.', 'vk-booking-manager' ),
-			$label
-		);
-		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。
-		$message .= ' ' . sprintf(
-			/* translators: %s: resource label. */
-			__( 'Please assign at least one %s.', 'vk-booking-manager' ),
-			$label
-		);
+		$message = Staff_Conflict_Detector::get_staff_required_message();
 
 		$this->push_admin_notice( $post_id, $message, self::ADMIN_NOTICE_TYPE_ERROR );
 	}
@@ -2321,6 +2374,24 @@ class Booking_Admin {
 		}
 
 		return $datetime->format( 'Y.n.j H:i' );
+	}
+
+	/**
+	 * 泊の予約のチェックイン日時・チェックアウト日時・泊数を管理画面用の1行にする。
+	 *
+	 * @param int    $post_id   予約の投稿ID。
+	 * @param string $check_in  保存済みのチェックイン日時。
+	 * @param string $check_out 保存済みのチェックアウト日時。
+	 * @return string
+	 */
+	private function format_stay_datetime_admin( int $post_id, string $check_in, string $check_out ): string {
+		return sprintf(
+			/* translators: 1: Check-in date and time, 2: Check-out date and time, 3: Number of nights (e.g. 1 night). */
+			__( 'Check-in %1$s - Check-out %2$s (%3$s)', 'vk-booking-manager' ),
+			$this->format_datetime_admin( $check_in ),
+			$this->format_datetime_admin( $check_out ),
+			Lodging_Booking::format_nights_label( Lodging_Booking::get_booking_nights( $post_id ) )
+		);
 	}
 
 	/**
@@ -2518,58 +2589,84 @@ class Booking_Admin {
 	}
 
 	/**
-	 * Build booking author dropdown options.
+	 * 予約者欄（現在の予約者の表示と、検索して選び直すパネル）を出力する。
 	 *
-	 * @param WP_Post $post Booking post.
-	 * @return array<int, string>
-	 */
-	private function get_booking_author_options( WP_Post $post ): array {
-		$roles      = wp_roles();
-		$role_names = $roles ? array_keys( $roles->roles ) : array();
-		$options    = array();
-		$users      = get_users(
-			array(
-				'role__in'    => $role_names,
-				'orderby'     => 'display_name',
-				'order'       => 'ASC',
-				'count_total' => false,
-			)
-		);
-
-		foreach ( $users as $user ) {
-			if ( ! $user instanceof WP_User ) {
-				continue;
-			}
-
-			$options[ (int) $user->ID ] = $this->resolve_author_label( $user );
-		}
-
-		$selected_author_id = (int) $post->post_author;
-		if ( $selected_author_id > 0 && ! isset( $options[ $selected_author_id ] ) ) {
-			$selected_user = get_userdata( $selected_author_id );
-			if ( $selected_user instanceof WP_User ) {
-				$options[ (int) $selected_user->ID ] = $this->resolve_author_label( $selected_user );
-			}
-		}
-
-		return $options;
-	}
-
-	/**
-	 * Resolve the author label with name priority.
+	 * 初期表示は現在の予約者だけ。変更するときは JavaScript の検索パネルで選び直す
+	 * （全ユーザーを並べるプルダウンは使わない）。値は hidden の vkbm_booking[author_id] に持たせる。
 	 *
-	 * @param WP_User $user User instance.
-	 * @return string
+	 * @param WP_Post $post 予約の投稿。
 	 */
-	private function resolve_author_label( WP_User $user ): string {
-		// Prefer full name > kana > display name, and fall back to user ID.
-		// 姓名 > ふりがな > 表示名 を優先し、なければユーザーIDにする.
-		$label = trim( VKBM_Helper::get_user_display_name( $user ) );
-		if ( '' !== $label ) {
-			return $label;
+	private function render_reserver_field( WP_Post $post ): void {
+		$author_id   = (int) $post->post_author;
+		$author_user = $author_id > 0 ? get_userdata( $author_id ) : false;
+
+		// 氏名欄の表示。未設定・削除済みユーザーは専用の文言にする。
+		$author_label = __( 'Not set', 'vk-booking-manager' );
+		$author_email = '';
+		if ( $author_user instanceof WP_User ) {
+			$author_label = Reserver_Search::resolve_label( $author_user );
+			$author_email = (string) $author_user->user_email;
+		} elseif ( $author_id > 0 ) {
+			/* translators: %d: user ID */
+			$author_label = sprintf( __( 'Unknown user (ID: %d)', 'vk-booking-manager' ), $author_id );
 		}
 
-		return (string) $user->ID;
+		$change_label = $author_id > 0 ? __( 'Change reserver', 'vk-booking-manager' ) : __( 'Select reserver', 'vk-booking-manager' );
+		$can_search   = current_user_can( 'list_users' );
+		?>
+		<div
+			class="vkbm-reserver"
+			data-vkbm-reserver
+			data-original-id="<?php echo esc_attr( (string) $author_id ); ?>"
+			data-original-label="<?php echo esc_attr( $author_label ); ?>"
+			data-original-email="<?php echo esc_attr( $author_email ); ?>"
+		>
+			<input type="hidden" id="vkbm-booking-author" name="vkbm_booking[author_id]" value="<?php echo esc_attr( (string) $author_id ); ?>" data-vkbm-reserver-value />
+			<div class="vkbm-reserver__current">
+				<p class="vkbm-reserver__name" data-vkbm-reserver-name><?php echo esc_html( $author_label ); ?></p>
+				<p class="vkbm-reserver__email" data-vkbm-reserver-email <?php echo '' === $author_email ? 'hidden' : ''; ?>><?php echo esc_html( $author_email ); ?></p>
+			</div>
+			<div class="vkbm-reserver__actions">
+				<?php if ( $can_search ) : ?>
+					<button type="button" class="button button-secondary vkbm-reserver__change" hidden aria-expanded="false" aria-controls="vkbm-reserver-panel" data-vkbm-reserver-change data-change-label="<?php echo esc_attr( __( 'Change reserver', 'vk-booking-manager' ) ); ?>" data-select-label="<?php echo esc_attr( __( 'Select reserver', 'vk-booking-manager' ) ); ?>"><?php echo esc_html( $change_label ); ?></button>
+				<?php endif; ?>
+				<?php if ( $author_id > 0 ) : ?>
+					<?php
+					$author_url = add_query_arg(
+						array(
+							'post_type' => Booking_Post_Type::POST_TYPE,
+							'author'    => $author_id,
+						),
+						admin_url( 'edit.php' )
+					);
+					?>
+					<a class="button button-secondary" href="<?php echo esc_url( $author_url ); ?>" data-vkbm-reserver-saved-action>
+						<?php esc_html_e( 'List of reservations made by this person', 'vk-booking-manager' ); ?>
+					</a>
+					<?php if ( $author_user instanceof WP_User && current_user_can( 'edit_user', $author_id ) ) : ?>
+						<a class="button button-secondary" href="<?php echo esc_url( get_edit_user_link( $author_id ) ); ?>" data-vkbm-reserver-saved-action>
+							<?php esc_html_e( 'Reserver information', 'vk-booking-manager' ); ?>
+						</a>
+					<?php endif; ?>
+				<?php endif; ?>
+				<button type="button" class="button button-secondary vkbm-reserver__restore" hidden data-vkbm-reserver-restore><?php esc_html_e( 'Restore original reserver', 'vk-booking-manager' ); ?></button>
+			</div>
+			<p class="vkbm-reserver__notice" role="status" data-vkbm-reserver-notice></p>
+			<?php if ( $can_search ) : ?>
+				<div class="vkbm-reserver__panel" id="vkbm-reserver-panel" hidden data-vkbm-reserver-panel>
+					<label class="vkbm-reserver__panel-label" for="vkbm-reserver-search"><?php esc_html_e( 'Search users', 'vk-booking-manager' ); ?></label>
+					<p class="description" id="vkbm-reserver-search-description"><?php esc_html_e( 'Enter part of a name, furigana, or email address.', 'vk-booking-manager' ); ?></p>
+					<div class="vkbm-reserver__search">
+						<input type="search" id="vkbm-reserver-search" class="regular-text" autocomplete="off" aria-describedby="vkbm-reserver-search-description" data-vkbm-reserver-input />
+						<button type="button" class="button button-secondary" data-vkbm-reserver-search><?php esc_html_e( 'Search', 'vk-booking-manager' ); ?></button>
+					</div>
+					<p class="vkbm-reserver__status" role="status" data-vkbm-reserver-status><span class="spinner" aria-hidden="true"></span><span data-vkbm-reserver-status-text></span></p>
+					<ul class="vkbm-reserver__results" aria-label="<?php echo esc_attr( __( 'Matching users', 'vk-booking-manager' ) ); ?>" data-vkbm-reserver-results></ul>
+					<button type="button" class="button button-secondary vkbm-reserver__close" data-vkbm-reserver-close><?php esc_html_e( 'Close', 'vk-booking-manager' ); ?></button>
+				</div>
+			<?php endif; ?>
+		</div>
+		<?php
 	}
 
 	/**

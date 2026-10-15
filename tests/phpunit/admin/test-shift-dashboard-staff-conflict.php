@@ -95,7 +95,7 @@ class Shift_Dashboard_Staff_Conflict_Test extends WP_UnitTestCase {
 		);
 		$this->assertStringContainsString( 'vkbm-alert__danger', $output_danger );
 		$this->assertStringContainsString( 'role="alert"', $output_danger );
-		$this->assertStringContainsString( 'reassign the staff', $output_danger );
+		$this->assertStringContainsString( 'reassign the Staff', $output_danger );
 
 		$output_empty = $this->capture(
 			fn() => $method->invoke(
@@ -108,7 +108,7 @@ class Shift_Dashboard_Staff_Conflict_Test extends WP_UnitTestCase {
 				)
 			)
 		);
-		$this->assertStringNotContainsString( 'Bookings the assigned staff cannot accommodate', $output_empty );
+		$this->assertStringNotContainsString( 'Bookings the assigned Staff cannot accommodate', $output_empty );
 	}
 
 	/**

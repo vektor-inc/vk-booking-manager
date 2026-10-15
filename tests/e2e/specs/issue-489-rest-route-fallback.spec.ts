@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { getServiceMenuId } from '../utils/helpers';
 
 /**
  * Issue #489: パーマリンク設定はあるがサーバー側（.htaccess 等）に WordPress の
@@ -62,8 +63,12 @@ test.describe( 'Issue #489: REST ?rest_route= fallback when /wp-json/ is unreach
 		// （global-setup.ts が作る /booking/ には data-default-menu-id が無く、
 		// URL にも menu_id を付けていないため）。
 		// issue-392-nomination-slot-capacity.spec.ts のメニュー選択手順に合わせる。
+		// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+		const menuId = getServiceMenuId();
 		const menuReserveButton = page
-			.locator( '.vkbm-menu-loop__item .vkbm-menu-loop__button--reserve' )
+			.locator(
+				`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+			)
 			.first();
 		await expect( menuReserveButton ).toBeVisible( { timeout: 20000 } );
 

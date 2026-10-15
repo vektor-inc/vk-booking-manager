@@ -7,6 +7,8 @@
  * - 公開中のリソースなら個別チェックが無くても指名できること
  * - 下書き（非公開）のリソースは指名できないこと（staff_not_assigned）
  * - 「選ぶ」かつ個別選択が空のメニューは従来どおり staff_not_configured のままであること
+ * - 「選ぶ」でも、非公開（下書き）のスタッフは自動割当・指名の候補にならないこと（#647）
+ * - get_staff_snapshot() が非公開スタッフ・リソース以外の投稿の情報を返さないこと（#647）
  * を、private メソッドのため ReflectionMethod 経由で検証する。
  *
  * 無料版では resolve_staff_ids() がメニュー側の担当設定を参照せず基本スタッフ固定になる
@@ -75,9 +77,10 @@ class Resolve_Staff_Ids_All_Staff_Test extends WP_UnitTestCase {
 		$staff_a = $this->create_resource( 'スタッフA', 1 );
 		$staff_b = $this->create_resource( 'スタッフB', 2 );
 		$draft_c = $this->create_resource( 'スタッフC（下書き）', 3, 'draft' );
+		$draft_d = $this->create_resource( 'スタッフD（下書き）', 4, 'draft' );
 
 		// このテストで作ったリソースだけを候補にするため、他の公開中リソースはフィルターで除外する。
-		$own_ids = array( $staff_a, $staff_b );
+		$own_ids = array( $staff_a, $staff_b, $draft_d );
 		$filter  = static function ( array $staff_ids ) use ( $own_ids ): array {
 			return array_values( array_intersect( $staff_ids, $own_ids ) );
 		};
@@ -131,6 +134,41 @@ class Resolve_Staff_Ids_All_Staff_Test extends WP_UnitTestCase {
 				'preferred_staff'     => 0,
 				'expected'            => array( $staff_b ),
 			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択に下書きが含まれる・指名なし => 公開中のスタッフだけが自動割当の候補になる（#647 正常系）',
+				'staff_all'           => false,
+				'staff_ids'           => array( $staff_a, $draft_d ),
+				'preferred_staff'     => 0,
+				'expected'            => array( $staff_a ),
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択に入っている下書きのスタッフを指名 => staff_not_assigned エラー（#647 異常系）',
+				'staff_all'           => false,
+				'staff_ids'           => array( $staff_a, $draft_d ),
+				'preferred_staff'     => $draft_d,
+				'expected'            => 'staff_not_assigned',
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択が空・下書きのスタッフを指名 => staff_not_assigned エラー（#647 異常系）',
+				'staff_all'           => false,
+				'staff_ids'           => array(),
+				'preferred_staff'     => $draft_d,
+				'expected'            => 'staff_not_assigned',
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択が空・公開中のスタッフを指名 => その指名スタッフで受け付ける（#647 正常系・回帰）',
+				'staff_all'           => false,
+				'staff_ids'           => array(),
+				'preferred_staff'     => $staff_a,
+				'expected'            => array( $staff_a ),
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択が下書きだけ・指名なし => 候補が無いので staff_not_configured（#647 境界値）',
+				'staff_all'           => false,
+				'staff_ids'           => array( $draft_d ),
+				'preferred_staff'     => 0,
+				'expected'            => 'staff_not_configured',
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -148,5 +186,51 @@ class Resolve_Staff_Ids_All_Staff_Test extends WP_UnitTestCase {
 		}
 
 		remove_filter( 'vkbm_menu_assignable_staff_ids', $filter );
+	}
+
+	/**
+	 * get_staff_snapshot() が、公開済みのリソースだけを返すことを検証する（#647）。
+	 */
+	public function test_get_staff_snapshot(): void {
+		$published = $this->create_resource( '公開スタッフ', 1 );
+		$draft     = $this->create_resource( '下書きスタッフ', 2, 'draft' );
+		$private   = $this->create_resource( '非公開スタッフ', 3, 'private' );
+		$page_id   = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_title'  => '固定ページ',
+			)
+		);
+
+		$service = new Availability_Service();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '公開済みのリソース => 情報を返す（正常系）',
+				'staff_ids'           => array( $published ),
+				'expected'            => array( $published ),
+			),
+			array(
+				'test_condition_name' => '下書き・非公開のリソース => 含めない（異常系）',
+				'staff_ids'           => array( $published, $draft, $private ),
+				'expected'            => array( $published ),
+			),
+			array(
+				'test_condition_name' => 'リソース以外の公開済み投稿（固定ページ）の ID => 含めない（異常系）',
+				'staff_ids'           => array( $page_id ),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '存在しない ID => 含めない（境界値）',
+				'staff_ids'           => array( 999999999 ),
+				'expected'            => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $service->get_staff_snapshot( $case['staff_ids'] );
+			$this->assertSame( $case['expected'], array_keys( $result ), $case['test_condition_name'] );
+		}
 	}
 }

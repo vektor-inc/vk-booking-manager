@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_Block;
@@ -125,6 +126,8 @@ class Menu_Card_Block {
 			array(
 				// 予約ブロックと同じハンドル名を使い、両方が読み込まれても重複登録・重複出力にならないようにする。
 				'handle' => 'vkbm-shared-menu-card',
+				// menu-loop の style-index.css は共通部品（ボタン等）を含まないため、依存として読み込む（issue #660）。
+				'deps'   => array( Common_Styles::COMPONENTS_HANDLE ),
 				'src'    => VKBM_PLUGIN_DIR_URL . 'build/blocks/menu-loop/style-index.css',
 				'ver'    => defined( 'VKBM_VERSION' ) ? VKBM_VERSION : null,
 				'path'   => VKBM_PLUGIN_DIR_PATH . 'build/blocks/menu-loop/style-index.css',

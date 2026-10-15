@@ -27,6 +27,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * 各テスト後に基本設定オプションを掃除する。
 	 */
 	public function tear_down(): void {
+		$_GET = array();
 		delete_option( Settings_Repository::OPTION_KEY );
 		parent::tear_down();
 	}
@@ -416,5 +417,44 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 		$renderer = $this->make_renderer();
 
 		$this->assertSame( 'いますぐ予約', $renderer->get_default_reserve_label() );
+	}
+
+	/**
+	 * build_reservation_link() が、表示中の URL の検証済みの日付だけをリンクへ引き継ぐことを検証する。
+	 */
+	public function test_build_reservation_link_carries_valid_dates_only(): void {
+		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$renderer = $this->make_renderer();
+		$post     = $this->create_menu_post();
+		$base     = 'https://example.com/reserve/?menu_id=' . $post->ID;
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'date がある => 引き継ぐ',
+				'get'                 => array( 'date' => '2098-10-20' ),
+				'expected'            => $base . '&date=2098-10-20',
+			),
+			array(
+				'test_condition_name' => '不正な date => 引き継がない',
+				'get'                 => array( 'date' => '2098-02-31' ),
+				'expected'            => $base,
+			),
+			array(
+				'test_condition_name' => 'スクリプト混じりの値 => 引き継がない',
+				'get'                 => array( 'date' => '"><script>alert(1)</script>' ),
+				'expected'            => $base,
+			),
+			array(
+				'test_condition_name' => 'クエリなし => 従来どおり menu_id だけ',
+				'get'                 => array(),
+				'expected'            => $base,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$_GET = $case['get'];
+			$this->assertSame( $case['expected'], $renderer->build_reservation_link( $post ), $case['test_condition_name'] );
+		}
+		$_GET = array();
 	}
 }

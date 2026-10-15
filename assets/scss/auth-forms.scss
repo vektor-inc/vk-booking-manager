@@ -1,3 +1,6 @@
+@use "breakpoints" as *;
+@use "mixins" as *;
+
 .vkbm-auth-card {
 	max-width: 520px;
 	border: 1px solid var(--vkbm--color--border);
@@ -53,7 +56,7 @@
 	justify-content: center;
 	width: 2rem;
 	height: 2rem;
-	background: #fff;
+	background: var(--vkbm--color--bg-primary, #fff);
 	border: none;
 	border-radius: 5px; /* フォームの角が切れたりしないように */
 	color: #475569;
@@ -62,8 +65,8 @@
 
 .vkbm-auth-form__password-toggle:hover,
 .vkbm-auth-form__password-toggle:focus {
-	border-color: #2563eb;
-	color: #2563eb;
+	border-color: var(--vkbm--color--primary, #2563eb);
+	color: var(--vkbm--color--primary, #2563eb);
 }
 
 .vkbm-auth-form__password-toggle-icon {
@@ -71,15 +74,8 @@
 }
 
 .vkbm-auth-form__password-toggle-label {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	white-space: nowrap;
-	border: 0;
+
+	@include vkbm-visually-hidden;
 }
 
 .vkbm-auth-form__field-group {
@@ -148,13 +144,12 @@
 	cursor: not-allowed;
 }
 
-/* keep only customized block defined once later */
-
 .vkbm-auth-form__input:focus {
-	border-color: #2563eb;
-	outline: none;
-	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
-	background: #fff;
+	border-color: var(--vkbm--color--primary, #2563eb);
+	// プライマリカラーが薄い色でも位置が分かるよう、固定の濃色 outline を付ける（強制カラーモードでも有効）
+	outline: 2px solid #11181c;
+	outline-offset: 1px;
+	background: var(--vkbm--color--bg-primary, #fff);
 }
 
 .vkbm-auth-form__meta {
@@ -214,13 +209,13 @@
 }
 
 /* ==========================================================================
-   認証メール再送フォーム（issue #507）
+   認証メール再送フォーム
    ========================================================================== */
 .vkbm-auth-form__resend {
 	margin-top: 0.75rem;
 }
 
-@media (max-width: 600px) {
+@include vkbm-bp-down($vkbm-bp-front-sm) {
 
 	.vkbm-auth-card {
 		padding: 1.5rem;

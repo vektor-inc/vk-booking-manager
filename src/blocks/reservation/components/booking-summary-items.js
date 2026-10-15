@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { formatCurrency } from '../../shared/pricing';
 import { formatGuestsCount } from '../../shared/guests';
 
@@ -59,6 +59,26 @@ export const BookingSummaryItems = ( {
 							</dd>
 						</dl>
 					) ) }
+			{ /* 泊の予約: 泊数を表示する（時間枠の予約には nights が無いため出ない）。 */ }
+			{ Number( booking?.nights ) > 0 && (
+				<dl className="vkbm-confirm__summary-item">
+					<dt className="vkbm-confirm__summary-item-title">
+						{ __( 'Number of nights', 'vk-booking-manager' ) }
+					</dt>
+					<dd className="vkbm-confirm__summary-item-value">
+						{ sprintf(
+							/* translators: %d: number of nights */
+							_n(
+								'%d night',
+								'%d nights',
+								Number( booking.nights ),
+								'vk-booking-manager'
+							),
+							Number( booking.nights )
+						) }
+					</dd>
+				</dl>
+			) }
 			{ Number( booking?.guests ) > 1 && (
 				<dl className="vkbm-confirm__summary-item">
 					<dt className="vkbm-confirm__summary-item-title">

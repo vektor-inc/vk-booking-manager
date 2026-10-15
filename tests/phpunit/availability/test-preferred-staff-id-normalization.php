@@ -65,6 +65,7 @@ use function current_datetime;
 use function get_post;
 use function get_posts;
 use function update_post_meta;
+use function wp_timezone;
 use function wp_update_post;
 
 /**
@@ -140,14 +141,85 @@ class Preferred_Staff_Id_Normalization_Test extends WP_UnitTestCase {
 		$preferred_without = $preferred_reflection->invoke( $service, array() );
 		$preferred_with    = $preferred_reflection->invoke( $service, array( 'resource_id' => 555 ) );
 
-		$key_without = (string) $cache_key_reflection->invoke( $service, 'daily', 3, array( 10 ), '2026-04-01', 'Asia/Tokyo', $preferred_without > 0 );
-		$key_with    = (string) $cache_key_reflection->invoke( $service, 'daily', 3, array( 10 ), '2026-04-01', 'Asia/Tokyo', $preferred_with > 0 );
+		$key_without = (string) $cache_key_reflection->invoke( $service, 'daily', 3, array( 10 ), '2026-04-01', $preferred_without > 0 );
+		$key_with    = (string) $cache_key_reflection->invoke( $service, 'daily', 3, array( 10 ), '2026-04-01', $preferred_with > 0 );
 
 		if ( Staff_Editor::is_enabled() ) {
 			$this->assertNotSame( $key_without, $key_with, 'Pro版では resource_id の有無でキャッシュキーが分かれる（正常系・従来どおり「指名」として区別される）' );
 		} else {
 			$this->assertSame( $key_without, $key_with, '無料版では resource_id の有無でキャッシュキーが分かれてはいけない（異常系・本PRの核心）' );
 		}
+	}
+
+	/**
+	 * get_daily_slots: リクエストのタイムゾーンにかかわらずサイト基準の同じ枠を返すことを検証する。
+	 */
+	public function test_get_daily_slots_uses_site_timezone(): void {
+		$staff_id = $this->create_staff();
+		$menu_id  = $this->create_menu();
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+		update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+
+		$target = current_datetime()->modify( '+2 months' );
+		$year   = (int) $target->format( 'Y' );
+		$month  = (int) $target->format( 'n' );
+		$this->create_full_month_shift(
+			$staff_id,
+			$year,
+			$month,
+			'open',
+			array(
+				array(
+					'start' => '10:00',
+					'end'   => '19:00',
+				),
+			)
+		);
+
+		$service  = new Availability_Service();
+		$calendar = $service->get_calendar_meta(
+			array(
+				'menu_id'  => $menu_id,
+				'year'     => $year,
+				'month'    => $month,
+				'timezone' => 'Asia/Tokyo',
+			)
+		);
+		$this->assertIsArray( $calendar, '前提: 月次の空き状況を取得できるべき' );
+
+		$available_date = '';
+		foreach ( $calendar['days'] as $day ) {
+			if ( $day['available_slots'] > 0 ) {
+				$available_date = $day['date'];
+				break;
+			}
+		}
+		$this->assertNotSame( '', $available_date, '前提: 予約可能な日が存在するべき' );
+
+		$new_york = $service->get_daily_slots(
+			array(
+				'menu_id'  => $menu_id,
+				'date'     => $available_date,
+				'timezone' => 'America/New_York',
+			)
+		);
+		$tokyo    = $service->get_daily_slots(
+			array(
+				'menu_id'  => $menu_id,
+				'date'     => $available_date,
+				'timezone' => 'Asia/Tokyo',
+			)
+		);
+
+		$this->assertIsArray( $new_york, 'America/New_York 指定で空き枠を取得できるべき' );
+		$this->assertNotEmpty( $new_york['slots'], '前提: 比較対象の空き枠が存在するべき' );
+
+		// 文字列表現ではなく瞬間を比較し、シフト開始時刻がサイトタイムゾーンで組み立てられたことを確認する。
+		$expected_start_at = new DateTimeImmutable( $available_date . ' 10:00:00', wp_timezone() );
+		$actual_start_at   = new DateTimeImmutable( $new_york['slots'][0]['start_at'] );
+		$this->assertSame( $expected_start_at->getTimestamp(), $actual_start_at->getTimestamp(), '最初の枠は対象日の10:00:00+09:00と同じ瞬間を表すべき' );
+		$this->assertSame( $available_date . ' 10:00:00+09:00', $actual_start_at->setTimezone( wp_timezone() )->format( 'Y-m-d H:i:sP' ), '最初の枠はサイト時刻で対象日の10:00開始を表すべき' );
+		$this->assertSame( $tokyo, $new_york, '異なる timezone を渡してもサイトのシフト時刻と同じ瞬間を返すべき' );
 	}
 
 	/**
@@ -220,6 +292,12 @@ class Preferred_Staff_Id_Normalization_Test extends WP_UnitTestCase {
 
 		$this->assertIsArray( $result_without, 'resource_id未指定でエラーにならないこと' );
 		$this->assertNotEmpty( $result_without['slots'], '前提: 実際にスロットが生成されるシナリオであること（比較が自明にならないようにするため）' );
+
+		// サイトが Asia/Tokyo のとき、別のタイムゾーンを渡しても同じシフトを同じ瞬間として返す。
+		$args_other_timezone             = $args_without_resource_id;
+		$args_other_timezone['timezone'] = 'America/New_York';
+		$result_other_timezone           = $service->get_daily_slots( $args_other_timezone );
+		$this->assertSame( $result_without, $result_other_timezone, 'リクエストの timezone が異なってもサイトのタイムゾーンで同じ空き枠を返すべき' );
 
 		$args_with_resource_id                = $args_without_resource_id;
 		$args_with_resource_id['resource_id'] = $default_staff_id;

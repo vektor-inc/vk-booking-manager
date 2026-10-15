@@ -323,10 +323,20 @@ class Post_Order_Manager {
 	/**
 	 * Determine whether menu order should be enforced for the query.
 	 *
+	 * クエリ変数 vkbm_force_menu_order の3状態:
+	 * - 未指定（null）: 従来どおり（管理画面のメイン以外のクエリでは強制しない）。
+	 * - true: 管理画面のメイン以外のクエリでも強制する。
+	 * - false: 常に強制しない（ブロックで並び順を指定したクエリ用）。
+	 *
 	 * @param WP_Query $query Query to inspect.
 	 * @return bool
 	 */
 	private function should_force_order( WP_Query $query ): bool {
+		// vkbm_force_menu_order が false と明示されたクエリ（メニューループの「公開日」指定など）は、並び順を書き換えない。
+		if ( false === $query->get( 'vkbm_force_menu_order', null ) ) {
+			return false;
+		}
+
 		if ( is_admin() && ! $query->is_main_query() && ! $query->get( 'vkbm_force_menu_order' ) ) {
 			return false;
 		}
