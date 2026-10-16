@@ -313,8 +313,13 @@ $vkbm-plan-summary-control-height: 44px;
 		min-height: $vkbm-plan-summary-control-height;
 		padding-top: 0;
 		padding-bottom: 0;
+		padding-inline: var(--vkbm--spacing--xs, 0.5rem);
 		border: 1px solid var(--vkbm--color--border);
 		border-radius: var(--vkbm--radius--sm, 4px);
+		background-color: var(--vkbm--color--bg-primary, #fff);
+		color: var(--vkbm--color--text-primary, #333);
+		// 暗い配色のテーマでも、標準アイコンが白背景に沈まないようにする。
+		color-scheme: light;
 		font-size: inherit;
 		line-height: normal;
 	}
@@ -337,19 +342,46 @@ $vkbm-plan-summary-control-height: 44px;
 
 // 絞り込み検索の日付欄（ブラウザ標準の日付入力）。
 // プルダウン（select）と同じ見た目にそろえ、タップ領域は 44px 以上にする。
-// 色は指定しない（ブラウザ標準の配色のままにして、カレンダーアイコンが背景に沈まないようにする）。
+// 背景と文字色を select と同じトークンにそろえる。PC のカレンダーアイコンを保つため、appearance は iPhone・iPad 以外では変更しない（下の @supports を参照）。
 // 欄の下の補助テキスト・選んだ日付・解除ボタンは、欄と同じグループとして近接させる（親の gap のみ）。
-.vkbm-plan-summary__date-input {
+.vkbm-plan-summary__field .vkbm-plan-summary__date-input {
 	box-sizing: border-box;
 	width: 100%;
+	min-width: 0;
+	max-width: 100%;
 	height: $vkbm-plan-summary-control-height;
 	min-height: $vkbm-plan-summary-control-height;
+	margin: 0;
 	padding-top: 0;
 	padding-bottom: 0;
+	padding-inline: var(--vkbm--spacing--xs, 0.5rem);
 	border: 1px solid var(--vkbm--color--border);
 	border-radius: var(--vkbm--radius--sm, 4px);
+	background-color: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--text-primary, #333);
+	// 暗い配色のテーマでも、標準アイコンが白背景に沈まないようにする。
+	color-scheme: light;
 	font: inherit;
 	line-height: normal;
+	text-align: start;
+
+	// Safari の内側の値領域も左にそろえ、ブラウザ標準の余白を残さない。
+	&::-webkit-date-and-time-value {
+		margin: 0;
+		text-align: start;
+	}
+
+	// 日付の各部分に付く内側の余白で、select と文字の開始位置がずれないようにする。
+	&::-webkit-datetime-edit {
+		padding: 0;
+	}
+
+	// iPhone の Safari の日付欄は標準部品の幅が優先され、min-width: 0 でも列より縮まずにはみ出す。
+	// iPhone・iPad のブラウザ（WebKit）だけ標準の描画を外して列の幅に従わせる（iOS には元々カレンダーアイコンが無く、PC には当てない）。
+	@supports (-webkit-touch-callout: none) {
+		-webkit-appearance: none;
+		appearance: none;
+	}
 }
 
 .vkbm-plan-summary__date-help,
@@ -646,7 +678,8 @@ $vkbm-plan-summary-control-height: 44px;
 	padding: 0.35rem 0.5rem;
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
 	border-radius: var(--vkbm--radius--md, 8px);
-	font-size: 0.95rem;
+	// iPhone は 16px 未満の入力欄をタップすると画面を拡大するため、ルートの文字サイズが小さいテーマでも 16px を下回らせない（#549）
+	font-size: max(16px, 0.95rem);
 }
 
 // 料金区分（大人料金・子供料金など）の人数入力欄.
@@ -1080,11 +1113,48 @@ $vkbm-plan-summary-control-height: 44px;
 	}
 }
 
-// スマホ幅ではリンクが 1 行に収まらないため折り返す。
+// スマホ幅ではロゴ・事業者名・ナビを 1 行ずつ縦に並べて中央揃えにする（中途半端な段落ちを防ぐ）。
+// 上方の「.header .nav」と同じ詳細度のため、ソース順の後勝ちで上書きしている。この位置より上へ移動しないこと。
+// スマホ幅ではリンクが 1 行に収まるか言語・テーマの余白で変わり、折り返すと行頭に区切り線が残り括弧も分断される。
+// 折り返す可能性があるため最初から縦に積み、区切り線と括弧は付けず、リンクの幅を揃える。
 @include vkbm-bp-down($vkbm-bp-front-sm) {
 
+	.vkbm-reservation-header {
+		flex-direction: column;
+		text-align: center;
+	}
+
+	.vkbm-reservation-header__brand {
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+
+	.vkbm-reservation-header .vkbm-reservation-header__nav {
+		margin-left: 0;
+	}
+
 	.vkbm-reservation-header__nav {
-		flex-wrap: wrap;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0;
+
+		&::before,
+		&::after {
+			display: none;
+		}
+
+		.vkbm-reservation-header__nav-link {
+			justify-content: center;
+			text-align: center;
+		}
+	}
+
+	.vkbm-reservation-header__nav-link + .vkbm-reservation-header__nav-link {
+
+		&::before {
+			display: none;
+		}
 	}
 }
 

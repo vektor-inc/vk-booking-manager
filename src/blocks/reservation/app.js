@@ -25,6 +25,7 @@ import {
 	validateStay,
 } from './booking-ui/date-filter';
 import { joinSentences } from './booking-ui/join-sentences';
+import { GuestCountInput } from './booking-ui/guest-count-input';
 import {
 	extractAssignableStaffIds,
 	filterLodgingStaffOptions,
@@ -887,6 +888,9 @@ export const ReservationApp = ( {
 	const [ shiftDashboardUrl, setShiftDashboardUrl ] = useState(
 		userBootstrap?.shiftDashboardUrl || ''
 	);
+	const [ settingsUrl, setSettingsUrl ] = useState(
+		userBootstrap?.settingsUrl || ''
+	);
 	const [ canManageReservations, setCanManageReservations ] = useState(
 		Boolean( userBootstrap?.canManageReservations )
 	);
@@ -1245,6 +1249,7 @@ export const ReservationApp = ( {
 		if ( ! isLoggedIn ) {
 			setLogoutUrl( '' );
 			setShiftDashboardUrl( '' );
+			setSettingsUrl( '' );
 			setCanManageReservations( false );
 			return () => {
 				isMounted = false;
@@ -1259,6 +1264,7 @@ export const ReservationApp = ( {
 		) {
 			setLogoutUrl( userBootstrap.logoutUrl || '' );
 			setShiftDashboardUrl( userBootstrap.shiftDashboardUrl || '' );
+			setSettingsUrl( userBootstrap.settingsUrl || '' );
 			setCanManageReservations(
 				Boolean( userBootstrap.canManageReservations )
 			);
@@ -1280,6 +1286,7 @@ export const ReservationApp = ( {
 
 				setLogoutUrl( response?.logout_url || '' );
 				setShiftDashboardUrl( response?.shift_dashboard_url || '' );
+				setSettingsUrl( response?.settings_url || '' );
 				setCanManageReservations(
 					Boolean( response?.can_manage_reservations )
 				);
@@ -1288,6 +1295,7 @@ export const ReservationApp = ( {
 				if ( isMounted ) {
 					setLogoutUrl( '' );
 					setShiftDashboardUrl( '' );
+					setSettingsUrl( '' );
 					setCanManageReservations( false );
 				}
 			} );
@@ -3278,6 +3286,7 @@ export const ReservationApp = ( {
 		variant: navVariant,
 		ariaLabel: navAriaLabel,
 		staffDashboardHref: shiftDashboardUrl || '',
+		staffSettingsHref: settingsUrl || '',
 		logoutHref: logoutUrl || buildLogoutFallbackUrl(),
 		onReturn: () => handleAuthLink( authMode || '' ),
 		returnLabel,
@@ -4091,8 +4100,7 @@ export const ReservationApp = ( {
 														) }
 													</span>
 												</label>
-												<input
-													type="number"
+												<GuestCountInput
 													id={ `vkbm-reservation-tier-${ index }` }
 													className="vkbm-plan-summary__guests-select"
 													min="0"
@@ -4223,8 +4231,7 @@ export const ReservationApp = ( {
 										</label>
 										{ /* 数値入力にして DOM 数を maxSelectableGuests に依存させない（大きな上限でのフリーズ防止）。 */ }
 										{ /* Use a numeric input so the DOM count stays constant regardless of maxSelectableGuests. */ }
-										<input
-											type="number"
+										<GuestCountInput
 											id="vkbm-reservation-guests"
 											className="vkbm-plan-summary__guests-select"
 											min={ Math.max(

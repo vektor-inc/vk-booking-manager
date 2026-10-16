@@ -385,6 +385,9 @@
 			"%s (opens in a new tab)": [
 				"%s（新しいタブで開きます）"
 			],
+			"BM settings": [
+				"BM 設定"
+			],
 			"Log in": [
 				"ログイン"
 			],
@@ -411,6 +414,9 @@
 			],
 			"Check-in: %s. Next, select the check-out date.": [
 				"チェックイン: %s。次にチェックアウト日を選んでください。"
+			],
+			"Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the list. Select a date to choose again.": [
+				"チェックイン: %1$s、チェックアウト: %2$s。次に、空いている%3$sから1つ選んでください。日付を押すと選び直せます。"
 			],
 			"Check-in: %1$s, check-out: %2$s. Select a date to choose again.": [
 				"チェックイン: %1$s、チェックアウト: %2$s。日付を押すと選び直せます。"
@@ -456,6 +462,9 @@
 			],
 			"Total amount": [
 				"合計金額"
+			],
+			"Select a %s to proceed to reservation.": [
+				"%sを選ぶと、予約に進めます。"
 			],
 			"Rate by night": [
 				"泊ごとの料金"

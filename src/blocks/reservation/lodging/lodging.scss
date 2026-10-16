@@ -111,13 +111,55 @@
 // 客室名と料金の見た目の間隔は 4px 前後（行の高さ 1.3 のハーフレディングだけで作り、gap は 0）。
 // 内側の余白は、客室名・料金の字面と枠線の距離が上下 12px・左右 16px になるようにする。
 // .vkbm-slot-list__item は他の予約画面と共通のため、ここ（.vkbm-lodging__room）だけで上書きする。
+// 選ぶものと分かるよう、左端にラジオボタン風の丸を付ける（マークアップは button + aria-pressed のまま）。
+// 丸は ::before で描き、ボタン自体の大きさ（押せる範囲）は変えない。選択の見た目は aria-pressed から取る。
+// 丸の右側に文字が来るよう、左の内側余白を 16px（丸の左）+ 20px（丸）+ 12px（丸と文字）にする。
 .vkbm-slot-list__item.vkbm-lodging__room {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	gap: 0;
 	width: 100%;
-	padding: calc(12px - 0.15em) 16px;
+	padding: calc(12px - 0.15em) 16px calc(12px - 0.15em) 48px;
 	line-height: 1.3;
+
+	&::before {
+		content: "";
+		position: absolute;
+		top: 50%;
+		left: 16px;
+		box-sizing: border-box;
+		width: 20px;
+		height: 20px;
+		border: 2px solid var(--vkbm--color--text-secondary, #666);
+		border-radius: 50%;
+		background: var(--vkbm--color--bg-primary, #fff);
+		transform: translateY(-50%);
+	}
+
+	&:hover {
+		border-color: var(--vkbm--color--accent);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--vkbm--color--accent);
+		outline-offset: 2px;
+	}
+
+	// 選択中: アクセント色の薄い背景、丸を塗って内側に白い点。
+	&[aria-pressed="true"] {
+		border-color: var(--vkbm--color--accent);
+		// color-mix() 非対応の環境では、薄い背景の代わりに通常の背景を使う（枠線・丸の塗りで選択中は伝わる）。
+		background: var(--vkbm--color--bg-primary, #fff);
+		background: color-mix(in srgb, var(--vkbm--color--accent) 10%, var(--vkbm--color--bg-primary, #fff));
+
+		&::before {
+			border-color: var(--vkbm--color--accent);
+			background:
+				radial-gradient(circle, var(--vkbm--color--bg-primary, #fff) 0 3px, transparent 3.5px),
+				var(--vkbm--color--accent);
+		}
+	}
 }
 
 .vkbm-lodging__room-name {
@@ -212,6 +254,28 @@
 	margin: 0;
 }
 
+// 客室が未選択のときの「未選択」。選んだ客室名（通常色）と区別するため補助色にする。
+.vkbm-lodging__summary-placeholder {
+	color: var(--vkbm--color--text-secondary, #666);
+}
+
+// 「予約に進む」の直上の理由の文。見た目のボタンとの間隔は 8px（ボタンの背景が見える端なので、文字側だけ差し引く）。
+// PC は右寄せでボタンとそろえ、狭い幅（下の積み指定）では左寄せにする。
+.vkbm-plan-summary__status.vkbm-lodging__summary .vkbm-plan-summary__actions {
+	gap: 0;
+}
+
+// gap を 0 にしたため、送信失敗のエラー文はボタンとの間隔をここで付ける（見た目 8px）。
+.vkbm-plan-summary__status.vkbm-lodging__summary .vkbm-plan-summary__error {
+	margin-top: visible-gap(8px, 1);
+}
+
+.vkbm-plan-summary__hint.vkbm-lodging__action-hint {
+	margin: 0 0 visible-gap(8px, 1);
+	line-height: 1.4;
+	text-align: right;
+}
+
 // 見出し列は最低 7em（日本語の最長「チェックアウト」分）で、長い見出しがあれば広げ、値の左端をそろえる。
 .vkbm-lodging__summary-list {
 	display: grid;
@@ -258,6 +322,7 @@
 	font-size: var(--vkbm--font-size--lg, 1.25rem);
 	font-weight: 700;
 	line-height: 1.32;
+	text-align: right;
 }
 
 .vkbm-lodging__summary-rule {
@@ -298,6 +363,10 @@
 		.vkbm-plan-summary__action {
 			width: 100%;
 		}
+	}
+
+	.vkbm-plan-summary__hint.vkbm-lodging__action-hint {
+		text-align: left;
 	}
 
 	.vkbm-lodging__summary-body {

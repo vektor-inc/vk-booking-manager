@@ -278,6 +278,8 @@ class Reservation_Block {
 			'canManageReservations' => $is_logged_in && current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 			'canViewPrivateMenus'   => $is_logged_in && current_user_can( Capabilities::VIEW_SERVICE_MENUS ),
 			'shiftDashboardUrl'     => $is_logged_in ? admin_url( 'admin.php?page=vkbm-shift-dashboard' ) : '',
+			// BM 設定画面（add_menu_page の capability と同じ MANAGE_PROVIDER_SETTINGS）を開けるユーザーにだけ URL を渡す。
+			'settingsUrl'           => ( $is_logged_in && current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) ? admin_url( 'admin.php?page=vkbm-provider-settings' ) : '',
 			'logoutUrl'             => $is_logged_in ? str_replace( '&amp;', '&', wp_logout_url( $redirect ) ) : '',
 			'locale'                => $locale,
 		);

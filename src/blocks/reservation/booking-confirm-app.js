@@ -258,6 +258,9 @@ export const BookingConfirmApp = ( {
 	const [ shiftDashboardUrl, setShiftDashboardUrl ] = useState(
 		userBootstrap?.shiftDashboardUrl || ''
 	);
+	const [ settingsUrl, setSettingsUrl ] = useState(
+		userBootstrap?.settingsUrl || ''
+	);
 	const [ providerCancellationPolicy, setProviderCancellationPolicy ] =
 		useState( '' );
 	const [ providerTermsOfService, setProviderTermsOfService ] =
@@ -672,6 +675,7 @@ export const BookingConfirmApp = ( {
 			setCanManageReservations( false );
 			setLogoutUrl( '' );
 			setShiftDashboardUrl( '' );
+			setSettingsUrl( '' );
 			return () => {
 				isMounted = false;
 			};
@@ -688,6 +692,7 @@ export const BookingConfirmApp = ( {
 			);
 			setLogoutUrl( userBootstrap.logoutUrl || '' );
 			setShiftDashboardUrl( userBootstrap.shiftDashboardUrl || '' );
+			setSettingsUrl( userBootstrap.settingsUrl || '' );
 			return () => {
 				isMounted = false;
 			};
@@ -709,12 +714,14 @@ export const BookingConfirmApp = ( {
 				);
 				setLogoutUrl( response?.logout_url || '' );
 				setShiftDashboardUrl( response?.shift_dashboard_url || '' );
+				setSettingsUrl( response?.settings_url || '' );
 			} )
 			.catch( () => {
 				if ( isMounted ) {
 					setCanManageReservations( false );
 					setLogoutUrl( '' );
 					setShiftDashboardUrl( '' );
+					setSettingsUrl( '' );
 				}
 			} );
 
@@ -1771,6 +1778,7 @@ export const BookingConfirmApp = ( {
 				variant: navVariant,
 				ariaLabel: navAriaLabel,
 				staffDashboardHref: shiftDashboardUrl || '',
+				staffSettingsHref: settingsUrl || '',
 				logoutHref,
 				onReturn: handleBackClick,
 				onBookings: handleBookingsClick,

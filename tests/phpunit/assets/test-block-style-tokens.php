@@ -42,6 +42,19 @@ use PHPUnit\Framework\TestCase;
 class Block_Style_Tokens_Test extends TestCase {
 
 	/**
+	 * 宿泊予約の合計金額が泊ごとの金額と同じ右端にそろうことを検証する。
+	 */
+	public function test_lodging_total_amount_is_aligned_to_the_right(): void {
+		$content = $this->read_local_file( VKBM_PLUGIN_DIR_PATH . 'src/blocks/reservation/lodging/lodging.scss' );
+
+		$this->assertMatchesRegularExpression(
+			'/\.vkbm-lodging__summary-list--total\s*>\s*\.vkbm-lodging__summary-value\s*\{[^}]*text-align:\s*right;/s',
+			$content,
+			'宿泊予約の合計金額が右端にそろう指定が見つかりません。'
+		);
+	}
+
+	/**
 	 * 共通部品を持たず、ブロック固有ルールだけを書く style.scss の一覧。
 	 *
 	 * @var string[]

@@ -5,6 +5,7 @@ export const ReservationHeaderNav = ( {
 	screen = '',
 	ariaLabel = '',
 	staffDashboardHref = '',
+	staffSettingsHref = '',
 	logoutHref = '',
 	onReturn = null,
 	returnLabel = '',
@@ -28,6 +29,12 @@ export const ReservationHeaderNav = ( {
 				type: 'link',
 				label: __( 'Shift/reservation table', 'vk-booking-manager' ),
 				href: staffDashboardHref,
+			},
+			{
+				key: 'settings',
+				type: 'link',
+				label: __( 'BM settings', 'vk-booking-manager' ),
+				href: staffSettingsHref,
 			},
 			{
 				key: 'logout',

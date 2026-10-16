@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 3.0.0
+Stable tag: 3.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,15 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.1.0 =
+* [ 機能追加 ][ 予約ブロック ] 店舗スタッフ用のヘッダーナビに、BM 設定画面を開ける権限のあるユーザーだけに「BM 設定」リンクを追加
+* [ 仕様変更 ][ 予約ブロック ] スマホで人数欄を打ち替えやすく変更（タップで数字を全選択・数字のテンキー表示・「03」の先頭の0を除去・iPhone でのタップ時の画面拡大を防止）
+* [ 仕様変更 ][ 予約ブロック ] 宿泊予約で日程を選んだあとに客室を選ぶ必要があると分かるよう、客室を選べる見た目と案内文を追加
+* [ デザイン不具合修正 ][ 予約ブロック ] iPhone の Safari で絞り込み検索の日付欄の文字位置・余白・背景がプルダウンとそろわない不具合を修正
+* [ デザイン不具合修正 ][ 予約ブロック ] 宿泊予約の合計金額が泊ごとの金額とそろわず、料金を比較しにくい表示を修正
+* [ デザイン不具合修正 ][ 予約ブロック ] スマホ幅でヘッダー（ロゴ・事業者名・ナビゲーション）の並びが崩れて見づらい不具合を修正
+* [ デザイン不具合修正 ][ 予約ブロック ] スマホ幅でヘッダーのナビゲーションが折り返すと、行頭に区切り線が残り括弧が分かれる表示を、縦に並べる表示に修正
 
 = 3.0.0 =
 * [ 機能追加 ] 会員にフラグ（要注意・VIP など任意ラベル）とメモを登録し（予約編集画面・ユーザー編集画面）、予約編集画面・シフト予約表での表示と種別ごとの予約ブロックに対応

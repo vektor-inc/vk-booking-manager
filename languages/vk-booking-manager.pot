@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: VK Booking Manager Pro 2.6.0\n"
+"Project-Id-Version: VK Booking Manager Pro 3.0.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-manager\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-15T02:47:53+00:00\n"
+"POT-Creation-Date: 2026-10-16T03:08:32+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -205,6 +205,7 @@ msgid "Basic settings"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:196
+#: src/blocks/reservation/components/reservation-header-nav.js:36
 msgid "BM settings"
 msgstr ""
 
@@ -330,12 +331,12 @@ msgstr ""
 #: src/resources/resource-labels.php:106
 #: src/rest/class-provider-settings-controller.php:93
 #: src/rest/class-provider-settings-controller.php:94
-#: src/blocks/reservation/app.js:533
 #: src/blocks/reservation/app.js:534
-#: src/blocks/reservation/app.js:1014
-#: src/blocks/reservation/app.js:1023
-#: src/blocks/reservation/booking-confirm-app.js:277
-#: src/blocks/reservation/booking-confirm-app.js:530
+#: src/blocks/reservation/app.js:535
+#: src/blocks/reservation/app.js:1018
+#: src/blocks/reservation/app.js:1027
+#: src/blocks/reservation/booking-confirm-app.js:280
+#: src/blocks/reservation/booking-confirm-app.js:533
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:527
 #: src/blocks/reservation/components/booking-summary-items.js:19
 #: src/blocks/reservation/resource-tag-empty-message.js:22
@@ -356,9 +357,9 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:732
 #: src/provider-settings/class-settings-repository.php:90
 #: src/resources/resource-labels.php:248
-#: src/blocks/reservation/app.js:536
-#: src/blocks/reservation/app.js:1030
-#: src/blocks/reservation/booking-confirm-app.js:280
+#: src/blocks/reservation/app.js:537
+#: src/blocks/reservation/app.js:1034
+#: src/blocks/reservation/booking-confirm-app.js:283
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:152
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:734
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:750
@@ -370,9 +371,9 @@ msgstr ""
 #: src/resources/resource-labels.php:261
 #: src/staff/class-staff-editor-pro.php:336
 #: src/staff/class-staff-editor.php:345
-#: src/blocks/reservation/app.js:537
-#: src/blocks/reservation/app.js:1035
-#: src/blocks/reservation/booking-confirm-app.js:283
+#: src/blocks/reservation/app.js:538
+#: src/blocks/reservation/app.js:1039
+#: src/blocks/reservation/booking-confirm-app.js:286
 msgid "Nomination fee"
 msgstr ""
 
@@ -387,9 +388,9 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:3477
 #: src/provider-settings/class-settings-repository.php:93
 #: src/resources/resource-labels.php:289
-#: src/blocks/reservation/app.js:552
-#: src/blocks/reservation/app.js:1061
-#: src/blocks/reservation/booking-confirm-app.js:286
+#: src/blocks/reservation/app.js:553
+#: src/blocks/reservation/app.js:1065
+#: src/blocks/reservation/booking-confirm-app.js:289
 #: src/blocks/reservation/components/booking-summary-items.js:126
 msgid "Other conditions"
 msgstr ""
@@ -1035,8 +1036,8 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:1946
 #: src/auth/class-auth-shortcodes.php:628
 #: src/auth/class-auth-shortcodes.php:630
-#: src/blocks/reservation/booking-confirm-app.js:2253
-#: src/blocks/reservation/components/reservation-header-nav.js:81
+#: src/blocks/reservation/booking-confirm-app.js:2261
+#: src/blocks/reservation/components/reservation-header-nav.js:88
 msgid "Log in"
 msgstr ""
 
@@ -1074,8 +1075,8 @@ msgid "If you access wp-login.php, you will be directed to the login screen of t
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2009
-#: src/blocks/reservation/app.js:3261
-#: src/blocks/reservation/booking-confirm-app.js:1755
+#: src/blocks/reservation/app.js:3269
+#: src/blocks/reservation/booking-confirm-app.js:1762
 msgid "Logo image"
 msgstr ""
 
@@ -1092,7 +1093,7 @@ msgid "Select a logo image from your Media Library (optional)."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2041
-#: src/blocks/reservation/booking-confirm-app.js:1520
+#: src/blocks/reservation/booking-confirm-app.js:1527
 #: src/blocks/reservation/components/footer-model.js:103
 msgid "Cancellation policy"
 msgstr ""
@@ -1103,7 +1104,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2056
 #: src/auth/class-auth-shortcodes.php:962
-#: src/blocks/reservation/booking-confirm-app.js:1552
+#: src/blocks/reservation/booking-confirm-app.js:1559
 #: src/blocks/reservation/components/footer-model.js:112
 msgid "System Terms of Use"
 msgstr ""
@@ -2433,7 +2434,7 @@ msgid "If set, only the specified times are available for booking."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:1374
-#: src/blocks/reservation/booking-confirm-app.js:2207
+#: src/blocks/reservation/booking-confirm-app.js:2215
 msgid "Private booking"
 msgstr ""
 
@@ -2482,9 +2483,9 @@ msgid "While \"Private booking\" is on, this setting is ignored."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:1448
-#: src/blocks/reservation/app.js:2169
-#: src/blocks/reservation/app.js:4400
-#: src/blocks/reservation/booking-confirm-app.js:2184
+#: src/blocks/reservation/app.js:2177
+#: src/blocks/reservation/app.js:4407
+#: src/blocks/reservation/booking-confirm-app.js:2192
 msgid "Private booking fee"
 msgstr ""
 
@@ -2791,7 +2792,7 @@ msgstr ""
 
 #: src/admin/class-shift-dashboard-page.php:162
 #: src/admin/class-shift-dashboard-page.php:303
-#: src/blocks/reservation/components/reservation-header-nav.js:29
+#: src/blocks/reservation/components/reservation-header-nav.js:30
 msgid "Shift/reservation table"
 msgstr ""
 
@@ -3034,7 +3035,7 @@ msgstr ""
 #: src/notifications/class-booking-notification-service.php:969
 #: src/notifications/class-booking-notification-service.php:970
 #: src/notifications/class-booking-notification-service.php:1005
-#: src/blocks/reservation/app.js:3379
+#: src/blocks/reservation/app.js:3388
 msgid "Pending"
 msgstr ""
 
@@ -3199,8 +3200,8 @@ msgstr ""
 #: src/bookings/class-booking-admin.php:2535
 #: src/notifications/class-booking-notification-service.php:998
 #: src/notifications/class-booking-notification-service.php:1153
-#: src/blocks/reservation/app.js:3384
-#: src/blocks/reservation/booking-confirm-app.js:1912
+#: src/blocks/reservation/app.js:3393
+#: src/blocks/reservation/booking-confirm-app.js:1920
 msgid "Cancelled"
 msgstr ""
 
@@ -3455,12 +3456,12 @@ msgid "Password (confirm)"
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:938
-#: src/blocks/reservation/booking-confirm-app.js:2338
+#: src/blocks/reservation/booking-confirm-app.js:2346
 msgid "Telephone number"
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:976
-#: src/blocks/reservation/app.js:3307
+#: src/blocks/reservation/app.js:3316
 msgid "I agree to the terms of use"
 msgstr ""
 
@@ -3490,7 +3491,7 @@ msgid "Please log in to edit your profile."
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:1099
-#: src/blocks/reservation/components/reservation-header-nav.js:53
+#: src/blocks/reservation/components/reservation-header-nav.js:60
 msgid "Edit user information"
 msgstr ""
 
@@ -3581,7 +3582,7 @@ msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:1833
 #: src/bookings/class-booking-confirmation-controller.php:577
-#: src/blocks/reservation/booking-confirm-app.js:1162
+#: src/blocks/reservation/booking-confirm-app.js:1169
 msgid "You must agree to the terms of use."
 msgstr ""
 
@@ -3611,8 +3612,8 @@ msgid "You are logged in as %s."
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:2094
-#: src/blocks/reservation/components/reservation-header-nav.js:35
-#: src/blocks/reservation/components/reservation-header-nav.js:61
+#: src/blocks/reservation/components/reservation-header-nav.js:42
+#: src/blocks/reservation/components/reservation-header-nav.js:68
 msgid "Log out"
 msgstr ""
 
@@ -3939,14 +3940,14 @@ msgstr ""
 
 #: src/blocks/class-menu-loop-block.php:1432
 #: src/blocks/reservation/components/booking-stay-datetime.js:21
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:756
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:775
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:85
 msgid "Check-in"
 msgstr ""
 
 #: src/blocks/class-menu-loop-block.php:1437
 #: src/blocks/reservation/components/booking-stay-datetime.js:24
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:769
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:788
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:89
 msgid "Check-out"
 msgstr ""
@@ -4012,15 +4013,15 @@ msgstr ""
 msgid "all"
 msgstr ""
 
-#: src/blocks/class-reservation-block.php:700
-#: src/blocks/reservation/app.js:3564
-#: src/blocks/reservation/booking-confirm-app.js:1803
-#: src/blocks/reservation/booking-confirm-app.js:2279
+#: src/blocks/class-reservation-block.php:702
+#: src/blocks/reservation/app.js:3573
+#: src/blocks/reservation/booking-confirm-app.js:1811
+#: src/blocks/reservation/booking-confirm-app.js:2287
 msgid "Loading form…"
 msgstr ""
 
 #. translators: %1$s: opening <a> tag to the native WordPress login page, %2$s: closing </a> tag.
-#: src/blocks/class-reservation-block.php:715
+#: src/blocks/class-reservation-block.php:717
 msgid "If the login form does not appear, please log in from the %1$salternate login page%2$s."
 msgstr ""
 
@@ -4031,8 +4032,8 @@ msgstr ""
 
 #: src/blocks/shared/class-reservation-button-renderer.php:150
 #: src/blocks/reservation-button/edit.js:127
-#: src/blocks/reservation/app.js:4449
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:863
+#: src/blocks/reservation/app.js:4456
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:909
 msgid "Proceed to Reservation"
 msgstr ""
 
@@ -4224,7 +4225,7 @@ msgstr ""
 
 #: src/bookings/class-booking-admin.php:952
 #: src/bookings/class-booking-admin.php:1388
-#: src/blocks/reservation/booking-confirm-app.js:2098
+#: src/blocks/reservation/booking-confirm-app.js:2106
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:597
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:710
 #: src/blocks/reservation/components/booking-summary-items.js:35
@@ -4255,8 +4256,8 @@ msgid "This is the basic service charge at the time of reservation. (Cannot be e
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:990
-#: src/blocks/reservation/app.js:2181
-#: src/blocks/reservation/booking-confirm-app.js:2219
+#: src/blocks/reservation/app.js:2189
+#: src/blocks/reservation/booking-confirm-app.js:2227
 #: src/blocks/reservation/components/booking-summary-items.js:110
 msgid "Total basic fee"
 msgstr ""
@@ -4322,7 +4323,7 @@ msgid "memo"
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:1121
-#: src/blocks/reservation/booking-confirm-app.js:2410
+#: src/blocks/reservation/booking-confirm-app.js:2418
 msgid "Management memo"
 msgstr ""
 
@@ -4331,8 +4332,8 @@ msgid "Reservation title"
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:1387
-#: src/blocks/reservation/booking-confirm-app.js:1905
-#: src/blocks/reservation/booking-confirm-app.js:2076
+#: src/blocks/reservation/booking-confirm-app.js:1913
+#: src/blocks/reservation/booking-confirm-app.js:2084
 msgid "Reservation date and time"
 msgstr ""
 
@@ -4457,8 +4458,8 @@ msgstr ""
 #: src/bookings/class-booking-draft-controller.php:499
 #: src/bookings/class-booking-draft-controller.php:788
 #: src/bookings/class-lodging-booking.php:287
-#: src/blocks/reservation/app.js:3070
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:521
+#: src/blocks/reservation/app.js:3078
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:541
 msgid "Please select at least one guest."
 msgstr ""
 
@@ -4492,7 +4493,7 @@ msgid "Could not assign person %s. Please try a different frame."
 msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:569
-#: src/blocks/reservation/booking-confirm-app.js:1152
+#: src/blocks/reservation/booking-confirm-app.js:1159
 msgid "You must agree to the cancellation policy."
 msgstr ""
 
@@ -4501,7 +4502,7 @@ msgid "Failed to create the booking. Please try again."
 msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:988
-#: src/blocks/reservation/booking-confirm-app.js:1322
+#: src/blocks/reservation/booking-confirm-app.js:1329
 msgid "A reservation for the same date and time already exists. Please change the date and time."
 msgstr ""
 
@@ -4568,8 +4569,8 @@ msgstr ""
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:407
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:479
 #: src/blocks/reservation/components/booking-summary-items.js:71
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:652
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:788
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:671
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:807
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:102
 msgid "%d night"
 msgid_plural "%d nights"
@@ -4662,7 +4663,7 @@ msgstr ""
 
 #. translators: %s: the lowest price (e.g. ¥7,000). The price differs by day, so it is shown as "from".
 #: src/common/class-lodging-price-display.php:191
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:581
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:600
 msgid "%s~"
 msgstr ""
 
@@ -4673,13 +4674,13 @@ msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:47
-#: src/blocks/reservation/app.js:290
+#: src/blocks/reservation/app.js:291
 msgid "This menu accepts bookings from %d guests."
 msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:52
-#: src/blocks/reservation/app.js:298
+#: src/blocks/reservation/app.js:299
 msgid "Please set the number of guests to %d or more."
 msgstr ""
 
@@ -5156,9 +5157,9 @@ msgstr ""
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:389
 #: src/resources/resource-labels.php:304
-#: src/blocks/reservation/app.js:554
-#: src/blocks/reservation/app.js:1067
-#: src/blocks/reservation/booking-confirm-app.js:290
+#: src/blocks/reservation/app.js:555
+#: src/blocks/reservation/app.js:1071
+#: src/blocks/reservation/booking-confirm-app.js:293
 #: src/blocks/reservation/components/booking-summary-items.js:88
 msgid "Number of guests"
 msgstr ""
@@ -5214,8 +5215,8 @@ msgstr ""
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:464
 #: src/resources/class-resource-delete-guard.php:659
-#: src/blocks/reservation/app.js:3424
-#: src/blocks/reservation/booking-confirm-app.js:1966
+#: src/blocks/reservation/app.js:3433
+#: src/blocks/reservation/booking-confirm-app.js:1974
 msgid "Cancel"
 msgstr ""
 
@@ -5256,7 +5257,7 @@ msgstr ""
 #: src/notifications/class-booking-notification-service.php:875
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:378
 #: src/blocks/reservation/components/booking-summary-items.js:66
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:782
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:801
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:99
 msgid "Number of nights"
 msgstr ""
@@ -5977,7 +5978,7 @@ msgid "(tax included)"
 msgstr ""
 
 #: src/provider-settings/class-settings-repository.php:325
-#: src/blocks/reservation/booking-confirm-app.js:1423
+#: src/blocks/reservation/booking-confirm-app.js:1430
 msgid "We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page."
 msgstr ""
 
@@ -6481,11 +6482,11 @@ msgid "Loading the default days on sale."
 msgstr ""
 
 #: src/shifts/class-shift-lodging-editor.php:285
-#: src/blocks/reservation/app.js:3504
-#: src/blocks/reservation/app.js:3691
-#: src/blocks/reservation/app.js:3864
-#: src/blocks/reservation/booking-confirm-app.js:1832
-#: src/blocks/reservation/booking-confirm-app.js:2011
+#: src/blocks/reservation/app.js:3513
+#: src/blocks/reservation/app.js:3700
+#: src/blocks/reservation/app.js:3873
+#: src/blocks/reservation/booking-confirm-app.js:1840
+#: src/blocks/reservation/booking-confirm-app.js:2019
 #: src/blocks/reservation/booking-ui/calendar-grid.js:149
 msgid "Loading…"
 msgstr ""
@@ -6805,352 +6806,353 @@ msgid "Proceed to Reservation Button Block"
 msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:320
+#: src/blocks/reservation/app.js:321
 msgid "This menu requires a minimum of %d guests."
 msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:341
+#: src/blocks/reservation/app.js:342
 msgid "This time slot cannot accept the minimum of %d guests required for this menu."
 msgstr ""
 
-#: src/blocks/reservation/app.js:347
+#: src/blocks/reservation/app.js:348
 msgid "Please choose another time slot."
 msgstr ""
 
-#: src/blocks/reservation/app.js:791
+#: src/blocks/reservation/app.js:792
 msgid "There are no service menus available for the selected dates."
 msgstr ""
 
-#: src/blocks/reservation/app.js:795
+#: src/blocks/reservation/app.js:796
 msgid "Change the dates or clear the dates to show all service menus."
 msgstr ""
 
-#: src/blocks/reservation/app.js:801
+#: src/blocks/reservation/app.js:802
 msgid "There are no service menus available on the selected date."
 msgstr ""
 
-#: src/blocks/reservation/app.js:805
+#: src/blocks/reservation/app.js:806
 msgid "Change the date or clear the date to show all service menus."
 msgstr ""
 
 #. translators: %s: resource label (e.g. "Staff"), customizable via basic settings.
-#: src/blocks/reservation/app.js:814
+#: src/blocks/reservation/app.js:815
 msgid "There are no service menus available for the selected %s."
 msgstr ""
 
 #. translators: %s: "No preference" label, customizable via basic settings.
-#: src/blocks/reservation/app.js:824
+#: src/blocks/reservation/app.js:825
 msgid "Choose %s to show all service menus."
 msgstr ""
 
-#: src/blocks/reservation/app.js:834
+#: src/blocks/reservation/app.js:835
 msgid "There are no service menus to display."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1220
+#: src/blocks/reservation/app.js:1224
 msgid "Could not get menu list."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1425
-#: src/blocks/reservation/booking-confirm-app.js:933
+#: src/blocks/reservation/app.js:1433
+#: src/blocks/reservation/booking-confirm-app.js:940
 msgid "The form could not be displayed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1471
-#: src/blocks/reservation/booking-confirm-app.js:976
+#: src/blocks/reservation/app.js:1479
+#: src/blocks/reservation/booking-confirm-app.js:983
 msgid "Do you want to cancel this reservation?"
 msgstr ""
 
-#: src/blocks/reservation/app.js:1500
-#: src/blocks/reservation/booking-confirm-app.js:1005
+#: src/blocks/reservation/app.js:1508
+#: src/blocks/reservation/booking-confirm-app.js:1012
 msgid "I was unable to cancel my reservation."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1582
-#: src/blocks/reservation/booking-confirm-app.js:1065
+#: src/blocks/reservation/app.js:1590
+#: src/blocks/reservation/booking-confirm-app.js:1072
 msgid "The reservation list could not be loaded."
 msgstr ""
 
-#: src/blocks/reservation/app.js:2265
+#: src/blocks/reservation/app.js:2273
 msgid "Failed to retrieve menu information."
 msgstr ""
 
 #. translators: %s: 診断理由の本文。
-#: src/blocks/reservation/app.js:2353
+#: src/blocks/reservation/app.js:2361
 msgid "[Administrator diagnostic] %s"
 msgstr ""
 
-#: src/blocks/reservation/app.js:2414
+#: src/blocks/reservation/app.js:2422
 msgid "Failed to load calendar."
 msgstr ""
 
-#: src/blocks/reservation/app.js:2496
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:212
+#: src/blocks/reservation/app.js:2504
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:214
 msgid "Failed to read free space."
 msgstr ""
 
-#: src/blocks/reservation/app.js:2855
+#: src/blocks/reservation/app.js:2863
 msgid "Could not delete the favorite."
 msgstr ""
 
-#: src/blocks/reservation/app.js:2986
+#: src/blocks/reservation/app.js:2994
 msgid "The details of the specified service menu cannot be displayed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3018
-#: src/blocks/reservation/app.js:3192
+#: src/blocks/reservation/app.js:3026
+#: src/blocks/reservation/app.js:3200
 msgid "Temporary reservation data save failed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3040
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:347
+#: src/blocks/reservation/app.js:3048
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:349
 msgid "The editor does not transition to the confirmation page."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3050
+#: src/blocks/reservation/app.js:3058
 msgid "Please select your menu and reservation slot before proceeding."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3062
+#: src/blocks/reservation/app.js:3070
 msgid "Please select the quantity."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3212
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:376
+#: src/blocks/reservation/app.js:3220
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:378
 msgid "Failed to save reservation details. Please try again later."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3262
-#: src/blocks/reservation/booking-confirm-app.js:1756
+#: src/blocks/reservation/app.js:3270
+#: src/blocks/reservation/booking-confirm-app.js:1763
 msgid "Reservation block navigation"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3267
-#: src/blocks/reservation/components/reservation-header-nav.js:71
+#: src/blocks/reservation/app.js:3275
+#: src/blocks/reservation/components/reservation-header-nav.js:78
 msgid "Return"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3268
+#: src/blocks/reservation/app.js:3276
 msgid "return"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3299
-#: src/blocks/reservation/components/reservation-header-nav.js:105
+#: src/blocks/reservation/app.js:3308
+#: src/blocks/reservation/components/reservation-header-nav.js:112
 msgid "Back to the list"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3311
+#: src/blocks/reservation/app.js:3320
 msgid "Please check our cancellation policy before booking."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3315
+#: src/blocks/reservation/app.js:3324
 msgid "Your reservation has been completed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3420
-#: src/blocks/reservation/app.js:4445
-#: src/blocks/reservation/booking-confirm-app.js:1962
-#: src/blocks/reservation/booking-confirm-app.js:2453
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:862
+#: src/blocks/reservation/app.js:3429
+#: src/blocks/reservation/app.js:4452
+#: src/blocks/reservation/booking-confirm-app.js:1970
+#: src/blocks/reservation/booking-confirm-app.js:2461
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:908
 msgid "Processing…"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3432
+#: src/blocks/reservation/app.js:3441
 msgid "Book the same again"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3523
-#: src/blocks/reservation/booking-confirm-app.js:1850
+#: src/blocks/reservation/app.js:3532
+#: src/blocks/reservation/booking-confirm-app.js:1858
 msgid "There are no reservations to display."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3533
+#: src/blocks/reservation/app.js:3542
 msgid "Upcoming reservations"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3548
+#: src/blocks/reservation/app.js:3557
 msgid "Past reservations"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3639
+#: src/blocks/reservation/app.js:3648
 msgid "Favorites"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3645
+#: src/blocks/reservation/app.js:3654
 msgid "Your usual"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3669
+#: src/blocks/reservation/app.js:3678
 msgid "Delete favorite"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3822
+#: src/blocks/reservation/app.js:3831
 msgid "Loading service menu…"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3935
+#: src/blocks/reservation/app.js:3944
 msgid "The date you had selected has passed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3939
+#: src/blocks/reservation/app.js:3948
 msgid "Please select the date again."
 msgstr ""
 
 #. translators: %s: the date that was carried over and cannot be booked.
-#: src/blocks/reservation/app.js:3947
+#: src/blocks/reservation/app.js:3956
 msgid "The date you selected (%s) cannot be booked for this menu."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3956
+#: src/blocks/reservation/app.js:3965
 msgid "Please select another date."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4039
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:816
+#: src/blocks/reservation/app.js:4048
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:825
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:844
 msgid "Not selected"
 msgstr ""
 
 #. translators: %s: total price.
-#: src/blocks/reservation/app.js:4153
+#: src/blocks/reservation/app.js:4161
 msgid "Total: %s"
 msgstr ""
 
 #. translators: %d: number of remaining bookable guests.
-#: src/blocks/reservation/app.js:4173
+#: src/blocks/reservation/app.js:4181
 msgid "You can book up to %d more."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4309
+#: src/blocks/reservation/app.js:4316
 msgid "Make this staff member's time slot private (no other bookings for that staff member will be accepted)"
 msgstr ""
 
-#: src/blocks/reservation/app.js:4313
+#: src/blocks/reservation/app.js:4320
 msgid "Make this time slot private (no other bookings will be accepted)"
 msgstr ""
 
-#: src/blocks/reservation/app.js:4322
+#: src/blocks/reservation/app.js:4329
 msgid "This slot already has a booking, so a private booking cannot be specified."
 msgstr ""
 
 #. translators: %d: minimum number of guests required for a private booking.
-#: src/blocks/reservation/app.js:4334
+#: src/blocks/reservation/app.js:4341
 msgid "A private booking requires at least %d guests."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4344
+#: src/blocks/reservation/app.js:4351
 msgid "Making it private means no one else can book this staff member for this time slot."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4348
+#: src/blocks/reservation/app.js:4355
 msgid "Making it private means no one else can book this time slot."
 msgstr ""
 
 #. translators: %d: number of guests at or above which the private booking fee is not charged.
-#: src/blocks/reservation/app.js:4358
-#: src/blocks/reservation/app.js:4415
+#: src/blocks/reservation/app.js:4365
+#: src/blocks/reservation/app.js:4422
 msgid "No private booking fee applies because there are %d or more guests."
 msgstr ""
 
 #. translators: %s: private booking fee per guest.
-#: src/blocks/reservation/app.js:4369
+#: src/blocks/reservation/app.js:4376
 msgid "A private booking fee of %s per guest will be added."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:470
+#: src/blocks/reservation/booking-confirm-app.js:473
 msgid "The URL does not include a temporary reservation data parameter. Please try again from the reservation page."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:501
-#: src/blocks/reservation/booking-confirm-app.js:1335
+#: src/blocks/reservation/booking-confirm-app.js:504
+#: src/blocks/reservation/booking-confirm-app.js:1342
 msgid "Couldn't load temporary reservation data. Please try again from the reservation page."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1119
+#: src/blocks/reservation/booking-confirm-app.js:1126
 msgid "Could not add to favorites."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1209
+#: src/blocks/reservation/booking-confirm-app.js:1216
 msgid "An error occurred during payment processing."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1346
+#: src/blocks/reservation/booking-confirm-app.js:1353
 msgid "Confirmation of reservation failed. Please try again later."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1386
+#: src/blocks/reservation/booking-confirm-app.js:1393
 msgid "Loading temporary reservation data…"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1416
+#: src/blocks/reservation/booking-confirm-app.js:1423
 msgid "Your tentative reservation has been received."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1480
+#: src/blocks/reservation/booking-confirm-app.js:1487
 msgid "No entry"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1540
+#: src/blocks/reservation/booking-confirm-app.js:1547
 msgid "I agree to the cancellation policy"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1584
-#: src/blocks/reservation/booking-confirm-app.js:2359
+#: src/blocks/reservation/booking-confirm-app.js:1591
+#: src/blocks/reservation/booking-confirm-app.js:2367
 msgid "Payment method"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1614
-#: src/blocks/reservation/booking-confirm-app.js:2382
+#: src/blocks/reservation/booking-confirm-app.js:1621
+#: src/blocks/reservation/booking-confirm-app.js:2390
 msgid "On-site payment"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1632
-#: src/blocks/reservation/booking-confirm-app.js:2400
+#: src/blocks/reservation/booking-confirm-app.js:1639
+#: src/blocks/reservation/booking-confirm-app.js:2408
 msgid "Card payment (Stripe)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1669
+#: src/blocks/reservation/booking-confirm-app.js:1676
 msgid "Save these details so you can quickly book the same thing again next time (add to favorites)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2211
+#: src/blocks/reservation/booking-confirm-app.js:2219
 msgid "Private (exclusive use of this slot)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2236
+#: src/blocks/reservation/booking-confirm-app.js:2244
 msgid "You must log in to confirm your reservation."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2269
-#: src/blocks/reservation/components/reservation-header-nav.js:89
+#: src/blocks/reservation/booking-confirm-app.js:2277
+#: src/blocks/reservation/components/reservation-header-nav.js:96
 msgid "Sign up"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2309
+#: src/blocks/reservation/booking-confirm-app.js:2317
 msgid "Requests/Notes"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2318
+#: src/blocks/reservation/booking-confirm-app.js:2326
 msgid "Reserved name"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2330
+#: src/blocks/reservation/booking-confirm-app.js:2338
 msgid "Please enter customer name."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2350
+#: src/blocks/reservation/booking-confirm-app.js:2358
 msgid "Please enter your contact phone number."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2434
+#: src/blocks/reservation/booking-confirm-app.js:2442
 msgid "If the minimum number of participants is not reached, the session may not take place."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2454
+#: src/blocks/reservation/booking-confirm-app.js:2462
 msgid "Reserve with this content"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2473
+#: src/blocks/reservation/booking-confirm-app.js:2481
 msgid "Added to favorites."
 msgstr ""
 
@@ -7275,7 +7277,7 @@ msgstr ""
 msgid "%s (opens in a new tab)"
 msgstr ""
 
-#: src/blocks/reservation/components/reservation-header-nav.js:45
+#: src/blocks/reservation/components/reservation-header-nav.js:52
 msgid "Confirm reservation"
 msgstr ""
 
@@ -7296,85 +7298,95 @@ msgstr ""
 msgid "Block settings"
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:388
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:398
 msgid "Select the check-in date."
 msgstr ""
 
 #. translators: %s: check-in date (e.g. October 10, 2026 (Sat)).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:392
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:402
 msgid "Check-in: %s. Next, select the check-out date."
 msgstr ""
 
+#. translators: 1: check-in date, 2: check-out date, 3: label for a room (e.g. room).
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:411
+msgid "Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the list. Select a date to choose again."
+msgstr ""
+
 #. translators: 1: check-in date, 2: check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:401
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:422
 msgid "Check-in: %1$s, check-out: %2$s. Select a date to choose again."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:413
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:434
 #: src/blocks/reservation/lodging/lodging-room-list.js:46
 msgid "Checking available rooms…"
 msgstr ""
 
 #. translators: %d: number of available rooms.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:420
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:441
 msgid "%d room is available."
 msgid_plural "%d rooms are available."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: minimum number of guests with unit (e.g. 1), 2: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:439
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:460
 msgid "The number of guests can be from %1$s to %2$s."
 msgstr ""
 
 #. translators: %s: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:511
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:531
 msgid "The number of guests can be up to %s."
 msgstr ""
 
 #. translators: %s: plan price per room per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:589
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:608
 msgid "The rate is %s per room per night. It does not change with the number of guests."
 msgstr ""
 
 #. translators: %s: plan price per guest per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:597
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:616
 msgid "The rate is %s per guest per night."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:611
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:630
 msgid "However, the rate varies by day, such as pre-holidays and special dates."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:615
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:634
 msgid "Select your dates and a room to see the rate for each night."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:631
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:650
 msgid "The dates you had selected have passed."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:635
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:661
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:654
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:680
 msgid "Please select your dates again."
 msgstr ""
 
 #. translators: 1: check-in date, 2: number of nights.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:645
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:664
 msgid "The dates you selected (%1$s, %2$s) cannot be booked for this plan because no rooms are available or they are outside the booking period."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:711
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:730
 msgid "Reselect dates"
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:723
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:742
 msgid "The room you selected is no longer available. Please select again."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:841
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:869
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:129
 msgid "Total amount"
+msgstr ""
+
+#. translators: %s: label for a room (e.g. room).
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:890
+msgid "Select a %s to proceed to reservation."
 msgstr ""
 
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:110

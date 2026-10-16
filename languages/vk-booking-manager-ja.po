@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: vk-booking-manager 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-"
 "manager\n"
-"POT-Creation-Date: 2026-10-15T02:47:53+00:00\n"
+"POT-Creation-Date: 2026-10-16T03:08:32+00:00\n"
 "PO-Revision-Date: 2026-02-23 23:58+0900\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -219,6 +219,7 @@ msgid "Basic settings"
 msgstr "基本設定"
 
 #: src/admin/class-provider-settings-page.php:196
+#: src/blocks/reservation/components/reservation-header-nav.js:36
 msgid "BM settings"
 msgstr "BM 設定"
 
@@ -374,10 +375,10 @@ msgstr ""
 #: src/resources/resource-labels.php:89 src/resources/resource-labels.php:106
 #: src/rest/class-provider-settings-controller.php:93
 #: src/rest/class-provider-settings-controller.php:94
-#: src/blocks/reservation/app.js:533 src/blocks/reservation/app.js:534
-#: src/blocks/reservation/app.js:1014 src/blocks/reservation/app.js:1023
-#: src/blocks/reservation/booking-confirm-app.js:277
-#: src/blocks/reservation/booking-confirm-app.js:530
+#: src/blocks/reservation/app.js:534 src/blocks/reservation/app.js:535
+#: src/blocks/reservation/app.js:1018 src/blocks/reservation/app.js:1027
+#: src/blocks/reservation/booking-confirm-app.js:280
+#: src/blocks/reservation/booking-confirm-app.js:533
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:527
 #: src/blocks/reservation/components/booking-summary-items.js:19
 #: src/blocks/reservation/resource-tag-empty-message.js:22
@@ -396,9 +397,9 @@ msgstr "担当可能スタッフ"
 
 #: src/admin/class-provider-settings-page.php:732
 #: src/provider-settings/class-settings-repository.php:90
-#: src/resources/resource-labels.php:248 src/blocks/reservation/app.js:536
-#: src/blocks/reservation/app.js:1030
-#: src/blocks/reservation/booking-confirm-app.js:280
+#: src/resources/resource-labels.php:248 src/blocks/reservation/app.js:537
+#: src/blocks/reservation/app.js:1034
+#: src/blocks/reservation/booking-confirm-app.js:283
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:152
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:734
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:750
@@ -409,9 +410,9 @@ msgstr "指名なし"
 #: src/provider-settings/class-settings-repository.php:91
 #: src/resources/resource-labels.php:261
 #: src/staff/class-staff-editor-pro.php:336
-#: src/staff/class-staff-editor.php:345 src/blocks/reservation/app.js:537
-#: src/blocks/reservation/app.js:1035
-#: src/blocks/reservation/booking-confirm-app.js:283
+#: src/staff/class-staff-editor.php:345 src/blocks/reservation/app.js:538
+#: src/blocks/reservation/app.js:1039
+#: src/blocks/reservation/booking-confirm-app.js:286
 msgid "Nomination fee"
 msgstr "指名料"
 
@@ -425,9 +426,9 @@ msgstr "時間"
 #: src/admin/class-provider-settings-page.php:735
 #: src/admin/class-provider-settings-page.php:3477
 #: src/provider-settings/class-settings-repository.php:93
-#: src/resources/resource-labels.php:289 src/blocks/reservation/app.js:552
-#: src/blocks/reservation/app.js:1061
-#: src/blocks/reservation/booking-confirm-app.js:286
+#: src/resources/resource-labels.php:289 src/blocks/reservation/app.js:553
+#: src/blocks/reservation/app.js:1065
+#: src/blocks/reservation/booking-confirm-app.js:289
 #: src/blocks/reservation/components/booking-summary-items.js:126
 msgid "Other conditions"
 msgstr "その他条件"
@@ -1210,8 +1211,8 @@ msgstr "回 / 30分"
 #: src/admin/class-provider-settings-page.php:1946
 #: src/auth/class-auth-shortcodes.php:628
 #: src/auth/class-auth-shortcodes.php:630
-#: src/blocks/reservation/booking-confirm-app.js:2253
-#: src/blocks/reservation/components/reservation-header-nav.js:81
+#: src/blocks/reservation/booking-confirm-app.js:2261
+#: src/blocks/reservation/components/reservation-header-nav.js:88
 msgid "Log in"
 msgstr "ログイン"
 
@@ -1268,8 +1269,8 @@ msgstr ""
 "wp-login.php にアクセスした場合は予約ページのログイン画面へ誘導します。"
 
 #: src/admin/class-provider-settings-page.php:2009
-#: src/blocks/reservation/app.js:3261
-#: src/blocks/reservation/booking-confirm-app.js:1755
+#: src/blocks/reservation/app.js:3269
+#: src/blocks/reservation/booking-confirm-app.js:1762
 msgid "Logo image"
 msgstr "ロゴ画像"
 
@@ -1286,7 +1287,7 @@ msgid "Select a logo image from your Media Library (optional)."
 msgstr "Media Library からロゴ画像を選択します（任意）。"
 
 #: src/admin/class-provider-settings-page.php:2041
-#: src/blocks/reservation/booking-confirm-app.js:1520
+#: src/blocks/reservation/booking-confirm-app.js:1527
 #: src/blocks/reservation/components/footer-model.js:103
 msgid "Cancellation policy"
 msgstr "キャンセルポリシー"
@@ -1299,7 +1300,7 @@ msgstr "予約ページや通知メール等で表示するキャンセル規定
 
 #: src/admin/class-provider-settings-page.php:2056
 #: src/auth/class-auth-shortcodes.php:962
-#: src/blocks/reservation/booking-confirm-app.js:1552
+#: src/blocks/reservation/booking-confirm-app.js:1559
 #: src/blocks/reservation/components/footer-model.js:112
 msgid "System Terms of Use"
 msgstr "システム利用規約"
@@ -2915,7 +2916,7 @@ msgid "If set, only the specified times are available for booking."
 msgstr "設定すると、指定した時刻のみ予約可能になります。"
 
 #: src/admin/class-service-menu-editor.php:1374
-#: src/blocks/reservation/booking-confirm-app.js:2207
+#: src/blocks/reservation/booking-confirm-app.js:2215
 msgid "Private booking"
 msgstr "貸し切り予約"
 
@@ -2983,8 +2984,8 @@ msgid "While \"Private booking\" is on, this setting is ignored."
 msgstr "「貸し切り予約」がONの間、この設定は無視されます。"
 
 #: src/admin/class-service-menu-editor.php:1448
-#: src/blocks/reservation/app.js:2169 src/blocks/reservation/app.js:4400
-#: src/blocks/reservation/booking-confirm-app.js:2184
+#: src/blocks/reservation/app.js:2177 src/blocks/reservation/app.js:4407
+#: src/blocks/reservation/booking-confirm-app.js:2192
 msgid "Private booking fee"
 msgstr "貸切料金"
 
@@ -3334,7 +3335,7 @@ msgstr "サイトの管理者にプラグインの更新を依頼してくださ
 
 #: src/admin/class-shift-dashboard-page.php:162
 #: src/admin/class-shift-dashboard-page.php:303
-#: src/blocks/reservation/components/reservation-header-nav.js:29
+#: src/blocks/reservation/components/reservation-header-nav.js:30
 msgid "Shift/reservation table"
 msgstr "シフト・予約表"
 
@@ -3581,7 +3582,7 @@ msgstr "内容を確認し、担当の%sを見直してください。"
 #: src/notifications/class-booking-notification-service.php:969
 #: src/notifications/class-booking-notification-service.php:970
 #: src/notifications/class-booking-notification-service.php:1005
-#: src/blocks/reservation/app.js:3379
+#: src/blocks/reservation/app.js:3388
 msgid "Pending"
 msgstr "仮予約"
 
@@ -3753,8 +3754,8 @@ msgstr "顧客フラグ: %s"
 #: src/bookings/class-booking-admin.php:2535
 #: src/notifications/class-booking-notification-service.php:998
 #: src/notifications/class-booking-notification-service.php:1153
-#: src/blocks/reservation/app.js:3384
-#: src/blocks/reservation/booking-confirm-app.js:1912
+#: src/blocks/reservation/app.js:3393
+#: src/blocks/reservation/booking-confirm-app.js:1920
 msgid "Cancelled"
 msgstr "キャンセル済み"
 
@@ -4033,11 +4034,11 @@ msgid "Password (confirm)"
 msgstr "パスワード（確認）"
 
 #: src/auth/class-auth-shortcodes.php:938
-#: src/blocks/reservation/booking-confirm-app.js:2338
+#: src/blocks/reservation/booking-confirm-app.js:2346
 msgid "Telephone number"
 msgstr "電話番号"
 
-#: src/auth/class-auth-shortcodes.php:976 src/blocks/reservation/app.js:3307
+#: src/auth/class-auth-shortcodes.php:976 src/blocks/reservation/app.js:3316
 msgid "I agree to the terms of use"
 msgstr "利用規約に同意します"
 
@@ -4072,7 +4073,7 @@ msgid "Please log in to edit your profile."
 msgstr "プロフィールを編集するにはログインしてください。"
 
 #: src/auth/class-auth-shortcodes.php:1099
-#: src/blocks/reservation/components/reservation-header-nav.js:53
+#: src/blocks/reservation/components/reservation-header-nav.js:60
 msgid "Edit user information"
 msgstr "ユーザー情報編集"
 
@@ -4172,7 +4173,7 @@ msgstr "パスワードを入力してください。"
 
 #: src/auth/class-auth-shortcodes.php:1833
 #: src/bookings/class-booking-confirmation-controller.php:577
-#: src/blocks/reservation/booking-confirm-app.js:1162
+#: src/blocks/reservation/booking-confirm-app.js:1169
 msgid "You must agree to the terms of use."
 msgstr "利用規約への同意が必要です。"
 
@@ -4206,8 +4207,8 @@ msgid "You are logged in as %s."
 msgstr "%s としてログイン中です。"
 
 #: src/auth/class-auth-shortcodes.php:2094
-#: src/blocks/reservation/components/reservation-header-nav.js:35
-#: src/blocks/reservation/components/reservation-header-nav.js:61
+#: src/blocks/reservation/components/reservation-header-nav.js:42
+#: src/blocks/reservation/components/reservation-header-nav.js:68
 msgid "Log out"
 msgstr "ログアウト"
 
@@ -4600,14 +4601,14 @@ msgstr "%sの写真"
 
 #: src/blocks/class-menu-loop-block.php:1432
 #: src/blocks/reservation/components/booking-stay-datetime.js:21
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:756
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:775
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:85
 msgid "Check-in"
 msgstr "チェックイン"
 
 #: src/blocks/class-menu-loop-block.php:1437
 #: src/blocks/reservation/components/booking-stay-datetime.js:24
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:769
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:788
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:89
 msgid "Check-out"
 msgstr "チェックアウト"
@@ -4673,15 +4674,15 @@ msgstr "すべて"
 msgid "all"
 msgstr "すべて"
 
-#: src/blocks/class-reservation-block.php:700
-#: src/blocks/reservation/app.js:3564
-#: src/blocks/reservation/booking-confirm-app.js:1803
-#: src/blocks/reservation/booking-confirm-app.js:2279
+#: src/blocks/class-reservation-block.php:702
+#: src/blocks/reservation/app.js:3573
+#: src/blocks/reservation/booking-confirm-app.js:1811
+#: src/blocks/reservation/booking-confirm-app.js:2287
 msgid "Loading form…"
 msgstr "フォームを読み込み中…"
 
 #. translators: %1$s: opening <a> tag to the native WordPress login page, %2$s: closing </a> tag.
-#: src/blocks/class-reservation-block.php:715
+#: src/blocks/class-reservation-block.php:717
 msgid ""
 "If the login form does not appear, please log in from the %1$salternate "
 "login page%2$s."
@@ -4695,8 +4696,8 @@ msgid "%s (select a plan on the reservation page)"
 msgstr "%s（予約ページでプランを選択）"
 
 #: src/blocks/shared/class-reservation-button-renderer.php:150
-#: src/blocks/reservation-button/edit.js:127 src/blocks/reservation/app.js:4449
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:863
+#: src/blocks/reservation-button/edit.js:127 src/blocks/reservation/app.js:4456
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:909
 msgid "Proceed to Reservation"
 msgstr "予約に進む"
 
@@ -4947,7 +4948,7 @@ msgstr ""
 
 #: src/bookings/class-booking-admin.php:952
 #: src/bookings/class-booking-admin.php:1388
-#: src/blocks/reservation/booking-confirm-app.js:2098
+#: src/blocks/reservation/booking-confirm-app.js:2106
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:597
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:710
 #: src/blocks/reservation/components/booking-summary-items.js:35
@@ -4984,8 +4985,8 @@ msgid ""
 "edited)"
 msgstr "予約時点のサービス基本料金です。（編集不可）"
 
-#: src/bookings/class-booking-admin.php:990 src/blocks/reservation/app.js:2181
-#: src/blocks/reservation/booking-confirm-app.js:2219
+#: src/bookings/class-booking-admin.php:990 src/blocks/reservation/app.js:2189
+#: src/blocks/reservation/booking-confirm-app.js:2227
 #: src/blocks/reservation/components/booking-summary-items.js:110
 msgid "Total basic fee"
 msgstr "基本料金合計"
@@ -5061,7 +5062,7 @@ msgid "memo"
 msgstr "メモ"
 
 #: src/bookings/class-booking-admin.php:1121
-#: src/blocks/reservation/booking-confirm-app.js:2410
+#: src/blocks/reservation/booking-confirm-app.js:2418
 msgid "Management memo"
 msgstr "運営側メモ"
 
@@ -5070,8 +5071,8 @@ msgid "Reservation title"
 msgstr "予約タイトル"
 
 #: src/bookings/class-booking-admin.php:1387
-#: src/blocks/reservation/booking-confirm-app.js:1905
-#: src/blocks/reservation/booking-confirm-app.js:2076
+#: src/blocks/reservation/booking-confirm-app.js:1913
+#: src/blocks/reservation/booking-confirm-app.js:2084
 msgid "Reservation date and time"
 msgstr "予約日時"
 
@@ -5199,8 +5200,8 @@ msgstr "この予約一時データにアクセスする権限がありません
 #: src/bookings/class-booking-draft-controller.php:499
 #: src/bookings/class-booking-draft-controller.php:788
 #: src/bookings/class-lodging-booking.php:287
-#: src/blocks/reservation/app.js:3070
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:521
+#: src/blocks/reservation/app.js:3078
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:541
 msgid "Please select at least one guest."
 msgstr "1名以上を選択してください。"
 
@@ -5238,7 +5239,7 @@ msgid "Could not assign person %s. Please try a different frame."
 msgstr "担当%sを割り当てできませんでした。別の枠でお試しください。"
 
 #: src/bookings/class-booking-confirmation-controller.php:569
-#: src/blocks/reservation/booking-confirm-app.js:1152
+#: src/blocks/reservation/booking-confirm-app.js:1159
 msgid "You must agree to the cancellation policy."
 msgstr "キャンセルポリシーへの同意が必要です。"
 
@@ -5247,7 +5248,7 @@ msgid "Failed to create the booking. Please try again."
 msgstr "予約の作成に失敗しました。もう一度お試しください。"
 
 #: src/bookings/class-booking-confirmation-controller.php:988
-#: src/blocks/reservation/booking-confirm-app.js:1322
+#: src/blocks/reservation/booking-confirm-app.js:1329
 msgid ""
 "A reservation for the same date and time already exists. Please change the "
 "date and time."
@@ -5325,8 +5326,8 @@ msgstr "トークンが不正です。"
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:407
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:479
 #: src/blocks/reservation/components/booking-summary-items.js:71
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:652
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:788
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:671
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:807
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:102
 msgid "%d night"
 msgid_plural "%d nights"
@@ -5427,7 +5428,7 @@ msgstr "%s・1泊"
 
 #. translators: %s: the lowest price (e.g. ¥7,000). The price differs by day, so it is shown as "from".
 #: src/common/class-lodging-price-display.php:191
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:581
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:600
 msgid "%s~"
 msgstr "%s〜"
 
@@ -5438,13 +5439,13 @@ msgstr "不明なエラー"
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:47
-#: src/blocks/reservation/app.js:290
+#: src/blocks/reservation/app.js:291
 msgid "This menu accepts bookings from %d guests."
 msgstr "このメニューは %d 名からお申し込みいただけます。"
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:52
-#: src/blocks/reservation/app.js:298
+#: src/blocks/reservation/app.js:299
 msgid "Please set the number of guests to %d or more."
 msgstr "人数を %d 名以上にしてください。"
 
@@ -5959,9 +5960,9 @@ msgid "Remove the connection"
 msgstr "連携を解除"
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:389
-#: src/resources/resource-labels.php:304 src/blocks/reservation/app.js:554
-#: src/blocks/reservation/app.js:1067
-#: src/blocks/reservation/booking-confirm-app.js:290
+#: src/resources/resource-labels.php:304 src/blocks/reservation/app.js:555
+#: src/blocks/reservation/app.js:1071
+#: src/blocks/reservation/booking-confirm-app.js:293
 #: src/blocks/reservation/components/booking-summary-items.js:88
 msgid "Number of guests"
 msgstr "人数"
@@ -6025,8 +6026,8 @@ msgstr "Google側に作成済みの予定は残ります。"
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:464
 #: src/resources/class-resource-delete-guard.php:659
-#: src/blocks/reservation/app.js:3424
-#: src/blocks/reservation/booking-confirm-app.js:1966
+#: src/blocks/reservation/app.js:3433
+#: src/blocks/reservation/booking-confirm-app.js:1974
 msgid "Cancel"
 msgstr "キャンセル"
 
@@ -6071,7 +6072,7 @@ msgstr "これ以上再送しません。"
 #: src/notifications/class-booking-notification-service.php:875
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:378
 #: src/blocks/reservation/components/booking-summary-items.js:66
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:782
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:801
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:99
 msgid "Number of nights"
 msgstr "泊数"
@@ -6846,7 +6847,7 @@ msgid "(tax included)"
 msgstr " (税込)"
 
 #: src/provider-settings/class-settings-repository.php:325
-#: src/blocks/reservation/booking-confirm-app.js:1423
+#: src/blocks/reservation/booking-confirm-app.js:1430
 msgid ""
 "We will check the details and email you once your reservation is confirmed. "
 "Please wait for that email. You can close this page."
@@ -7412,10 +7413,10 @@ msgid "Loading the default days on sale."
 msgstr "初期値の販売日を読み込んでいます。"
 
 #: src/shifts/class-shift-lodging-editor.php:285
-#: src/blocks/reservation/app.js:3504 src/blocks/reservation/app.js:3691
-#: src/blocks/reservation/app.js:3864
-#: src/blocks/reservation/booking-confirm-app.js:1832
-#: src/blocks/reservation/booking-confirm-app.js:2011
+#: src/blocks/reservation/app.js:3513 src/blocks/reservation/app.js:3700
+#: src/blocks/reservation/app.js:3873
+#: src/blocks/reservation/booking-confirm-app.js:1840
+#: src/blocks/reservation/booking-confirm-app.js:2019
 #: src/blocks/reservation/booking-ui/calendar-grid.js:149
 msgid "Loading…"
 msgstr "読み込み中…"
@@ -7742,225 +7743,226 @@ msgid "Proceed to Reservation Button Block"
 msgstr "予約に進むボタンブロック"
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:320
+#: src/blocks/reservation/app.js:321
 msgid "This menu requires a minimum of %d guests."
 msgstr "このメニューは最低 %d 名からのお申し込みです。"
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:341
+#: src/blocks/reservation/app.js:342
 msgid ""
 "This time slot cannot accept the minimum of %d guests required for this menu."
 msgstr ""
 "この時間帯は、このメニューの最低申し込み人数（%d名）を受け付けられません。"
 
-#: src/blocks/reservation/app.js:347
+#: src/blocks/reservation/app.js:348
 msgid "Please choose another time slot."
 msgstr "別の時間帯を選択してください。"
 
-#: src/blocks/reservation/app.js:791
+#: src/blocks/reservation/app.js:792
 msgid "There are no service menus available for the selected dates."
 msgstr "選んだ日程で予約できるサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:795
+#: src/blocks/reservation/app.js:796
 msgid "Change the dates or clear the dates to show all service menus."
 msgstr ""
 "日程を変えるか、日付の指定を外すと、すべてのサービスメニューが表示されます。"
 
-#: src/blocks/reservation/app.js:801
+#: src/blocks/reservation/app.js:802
 msgid "There are no service menus available on the selected date."
 msgstr "選んだ日に予約できるサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:805
+#: src/blocks/reservation/app.js:806
 msgid "Change the date or clear the date to show all service menus."
 msgstr ""
 "日付を変えるか、日付の指定を外すと、すべてのサービスメニューが表示されます。"
 
 #. translators: %s: resource label (e.g. "Staff"), customizable via basic settings.
-#: src/blocks/reservation/app.js:814
+#: src/blocks/reservation/app.js:815
 msgid "There are no service menus available for the selected %s."
 msgstr "選択した%sで予約できるサービスメニューがありません。"
 
 #. translators: %s: "No preference" label, customizable via basic settings.
-#: src/blocks/reservation/app.js:824
+#: src/blocks/reservation/app.js:825
 msgid "Choose %s to show all service menus."
 msgstr "全メニューを表示するには「%s」を選択してください。"
 
-#: src/blocks/reservation/app.js:834
+#: src/blocks/reservation/app.js:835
 msgid "There are no service menus to display."
 msgstr "表示するサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:1220
+#: src/blocks/reservation/app.js:1224
 msgid "Could not get menu list."
 msgstr "メニュー一覧を取得できませんでした。"
 
-#: src/blocks/reservation/app.js:1425
-#: src/blocks/reservation/booking-confirm-app.js:933
+#: src/blocks/reservation/app.js:1433
+#: src/blocks/reservation/booking-confirm-app.js:940
 msgid "The form could not be displayed."
 msgstr "フォームを表示できませんでした。"
 
-#: src/blocks/reservation/app.js:1471
-#: src/blocks/reservation/booking-confirm-app.js:976
+#: src/blocks/reservation/app.js:1479
+#: src/blocks/reservation/booking-confirm-app.js:983
 msgid "Do you want to cancel this reservation?"
 msgstr "この予約をキャンセルしますか？"
 
-#: src/blocks/reservation/app.js:1500
-#: src/blocks/reservation/booking-confirm-app.js:1005
+#: src/blocks/reservation/app.js:1508
+#: src/blocks/reservation/booking-confirm-app.js:1012
 msgid "I was unable to cancel my reservation."
 msgstr "予約をキャンセルできませんでした。"
 
-#: src/blocks/reservation/app.js:1582
-#: src/blocks/reservation/booking-confirm-app.js:1065
+#: src/blocks/reservation/app.js:1590
+#: src/blocks/reservation/booking-confirm-app.js:1072
 msgid "The reservation list could not be loaded."
 msgstr "予約一覧を読み込めませんでした。"
 
-#: src/blocks/reservation/app.js:2265
+#: src/blocks/reservation/app.js:2273
 msgid "Failed to retrieve menu information."
 msgstr "メニュー情報の取得に失敗しました。"
 
 #. translators: %s: 診断理由の本文。
-#: src/blocks/reservation/app.js:2353
+#: src/blocks/reservation/app.js:2361
 msgid "[Administrator diagnostic] %s"
 msgstr "【管理者向け診断】%s"
 
-#: src/blocks/reservation/app.js:2414
+#: src/blocks/reservation/app.js:2422
 msgid "Failed to load calendar."
 msgstr "カレンダーの読み込みに失敗しました。"
 
-#: src/blocks/reservation/app.js:2496
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:212
+#: src/blocks/reservation/app.js:2504
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:214
 msgid "Failed to read free space."
 msgstr "空き状況の読み込みに失敗しました。"
 
-#: src/blocks/reservation/app.js:2855
+#: src/blocks/reservation/app.js:2863
 msgid "Could not delete the favorite."
 msgstr "お気に入りを削除できませんでした。"
 
-#: src/blocks/reservation/app.js:2986
+#: src/blocks/reservation/app.js:2994
 msgid "The details of the specified service menu cannot be displayed."
 msgstr "指定されたサービスメニューの詳細は表示できません。"
 
-#: src/blocks/reservation/app.js:3018 src/blocks/reservation/app.js:3192
+#: src/blocks/reservation/app.js:3026 src/blocks/reservation/app.js:3200
 msgid "Temporary reservation data save failed."
 msgstr "仮予約データの保存に失敗しました。"
 
-#: src/blocks/reservation/app.js:3040
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:347
+#: src/blocks/reservation/app.js:3048
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:349
 msgid "The editor does not transition to the confirmation page."
 msgstr "エディターが確認ページに遷移しません。"
 
-#: src/blocks/reservation/app.js:3050
+#: src/blocks/reservation/app.js:3058
 msgid "Please select your menu and reservation slot before proceeding."
 msgstr "進む前にメニューと予約枠を選択してください。"
 
-#: src/blocks/reservation/app.js:3062
+#: src/blocks/reservation/app.js:3070
 msgid "Please select the quantity."
 msgstr "数量を選択してください。"
 
-#: src/blocks/reservation/app.js:3212
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:376
+#: src/blocks/reservation/app.js:3220
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:378
 msgid "Failed to save reservation details. Please try again later."
 msgstr "予約詳細の保存に失敗しました。後でもう一度お試しください。"
 
-#: src/blocks/reservation/app.js:3262
-#: src/blocks/reservation/booking-confirm-app.js:1756
+#: src/blocks/reservation/app.js:3270
+#: src/blocks/reservation/booking-confirm-app.js:1763
 msgid "Reservation block navigation"
 msgstr "予約ブロックナビゲーション"
 
-#: src/blocks/reservation/app.js:3267
-#: src/blocks/reservation/components/reservation-header-nav.js:71
+#: src/blocks/reservation/app.js:3275
+#: src/blocks/reservation/components/reservation-header-nav.js:78
 msgid "Return"
 msgstr "戻る"
 
-#: src/blocks/reservation/app.js:3268
+#: src/blocks/reservation/app.js:3276
 msgid "return"
 msgstr "戻る"
 
-#: src/blocks/reservation/app.js:3299
-#: src/blocks/reservation/components/reservation-header-nav.js:105
+#: src/blocks/reservation/app.js:3308
+#: src/blocks/reservation/components/reservation-header-nav.js:112
 msgid "Back to the list"
 msgstr "一覧に戻る"
 
-#: src/blocks/reservation/app.js:3311
+#: src/blocks/reservation/app.js:3320
 msgid "Please check our cancellation policy before booking."
 msgstr "予約前にキャンセルポリシーをご確認ください。"
 
-#: src/blocks/reservation/app.js:3315
+#: src/blocks/reservation/app.js:3324
 msgid "Your reservation has been completed."
 msgstr "予約が完了しました。"
 
-#: src/blocks/reservation/app.js:3420 src/blocks/reservation/app.js:4445
-#: src/blocks/reservation/booking-confirm-app.js:1962
-#: src/blocks/reservation/booking-confirm-app.js:2453
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:862
+#: src/blocks/reservation/app.js:3429 src/blocks/reservation/app.js:4452
+#: src/blocks/reservation/booking-confirm-app.js:1970
+#: src/blocks/reservation/booking-confirm-app.js:2461
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:908
 msgid "Processing…"
 msgstr "処理中…"
 
-#: src/blocks/reservation/app.js:3432
+#: src/blocks/reservation/app.js:3441
 msgid "Book the same again"
 msgstr "同じ内容で予約する"
 
-#: src/blocks/reservation/app.js:3523
-#: src/blocks/reservation/booking-confirm-app.js:1850
+#: src/blocks/reservation/app.js:3532
+#: src/blocks/reservation/booking-confirm-app.js:1858
 msgid "There are no reservations to display."
 msgstr "表示する予約はありません。"
 
-#: src/blocks/reservation/app.js:3533
+#: src/blocks/reservation/app.js:3542
 msgid "Upcoming reservations"
 msgstr "今後の予約"
 
-#: src/blocks/reservation/app.js:3548
+#: src/blocks/reservation/app.js:3557
 msgid "Past reservations"
 msgstr "過去の予約"
 
-#: src/blocks/reservation/app.js:3639
+#: src/blocks/reservation/app.js:3648
 msgid "Favorites"
 msgstr "お気に入り"
 
-#: src/blocks/reservation/app.js:3645
+#: src/blocks/reservation/app.js:3654
 msgid "Your usual"
 msgstr "よく使う予約"
 
-#: src/blocks/reservation/app.js:3669
+#: src/blocks/reservation/app.js:3678
 msgid "Delete favorite"
 msgstr "お気に入りを削除"
 
-#: src/blocks/reservation/app.js:3822
+#: src/blocks/reservation/app.js:3831
 msgid "Loading service menu…"
 msgstr "サービスメニューを読み込み中"
 
-#: src/blocks/reservation/app.js:3935
+#: src/blocks/reservation/app.js:3944
 msgid "The date you had selected has passed."
 msgstr "選んでいた日付は過ぎています。"
 
-#: src/blocks/reservation/app.js:3939
+#: src/blocks/reservation/app.js:3948
 msgid "Please select the date again."
 msgstr "日付を選び直してください。"
 
 #. translators: %s: the date that was carried over and cannot be booked.
-#: src/blocks/reservation/app.js:3947
+#: src/blocks/reservation/app.js:3956
 msgid "The date you selected (%s) cannot be booked for this menu."
 msgstr "選んでいた%sは、このメニューでは予約できません。"
 
-#: src/blocks/reservation/app.js:3956
+#: src/blocks/reservation/app.js:3965
 msgid "Please select another date."
 msgstr "別の日付を選んでください。"
 
-#: src/blocks/reservation/app.js:4039
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:816
+#: src/blocks/reservation/app.js:4048
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:825
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:844
 msgid "Not selected"
 msgstr "未選択"
 
 #. translators: %s: total price.
-#: src/blocks/reservation/app.js:4153
+#: src/blocks/reservation/app.js:4161
 msgid "Total: %s"
 msgstr "合計：%s"
 
 #. translators: %d: number of remaining bookable guests.
-#: src/blocks/reservation/app.js:4173
+#: src/blocks/reservation/app.js:4181
 msgid "You can book up to %d more."
 msgstr "残り%d名まで予約できます。"
 
-#: src/blocks/reservation/app.js:4309
+#: src/blocks/reservation/app.js:4316
 msgid ""
 "Make this staff member's time slot private (no other bookings for that staff "
 "member will be accepted)"
@@ -7968,21 +7970,21 @@ msgstr ""
 "この時間帯の担当スタッフを貸切にする（その担当スタッフへの他の方の予約を受け"
 "付けません）"
 
-#: src/blocks/reservation/app.js:4313
+#: src/blocks/reservation/app.js:4320
 msgid "Make this time slot private (no other bookings will be accepted)"
 msgstr "この時間帯を貸切にする（他の方の予約を受け付けません）"
 
-#: src/blocks/reservation/app.js:4322
+#: src/blocks/reservation/app.js:4329
 msgid ""
 "This slot already has a booking, so a private booking cannot be specified."
 msgstr "この枠は既にご予約があるため貸切指定はできません"
 
 #. translators: %d: minimum number of guests required for a private booking.
-#: src/blocks/reservation/app.js:4334
+#: src/blocks/reservation/app.js:4341
 msgid "A private booking requires at least %d guests."
 msgstr "貸切にするには %d 名以上のお申し込みが必要です。"
 
-#: src/blocks/reservation/app.js:4344
+#: src/blocks/reservation/app.js:4351
 msgid ""
 "Making it private means no one else can book this staff member for this time "
 "slot."
@@ -7990,21 +7992,21 @@ msgstr ""
 "貸切にすると、この時間帯の担当スタッフへの予約を他の方が入れられなくなりま"
 "す。"
 
-#: src/blocks/reservation/app.js:4348
+#: src/blocks/reservation/app.js:4355
 msgid "Making it private means no one else can book this time slot."
 msgstr "貸切にすると、この枠は他の方が予約できなくなります。"
 
 #. translators: %d: number of guests at or above which the private booking fee is not charged.
-#: src/blocks/reservation/app.js:4358 src/blocks/reservation/app.js:4415
+#: src/blocks/reservation/app.js:4365 src/blocks/reservation/app.js:4422
 msgid "No private booking fee applies because there are %d or more guests."
 msgstr "%d 名以上のお申し込みのため貸切料金はかかりません"
 
 #. translators: %s: private booking fee per guest.
-#: src/blocks/reservation/app.js:4369
+#: src/blocks/reservation/app.js:4376
 msgid "A private booking fee of %s per guest will be added."
 msgstr "貸切料金として一人あたり %s プラスになります。"
 
-#: src/blocks/reservation/booking-confirm-app.js:470
+#: src/blocks/reservation/booking-confirm-app.js:473
 msgid ""
 "The URL does not include a temporary reservation data parameter. Please try "
 "again from the reservation page."
@@ -8012,102 +8014,102 @@ msgstr ""
 "URLに一時予約データパラメータが含まれていません。予約ページからもう一度お試し"
 "ください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:501
-#: src/blocks/reservation/booking-confirm-app.js:1335
+#: src/blocks/reservation/booking-confirm-app.js:504
+#: src/blocks/reservation/booking-confirm-app.js:1342
 msgid ""
 "Couldn't load temporary reservation data. Please try again from the "
 "reservation page."
 msgstr "仮予約データを読み込めませんでした。予約ページから再度お試しください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1119
+#: src/blocks/reservation/booking-confirm-app.js:1126
 msgid "Could not add to favorites."
 msgstr "お気に入りに登録できませんでした。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1209
+#: src/blocks/reservation/booking-confirm-app.js:1216
 msgid "An error occurred during payment processing."
 msgstr "決済処理中にエラーが発生しました。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1346
+#: src/blocks/reservation/booking-confirm-app.js:1353
 msgid "Confirmation of reservation failed. Please try again later."
 msgstr "予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1386
+#: src/blocks/reservation/booking-confirm-app.js:1393
 msgid "Loading temporary reservation data…"
 msgstr "一時予約データを読み込み中…"
 
-#: src/blocks/reservation/booking-confirm-app.js:1416
+#: src/blocks/reservation/booking-confirm-app.js:1423
 msgid "Your tentative reservation has been received."
 msgstr "仮予約を受け付けました"
 
-#: src/blocks/reservation/booking-confirm-app.js:1480
+#: src/blocks/reservation/booking-confirm-app.js:1487
 msgid "No entry"
 msgstr "記入なし"
 
-#: src/blocks/reservation/booking-confirm-app.js:1540
+#: src/blocks/reservation/booking-confirm-app.js:1547
 msgid "I agree to the cancellation policy"
 msgstr "キャンセルポリシーに同意します"
 
-#: src/blocks/reservation/booking-confirm-app.js:1584
-#: src/blocks/reservation/booking-confirm-app.js:2359
+#: src/blocks/reservation/booking-confirm-app.js:1591
+#: src/blocks/reservation/booking-confirm-app.js:2367
 msgid "Payment method"
 msgstr "決済方法"
 
-#: src/blocks/reservation/booking-confirm-app.js:1614
-#: src/blocks/reservation/booking-confirm-app.js:2382
+#: src/blocks/reservation/booking-confirm-app.js:1621
+#: src/blocks/reservation/booking-confirm-app.js:2390
 msgid "On-site payment"
 msgstr "現地決済"
 
-#: src/blocks/reservation/booking-confirm-app.js:1632
-#: src/blocks/reservation/booking-confirm-app.js:2400
+#: src/blocks/reservation/booking-confirm-app.js:1639
+#: src/blocks/reservation/booking-confirm-app.js:2408
 msgid "Card payment (Stripe)"
 msgstr "カード決済"
 
-#: src/blocks/reservation/booking-confirm-app.js:1669
+#: src/blocks/reservation/booking-confirm-app.js:1676
 msgid ""
 "Save these details so you can quickly book the same thing again next time "
 "(add to favorites)"
 msgstr "この予約内容で次回もすぐ予約できるようにする（お気に入り登録）"
 
-#: src/blocks/reservation/booking-confirm-app.js:2211
+#: src/blocks/reservation/booking-confirm-app.js:2219
 msgid "Private (exclusive use of this slot)"
 msgstr "貸切（この枠を専有）"
 
-#: src/blocks/reservation/booking-confirm-app.js:2236
+#: src/blocks/reservation/booking-confirm-app.js:2244
 msgid "You must log in to confirm your reservation."
 msgstr "予約を確認するにはログインする必要があります。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2269
-#: src/blocks/reservation/components/reservation-header-nav.js:89
+#: src/blocks/reservation/booking-confirm-app.js:2277
+#: src/blocks/reservation/components/reservation-header-nav.js:96
 msgid "Sign up"
 msgstr "新規登録"
 
-#: src/blocks/reservation/booking-confirm-app.js:2309
+#: src/blocks/reservation/booking-confirm-app.js:2317
 msgid "Requests/Notes"
 msgstr "ご要望・備考"
 
-#: src/blocks/reservation/booking-confirm-app.js:2318
+#: src/blocks/reservation/booking-confirm-app.js:2326
 msgid "Reserved name"
 msgstr "予約者名"
 
-#: src/blocks/reservation/booking-confirm-app.js:2330
+#: src/blocks/reservation/booking-confirm-app.js:2338
 msgid "Please enter customer name."
 msgstr "お名前を入力してください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2350
+#: src/blocks/reservation/booking-confirm-app.js:2358
 msgid "Please enter your contact phone number."
 msgstr "ご連絡先の電話番号を入力してください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2434
+#: src/blocks/reservation/booking-confirm-app.js:2442
 msgid ""
 "If the minimum number of participants is not reached, the session may not "
 "take place."
 msgstr "最少催行人数に満たない場合、開催されない可能性があります。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2454
+#: src/blocks/reservation/booking-confirm-app.js:2462
 msgid "Reserve with this content"
 msgstr "この内容で予約する"
 
-#: src/blocks/reservation/booking-confirm-app.js:2473
+#: src/blocks/reservation/booking-confirm-app.js:2481
 msgid "Added to favorites."
 msgstr "お気に入りに登録しました。"
 
@@ -8237,7 +8239,7 @@ msgstr "ウェブサイト"
 msgid "%s (opens in a new tab)"
 msgstr "%s（新しいタブで開きます）"
 
-#: src/blocks/reservation/components/reservation-header-nav.js:45
+#: src/blocks/reservation/components/reservation-header-nav.js:52
 msgid "Confirm reservation"
 msgstr "予約内容確認"
 
@@ -8257,73 +8259,82 @@ msgstr "」から行ってください。"
 msgid "Block settings"
 msgstr "ブロック設定"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:388
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:398
 msgid "Select the check-in date."
 msgstr "チェックイン日を選んでください。"
 
 #. translators: %s: check-in date (e.g. October 10, 2026 (Sat)).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:392
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:402
 msgid "Check-in: %s. Next, select the check-out date."
 msgstr "チェックイン: %s。次にチェックアウト日を選んでください。"
 
+#. translators: 1: check-in date, 2: check-out date, 3: label for a room (e.g. room).
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:411
+msgid ""
+"Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the "
+"list. Select a date to choose again."
+msgstr ""
+"チェックイン: %1$s、チェックアウト: %2$s。次に、空いている%3$sから1つ選んでく"
+"ださい。日付を押すと選び直せます。"
+
 #. translators: 1: check-in date, 2: check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:401
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:422
 msgid "Check-in: %1$s, check-out: %2$s. Select a date to choose again."
 msgstr "チェックイン: %1$s、チェックアウト: %2$s。日付を押すと選び直せます。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:413
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:434
 #: src/blocks/reservation/lodging/lodging-room-list.js:46
 msgid "Checking available rooms…"
 msgstr "空いている客室を確認しています…"
 
 #. translators: %d: number of available rooms.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:420
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:441
 msgid "%d room is available."
 msgid_plural "%d rooms are available."
 msgstr[0] "空いている客室は%d件です。"
 
 #. translators: 1: minimum number of guests with unit (e.g. 1), 2: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:439
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:460
 msgid "The number of guests can be from %1$s to %2$s."
 msgstr "宿泊人数は %1$s から %2$s までです。"
 
 #. translators: %s: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:511
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:531
 msgid "The number of guests can be up to %s."
 msgstr "宿泊人数は %s までです。"
 
 #. translators: %s: plan price per room per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:589
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:608
 msgid ""
 "The rate is %s per room per night. It does not change with the number of "
 "guests."
 msgstr "料金は 1室1泊あたり %s です。宿泊人数で料金は変わりません。"
 
 #. translators: %s: plan price per guest per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:597
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:616
 msgid "The rate is %s per guest per night."
 msgstr "料金は 1名1泊あたり %s です。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:611
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:630
 msgid ""
 "However, the rate varies by day, such as pre-holidays and special dates."
 msgstr "ただし、休前日や特定日など、日によって料金が変わります。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:615
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:634
 msgid "Select your dates and a room to see the rate for each night."
 msgstr "日程と客室を選ぶと、泊ごとの料金を表示します。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:631
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:650
 msgid "The dates you had selected have passed."
 msgstr "選んでいた日程は過ぎています。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:635
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:661
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:654
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:680
 msgid "Please select your dates again."
 msgstr "日程を選び直してください。"
 
 #. translators: 1: check-in date, 2: number of nights.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:645
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:664
 msgid ""
 "The dates you selected (%1$s, %2$s) cannot be booked for this plan because "
 "no rooms are available or they are outside the booking period."
@@ -8331,18 +8342,23 @@ msgstr ""
 "選んでいた日程（%1$sから%2$s）は、このプランでは空きがないか受付期間外のため"
 "予約できません。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:711
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:730
 msgid "Reselect dates"
 msgstr "日程を選び直す"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:723
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:742
 msgid "The room you selected is no longer available. Please select again."
 msgstr "選んでいた客室は選べなくなりました。もう一度お選びください。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:841
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:869
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:129
 msgid "Total amount"
 msgstr "合計金額"
+
+#. translators: %s: label for a room (e.g. room).
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:890
+msgid "Select a %s to proceed to reservation."
+msgstr "%sを選ぶと、予約に進めます。"
 
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:110
 msgid "Rate by night"

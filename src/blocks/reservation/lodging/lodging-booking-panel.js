@@ -10,6 +10,7 @@ import {
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
 import { joinSentences } from '../booking-ui/join-sentences';
+import { GuestCountInput } from '../booking-ui/guest-count-input';
 import { formatCurrency } from '../../shared/pricing';
 import { formatGuestsCount } from '../../shared/guests';
 import { resolveApiErrorMessage } from '../../shared/rest-error-message';
@@ -108,6 +109,7 @@ const LodgingBookingPanel = ( {
 	const idPrefix = useId();
 	const guideId = `${ idPrefix }-guide`;
 	const guestsHintId = `${ idPrefix }-guests-hint`;
+	const actionHintId = `${ idPrefix }-action-hint`;
 	const guestsLabelId = `${ idPrefix }-guests-label`;
 	const maxGuests = Math.max( 1, Number( lodging?.max_guests ) || 1 );
 	const tiers = useMemo(
@@ -384,6 +386,14 @@ const LodgingBookingPanel = ( {
 		} );
 	};
 
+	// 日程が決まり、空いている客室があるのにまだ選んでいないとき、ガイド行で次の操作（客室を選ぶ）を伝える。
+	// 空室の確認中や満室・取得失敗のときは、選べる客室が無いので促さない。
+	const shouldPromptRoomSelection =
+		isRangeComplete &&
+		! selectedRoom &&
+		availability.status === 'done' &&
+		rooms.length > 0;
+
 	// カレンダーの下のガイド行（今の状態と次にすることを伝える）。
 	let guideText = __( 'Select the check-in date.', 'vk-booking-manager' );
 	if ( range.checkIn && ! range.checkOut ) {
@@ -394,6 +404,17 @@ const LodgingBookingPanel = ( {
 				'vk-booking-manager'
 			),
 			formatStayDate( range.checkIn, locale )
+		);
+	} else if ( shouldPromptRoomSelection ) {
+		guideText = sprintf(
+			/* translators: 1: check-in date, 2: check-out date, 3: label for a room (e.g. room). */
+			__(
+				'Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the list. Select a date to choose again.',
+				'vk-booking-manager'
+			),
+			formatStayDate( range.checkIn, locale ),
+			formatStayDate( range.checkOut, locale ),
+			resourceLabelSingular
 		);
 	} else if ( isRangeComplete ) {
 		guideText = sprintf(
@@ -479,8 +500,7 @@ const LodgingBookingPanel = ( {
 									) }
 								</span>
 							</label>
-							<input
-								type="number"
+							<GuestCountInput
 								id={ `${ idPrefix }-tier-${ index }` }
 								className="vkbm-plan-summary__guests-select"
 								min="0"
@@ -536,8 +556,7 @@ const LodgingBookingPanel = ( {
 				>
 					{ guestsCountLabel }
 				</label>
-				<input
-					type="number"
+				<GuestCountInput
 					id={ `${ idPrefix }-guests` }
 					className="vkbm-plan-summary__guests-select"
 					min="1"
@@ -795,21 +814,30 @@ const LodgingBookingPanel = ( {
 											) }
 										/>
 									</dl>
-									{ selectedRoom && (
-										<dl className="vkbm-lodging__summary-list">
-											<SummaryLine
-												label={ resourceLabelSingular }
-												value={ selectedRoom.name }
-											/>
-											<SummaryLine
-												label={ guestsCountLabel }
-												value={ formatGuestsCount(
-													guestCount,
-													guestsUnitLabel
-												) }
-											/>
-										</dl>
-									) }
+									<dl className="vkbm-lodging__summary-list">
+										<SummaryLine
+											label={ resourceLabelSingular }
+											value={
+												selectedRoom ? (
+													selectedRoom.name
+												) : (
+													<span className="vkbm-lodging__summary-placeholder">
+														{ __(
+															'Not selected',
+															'vk-booking-manager'
+														) }
+													</span>
+												)
+											}
+										/>
+										<SummaryLine
+											label={ guestsCountLabel }
+											value={ formatGuestsCount(
+												guestCount,
+												guestsUnitLabel
+											) }
+										/>
+									</dl>
 								</>
 							) : (
 								<p className="vkbm-lodging__summary-empty">
@@ -852,11 +880,29 @@ const LodgingBookingPanel = ( {
 						) }
 					</div>
 					<div className="vkbm-plan-summary__actions">
+						{ ! selectedRoom && (
+							<p
+								id={ actionHintId }
+								className="vkbm-plan-summary__hint vkbm-lodging__action-hint"
+							>
+								{ sprintf(
+									/* translators: %s: label for a room (e.g. room). */
+									__(
+										'Select a %s to proceed to reservation.',
+										'vk-booking-manager'
+									),
+									resourceLabelSingular
+								) }
+							</p>
+						) }
 						<button
 							type="button"
 							className="vkbm-plan-summary__action vkbm-button vkbm-button__md vkbm-button__primary"
 							onClick={ handleProceed }
 							disabled={ ! selectedRoom || isSubmitting }
+							aria-describedby={
+								selectedRoom ? undefined : actionHintId
+							}
 						>
 							{ isSubmitting
 								? __( 'Processing…', 'vk-booking-manager' )

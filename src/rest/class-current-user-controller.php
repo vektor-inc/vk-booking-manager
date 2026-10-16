@@ -121,6 +121,8 @@ class Current_User_Controller extends WP_REST_Controller {
 			array(
 				'can_manage_reservations' => current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 				'shift_dashboard_url'     => admin_url( 'admin.php?page=vkbm-shift-dashboard' ),
+				// BM 設定画面を開ける権限（MANAGE_PROVIDER_SETTINGS）が無いユーザーには URL を渡さない。
+				'settings_url'            => current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ? admin_url( 'admin.php?page=vkbm-provider-settings' ) : '',
 				'logout_url'              => str_replace( '&amp;', '&', wp_logout_url( $redirect ) ),
 			)
 		);
