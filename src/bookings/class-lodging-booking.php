@@ -344,6 +344,7 @@ class Lodging_Booking {
 	 *
 	 * 時間枠の予約の最大人数（Booking_Draft_Controller / Booking_Confirmation_Controller の get_max_guests / resolve_guests）と
 	 * 同じ条件の3か所目。複数人一括予約の適用条件や上限の式を変えるときは、3か所を同じ式で更新すること。
+	 * 「複数人一括予約が有効か」の判定は Service_Menu_Post_Type::is_multi_guest_booking_enabled() に集約している。
 	 *
 	 * @param int $menu_id メニューの投稿 ID。
 	 * @return int 最大人数。適用されない場合は 0。
@@ -353,7 +354,8 @@ class Lodging_Booking {
 			return 0;
 		}
 
-		if ( ! (bool) get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true ) ) {
+		// 1室1泊あたりのプランは、許可フラグが未保存・OFF でも ON として扱う（#831）。
+		if ( ! Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id ) ) {
 			return 0;
 		}
 

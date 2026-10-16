@@ -158,7 +158,14 @@ export const loginAsAdmin = async (
 		await page.locator( '#user_login' ).fill( user );
 		await page.locator( '#user_pass' ).fill( password );
 		await page.locator( '#wp-submit' ).click();
-		await page.waitForURL( /wp-admin/, { timeout: 30000 } );
+		// ログイン画面の URL にも redirect_to=…/wp-admin/ が含まれるため、/wp-admin/ の一致では
+		// 送信前に待ちが終わってしまう。ログイン画面から離れたことで待つ。
+		await page.waitForURL(
+			( url ) => ! url.pathname.includes( 'wp-login.php' ),
+			{
+				timeout: 30000,
+			}
+		);
 	}
 };
 

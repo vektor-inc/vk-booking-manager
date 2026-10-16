@@ -275,6 +275,17 @@ class Service_Menu_Editor {
 					'priceHeadNight'                    => __( 'Price (per guest, per night)', 'vk-booking-manager' ),
 					'multipleGuestsPriceNoteDefault'    => __( 'The price is multiplied by the number of people.', 'vk-booking-manager' ),
 					'multipleGuestsPriceNotePerRoom'    => __( 'The price does not change with the number of people.', 'vk-booking-manager' ),
+					// #831: 1室1泊あたりのときに「予約枠の定員」から切り替える、1室の最大人数のラベル・説明文。
+					'maxCapacityDefaultLabel'           => __( 'Time slot capacity', 'vk-booking-manager' ),
+					'maxCapacityDefaultDescription1'    => __( 'Maximum number of people who can share this time slot when staff auto-assignment is used.', 'vk-booking-manager' ),
+					'maxCapacityDefaultDescription2'    => __( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ),
+					'maxCapacityNominationDescription1' => __( 'Maximum number of guests that can be booked together in a single reservation when a staff member is nominated.', 'vk-booking-manager' ),
+					'maxCapacityNominationDescription2' => __( 'Once a booking is placed, that staff member is fully booked for the slot (private to that group) and cannot be shared with another customer.', 'vk-booking-manager' ),
+					'maxCapacityDefaultNote'            => __( 'Default is 1.', 'vk-booking-manager' ),
+					'maxCapacityPerRoomLabel'           => __( 'Maximum guests per room', 'vk-booking-manager' ),
+					'maxCapacityPerRoomDescription1'    => __( 'Enter the maximum number of guests who can stay in this room.', 'vk-booking-manager' ),
+					'maxCapacityPerRoomDescription2'    => __( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ),
+					'maxCapacityPerRoomDescription3'    => __( 'The price does not change with the number of people.', 'vk-booking-manager' ),
 				),
 				// 料金区分の料金欄に表示する単位（通貨記号＋税込ラベル）。税込ラベルが空でも通貨記号は常時表示する。
 				'priceUnit' => '' !== VKBM_Helper::get_tax_included_label()
@@ -745,9 +756,11 @@ class Service_Menu_Editor {
 				// 初期化）が起きるため、表示の出し分けは常に hidden 属性のみで行う（保存側は
 				// 「予約枠の定員機能がONかどうか」だけで保存可否を判定し、このメニューの指名可否では
 				// 保存対象を分岐しない）。
-				$max_capacity       = get_post_meta( $post->ID, self::META_MAX_CAPACITY, true );
-				$min_capacity       = get_post_meta( $post->ID, self::META_MIN_CAPACITY, true );
-				$allow_multi_guests = (bool) get_post_meta( $post->ID, self::META_ALLOW_MULTIPLE_GUESTS, true );
+				$max_capacity      = get_post_meta( $post->ID, self::META_MAX_CAPACITY, true );
+				$min_capacity      = get_post_meta( $post->ID, self::META_MIN_CAPACITY, true );
+				$saved_allow_multi = (bool) get_post_meta( $post->ID, self::META_ALLOW_MULTIPLE_GUESTS, true );
+				// 1室1泊あたりのプランは許可フラグが未保存・OFF でも ON として扱う（#831）。
+				$allow_multi_guests = Service_Menu_Post_Type::is_multi_guest_booking_enabled( $post->ID );
 				// 実効の予約枠の定員（未設定は既定1）。最少催行人数・貸切・料金区分は
 				// 複数人一括予約の相乗りが前提のため、ここが2以上のときだけ意味を持つ（#320）。
 				$max_capacity_value = '' === $max_capacity ? 1 : max( 1, (int) $max_capacity );
@@ -758,12 +771,25 @@ class Service_Menu_Editor {
 				?>
 				<tr id="vkbm-max-capacity-field">
 					<th scope="row">
-						<label for="vkbm_service_menu_max_capacity"><?php esc_html_e( 'Time slot capacity', 'vk-booking-manager' ); ?></label>
+						<label for="vkbm_service_menu_max_capacity" id="vkbm-max-capacity-label">
+							<?php
+							// 1室1泊あたりのプランは「部屋を貸す」感覚で設定できるよう、ラベルと説明文を切り替える（#831）。
+							if ( $is_per_room_night ) {
+								esc_html_e( 'Maximum guests per room', 'vk-booking-manager' );
+							} else {
+								esc_html_e( 'Time slot capacity', 'vk-booking-manager' );
+							}
+							?>
+						</label>
 					</th>
 					<td>
 						<input type="number" id="vkbm_service_menu_max_capacity" name="vkbm_service_menu[max_capacity]" class="small-text" min="1" step="1" value="<?php echo esc_attr( $max_capacity ); ?>" />
-						<p class="description">
-							<?php if ( $is_nomination_enabled ) : ?>
+						<p class="description" id="vkbm-max-capacity-description">
+							<?php if ( $is_per_room_night ) : ?>
+								<?php esc_html_e( 'Enter the maximum number of guests who can stay in this room.', 'vk-booking-manager' ); ?><br>
+								<?php esc_html_e( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ); ?><br>
+								<?php esc_html_e( 'The price does not change with the number of people.', 'vk-booking-manager' ); ?><br>
+							<?php elseif ( $is_nomination_enabled ) : ?>
 								<?php esc_html_e( 'Maximum number of guests that can be booked together in a single reservation when a staff member is nominated.', 'vk-booking-manager' ); ?><br>
 								<?php esc_html_e( 'Once a booking is placed, that staff member is fully booked for the slot (private to that group) and cannot be shared with another customer.', 'vk-booking-manager' ); ?><br>
 							<?php else : ?>
@@ -774,7 +800,7 @@ class Service_Menu_Editor {
 						</p>
 					</td>
 				</tr>
-				<tr id="vkbm-min-capacity-field" <?php echo $show_multi_guest_dependent_fields ? '' : 'hidden'; ?>>
+				<tr id="vkbm-min-capacity-field" <?php echo $show_multi_guest_dependent_fields && ! $is_per_room_night ? '' : 'hidden'; ?>>
 					<th scope="row">
 						<label for="vkbm_service_menu_min_capacity" id="vkbm-min-capacity-label">
 							<?php
@@ -805,13 +831,13 @@ class Service_Menu_Editor {
 						</p>
 					</td>
 				</tr>
-				<tr id="vkbm-allow-multiple-guests-field">
+				<tr id="vkbm-allow-multiple-guests-field" <?php echo $is_per_room_night ? 'hidden' : ''; ?>>
 					<th scope="row">
 						<?php esc_html_e( 'Booking multiple people at once', 'vk-booking-manager' ); ?>
 					</th>
 					<td>
 						<label>
-							<input type="checkbox" id="vkbm_service_menu_allow_multiple_guests" name="vkbm_service_menu[allow_multiple_guests]" value="1" <?php checked( true, $allow_multi_guests ); ?> />
+							<input type="checkbox" id="vkbm_service_menu_allow_multiple_guests" name="vkbm_service_menu[allow_multiple_guests]" value="1" <?php checked( true, $saved_allow_multi ); ?> />
 							<?php esc_html_e( 'Allow the same user to book for multiple people at once', 'vk-booking-manager' ); ?>
 						</label>
 						<p class="description">
@@ -847,7 +873,10 @@ class Service_Menu_Editor {
 						</p>
 					</td>
 				</tr>
-				<?php $this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields ); ?>
+				<?php
+				// 1室1泊あたりのプランは部屋ごとに1組だけが泊まるため、枠を貸し切りにする設定は意味を持たず、欄を出さない（#831）。
+				$this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields && ! $is_per_room_night );
+				?>
 				<?php
 				// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
 				$this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields && ! $is_night_unit );

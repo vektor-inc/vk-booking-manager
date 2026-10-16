@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Staff\Staff_Editor;
 use function get_post_meta;
 
@@ -212,7 +213,7 @@ class Price_Tiers {
 	 * 区分一覧を表示するか」を判定するために使う、単一の入口。判定条件は次の4つすべてを満たすこと。
 	 *
 	 * 1. `Staff_Editor::is_multi_guest_available_for_menu()` が true（Pro版・予約枠の定員機能ON）。
-	 * 2. `_vkbm_allow_multiple_guests`（複数人一括予約の許可）がON。
+	 * 2. 複数人一括予約が有効（`Service_Menu_Post_Type::is_multi_guest_booking_enabled()`。1室1泊あたりのプランは料金区分を使わないため除く）。
 	 * 3. 予約枠の定員（`_vkbm_max_capacity`）が2以上。
 	 * 4. 区分（`_vkbm_price_tiers`）が1件以上保存されている。
 	 *
@@ -238,7 +239,13 @@ class Price_Tiers {
 			return false;
 		}
 
-		if ( ! (bool) get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true ) ) {
+		if ( ! Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id ) ) {
+			return false;
+		}
+
+		// 1室1泊あたりのプランは料金区分を使わない（編集画面でも区分の行を出さず、保存時に区分を削除する）ため、
+		// 複数人一括予約が常に ON でも「区分で設定されている」とは扱わない（#831）。
+		if ( Service_Menu_Post_Type::is_night_price_per_room( $menu_id ) ) {
 			return false;
 		}
 

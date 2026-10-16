@@ -14,6 +14,7 @@ namespace VKBookingManager\Tests\Admin;
 
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Admin\Service_Menu_Editor;
+use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -383,9 +384,11 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 					'Price (per guest, per night)',
 					'aria-describedby="vkbm-base-price-unit vkbm-base-price-overridden-description"',
 				),
-				'not_contains'        => array( '/ per room, per night</span>', 'The price does not change with the number of people.' ),
+				'not_contains'        => array( '/ per room, per night</span>', 'The price does not change with the number of people.', 'Maximum guests per room' ),
 				'row_hidden'          => array(
+					'vkbm-allow-multiple-guests-field'     => false,
 					'vkbm-night-price-unit-field'          => false,
+					'vkbm-min-capacity-field'              => false,
 					'vkbm-price-tiers-field'               => false,
 					'vkbm-exclusive-user-selectable-field' => true,
 					'vkbm-exclusive-when-booked-field'     => false,
@@ -400,12 +403,17 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 					'/ per room, per night</span>',
 					'The price does not change with the number of people.',
 					'aria-describedby="vkbm-base-price-unit"',
+					'Maximum guests per room',
+					'Guests can choose up to this number in the number of guests field on the reservation screen.',
 				),
-				'not_contains'        => array( 'readonly', 'vkbm-base-price-overridden"' ),
+				'not_contains'        => array( 'readonly', 'vkbm-base-price-overridden"', 'Time slot capacity</label>' ),
 				'row_hidden'          => array(
+					'vkbm-allow-multiple-guests-field'     => true,
 					'vkbm-night-price-unit-field'          => false,
+					'vkbm-min-capacity-field'              => true,
 					'vkbm-price-tiers-field'               => true,
 					'vkbm-exclusive-user-selectable-field' => true,
+					'vkbm-exclusive-when-booked-field'     => true,
 				),
 			),
 			array(
@@ -417,6 +425,7 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 				'not_contains'        => array( 'aria-describedby="vkbm-base-price-unit"' ),
 				'row_hidden'          => array(
 					'vkbm-night-price-unit-field'          => true,
+					'vkbm-min-capacity-field'              => false,
 					'vkbm-price-tiers-field'               => false,
 					'vkbm-exclusive-user-selectable-field' => false,
 				),
@@ -470,6 +479,129 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 				$this->assertSame( $expected_hidden, str_contains( $matches[0], 'hidden' ), $case['test_condition_name'] . ': ' . $row_id . ' の hidden' );
 			}
 		}
+	}
+
+	/**
+	 * 1室1泊あたりで許可フラグが未保存でも、複数人一括予約の行は hidden、貸し切り予約の行は hidden、
+	 * 「予約枠の定員」は「1室の最大人数」の表記になる（#831）。保存済みの許可フラグには触れない。
+	 */
+	public function test_render_per_room_without_saved_allow_flag(): void {
+		$this->set_site( 'lodging' );
+		$post = $this->create_menu();
+		update_post_meta( $post->ID, '_vkbm_booking_unit', 'night' );
+		update_post_meta( $post->ID, '_vkbm_night_price_unit', 'per_room' );
+		update_post_meta( $post->ID, '_vkbm_max_capacity', 3 );
+
+		$output = $this->render( $post );
+
+		$this->assertStringContainsString( 'Maximum guests per room', $output, '1室の最大人数のラベル' );
+		$this->assertStringNotContainsString( 'Time slot capacity</label>', $output, '予約枠の定員のラベルは出さない' );
+		foreach ( array( 'vkbm-allow-multiple-guests-field', 'vkbm-exclusive-when-booked-field', 'vkbm-min-capacity-field', 'vkbm-price-tiers-field' ) as $row_id ) {
+			$this->assertSame( 1, preg_match( '/<tr id="' . preg_quote( $row_id, '/' ) . '"[^>]*\shidden/', $output ), $row_id . ' は hidden' );
+		}
+		$this->assertSame( 0, preg_match( '/id="vkbm_service_menu_allow_multiple_guests"[^>]*checked/', $output ), '保存済みの許可フラグ（未保存）はチェックONに見せない' );
+	}
+
+	/**
+	 * is_multi_guest_booking_enabled / Price_Tiers::is_menu_using_price_tiers: 1室1泊あたりは許可フラグに関わらず ON、それ以外は保存値に従う（#831）。
+	 */
+	public function test_is_multi_guest_booking_enabled(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '1室1泊あたり・フラグ未保存 => 有効',
+				'preset'              => 'lodging',
+				'price_unit'          => 'per_room',
+				'allow'               => null,
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・フラグOFF => 有効',
+				'preset'              => 'lodging',
+				'price_unit'          => 'per_room',
+				'allow'               => '',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '1名1泊あたり・フラグ未保存 => 無効',
+				'preset'              => 'lodging',
+				'price_unit'          => '',
+				'allow'               => null,
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '1名1泊あたり・フラグON => 有効',
+				'preset'              => 'lodging',
+				'price_unit'          => '',
+				'allow'               => '1',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '宿泊以外のサイトでは per_room が残っていても保存値に従う（OFF => 無効）',
+				'preset'              => 'salon',
+				'price_unit'          => 'per_room',
+				'allow'               => '',
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->set_site( $case['preset'] );
+			$post = $this->create_menu();
+			update_post_meta( $post->ID, '_vkbm_booking_unit', 'night' );
+			update_post_meta( $post->ID, '_vkbm_max_capacity', 3 );
+			update_post_meta(
+				$post->ID,
+				'_vkbm_price_tiers',
+				array(
+					array(
+						'label' => '大人',
+						'price' => 12000,
+					),
+				)
+			);
+			if ( '' !== $case['price_unit'] ) {
+				update_post_meta( $post->ID, '_vkbm_night_price_unit', $case['price_unit'] );
+			}
+			if ( null !== $case['allow'] ) {
+				update_post_meta( $post->ID, '_vkbm_allow_multiple_guests', $case['allow'] );
+			}
+			$this->assertSame( $case['expected'], Service_Menu_Post_Type::is_multi_guest_booking_enabled( $post->ID ), $case['test_condition_name'] );
+		}
+		$this->assertFalse( Service_Menu_Post_Type::is_multi_guest_booking_enabled( 0 ), 'メニューIDが0なら無効' );
+
+		// 1室1泊あたりは料金区分のデータが残っていても「区分で設定されたメニュー」にしない。1名1泊あたりでフラグONなら従来どおり。
+		$this->set_site( 'lodging' );
+		$per_room = $this->create_menu();
+		update_post_meta( $per_room->ID, '_vkbm_booking_unit', 'night' );
+		update_post_meta( $per_room->ID, '_vkbm_night_price_unit', 'per_room' );
+		update_post_meta( $per_room->ID, '_vkbm_max_capacity', 3 );
+		update_post_meta(
+			$per_room->ID,
+			'_vkbm_price_tiers',
+			array(
+				array(
+					'label' => '大人',
+					'price' => 12000,
+				),
+			)
+		);
+		$this->assertFalse( Price_Tiers::is_menu_using_price_tiers( $per_room->ID ), '1室1泊あたりは区分で設定されたメニューにしない' );
+
+		$per_guest = $this->create_menu();
+		update_post_meta( $per_guest->ID, '_vkbm_booking_unit', 'night' );
+		update_post_meta( $per_guest->ID, '_vkbm_allow_multiple_guests', '1' );
+		update_post_meta( $per_guest->ID, '_vkbm_max_capacity', 3 );
+		update_post_meta(
+			$per_guest->ID,
+			'_vkbm_price_tiers',
+			array(
+				array(
+					'label' => '大人',
+					'price' => 12000,
+				),
+			)
+		);
+		$this->assertTrue( Price_Tiers::is_menu_using_price_tiers( $per_guest->ID ), '1名1泊あたり・フラグONは従来どおり区分で設定されたメニュー' );
 	}
 
 	/**

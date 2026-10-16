@@ -433,8 +433,12 @@
 			const parsed = parseInt( $maxCapacity.val(), 10 );
 			maxCapacity = isNaN( parsed ) ? 1 : parsed;
 		}
-		const allowMultipleGuests = $checkbox.prop( 'checked' );
+		// 1室1泊あたりのプランは複数人一括予約を常に ON として扱い、チェックボックスの行は隠す（#831）。
+		const isPerRoom = isPerRoomNightSelected();
+		const allowMultipleGuests = $checkbox.prop( 'checked' ) || isPerRoom;
 		const meetsCapacity = maxCapacity >= 2;
+		$( '#vkbm-allow-multiple-guests-field' ).prop( 'hidden', isPerRoom );
+		syncMaxCapacityCopy( isPerRoom );
 
 		// #393・#440: 最少催行人数／最低申し込み人数欄・料金区分欄・貸し切り予約・予約者による
 		// 貸切指定は、指名を使うメニューでも意味を持つ（予約画面・予約確定処理は #392／#440の
@@ -449,7 +453,7 @@
 			hiddenMultiGuestDependentFields || isPerRoomNightSelected();
 		$( '#vkbm-min-capacity-field' ).prop(
 			'hidden',
-			hiddenMultiGuestDependentFields
+			hiddenMultiGuestDependentFields || isPerRoomNightSelected()
 		);
 		syncMinCapacityFieldCopy();
 		$( '#vkbm-price-tiers-field' ).prop( 'hidden', hiddenPriceTiers );
@@ -461,9 +465,10 @@
 			'#vkbm-exclusive-when-booked-field'
 		);
 		if ( $exclusiveWhenBookedField.length > 0 ) {
+			// 1室1泊あたりのプランは部屋ごとに1組だけが泊まるため、欄を出さない（#831）。
 			$exclusiveWhenBookedField.prop(
 				'hidden',
-				hiddenMultiGuestDependentFields
+				hiddenMultiGuestDependentFields || isPerRoom
 			);
 		}
 		// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
@@ -870,6 +875,50 @@
 		$( '.vkbm-booking-unit-slot-only' ).prop( 'hidden', isNight );
 		$( '.vkbm-booking-unit-night-only' ).prop( 'hidden', ! isNight );
 		syncNightPriceUnitFields();
+	}
+
+	// 「予約枠の定員」のラベルと説明文を、1室1泊あたりのときは「1室の最大人数」用に、それ以外は元の文言に切り替える（#831）。
+	// 元の文言は指名の有無で異なるため、最少催行人数の欄（syncMinCapacityFieldCopy）と同じく、現在の指名の状態から組み立てる。
+	function syncMaxCapacityCopy( isPerRoom ) {
+		const $label = $( '#vkbm-max-capacity-label' );
+		const $description = $( '#vkbm-max-capacity-description' );
+		if ( $label.length === 0 || $description.length === 0 ) {
+			return;
+		}
+
+		let labelText = i18n.maxCapacityDefaultLabel;
+		let lines = [
+			i18n.maxCapacityDefaultDescription1,
+			i18n.maxCapacityDefaultDescription2,
+		];
+		if ( isPerRoom ) {
+			labelText = i18n.maxCapacityPerRoomLabel;
+			lines = [
+				i18n.maxCapacityPerRoomDescription1,
+				i18n.maxCapacityPerRoomDescription2,
+				i18n.maxCapacityPerRoomDescription3,
+			];
+		} else if ( isMenuNominationInUse() ) {
+			lines = [
+				i18n.maxCapacityNominationDescription1,
+				i18n.maxCapacityNominationDescription2,
+			];
+		}
+		lines.push( i18n.maxCapacityDefaultNote );
+
+		if ( labelText ) {
+			$label.text( labelText );
+		}
+		$description.empty();
+		lines.forEach( function ( line, index ) {
+			if ( ! line ) {
+				return;
+			}
+			if ( index > 0 ) {
+				$description.append( '<br>' );
+			}
+			$description.append( document.createTextNode( line ) );
+		} );
 	}
 
 	// 泊単位の料金の単位（1名1泊あたり／1室1泊あたり）に合わせて、単位表記・料金区分の列見出し・

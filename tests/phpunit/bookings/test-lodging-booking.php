@@ -352,6 +352,29 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 1室1泊あたりでは、保存済みの最低申し込み人数を下書き・確定の受付制限に使わない。
+	 */
+	public function test_per_room_booking_ignores_nomination_min_guests(): void {
+		$room_id = $this->create_room();
+		$menu_id = $this->create_menu(
+			array( $room_id ),
+			array(
+				Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
+				'_vkbm_allow_multiple_guests' => true,
+				'_vkbm_max_capacity'          => 3,
+				'_vkbm_min_capacity'          => 2,
+			)
+		);
+
+		wp_set_current_user( $this->factory()->user->create() );
+		$token  = $this->save_draft_token( $this->lodging_payload( $menu_id, $room_id, 10, 1 ) );
+		$result = $this->confirm( $token );
+
+		$this->assertInstanceOf( WP_REST_Response::class, $result, $result instanceof WP_Error ? $result->get_error_code() : '' );
+		$this->assertGreaterThan( 0, (int) ( $result->get_data()['booking_id'] ?? 0 ) );
+	}
+
+	/**
 	 * 結果がエラーなら、エラーコードと HTTP ステータスを返す。成功なら ok。
 	 *
 	 * @param WP_REST_Response|WP_Error $result 結果。
@@ -939,6 +962,48 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 				'expected_total'      => 60000,
 			),
 			array(
+				'test_condition_name' => '許可フラグがOFFでも最大3名の設定あり・2名・1名1泊あたり => guests_exceeded（従来どおり1名に限る。#831）',
+				'meta'                => array(
+					'_vkbm_allow_multiple_guests' => '',
+					'_vkbm_max_capacity'          => '3',
+				),
+				'extra'               => array( 'guests' => 2 ),
+				'expected'            => 'guests_exceeded:400',
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・許可フラグ未保存・最大3名・3名ちょうど: 10000 × 2（#831）',
+				'meta'                => array(
+					Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
+					'_vkbm_max_capacity' => '3',
+				),
+				'extra'               => array( 'guests' => 3 ),
+				'expected'            => 'ok',
+				'expected_total'      => 20000,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・許可フラグOFF・最大3名・2名: 10000 × 2（#831）',
+				'meta'                => array(
+					Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
+					'_vkbm_allow_multiple_guests' => '',
+					'_vkbm_max_capacity'          => '3',
+				),
+				'extra'               => array( 'guests' => 2 ),
+				'expected'            => 'ok',
+				'expected_total'      => 20000,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・許可フラグOFF・最大3名・4名 => guests_exceeded（#831）',
+				'meta'                => array(
+					Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
+					'_vkbm_allow_multiple_guests' => '',
+					'_vkbm_max_capacity'          => '3',
+				),
+				'extra'               => array( 'guests' => 4 ),
+				'expected'            => 'guests_exceeded:400',
+				'expected_total'      => 0,
+			),
+			array(
 				'test_condition_name' => '最大3名・4名 => guests_exceeded',
 				'meta'                => $multi,
 				'extra'               => array( 'guests' => 4 ),
@@ -1019,6 +1084,10 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 			// 下書きは人数を丸めずに保存し、読み出しの合計は空室一覧と同じ。
 			$stored = get_transient( self::TRANSIENT_PREFIX . $token );
 			$data   = $this->get_draft_data( $token );
+			// 要求した人数がそのまま保存されること（全段階で同じ誤った人数に丸められても検出する）。
+			if ( isset( $case['extra']['guests'] ) ) {
+				$this->assertSame( (int) $case['extra']['guests'], (int) $stored['guests'], $name . '（要求した人数が保存される）' );
+			}
 			$this->assertSame( $stored['guests'], $data['guests'], $name . '（保存した人数）' );
 			$this->assertSame( $case['expected_total'], $data['total_price'], $name . '（下書きの合計）' );
 

@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: VK Booking Manager Pro 3.0.0\n"
+"Project-Id-Version: VK Booking Manager Pro 3.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-manager\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-16T03:08:32+00:00\n"
+"POT-Creation-Date: 2026-10-16T13:33:47+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -200,7 +200,7 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:208
 #: src/admin/class-provider-settings-page.php:209
 #: src/admin/class-provider-settings-page.php:854
-#: src/admin/class-service-menu-editor.php:833
+#: src/admin/class-service-menu-editor.php:859
 msgid "Basic settings"
 msgstr ""
 
@@ -504,17 +504,17 @@ msgid "No regular holidays"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1066
-#: src/admin/class-service-menu-editor.php:937
+#: src/admin/class-service-menu-editor.php:966
 msgid "period"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1067
-#: src/admin/class-service-menu-editor.php:938
+#: src/admin/class-service-menu-editor.php:967
 msgid "day of week"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1068
-#: src/admin/class-service-menu-editor.php:939
+#: src/admin/class-service-menu-editor.php:968
 msgid "operation"
 msgstr ""
 
@@ -874,7 +874,7 @@ msgid "minutes"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1717
-#: src/admin/class-service-menu-editor.php:654
+#: src/admin/class-service-menu-editor.php:665
 msgid "During the service time plus the buffer time, new reservations will not be accepted."
 msgstr ""
 
@@ -885,31 +885,31 @@ msgid "If there is an input for each service menu, that will take priority."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1727
-#: src/admin/class-service-menu-editor.php:419
+#: src/admin/class-service-menu-editor.php:430
 #: src/post-types/class-service-menu-post-type.php:288
 #: src/post-types/class-service-menu-post-type.php:706
 msgid "Reservation deadline"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1738
-#: src/admin/class-service-menu-editor.php:422
+#: src/admin/class-service-menu-editor.php:433
 #: src/post-types/class-service-menu-post-type.php:708
 msgid "hours ago"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1747
-#: src/admin/class-service-menu-editor.php:441
+#: src/admin/class-service-menu-editor.php:452
 msgid "Max advance booking period"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1758
 #: src/admin/class-provider-settings-page.php:2934
-#: src/admin/class-service-menu-editor.php:444
+#: src/admin/class-service-menu-editor.php:455
 msgid "days"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1760
-#: src/admin/class-service-menu-editor.php:446
+#: src/admin/class-service-menu-editor.php:457
 msgid "The maximum number of days in advance that reservations can be made. Set to 0 for no limit."
 msgstr ""
 
@@ -1807,7 +1807,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:3842
 #: src/admin/class-provider-settings-page.php:4021
-#: src/admin/class-service-menu-editor.php:1027
+#: src/admin/class-service-menu-editor.php:1056
 #: src/bookings/class-booking-admin.php:1069
 #: src/bookings/class-booking-admin.php:1084
 #: src/common/class-weekday-rule.php:180
@@ -1842,12 +1842,12 @@ msgid "Remove time slot for %s"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:4190
-#: src/admin/class-service-menu-editor.php:1023
+#: src/admin/class-service-menu-editor.php:1052
 msgid "Start date"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:4199
-#: src/admin/class-service-menu-editor.php:1025
+#: src/admin/class-service-menu-editor.php:1054
 msgid "End date"
 msgstr ""
 
@@ -1862,8 +1862,8 @@ msgstr ""
 #. Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
 #: src/admin/class-provider-settings-page.php:4219
 #: src/admin/class-service-menu-editor.php:243
-#: src/admin/class-service-menu-editor.php:1326
-#: src/admin/class-service-menu-editor.php:1732
+#: src/admin/class-service-menu-editor.php:1355
+#: src/admin/class-service-menu-editor.php:1761
 #: src/customers/class-customer-flag-settings-page.php:263
 #: src/customers/class-customer-flag-settings-page.php:334
 msgid "Delete"
@@ -1967,275 +1967,298 @@ msgstr ""
 
 #. Translators: Placeholder for the price category name input. / 料金区分名の入力プレースホルダー.
 #: src/admin/class-service-menu-editor.php:245
-#: src/admin/class-service-menu-editor.php:1687
+#: src/admin/class-service-menu-editor.php:1716
 msgid "Category name (e.g. Adult)"
 msgstr ""
 
 #. Translators: aria-label for the price category name input. / 料金区分名入力の aria-label.
 #: src/admin/class-service-menu-editor.php:247
-#: src/admin/class-service-menu-editor.php:1658
+#: src/admin/class-service-menu-editor.php:1687
 msgid "Price category name"
 msgstr ""
 
 #. Translators: aria-label for the price input. / 料金入力の aria-label.
 #: src/admin/class-service-menu-editor.php:249
 #: src/admin/class-service-menu-editor.php:274
-#: src/admin/class-service-menu-editor.php:1661
+#: src/admin/class-service-menu-editor.php:1690
 msgid "Price"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:252
-#: src/admin/class-service-menu-editor.php:787
+#: src/admin/class-service-menu-editor.php:813
 #: src/blocks/class-menu-loop-block.php:1645
 msgid "Minimum participants to confirm"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:253
-#: src/admin/class-service-menu-editor.php:785
+#: src/admin/class-service-menu-editor.php:811
 msgid "Minimum guests to accept a booking"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:254
-#: src/admin/class-service-menu-editor.php:801
+#: src/admin/class-service-menu-editor.php:827
 msgid "When bookings sharing the same time slot reach this number, the session is treated as confirmed."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:255
-#: src/admin/class-service-menu-editor.php:802
+#: src/admin/class-service-menu-editor.php:828
 msgid "Enter 0 to disable the minimum and accept any number of bookings."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:256
-#: src/admin/class-service-menu-editor.php:803
+#: src/admin/class-service-menu-editor.php:829
 msgid "Values above the time slot capacity are reduced to that capacity."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:257
-#: src/admin/class-service-menu-editor.php:796
+#: src/admin/class-service-menu-editor.php:822
 msgid "This menu uses staff nomination, so each booking becomes a private booking for one group."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:258
-#: src/admin/class-service-menu-editor.php:797
+#: src/admin/class-service-menu-editor.php:823
 msgid "If the number of guests is below this value, the reservation cannot be accepted."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:259
-#: src/admin/class-service-menu-editor.php:798
+#: src/admin/class-service-menu-editor.php:824
 msgid "Enter 0 to remove the minimum and accept bookings from 1 guest."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:260
-#: src/admin/class-service-menu-editor.php:799
+#: src/admin/class-service-menu-editor.php:825
 msgid "Values above the time slot capacity (the maximum guests per group) are reduced to that capacity."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:269
-#: src/admin/class-service-menu-editor.php:1565
-#: src/admin/class-service-menu-editor.php:1693
+#: src/admin/class-service-menu-editor.php:1594
+#: src/admin/class-service-menu-editor.php:1722
 #: src/blocks/reservation/lodging/night-rates.js:42
 msgid "Regular"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:270
-#: src/admin/class-service-menu-editor.php:1537
-#: src/admin/class-service-menu-editor.php:1755
+#: src/admin/class-service-menu-editor.php:1566
+#: src/admin/class-service-menu-editor.php:1784
 #: src/blocks/reservation/lodging/night-rates.js:39
 msgid "Pre-holiday"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:271
-#: src/admin/class-service-menu-editor.php:1543
-#: src/admin/class-service-menu-editor.php:1759
+#: src/admin/class-service-menu-editor.php:1572
+#: src/admin/class-service-menu-editor.php:1788
 #: src/blocks/reservation/lodging/night-rates.js:35
 msgid "Special date"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:272
-#: src/admin/class-service-menu-editor.php:1756
+#: src/admin/class-service-menu-editor.php:1785
 msgid "Price (pre-holiday)"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:273
-#: src/admin/class-service-menu-editor.php:1760
+#: src/admin/class-service-menu-editor.php:1789
 msgid "Price (special date)"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:275
-#: src/admin/class-service-menu-editor.php:1665
+#: src/admin/class-service-menu-editor.php:1694
 msgid "Price (per guest, per night)"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:276
-#: src/admin/class-service-menu-editor.php:825
+#: src/admin/class-service-menu-editor.php:851
 msgid "The price is multiplied by the number of people."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:277
-#: src/admin/class-service-menu-editor.php:823
+#: src/admin/class-service-menu-editor.php:288
+#: src/admin/class-service-menu-editor.php:791
+#: src/admin/class-service-menu-editor.php:849
 msgid "The price does not change with the number of people."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:299
+#: src/admin/class-service-menu-editor.php:279
+#: src/admin/class-service-menu-editor.php:712
+#: src/admin/class-service-menu-editor.php:780
+#: src/admin/class-service-menu-editor.php:896
+#: src/blocks/class-menu-loop-block.php:1631
+msgid "Time slot capacity"
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:280
+#: src/admin/class-service-menu-editor.php:796
+msgid "Maximum number of people who can share this time slot when staff auto-assignment is used."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:281
+#: src/admin/class-service-menu-editor.php:797
+msgid "When a specific staff member is selected, only one booking per slot is allowed."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:282
+#: src/admin/class-service-menu-editor.php:793
+msgid "Maximum number of guests that can be booked together in a single reservation when a staff member is nominated."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:283
+#: src/admin/class-service-menu-editor.php:794
+msgid "Once a booking is placed, that staff member is fully booked for the slot (private to that group) and cannot be shared with another customer."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:284
+#: src/admin/class-service-menu-editor.php:799
+msgid "Default is 1."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:285
+#: src/admin/class-service-menu-editor.php:778
+msgid "Maximum guests per room"
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:286
+#: src/admin/class-service-menu-editor.php:789
+msgid "Enter the maximum number of guests who can stay in this room."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:287
+#: src/admin/class-service-menu-editor.php:790
+msgid "Guests can choose up to this number in the number of guests field on the reservation screen."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:310
 #: src/blocks/class-block-category.php:45
 msgid "VK Booking Manager"
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:313
+#: src/admin/class-service-menu-editor.php:324
 msgid "%s collaboration"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:326
+#: src/admin/class-service-menu-editor.php:337
 msgid "Public settings"
 msgstr ""
 
 #. translators: %s: link to the reservation deadline setting on the provider settings page.
 #. translators: %s: link to the max advance booking period setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:428
-#: src/admin/class-service-menu-editor.php:451
+#: src/admin/class-service-menu-editor.php:439
+#: src/admin/class-service-menu-editor.php:462
 msgid "If not filled in, the information entered on %s will be reflected."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:432
+#: src/admin/class-service-menu-editor.php:443
 msgid "Reservation deadline on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:455
+#: src/admin/class-service-menu-editor.php:466
 msgid "Max advance booking period on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:475
+#: src/admin/class-service-menu-editor.php:486
 msgid "Internal memo (customer hidden)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:494
+#: src/admin/class-service-menu-editor.php:505
 msgid "Details page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:498
+#: src/admin/class-service-menu-editor.php:509
 msgid "Use"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:522
+#: src/admin/class-service-menu-editor.php:533
 msgid "Catchphrase"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:550
+#: src/admin/class-service-menu-editor.php:561
 msgid "Staff nomination"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:554
+#: src/admin/class-service-menu-editor.php:565
 msgid "Use staff nomination for this service menu."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:557
+#: src/admin/class-service-menu-editor.php:568
 msgid "When unchecked, staff are assigned automatically for this service menu and customers cannot choose a specific staff member."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:569
+#: src/admin/class-service-menu-editor.php:580
 msgid "The time slot capacity and multi-guest booking settings below are shown regardless of this checkbox."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:598
+#: src/admin/class-service-menu-editor.php:609
 #: src/post-types/class-service-menu-post-type.php:688
 msgid "Disable for this service menu"
 msgstr ""
 
 #. translators: %s: resource label (singular)
-#: src/admin/class-service-menu-editor.php:604
+#: src/admin/class-service-menu-editor.php:615
 msgid "This is the fee you enter on each %s's edit screen."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:608
+#: src/admin/class-service-menu-editor.php:619
 msgid "When checked, it is not added to this service menu's price even if the customer nominates one."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:641
+#: src/admin/class-service-menu-editor.php:652
 msgid "Time required (minutes)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:649
+#: src/admin/class-service-menu-editor.php:660
 msgid "Post-service buffer (min)"
 msgstr ""
 
 #. translators: %s: link to the post-service buffer setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:659
+#: src/admin/class-service-menu-editor.php:670
 #: src/post-types/class-service-menu-post-type.php:730
 msgid "If it is left blank, the information entered on %s will be reflected."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:663
+#: src/admin/class-service-menu-editor.php:674
 #: src/post-types/class-service-menu-post-type.php:734
 msgid "Post-service buffer on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:701
-#: src/admin/class-service-menu-editor.php:761
-#: src/admin/class-service-menu-editor.php:867
-#: src/blocks/class-menu-loop-block.php:1631
-msgid "Time slot capacity"
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:705
+#: src/admin/class-service-menu-editor.php:716
 msgid "To set the time slot capacity to 2 or more, enable the time slot capacity option in the basic settings."
 msgstr ""
 
 #. translators: %1$s: opening anchor tag, %2$s: closing anchor tag (基本設定画面へのリンク).
-#: src/admin/class-service-menu-editor.php:709
+#: src/admin/class-service-menu-editor.php:720
 msgid "The time slot capacity can be enabled from the %1$sbasic settings page%2$s."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:767
-msgid "Maximum number of guests that can be booked together in a single reservation when a staff member is nominated."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:768
-msgid "Once a booking is placed, that staff member is fully booked for the slot (private to that group) and cannot be shared with another customer."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:770
-msgid "Maximum number of people who can share this time slot when staff auto-assignment is used."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:771
-msgid "When a specific staff member is selected, only one booking per slot is allowed."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:773
-msgid "Default is 1."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:810
+#: src/admin/class-service-menu-editor.php:836
 msgid "Booking multiple people at once"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:815
+#: src/admin/class-service-menu-editor.php:841
 msgid "Allow the same user to book for multiple people at once"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:818
+#: src/admin/class-service-menu-editor.php:844
 msgid "A single booking can reserve for multiple people by entering the number of people."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:819
+#: src/admin/class-service-menu-editor.php:845
 msgid "The maximum number per booking is the time slot capacity, because each booking is assigned to a single staff member."
 msgstr ""
 
 #. translators: %s: Provider settings page link to customize the quantity heading and unit.
-#: src/admin/class-service-menu-editor.php:832
+#: src/admin/class-service-menu-editor.php:858
 msgid "You can customize the quantity heading and unit in %s."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:845
+#: src/admin/class-service-menu-editor.php:871
 msgid "When this is enabled and the time slot capacity is 2 or more, the minimum participants (labeled \"minimum guests to accept a booking\" for menus that use staff nomination), price category, and private booking settings are shown."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:872
+#: src/admin/class-service-menu-editor.php:901
 msgid "Setting the time slot capacity and staff auto-assignment are available in the Pro edition."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:919
+#: src/admin/class-service-menu-editor.php:948
 #: src/blocks/class-menu-loop-block.php:1562
 #: src/bookings/class-booking-admin.php:635
 #: src/post-types/class-service-menu-post-type.php:299
@@ -2243,246 +2266,246 @@ msgstr ""
 msgid "Reservation date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:923
+#: src/admin/class-service-menu-editor.php:952
 #: src/post-types/class-service-menu-post-type.php:790
 msgid "Not specified"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:924
+#: src/admin/class-service-menu-editor.php:953
 #: src/common/class-reservation-day.php:321
 #: src/post-types/class-service-menu-post-type.php:791
 msgid "Saturdays and Sundays only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:925
+#: src/admin/class-service-menu-editor.php:954
 #: src/common/class-reservation-day.php:325
 #: src/post-types/class-service-menu-post-type.php:792
 msgid "Weekdays only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:926
+#: src/admin/class-service-menu-editor.php:955
 #: src/common/class-reservation-day.php:329
 #: src/post-types/class-service-menu-post-type.php:800
 msgid "Specified days of the week"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:927
+#: src/admin/class-service-menu-editor.php:956
 #: src/common/class-reservation-day.php:333
 #: src/post-types/class-service-menu-post-type.php:801
 msgid "Specified dates"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:929
+#: src/admin/class-service-menu-editor.php:958
 msgid "If not specified, reservations are accepted on all days of the week (within the range where shifts exist)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:933
+#: src/admin/class-service-menu-editor.php:962
 msgid "Specify the days of the week when reservations are accepted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:951
+#: src/admin/class-service-menu-editor.php:980
 msgid "+ Add day of the week"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:952
+#: src/admin/class-service-menu-editor.php:981
 msgid "Combine \"every week\" or \"1st to 5th\" with a day of the week. Reservations are accepted only on the specified days of the week (within the range where shifts exist)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:964
+#: src/admin/class-service-menu-editor.php:993
 msgid "Specify the dates when reservations are accepted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:973
+#: src/admin/class-service-menu-editor.php:1002
 msgid "+ Add date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:974
+#: src/admin/class-service-menu-editor.php:1003
 msgid "Choose \"Single day\" or a \"Range\" (start to end) per row. Reservations are accepted only on the specified dates (within the range where shifts exist)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1015
+#: src/admin/class-service-menu-editor.php:1044
 msgid "Date specification type"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1016
+#: src/admin/class-service-menu-editor.php:1045
 msgid "Single day"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1017
+#: src/admin/class-service-menu-editor.php:1046
 msgid "Range"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1020
+#: src/admin/class-service-menu-editor.php:1049
 #: src/shifts/class-shift-lodging-editor.php:234
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:93
 msgid "Date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1150
-#: src/admin/class-service-menu-editor.php:1153
-#: src/admin/class-service-menu-editor.php:1248
+#: src/admin/class-service-menu-editor.php:1179
+#: src/admin/class-service-menu-editor.php:1182
+#: src/admin/class-service-menu-editor.php:1277
 msgid "Booking unit"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1156
+#: src/admin/class-service-menu-editor.php:1185
 msgid "Time slot"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1161
+#: src/admin/class-service-menu-editor.php:1190
 msgid "Nights"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1165
+#: src/admin/class-service-menu-editor.php:1194
 msgid "If you choose \"Nights\", bookings are accepted by check-in date and check-out date."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1166
+#: src/admin/class-service-menu-editor.php:1195
 msgid "If you choose \"Nights\" and save, the private booking by customer settings are deleted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1167
+#: src/admin/class-service-menu-editor.php:1196
 msgid "If you choose \"Nights\", the time required, post-service buffer, and fixed start times fields are not used, so they are hidden."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1172
-#: src/admin/class-service-menu-editor.php:1174
+#: src/admin/class-service-menu-editor.php:1201
+#: src/admin/class-service-menu-editor.php:1203
 msgid "Check-in time"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1178
+#: src/admin/class-service-menu-editor.php:1207
 msgid "Check-out time (departure day)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1180
+#: src/admin/class-service-menu-editor.php:1209
 msgid "Check-out time"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1182
+#: src/admin/class-service-menu-editor.php:1211
 msgid "This is the time on the day after the last night of the stay."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1197
+#: src/admin/class-service-menu-editor.php:1226
 msgid "/ per room, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1200
+#: src/admin/class-service-menu-editor.php:1229
 msgid "/ per guest, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1217
-#: src/admin/class-service-menu-editor.php:1220
+#: src/admin/class-service-menu-editor.php:1246
+#: src/admin/class-service-menu-editor.php:1249
 msgid "Price unit"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1223
+#: src/admin/class-service-menu-editor.php:1252
 msgid "Per guest, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1228
+#: src/admin/class-service-menu-editor.php:1257
 msgid "Per room, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1232
+#: src/admin/class-service-menu-editor.php:1261
 msgid "If you choose \"Per room, per night\", enter the price of one room per night as the basic price. It is not multiplied by the number of guests."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1233
+#: src/admin/class-service-menu-editor.php:1262
 msgid "Price categories cannot be used with \"Per room, per night\". Price categories you have already set are deleted when you save."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1251
+#: src/admin/class-service-menu-editor.php:1280
 msgid "This menu is saved with the \"Nights\" booking unit. Because the industry preset is not \"Lodging\", it is currently handled as a time-slot menu."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1252
+#: src/admin/class-service-menu-editor.php:1281
 msgid "To switch back to \"Lodging\", change the industry preset to \"Lodging\" at the link below."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1253
+#: src/admin/class-service-menu-editor.php:1282
 msgid "Industry preset on the General Settings page"
 msgstr ""
 
 #. translators: %s: field name such as "Check-in time".
-#: src/admin/class-service-menu-editor.php:1277
+#: src/admin/class-service-menu-editor.php:1306
 msgid "%s (hour)"
 msgstr ""
 
 #. translators: %s: field name such as "Check-in time".
-#: src/admin/class-service-menu-editor.php:1279
+#: src/admin/class-service-menu-editor.php:1308
 msgid "%s (minute)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1306
+#: src/admin/class-service-menu-editor.php:1335
 msgid "Fixed start times"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1330
+#: src/admin/class-service-menu-editor.php:1359
 msgid "+ Add time"
 msgstr ""
 
 #. translators: %s: link to the reservation slot time setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:1336
+#: src/admin/class-service-menu-editor.php:1365
 msgid "If not set, reservation slots are based on the interval specified in %s."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1340
+#: src/admin/class-service-menu-editor.php:1369
 msgid "Reservation slot time on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1347
+#: src/admin/class-service-menu-editor.php:1376
 msgid "If set, only the specified times are available for booking."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1374
+#: src/admin/class-service-menu-editor.php:1403
 #: src/blocks/reservation/booking-confirm-app.js:2215
 msgid "Private booking"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1378
+#: src/admin/class-service-menu-editor.php:1407
 msgid "Make the slot private once a booking is placed"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1381
+#: src/admin/class-service-menu-editor.php:1410
 msgid "When enabled, once even a single booking is placed in a time slot, other users can no longer book that slot even if seats remain."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1385
+#: src/admin/class-service-menu-editor.php:1414
 msgid "For menus that use staff nomination, this only closes that booking's staff member for the time slot, and other staff members remain bookable."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1388
+#: src/admin/class-service-menu-editor.php:1417
 msgid "This is intended for tours where strangers should not share the same slot (e.g. SUP, diving)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1418
+#: src/admin/class-service-menu-editor.php:1447
 msgid "Private booking by customer"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1422
+#: src/admin/class-service-menu-editor.php:1451
 msgid "Accept private booking requests from customers"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1425
+#: src/admin/class-service-menu-editor.php:1454
 msgid "Only the first person to book the same date and time can choose this."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1429
+#: src/admin/class-service-menu-editor.php:1458
 msgid "For menus that use staff nomination, this is judged per staff member, not for the whole time slot."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1439
+#: src/admin/class-service-menu-editor.php:1468
 msgid "It can be chosen only when the number of guests meets this menu's minimum participants (labeled \"minimum guests to accept a booking\" for menus that use staff nomination)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1442
+#: src/admin/class-service-menu-editor.php:1471
 msgid "This setting cannot be used together with \"Private booking\" for this menu."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1443
+#: src/admin/class-service-menu-editor.php:1472
 msgid "While \"Private booking\" is on, this setting is ignored."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1448
+#: src/admin/class-service-menu-editor.php:1477
 #: src/blocks/reservation/app.js:2177
 #: src/blocks/reservation/app.js:4407
 #: src/blocks/reservation/booking-confirm-app.js:2192
@@ -2490,141 +2513,141 @@ msgid "Private booking fee"
 msgstr ""
 
 #. translators: per one guest unit suffix shown after the private booking fee input.
-#: src/admin/class-service-menu-editor.php:1452
+#: src/admin/class-service-menu-editor.php:1481
 msgid "/ per guest"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1457
+#: src/admin/class-service-menu-editor.php:1486
 msgid "The private booking fee is added per guest."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1460
+#: src/admin/class-service-menu-editor.php:1489
 msgid "Number of guests that exempts the private booking fee"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1465
+#: src/admin/class-service-menu-editor.php:1494
 msgid "The private booking fee is not added when the number of guests is this value or more."
 msgstr ""
 
 #. translators: the numbers are an example threshold. Keep the second number one less than the first.
-#: src/admin/class-service-menu-editor.php:1468
+#: src/admin/class-service-menu-editor.php:1497
 msgid "Example: if you enter 5, the fee is added for up to 4 guests and not added for 5 or more."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1471
+#: src/admin/class-service-menu-editor.php:1500
 msgid "If left blank or set to 0, the private booking fee is always added regardless of the number of guests."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1538
+#: src/admin/class-service-menu-editor.php:1567
 msgid "Basic price (pre-holiday)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1544
+#: src/admin/class-service-menu-editor.php:1573
 msgid "Basic price (special date)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1553
+#: src/admin/class-service-menu-editor.php:1582
 #: src/post-types/class-service-menu-post-type.php:628
 msgid "Basic price"
 msgstr ""
 
 #. translators: %s: link to the pre-holiday and special date settings on the provider settings page.
-#: src/admin/class-service-menu-editor.php:1619
+#: src/admin/class-service-menu-editor.php:1648
 msgid "If the pre-holiday price is empty, the regular price is used. If the special date price is empty, the night is priced as a pre-holiday or regular night. Set the days of the week and dates in %s."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1623
+#: src/admin/class-service-menu-editor.php:1652
 msgid "Pre-holidays and special dates on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1633
+#: src/admin/class-service-menu-editor.php:1662
 msgid "Price categories are set, so the basic price is not used."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1659
+#: src/admin/class-service-menu-editor.php:1688
 msgid "Price (regular)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1660
+#: src/admin/class-service-menu-editor.php:1689
 msgid "Category name"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1671
+#: src/admin/class-service-menu-editor.php:1700
 #: src/post-types/class-service-menu-post-type.php:387
 msgid "Price categories"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1736
+#: src/admin/class-service-menu-editor.php:1765
 msgid "+ Add price category"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1737
+#: src/admin/class-service-menu-editor.php:1766
 msgid "Define categories such as \"Adult\" and \"Child\", each with its own price."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1738
+#: src/admin/class-service-menu-editor.php:1767
 msgid "When one or more categories are defined, the basic price is ignored and the price is calculated from the categories."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1739
+#: src/admin/class-service-menu-editor.php:1768
 msgid "If no category is defined, the basic price multiplied by the number of guests is used."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1819
+#: src/admin/class-service-menu-editor.php:1848
 msgid "%s added later will also be able to handle this menu automatically."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1842
+#: src/admin/class-service-menu-editor.php:1871
 msgid "After adding %s, check them here so they can be in charge."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1858
+#: src/admin/class-service-menu-editor.php:1887
 msgid "No %s are registered."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
 #. translators: %s: resource label (singular), e.g. "room".
 #. translators: %s: Resource label (singular).
-#: src/admin/class-service-menu-editor.php:1866
+#: src/admin/class-service-menu-editor.php:1895
 #: src/admin/class-setup-notices.php:436
 #: src/post-types/class-resource-post-type.php:52
 msgid "Add %s"
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:1916
+#: src/admin/class-service-menu-editor.php:1945
 msgid "No %s have been selected to be in charge."
 msgstr ""
 
 #. translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option.
-#: src/admin/class-service-menu-editor.php:1920
+#: src/admin/class-service-menu-editor.php:1949
 msgid "Check the %1$s, or select \"%2$s\"."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1947
+#: src/admin/class-service-menu-editor.php:1976
 msgid "Disable online reservations"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1953
+#: src/admin/class-service-menu-editor.php:1982
 msgid "Mark as archived"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2012
+#: src/admin/class-service-menu-editor.php:2041
 msgid "No valid day-of-week rows were found, so the reservation date was reset to \"Not specified\"."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2015
+#: src/admin/class-service-menu-editor.php:2044
 msgid "No valid date rows were found, so the reservation date was reset to \"Not specified\"."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2019
+#: src/admin/class-service-menu-editor.php:2048
 msgid "Some invalid day-of-week rows were not saved."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2023
+#: src/admin/class-service-menu-editor.php:2052
 msgid "Some invalid dates (past dates, or start after end) were not saved."
 msgstr ""
 
@@ -2739,7 +2762,7 @@ msgid " Open the permalink settings and click \"Save Changes\" without changing 
 msgstr ""
 
 #: src/admin/class-setup-notices.php:1095
-#: src/availability/class-availability-service.php:2483
+#: src/availability/class-availability-service.php:2488
 msgid "Shift not registered"
 msgstr ""
 
@@ -3841,43 +3864,43 @@ msgstr ""
 msgid "There are no %s matching the selected conditions."
 msgstr ""
 
-#: src/availability/class-availability-service.php:2669
+#: src/availability/class-availability-service.php:2674
 msgid "No route was found matching the URL and request method."
 msgstr ""
 
-#: src/availability/class-availability-service.php:2679
+#: src/availability/class-availability-service.php:2684
 msgid "This menu is not a plan billed per night."
 msgstr ""
 
-#: src/availability/class-availability-service.php:2733
+#: src/availability/class-availability-service.php:2738
 msgid "The selected date is not valid. Please choose the check-in and check-out dates again."
 msgstr ""
 
-#: src/availability/class-availability-service.php:2746
+#: src/availability/class-availability-service.php:2751
 msgid "The check-in date has already passed. Please choose today or a later date."
 msgstr ""
 
 #. translators: %d: number of days ahead that reservations are accepted.
-#: src/availability/class-availability-service.php:2755
+#: src/availability/class-availability-service.php:2760
 msgid "Reservations are accepted up to %d days ahead. Please choose an earlier date."
 msgstr ""
 
-#: src/availability/class-availability-service.php:2791
+#: src/availability/class-availability-service.php:2796
 msgid "The reservation deadline for this check-in date has passed. Please choose a later date."
 msgstr ""
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/availability/class-availability-service.php:2851
+#: src/availability/class-availability-service.php:2856
 msgid "The specified %s cannot be in charge of this menu."
 msgstr ""
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/availability/class-availability-service.php:2868
+#: src/availability/class-availability-service.php:2873
 msgid "The specified %s was not found."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Rooms".
-#: src/availability/class-availability-service.php:2880
+#: src/availability/class-availability-service.php:2885
 msgid "No %s have been set up to be in charge."
 msgstr ""
 
@@ -5778,19 +5801,19 @@ msgstr ""
 msgid "Applies only when the menu loop displays all groups."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2083
+#: src/post-types/class-service-menu-post-type.php:2102
 msgid "Primary service menu group information."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2107
+#: src/post-types/class-service-menu-post-type.php:2126
 msgid "Minimum number of guests required to book this menu when staff nomination is used (0 = no restriction)."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2123
+#: src/post-types/class-service-menu-post-type.php:2142
 msgid "Reservation screen settings for a plan billed per night (null when the menu is not billed per night)."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2142
+#: src/post-types/class-service-menu-post-type.php:2161
 msgid "IDs of the resources (staff) that can be in charge of this menu, with \"all resources\" expanded to the published resources."
 msgstr ""
 

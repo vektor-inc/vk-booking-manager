@@ -2286,6 +2286,11 @@ class Availability_Service {
 	 * @return int 最低申し込み人数（0=制限なし）。
 	 */
 	public function get_menu_nomination_min_guests( WP_Post $menu_post ): int {
+		// 1室1泊あたりのプランは人数で料金・受付条件を分けないため、保存済みの最低人数を適用しない。
+		if ( Service_Menu_Post_Type::is_night_price_per_room( $menu_post->ID ) ) {
+			return 0;
+		}
+
 		// 指名を使わないメニューではこの受付制限は無効（このメニューの最少催行人数は表示専用のまま）。
 		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) ) {
 			return 0;

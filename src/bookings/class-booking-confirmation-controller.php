@@ -2333,8 +2333,8 @@ class Booking_Confirmation_Controller {
 			return array();
 		}
 
-		$allow = (bool) get_post_meta( $menu_id, self::MENU_META_ALLOW_GUESTS, true );
-		if ( ! $allow || $this->count_menu_staff( $menu_id ) < 1 ) {
+		// 1室1泊あたりのプランは許可フラグが未保存・OFF でも ON として扱う（#831）。
+		if ( ! Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id ) || $this->count_menu_staff( $menu_id ) < 1 ) {
 			return array();
 		}
 
@@ -2376,8 +2376,8 @@ class Booking_Confirmation_Controller {
 			return 1;
 		}
 
-		$allow = (bool) get_post_meta( $menu_id, self::MENU_META_ALLOW_GUESTS, true );
-		if ( ! $allow ) {
+		// 1室1泊あたりのプランは許可フラグが未保存・OFF でも ON として扱う（#831）。
+		if ( ! Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id ) ) {
 			return 1;
 		}
 

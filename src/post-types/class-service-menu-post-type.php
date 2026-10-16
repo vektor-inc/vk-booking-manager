@@ -1979,6 +1979,25 @@ class Service_Menu_Post_Type {
 	}
 
 	/**
+	 * このメニューで複数人一括予約が有効か（許可フラグの実効値）を返す（#831）。
+	 *
+	 * 1室1泊あたりの泊のプランは、人数が料金に影響しない代わりに「部屋に泊まれる最大人数」までを常に受け付けるため、
+	 * 保存済みの許可フラグ（_vkbm_allow_multiple_guests）に関わらず ON として扱う。それ以外のメニューは保存済みの値に従う。
+	 * Pro 版・予約枠の定員機能・担当リソースの有無といった他のゲートは含まない（呼び出し側で別に判定する）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 複数人一括予約が有効なら true。
+	 */
+	public static function is_multi_guest_booking_enabled( int $menu_id ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		return self::is_night_price_per_room( $menu_id )
+			|| (bool) get_post_meta( $menu_id, self::META_ALLOW_MULTIPLE_GUESTS, true );
+	}
+
+	/**
 	 * メニューのチェックイン時刻（HH:MM）を返す。未設定・不正値は既定値。
 	 *
 	 * @param int $menu_id サービスメニューの投稿ID。

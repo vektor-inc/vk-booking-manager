@@ -1333,8 +1333,8 @@ class Booking_Draft_Controller {
 			return 0;
 		}
 
-		$allow = (bool) get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
-		if ( ! $allow ) {
+		// 1室1泊あたりのプランは許可フラグが未保存・OFF でも ON として扱う（#831）。
+		if ( ! Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id ) ) {
 			return 0;
 		}
 
