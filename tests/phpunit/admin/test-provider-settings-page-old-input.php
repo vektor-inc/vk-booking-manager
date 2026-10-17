@@ -161,6 +161,17 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
+				'test_condition_name' => '#825 フッターの色に正しい色と不正な値 => 正しい色は復元され、不正な値は保存時と同じく空になる',
+				'input'               => array(
+					'design_footer_background_color' => '#1e3a8a',
+					'design_footer_text_color'       => 'red',
+				),
+				'expected'            => array(
+					'design_footer_background_color' => '#1e3a8a',
+					'design_footer_text_color'       => '',
+				),
+			),
+			array(
 				'test_condition_name' => '同じく漏れていたチェックボックスがチェックなし => OFF が復元される',
 				'input'               => array(),
 				'expected'            => array(

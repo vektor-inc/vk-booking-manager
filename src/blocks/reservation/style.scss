@@ -1115,8 +1115,13 @@ $vkbm-plan-summary-control-height: 44px;
 
 // スマホ幅ではロゴ・事業者名・ナビを 1 行ずつ縦に並べて中央揃えにする（中途半端な段落ちを防ぐ）。
 // 上方の「.header .nav」と同じ詳細度のため、ソース順の後勝ちで上書きしている。この位置より上へ移動しないこと。
-// スマホ幅ではリンクが 1 行に収まるか言語・テーマの余白で変わり、折り返すと行頭に区切り線が残り括弧も分断される。
-// 折り返す可能性があるため最初から縦に積み、区切り線と括弧は付けず、リンクの幅を揃える。
+// ナビの中の項目は PC 版と同じ「[ A | B | C ]」の横並びのまま、ナビ全体を中央に置く（区切り線と括弧は上方・タブレット幅の指定を引き継ぐ）。
+// 項目どうしは折り返さない（nowrap）。折り返すと行頭に区切り線が残り括弧も分断されるため。
+// まず 360px 未満（ミキシンの出力は max-width: 359.98px）では余白・文字サイズを詰めて、折り返す前に 1 行へ収める（44px のタップ領域は維持）。
+// それでも足りない場合だけ、各項目の中で文字を折り返す。リンクの共通クラス（.vkbm-button）が white-space: nowrap を指定しており、
+// min-width: 0 だけでは箱だけが縮んで文字がはみ出すため、white-space: normal と overflow-wrap: anywhere で文字を折り返せるようにしている。
+// word-break: auto-phrase で折り返し位置を語句の境目にする（非対応ブラウザでは従来の折り返し）。
+// このナビは reservation-header-nav.js が店舗スタッフ・会員・ゲストのどれでも同じクラスで描画するため、指定は全員に共通で効く。
 @include vkbm-bp-down($vkbm-bp-front-sm) {
 
 	.vkbm-reservation-header {
@@ -1132,28 +1137,40 @@ $vkbm-plan-summary-control-height: 44px;
 
 	.vkbm-reservation-header .vkbm-reservation-header__nav {
 		margin-left: 0;
+		max-width: 100%;
 	}
 
 	.vkbm-reservation-header__nav {
-		flex-direction: column;
-		align-items: stretch;
-		gap: 0;
-
-		&::before,
-		&::after {
-			display: none;
-		}
+		flex-wrap: nowrap;
+		justify-content: center;
 
 		.vkbm-reservation-header__nav-link {
-			justify-content: center;
+			min-width: 0;
 			text-align: center;
+			white-space: normal;
+			overflow-wrap: anywhere;
+			word-break: auto-phrase;
+		}
+
+		// 360px 未満では 1 行に収まるよう余白と文字サイズを詰める（縦の min-height 44px はそのまま）。
+		@include vkbm-bp-down($vkbm-bp-front-xs) {
+			gap: 0.25rem;
+			font-size: 0.8rem;
+
+			// リンクには共通クラス .vkbm-button__sm（0,1,0）が font-size: 0.88rem を直接指定しているため、
+			// ここ（0,2,0 以上でソース順に依らず勝つ）で inherit にして、ナビの 0.8rem を実際に効かせる。
+			.vkbm-reservation-header__nav-link {
+				padding-inline: 0.125rem;
+				font-size: inherit;
+			}
 		}
 	}
 
-	.vkbm-reservation-header__nav-link + .vkbm-reservation-header__nav-link {
+	// 上の詰めに合わせて、区切り線の位置（リンクの左余白の分）も寄せる。
+	@include vkbm-bp-down($vkbm-bp-front-xs) {
 
-		&::before {
-			display: none;
+		.vkbm-reservation-header__nav-link + .vkbm-reservation-header__nav-link::before {
+			left: -0.125rem;
 		}
 	}
 }
@@ -1853,8 +1870,9 @@ body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(foot
 		color: inherit;
 	}
 
+	// フッターの文字色を白などに設定すると、白いモーダルの上で枠が見えなくなるため、フッター用の色は使わない（#825）。
 	&:focus-visible {
-		outline: 2px solid var(--vkbm--color--footer-link, var(--vkbm--color--footer-text, #333));
+		outline: 2px solid var(--vkbm--color--text-primary, #333);
 		outline-offset: -2px;
 	}
 }

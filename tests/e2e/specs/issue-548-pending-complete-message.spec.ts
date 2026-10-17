@@ -5,6 +5,7 @@ import {
 	loginAsAdmin,
 	getServiceMenuId,
 } from '../utils/helpers';
+import { checkConfirmConsents } from '../utils/consent-helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 
@@ -149,17 +150,8 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 			page.locator( '.vkbm-confirm__summary' ).first()
 		).toBeVisible( { timeout: 15000 } );
 
-		// 同意チェック（表示されている場合のみ）。
-		const cancelPolicy = page.locator(
-			'#vkbm-confirm-cancellation-policy'
-		);
-		if ( await cancelPolicy.isVisible().catch( () => false ) ) {
-			await cancelPolicy.check();
-		}
-		const terms = page.locator( '#vkbm-confirm-terms' );
-		if ( await terms.isVisible().catch( () => false ) ) {
-			await terms.check();
-		}
+		// 同意チェック（キャンセルポリシー・利用規約）。文面の描画を待ってからチェックする。
+		await checkConfirmConsents( page );
 
 		// 予約を確定する。
 		const confirmButton = page.locator( '.vkbm-confirm__button' );

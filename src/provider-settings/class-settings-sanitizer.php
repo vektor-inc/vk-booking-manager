@@ -252,6 +252,13 @@ class Settings_Sanitizer {
 		$data['design_menu_card_price_color']    = $this->sanitize_color(
 			$input['design_menu_card_price_color'] ?? ( $data['design_menu_card_price_color'] ?? '' )
 		);
+		// #825: フッターの色。不正な値は空（指定なし）として保存する。
+		$data['design_footer_background_color'] = $this->sanitize_color(
+			$input['design_footer_background_color'] ?? ( $data['design_footer_background_color'] ?? '' )
+		);
+		$data['design_footer_text_color']       = $this->sanitize_color(
+			$input['design_footer_text_color'] ?? ( $data['design_footer_text_color'] ?? '' )
+		);
 		// 未入力・0 は「指定なし」（現状の表示幅のまま）として空文字で保存する。
 		$header_logo_width_raw            = $input['design_header_logo_width'] ?? ( $data['design_header_logo_width'] ?? '' );
 		$header_logo_width                = $this->sanitize_non_negative_int( $header_logo_width_raw );

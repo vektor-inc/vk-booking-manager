@@ -83,6 +83,8 @@ class Provider_Settings_Page {
 		'design_menu_card_catch_color',
 		'design_reservation_button_color',
 		'design_menu_card_price_color',
+		'design_footer_background_color',
+		'design_footer_text_color',
 		'design_header_logo_width',
 		'design_menu_search_style',
 		'design_radius_md',
@@ -808,6 +810,8 @@ class Provider_Settings_Page {
 		$design_menu_card_catch_color     = isset( $settings['design_menu_card_catch_color'] ) ? (string) $settings['design_menu_card_catch_color'] : '';
 		$design_reservation_button_color  = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
 		$design_menu_card_price_color     = isset( $settings['design_menu_card_price_color'] ) ? (string) $settings['design_menu_card_price_color'] : '';
+		$design_footer_background_color   = isset( $settings['design_footer_background_color'] ) ? (string) $settings['design_footer_background_color'] : '';
+		$design_footer_text_color         = isset( $settings['design_footer_text_color'] ) ? (string) $settings['design_footer_text_color'] : '';
 		$design_header_logo_width         = isset( $settings['design_header_logo_width'] ) ? (string) $settings['design_header_logo_width'] : '';
 		$design_menu_search_style         = isset( $settings['design_menu_search_style'] ) ? (string) $settings['design_menu_search_style'] : Settings_Sanitizer::DESIGN_MENU_SEARCH_STYLE_DEFAULT;
 		$design_menu_search_style_choices = Settings_Sanitizer::get_design_menu_search_style_choices();
@@ -1391,7 +1395,7 @@ class Provider_Settings_Page {
 						</tr>
 
 							<tr class="vkbm-provider-settings__tab-system">
-								<th scope="row"><?php esc_html_e( 'Reservation page display elements', 'vk-booking-manager' ); ?></th>
+								<th scope="row" id="vkbm-reservation-display-elements" class="vkbm-provider-settings__link-target"><?php esc_html_e( 'Reservation page display elements', 'vk-booking-manager' ); ?></th>
 								<td>
 									<div class="vkbm-provider-settings__checkbox-stack">
 										<label class="vkbm-inline-checkbox">
@@ -1496,6 +1500,13 @@ class Provider_Settings_Page {
 												esc_html__( 'The displayed content uses the values entered in %1$s and %2$s.', 'vk-booking-manager' ),
 												'<a href="' . esc_url( add_query_arg( 'tab', 'store', $base_url ) ) . '">' . esc_html__( 'Business information', 'vk-booking-manager' ) . '</a>',
 												'<a href="' . esc_url( add_query_arg( 'tab', 'consent', $base_url ) ) . '">' . esc_html__( 'User consent items', 'vk-booking-manager' ) . '</a>'
+											);
+											?>
+											<?php
+											printf(
+												/* translators: %s: link to the footer color settings on the "design settings" tab. */
+												esc_html__( 'The background color and text color can be changed on the %s tab.', 'vk-booking-manager' ),
+												'<a href="' . esc_url( add_query_arg( 'tab', 'design', $base_url ) . '#vkbm-design-footer-colors' ) . '">' . esc_html__( 'design settings', 'vk-booking-manager' ) . '</a>'
 											);
 											?>
 										</li>
@@ -2648,6 +2659,55 @@ class Provider_Settings_Page {
 									<?php esc_html_e( 'Use as the background color for the Proceed to Booking button.', 'vk-booking-manager' ); ?>
 									<br />
 									<?php esc_html_e( 'If not specified, the primary color will be applied.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<?php // #825: 予約ブロック末尾のフッターの色。「フッター」のチェックが外れていても隠さず、入力も止めない。 ?>
+						<tr class="vkbm-provider-settings__tab-design vkbm-provider-settings__link-target" id="vkbm-design-footer-colors">
+							<th scope="row">
+								<label for="vkbm-design-footer-background-color"><?php esc_html_e( 'Footer background color', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="vkbm-color-picker"
+									id="vkbm-design-footer-background-color"
+									name="vkbm_provider_settings[design_footer_background_color]"
+									value="<?php echo esc_attr( $design_footer_background_color ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Use as the background color of the band at the end of the reservation block that shows the business information and the terms links.', 'vk-booking-manager' ); ?>
+									<br />
+									<?php esc_html_e( 'If left blank, a light gray is used.', 'vk-booking-manager' ); ?>
+									<br />
+									<?php
+									printf(
+										/* translators: %s: link to "Reservation page display elements" on the "System settings" tab. */
+										esc_html__( 'The footer is displayed when "Footer" is checked in %s on the "System settings" tab.', 'vk-booking-manager' ),
+										'<a href="' . esc_url( add_query_arg( 'tab', 'system', $base_url ) . '#vkbm-reservation-display-elements' ) . '">' . esc_html__( 'Reservation page display elements', 'vk-booking-manager' ) . '</a>'
+									);
+									?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-design">
+							<th scope="row">
+								<label for="vkbm-design-footer-text-color"><?php esc_html_e( 'Footer text color', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="vkbm-color-picker"
+									id="vkbm-design-footer-text-color"
+									name="vkbm_provider_settings[design_footer_text_color]"
+									value="<?php echo esc_attr( $design_footer_text_color ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Use as the text color of the business information and the terms links.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'The divider lines are also displayed in a lighter shade of this color.', 'vk-booking-manager' ); ?>
+									<br />
+									<?php esc_html_e( 'If left blank, a readable color is selected automatically to match the background color.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'If you specify a text color while leaving the background color blank, choose a color that is readable on the light gray background.', 'vk-booking-manager' ); ?>
 								</p>
 							</td>
 						</tr>

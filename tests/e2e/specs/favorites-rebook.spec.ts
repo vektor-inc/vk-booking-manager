@@ -7,6 +7,7 @@ import {
 	createShiftForMonth,
 	getServiceMenuId,
 } from '../utils/helpers';
+import { checkConfirmConsents } from '../utils/consent-helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 
@@ -174,17 +175,8 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		const { savedMenuId, savedStaffId } = await proceedToConfirm( page );
 		expect( Number( savedMenuId ) ).toBeGreaterThan( 0 );
 
-		// 同意チェック（キャンセルポリシー・利用規約）。
-		const cancelPolicy = page.locator(
-			'#vkbm-confirm-cancellation-policy'
-		);
-		if ( await cancelPolicy.isVisible().catch( () => false ) ) {
-			await cancelPolicy.check();
-		}
-		const terms = page.locator( '#vkbm-confirm-terms' );
-		if ( await terms.isVisible().catch( () => false ) ) {
-			await terms.check();
-		}
+		// 同意チェック（キャンセルポリシー・利用規約）。文面の描画を待ってからチェックする。
+		await checkConfirmConsents( page );
 
 		// お気に入り登録のチェックボックス（本機能）が表示され、ON にできること。
 		const favoriteOptIn = page.locator( '#vkbm-confirm-favorite-optin' );

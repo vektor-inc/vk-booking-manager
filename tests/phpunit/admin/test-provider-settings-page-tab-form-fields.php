@@ -400,6 +400,122 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * フッターの背景色・文字色（デザイン設定タブの行）が、全タブで 1 つずつ出力され、変更した値で保存されることを検証する（#825）。
+	 *
+	 * 行は全タブで描画するため、hidden を併せて出すと同じ名前が二重に送られ、
+	 * フォーム末尾の hidden が後勝ちになってデザイン設定タブでの変更が元の値に戻る。これを防ぐ。
+	 */
+	public function test_save_settings_design_footer_colors(): void {
+		$saved_values = array(
+			'design_footer_background_color' => '#1e3a8a',
+			'design_footer_text_color'       => '#ffcc00',
+		);
+		$typed_values = array(
+			'design_footer_background_color' => '#000000',
+			'design_footer_text_color'       => '#ffffff',
+		);
+		// 入力欄の id（値の書き換えに使う）。
+		$field_ids = array(
+			'design_footer_background_color' => 'vkbm-design-footer-background-color',
+			'design_footer_text_color'       => 'vkbm-design-footer-text-color',
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '「デザイン」タブで2色を書き換えて保存 => 書き換えた値で保存される',
+				'tab'                 => 'design',
+				'typed'               => $typed_values,
+				'expected'            => $typed_values,
+			),
+			array(
+				'test_condition_name' => '「デザイン」タブで書き換えずに保存 => 保存済みの値のまま',
+				'tab'                 => 'design',
+				'typed'               => array(),
+				'expected'            => $saved_values,
+			),
+			array(
+				'test_condition_name' => '「デザイン」タブで背景色だけを空欄にして保存 => 背景色は空、文字色は保存済みの値のまま',
+				'tab'                 => 'design',
+				'typed'               => array( 'design_footer_background_color' => '' ),
+				'expected'            => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '#ffcc00',
+				),
+			),
+		);
+		// デザイン以外のタブ（タブ指定なしを含む）から保存 => 保存済みの値のまま。
+		foreach ( array_merge( array_diff( self::FORM_TABS, array( 'design' ) ), array( '' ) ) as $tab ) {
+			$test_cases[] = array(
+				'test_condition_name' => '「' . ( '' === $tab ? 'タブ指定なし' : $tab ) . '」タブから保存 => 保存済みの値のまま',
+				'tab'                 => $tab,
+				'typed'               => array(),
+				'expected'            => $saved_values,
+			);
+		}
+
+		$page    = $this->create_page();
+		$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+		foreach ( $test_cases as $case ) {
+			// 保存済みの設定を用意する。
+			delete_option( Settings_Repository::OPTION_KEY );
+			$repository = new Settings_Repository();
+			update_option( Settings_Repository::OPTION_KEY, array_merge( $repository->get_default_settings(), $saved_values ) );
+
+			$html = $this->render_tab( $page, $case['tab'] );
+
+			// どのタブでも、2色はデザイン設定タブの行の入力欄 1 つずつだけ出力される（hidden と二重にならない）。
+			foreach ( array_keys( $saved_values ) as $key ) {
+				$this->assertSame(
+					1,
+					substr_count( $html, 'name="vkbm_provider_settings[' . $key . ']"' ),
+					$case['test_condition_name'] . '（' . $key . ' の出力数）'
+				);
+				$this->assertMatchesRegularExpression(
+					'/<tr class="vkbm-provider-settings__tab-design(?: [^"]*)?"[^>]*>(?:(?!<\/tr>).)*name="vkbm_provider_settings\[' . $key . '\]/s',
+					$html,
+					$case['test_condition_name'] . '（' . $key . ' がデザイン設定タブの行にあること）'
+				);
+			}
+
+			// 入力欄を書き換えた状態を再現する。
+			foreach ( $case['typed'] as $key => $typed ) {
+				$html = preg_replace(
+					'/(id="' . $field_ids[ $key ] . '"\s+name="vkbm_provider_settings\[' . $key . '\]"\s+value=")[^"]*"/',
+					'${1}' . $typed . '"',
+					$html,
+					-1,
+					$replaced
+				);
+				$this->assertSame( 1, $replaced, $case['test_condition_name'] . '（前提: ' . $key . ' の入力欄を書き換えられる）' );
+			}
+
+			$submitted = $this->get_submitted_values( $html );
+			$payload   = $submitted['vkbm_provider_settings'] ?? array();
+			unset( $payload['license_key'], $payload['delete_license_key'] );
+
+			$result = $service->save_settings( $payload );
+			$this->assertNotWPError( $result, $case['test_condition_name'] . '（前提: 保存できる）' );
+
+			// 保存後の2色を取り出して比較する。
+			$saved_settings = get_option( Settings_Repository::OPTION_KEY, array() );
+			$actual         = array();
+			foreach ( array_keys( $case['expected'] ) as $key ) {
+				$actual[ $key ] = $saved_settings[ $key ] ?? '(保存されていない)';
+			}
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+
+		// システム設定タブの「フッター」の説明とデザイン設定タブの色の欄を、互いにリンクでつなぐ。
+		$system_html = $this->render_tab( $page, 'system' );
+		$design_html = $this->render_tab( $page, 'design' );
+		$this->assertStringContainsString( 'tab=design#vkbm-design-footer-colors', $system_html, 'システム設定タブから、デザイン設定タブの色の欄へのリンクが出ること' );
+		$this->assertSame( 1, substr_count( $design_html, 'id="vkbm-design-footer-colors"' ), 'デザイン設定タブの色の欄にリンク先の id が 1 つだけ付くこと' );
+		$this->assertStringContainsString( 'tab=system#vkbm-reservation-display-elements', $design_html, 'デザイン設定タブから、システム設定タブの「予約ページの表示要素」へのリンクが出ること' );
+		$this->assertSame( 1, substr_count( $system_html, 'id="vkbm-reservation-display-elements"' ), 'システム設定タブの「予約ページの表示要素」にリンク先の id が 1 つだけ付くこと' );
+	}
+
+	/**
 	 * 指定タブで設定画面を描画し、HTML を返す。
 	 *
 	 * @param Provider_Settings_Page $page 設定画面。

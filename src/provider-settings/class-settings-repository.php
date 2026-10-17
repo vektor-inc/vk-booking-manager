@@ -123,6 +123,9 @@ class Settings_Repository {
 			'design_reservation_button_color'            => '',
 			// サービスメニューカードの料金の色。空は未指定（既存の濃い赤のまま）。
 			'design_menu_card_price_color'               => '',
+			// #825: フッターの背景色・文字色。空文字は「指定なし」で、CSS 変数を出力せず従来の見た目のままにする。
+			'design_footer_background_color'             => '',
+			'design_footer_text_color'                   => '',
 			// ヘッダーに表示する店舗ロゴ画像の横幅（px）。空は未指定（現状の表示幅のまま）。
 			'design_header_logo_width'                   => '',
 			// 絞り込み検索のデザイン（plain / framed）。選択肢は Settings_Sanitizer::get_design_menu_search_style_choices() で定義する。

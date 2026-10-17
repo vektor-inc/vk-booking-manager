@@ -819,6 +819,84 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * #825: フッターの背景色・文字色は、既定値が空文字で、16 進数カラーだけが保存され、
+	 * 不正な値は空文字になることを検証する。
+	 */
+	public function test_sanitize_design_footer_colors(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		// 既定値は空（指定なし。既存サイトのフッターの見た目を変えない）。
+		$this->assertSame( '', $defaults['design_footer_background_color'] );
+		$this->assertSame( '', $defaults['design_footer_text_color'] );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '正しい 6 桁の色 => そのまま保存される',
+				'input'               => array(
+					'design_footer_background_color' => '#1e3a8a',
+					'design_footer_text_color'       => '#ffffff',
+				),
+				'expected'            => array(
+					'design_footer_background_color' => '#1e3a8a',
+					'design_footer_text_color'       => '#ffffff',
+				),
+			),
+			array(
+				'test_condition_name' => '3 桁の色 => そのまま保存される',
+				'input'               => array(
+					'design_footer_background_color' => '#abc',
+					'design_footer_text_color'       => '#FFF',
+				),
+				'expected'            => array(
+					'design_footer_background_color' => '#abc',
+					'design_footer_text_color'       => '#FFF',
+				),
+			),
+			array(
+				'test_condition_name' => '# の無い値・CSS を埋め込む値 => 空文字になる',
+				'input'               => array(
+					'design_footer_background_color' => '1e3a8a',
+					'design_footer_text_color'       => '#fff;}body{display:none}',
+				),
+				'expected'            => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '',
+				),
+			),
+			array(
+				'test_condition_name' => '空文字 => 未指定として空文字のまま',
+				'input'               => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '',
+				),
+				'expected'            => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '',
+				),
+			),
+			array(
+				'test_condition_name' => '未送信 => 既定値（空文字）のまま',
+				'input'               => array(),
+				'expected'            => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '',
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+
+			$actual = array(
+				'design_footer_background_color' => $result['design_footer_background_color'],
+				'design_footer_text_color'       => $result['design_footer_text_color'],
+			);
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * #431: 「リソースタグ検索」（resource_tag_search_enabled）は「絞り込み検索」
 	 * （reservation_show_menu_search）の子項目のため、親がOFFなら送信値に関わらず
 	 * 強制的にOFFになることを検証する。また、リソースタグ機能自体が Pro 版限定のため、

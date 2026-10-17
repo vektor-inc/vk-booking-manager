@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.1
-Stable tag: 3.2.0
+Stable tag: 3.3.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,10 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.3.0 =
+* [ 機能追加 ][ 予約ブロック ] フッターの背景色・文字色をデザイン設定タブから変えられるよう追加（文字色が空欄なら背景色に合わせて読みやすい色を自動で選択）
+* [ デザイン不具合修正 ][ 予約ブロック ] スマホ幅でヘッダーのナビゲーションの項目が縦積みになっていた表示を、PC 版と同じ横並び（区切り線・括弧あり）で中央に配置する表示に修正
 
 = 3.2.0 =
 * [ 仕様変更 ] 宿泊モードの「1室1泊あたり」のプランで複数人一括予約を常に有効にし、「予約枠の定員」を「1室の最大人数」に変更（保存済みのプランで人数欄を出すには「1室の最大人数」に2以上を入力。1室1泊あたりでは「貸し切り予約」の項目も非表示）

@@ -29,6 +29,16 @@ class Common_Styles {
 	public const VARIABLES_HANDLE  = 'vkbm-variables';
 
 	/**
+	 * フッターの文字色が未設定のとき、まず候補にする文字色（濃いグレー）。
+	 */
+	public const FOOTER_TEXT_COLOR_PREFERRED = '#333333';
+
+	/**
+	 * 文字色に求めるコントラスト比の下限（WCAG 2.1 AA の本文の基準）。
+	 */
+	public const MIN_TEXT_CONTRAST_RATIO = 4.5;
+
+	/**
 	 * カスタムプロパティのインライン CSS を既に付与したかどうか。
 	 *
 	 * ブロックエディター画面では `admin_enqueue_scripts`（本クラスの
@@ -247,6 +257,8 @@ class Common_Styles {
 			}
 		}
 
+		$properties = array_merge( $properties, self::get_footer_color_properties( $settings ) );
+
 		$radius_raw = $settings['design_radius_md'] ?? null;
 		if ( '' !== $radius_raw && null !== $radius_raw ) {
 			// 上限クランプの参照元を Settings_Sanitizer::DESIGN_RADIUS_MD_MAX 一本にする。
@@ -258,6 +270,127 @@ class Common_Styles {
 		}
 
 		return $properties;
+	}
+
+	/**
+	 * フッターの背景色・文字色・区切り線の色の CSS 変数を組み立てる（#825）。
+	 *
+	 * 文字色が未設定で背景色だけがあるときは、背景色から読みやすい文字色を選ぶ。
+	 * 区切り線の色は、文字色（手動・自動のどちらでも）が決まったときだけ、その色の 20% の濃さで出力する。
+	 * どちらの色も未設定・不正なら空の配列を返し、CSS 側の既定値のままにする。
+	 *
+	 * @param array<string, mixed> $settings 保存済みの設定。
+	 * @return array<string, string> CSS 変数名 => 値。
+	 */
+	public static function get_footer_color_properties( array $settings ): array {
+		// 出力する値は、必ず sanitize_hex_color() を通した色から作る。
+		$background_color = self::sanitize_hex_color_or_empty( $settings['design_footer_background_color'] ?? '' );
+		$text_color       = self::sanitize_hex_color_or_empty( $settings['design_footer_text_color'] ?? '' );
+
+		// 文字色が未設定なら、背景色から自動で決める。
+		if ( '' === $text_color && '' !== $background_color ) {
+			$text_color = self::get_readable_text_color( $background_color );
+		}
+
+		$properties = array();
+		if ( '' !== $background_color ) {
+			$properties['--vkbm--color--footer-bg'] = $background_color;
+		}
+		if ( '' !== $text_color ) {
+			$rgb                                        = self::hex_to_rgb( $text_color );
+			$properties['--vkbm--color--footer-text']   = $text_color;
+			$properties['--vkbm--color--footer-border'] = sprintf( 'rgb(%d %d %d / 20%%)', $rgb[0], $rgb[1], $rgb[2] );
+		}
+
+		return $properties;
+	}
+
+	/**
+	 * 背景色に対して読みやすい文字色を返す。
+	 *
+	 * 濃いグレー（#333333）で WCAG のコントラスト比 4.5:1 以上になればそれを使う。
+	 * 届かなければ、黒（#000000）と白（#ffffff）のうちコントラスト比が高い方を使う。
+	 *
+	 * @param string $background_color 背景色（sanitize_hex_color() を通した #rgb / #rrggbb）。
+	 * @return string 文字色（#rrggbb）。
+	 */
+	public static function get_readable_text_color( string $background_color ): string {
+		if ( self::get_contrast_ratio( self::FOOTER_TEXT_COLOR_PREFERRED, $background_color ) >= self::MIN_TEXT_CONTRAST_RATIO ) {
+			return self::FOOTER_TEXT_COLOR_PREFERRED;
+		}
+
+		$black_ratio = self::get_contrast_ratio( '#000000', $background_color );
+		$white_ratio = self::get_contrast_ratio( '#ffffff', $background_color );
+
+		return $black_ratio >= $white_ratio ? '#000000' : '#ffffff';
+	}
+
+	/**
+	 * 2色の WCAG のコントラスト比（1〜21）を返す。
+	 *
+	 * @param string $color_a 色（#rgb / #rrggbb）。
+	 * @param string $color_b 色（#rgb / #rrggbb）。
+	 * @return float コントラスト比。
+	 */
+	public static function get_contrast_ratio( string $color_a, string $color_b ): float {
+		$luminance_a = self::get_relative_luminance( $color_a );
+		$luminance_b = self::get_relative_luminance( $color_b );
+
+		return ( max( $luminance_a, $luminance_b ) + 0.05 ) / ( min( $luminance_a, $luminance_b ) + 0.05 );
+	}
+
+	/**
+	 * WCAG の相対輝度（0〜1）を返す。
+	 *
+	 * @param string $color 色（#rgb / #rrggbb）。
+	 * @return float 相対輝度。
+	 */
+	private static function get_relative_luminance( string $color ): float {
+		// sRGB の各成分を線形の値に戻してから、人の目の感じ方に合わせた重みで足す。
+		$linear = array_map(
+			static function ( int $channel ): float {
+				$value = $channel / 255;
+				return $value <= 0.04045 ? $value / 12.92 : ( ( $value + 0.055 ) / 1.055 ) ** 2.4;
+			},
+			self::hex_to_rgb( $color )
+		);
+
+		return 0.2126 * $linear[0] + 0.7152 * $linear[1] + 0.0722 * $linear[2];
+	}
+
+	/**
+	 * 16進の色を RGB の各成分（0〜255）に分ける。3桁の色（#abc）は6桁に広げて扱う。
+	 *
+	 * @param string $color 色（#rgb / #rrggbb）。
+	 * @return array{0: int, 1: int, 2: int} R・G・B。
+	 */
+	private static function hex_to_rgb( string $color ): array {
+		$hex = ltrim( $color, '#' );
+		if ( 3 === strlen( $hex ) ) {
+			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+		}
+
+		return array(
+			(int) hexdec( substr( $hex, 0, 2 ) ),
+			(int) hexdec( substr( $hex, 2, 2 ) ),
+			(int) hexdec( substr( $hex, 4, 2 ) ),
+		);
+	}
+
+	/**
+	 * sanitize_hex_color() を通した色を返す。空・不正な値は空文字にする。
+	 *
+	 * @param mixed $value 保存済みの値。
+	 * @return string 色（#rgb / #rrggbb）または空文字。
+	 */
+	private static function sanitize_hex_color_or_empty( $value ): string {
+		if ( ! is_string( $value ) || '' === $value ) {
+			return '';
+		}
+
+		$color = sanitize_hex_color( $value );
+
+		return is_string( $color ) ? $color : '';
 	}
 
 	/**

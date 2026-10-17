@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { wpCliArgs, getServiceMenuId } from '../utils/helpers';
+import { checkConfirmConsents } from '../utils/consent-helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 const E2E_DEBUG =
@@ -861,38 +862,8 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		// 9. 同意事項をチェック
 		console.log( 'Checking for agreement checkboxes...' );
 
-		// ページが完全に読み込まれるまで少し待機
-		await page.waitForTimeout( 1000 );
-
-		// キャンセルポリシー
-		try {
-			const cancelPolicyCheckbox = page.locator(
-				'#vkbm-confirm-cancellation-policy'
-			);
-			await cancelPolicyCheckbox.waitFor( {
-				state: 'visible',
-				timeout: 3000,
-			} );
-			await cancelPolicyCheckbox.check();
-			console.log( 'Checked cancellation policy checkbox' );
-		} catch ( e ) {
-			console.log(
-				'Cancellation policy checkbox not found or not required'
-			);
-		}
-
-		// 利用規約
-		try {
-			const termsCheckbox = page.locator( '#vkbm-confirm-terms' );
-			await termsCheckbox.waitFor( { state: 'visible', timeout: 3000 } );
-			await termsCheckbox.check();
-			console.log( 'Checked terms checkbox' );
-		} catch ( e ) {
-			console.log( 'Terms checkbox not found or not required' );
-		}
-
-		// チェックボックスをチェックした後、ボタンが有効になるまで待機
-		await page.waitForTimeout( 500 );
+		// 文面の描画を待ってから、表示される同意欄だけチェックする（固定待ちは使わない）。
+		await checkConfirmConsents( page );
 
 		// デバッグ: ボタンの状態を確認
 		const finalConfirmButton = page.locator( '.vkbm-confirm__button' );

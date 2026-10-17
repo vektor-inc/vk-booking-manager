@@ -167,6 +167,28 @@ class Common_Styles_Test extends WP_UnitTestCase {
 				'expected'            => ':root{--vkbm--radius--md: 32px;}',
 			],
 			[
+				'test_condition_name' => '#825 フッターの背景色と文字色 => 背景・文字・区切り線（文字色の 20%）が出力される',
+				'conditions'          => [
+					'options' => [
+						'design_footer_background_color' => '#1e3a8a',
+						'design_footer_text_color'       => '#ffcc00',
+						'design_radius_md'                    => '',
+					],
+				],
+				'expected'            => ':root{--vkbm--color--footer-bg: #1e3a8a;--vkbm--color--footer-text: #ffcc00;--vkbm--color--footer-border: rgb(255 204 0 / 20%);}',
+			],
+			[
+				'test_condition_name' => '#825 フッターの色がどちらも空 => 何も出力しない',
+				'conditions'          => [
+					'options' => [
+						'design_footer_background_color' => '',
+						'design_footer_text_color'       => '',
+						'design_radius_md'                    => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
 				'test_condition_name' => 'radius_at_max_boundary_is_unchanged',
 				'conditions'          => [
 					'options' => [
@@ -190,6 +212,218 @@ class Common_Styles_Test extends WP_UnitTestCase {
 			$result = $method->invoke( $styles );
 
 			$this->assertSame( $case['expected'], $result, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * #825: get_footer_color_properties() が、背景色・文字色の設定から
+	 * フッターの CSS 変数を組み立てることを検証する。
+	 */
+	public function test_get_footer_color_properties(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '背景色・文字色とも設定 => 文字色をそのまま使い、区切り線は文字色の 20%',
+				'conditions'          => array(
+					'design_footer_background_color' => '#1e3a8a',
+					'design_footer_text_color'       => '#ffcc00',
+				),
+				'expected'            => array(
+					'--vkbm--color--footer-bg'     => '#1e3a8a',
+					'--vkbm--color--footer-text'   => '#ffcc00',
+					'--vkbm--color--footer-border' => 'rgb(255 204 0 / 20%)',
+				),
+			),
+			array(
+				'test_condition_name' => '濃い背景色だけ設定 => 文字色は自動で白',
+				'conditions'          => array(
+					'design_footer_background_color' => '#1e3a8a',
+					'design_footer_text_color'       => '',
+				),
+				'expected'            => array(
+					'--vkbm--color--footer-bg'     => '#1e3a8a',
+					'--vkbm--color--footer-text'   => '#ffffff',
+					'--vkbm--color--footer-border' => 'rgb(255 255 255 / 20%)',
+				),
+			),
+			array(
+				'test_condition_name' => '薄い背景色だけ設定 => 文字色は自動で濃いグレー',
+				'conditions'          => array(
+					'design_footer_background_color' => '#f1f2f4',
+				),
+				'expected'            => array(
+					'--vkbm--color--footer-bg'     => '#f1f2f4',
+					'--vkbm--color--footer-text'   => '#333333',
+					'--vkbm--color--footer-border' => 'rgb(51 51 51 / 20%)',
+				),
+			),
+			array(
+				'test_condition_name' => '文字色だけ設定（3 桁） => 背景色は出さず、文字色と区切り線を出す',
+				'conditions'          => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '#abc',
+				),
+				'expected'            => array(
+					'--vkbm--color--footer-text'   => '#abc',
+					'--vkbm--color--footer-border' => 'rgb(170 187 204 / 20%)',
+				),
+			),
+			array(
+				'test_condition_name' => '3 桁の背景色だけ設定（#000） => 文字色は自動で白',
+				'conditions'          => array(
+					'design_footer_background_color' => '#000',
+				),
+				'expected'            => array(
+					'--vkbm--color--footer-bg'     => '#000',
+					'--vkbm--color--footer-text'   => '#ffffff',
+					'--vkbm--color--footer-border' => 'rgb(255 255 255 / 20%)',
+				),
+			),
+			array(
+				'test_condition_name' => 'どちらも空 => 何も出力しない',
+				'conditions'          => array(
+					'design_footer_background_color' => '',
+					'design_footer_text_color'       => '',
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '設定キーが無い（未保存のサイト） => 何も出力しない',
+				'conditions'          => array(),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '不正な文字色（# なし）と正しい背景色 => 文字色は背景色から自動で決める',
+				'conditions'          => array(
+					'design_footer_background_color' => '#ffffff',
+					'design_footer_text_color'       => 'ffffff',
+				),
+				'expected'            => array(
+					'--vkbm--color--footer-bg'     => '#ffffff',
+					'--vkbm--color--footer-text'   => '#333333',
+					'--vkbm--color--footer-border' => 'rgb(51 51 51 / 20%)',
+				),
+			),
+			array(
+				'test_condition_name' => 'CSS を埋め込む背景色・文字色 => 何も出力しない',
+				'conditions'          => array(
+					'design_footer_background_color' => '#fff;}body{display:none}',
+					'design_footer_text_color'       => 'red;}body{display:none}',
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '文字列でない値 => 何も出力しない',
+				'conditions'          => array(
+					'design_footer_background_color' => array( '#ffffff' ),
+					'design_footer_text_color'       => 123,
+				),
+				'expected'            => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Common_Styles::get_footer_color_properties( $case['conditions'] );
+
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * #825: get_readable_text_color() が、濃いグレーで 4.5:1 に届けば濃いグレーを、
+	 * 届かなければ黒・白のうちコントラスト比が高い方を返すことを検証する（境目を含む）。
+	 */
+	public function test_get_readable_text_color(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '白 => 濃いグレー',
+				'background'          => '#ffffff',
+				'expected'            => '#333333',
+			),
+			array(
+				'test_condition_name' => '黒 => 白',
+				'background'          => '#000000',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => '濃いグレーで 4.5:1 に届く境目 #9b9b9b（約 4.55） => 濃いグレー',
+				'background'          => '#9b9b9b',
+				'expected'            => '#333333',
+			),
+			array(
+				'test_condition_name' => '濃いグレーで 4.5:1 に届かない境目 #9a9a9a（約 4.49） => 黒（黒の方が比が高い）',
+				'background'          => '#9a9a9a',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '黒の方が白より比が高い境目 #767676 => 黒',
+				'background'          => '#767676',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '白の方が黒より比が高い境目 #757575 => 白',
+				'background'          => '#757575',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => '3 桁の白 #fff => 濃いグレー',
+				'background'          => '#fff',
+				'expected'            => '#333333',
+			),
+			array(
+				'test_condition_name' => '3 桁の濃い青 #123 => 白',
+				'background'          => '#123',
+				'expected'            => '#ffffff',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Common_Styles::get_readable_text_color( $case['background'] );
+
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * #825: get_contrast_ratio() が WCAG のコントラスト比を返すことを検証する。
+	 */
+	public function test_get_contrast_ratio(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '黒と白 => 21',
+				'color_a'             => '#000000',
+				'color_b'             => '#ffffff',
+				'expected'            => 21.0,
+			),
+			array(
+				'test_condition_name' => '順番を入れ替えても同じ値 => 21',
+				'color_a'             => '#ffffff',
+				'color_b'             => '#000000',
+				'expected'            => 21.0,
+			),
+			array(
+				'test_condition_name' => '同じ色 => 1',
+				'color_a'             => '#808080',
+				'color_b'             => '#808080',
+				'expected'            => 1.0,
+			),
+			array(
+				'test_condition_name' => '3 桁と 6 桁の同じ色 => 1',
+				'color_a'             => '#abc',
+				'color_b'             => '#aabbcc',
+				'expected'            => 1.0,
+			),
+			array(
+				'test_condition_name' => '濃いグレーと白 => 約 12.63',
+				'color_a'             => '#333333',
+				'color_b'             => '#ffffff',
+				'expected'            => 12.63,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Common_Styles::get_contrast_ratio( $case['color_a'], $case['color_b'] );
+
+			$this->assertEqualsWithDelta( $case['expected'], $actual, 0.01, $case['test_condition_name'] );
 		}
 	}
 
