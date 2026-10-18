@@ -597,8 +597,9 @@ class Lodging_Stay_Display_Test extends WP_UnitTestCase {
 	 * @param int    $menu_id    メニュー ID。
 	 * @param int    $room_id    客室 ID。
 	 * @param string $status     送信するステータス。
+	 * @param array  $extra_fields 追加で送信するフィールド（`vkbm_booking` 配下）。
 	 */
-	private function save_from_admin_screen( int $booking_id, int $menu_id, int $room_id, string $status ): void {
+	private function save_from_admin_screen( int $booking_id, int $menu_id, int $room_id, string $status, array $extra_fields = array() ): void {
 		$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
 		get_user_by( 'id', $user_id )->add_cap( Capabilities::MANAGE_RESERVATIONS );
 		wp_set_current_user( $user_id );
@@ -613,7 +614,7 @@ class Lodging_Stay_Display_Test extends WP_UnitTestCase {
 				'resource_id' => $room_id,
 				'guests'      => 1,
 				'status'      => $status,
-			),
+			) + $extra_fields,
 		);
 		( new Booking_Admin() )->save_post( $booking_id, get_post( $booking_id ) );
 		$_POST = array();
@@ -641,6 +642,140 @@ class Lodging_Stay_Display_Test extends WP_UnitTestCase {
 		$this->assertSame( 2, (int) get_post_meta( $booking_id, '_vkbm_booking_guests', true ) );
 		$this->assertSame( 2, (int) get_post_meta( $booking_id, Lodging_Booking::META_NIGHTS, true ) );
 		$this->assertSame( 'pending', get_post_meta( $booking_id, '_vkbm_booking_status', true ) );
+	}
+
+	/**
+	 * 予約の編集画面（メタボックス）の HTML を返す。
+	 *
+	 * @param int $booking_id 予約の投稿 ID。
+	 * @return string
+	 */
+	private function render_edit_screen( int $booking_id ): string {
+		wp_set_current_user( $this->factory()->user->create( array( 'role' => 'administrator' ) ) );
+		ob_start();
+		( new Booking_Admin() )->render_meta_box( get_post( $booking_id ) );
+
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * 客室（リソース）を作る。
+	 *
+	 * @return int 客室の投稿 ID。
+	 */
+	private function create_room(): int {
+		return (int) $this->factory()->post->create(
+			array(
+				'post_type'   => \VKBookingManager\PostTypes\Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+	}
+
+	/**
+	 * #828: 泊の予約の編集画面には指名区分のチェック欄が出ない。時間枠の予約には出る。
+	 */
+	public function test_admin_edit_screen_hides_nomination_category_for_stay_booking_only(): void {
+		$menu_id = $this->create_menu( '1泊プラン' );
+
+		$stay_html = $this->render_edit_screen( $this->create_stay_booking( $menu_id ) );
+		$this->assertStringNotContainsString( 'vkbm_booking[is_staff_preferred]', $stay_html );
+		$this->assertStringNotContainsString( 'Nomination category', $stay_html );
+
+		$slot_html = $this->render_edit_screen( $this->create_booking( $menu_id, '2026-10-10 10:00:00', '2026-10-10 11:00:00' ) );
+		$this->assertStringContainsString( 'name="vkbm_booking[is_staff_preferred]"', $slot_html );
+		$this->assertStringContainsString( 'Nomination category', $slot_html );
+	}
+
+	/**
+	 * #828: 泊の予約を保存しても、保存済みの指名区分 '1' は欄が送られなくても残る。
+	 */
+	public function test_admin_save_keeps_staff_preferred_for_stay_booking(): void {
+		$menu_id    = $this->create_menu( '1泊プラン' );
+		$booking_id = $this->create_stay_booking( $menu_id );
+		update_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', '1' );
+
+		$this->save_from_admin_screen( $booking_id, $menu_id, $this->create_room(), 'pending' );
+		$this->assertSame( 'pending', get_post_meta( $booking_id, '_vkbm_booking_status', true ), '保存処理が最後まで実行されたこと' );
+
+		$this->assertSame( '1', get_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', true ) );
+	}
+
+	/**
+	 * #828: 泊の予約で指名区分のメタが空の値で存在するとき、保存後もメタが残る（削除されない）。
+	 */
+	public function test_admin_save_keeps_empty_staff_preferred_meta_for_stay_booking(): void {
+		$menu_id    = $this->create_menu( '1泊プラン' );
+		$booking_id = $this->create_stay_booking( $menu_id );
+		update_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', '' );
+		$this->assertTrue( metadata_exists( 'post', $booking_id, '_vkbm_booking_is_staff_preferred' ) );
+
+		$this->save_from_admin_screen( $booking_id, $menu_id, $this->create_room(), 'pending' );
+		$this->assertSame( 'pending', get_post_meta( $booking_id, '_vkbm_booking_status', true ), '保存処理が最後まで実行されたこと' );
+
+		$this->assertTrue( metadata_exists( 'post', $booking_id, '_vkbm_booking_is_staff_preferred' ) );
+	}
+
+	/**
+	 * #828: 泊の予約では、送信内容に指名区分があっても保存済みの値を書き換えない（保存済みの泊数で判定する）。
+	 */
+	public function test_admin_save_ignores_submitted_staff_preferred_for_stay_booking(): void {
+		$menu_id    = $this->create_menu( '1泊プラン' );
+		$booking_id = $this->create_stay_booking( $menu_id );
+		update_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', '' );
+
+		$this->save_from_admin_screen( $booking_id, $menu_id, $this->create_room(), 'pending', array( 'is_staff_preferred' => '1' ) );
+		$this->assertSame( 'pending', get_post_meta( $booking_id, '_vkbm_booking_status', true ), '保存処理が最後まで実行されたこと' );
+
+		$this->assertSame( '', get_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', true ) );
+	}
+
+	/**
+	 * #828: 時間枠の予約では、保存済みの指名区分 '1' がチェック欄なしの保存で今までどおり削除される。
+	 */
+	public function test_admin_save_removes_staff_preferred_for_time_slot_booking(): void {
+		$menu_id    = $this->create_menu( '時間枠プラン' );
+		$room_id    = $this->create_room();
+		$booking_id = $this->create_booking( $menu_id, '2026-10-10 15:00:00', '2026-10-10 16:00:00' );
+		update_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', '1' );
+
+		$this->save_from_admin_screen( $booking_id, $menu_id, $room_id, 'pending' );
+		$this->assertSame( 'pending', get_post_meta( $booking_id, '_vkbm_booking_status', true ), '保存処理が最後まで実行されたこと' );
+
+		$this->assertFalse( metadata_exists( 'post', $booking_id, '_vkbm_booking_is_staff_preferred' ) );
+	}
+
+	/**
+	 * #828: 泊の予約で指名料が 0 円なら「指名料」の行と指名料への言及が出ない。1 円以上なら出る。
+	 * 時間枠の予約は宿泊のサイトでも出る。
+	 */
+	public function test_admin_edit_screen_nomination_fee_row_depends_on_stay_and_fee(): void {
+		$menu_id = $this->create_menu( '1泊プラン' );
+		$label   = vkbm_get_nomination_fee_label();
+		$row     = '<th scope="row">' . esc_html( $label ) . '</th>';
+
+		$stay_zero = $this->create_stay_booking( $menu_id );
+		update_post_meta( $stay_zero, '_vkbm_booking_nomination_fee', 0 );
+		$html = $this->render_edit_screen( $stay_zero );
+		$this->assertStringNotContainsString( $row, $html );
+		$this->assertStringNotContainsString( 'basic service fee + ' . $label, $html );
+		$this->assertStringNotContainsString( 'including the ' . $label, $html );
+		$this->assertStringContainsString( 'This is the total fee at the time of reservation. (Cannot be edited)', $html );
+		$this->assertStringContainsString( 'please enter the final amount charged. If not entered', $html );
+
+		$stay_fee = $this->create_stay_booking( $menu_id );
+		update_post_meta( $stay_fee, '_vkbm_booking_nomination_fee', 1000 );
+		$html = $this->render_edit_screen( $stay_fee );
+		$this->assertStringContainsString( $row, $html );
+		$this->assertStringContainsString( '1,000', $html );
+		$this->assertStringContainsString( 'basic service fee + ' . $label, $html );
+		$this->assertStringContainsString( 'including the ' . $label, $html );
+
+		$slot = $this->create_booking( $menu_id, '2026-10-10 10:00:00', '2026-10-10 11:00:00' );
+		update_post_meta( $slot, '_vkbm_booking_nomination_fee', 0 );
+		$html = $this->render_edit_screen( $slot );
+		$this->assertStringContainsString( $row, $html );
+		$this->assertStringContainsString( 'basic service fee + ' . $label, $html );
 	}
 
 	/**

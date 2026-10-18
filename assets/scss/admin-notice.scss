@@ -114,8 +114,8 @@
 	background: rgba(255, 255, 255, 0.55);
 }
 
-.vkbm-notice__dismiss:focus {
-	outline: 2px solid rgba(37, 99, 235, 0.35);
+.vkbm-notice__dismiss:focus-visible {
+	outline: 2px solid var(--wp-admin-theme-color, #2271b1);
 	outline-offset: 2px;
 }
 

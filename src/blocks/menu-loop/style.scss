@@ -14,8 +14,14 @@
 	font-size: 1.25rem;
 	margin: 0 0 1rem;
 	background-color: #f5f5f5;
+	color: var(--vkbm--color--surface-text, #333);
 	border-left: 3px solid var(--vkbm--color--primary, #2563eb);
 	padding: 0.6em 0.7em;
+
+	// 帯の中のリンクにテーマのリンク色が当たっても、帯の文字色に従わせる。
+	a {
+		color: inherit;
+	}
 }
 
 .vkbm-menu-loop__group + .vkbm-menu-loop__group {
@@ -65,7 +71,8 @@
 }
 
 .vkbm-menu-loop__card-item {
-	background: var(--vkbm--color--bg-primary, #fff);
+	// レイアウト用の箱なので背景は付けず、テーマの背景に従う（白い面を持つと、ダーク系テーマで本文色が見えなくなる）。
+	background: transparent;
 	border: 1px solid var(--wp--preset--color--contrast-5, #e3e3e3);
 	border-radius: var(--vkbm--radius--md, 8px);
 
@@ -124,11 +131,11 @@
 
 .vkbm-menu-loop__card-categories li {
 	border-radius: var(--vkbm--radius--sm, 4px);
-	color: var(--wp--preset--color--primary, #2563eb);
+	color: inherit;
 	font-size: 0.75rem;
 	line-height: 1;
 	padding: 3px 0.55rem;
-	background-color: color-mix(in srgb, var(--wp--preset--color--primary, #2563eb) 15%, #fff);
+	background-color: color-mix(in srgb, var(--wp--preset--color--primary, #2563eb) 15%, transparent);
 }
 
 .vkbm-menu-loop__card-title {
@@ -146,13 +153,13 @@
 }
 
 .vkbm-menu-loop__card-catch {
-	color: var(--vkbm--color--menu-card-catch, var(--wp--preset--color--contrast, #222));
+	color: var(--vkbm--color--menu-card-catch, inherit);
 	font-size: var(--vkbm--font-size--sm);
 	margin: 0 0 var(--vkbm--spacing--sm);
 }
 
 .vkbm-menu-loop__card-excerpt {
-	color: var(--wp--preset--color--contrast-2, #444);
+	color: inherit;
 	font-size: var(--vkbm--font-size--sm);
 	margin: 0 0 var(--vkbm--spacing--sm);
 
@@ -222,8 +229,8 @@
 	cursor: zoom-in;
 
 	&:focus-visible {
-		outline: 2px solid var(--vkbm--color--primary, #2563eb);
-		outline-offset: 2px;
+
+		@include vkbm-focus-ring;
 	}
 }
 
@@ -370,6 +377,7 @@
 	dt {
 		white-space: nowrap;
 		background-color: #e5e5e5;
+		color: var(--vkbm--color--surface-text, #333);
 		text-align: center;
 		padding: 3px 1em;
 		border-radius: var(--vkbm--radius--sm, 4px);
@@ -430,6 +438,22 @@
 	font-size: 1.2rem;
 	font-weight: 700;
 	margin: 0;
+}
+
+// 価格の色。既定は #d11c1c だが、ダーク系テーマの背景（Twenty Twenty-Four の #272727 など）では約 2.8:1 で読めない。
+// カードの背景は透明でテーマの背景に従うため、文字色（親から継承した色）の明るさに合わせて
+// 同じ赤系の色相のまま明るさだけ変える。明度は 0.56〜0.78 の範囲に収める。濃い文字色（明るいテーマ）では下限 0.56 の赤（#cc3430。白地で 5.12:1）、
+// 明るい文字色（ダーク系テーマ）では明度 0.75〜0.78 の赤になる。ダーク系テーマでは #272727 上で 5.68:1 以上、#333 上で 4.80:1 以上
+// （色域外の扱いを、CSS Color 4 の色域マッピング・単純な切り捨て・彩度低減の3方式で計算した最小値。最も厳しい #333 上の #ddd の文字色では
+// CSS Color 4 の色域マッピングで 4.99:1、単純な切り捨てで 4.80:1）。
+// 相対色構文に非対応のブラウザでは @supports ごと無視され、上の #d11c1c のままになる（color-mix は使わない）。
+// 設定側で --vkbm--color--menu-card-price を指定した場合はその色を優先する。
+@supports (color: oklch(from red l c h)) {
+
+	.vkbm-menu-loop__card-price,
+	.vkbm-menu-loop__card-prices-value {
+		color: var(--vkbm--color--menu-card-price, oklch(from currentcolor clamp(0.56, calc(0.3 + 0.5 * l), 0.78) 0.19 27));
+	}
 }
 
 // 税込みラベルは一覧の末尾に 1 回だけ表示する。

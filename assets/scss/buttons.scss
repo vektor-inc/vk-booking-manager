@@ -26,9 +26,14 @@
 	}
 }
 
-.vkbm-button:focus {
-	outline: 2px solid rgba(37, 99, 235, 0.35);
-	outline-offset: 2px;
+.vkbm-button:focus-visible {
+
+	@include vkbm-focus-ring;
+}
+
+// 管理画面では WordPress 本体の配色（管理画面のカラースキーム）に合わせた不透明な枠にする。
+.wp-admin .vkbm-button:focus-visible {
+	outline-color: var(--wp-admin-theme-color, #2271b1);
 }
 
 .vkbm-button[disabled],
@@ -106,7 +111,7 @@ a.vkbm-button__danger {
 .vkbm-button__link {
 	background: transparent;
 	border: none;
-	color: var(--vkbm--color--link, #1d8fcb);
+	color: var(--vkbm--color--link, #1772a2);
 	font-weight: 400;
 	min-height: auto;
 	padding: 0;

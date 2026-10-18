@@ -438,6 +438,48 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		await expect( checkOutValue ).toContainText( /10:00/i );
 	} );
 
+	test( '予約画面（泊のプラン）: 選択中の客室は通常時・ホバー中・押下中のどれでも淡い選択色の背景になる（issue #844）', async ( {
+		page,
+	} ) => {
+		await openMenu( page, nightMenuId );
+		await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
+			timeout: 15000,
+		} );
+
+		await clickStayDay( page, tokyoDateAfter( CHECK_IN_OFFSET ) );
+		await clickStayDay(
+			page,
+			tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS )
+		);
+
+		const rooms = page.locator( '.vkbm-lodging__room' );
+		await expect( rooms ).toHaveCount( 2, { timeout: 15000 } );
+		const selected = rooms.filter( { hasText: `${ PREFIX } Room A` } );
+		const other = rooms.filter( { hasText: `${ PREFIX } Room B` } );
+		await selected.click();
+		await expect( selected ).toHaveAttribute( 'aria-pressed', 'true' );
+
+		const background = ( locator: typeof selected ) =>
+			locator.evaluate(
+				( el ) => window.getComputedStyle( el ).backgroundColor
+			);
+		const isWhiteOrClear = ( color: string ) =>
+			color === 'rgb(255, 255, 255)' || color === 'rgba(0, 0, 0, 0)';
+
+		// 通常時: 選択中は白ではなく、選択していない客室は白のまま。
+		await page.mouse.move( 0, 0 );
+		expect( isWhiteOrClear( await background( selected ) ) ).toBe( false );
+		expect( await background( other ) ).toBe( 'rgb(255, 255, 255)' );
+		const normal = await background( selected );
+
+		// ホバー中・押下中も同じ選択色のまま（テーマのホバー色で透明や白に変わらない）。
+		await selected.hover();
+		expect( await background( selected ) ).toBe( normal );
+		await page.mouse.down();
+		expect( await background( selected ) ).toBe( normal );
+		await page.mouse.up();
+	} );
+
 	test( '予約画面（時間枠のプラン）: 宿泊プリセットのサイトでも従来どおり日付 → 時間枠 → 確認画面の流れ', async ( {
 		page,
 	} ) => {

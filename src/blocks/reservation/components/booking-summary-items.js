@@ -10,7 +10,10 @@ export const BookingSummaryItems = ( {
 	guestsCountLabel = '',
 	// 数量の単位（実効値。空文字は単位なし）。
 	guestsUnitLabel = '',
+	// メニュー名・時間枠の担当者名が空のときの表記。
 	emptyValue = '',
+	// 泊の予約で客室名が取れないときの表記（#827）。emptyValue とは分けて持つ。
+	stayRoomEmptyValue = '—',
 	currencySymbol = null,
 } ) => {
 	const resolvedLabel =
@@ -22,11 +25,16 @@ export const BookingSummaryItems = ( {
 		booking.menu_name.trim() !== ''
 			? booking.menu_name
 			: emptyValue;
-	const staffName =
+	// 泊の予約かどうかは、予約に保存された泊数で判定する。
+	const isStayBooking = Number( booking?.nights ) > 0;
+	// #827: emptyValue を共有すると、呼び出し側が「—」を渡したときにメニュー名など他の空欄の表示まで変わるため、泊の予約の客室名だけ別の表記にする。
+	let staffName = isStayBooking ? stayRoomEmptyValue : emptyValue;
+	if (
 		typeof booking?.resource_name === 'string' &&
 		booking.resource_name.trim() !== ''
-			? booking.resource_name
-			: emptyValue;
+	) {
+		staffName = booking.resource_name;
+	}
 
 	return (
 		<>
@@ -95,7 +103,8 @@ export const BookingSummaryItems = ( {
 					</dd>
 				</dl>
 			) }
-			{ booking?.is_staff_preferred && (
+			{ /* #827: 泊の予約は指名フラグを保存しないため、泊数があれば客室の行を出す。 */ }
+			{ ( booking?.is_staff_preferred || isStayBooking ) && (
 				<dl className="vkbm-confirm__summary-item">
 					<dt className="vkbm-confirm__summary-item-title">
 						{ resolvedLabel }

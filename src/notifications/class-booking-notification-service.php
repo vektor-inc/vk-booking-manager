@@ -844,16 +844,27 @@ class Booking_Notification_Service {
 		$staff_title = '';
 		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。
 		$nomination_enabled = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
-		if ( $nomination_enabled && $is_staff_preferred && $staff_id > 0 ) {
-			$staff_title = vkbm_get_resource_display_name( $staff_id );
-		}
-		if ( $nomination_enabled && '' === $staff_title ) {
-			$staff_title = vkbm_get_no_nomination_label();
+		// #827: 泊の予約は指名フラグを保存しない（常に指名なし）ため、指名の有無やメニュー単位の指名設定では判定せず、
+		// 保存済みの客室をそのまま出す。客室が削除されて名前が取れない場合は「おまかせ」ではなく「未定」にする。
+		// 泊の予約かの判定と泊数の表示で同じ値を使うよう、泊数はここで1回だけ取得する。
+		$nights          = Lodging_Booking::get_booking_nights( $booking_id );
+		$is_stay_booking = $nights > 0;
+		if ( $is_stay_booking ) {
+			if ( $staff_id > 0 ) {
+				$staff_title = vkbm_get_resource_display_name( $staff_id );
+			}
+		} else {
+			// 時間枠の予約：指名ありならスタッフ名、指名なしなら指名なしラベル。
+			if ( $nomination_enabled && $is_staff_preferred && $staff_id > 0 ) {
+				$staff_title = vkbm_get_resource_display_name( $staff_id );
+			}
+			if ( $nomination_enabled && '' === $staff_title ) {
+				$staff_title = vkbm_get_no_nomination_label();
+			}
 		}
 		// 泊の予約（予約に泊数が保存されている）は、日時の行をチェックイン／チェックアウトにし、
 		// 所要時間の行を泊数に置き換える。判定は予約側の保存データで行い、メニューやサイトの現在の設定は見ない。
-		$nights = Lodging_Booking::get_booking_nights( $booking_id );
-		if ( $nights > 0 ) {
+		if ( $is_stay_booking ) {
 			$duration = Lodging_Booking::format_nights_label( $nights );
 		} else {
 			$duration = $this->get_menu_duration( $menu_id );
@@ -922,7 +933,8 @@ class Booking_Notification_Service {
 			'provider_cancellation_policy' => isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '',
 			'resource_label_singular'      => $resource_label_singular,
 			'duration_label_heading'       => $duration_label_heading,
-			'staff_enabled'                => $nomination_enabled,
+			// #827: 泊の予約は、メニュー単位で指名を使わない設定でも客室の行を出す。
+			'staff_enabled'                => $is_stay_booking || $nomination_enabled,
 			'is_staff_preferred'           => $is_staff_preferred,
 			'site_name'                    => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'edit_url'                     => $edit_url,

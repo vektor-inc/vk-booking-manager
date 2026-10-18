@@ -451,9 +451,9 @@ class Shift_Dashboard_Page {
 																		);
 																		?>
 																		<?php if ( ! empty( $booking['url'] ) ) : ?>
-																			<a class="<?php echo esc_attr( implode( ' ', $booking_classes ) ); ?>" style="<?php echo esc_attr( $booking_style ); ?>" href="<?php echo esc_url( $booking['url'] ); ?>">
+																			<a class="<?php echo esc_attr( implode( ' ', $booking_classes ) ); ?>" style="<?php echo esc_attr( $booking_style ); ?>" href="<?php echo esc_url( $booking['url'] ); ?>"<?php $this->render_status_title_attribute( (string) ( $booking['card_title'] ?? '' ) ); ?>>
 																		<?php else : ?>
-																			<div class="<?php echo esc_attr( implode( ' ', $booking_classes ) ); ?>" style="<?php echo esc_attr( $booking_style ); ?>">
+																			<div class="<?php echo esc_attr( implode( ' ', $booking_classes ) ); ?>" style="<?php echo esc_attr( $booking_style ); ?>"<?php $this->render_status_title_attribute( (string) ( $booking['card_title'] ?? '' ) ); ?>>
 																		<?php endif; ?>
 																		<?php if ( ! empty( $booking['stay_label'] ) ) : ?>
 																			<span class="vkbm-booking-card__stay-label"><?php echo esc_html( $booking['stay_label'] ); ?></span>
@@ -463,8 +463,9 @@ class Shift_Dashboard_Page {
 																		<?php endif; ?>
 																		<?php if ( ! empty( $booking['time'] ) || ! empty( $booking['customer'] ) ) : ?>
 																				<span class="vkbm-booking-card__summary">
+																					<?php $this->render_booking_status_label( (string) ( $booking['status'] ?? '' ), 'vkbm-booking-card__status' ); ?>
 																					<?php if ( ! empty( $booking['time'] ) ) : ?>
-																						<span class="vkbm-booking-card__time"><?php echo esc_html( $booking['time'] ); ?></span>
+																						<span class="vkbm-booking-card__time"><?php $this->render_card_time( (string) $booking['time'], (string) ( $booking['time_start'] ?? '' ), (string) ( $booking['time_end'] ?? '' ) ); ?></span>
 																					<?php endif; ?>
 																					<?php if ( ! empty( $booking['time'] ) && ! empty( $booking['customer'] ) ) : ?>
 																						<span class="vkbm-booking-card__divider"> / </span>
@@ -580,12 +581,12 @@ class Shift_Dashboard_Page {
 																			<?php foreach ( $shift['all_bookings'] as $modal_booking ) : ?>
 																				<li class="vkbm-booking-modal__item">
 																					<?php if ( ! empty( $modal_booking['url'] ) ) : ?>
-																						<a class="vkbm-booking-modal__link" href="<?php echo esc_url( $modal_booking['url'] ); ?>">
+																						<a class="vkbm-booking-modal__link" href="<?php echo esc_url( $modal_booking['url'] ); ?>"<?php $this->render_status_title_attribute( (string) ( $modal_booking['status_title'] ?? '' ) ); ?>>
 																					<?php else : ?>
-																						<span class="vkbm-booking-modal__link">
+																						<span class="vkbm-booking-modal__link"<?php $this->render_status_title_attribute( (string) ( $modal_booking['status_title'] ?? '' ) ); ?>>
 																					<?php endif; ?>
 																						<?php if ( ! empty( $modal_booking['time'] ) ) : ?>
-																							<span class="vkbm-booking-modal__time"><?php echo esc_html( $modal_booking['time'] ); ?></span>
+																							<span class="vkbm-booking-modal__time"><?php $this->render_booking_status_label( (string) ( $modal_booking['status'] ?? '' ), 'vkbm-booking-modal__status' ); ?><?php echo esc_html( $modal_booking['time'] ); ?></span>
 																						<?php endif; ?>
 																						<?php if ( ! empty( $modal_booking['customer'] ) ) : ?>
 																							<span class="vkbm-booking-modal__customer"><?php echo esc_html( $modal_booking['customer'] ); ?></span>
@@ -709,13 +710,13 @@ class Shift_Dashboard_Page {
 																?>
 
 																<?php if ( ! empty( $entry['url'] ) ) : ?>
-																	<a class="<?php echo esc_attr( implode( ' ', $entry_classes ) ); ?>" href="<?php echo esc_url( $entry['url'] ); ?>">
-																		<span class="vkbm-month-booking__time"><?php echo esc_html( $entry['time_line'] ); ?></span>
+																	<a class="<?php echo esc_attr( implode( ' ', $entry_classes ) ); ?>" href="<?php echo esc_url( $entry['url'] ); ?>"<?php $this->render_status_title_attribute( (string) ( $entry['status_title'] ?? '' ) ); ?>>
+																		<span class="vkbm-month-booking__time"><?php $this->render_booking_status_label( (string) ( $entry['status'] ?? '' ), 'vkbm-month-booking__status' ); ?><?php echo esc_html( $entry['time_line'] ); ?></span>
 																		<span class="vkbm-month-booking__customer"><?php echo esc_html( $entry['customer_line'] ); ?><?php $this->render_customer_flag_mark( $entry['customer_flag'] ?? null ); ?></span>
 																	</a>
 																<?php else : ?>
-																	<div class="<?php echo esc_attr( implode( ' ', $entry_classes ) ); ?>">
-																		<span class="vkbm-month-booking__time"><?php echo esc_html( $entry['time_line'] ); ?></span>
+																	<div class="<?php echo esc_attr( implode( ' ', $entry_classes ) ); ?>"<?php $this->render_status_title_attribute( (string) ( $entry['status_title'] ?? '' ) ); ?>>
+																		<span class="vkbm-month-booking__time"><?php $this->render_booking_status_label( (string) ( $entry['status'] ?? '' ), 'vkbm-month-booking__status' ); ?><?php echo esc_html( $entry['time_line'] ); ?></span>
 																		<span class="vkbm-month-booking__customer"><?php echo esc_html( $entry['customer_line'] ); ?><?php $this->render_customer_flag_mark( $entry['customer_flag'] ?? null ); ?></span>
 																	</div>
 																<?php endif; ?>
@@ -1794,10 +1795,9 @@ class Shift_Dashboard_Page {
 			$customer_label = '' !== $customer ? $customer : __( 'Name not entered', 'vk-booking-manager' );
 			$staff_label    = $resource_names[ $resource_id ] ?? __( 'Person in charge not set', 'vk-booking-manager' );
 
-			$status_badge = $this->get_month_booking_status_badge( $status );
-			$stay_type    = (string) ( $booking['stay_type'] ?? '' );
-			$nights       = (int) ( $booking['nights'] ?? 0 );
-			$stay_day     = (int) ( $booking['stay_day'] ?? 0 );
+			$stay_type = (string) ( $booking['stay_type'] ?? '' );
+			$nights    = (int) ( $booking['nights'] ?? 0 );
+			$stay_day  = (int) ( $booking['stay_day'] ?? 0 );
 			if ( 'in' === $stay_type ) {
 				$time_label = sprintf(
 					/* translators: 1: room, 2: check-in date, 3: check-in time, 4: check-out date, 5: check-out time, 6: formatted nights label. */
@@ -1828,10 +1828,6 @@ class Shift_Dashboard_Page {
 				$time_label = sprintf( '%s ～ %s', $start_label, $end_label );
 			}
 
-			if ( '' !== $status_badge ) {
-				$time_label .= sprintf( ' [ %s ]', $status_badge );
-			}
-
 			if ( 'in' === $stay_type ) {
 				$customer_line = $customer_label;
 			} elseif ( '' !== $stay_type ) {
@@ -1847,6 +1843,8 @@ class Shift_Dashboard_Page {
 
 			$entries[] = array(
 				'id'            => (string) ( $booking['post_id'] ?? '' ),
+				'status'        => $status,
+				'status_title'  => $this->get_booking_status_title( $status ),
 				'time_line'     => $time_label,
 				'customer_line' => $customer_line,
 				// 宿泊の中日・OUT の小さな札は顧客名を出さないため、印も出さない。
@@ -2074,21 +2072,114 @@ class Shift_Dashboard_Page {
 	}
 
 	/**
-	 * Retrieve a compact status badge label for the month cell.
+	 * 予約カードの先頭に付ける状態の短縮ラベルを返す。
 	 *
-	 * @param string $status Booking status key.
-	 * @return string
+	 * 確定は有効な予約の通常状態のため、ラベルを付けず空文字を返す。
+	 *
+	 * @param string $status 予約ステータスのキー。
+	 * @return string 短縮ラベル（確定・不明な状態は空文字）。
 	 */
-	private function get_month_booking_status_badge( string $status ): string {
+	private function get_booking_status_short_label( string $status ): string {
 		switch ( $status ) {
-			case self::BOOKING_STATUS_CONFIRMED:
-				return __( 'Certain', 'vk-booking-manager' );
 			case self::BOOKING_STATUS_PENDING:
-				return __( 'Tentative', 'vk-booking-manager' );
+				return _x( 'Pending', 'short form of booking status on shift dashboard cards', 'vk-booking-manager' );
+			case self::BOOKING_STATUS_CANCELLED:
+				return _x( 'Cancelled', 'short form of booking status on shift dashboard cards', 'vk-booking-manager' );
+			case self::BOOKING_STATUS_NO_SHOW:
+				return _x( 'No-show', 'short form of booking status on shift dashboard cards', 'vk-booking-manager' );
 			default:
-				$labels = $this->get_booking_status_labels();
-				return $labels[ $status ] ?? '';
+				return '';
 		}
+	}
+
+	/**
+	 * 短縮ラベルを補う正式名（カードの title 属性に使う文字列）を返す。
+	 *
+	 * @param string $status 予約ステータスのキー。
+	 * @return string 正式名（短縮ラベルが無い状態は空文字）。
+	 */
+	private function get_booking_status_title( string $status ): string {
+		if ( '' === $this->get_booking_status_short_label( $status ) ) {
+			return '';
+		}
+
+		$labels = $this->get_booking_status_labels();
+
+		return $labels[ $status ] ?? '';
+	}
+
+	/**
+	 * 日表示の予約カードの title（状態の正式名・時刻・顧客名）を作る。
+	 *
+	 * @param string $status        予約ステータスのキー。
+	 * @param string $time_range    時刻の表記（開始〜終了）。
+	 * @param string $customer_name 顧客名。
+	 * @return string 空でない要素を「 / 」で連結した文字列（エスケープ前）。
+	 */
+	private function build_card_title( string $status, string $time_range, string $customer_name ): string {
+		$parts = array_filter(
+			array( $this->get_booking_status_title( $status ), $time_range, $customer_name ),
+			static function ( string $part ): bool {
+				return '' !== $part;
+			}
+		);
+
+		return implode( ' / ', $parts );
+	}
+
+	/**
+	 * 日表示のカードの時刻を出力する。開始だけの要素と終了側の要素に分け、短いカードで終了側を隠せるようにする。
+	 *
+	 * @param string $time_range 時刻の表記（開始〜終了、または宿泊の表記）。
+	 * @param string $time_start 開始時刻（宿泊は空）。
+	 * @param string $time_end   終了時刻（宿泊は空）。
+	 * @return void
+	 */
+	private function render_card_time( string $time_range, string $time_start, string $time_end ): void {
+		if ( '' === $time_start || '' === $time_end ) {
+			echo esc_html( $time_range );
+			return;
+		}
+
+		echo '<span class="vkbm-booking-card__time-start">' . esc_html( $time_start ) . '</span>';
+		echo '<span class="vkbm-booking-card__time-end">' . esc_html( ' - ' . $time_end ) . '</span>';
+	}
+
+	/**
+	 * 正式名が空でなければ title 属性（先頭に空白付き）を出力する。
+	 *
+	 * @param string $title 正式名。
+	 * @return void
+	 */
+	private function render_status_title_attribute( string $title ): void {
+		if ( '' === $title ) {
+			return;
+		}
+
+		echo ' title="' . esc_attr( $title ) . '"';
+	}
+
+	/**
+	 * 予約の状態の短縮ラベルを出力する（確定は何も出力しない）。
+	 *
+	 * @param string $status     予約ステータスのキー。
+	 * @param string $base_class ラベル要素の基本クラス名（状態別の修飾クラスは `{base}--{状態}` で付く）。
+	 * @return void
+	 */
+	private function render_booking_status_label( string $status, string $base_class ): void {
+		$label = $this->get_booking_status_short_label( $status );
+		if ( '' === $label ) {
+			return;
+		}
+
+		$modifier = str_replace( 'vkbm-booking-card--', '', $this->booking_status_to_class( $status ) );
+
+		printf(
+			'<span class="%1$s %1$s--%2$s">%3$s</span>',
+			esc_attr( $base_class ),
+			esc_attr( $modifier ),
+			esc_html( $label )
+		);
 	}
 
 	/**
@@ -2554,7 +2645,14 @@ class Shift_Dashboard_Page {
 
 		return array(
 			'class'              => $class,
+			'status'             => $status,
+			'status_title'       => $this->get_booking_status_title( $status ),
+			// 日表示のカードの title（状態の正式名・時刻・顧客名）。短いカードで省いた情報を補う。
+			'card_title'         => $this->build_card_title( $status, (string) ( $booking['time_range'] ?? '' ), $customer ),
 			'time'               => $booking['time_range'] ?? '',
+			// 宿泊以外は開始と終了を分け、短いカードで終了側だけ隠せるようにする。
+			'time_start'         => '' === $stay_type ? (string) ( $booking['start_label'] ?? '' ) : '',
+			'time_end'           => '' === $stay_type ? (string) ( $booking['end_label'] ?? '' ) : '',
 			'stay_label'         => $stay_label,
 			'continuing'         => $continuing,
 			'customer'           => $customer,

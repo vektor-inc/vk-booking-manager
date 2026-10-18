@@ -16,7 +16,7 @@
  * 確定画面の注記（CodeRabbit #3）は availability_service が返す min_capacity/booked_guests に
  * 対する PHP ロジック（BookingConfirmApp の showMinCapacityNote 相当）を REST レスポンス検証で確認する。
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
 	wpCliArgs,
 	wpEvalPhp,
@@ -913,6 +913,237 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 			path: 'tests/e2e/screenshots/pr-311/after-front-slot-fulfillment.png',
 			fullPage: true,
 		} );
+	} );
+
+	/**
+	 * issue #844: 予約ページを開き、メニューを選んで翌月カレンダーの 1 日を選択済みにする。
+	 *
+	 * @param page Playwright ページ。
+	 */
+	const openCalendarWithDayOneSelected = async ( page: Page ) => {
+		await page.goto( '/booking/' );
+		await page.waitForLoadState( 'domcontentloaded' );
+
+		// メニューカードの「予約に進む」でカレンダーを表示する。
+		const reserveLink = page
+			.locator(
+				`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+			)
+			.first();
+		await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
+		await reserveLink.click();
+		await page
+			.locator( '.vkbm-calendar' )
+			.first()
+			.waitFor( { state: 'visible', timeout: 15000 } );
+
+		// 対象日は翌月のため「次の月」へ 1 回進めてから 1 日を選ぶ。
+		await page.locator( '.vkbm-calendar__nav' ).last().click();
+		const dayOne = page
+			.locator(
+				'.vkbm-calendar__day--available:not(.vkbm-calendar__day--muted)'
+			)
+			.filter( {
+				has: page
+					.locator( '.vkbm-calendar__day-label' )
+					.filter( { hasText: /^1$/ } ),
+			} )
+			.first();
+		await dayOne.waitFor( { state: 'visible', timeout: 15000 } );
+		await dayOne.click();
+		await page
+			.locator( '.vkbm-slot-list__item' )
+			.first()
+			.waitFor( { state: 'visible', timeout: 15000 } );
+	};
+
+	test( 'issue #844: 選択済みの日へ Tab で移動すると、2 色のフォーカス枠が出る', async ( {
+		page,
+	} ) => {
+		await openCalendarWithDayOneSelected( page );
+
+		// 選択済みの日は aria-pressed="true" で選択状態を伝える。
+		const selectedDay = page.locator( '.vkbm-calendar__day--selected' );
+		await expect( selectedDay ).toHaveAttribute( 'aria-pressed', 'true' );
+
+		// キーボード操作として扱われるよう、「次の月」ボタンから Tab で選択済みの日まで進める。
+		await page.locator( '.vkbm-calendar__nav' ).last().focus();
+		await page.keyboard.press( 'Shift+Tab' );
+		await page.keyboard.press( 'Tab' );
+		for ( let i = 0; i < 60; i++ ) {
+			await page.keyboard.press( 'Tab' );
+			const reached = await page.evaluate(
+				() =>
+					document.activeElement?.classList.contains(
+						'vkbm-calendar__day--selected'
+					)
+			);
+			if ( reached ) {
+				break;
+			}
+		}
+		await expect( selectedDay ).toBeFocused();
+
+		// 外側の枠は 2px の実線（outline）、内側の白は box-shadow（内側に描く）で表示される。
+		const ring = await selectedDay.evaluate( ( el ) => {
+			const style = window.getComputedStyle( el );
+			return {
+				outlineStyle: style.outlineStyle,
+				outlineWidth: style.outlineWidth,
+				outlineColor: style.outlineColor,
+				outlineOffset: style.outlineOffset,
+				boxShadow: style.boxShadow,
+			};
+		} );
+		expect( ring.outlineStyle ).toBe( 'solid' );
+		expect( ring.outlineWidth ).toBe( '2px' );
+		expect( ring.outlineOffset ).toBe( '-2px' );
+		expect( ring.outlineColor ).not.toBe( 'rgba(0, 0, 0, 0)' );
+		expect( ring.boxShadow ).toContain( 'inset' );
+
+		// 選択中のマスは、内側の帯が白ではなく選択色になり、選択の 1px 枠を覆われても選択中だと分かる。
+		expect( ring.boxShadow ).not.toContain( 'rgb(255, 255, 255)' );
+
+		// 選択していない隣のマスへ Tab で進むと、内側の帯は従来どおり白。選択中のマスと見分けられる。
+		await page.keyboard.press( 'Tab' );
+		const nextDay = page.locator( '.vkbm-calendar__day:focus' );
+		await expect( nextDay ).toBeFocused();
+		await expect( nextDay ).not.toHaveClass(
+			/vkbm-calendar__day--selected/
+		);
+		const nextRing = await nextDay.evaluate(
+			( el ) => window.getComputedStyle( el ).boxShadow
+		);
+		expect( nextRing ).toContain( 'inset' );
+		expect( nextRing ).toContain( 'rgb(255, 255, 255)' );
+		expect( nextRing ).not.toBe( ring.boxShadow );
+	} );
+
+	test( 'issue #844: 時間枠ボタンの背景と文字色はテーマの button の色に左右されない', async ( {
+		page,
+	} ) => {
+		await openCalendarWithDayOneSelected( page );
+
+		// 満席・受付終了の見た目は CSS だけで決まるため、クラスを付けて確かめる。
+		await page.evaluate( () => {
+			const items = document.querySelectorAll( '.vkbm-slot-list__item' );
+			items[ 1 ].classList.add( 'is-full' );
+			items[ 1 ]
+				.querySelector( '.vkbm-slot-list__remaining' )
+				?.classList.add( 'vkbm-slot-list__remaining--full' );
+			items[ 2 ].classList.add( 'is-exclusive-closed' );
+			items[ 2 ]
+				.querySelector( '.vkbm-slot-list__remaining' )
+				?.classList.add( 'vkbm-slot-list__remaining--closed' );
+		} );
+		await page.mouse.move( 0, 0 );
+
+		// 通常・満席・受付終了の時刻と残枠表示の文字が、背景に対して 4.5:1 以上あること。
+		const readContrasts = () =>
+			page.evaluate( () => {
+				const luminance = ( color: string ) => {
+					const [ r, g, b ] = ( color.match( /[\d.]+/g ) || [] )
+						.slice( 0, 3 )
+						.map( ( v ) => {
+							const c = Number( v ) / 255;
+							return c <= 0.03928
+								? c / 12.92
+								: Math.pow( ( c + 0.055 ) / 1.055, 2.4 );
+						} );
+					return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+				};
+				const ratio = ( a: string, b: string ) => {
+					const x = luminance( a );
+					const y = luminance( b );
+					return (
+						( Math.max( x, y ) + 0.05 ) /
+						( Math.min( x, y ) + 0.05 )
+					);
+				};
+				return Array.from(
+					document.querySelectorAll( '.vkbm-slot-list__item' )
+				)
+					.slice( 0, 3 )
+					.map( ( item ) => {
+						const bg =
+							window.getComputedStyle( item ).backgroundColor;
+						const time = item.querySelector(
+							'.vkbm-slot-list__time'
+						);
+						const remaining = item.querySelector(
+							'.vkbm-slot-list__remaining'
+						);
+						return {
+							bg,
+							time: ratio(
+								window.getComputedStyle( time! ).color,
+								bg
+							),
+							remaining: ratio(
+								window.getComputedStyle( remaining! ).color,
+								bg
+							),
+						};
+					} );
+			} );
+
+		for ( const row of await readContrasts() ) {
+			expect( row.time ).toBeGreaterThanOrEqual( 4.5 );
+			expect( row.remaining ).toBeGreaterThanOrEqual( 4.5 );
+		}
+
+		// ホバー中もテーマ（Twenty Twenty-One は背景を透明にする）の色に変わらない。
+		const first = page.locator( '.vkbm-slot-list__item' ).first();
+		const before = await first.evaluate(
+			( el ) => window.getComputedStyle( el ).backgroundColor
+		);
+		await first.hover();
+		const after = await first.evaluate(
+			( el ) => window.getComputedStyle( el ).backgroundColor
+		);
+		expect( after ).toBe( before );
+		expect( after ).toBe( 'rgb(255, 255, 255)' );
+
+		// ホバー中は枠線がアクセント色になる。満席・受付終了はクリックできないため変わらない。
+		const borderColor = ( index: number ) =>
+			page
+				.locator( '.vkbm-slot-list__item' )
+				.nth( index )
+				.evaluate(
+					( el ) => window.getComputedStyle( el ).borderTopColor
+				);
+		expect( await borderColor( 0 ) ).toBe( 'rgb(29, 143, 203)' );
+		await page.locator( '.vkbm-slot-list__item' ).nth( 1 ).hover();
+		expect( await borderColor( 1 ) ).toBe( 'rgb(208, 208, 208)' );
+	} );
+
+	test( 'issue #844: 残枠数の文字色が --vkbm--color--accent-text になる', async ( {
+		page,
+	} ) => {
+		await openCalendarWithDayOneSelected( page );
+
+		// 満席・受付終了ではない通常の残枠数表示を対象にする。
+		const remaining = page
+			.locator(
+				'.vkbm-slot-list__remaining:not(.vkbm-slot-list__remaining--full):not(.vkbm-slot-list__remaining--closed)'
+			)
+			.first();
+		await expect( remaining ).toBeVisible();
+
+		// CSS 変数の値は rgb 表記で比べるため、変数を color に指定した要素の計算値と突き合わせる。
+		const colors = await remaining.evaluate( ( el ) => {
+			const probe = document.createElement( 'span' );
+			probe.style.color = 'var(--vkbm--color--accent-text)';
+			document.body.appendChild( probe );
+			const expected = window.getComputedStyle( probe ).color;
+			probe.remove();
+			return {
+				actual: window.getComputedStyle( el ).color,
+				expected,
+			};
+		} );
+		expect( colors.expected ).toBe( 'rgb(23, 114, 162)' );
+		expect( colors.actual ).toBe( colors.expected );
 	} );
 } );
 

@@ -5,9 +5,15 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\Notifications;
 
 use ReflectionMethod;
+use VKBookingManager\Admin\Pro_Upsell;
+use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Notifications\Booking_Notification_Service;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
 
 /**
@@ -408,6 +414,252 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 			foreach ( $case['not_contains'] as $needle ) {
 				$this->assertStringNotContainsString( $needle, $text, $case['name'] . " => '{$needle}' を含まないべき" );
 			}
+		}
+	}
+
+	/**
+	 * #827: build_booking_payload() の客室（担当者）欄。
+	 *
+	 * 泊の予約（予約に泊数を保存したもの）は指名フラグを保存しないため、指名の有無やメニュー単位の指名設定に
+	 * 関係なく保存済みの客室名を出し、客室の行も出す。客室名が取れない場合は「おまかせ」ではなく「未定」にする。
+	 * 時間枠の予約（宿泊のサイトの貸切風呂などを含む）と宿泊以外のサイトは従来どおり。
+	 */
+	public function test_build_booking_payload(): void {
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '宿泊と指名機能は Pro 版限定のため、無料版ではスキップする。' );
+		}
+
+		// 文言の検証は英語（原文）で行う（「未定」は 'TBD'）。
+		switch_to_locale( 'en_US' );
+		unload_textdomain( 'vk-booking-manager', true );
+		$original_settings = get_option( Settings_Repository::OPTION_KEY, false );
+
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$payload = new ReflectionMethod( Booking_Notification_Service::class, 'build_booking_payload' );
+		$payload->setAccessible( true );
+		$lines = new ReflectionMethod( Booking_Notification_Service::class, 'get_reservation_information_lines' );
+		$lines->setAccessible( true );
+
+		// 客室（リソース）を用意する。削除済みの客室は、作ってから完全に削除した ID を使う。
+		$room_id         = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => '桜の間',
+			)
+		);
+		$deleted_room_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => '削除した客室',
+			)
+		);
+		wp_delete_post( $deleted_room_id, true );
+
+		$lodging_site = array(
+			'industry_preset'         => 'lodging',
+			'staff_enabled'           => true,
+			'resource_label_singular' => '客室',
+			'no_nomination_label'     => 'おまかせ（空いている客室）',
+		);
+		$salon_site   = array(
+			'industry_preset'         => 'custom',
+			'staff_enabled'           => true,
+			'resource_label_singular' => 'スタッフ',
+			'no_nomination_label'     => '指名なし',
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '泊の予約・指名フラグなし・客室あり => 客室名を出し、客室の行も出す',
+				'conditions'          => array(
+					'site'               => $lodging_site,
+					'nights'             => 1,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '',
+					'disable_nomination' => false,
+				),
+				'expected'            => array(
+					'staff_title'   => '桜の間',
+					'staff_enabled' => true,
+					'line'          => '客室: 桜の間',
+				),
+			),
+			array(
+				'test_condition_name' => '泊の予約・メニュー単位で指名を使わない設定 => 客室名を出し、客室の行も出す',
+				'conditions'          => array(
+					'site'               => $lodging_site,
+					'nights'             => 2,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '',
+					'disable_nomination' => true,
+				),
+				'expected'            => array(
+					'staff_title'   => '桜の間',
+					'staff_enabled' => true,
+					'line'          => '客室: 桜の間',
+				),
+			),
+			array(
+				'test_condition_name' => '泊の予約・客室が削除済み => 「おまかせ」ではなく「未定」を出す',
+				'conditions'          => array(
+					'site'               => $lodging_site,
+					'nights'             => 1,
+					'resource_id'        => $deleted_room_id,
+					'is_staff_preferred' => '',
+					'disable_nomination' => false,
+				),
+				'expected'            => array(
+					'staff_title'   => 'TBD',
+					'staff_enabled' => true,
+					'line'          => '客室: TBD',
+				),
+			),
+			array(
+				'test_condition_name' => '宿泊のサイトの時間枠の予約・指名あり => 指名した名前を出す（従来どおり）',
+				'conditions'          => array(
+					'site'               => $lodging_site,
+					'nights'             => 0,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '1',
+					'disable_nomination' => false,
+				),
+				'expected'            => array(
+					'staff_title'   => '桜の間',
+					'staff_enabled' => true,
+					'line'          => '客室: 桜の間',
+				),
+			),
+			array(
+				'test_condition_name' => '宿泊のサイトの時間枠の予約・おまかせ => 指名なしラベルを出す（従来どおり）',
+				'conditions'          => array(
+					'site'               => $lodging_site,
+					'nights'             => 0,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '',
+					'disable_nomination' => false,
+				),
+				'expected'            => array(
+					'staff_title'   => 'おまかせ（空いている客室）',
+					'staff_enabled' => true,
+					'line'          => '客室: おまかせ（空いている客室）',
+				),
+			),
+			array(
+				'test_condition_name' => '時間枠の予約・おまかせ・メニュー単位で指名を使わない設定 => 行を出さない（従来どおり）',
+				'conditions'          => array(
+					'site'               => $lodging_site,
+					'nights'             => 0,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '',
+					'disable_nomination' => true,
+				),
+				'expected'            => array(
+					'staff_title'   => 'TBD',
+					'staff_enabled' => false,
+					'line'          => null,
+				),
+			),
+			array(
+				'test_condition_name' => '宿泊以外のサイトの指名あり => スタッフ名を出す（従来どおり）',
+				'conditions'          => array(
+					'site'               => $salon_site,
+					'nights'             => 0,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '1',
+					'disable_nomination' => false,
+				),
+				'expected'            => array(
+					'staff_title'   => '桜の間',
+					'staff_enabled' => true,
+					'line'          => 'スタッフ: 桜の間',
+				),
+			),
+			array(
+				'test_condition_name' => '宿泊以外のサイトのおまかせ => 指名なしラベルを出す（従来どおり）',
+				'conditions'          => array(
+					'site'               => $salon_site,
+					'nights'             => 0,
+					'resource_id'        => $room_id,
+					'is_staff_preferred' => '',
+					'disable_nomination' => false,
+				),
+				'expected'            => array(
+					'staff_title'   => '指名なし',
+					'staff_enabled' => true,
+					'line'          => 'スタッフ: 指名なし',
+				),
+			),
+		);
+
+		try {
+			foreach ( $test_cases as $case ) {
+				$conditions = $case['conditions'];
+
+				// サイトの設定を切り替え、設定のキャッシュを消す。
+				update_option(
+					Settings_Repository::OPTION_KEY,
+					array_merge( ( new Settings_Repository() )->get_default_settings(), $conditions['site'] )
+				);
+				Industry_Presets::clear_cache();
+				Staff_Editor::clear_nomination_enabled_cache();
+
+				// メニューと予約を作る。泊の予約は泊数だけを保存し、指名フラグは確定処理と同じく空のままにする。
+				$menu_meta  = $conditions['disable_nomination'] ? array( '_vkbm_disable_nomination' => '1' ) : array();
+				$menu_id    = (int) $this->factory()->post->create(
+					array(
+						'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+						'post_status' => 'publish',
+						'post_title'  => 'テストプラン',
+						'meta_input'  => $menu_meta,
+					)
+				);
+				$booking_id = (int) $this->factory()->post->create(
+					array(
+						'post_type'   => Booking_Post_Type::POST_TYPE,
+						'post_status' => 'publish',
+					)
+				);
+				update_post_meta( $booking_id, '_vkbm_booking_service_id', $menu_id );
+				update_post_meta( $booking_id, '_vkbm_booking_resource_id', $conditions['resource_id'] );
+				update_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', $conditions['is_staff_preferred'] );
+				update_post_meta( $booking_id, '_vkbm_booking_service_start', '2026-10-10 15:00:00' );
+				update_post_meta( $booking_id, '_vkbm_booking_service_end', '2026-10-11 10:00:00' );
+				update_post_meta( $booking_id, '_vkbm_booking_status', 'confirmed' );
+				if ( $conditions['nights'] > 0 ) {
+					update_post_meta( $booking_id, Lodging_Booking::META_NIGHTS, $conditions['nights'] );
+				}
+
+				// 本文の材料と「予約情報」の行を組み立てる。
+				$actual_payload = $payload->invoke( $service, $booking_id );
+				$actual_lines   = $lines->invoke( $service, $actual_payload );
+
+				$this->assertSame( $case['expected']['staff_title'], $actual_payload['staff_title'], $case['test_condition_name'] . '（客室・担当者名）' );
+				$this->assertSame( $case['expected']['staff_enabled'], $actual_payload['staff_enabled'], $case['test_condition_name'] . '（行を出すか）' );
+				if ( null === $case['expected']['line'] ) {
+					$resource_prefix = $conditions['site']['resource_label_singular'] . ': ';
+					$resource_lines  = array_filter(
+						$actual_lines,
+						static function ( string $line ) use ( $resource_prefix ): bool {
+							return 0 === strpos( $line, $resource_prefix );
+						}
+					);
+					$this->assertSame( array(), array_values( $resource_lines ), $case['test_condition_name'] . '（本文の行）' );
+				} else {
+					$this->assertContains( $case['expected']['line'], $actual_lines, $case['test_condition_name'] . '（本文の行）' );
+				}
+			}
+		} finally {
+			// 設定とロケールを元に戻す。
+			if ( false === $original_settings ) {
+				delete_option( Settings_Repository::OPTION_KEY );
+			} else {
+				update_option( Settings_Repository::OPTION_KEY, $original_settings );
+			}
+			Industry_Presets::clear_cache();
+			Staff_Editor::clear_nomination_enabled_cache();
+			restore_previous_locale();
 		}
 	}
 

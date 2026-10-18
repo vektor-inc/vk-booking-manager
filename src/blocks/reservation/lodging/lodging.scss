@@ -49,19 +49,15 @@
 		background: color-mix(in srgb, var(--vkbm--color--accent, #1d8fcb) 12%, transparent);
 	}
 
-	// 端の日（チェックイン日・チェックアウト日）は、濃い文字に淡い背景と枠線で示す。
+	// 端の日（チェックイン日・チェックアウト日）は、淡い背景と枠線で示す。
 	// accent 色の上に白文字を載せるとコントラストが足りないため。
 	.vkbm-calendar__day--range-start,
 	.vkbm-calendar__day--range-end {
 		background: color-mix(in srgb, var(--vkbm--color--accent, #1d8fcb) 22%, transparent);
 		border: 2px solid var(--vkbm--color--accent, #1d8fcb);
-		color: var(--vkbm--color--text-primary, #333);
+		// 背景はテーマの背景に淡い色を重ねただけなので、固定色ではなく周囲の文字色に従う。
+		color: inherit;
 		font-weight: 700;
-	}
-
-	.vkbm-calendar__day:focus-visible {
-		outline: 2px solid var(--vkbm--color--text-primary, #333);
-		outline-offset: -2px;
 	}
 }
 
@@ -147,11 +143,17 @@
 	}
 
 	// 選択中: アクセント色の薄い背景、丸を塗って内側に白い点。
-	&[aria-pressed="true"] {
+	// 背景は、時間枠と共通の `.vkbm-slot-list__item:not(:hover):not(:active):not(.has-background)`（reservation/style.scss。
+	// テーマの button 色の上書きを打ち消す規則）より詳細度を高くしないと白に戻るため、同じ形の :not() を付けた指定も並べる。
+	&[aria-pressed="true"],
+	&[aria-pressed="true"]:not(:hover):not(:active):not(.has-background) {
 		border-color: var(--vkbm--color--accent);
 		// color-mix() 非対応の環境では、薄い背景の代わりに通常の背景を使う（枠線・丸の塗りで選択中は伝わる）。
 		background: var(--vkbm--color--bg-primary, #fff);
 		background: color-mix(in srgb, var(--vkbm--color--accent) 10%, var(--vkbm--color--bg-primary, #fff));
+	}
+
+	&[aria-pressed="true"] {
 
 		&::before {
 			border-color: var(--vkbm--color--accent);

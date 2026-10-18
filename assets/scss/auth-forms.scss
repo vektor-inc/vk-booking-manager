@@ -6,16 +6,30 @@
 	border: 1px solid var(--vkbm--color--border);
 	border-radius: var(--vkbm--radius--md, 8px);
 	background-color: var(--vkbm--color--bg-primary);
+	color: var(--vkbm--color--surface-text, #333);
 	padding: var(--vkbm--spacing--lg);
 	margin: var(--vkbm--spacing--md) auto 0;
 	box-shadow: none;
 }
 
 .vkbm-auth-card__title {
+	// テーマの見出し色が直接当たっても、白いカードの文字色に従わせる。
+	color: inherit;
 	text-align: center;
 	font-size: 1.4rem;
 	margin-top: 0;
 	margin-bottom: var(--vkbm--spacing--sm);
+}
+
+// カード内のほかの見出し（メール認証の案内、同意事項の見出しなど）も、テーマの見出し色ではなくカードの文字色に従わせる。
+.vkbm-auth-card :is(h2, h3, h4) {
+	color: inherit;
+}
+
+// カード内のリンクも、テーマのリンク色（ダーク設定では白に近い色）が白地に残らないよう、白地で 4.5:1 以上になるリンク色にする。
+// ボタンの見た目のリンクは、それぞれの色を持つため除く。
+.vkbm-auth-card a:where(:not(.vkbm-button)) {
+	color: var(--vkbm--color--link, #1772a2);
 }
 
 .vkbm-auth-card__description {
@@ -150,6 +164,7 @@
 	outline: 2px solid #11181c;
 	outline-offset: 1px;
 	background: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--surface-text, #333);
 }
 
 .vkbm-auth-form__meta {

@@ -35,6 +35,8 @@ class Scheduled_Events {
 		'vkbm_retry_booking_email',
 		// Google カレンダーへの予約の反映（予約ごとに登録される単発の処理）。
 		'vkbm_google_calendar_sync_booking',
+		// Google カレンダー連携が切れていた間の予約を、再接続後に順に反映するまとめ役（単発の処理）。
+		'vkbm_google_calendar_flush_pending_sync',
 	);
 
 	/**

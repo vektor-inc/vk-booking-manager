@@ -580,9 +580,14 @@ class Booking_Admin {
 
 		// 泊の予約は予約に保存した泊数で判定する（サイトの業種が変わっても保存した日時のまま表示する）。
 		$is_stay_booking = Lodging_Booking::is_stay_booking( $post->ID );
-		$start_date      = $this->format_datetime_for_input( $start, 'date' );
-		$start_time      = $this->format_datetime_for_input( $start, 'time' );
-		$end_time        = $this->format_datetime_for_input( $end, 'time' );
+		// #828: 泊の予約は指名区分を使わないため「指名区分」の行を出さない。
+		// 指名料は画面に出す金額が 0 円のときだけ「指名料」の行を出さず、合計欄の説明文も指名料に触れない文にする。
+		// 行の表示と説明文の差し替えは、この1つの判定結果で決める。
+		$show_nomination_category = ! $is_stay_booking;
+		$show_nomination_fee_row  = ! ( $is_stay_booking && 0 === (int) $nomination_fee );
+		$start_date               = $this->format_datetime_for_input( $start, 'date' );
+		$start_time               = $this->format_datetime_for_input( $start, 'time' );
+		$end_time                 = $this->format_datetime_for_input( $end, 'time' );
 
 		$resources        = $this->get_resources();
 		$services         = $this->get_service_menus();
@@ -899,6 +904,7 @@ class Booking_Admin {
 							<?php endif; ?>
 						</td>
 					</tr>
+					<?php if ( $show_nomination_category ) : ?>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'Nomination category', 'vk-booking-manager' ); ?></th>
 						<td>
@@ -933,6 +939,8 @@ class Booking_Admin {
 							</p>
 						</td>
 					</tr>
+					<?php endif; ?>
+					<?php if ( $show_nomination_fee_row ) : ?>
 					<tr>
 						<th scope="row"><?php echo esc_html( vkbm_get_nomination_fee_label() ); ?></th>
 						<td>
@@ -948,6 +956,7 @@ class Booking_Admin {
 							?>
 						</td>
 					</tr>
+					<?php endif; ?>
 					<tr>
 						<th scope="row"><label for="vkbm-booking-service"><?php esc_html_e( 'Menu', 'vk-booking-manager' ); ?></label></th>
 						<td>
@@ -997,11 +1006,15 @@ class Booking_Admin {
 							?>
 							<p class="description">
 								<?php
-								printf(
-									/* translators: %s: nomination fee label */
-									esc_html__( 'This is the total of the basic service fee + %s at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ),
-									esc_html( vkbm_get_nomination_fee_label() )
-								);
+								if ( $show_nomination_fee_row ) {
+									printf(
+										/* translators: %s: nomination fee label */
+										esc_html__( 'This is the total of the basic service fee + %s at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ),
+										esc_html( vkbm_get_nomination_fee_label() )
+									);
+								} else {
+									esc_html_e( 'This is the total fee at the time of reservation. (Cannot be edited)', 'vk-booking-manager' );
+								}
 								?>
 							</p>
 						</td>
@@ -1026,11 +1039,15 @@ class Booking_Admin {
 							?>
 							<p class="description">
 								<?php
-								printf(
-									/* translators: %s: nomination fee label */
-									esc_html__( 'If there are any service changes or additional charges, please enter the final amount charged, including the %s. If not entered, the total basic fee will be applied.', 'vk-booking-manager' ),
-									esc_html( vkbm_get_nomination_fee_label() )
-								);
+								if ( $show_nomination_fee_row ) {
+									printf(
+										/* translators: %s: nomination fee label */
+										esc_html__( 'If there are any service changes or additional charges, please enter the final amount charged, including the %s. If not entered, the total basic fee will be applied.', 'vk-booking-manager' ),
+										esc_html( vkbm_get_nomination_fee_label() )
+									);
+								} else {
+									esc_html_e( 'If there are any service changes or additional charges, please enter the final amount charged. If not entered, the total basic fee will be applied.', 'vk-booking-manager' );
+								}
 								?>
 							</p>
 							<p class="description">
@@ -1361,7 +1378,11 @@ class Booking_Admin {
 		$this->update_meta_value( $post_id, self::META_STATUS, $status );
 		$this->update_meta_value( $post_id, self::META_NOTE, $note );
 		$this->update_meta_value( $post_id, self::META_INTERNAL_NOTE, $internal_note );
-		$this->update_meta_value( $post_id, self::META_IS_PREFERRED, $is_preferred );
+		// #828: 泊の予約は編集画面に指名区分を出さないため、欄が送られない。保存済みの泊数で判定し、
+		// 保存済みの指名区分を保つ（空の値を渡すとメタが削除されてしまう）。
+		if ( ! $is_stay_booking ) {
+			$this->update_meta_value( $post_id, self::META_IS_PREFERRED, $is_preferred );
+		}
 
 		$this->maybe_update_post_title( $post_id, $post, $customer, $start );
 

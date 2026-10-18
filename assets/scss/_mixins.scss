@@ -95,3 +95,21 @@ $vkbm-status-colors: (
 
 	color: vkbm-status-color($name, text);
 }
+
+// キーボードフォーカス枠（外側が濃色・内側が白の 2 色）
+// -----------------------------------------------------------------------------
+// :focus-visible の中で @include する。外側の色は --vkbm--color--focus で、テーマ側から上書きできる。
+// 内側の白は box-shadow で outline との隙間を埋めて作る。
+// 隙間なく並ぶ要素（カレンダーのマスなど）は、隣と重ならないよう vkbm-focus-ring-inset を使う。
+@mixin vkbm-focus-ring($gap: 2px) {
+	outline: 2px solid var(--vkbm--color--focus, #1f2937);
+	outline-offset: $gap;
+	box-shadow: 0 0 0 $gap #fff;
+}
+
+// 要素の内側に枠を描く版。outline の内側に幅 2px の白を足す。
+@mixin vkbm-focus-ring-inset {
+	outline: 2px solid var(--vkbm--color--focus, #1f2937);
+	outline-offset: -2px;
+	box-shadow: inset 0 0 0 4px #fff;
+}

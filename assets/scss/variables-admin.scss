@@ -34,6 +34,13 @@
 	--vkbm--admin--status-no-show-border: #dc3232;
 	--vkbm--admin--status-no-show-text: #a72222;
 
+	// 予約カードの先頭に付ける状態ラベル（仮予約・キャンセル・無断）の文字色。
+	// 各状態の背景（上の -bg）・白・ホバー時の淡い青のいずれの上でも 4.5:1 以上を保つこと。
+	// 背景色を変えるときは、ここの値のコントラスト比も確かめ直す。
+	--vkbm--admin--status-pending-label: #7a4b00;
+	--vkbm--admin--status-cancelled-label: #50575e;
+	--vkbm--admin--status-no-show-label: #a72222;
+
 	// メール送信履歴の状態表示（送信済み・失敗・未送信）の文字色。
 	// 一覧は縞模様の行（#f6f7f7）にも載るため、白地・縞模様のどちらでもコントラスト比 4.5:1 以上を
 	// 保つ必要がある。--success / --danger は縞模様の行で 4.5:1 を下回るため流用せず、別の値にしている。

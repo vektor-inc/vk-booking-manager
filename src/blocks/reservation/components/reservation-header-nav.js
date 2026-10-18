@@ -155,6 +155,7 @@ export const ReservationHeaderNav = ( {
 						className={ itemClassName }
 						onClick={ item.onClick }
 						aria-pressed={ item.ariaPressed }
+						aria-current={ item.isActive ? 'page' : undefined }
 					>
 						{ item.label }
 					</button>
@@ -163,6 +164,7 @@ export const ReservationHeaderNav = ( {
 						key={ item.key || `${ item.type }-${ index }` }
 						className={ itemClassName }
 						href={ item.href }
+						aria-current={ item.isActive ? 'page' : undefined }
 					>
 						{ item.label }
 					</a>

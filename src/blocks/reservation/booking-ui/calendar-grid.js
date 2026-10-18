@@ -196,6 +196,7 @@ export const CalendarGrid = ( {
 										.filter( Boolean )
 										.join( ' ' ) }
 									onClick={ () => onSelectDate( day.iso ) }
+									aria-pressed={ isSelected }
 									disabled={ disabled }
 								>
 									<span className="vkbm-calendar__day-label">

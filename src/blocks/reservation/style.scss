@@ -40,6 +40,7 @@ $vkbm-plan-summary-control-height: 44px;
 	border-top: 1px solid var(--vkbm--color--primary);
 	border-bottom: 1px solid var(--vkbm--color--border);
 	background-color: #f5f5f5;
+	color: var(--vkbm--color--surface-text, #333);
 	padding: var(--vkbm--spacing--sm) var(--vkbm--spacing--md);
 }
 
@@ -146,7 +147,8 @@ $vkbm-plan-summary-control-height: 44px;
 .vkbm-reservation-header__brand-name {
 	font-weight: 600;
 	font-size: 1.2rem;
-	color: #0f172a;
+	// 背景を持たない（テーマの背景に重なる）ため、固定色ではなくテーマの文字色に従う。
+	color: inherit;
 }
 
 .vkbm-reservation-header .vkbm-reservation-header__nav {
@@ -171,7 +173,14 @@ $vkbm-plan-summary-control-height: 44px;
 	// TT1 など上書き用
 	.vkbm-reservation-header__nav-link:not(:hover):not(:active):not(.has-background) {
 		background: none;
-		color: var(--vkbm--color--link, #1d8fcb);
+		// 背景を持たない（テーマの背景に重なる）ため、固定のアクセント色ではなくテーマの文字色に従う。下線がリンクの目印になる。
+		color: inherit;
+	}
+
+	// マウスを乗せている間・押している間も、併用している .vkbm-button__link の固定色に戻さず、テーマの文字色に従う。
+	.vkbm-reservation-header__nav-link:hover:not(.has-background),
+	.vkbm-reservation-header__nav-link:active:not(.has-background) {
+		color: inherit;
 	}
 }
 
@@ -215,7 +224,8 @@ $vkbm-plan-summary-control-height: 44px;
 	margin: 0 0 0.75rem;
 	font-size: 1.05rem;
 	font-weight: 600;
-	color: #0f172a;
+	// 背景を持たない（テーマの背景に重なる）ため、固定色ではなくテーマの文字色に従う。
+	color: inherit;
 }
 
 .vkbm-user-section__panel {
@@ -317,7 +327,7 @@ $vkbm-plan-summary-control-height: 44px;
 		border: 1px solid var(--vkbm--color--border);
 		border-radius: var(--vkbm--radius--sm, 4px);
 		background-color: var(--vkbm--color--bg-primary, #fff);
-		color: var(--vkbm--color--text-primary, #333);
+		color: var(--vkbm--color--surface-text, #333);
 		// 暗い配色のテーマでも、標準アイコンが白背景に沈まないようにする。
 		color-scheme: light;
 		font-size: inherit;
@@ -358,7 +368,7 @@ $vkbm-plan-summary-control-height: 44px;
 	border: 1px solid var(--vkbm--color--border);
 	border-radius: var(--vkbm--radius--sm, 4px);
 	background-color: var(--vkbm--color--bg-primary, #fff);
-	color: var(--vkbm--color--text-primary, #333);
+	color: var(--vkbm--color--surface-text, #333);
 	// 暗い配色のテーマでも、標準アイコンが白背景に沈まないようにする。
 	color-scheme: light;
 	font: inherit;
@@ -568,12 +578,14 @@ $vkbm-plan-summary-control-height: 44px;
 	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 0.75rem 1rem;
 	background: var(--vkbm--color--bg-secondary, #f9fafb);
+	color: var(--vkbm--color--surface-text, #333);
 }
 
+// 背景が透明に近い（テーマの背景に重なる）ため、固定色ではなく親（テーマ）の文字色に従う。
 .vkbm-plan-summary__pricing--placeholder {
 	border-style: dashed;
 	background: rgba(148, 163, 184, 0.075);
-	color: #475569;
+	color: inherit;
 	text-align: center;
 }
 
@@ -896,8 +908,15 @@ $vkbm-plan-summary-control-height: 44px;
 .vkbm-calendar__nav {
 	background: transparent;
 	border: none;
+	// 背景を持たない（テーマの背景に重なる）ため、テーマの button の文字色ではなく周囲の文字色に従う。
+	color: inherit;
 	font-size: 1.5rem;
 	cursor: pointer;
+
+	&:focus-visible {
+
+		@include vkbm-focus-ring;
+	}
 }
 
 .vkbm-calendar__weekdays,
@@ -910,7 +929,8 @@ $vkbm-plan-summary-control-height: 44px;
 	text-align: center;
 	padding: 0.5rem 0;
 	font-size: 0.875rem;
-	color: var(--vkbm--color--text-secondary, #666);
+	// 背景を持たない（テーマの背景に重なる）ため、固定の灰色ではなく周囲の文字色に従う。
+	color: inherit;
 }
 
 .vkbm-calendar__day {
@@ -923,6 +943,8 @@ $vkbm-plan-summary-control-height: 44px;
 	align-items: center;
 	gap: 0.35rem;
 	font-size: 0.875rem;
+	// 背景を持たない（テーマの背景に重なる）ため、テーマの button の文字色ではなく周囲の文字色に従う。
+	color: inherit;
 	cursor: pointer;
 
 	&--muted {
@@ -932,8 +954,21 @@ $vkbm-plan-summary-control-height: 44px;
 
 	&--selected {
 		background: rgba(29, 143, 203, 0.1);
-		outline: none;
 		border: 1px solid var(--vkbm--color--accent);
+	}
+
+	// マスは隙間なく並ぶため、隣と重ならないよう枠を内側に描く。宿泊カレンダーのマスも同じクラスなので共通で効く。
+	&:focus-visible {
+
+		@include vkbm-focus-ring-inset;
+	}
+
+	// 選択中（aria-pressed="true"。通常カレンダーの選択日と、宿泊カレンダーのチェックイン・チェックアウト日）は、
+	// フォーカス枠が選択の 1px 枠を覆うため、内側の白い帯を選択色の帯に替えて、選択中だと分かるようにする。
+	// 帯の色は accent と accent-text の中間色で、外側の濃い枠・淡い選択背景・テーマの濃色背景のいずれに対しても 3:1 以上になる。
+	// 上の &:focus-visible より後ろに置くこと（同じ詳細度のため、後ろにあるほうが勝つ）。
+	&[aria-pressed="true"]:focus-visible {
+		box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--vkbm--color--accent, #1d8fcb) 50%, var(--vkbm--color--accent-text, #1772a2));
 	}
 }
 
@@ -943,7 +978,7 @@ $vkbm-plan-summary-control-height: 44px;
 	justify-content: center;
 	min-width: 1.5rem;
 	border-radius: 999px;
-	background: var(--vkbm--color--accent);
+	background: var(--vkbm--color--accent-text, #1772a2);
 	color: #fff;
 	font-size: 0.75rem;
 	padding: 0 0.4rem;
@@ -966,6 +1001,7 @@ $vkbm-plan-summary-control-height: 44px;
 	padding: var(--vkbm--spacing--xs);
 	text-align: left;
 	background: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--surface-text, #333);
 	cursor: pointer;
 	font-size: var(--vkbm--font-size--sm, 0.75rem);
 	font-weight: 400;
@@ -975,10 +1011,22 @@ $vkbm-plan-summary-control-height: 44px;
 		box-shadow: 0 0 0 1px rgba(29, 143, 203, 0.3);
 	}
 
+	// 選択中の box-shadow より後に置いて、フォーカス中は 2 色の枠を優先する（この位置より上へ移動しないこと）。
+	&:focus-visible {
+
+		@include vkbm-focus-ring;
+	}
+
+	// ホバー中は枠線をアクセント色にする（背景を固定したため、テーマのホバー色に頼らず手応えを出す）。
+	// 満席・受付終了はクリックできないので変えない。
+	&:hover:not(.is-full):not(.is-exclusive-closed) {
+		border-color: var(--vkbm--color--accent);
+	}
+
 	// 満枠スロットのスタイル。
 	&.is-full {
 		background: #f0f0f0;
-		color: #767676;
+		color: #595959;
 		border-color: #d0d0d0;
 		cursor: not-allowed;
 	}
@@ -986,21 +1034,43 @@ $vkbm-plan-summary-control-height: 44px;
 	// 貸し切り予約で受付終了になった枠のスタイル（満席と同じく無効状態で残す）。
 	&.is-exclusive-closed {
 		background: #f0f0f0;
-		color: #767676;
+		color: #595959;
 		border-color: #d0d0d0;
 		cursor: not-allowed;
+	}
+
+	// Twenty Twenty-One など、テーマが button の背景・文字色を
+	// `button:not(:hover):not(:active):not(.has-background)` のような強い詳細度で上書きするテーマ向け。
+	// 上書きされるとスロットの背景がテーマの濃色になり、残枠数（水色）・満席の灰色の文字が読めなくなる。
+	// テーマと同じ形の :not() を付けて詳細度を上回らせ、背景と文字色をこのプラグインの値に戻す。
+	// ホバー・押下中もテーマは背景を透明にするため、同じ値で固定する。
+	&:not(:hover):not(:active):not(.has-background),
+	&:hover,
+	&:active {
+		background: var(--vkbm--color--bg-primary, #fff);
+		color: var(--vkbm--color--surface-text, #333);
+	}
+
+	&.is-full:not(:hover):not(:active):not(.has-background),
+	&.is-full:hover,
+	&.is-full:active,
+	&.is-exclusive-closed:not(:hover):not(:active):not(.has-background),
+	&.is-exclusive-closed:hover,
+	&.is-exclusive-closed:active {
+		background: #f0f0f0;
+		color: #595959;
 	}
 }
 
 // 残り枠数表示。
 .vkbm-slot-list__remaining {
 	font-size: var(--vkbm--font-size--xs, 0.75rem);
-	color: var(--vkbm--color--accent, #1d8fcb);
+	color: var(--vkbm--color--accent-text, #1772a2);
 	margin-top: 2px;
 
 	// 満枠時の表示。
 	&--full {
-		color: #999;
+		color: #595959;
 	}
 
 	// 貸し切り予約で受付終了になった枠の表示。
@@ -1061,13 +1131,15 @@ $vkbm-plan-summary-control-height: 44px;
    ========================================================================== */
 
 .vkbm-reservation-header__nav .vkbm-reservation-header__nav-link.is-active {
-	color: var(--vkbm--color--accent, #1d8fcb);
+	// 色を文字色に揃えたぶん、現在のページは太字で区別する。
+	color: inherit;
+	font-weight: 700;
 	text-decoration: underline;
 }
 
 .vkbm-reservation-header__nav::before,
 .vkbm-reservation-header__nav::after {
-	color: var(--vkbm--color--text-primary, #333);
+	color: inherit;
 }
 
 .vkbm-reservation-header__nav::before {
@@ -1079,7 +1151,7 @@ $vkbm-plan-summary-control-height: 44px;
 }
 
 .vkbm-reservation-header__nav-link + .vkbm-reservation-header__nav-link {
-	border-left: 1px solid var(--vkbm--color--text-primary, #333);
+	border-left: 1px solid currentcolor;
 	padding-left: var(--vkbm--spacing--xs);
 	border-radius: 0;
 }
@@ -1190,6 +1262,7 @@ $vkbm-plan-summary-control-height: 44px;
 	border-radius: var(--vkbm--radius--md, 8px);
 	padding: 1rem;
 	background: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--surface-text, #333);
 	container-type: inline-size;
 }
 
@@ -1285,9 +1358,12 @@ $vkbm-plan-summary-control-height: 44px;
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
 	border-radius: var(--vkbm--radius--md, 8px);
 	background: var(--vkbm--color--bg-secondary, #f9fafb);
+	color: var(--vkbm--color--surface-text, #333);
 }
 
 .vkbm-favorites__title {
+	// テーマの見出し色（Twenty Twenty-Four のダーク版は #f9f9f9）が直接当たっても、白い面の文字色に従わせる。
+	color: inherit;
 	margin: 0 0 0.5rem;
 	font-size: 0.95rem;
 	font-weight: 700;
@@ -1463,6 +1539,7 @@ $vkbm-plan-summary-control-height: 44px;
 		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 2rem;
 		background-color: var(--vkbm--color--bg-secondary);
+		color: var(--vkbm--color--surface-text, #333);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		text-align: center;
 	}
@@ -1527,6 +1604,7 @@ $vkbm-plan-summary-control-height: 44px;
 		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 1rem;
 		background: var(--vkbm--color--bg-primary, #fff);
+		color: var(--vkbm--color--surface-text, #333);
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
@@ -1594,7 +1672,8 @@ $vkbm-plan-summary-control-height: 44px;
 
 	.vkbm-confirm__policy {
 		font-size: 0.9rem;
-		color: #555;
+		// 背景を持たない（テーマの背景に重なる）ため、固定色ではなくテーマの文字色に従う。
+		color: inherit;
 		margin: 0;
 	}
 
@@ -1819,7 +1898,7 @@ body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(foot
 	max-width: 640px;
 	max-height: 100%;
 	background: var(--vkbm--color--bg-primary, #fff);
-	color: var(--vkbm--color--text-primary, #333);
+	color: var(--vkbm--color--surface-text, #333);
 	border-radius: var(--vkbm--radius--md, 8px);
 	box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
 }
@@ -1838,6 +1917,8 @@ body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(foot
 }
 
 .vkbm-footer-modal__title {
+	// テーマの見出し色が直接当たっても、白いモーダルの文字色に従わせる。
+	color: inherit;
 	margin: 0;
 	font-size: var(--vkbm--font-size--md, 1rem);
 	line-height: 1.4;
@@ -1872,8 +1953,8 @@ body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(foot
 
 	// フッターの文字色を白などに設定すると、白いモーダルの上で枠が見えなくなるため、フッター用の色は使わない（#825）。
 	&:focus-visible {
-		outline: 2px solid var(--vkbm--color--text-primary, #333);
-		outline-offset: -2px;
+
+		@include vkbm-focus-ring-inset;
 	}
 }
 

@@ -29,7 +29,8 @@
 
 .vkbm-menu-search__field-preview {
 	align-items: center;
-	background: var(--vkbm--color--bg-primary, #fff);
+	// エディターでの入力欄の見本。背景は付けず、テーマの背景に従う。
+	background: transparent;
 	border: 1px dashed var(--wp--preset--color--contrast-4, #bababa);
 	border-radius: 4px;
 	color: var(--wp--preset--color--contrast-3, #6b6b6b);

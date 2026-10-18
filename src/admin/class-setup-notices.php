@@ -17,6 +17,7 @@ use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Holiday_Calendar;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Controller;
+use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connection;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -678,12 +679,25 @@ class Setup_Notices {
 	 * `Google_Calendar_Event_Sync::OPTION_SYNC_BROKEN` は、再試行の上限に達した時点で
 	 * 理由付きで立ち、反映に成功すると消える（`Google_Calendar_Event_Sync` 参照）。
 	 *
+	 * 連携状態が `error` のときは、option が立っていなくても {@see Google_Calendar_Event_Sync::REASON_AUTH}
+	 * として扱う。
+	 *
 	 * @return string Google_Calendar_Event_Sync::REASON_* のいずれか。立っていなければ空文字。
 	 */
 	private function get_google_calendar_sync_broken_reason(): string {
 		$reason = (string) get_option( Google_Calendar_Event_Sync::OPTION_SYNC_BROKEN, '' );
 
-		return in_array( $reason, array( Google_Calendar_Event_Sync::REASON_AUTH, Google_Calendar_Event_Sync::REASON_OTHER ), true ) ? $reason : '';
+		if ( in_array( $reason, array( Google_Calendar_Event_Sync::REASON_AUTH, Google_Calendar_Event_Sync::REASON_OTHER ), true ) ) {
+			return $reason;
+		}
+
+		// 連携状態が error の間は、再試行の失敗を待たずに認可喪失のお知らせを出す
+		// （切れている間の予約は再接続後に反映されるため、オーナーに早く気づいてもらう）。
+		if ( Google_Calendar_Connection::STATUS_ERROR === ( new Google_Calendar_Connection() )->get_status() ) {
+			return Google_Calendar_Event_Sync::REASON_AUTH;
+		}
+
+		return '';
 	}
 
 	/**
