@@ -3,8 +3,8 @@ Contributors: vektor-inc,kurudrive
 Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
-Requires PHP: 8.1
-Stable tag: 3.4.0
+Requires PHP: 8.3
+Stable tag: 3.5.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,11 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.5.0 =
+* [ 仕様変更 ] 動作要件の PHP バージョンを 8.1 以上から 8.3 以上に変更（PHP 8.2 以前の環境は動作保証の対象外）
+* [ 仕様変更 ][ メニュー一覧ブロック ] カード表示で、料金が1つだけのメニューの税込み表記を、金額の横から金額の下（ボタンの上）に右寄せで表示するよう変更
+* [ 不具合修正 ] プラグインを更新しても、予約ブロックなどのブロックの CSS が更新前のまま配信され続け、見た目の修正が数時間反映されないことがある不具合を修正
 
 = 3.4.0 =
 * [ 仕様変更 ][ メニュー一覧ブロック ] カテゴリータグの文字色を、テーマの primary 色から本文の文字色に変更

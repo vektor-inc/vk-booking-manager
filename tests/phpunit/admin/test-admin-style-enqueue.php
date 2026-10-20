@@ -31,10 +31,21 @@ use WP_UnitTestCase;
 class Admin_Style_Enqueue_Test extends WP_UnitTestCase {
 
 	/**
+	 * テスト前の $GLOBALS['wp_styles']。tearDown で元に戻す。
+	 *
+	 * 戻さずに unset したままにすると、ブロック登録時に登録された CSS のハンドルが消え、
+	 * 後に実行される別のテストが失敗する。
+	 *
+	 * @var \WP_Styles|null
+	 */
+	private $original_wp_styles;
+
+	/**
 	 * 管理者でログインし、スタイルの登録状態をリセットする。
 	 */
 	protected function setUp(): void {
 		parent::setUp();
+		$this->original_wp_styles = $GLOBALS['wp_styles'] ?? null;
 		unset( $GLOBALS['wp_styles'] );
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
 		( new Common_Styles() )->register_styles();
@@ -44,7 +55,8 @@ class Admin_Style_Enqueue_Test extends WP_UnitTestCase {
 	 * 画面・スタイル・ユーザーの状態を元に戻す。
 	 */
 	protected function tearDown(): void {
-		unset( $GLOBALS['wp_styles'], $GLOBALS['current_screen'] );
+		unset( $GLOBALS['current_screen'] );
+		$GLOBALS['wp_styles'] = $this->original_wp_styles;
 		parent::tearDown();
 	}
 

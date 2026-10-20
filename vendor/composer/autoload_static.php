@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit824dafa48eef679f1b84bd2dbdfd6c85
+class ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4
 {
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
@@ -28,6 +28,7 @@ class ComposerStaticInit824dafa48eef679f1b84bd2dbdfd6c85
         'VKBookingManager\\Availability\\Night_Strategy' => __DIR__ . '/../..' . '/src/availability/class-night-strategy.php',
         'VKBookingManager\\Availability\\Slot_Strategy' => __DIR__ . '/../..' . '/src/availability/interface-slot-strategy.php',
         'VKBookingManager\\Availability\\Time_Slot_Strategy' => __DIR__ . '/../..' . '/src/availability/class-time-slot-strategy.php',
+        'VKBookingManager\\Blocks\\Block_Asset_Version' => __DIR__ . '/../..' . '/src/blocks/class-block-asset-version.php',
         'VKBookingManager\\Blocks\\Block_Category' => __DIR__ . '/../..' . '/src/blocks/class-block-category.php',
         'VKBookingManager\\Blocks\\Menu_Card_Block' => __DIR__ . '/../..' . '/src/blocks/class-menu-card-block.php',
         'VKBookingManager\\Blocks\\Menu_Loop_Block' => __DIR__ . '/../..' . '/src/blocks/class-menu-loop-block.php',
@@ -107,7 +108,7 @@ class ComposerStaticInit824dafa48eef679f1b84bd2dbdfd6c85
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->classMap = ComposerStaticInit824dafa48eef679f1b84bd2dbdfd6c85::$classMap;
+            $loader->classMap = ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4::$classMap;
 
         }, null, ClassLoader::class);
     }

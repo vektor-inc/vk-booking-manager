@@ -1660,9 +1660,11 @@ class Menu_Loop_Block {
 		} elseif ( Price_Tiers::is_menu_using_price_tiers( $post->ID ) ) {
 			$price_markup = $this->render_price_tiers( Price_Tiers::normalize_tiers( $price_tiers_raw ) );
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
+			// #858: 税込みラベルは金額の横ではなく、金額の下に右寄せで別行表示する（料金区分一覧と同じ見た目）。
 			$price_markup = sprintf(
-				'<div class="vkbm-menu-loop__card-price">%s</div>',
-				wp_kses_post( $this->format_price_display( (int) $price ) )
+				'<div class="vkbm-menu-loop__card-price">%s</div>%s',
+				esc_html( VKBM_Helper::format_currency( (int) $price ) ),
+				$this->render_card_tax_note()
 			);
 		}
 
@@ -1843,9 +1845,11 @@ class Menu_Loop_Block {
 
 		// 料金区分が無い（基本料金の 1 行だけ）ときは、今の単一料金と同じ見た目にする。
 		if ( 1 === count( $rows ) && '' === $rows[0]['label'] ) {
+			// #858: 税込みラベルは金額の横ではなく、金額の下に右寄せで別行表示する。
 			return sprintf(
-				'<div class="vkbm-menu-loop__card-price">%s</div>',
-				wp_kses_post( $this->append_tax_label( $texts[0] ) )
+				'<div class="vkbm-menu-loop__card-price">%s</div>%s',
+				wp_kses_post( $texts[0] ),
+				$this->render_card_tax_note()
 			);
 		}
 
@@ -1874,9 +1878,28 @@ class Menu_Loop_Block {
 	}
 
 	/**
-	 * Format the price label considering tax settings.
+	 * カード表示で、金額の下に右寄せで出す税込みラベルの行を生成する。
 	 *
-	 * @param int $base_price Base (tax-included) price.
+	 * 料金区分の一覧（render_price_tiers()）の末尾と同じクラスを使い、見た目をそろえる。
+	 *
+	 * @return string `<p>` 要素。税込みラベルが空のときは空文字列。
+	 */
+	private function render_card_tax_note(): string {
+		$tax_label = VKBM_Helper::get_tax_included_label();
+		if ( '' === $tax_label ) {
+			return '';
+		}
+
+		return sprintf(
+			'<p class="vkbm-menu-loop__card-prices-tax">%s</p>',
+			esc_html( $tax_label )
+		);
+	}
+
+	/**
+	 * テキスト表示用に、税込みラベルを付けた金額の文字列を生成する。
+	 *
+	 * @param int $base_price 基本料金（税込）。
 	 * @return string
 	 */
 	private function format_price_display( int $base_price ): string {
@@ -1914,14 +1937,7 @@ class Menu_Loop_Block {
 		}
 
 		// 税込みラベルは各行ではなく一覧の末尾に 1 回だけ表示する。
-		$tax_markup = '';
-		$tax_label  = VKBM_Helper::get_tax_included_label();
-		if ( '' !== $tax_label ) {
-			$tax_markup = sprintf(
-				'<p class="vkbm-menu-loop__card-prices-tax">%s</p>',
-				esc_html( $tax_label )
-			);
-		}
+		$tax_markup = $this->render_card_tax_note();
 
 		return sprintf(
 			// スクリーンリーダー向けに、この dl が料金一覧であることを aria-label で明示する。

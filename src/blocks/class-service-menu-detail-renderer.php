@@ -182,7 +182,7 @@ class Service_Menu_Detail_Renderer {
 			// 差し替えたグローバル変数を、控えておいた状態（無かったものは無い状態）へ戻す。
 			foreach ( self::POST_GLOBAL_KEYS as $key ) {
 				if ( array_key_exists( $key, $previous_globals ) ) {
-					// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- 上で差し替えた値を元に戻す。
+					// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- 差し替える前にあった WordPress コアのグローバル変数を、控えておいた値へ戻す。
 					$GLOBALS[ $key ] = $previous_globals[ $key ];
 				} else {
 					unset( $GLOBALS[ $key ] ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- 差し替える前に無かった WordPress コアのグローバル変数を元の状態へ戻す。

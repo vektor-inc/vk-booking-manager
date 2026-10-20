@@ -3,7 +3,8 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.4.0
+ * Version:     3.5.0
+ * Requires PHP: 8.3
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
  * License:     GPL-2.0-or-later
@@ -77,6 +78,7 @@ require_once __DIR__ . '/src/common/class-staff-conflict-detector.php';
 require_once __DIR__ . '/src/assets/class-common-styles.php';
 require_once __DIR__ . '/src/term-order/class-term-order-manager.php';
 require_once __DIR__ . '/src/blocks/class-block-category.php';
+require_once __DIR__ . '/src/blocks/class-block-asset-version.php';
 require_once __DIR__ . '/src/blocks/shared/class-reservation-button-renderer.php';
 require_once __DIR__ . '/src/blocks/class-menu-search-block.php';
 require_once __DIR__ . '/src/blocks/class-menu-loop-block.php';
@@ -149,6 +151,7 @@ use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
 use VKBookingManager\Bookings\User_Favorites_Controller;
+use VKBookingManager\Blocks\Block_Asset_Version;
 use VKBookingManager\Blocks\Block_Category;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Blocks\Menu_Card_Block;
@@ -383,6 +386,9 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// ブロックインサーターに専用カテゴリーを追加（プラグインのブロックを見つけやすくするため）.
 		// Register the block inserter category (so plugin blocks are easy to find).
 		( new Block_Category() )->register();
+
+		// ブロックの CSS の ?ver= をプラグインのバージョンに揃える（issue #854）。ブロック登録（init）より前に張る。
+		( new Block_Asset_Version() )->register();
 		$plugin = new Plugin(
 			$common_styles,
 			$provider_settings_page,

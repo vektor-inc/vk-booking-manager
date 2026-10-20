@@ -27,6 +27,7 @@ return array(
     'VKBookingManager\\Availability\\Night_Strategy' => $baseDir . '/src/availability/class-night-strategy.php',
     'VKBookingManager\\Availability\\Slot_Strategy' => $baseDir . '/src/availability/interface-slot-strategy.php',
     'VKBookingManager\\Availability\\Time_Slot_Strategy' => $baseDir . '/src/availability/class-time-slot-strategy.php',
+    'VKBookingManager\\Blocks\\Block_Asset_Version' => $baseDir . '/src/blocks/class-block-asset-version.php',
     'VKBookingManager\\Blocks\\Block_Category' => $baseDir . '/src/blocks/class-block-category.php',
     'VKBookingManager\\Blocks\\Menu_Card_Block' => $baseDir . '/src/blocks/class-menu-card-block.php',
     'VKBookingManager\\Blocks\\Menu_Loop_Block' => $baseDir . '/src/blocks/class-menu-loop-block.php',

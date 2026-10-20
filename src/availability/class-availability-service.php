@@ -2434,7 +2434,7 @@ class Availability_Service {
 			$statuses[] = (string) ( $entry['status'] ?? self::DAY_STATUS_OPEN );
 		}
 
-		// array_filter() はキー番号を詰めないため、先頭が空だと $statuses[0] が無くなる。array_values() で詰める。
+		// array_filter で空の値を取り除いてもキー番号は詰められないため、先頭が空だと 0 番目の要素が無くなる。array_values でキー番号を振り直す。
 		$statuses = array_values( array_filter( array_unique( $statuses ) ) );
 
 		if ( empty( $statuses ) ) {

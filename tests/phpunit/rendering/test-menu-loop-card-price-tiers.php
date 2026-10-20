@@ -122,7 +122,8 @@ class Menu_Loop_Card_Price_Tiers_Test extends WP_UnitTestCase {
 
 		// 単一料金のマークアップが出力され、区分一覧は出力されない。
 		$this->assertStringContainsString( 'vkbm-menu-loop__card-price', $output );
-		$this->assertStringNotContainsString( 'vkbm-menu-loop__card-prices', $output );
+		// 区分一覧（dl）は出力されない（単一料金の税込みラベル card-prices-tax とは区別する）。
+		$this->assertStringNotContainsString( '<dl class="vkbm-menu-loop__card-prices"', $output );
 	}
 
 	/**
@@ -159,7 +160,8 @@ class Menu_Loop_Card_Price_Tiers_Test extends WP_UnitTestCase {
 		$output = $this->block->render_menu_card( $menu_id );
 
 		// 区分一覧は出力されず、基本料金の単一表示にフォールバックする。
-		$this->assertStringNotContainsString( 'vkbm-menu-loop__card-prices', $output );
+		// 区分一覧（dl）は出力されない（単一料金の税込みラベル card-prices-tax とは区別する）。
+		$this->assertStringNotContainsString( '<dl class="vkbm-menu-loop__card-prices"', $output );
 		$this->assertStringNotContainsString( '大人', $output );
 		$this->assertStringNotContainsString( '子供', $output );
 		$this->assertStringContainsString( 'vkbm-menu-loop__card-price', $output );

@@ -456,12 +456,23 @@
 	}
 }
 
-// 税込みラベルは一覧の末尾に 1 回だけ表示する。
+// 税込みラベルはカード表示の料金（単一料金・料金区分一覧）の下に右寄せで 1 回だけ表示する。テキスト表示は .vkbm-menu-loop__card-price-tax（金額の直後）を使う。
 .vkbm-menu-loop__card-prices-tax {
 	font-size: var(--vkbm--font-size--xs);
 	font-weight: 400;
 	text-align: right;
-	margin: 0.1rem 0 0;
+
+	// 行の高さによる上下の余白を削り、見えている文字の端どうしの距離で間隔を決める。
+	text-box: trim-both text;
+
+	// 親（.vkbm-menu-loop__card-meta-side）の gap を差し引いて金額に寄せている。
+	// gap を変えるときは、金額との間 < ボタンとの間 が保たれるようここも見直すこと。
+	margin: calc(0.3rem - var(--vkbm--spacing--xs)) 0 0.2rem;
+}
+
+// 料金区分の一覧は、最終行の下側の行の高さ分の余白も削り、税込みまでを単一料金のときと同じ見た目の距離にする。
+.vkbm-menu-loop__card-prices-row:last-child > * {
+	text-box: trim-end text;
 }
 
 

@@ -12,6 +12,14 @@ use WP_UnitTestCase;
  * @group assets
  */
 class Common_Styles_Test extends WP_UnitTestCase {
+
+	/**
+	 * テスト前の $GLOBALS['wp_styles']。tearDown で元に戻す。
+	 *
+	 * @var \WP_Styles|null
+	 */
+	private $original_wp_styles;
+
 	public function test_get_custom_css_returns_expected_string(): void {
 		$test_cases = [
 			[
@@ -433,9 +441,12 @@ class Common_Styles_Test extends WP_UnitTestCase {
 	 * WP_UnitTestCase は wp_styles() のグローバル状態を自動でリセットしないため、
 	 * register_styles() / enqueue_variables() のようにスタイルの登録・enqueue 状態を
 	 * 検証するテストでは、他のテストへ影響を残さないよう自前でリセットする。
+	 * テスト後は unset したままにせず、テスト前の状態へ戻す（ブロック登録時に登録された
+	 * CSS のハンドルが消え、後に実行される別のテストが失敗するため）。
 	 */
 	protected function setUp(): void {
 		parent::setUp();
+		$this->original_wp_styles = $GLOBALS['wp_styles'] ?? null;
 		unset( $GLOBALS['wp_styles'] );
 	}
 
@@ -443,7 +454,7 @@ class Common_Styles_Test extends WP_UnitTestCase {
 	 * テスト後の後片付け。
 	 */
 	protected function tearDown(): void {
-		unset( $GLOBALS['wp_styles'] );
+		$GLOBALS['wp_styles'] = $this->original_wp_styles;
 		parent::tearDown();
 	}
 

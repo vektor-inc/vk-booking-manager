@@ -353,10 +353,10 @@ class Price_Tiers {
 
 			if ( is_array( $value ) ) {
 				// `[ 'count' => n ]` 形式。
-				$count = isset( $value['count'] ) && is_numeric( $value['count'] ) ? (int) max( 0.0, min( (float) $value['count'], (float) self::MAX_GUESTS_PER_TIER ) ) : 0;
+				$count = isset( $value['count'] ) && is_numeric( $value['count'] ) ? self::clamp_count( $value['count'] ) : 0;
 			} elseif ( is_numeric( $value ) ) {
 				// `index => n` 形式。
-				$count = (int) max( 0.0, min( (float) $value, (float) self::MAX_GUESTS_PER_TIER ) );
+				$count = self::clamp_count( $value );
 			} else {
 				$count = 0;
 			}
@@ -365,6 +365,23 @@ class Price_Tiers {
 		}
 
 		return $counts;
+	}
+
+	/**
+	 * 数値の人数を 0〜区分ごとの上限人数の整数に収める。
+	 *
+	 * @param int|float|string $value 数値として扱える人数。
+	 * @return int 0 以上、区分ごとの上限人数以下の人数。
+	 */
+	private static function clamp_count( $value ): int {
+		$count = (float) $value;
+
+		// PHP 8.5 から NAN の int キャストが警告になるため、キャスト前に 0 として扱う。
+		if ( is_nan( $count ) ) {
+			return 0;
+		}
+
+		return (int) max( 0.0, min( $count, (float) self::MAX_GUESTS_PER_TIER ) );
 	}
 
 	/**
