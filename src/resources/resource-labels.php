@@ -167,6 +167,80 @@ function vkbm_get_resource_tag_empty_message(): string {
 }
 
 /**
+ * サービスメニュー編集画面で使うリソース選択関連の文言を返す。
+ *
+ * PHP の初期描画と JavaScript の切り替え表示で同じ完成文を使い、宿泊では「指定」、
+ * それ以外では「指名」と表現する。
+ *
+ * @return array<string,string> リソース選択関連のローカライズ済み文言。
+ */
+function vkbm_get_resource_selection_strings(): array {
+	$resource_label = vkbm_get_resource_label_singular();
+	$is_lodging     = Industry_Presets::supports( 'lodging' );
+
+	if ( $is_lodging ) {
+		return array(
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'heading'                     => sprintf( _x( '%s selection', 'resource selection setting heading', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'checkbox'                    => sprintf( __( 'Allow customers to select a %s for this service menu.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %1$s: resource label (singular), e.g. "Room". */
+			'unchecked'                   => sprintf( __( 'When unchecked, a %1$s is assigned automatically for this service menu and customers cannot select one.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'max_capacity_default_1'      => sprintf( __( 'Maximum number of people who can share this time slot when %s is assigned automatically.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'max_capacity_default_2'      => sprintf( __( 'When a specific %s is selected, only one booking per slot is allowed.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'max_capacity_nomination_1'   => sprintf( __( 'Maximum number of guests that can be booked together in a single reservation when a %s is selected.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'max_capacity_nomination_2'   => sprintf( __( 'Once a booking is placed, that %s is fully booked for the slot and cannot be shared with another customer.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'min_capacity_nomination_1'   => sprintf( __( 'This menu allows %s selection, so each booking becomes a private booking for one group.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'multiple_guests_assignment'  => sprintf( __( 'The maximum number per booking is the time slot capacity, because each booking is assigned to a single %s.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'multiple_guests_conditions'  => sprintf( __( 'When this is enabled and the time slot capacity is 2 or more, the minimum participants (labeled "minimum guests to accept a booking" for menus that allow %s selection), price category, and private booking settings are shown.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'exclusive_minimum_condition' => sprintf( __( 'It can be chosen only when the number of guests meets this menu\'s minimum participants (labeled "minimum guests to accept a booking" for menus that allow %s selection).', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %1$s: resource label (singular), e.g. "Room". */
+			'exclusive_when_booked'       => sprintf( __( 'For menus that allow %1$s selection, this only closes the selected %1$s for the time slot, and other options remain bookable.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %1$s: resource label (singular), e.g. "Room". */
+			'exclusive_user_selectable'   => sprintf( __( 'For menus that allow %1$s selection, this is judged per selected %1$s, not for the whole time slot.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %1$s: resource label (singular), e.g. "Room". */
+			'exclusive_when_booked_night' => sprintf( __( 'Only the booked %1$s will stop accepting reservations for that time slot. Other %1$s remain bookable.', 'vk-booking-manager' ), $resource_label ),
+			/* translators: %s: resource label (singular), e.g. "Room". */
+			'exclusive_user_night'        => sprintf( __( 'This is judged per %s, not for the whole time slot.', 'vk-booking-manager' ), $resource_label ),
+		);
+	}
+
+	return array(
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'heading'                     => sprintf( _x( '%s nomination', 'resource nomination setting heading', 'vk-booking-manager' ), $resource_label ),
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'checkbox'                    => sprintf( __( 'Use %s nomination for this service menu.', 'vk-booking-manager' ), $resource_label ),
+		/* translators: %1$s: resource label (singular), e.g. "Staff". */
+		'unchecked'                   => sprintf( __( 'When unchecked, a %1$s is assigned automatically for this service menu and customers cannot choose a specific %1$s.', 'vk-booking-manager' ), $resource_label ),
+		'max_capacity_default_1'      => __( 'Maximum number of people who can share this time slot when staff auto-assignment is used.', 'vk-booking-manager' ),
+		'max_capacity_default_2'      => __( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ),
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'max_capacity_nomination_1'   => sprintf( __( 'Maximum number of guests that can be booked together in a single reservation when a %s is nominated.', 'vk-booking-manager' ), $resource_label ),
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'max_capacity_nomination_2'   => sprintf( __( 'Once a booking is placed, that %s is fully booked for the slot (private to that group) and cannot be shared with another customer.', 'vk-booking-manager' ), $resource_label ),
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'min_capacity_nomination_1'   => sprintf( __( 'This menu uses %s nomination, so each booking becomes a private booking for one group.', 'vk-booking-manager' ), $resource_label ),
+		'multiple_guests_assignment'  => __( 'The maximum number per booking is the time slot capacity, because each booking is assigned to a single staff member.', 'vk-booking-manager' ),
+		'multiple_guests_conditions'  => __( 'When this is enabled and the time slot capacity is 2 or more, the minimum participants (labeled "minimum guests to accept a booking" for menus that use staff nomination), price category, and private booking settings are shown.', 'vk-booking-manager' ),
+		'exclusive_minimum_condition' => __( 'It can be chosen only when the number of guests meets this menu\'s minimum participants (labeled "minimum guests to accept a booking" for menus that use staff nomination).', 'vk-booking-manager' ),
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'exclusive_when_booked'       => sprintf( __( 'For menus that use %1$s nomination, this only closes that booking\'s %1$s for the time slot, and other %1$s remain bookable.', 'vk-booking-manager' ), $resource_label ),
+		/* translators: %s: resource label (singular), e.g. "Staff". */
+		'exclusive_user_selectable'   => sprintf( __( 'For menus that use %1$s nomination, this is judged per %1$s, not for the whole time slot.', 'vk-booking-manager' ), $resource_label ),
+		'exclusive_when_booked_night' => '',
+		'exclusive_user_night'        => '',
+	);
+}
+
+/**
  * Get the configured menu-card label for available resources (default: Staff available).
  * メニューカードの「担当できる〇〇」に使う呼び方を返す。無料版では保存値ではなく既定値を返す。
  *

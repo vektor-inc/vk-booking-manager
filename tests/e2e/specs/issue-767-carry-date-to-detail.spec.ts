@@ -54,6 +54,32 @@ function tokyoIsoAfter( offset: number ): string {
 }
 
 /**
+ * offset 日後以降で、チェックイン日とチェックアウト日が同じ月に収まる最初の日程を返す。
+ *
+ * 宿泊の日程選択カレンダーは1か月分だけを表示し、表示月の外の日は押せない空のマスになる。
+ * 月をまたぐ日程（例: 10/31〜11/2）だとチェックアウト日が画面に出ず、
+ * 選択済みの日の数を数えるテストが実行日によって失敗するため、同じ月に収まる日程を使う。
+ *
+ * @param offset 最初に試すチェックイン日（今日から何日後か）
+ * @param nights 泊数
+ * @return チェックイン日・チェックアウト日（YYYY-MM-DD）
+ */
+function tokyoStayInOneMonth(
+	offset: number,
+	nights: number
+): { checkIn: string; checkOut: string } {
+	for ( let start = offset; start < offset + 31; start++ ) {
+		const checkIn = tokyoIsoAfter( start );
+		const checkOut = tokyoIsoAfter( start + nights );
+		// YYYY-MM が同じなら同じ月に収まる。
+		if ( checkIn.slice( 0, 7 ) === checkOut.slice( 0, 7 ) ) {
+			return { checkIn, checkOut };
+		}
+	}
+	throw new Error( '同じ月に収まる日程が見つかりませんでした' );
+}
+
+/**
  * PHP を実行し、出力が正の整数（post ID）であることを確かめて返す。
  *
  * @param php   実行する PHP（最後に ID を echo する）
@@ -277,7 +303,8 @@ test.describe
 			const detailLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ slotMenuId }"] a.vkbm-button__primary`
 			);
-			await expect( detailLink ).toBeVisible();
+			// 一覧はメニュー取得後に描画される。冷えた環境・重い環境では 5 秒の既定では足りない。
+			await expect( detailLink ).toBeVisible( { timeout: 20000 } );
 			// 絞り込み後の一覧の再描画を待つ（href に date が付くまで）。再描画前の href を読まない。
 			await expect( detailLink ).toHaveAttribute(
 				'href',
@@ -411,14 +438,21 @@ test.describe
 				calendarBox!.y + 1
 			);
 
-			// 日付を選び直すと案内は消える。表示月は引き継いだ日付の月（空きなし）のため、前の月へ戻して空きのある日を選ぶ。
+			// 日付を選び直すと案内は消える。表示月は引き継いだ日付の月（空きなし）のため、
+			// 「空きのある月」まで前の月へ戻して日付を選ぶ。
+			// シフトは当月と翌月に入っているため、実行日によらず必ず空きがあるのは翌月。
+			// 戻す回数は、引き継いだ日付の月と翌月の差から決める（描画途中の件数を見て戻す回数を決めると、
+			// 読み込み前に空と判定して翌月を通り過ぎ、空きの無い過去月まで戻ってしまう）。
+			const nextMonth = getCurrentAndNextTokyoMonths()[ 1 ];
+			const monthsBack =
+				Number( farIso.slice( 0, 4 ) ) * 12 +
+				Number( farIso.slice( 5, 7 ) ) -
+				( nextMonth.year * 12 + nextMonth.month );
+			expect( monthsBack ).toBeGreaterThan( 0 );
 			const available = page.locator(
 				'.vkbm-calendar__day--available:not(:disabled):not(.vkbm-calendar__day--muted)'
 			);
-			for ( let i = 0; i < 4; i++ ) {
-				if ( ( await available.count() ) > 0 ) {
-					break;
-				}
+			for ( let i = 0; i < monthsBack; i++ ) {
 				// 表示月の見出しの変化と、その月の calendar-meta の応答完了を待つ（固定待ちはしない）。
 				const heading = page.locator( '.vkbm-calendar__current' );
 				const before = await heading.textContent();
@@ -436,6 +470,8 @@ test.describe
 					page.locator( '.vkbm-calendar__spinner' )
 				).toHaveCount( 0 );
 			}
+			// 翌月の空き日が描画されるまで待ってから選ぶ。
+			await expect( available.first() ).toBeVisible( { timeout: 15000 } );
 			await available.first().click();
 			await expect( notice.locator( 'p' ) ).toHaveCount( 0 );
 		} );
@@ -537,8 +573,7 @@ test.describe
 		test( 'チェックイン日・チェックアウト日が詳細経由で日程選択に入力済みで開き、日程を指定しないときは未入力で開く', async ( {
 			page,
 		} ) => {
-			const checkIn = tokyoIsoAfter( 3 );
-			const checkOut = tokyoIsoAfter( 5 );
+			const { checkIn, checkOut } = tokyoStayInOneMonth( 3, 2 );
 			await page.goto( '/booking/' );
 			const inputs = page.locator(
 				'input.vkbm-plan-summary__date-input'
@@ -624,8 +659,7 @@ test.describe
 					await route.continue();
 				}
 			);
-			const checkIn = tokyoIsoAfter( 3 );
-			const checkOut = tokyoIsoAfter( 5 );
+			const { checkIn, checkOut } = tokyoStayInOneMonth( 3, 2 );
 			await page.goto(
 				`/booking/?menu_id=${ nightMenuId }&vkbm_view=detail&date=${ checkIn }&check_out_date=${ checkOut }`
 			);

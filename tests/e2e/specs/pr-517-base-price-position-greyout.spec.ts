@@ -183,25 +183,29 @@ function deleteMenu( id: string ): void {
  * @param postId 開くサービスメニューの post ID
  */
 async function gotoMenuEditor( page: Page, postId: string ) {
-	await page.goto( `/wp-admin/post.php?post=${ postId }&action=edit` );
-	await page.waitForLoadState( 'domcontentloaded' );
+	// ブロックエディタは画像・外部リソースを多く読むため、load ではなく DOM の構築までを待つ。
+	// 以降の待ちは、エディタの中身（基本料金の入力欄）が出るかどうかで行う。
+	await page.goto( `/wp-admin/post.php?post=${ postId }&action=edit`, {
+		waitUntil: 'domcontentloaded',
+	} );
 
-	// 「エディターへようこそ」モーダルが出たら閉じる。
+	// 基本料金 input が DOM に存在するまで待つ（hidden でもよい＝メタボックス内）。
+	// エディタの起動は重い環境で数十秒かかることがあるため、他の待ちより長く取る。
+	await page
+		.locator( BASE_PRICE_INPUT )
+		.waitFor( { state: 'attached', timeout: 30000 } );
+
+	// 「エディターへようこそ」モーダルが出ていたら閉じる（出なければ短く待って先へ進む）。
 	const welcomeClose = page.locator(
 		'.components-modal__frame .components-modal__header button[aria-label="閉じる"], .components-modal__frame .components-modal__header button[aria-label="Close"]'
 	);
 	try {
-		await welcomeClose.first().waitFor( { state: 'visible', timeout: 3000 } );
+		await welcomeClose.first().waitFor( { state: 'visible', timeout: 1500 } );
 		await welcomeClose.first().click();
-		await page.waitForTimeout( 200 );
+		await expect( welcomeClose.first() ).toBeHidden();
 	} catch {
 		// モーダルが出なければ何もせず進む。
 	}
-
-	// 基本料金 input が DOM に存在するまで待つ（hidden でもよい＝メタボックス内）。
-	await page
-		.locator( BASE_PRICE_INPUT )
-		.waitFor( { state: 'attached', timeout: 15000 } );
 
 	// クラシックメタボックス領域（.edit-post-layout__metaboxes）を開く。
 	await page.evaluate( () => {
@@ -217,11 +221,12 @@ async function gotoMenuEditor( page: Page, postId: string ) {
 			toggle.click();
 		}
 	} );
-	await page.waitForTimeout( 400 );
 
+	// 開いて入力欄が見える状態になるまで待つ（固定待ちはしない）。
+	await expect( page.locator( BASE_PRICE_INPUT ) ).toBeVisible( {
+		timeout: 15000,
+	} );
 	await page.locator( BASE_PRICE_INPUT ).scrollIntoViewIfNeeded();
-	await page.waitForTimeout( 300 );
-	await expect( page.locator( BASE_PRICE_INPUT ) ).toBeVisible();
 }
 
 // 基本料金入力欄がグレー表示（readonly + クラス + 説明文表示）中であることを検証する。
@@ -250,6 +255,10 @@ async function expectNotOverridden( page: Page ) {
 let originalStaffEnabled = true;
 
 test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（予約枠の定員機能ON）', () => {
+	// ブロックエディタの起動が重く、3 つ目のテストは保存を挟んで 3 回開く。
+	// 起動の待ちは条件待ちにしたうえで、重い環境でも収まるよう制限時間に余裕を持たせる。
+	test.describe.configure( { timeout: 120000 } );
+
 	let menuId = '';
 
 	test.beforeAll( () => {
@@ -314,13 +323,11 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 
 		// 区分行を追加しただけ（区分名は空）ではグレー表示にならない。
 		await page.locator( PRICE_TIER_ADD ).click();
-		await page.waitForTimeout( 200 );
 		await expectNotOverridden( page );
 
 		// 区分名を入力するとグレー表示になる。
 		const labelInput = page.locator( PRICE_TIER_LABEL ).first();
 		await labelInput.fill( '大人' );
-		await page.waitForTimeout( 200 );
 		await expectOverridden( page );
 
 		// スクリーンショット（グレー表示中）。
@@ -332,42 +339,35 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 
 		// 区分名を半角スペースだけにすると、trim 後は空扱いになりグレー表示が解除される。
 		await labelInput.fill( '   ' );
-		await page.waitForTimeout( 200 );
 		await expectNotOverridden( page );
 
 		// 区分名を再度入力し直すとグレー表示に戻る。
 		await labelInput.fill( '大人' );
-		await page.waitForTimeout( 200 );
 		await expectOverridden( page );
 
 		// 「複数人一括予約」のチェックを外す→料金区分の行が隠れ、基本料金は通常表示に戻る。
 		await page.locator( ALLOW_MULTI ).uncheck();
-		await page.waitForTimeout( 200 );
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 		await expectNotOverridden( page );
 
 		// 再度チェックを入れる→料金区分の行が復帰し、区分名（大人）が残っているため
 		// グレー表示にも戻る。
 		await page.locator( ALLOW_MULTI ).check();
-		await page.waitForTimeout( 200 );
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 		await expectOverridden( page );
 
 		// 予約枠の定員を1にする→複数人一括予約系設定が非表示になり、基本料金は通常表示に戻る。
 		await page.locator( MAX_CAPACITY ).fill( '1' );
-		await page.waitForTimeout( 200 );
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 		await expectNotOverridden( page );
 
 		// 定員を2に戻すと、区分名が残っているためグレー表示に戻る。
 		await page.locator( MAX_CAPACITY ).fill( '2' );
-		await page.waitForTimeout( 200 );
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 		await expectOverridden( page );
 
 		// 区分行を削除するとグレー表示が解除される。
 		await page.locator( PRICE_TIER_REMOVE ).first().click();
-		await page.waitForTimeout( 200 );
 		await expectNotOverridden( page );
 	} );
 
@@ -384,7 +384,6 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 			.locator( '.vkbm-price-tier-price' )
 			.first()
 			.fill( '5000' );
-		await page.waitForTimeout( 200 );
 		await expectOverridden( page );
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveValue( '9000' );
 
@@ -432,7 +431,6 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 			{ timeout: 20000 }
 		);
 		await page.locator( PRICE_TIER_REMOVE ).first().click();
-		await page.waitForTimeout( 200 );
 		await expectNotOverridden( page );
 		await page.locator( '.editor-post-publish-button__button' ).click();
 		await saveResponse2;
@@ -463,6 +461,8 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 } );
 
 test.describe( 'PR #517: デグレ確認（予約枠の定員機能OFFのサイトでも基本料金の行は表示される）', () => {
+	test.describe.configure( { timeout: 90000 } );
+
 	let menuId = '';
 
 	test.beforeAll( () => {

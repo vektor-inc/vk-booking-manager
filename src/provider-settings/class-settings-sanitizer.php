@@ -24,6 +24,34 @@ use function vkbm_sanitize_resource_menu_icon;
  */
 class Settings_Sanitizer {
 	/**
+	 * 自動匿名化で選べる保持月数を返す。
+	 *
+	 * @return int[]
+	 */
+	public static function get_booking_auto_anonymize_month_choices(): array {
+		$choices = apply_filters( 'vkbm_booking_auto_anonymize_month_choices', array( 0, 3, 6, 12, 24, 36, 60 ) );
+		return array_values(
+			array_unique(
+				array_filter(
+					array_map( 'absint', is_array( $choices ) ? $choices : array() ),
+					static function ( int $value ): bool {
+						return 0 === $value || $value > 0;
+					}
+				)
+			)
+		);
+	}
+
+	/**
+	 * 自動匿名化の保持月数を許可値へ正規化する。
+	 *
+	 * @param int $value 値。
+	 * @return int
+	 */
+	public static function normalize_booking_auto_anonymize_months( int $value ): int {
+		return in_array( $value, self::get_booking_auto_anonymize_month_choices(), true ) ? $value : 0;
+	}
+	/**
 	 * 「角丸の基本サイズ」（design_radius_md）の上限値（px）。
 	 *
 	 * この値に追従する要素のうち最も背の低い時間枠カード（.vkbm-slot-list__item）の
@@ -66,6 +94,9 @@ class Settings_Sanitizer {
 	 * @var int
 	 */
 	public const BOOKING_COMPLETE_MESSAGE_MAX_LENGTH = 1000;
+
+	/** 利用者名入力欄の見出しの最大文字数。 */
+	public const BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH = 200;
 
 	private const HOLIDAY_FREQUENCIES = array(
 		'weekly',
@@ -173,8 +204,8 @@ class Settings_Sanitizer {
 			$data['provider_service_menu_buffer_after_minutes'] = $this->sanitize_non_negative_int(
 				$input['provider_service_menu_buffer_after_minutes'] ?? ( $data['provider_service_menu_buffer_after_minutes'] ?? 0 )
 			);
-			$booking_status_mode                                = sanitize_key( (string) ( $input['provider_booking_status_mode'] ?? ( $data['provider_booking_status_mode'] ?? 'confirmed' ) ) );
-			$data['provider_booking_status_mode']               = in_array( $booking_status_mode, array( 'confirmed', 'pending' ), true ) ? $booking_status_mode : 'confirmed';
+			$booking_status_mode                                = sanitize_key( (string) ( $input['provider_booking_status_mode'] ?? ( $data['provider_booking_status_mode'] ?? Settings_Repository::BOOKING_STATUS_MODE_PENDING ) ) );
+			$data['provider_booking_status_mode']               = in_array( $booking_status_mode, Settings_Repository::BOOKING_STATUS_MODES, true ) ? $booking_status_mode : Settings_Repository::BOOKING_STATUS_MODE_PENDING;
 		$cancel_mode                                    = sanitize_key( (string) ( $input['provider_booking_cancel_mode'] ?? ( $data['provider_booking_cancel_mode'] ?? 'hours' ) ) );
 		$data['provider_booking_cancel_mode']           = in_array( $cancel_mode, array( 'hours', 'none' ), true ) ? $cancel_mode : 'hours';
 		$data['provider_booking_cancel_deadline_hours'] = $this->sanitize_non_negative_int(
@@ -185,6 +216,17 @@ class Settings_Sanitizer {
 			$input['provider_booking_complete_message_pending'] ?? ( $data['provider_booking_complete_message_pending'] ?? '' )
 		);
 		$data['provider_allow_staff_overlap_admin']        = ! empty( $input['provider_allow_staff_overlap_admin'] );
+		$attendee_name_mode                                = sanitize_key( (string) ( $input['booking_attendee_name_mode'] ?? ( $data['booking_attendee_name_mode'] ?? 'disabled' ) ) );
+		$data['booking_attendee_name_mode']                = in_array( $attendee_name_mode, array( 'disabled', 'optional', 'required' ), true ) ? $attendee_name_mode : 'disabled';
+		$attendee_name_label                               = sanitize_text_field( (string) ( $input['booking_attendee_name_label'] ?? ( $data['booking_attendee_name_label'] ?? '' ) ) );
+		$data['booking_attendee_name_label']               = mb_strlen( $attendee_name_label ) > self::BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH ? mb_substr( $attendee_name_label, 0, self::BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH ) : $attendee_name_label;
+		$data['attendee_roster_enabled']                   = ! empty( $input['attendee_roster_enabled'] );
+		$data['attendee_roster_label']                     = sanitize_text_field( (string) ( $input['attendee_roster_label'] ?? '' ) );
+		$data['attendee_roster_show_self']                 = ! empty( $input['attendee_roster_show_self'] );
+		$data['attendee_roster_kana_enabled']              = ! empty( $input['attendee_roster_kana_enabled'] );
+		$data['attendee_roster_kana_label']                = sanitize_text_field( (string) ( $input['attendee_roster_kana_label'] ?? '' ) );
+		$data['attendee_number_enabled']                   = ! empty( $input['attendee_number_enabled'] );
+		$data['attendee_number_label']                     = sanitize_text_field( (string) ( $input['attendee_number_label'] ?? '' ) );
 			$data['provider_website_url']                  = $this->sanitize_url( $data['provider_website_url'] );
 			$data['reservation_page_url']                  = $this->sanitize_url( $data['reservation_page_url'] );
 		// #427: 「絞り込み検索」チェックボックス。未送信＝チェック無しとして扱う（他のチェックボックス項目と同様）。
@@ -237,10 +279,18 @@ class Settings_Sanitizer {
 		$data['shift_alert_months'] = min( 4, max( 1, $shift_alert_months ) );
 		// シフトの自動登録月数。許可値（0〜3）の判定は Shift_Editor::normalize_auto_register_months() に
 		// 一本化している（Setup_Notices・Shift_Editor 自身の判定と基準をそろえるため）。
-		$shift_auto_register_months              = $this->sanitize_non_negative_int(
+		$shift_auto_register_months         = $this->sanitize_non_negative_int(
 			$input['shift_auto_register_months'] ?? ( $data['shift_auto_register_months'] ?? 0 )
 		);
-		$data['shift_auto_register_months']      = Shift_Editor::normalize_auto_register_months( $shift_auto_register_months );
+		$data['shift_auto_register_months'] = Shift_Editor::normalize_auto_register_months( $shift_auto_register_months );
+		$auto_anonymize_raw                 = $input['booking_auto_anonymize_months'] ?? ( $data['booking_auto_anonymize_months'] ?? 0 );
+		$auto_anonymize                     = is_scalar( $auto_anonymize_raw ) && preg_match( '/^\d+$/', (string) $auto_anonymize_raw ) ? (int) $auto_anonymize_raw : -1;
+		if ( ! in_array( $auto_anonymize, self::get_booking_auto_anonymize_month_choices(), true ) ) {
+			$this->errors[]                                      = __( 'Please select a valid automatic anonymization period.', 'vk-booking-manager' );
+			$this->field_errors['booking_auto_anonymize_months'] = __( 'Please select a valid period.', 'vk-booking-manager' );
+			$auto_anonymize                                      = (int) ( $defaults['booking_auto_anonymize_months'] ?? 0 );
+		}
+		$data['booking_auto_anonymize_months']   = \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ? 0 : $auto_anonymize;
 		$data['booking_reminder_hours']          = $this->sanitize_reminder_hours(
 			$input['booking_reminder_hours'] ?? ( $data['booking_reminder_hours'] ?? array() )
 		);
@@ -258,6 +308,10 @@ class Settings_Sanitizer {
 		);
 		$data['design_footer_text_color']       = $this->sanitize_color(
 			$input['design_footer_text_color'] ?? ( $data['design_footer_text_color'] ?? '' )
+		);
+		// #864: 見出しをフッターと同じ色にするか。フォームはチェックボックスの前に値 0 の hidden を置き、オフでも '0' を送る。
+		$data['design_menu_heading_use_footer_color'] = ! empty(
+			$input['design_menu_heading_use_footer_color'] ?? ( $data['design_menu_heading_use_footer_color'] ?? false )
 		);
 		// 未入力・0 は「指定なし」（現状の表示幅のまま）として空文字で保存する。
 		$header_logo_width_raw            = $input['design_header_logo_width'] ?? ( $data['design_header_logo_width'] ?? '' );

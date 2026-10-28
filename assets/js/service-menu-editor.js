@@ -218,7 +218,11 @@
 	} );
 
 	// 区分名の入力に合わせて即時に判定し直す（デリゲートで動的追加した行にも効かせる）。
-	$( document ).on( 'input', '.vkbm-price-tier-label', syncBasePriceOverride );
+	$( document ).on(
+		'input',
+		'.vkbm-price-tier-label',
+		syncBasePriceOverride
+	);
 
 	// 基本料金入力欄のグレーアウトに使う aria-describedby の id（PHP側の render_base_price_field() と一致させる）。
 	const BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID =
@@ -235,6 +239,11 @@
 		);
 	}
 
+	// 宿泊のサイトで、予約の単位が「泊」を選択中か。
+	function isNightPlanSelected() {
+		return supportsLodging && isNightUnitSelected();
+	}
+
 	// 泊単位で、料金の単位が「1室1泊あたり」を選択中か。
 	function isPerRoomNightSelected() {
 		return (
@@ -245,6 +254,16 @@
 		);
 	}
 
+	// 1室1泊あたりで、規定人数を超えた分の追加料金のチェックが入っているか（#934）。
+	function isExtraGuestFeeSelected() {
+		return (
+			isPerRoomNightSelected() &&
+			$( '#vkbm_service_menu_night_extra_guest_enabled' ).prop(
+				'checked'
+			)
+		);
+	}
+
 	/**
 	 * 区分名が「有効」（保存対象になる）かどうかを、保存側の判定基準に合わせて判定する。
 	 *
@@ -252,6 +271,8 @@
 	 * `trim()` し、空文字なら保存対象から除外する（#514レビュー対応・安藤 LOW）。
 	 * JS ではこれと完全には同じ処理ができないため、判定結果に効く2点だけを近似で合わせる。
 	 * 完全再現できない理由は各手順のコメントを参照。
+	 *
+	 * @param {unknown} rawValue 判定する区分名。
 	 */
 	function isPriceTierLabelActive( rawValue ) {
 		// 1) タグを除去する。sanitize_text_field() は HTML タグを取り除くため、
@@ -335,12 +356,14 @@
 		}
 	}
 
-	// 「このメニューで指名を使う」チェックボックスが指名を使う状態かどうかを返す。
-	// チェックボックス自体が画面に無い（サイト全体の指名機能OFF・無料版など）場合は
-	// 判定材料が無いため false（指名を使わない扱い）を返し、複数人一括予約系の表示制御に
-	// 影響させない（#412 B-4）。
-	function isMenuNominationInUse() {
+	// 人数の下限・予約枠の定員の欄の文言を「指名を使う」扱いにするかを返す（#935）。
+	// 受付処理（Availability_Service::get_menu_nomination_min_guests()）と同じ条件で、1室1泊あたりは対象外。
+	function isMinGuestsCopyApplied() {
+		if ( isPerRoomNightSelected() ) {
+			return false;
+		}
 		const $useNomination = $( '#vkbm_service_menu_use_nomination' );
+		// 泊単位では指名のチェックボックスを隠していても、保存値を保持した input が DOM に残っているため、その値を見る。
 		return $useNomination.length > 0 && $useNomination.prop( 'checked' );
 	}
 
@@ -370,6 +393,35 @@
 		syncMultipleGuestsDependentFields();
 	}
 
+	// 宿泊の泊単位プランではメニュー単位のリソース指定欄を隠す。input は DOM に残し、保存値を保持する。
+	function syncResourceSelectionField() {
+		if ( ! supportsLodging ) {
+			return;
+		}
+		$( '#vkbm-use-nomination-field' ).prop(
+			'hidden',
+			isNightUnitSelected()
+		);
+	}
+
+	// 泊単位では指定欄を使わないため、貸し切り欄の説明から指定を前提とする条件節を外す。
+	function syncResourceSelectionCopy() {
+		if ( ! supportsLodging ) {
+			return;
+		}
+		const isNight = isNightUnitSelected();
+		$( '#vkbm-exclusive-when-booked-resource-description' ).text(
+			isNight
+				? i18n.exclusiveWhenBookedNight
+				: i18n.exclusiveWhenBookedSlot
+		);
+		$( '#vkbm-exclusive-user-selectable-resource-description' ).text(
+			isNight
+				? i18n.exclusiveUserSelectableNight
+				: i18n.exclusiveUserSelectableSlot
+		);
+	}
+
 	// 最少催行人数／最低申し込み人数欄のラベル・説明文を「このメニューで指名を使う」チェックの
 	// 状態に合わせて即時切り替える（#393）。PHP 初期描画（class-service-menu-editor.php）と
 	// 同じ文言を wp_localize_script 経由の i18n オブジェクトから取得して差し替える。
@@ -379,7 +431,8 @@
 		if ( $label.length === 0 || $description.length === 0 ) {
 			return;
 		}
-		const isNomination = isMenuNominationInUse();
+		const isNomination = isMinGuestsCopyApplied();
+		const isNightPlan = isNightPlanSelected();
 
 		const labelText = isNomination
 			? i18n.minCapacityNominationLabel
@@ -390,10 +443,14 @@
 
 		const lines = isNomination
 			? [
-					i18n.minCapacityNominationDescription1,
+					isNightPlan
+						? i18n.minCapacityNightDescription1
+						: i18n.minCapacityNominationDescription1,
 					i18n.minCapacityNominationDescription2,
 					i18n.minCapacityNominationDescription3,
-					i18n.minCapacityNominationDescription4,
+					isNightPlan
+						? i18n.minCapacityDefaultDescription3
+						: i18n.minCapacityNominationDescription4,
 			  ]
 			: [
 					i18n.minCapacityDefaultDescription1,
@@ -448,9 +505,10 @@
 		const showMultiGuestDependentFields =
 			allowMultipleGuests && meetsCapacity;
 		const hiddenMultiGuestDependentFields = ! showMultiGuestDependentFields;
-		// 1室1泊あたりのプランでは料金区分を使わない（#572）。
+		// 1室1泊あたりのプランは、規定人数を超えた分の追加料金を使うときだけ料金区分を使う（#572、#934）。
 		const hiddenPriceTiers =
-			hiddenMultiGuestDependentFields || isPerRoomNightSelected();
+			hiddenMultiGuestDependentFields ||
+			( isPerRoomNightSelected() && ! isExtraGuestFeeSelected() );
 		$( '#vkbm-min-capacity-field' ).prop(
 			'hidden',
 			hiddenMultiGuestDependentFields || isPerRoomNightSelected()
@@ -578,6 +636,8 @@
 	// 単独の syncMultipleGuestsDependentFields 呼び出しは不要（チェックボックス自体が無い
 	// 画面では syncNominationDependentFields は何もしないため、念のため両方呼んでおく）。
 	$( syncNominationDependentFields );
+	$( syncResourceSelectionField );
+	$( syncResourceSelectionCopy );
 	$( syncMultipleGuestsDependentFields );
 	$( syncExclusiveFeeFields );
 	$( syncExclusiveWhenBookedExclusivity );
@@ -597,8 +657,11 @@
 
 	// 曜日指定行の連番インデックス（同一送信内で name のキー衝突を避けるためだけに使う。
 	// 保存側で array_values により振り直されるため、連続でなくてよい）。
-	let weekdayRowIndex = $( '#vkbm-reservation-custom-weekday-rows' ).children().length;
-	let dateRowIndex = $( '#vkbm-reservation-custom-date-rows' ).children().length;
+	let weekdayRowIndex = $(
+		'#vkbm-reservation-custom-weekday-rows'
+	).children().length;
+	let dateRowIndex = $( '#vkbm-reservation-custom-date-rows' ).children()
+		.length;
 
 	// 今日の日付を YYYY-MM-DD（ローカル）で返す。日付入力の min（過去日抑止）に使う。
 	function todayStr() {
@@ -610,7 +673,10 @@
 
 	// 行内の最初の操作可能要素へフォーカスを移す（キーボード/SR 利用者の迷子防止）。
 	function focusFirstField( $row ) {
-		const $field = $row.find( 'select, input' ).filter( ':visible' ).first();
+		const $field = $row
+			.find( 'select, input' )
+			.filter( ':visible' )
+			.first();
 		if ( $field.length ) {
 			$field.trigger( 'focus' );
 		}
@@ -634,7 +700,9 @@
 	// 終了日は開始日以降（開始日未入力時は今日以降）に制限する。
 	function syncDateRowConstraints( $row ) {
 		const today = todayStr();
-		const $single = $row.find( '.vkbm-reservation-custom-date-single-input' );
+		const $single = $row.find(
+			'.vkbm-reservation-custom-date-single-input'
+		);
 		const $start = $row.find( '.vkbm-reservation-custom-date-start' );
 		const $end = $row.find( '.vkbm-reservation-custom-date-end' );
 
@@ -645,7 +713,7 @@
 			$start.attr( 'min', today );
 		}
 		if ( $end.length ) {
-			$end.attr( 'min', ( $start.val() || today ) );
+			$end.attr( 'min', $start.val() || today );
 		}
 	}
 
@@ -745,9 +813,13 @@
 		}
 	);
 
-	$( document ).on( 'click', '#vkbm-reservation-custom-date-add', function () {
-		addDateRow( true );
-	} );
+	$( document ).on(
+		'click',
+		'#vkbm-reservation-custom-date-add',
+		function () {
+			addDateRow( true );
+		}
+	);
 
 	$( document ).on(
 		'click',
@@ -896,13 +968,17 @@
 			lines = [
 				i18n.maxCapacityPerRoomDescription1,
 				i18n.maxCapacityPerRoomDescription2,
-				i18n.maxCapacityPerRoomDescription3,
+				isExtraGuestFeeSelected()
+					? i18n.maxCapacityExtraGuestNote
+					: i18n.maxCapacityPerRoomDescription3,
 			];
-		} else if ( isMenuNominationInUse() ) {
-			lines = [
-				i18n.maxCapacityNominationDescription1,
-				i18n.maxCapacityNominationDescription2,
-			];
+		} else if ( isMinGuestsCopyApplied() ) {
+			lines = isNightPlanSelected()
+				? [ i18n.maxCapacityNightDescription1 ]
+				: [
+						i18n.maxCapacityNominationDescription1,
+						i18n.maxCapacityNominationDescription2,
+				  ];
 		}
 		lines.push( i18n.maxCapacityDefaultNote );
 
@@ -936,9 +1012,31 @@
 			);
 		}
 
+		// 1室1泊あたりで追加料金を使うときだけ、追加料金のチェックと基本料金に含まれる人数の欄を出す（#934）。
+		const isExtraGuestFee = isExtraGuestFeeSelected();
+		$( '#vkbm-night-extra-guest-fields' ).prop( 'hidden', ! isPerRoom );
+		$( '#vkbm-night-included-guests-field' ).prop(
+			'hidden',
+			! isExtraGuestFee
+		);
+		$( '.vkbm-price-tiers-description-default' ).prop(
+			'hidden',
+			isExtraGuestFee
+		);
+		$( '.vkbm-price-tiers-description-extra-guest' ).prop(
+			'hidden',
+			! isExtraGuestFee
+		);
+
 		const $head = $( '.vkbm-price-tier-head-price' );
 		if ( $head.length > 0 && i18n.priceHeadDefault ) {
-			$head.text( isNight ? i18n.priceHeadNight : i18n.priceHeadDefault );
+			let headText = isNight
+				? i18n.priceHeadNight
+				: i18n.priceHeadDefault;
+			if ( isExtraGuestFee && i18n.priceHeadExtraGuest ) {
+				headText = i18n.priceHeadExtraGuest;
+			}
+			$head.text( headText );
 		}
 
 		const $note = $( '#vkbm-multiple-guests-price-note' );
@@ -956,11 +1054,16 @@
 	$( document ).on(
 		'change',
 		'input[name="vkbm_service_menu[booking_unit]"]',
-		syncBookingUnitFields
+		function () {
+			syncBookingUnitFields();
+			syncResourceSelectionField();
+			syncResourceSelectionCopy();
+			syncMultipleGuestsDependentFields();
+		}
 	);
 	$( document ).on(
 		'change',
-		'input[name="vkbm_service_menu[night_price_unit]"]',
+		'input[name="vkbm_service_menu[night_price_unit]"], #vkbm_service_menu_night_extra_guest_enabled',
 		syncNightPriceUnitFields
 	);
 	$( syncBookingUnitFields );

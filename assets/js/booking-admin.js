@@ -438,8 +438,39 @@
 							title: addButton.textContent || 'Add',
 							button: { text: addButton.textContent || 'Add' },
 							library: { type: 'image' },
-							uploader: { params: { vkbm_booking_upload: '1' } },
 							multiple: true,
+						} );
+
+						// MediaFrame は uploader オプションを真偽値としてしか見ず、渡した params は捨てられる。
+						// そのため、フレームが準備できた時点で実際の送信パラメーターに目印を足す。
+						// PHP 側はこの目印で予約画面からのアップロードかを判定する（issue #871）。
+						// MediaFrame ignores uploader.params, so add the flag to the real upload params on uploader:ready.
+						frame.on( 'uploader:ready', function () {
+							if (
+								frame.uploader &&
+								frame.uploader.uploader &&
+								typeof frame.uploader.uploader.param ===
+									'function'
+							) {
+								frame.uploader.uploader.param(
+									'vkbm_booking_upload',
+									'1'
+								);
+
+								// 予約の編集画面の投稿ID（既存の予約・新規作成の自動下書きの両方）を、アップロード先として送る。
+								// Send the booking post ID (existing booking or auto-draft) as the upload target.
+								const postIdInput =
+									document.getElementById( 'post_ID' );
+								const postId = postIdInput
+									? parseInt( postIdInput.value, 10 )
+									: 0;
+								if ( postId > 0 ) {
+									frame.uploader.uploader.param(
+										'post_id',
+										String( postId )
+									);
+								}
+							}
 						} );
 
 						frame.on( 'select', function () {

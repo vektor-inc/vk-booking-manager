@@ -18,6 +18,8 @@ use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\PostTypes\Shift_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
 use function current_datetime;
@@ -167,6 +169,60 @@ class Get_Unavailability_Reason_Test extends WP_UnitTestCase {
 			}
 
 			Staff_Editor::clear_nomination_enabled_cache();
+		}
+	}
+
+	/**
+	 * 全日休業の管理者向け案内を宿泊と宿泊以外で切り替えることを検証する。
+	 */
+	public function test_get_unavailability_reason_resource_guidance(): void {
+		$original_settings = get_option( Settings_Repository::OPTION_KEY, false );
+		$now               = current_datetime();
+		$target            = $now->modify( '+2 months' );
+		$year              = (int) $target->format( 'Y' );
+		$month             = (int) $target->format( 'n' );
+		$defaults          = ( new Settings_Repository() )->get_default_settings();
+		/* translators: %s: resource label (singular). */
+		$lodging_expected = __( 'Check the days on sale for each %s.', 'vk-booking-manager' );
+		$cases            = array(
+			array(
+				'test_condition_name' => '宿泊 => 各リソースの販売日を確認する案内になる',
+				'preset'              => 'lodging',
+				'expected'            => Pro_Upsell::is_free_edition() ? __( 'Check the shift settings in staff management.', 'vk-booking-manager' ) : $lodging_expected,
+			),
+			array(
+				'test_condition_name' => 'カスタム => main と同じスタッフ管理の案内になる',
+				'preset'              => 'custom',
+				'expected'            => __( 'Check the shift settings in staff management.', 'vk-booking-manager' ),
+			),
+		);
+
+		try {
+			foreach ( $cases as $case ) {
+				$this->trash_all_resources();
+				update_option( Settings_Repository::OPTION_KEY, array_merge( $defaults, array( 'industry_preset' => $case['preset'] ) ) );
+				Industry_Presets::clear_cache();
+				list( $menu_id ) = $this->build_scenario( 'all_days_closed', $year, $month );
+				$reason          = ( new Availability_Service() )->get_unavailability_reason(
+					array(
+						'menu_id'  => $menu_id,
+						'year'     => $year,
+						'month'    => $month,
+						'timezone' => 'Asia/Tokyo',
+					)
+				);
+
+				$this->assertIsArray( $reason, $case['test_condition_name'] );
+				$expected = sprintf( $case['expected'], vkbm_get_resource_label_singular() );
+				$this->assertStringContainsString( $expected, $reason['message'], $case['test_condition_name'] );
+			}
+		} finally {
+			if ( false === $original_settings ) {
+				delete_option( Settings_Repository::OPTION_KEY );
+			} else {
+				update_option( Settings_Repository::OPTION_KEY, $original_settings );
+			}
+			Industry_Presets::clear_cache();
 		}
 	}
 

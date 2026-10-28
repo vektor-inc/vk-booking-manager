@@ -472,4 +472,61 @@ class Night_Strategy_Test extends WP_UnitTestCase {
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
 		}
 	}
+
+	/**
+	 * get_calendar_availability: 月内の1泊とチェックアウト候補をまとめて判定する。
+	 */
+	public function test_get_calendar_availability(): void {
+		$this->create_shift( 101, '2098-10', $this->month_days( '2098-10', 'open', array( 13 => 'unavailable' ) ) );
+		$this->create_booking( 101, '2098-10-11 15:00:00', '2098-10-12 10:00:00' );
+
+		$strategy = new Night_Strategy();
+		$monthly  = $strategy->get_calendar_availability( array( 101 ), '2098-10-10', '2098-10-13', '15:00', '10:00' );
+		$this->assertSame(
+			array(
+				'2098-10-10' => array(
+					'available' => true,
+					'reason'    => '',
+				),
+				'2098-10-11' => array(
+					'available' => false,
+					'reason'    => 'fully_booked',
+				),
+				'2098-10-12' => array(
+					'available' => true,
+					'reason'    => '',
+				),
+				'2098-10-13' => array(
+					'available' => false,
+					'reason'    => 'unavailable_date',
+				),
+			),
+			$monthly,
+			'月内の1泊ごとに満室と販売停止を区別する'
+		);
+
+		$checkout_candidates = $strategy->get_calendar_availability( array( 101 ), '2098-10-11', '2098-10-14', '15:00', '10:00', '2098-10-10' );
+		$this->assertSame(
+			array(
+				'2098-10-11' => array(
+					'available' => true,
+					'reason'    => '',
+				),
+				'2098-10-12' => array(
+					'available' => false,
+					'reason'    => 'fully_booked',
+				),
+				'2098-10-13' => array(
+					'available' => false,
+					'reason'    => 'fully_booked',
+				),
+				'2098-10-14' => array(
+					'available' => false,
+					'reason'    => 'unavailable_date',
+				),
+			),
+			$checkout_candidates,
+			'最初の満室日まではチェックアウト候補になり、それより後は滞在全体で空室なしになる'
+		);
+	}
 }

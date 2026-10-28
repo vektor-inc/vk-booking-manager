@@ -2,7 +2,7 @@ import { __, _n, sprintf } from '@wordpress/i18n';
 import { useEffect, useId, useRef, useState } from '@wordpress/element';
 import { decodeEntities } from '@wordpress/html-entities';
 import { PricingRowLabel } from '../components/pricing-row-label';
-import { formatStayDate } from '../lodging/stay-dates';
+import { formatReservationDate } from '../date-format';
 import {
 	applyCheckInChange,
 	applyCheckOutChange,
@@ -168,7 +168,9 @@ const DateFilterField = ( { value, min, onChange, locale } ) => {
 				className="vkbm-plan-summary__date-selected"
 				aria-live="polite"
 			>
-				{ value && <span>{ formatStayDate( value, locale ) }</span> }
+				{ value && (
+					<span>{ formatReservationDate( value, locale ) }</span>
+				) }
 				{ ! value && cleared && (
 					<span>
 						{ __(
@@ -472,8 +474,8 @@ const StayFilterField = ( {
 								'Check-in %1$s - Check-out %2$s (%3$s)',
 								'vk-booking-manager'
 							),
-							formatStayDate( checkIn, locale ),
-							formatStayDate( checkOut, locale ),
+							formatReservationDate( checkIn, locale ),
+							formatReservationDate( checkOut, locale ),
 							sprintf(
 								/* translators: %d: number of nights. */
 								_n(

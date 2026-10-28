@@ -1,10 +1,10 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
+import { formatReservationDate } from '../date-format';
 import {
 	addDays,
 	addMonths,
 	buildMonthWeeks,
-	formatStayDate,
 	formatStayMonth,
 	getRangePosition,
 	getWeekday,
@@ -23,19 +23,52 @@ const WEEKDAYS = [
 /**
  * 画面の読み上げ用に、日付のボタンの状態を説明する文を作る。
  *
- * @param {string}  position  選択範囲での位置（start / end / between / 空文字）。
- * @param {boolean} isPastDay 過去の日付か。
+ * @param {string}  position            選択範囲での位置（start / end / between / 空文字）。
+ * @param {boolean} isPastDay           過去の日付か。
+ * @param {string}  unavailableReason   空きなしの理由。
+ * @param {boolean} isCheckoutCandidate チェックアウト日に選べるか。
+ * @param {boolean} isStayBlocked       途中に空きなし日を含むか。
+ * @param {boolean} isBeyondMaxNights   最大泊数を超えるか。
  * @return {string} 状態の説明。説明が要らなければ空文字。
  */
-const describeDayState = ( position, isPastDay ) => {
+const describeDayState = (
+	position,
+	isPastDay,
+	unavailableReason = '',
+	isCheckoutCandidate = false,
+	isStayBlocked = false,
+	isBeyondMaxNights = false
+) => {
 	if ( isPastDay ) {
 		return __( 'Not selectable (past date)', 'vk-booking-manager' );
 	}
+	if ( isCheckoutCandidate ) {
+		return __( 'Available as check-out date', 'vk-booking-manager' );
+	}
+	if ( isBeyondMaxNights ) {
+		return __(
+			'Not selectable (exceeds the maximum number of nights)',
+			'vk-booking-manager'
+		);
+	}
+	if ( isStayBlocked ) {
+		return __(
+			'Not selectable (the stay includes an unavailable night)',
+			'vk-booking-manager'
+		);
+	}
+	if ( position === 'start' ) {
+		return __( 'Check-in date', 'vk-booking-manager' );
+	}
+	if ( position === 'end' ) {
+		return __( 'Check-out date', 'vk-booking-manager' );
+	}
+	if ( unavailableReason ) {
+		return unavailableReason === 'fully_booked'
+			? __( 'Not selectable (fully booked)', 'vk-booking-manager' )
+			: __( 'Not selectable (unavailable date)', 'vk-booking-manager' );
+	}
 	switch ( position ) {
-		case 'start':
-			return __( 'Check-in date', 'vk-booking-manager' );
-		case 'end':
-			return __( 'Check-out date', 'vk-booking-manager' );
 		case 'between':
 			return __( 'Included in your stay', 'vk-booking-manager' );
 		default:
@@ -51,15 +84,20 @@ const describeDayState = ( position, isPastDay ) => {
  * PageUp / PageDown で前後の月へ動く。
  *
  * @param {Object}                              props
- * @param {number}                              props.year           表示する年。
- * @param {number}                              props.month          表示する月（1〜12）。
- * @param {{checkIn: string, checkOut: string}} props.range          今の選択。
- * @param {string}                              props.todayIso       今日の日付（これより前は選べない）。
- * @param {Function}                            props.onSelectDate   日付を押したときに押した日を渡して呼ぶ。
- * @param {Function}                            props.onMonthChange  表示月を動かすときに月数を渡して呼ぶ。
- * @param {boolean}                             props.isPrevDisabled 前の月へ動かせないとき true（aria-disabled にする）。
- * @param {string}                              props.guideId        ガイド文の要素 id（aria-describedby 用）。
- * @param {string}                              props.locale         WordPress のロケール。
+ * @param {number}                              props.year                 表示する年。
+ * @param {number}                              props.month                表示する月（1〜12）。
+ * @param {{checkIn: string, checkOut: string}} props.range                今の選択。
+ * @param {string}                              props.todayIso             今日の日付（これより前は選べない）。
+ * @param {Function}                            props.onSelectDate         日付を押したときに押した日を渡して呼ぶ。
+ * @param {Function}                            props.onUnavailableDate    選べない日を押したときの処理。
+ * @param {Function}                            props.onMonthChange        表示月を動かすときに月数を渡して呼ぶ。
+ * @param {boolean}                             props.isPrevDisabled       前の月へ動かせないとき true（aria-disabled にする）。
+ * @param {boolean}                             props.isNextDisabled       次の月へ動かせないとき true（aria-disabled にする）。
+ * @param {string}                              props.guideId              ガイド文の要素 id（aria-describedby 用）。
+ * @param {string}                              props.locale               WordPress のロケール。
+ * @param {{status:string, days:Array}}         props.availability         空き状況。
+ * @param {{status:string, days:Array}}         props.checkoutAvailability チェックアウト候補の空き状況。
+ * @param {number}                              props.maxNights            最大泊数。
  * @return {JSX.Element} カレンダー。
  */
 export const LodgingRangeCalendar = ( {
@@ -68,10 +106,15 @@ export const LodgingRangeCalendar = ( {
 	range,
 	todayIso,
 	onSelectDate,
+	onUnavailableDate,
 	onMonthChange,
 	guideId,
 	locale,
 	isPrevDisabled = false,
+	isNextDisabled = false,
+	availability = { status: 'loading', days: [] },
+	checkoutAvailability = { status: 'idle', days: [] },
+	maxNights = 30,
 } ) => {
 	const weeks = useMemo(
 		() => buildMonthWeeks( year, month ),
@@ -81,7 +124,18 @@ export const LodgingRangeCalendar = ( {
 		() => `${ year }-${ String( month ).padStart( 2, '0' ) }-`,
 		[ year, month ]
 	);
-
+	const availabilityByDate = useMemo(
+		() =>
+			Object.fromEntries(
+				availability.days.map( ( day ) => [ day.date, day ] )
+			),
+		[ availability.days ]
+	);
+	const firstBlockedCheckout =
+		range.checkIn && ! range.checkOut
+			? checkoutAvailability.days.find( ( day ) => ! day.available )
+					?.date || ''
+			: '';
 	// 今フォーカスできる日（roving tabindex）。月の外に出ていたら、その月の中の日へ寄せる。
 	const [ focusIso, setFocusIso ] = useState( '' );
 	const buttonRefs = useRef( {} );
@@ -169,11 +223,20 @@ export const LodgingRangeCalendar = ( {
 				</button>
 				<div className="vkbm-calendar__current">
 					{ formatStayMonth( year, month, locale ) }
+					{ availability.status === 'loading' && (
+						<span
+							className="vkbm-stay-calendar__loading"
+							aria-live="polite"
+						>
+							{ __( 'Loading…', 'vk-booking-manager' ) }
+						</span>
+					) }
 				</div>
 				<button
 					type="button"
 					className="vkbm-calendar__nav"
 					onClick={ () => onMonthChange( 1 ) }
+					aria-disabled={ isNextDisabled }
 					aria-label={ __( 'next month', 'vk-booking-manager' ) }
 				>
 					›
@@ -207,11 +270,56 @@ export const LodgingRangeCalendar = ( {
 
 							const position = getRangePosition( range, day.iso );
 							const isPastDay = day.iso < todayIso;
+							const dayAvailability =
+								availabilityByDate[ day.iso ];
+							const isUnavailable =
+								availability.status !== 'error' &&
+								dayAvailability?.available === false;
+							const isSelectingCheckout = Boolean(
+								range.checkIn && ! range.checkOut
+							);
+							const isStayBlocked = Boolean(
+								isSelectingCheckout &&
+									firstBlockedCheckout &&
+									day.iso >= firstBlockedCheckout
+							);
+							const isBeyondMaxNights = Boolean(
+								isSelectingCheckout &&
+									day.iso >
+										addDays( range.checkIn, maxNights )
+							);
+							const isAfterCheckIn = Boolean(
+								isSelectingCheckout && day.iso > range.checkIn
+							);
+							const isDisabled =
+								isPastDay ||
+								( isAfterCheckIn
+									? isStayBlocked || isBeyondMaxNights
+									: isUnavailable );
+							const isCheckoutCandidate = Boolean(
+								isAfterCheckIn &&
+									checkoutAvailability.status === 'done' &&
+									! isStayBlocked &&
+									! isBeyondMaxNights
+							);
+							const shouldShowUnavailableMark = Boolean(
+								isUnavailable &&
+									! (
+										isAfterCheckIn &&
+										( isStayBlocked || isBeyondMaxNights )
+									)
+							);
 							const isEdge =
 								position === 'start' || position === 'end';
 							const stateLabel = describeDayState(
 								position,
-								isPastDay
+								isPastDay,
+								isUnavailable && ! isCheckoutCandidate
+									? dayAvailability?.reason
+									: '',
+								isCheckoutCandidate,
+								isStayBlocked,
+								isBeyondMaxNights
 							);
 
 							return (
@@ -226,6 +334,9 @@ export const LodgingRangeCalendar = ( {
 										position &&
 											`vkbm-calendar__day--range-${ position }`,
 										isPastDay && 'vkbm-calendar__day--past',
+										isDisabled &&
+											! isPastDay &&
+											'vkbm-calendar__day--unavailable',
 									]
 										.filter( Boolean )
 										.join( ' ' ) }
@@ -238,23 +349,28 @@ export const LodgingRangeCalendar = ( {
 														'%1$s, %2$s',
 														'vk-booking-manager'
 													),
-													formatStayDate(
+													formatReservationDate(
 														day.iso,
 														locale
 													),
 													stateLabel
 											  )
-											: formatStayDate( day.iso, locale )
+											: formatReservationDate(
+													day.iso,
+													locale
+											  )
 									}
 									aria-pressed={ isEdge }
-									aria-disabled={ isPastDay }
+									aria-disabled={ isDisabled }
 									aria-describedby={ guideId }
 									onFocus={ () => setFocusIso( day.iso ) }
 									onKeyDown={ ( event ) =>
 										handleKeyDown( event, day.iso )
 									}
 									onClick={ () => {
-										if ( ! isPastDay ) {
+										if ( isDisabled ) {
+											onUnavailableDate( day.iso );
+										} else {
 											onSelectDate( day.iso );
 										}
 									} }
@@ -262,16 +378,22 @@ export const LodgingRangeCalendar = ( {
 									<span className="vkbm-calendar__day-label">
 										{ day.label }
 									</span>
-									{ isEdge && (
-										<span
-											className="vkbm-calendar__day-badge"
-											aria-hidden="true"
-										>
-											{ position === 'start'
+									<span
+										className={
+											isEdge
+												? 'vkbm-calendar__day-badge'
+												: 'vkbm-calendar__day-unavailable-mark'
+										}
+										aria-hidden="true"
+									>
+										{ isEdge
+											? position === 'start'
 												? 'IN'
-												: 'OUT' }
-										</span>
-									) }
+												: 'OUT'
+											: shouldShowUnavailableMark
+											? '×'
+											: '' }
+									</span>
 								</button>
 							);
 						} ) }

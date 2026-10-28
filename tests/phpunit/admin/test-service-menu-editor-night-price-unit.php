@@ -70,11 +70,12 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 業種プリセットを設定する（予約枠の定員機能は ON）。
+	 * 業種プリセットと予約枠の定員機能を設定する。
 	 *
-	 * @param string $preset         保存する業種プリセットのキー。
+	 * @param string $preset                保存する業種プリセットのキー。
+	 * @param bool   $slot_capacity_enabled 予約枠の定員機能を有効にするか。
 	 */
-	private function set_site( string $preset ): void {
+	private function set_site( string $preset, bool $slot_capacity_enabled = true ): void {
 		Industry_Presets::clear_cache();
 		update_option(
 			Settings_Repository::OPTION_KEY,
@@ -82,7 +83,7 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 				( new Settings_Repository() )->get_default_settings(),
 				array(
 					'industry_preset'       => $preset,
-					'slot_capacity_enabled' => true,
+					'slot_capacity_enabled' => $slot_capacity_enabled,
 				)
 			)
 		);
@@ -431,10 +432,10 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
-				'test_condition_name' => '宿泊以外のサイト（custom）: 料金の単位・単位表記を出さず、料金区分・貸切指定は従来どおり表示',
+				'test_condition_name' => '宿泊以外のサイト（custom）・泊の保存値あり: 料金の単位・単位表記を出さず、料金区分・貸切指定は従来どおり表示',
 				'preset'              => 'custom',
-				'unit'                => '',
-				'price_unit'          => '',
+				'unit'                => 'night',
+				'price_unit'          => 'per_room',
 				'contains'            => array( 'name="vkbm_service_menu[allow_multiple_guests]"' ),
 				'not_contains'        => array( 'night_price_unit', 'vkbm-base-price-unit', 'per guest, per night' ),
 				'row_hidden'          => array(
@@ -705,20 +706,38 @@ class Service_Menu_Editor_Night_Price_Unit_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 料金の単位の行は基本料金の行の直上に描画される。
+	 * 料金の単位の行はチェックアウト時刻の行の直後に描画される。
 	 */
 	public function test_render_night_price_unit_position(): void {
-		$this->set_site( 'lodging' );
-		$post = $this->create_menu();
-		update_post_meta( $post->ID, '_vkbm_booking_unit', 'night' );
-
-		$output = $this->render( $post );
-
-		$this->assertSame(
-			1,
-			preg_match( '/id="vkbm-night-price-unit-field".*?<\/tr>\s*<tr id="vkbm-base-price-field"/s', $output ),
-			'料金の単位の行が基本料金の行の直上に描画されること'
+		$test_cases = array(
+			array(
+				'test_condition_name'   => '予約枠の定員機能が ON の場合',
+				'slot_capacity_enabled' => true,
+			),
+			array(
+				'test_condition_name'   => '予約枠の定員機能が OFF の場合',
+				'slot_capacity_enabled' => false,
+			),
 		);
+
+		foreach ( $test_cases as $case ) {
+			$this->set_site( 'lodging', $case['slot_capacity_enabled'] );
+			$post = $this->create_menu();
+			update_post_meta( $post->ID, '_vkbm_booking_unit', 'night' );
+
+			$output = $this->render( $post );
+
+			$this->assertSame(
+				1,
+				preg_match( '/id="vkbm-check-out-time-field".*?<\/tr>\s*<tr id="vkbm-night-price-unit-field"/s', $output ),
+				$case['test_condition_name'] . ': 料金の単位の行がチェックアウト時刻の行の直後に描画されること'
+			);
+			$this->assertSame(
+				1,
+				substr_count( $output, 'id="vkbm-night-price-unit-field"' ),
+				$case['test_condition_name'] . ': 料金の単位の行が1回だけ描画されること'
+			);
+		}
 	}
 
 	/**

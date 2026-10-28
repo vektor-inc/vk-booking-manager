@@ -323,12 +323,15 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		// 保存前は宿泊ではない（既存サイトと同じ状態から始める）。
 		expect( getStoredIndustryPreset() ).not.toBe( 'lodging' );
 
-		// 業種プリセットは「システム」タブにある。
+		// 業種プリセットが「事業者情報」タブの先頭に表示されることを確認する。
 		await page.goto(
-			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
+			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=store'
 		);
 		const select = page.locator( '#vkbm-industry-preset' );
 		await expect( select ).toBeVisible();
+		await expect(
+			page.locator( '.form-table tbody > tr' ).first()
+		).toHaveClass( /vkbm-industry-preset-row/ );
 
 		// 選択肢の並び（既存の4つの後ろに「宿泊」が加わる）。
 		const values = await select

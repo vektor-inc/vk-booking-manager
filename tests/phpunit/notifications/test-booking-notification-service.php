@@ -357,9 +357,33 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 			'guests'                  => 1,
 			'staff_enabled'           => false,
 			'resource_label_singular' => 'スタッフ',
+			'attendee_name'            => '',
+			'attendee_name_mode'       => 'disabled',
+			'attendee_name_label'      => '受診者名',
 		);
 
 		$cases = array(
+			array(
+				'name'         => '利用者名が有効かつ値あり => 見出しと値の行を出力',
+				'overrides'    => array( 'attendee_name' => '利用者花子', 'attendee_name_mode' => 'optional' ),
+				'status_label' => '',
+				'contains'     => array( '受診者名: 利用者花子' ),
+				'not_contains' => array(),
+			),
+			array(
+				'name'         => '利用者名が空または無効 => 行を出力しない',
+				'overrides'    => array( 'attendee_name' => '利用者花子', 'attendee_name_mode' => 'disabled' ),
+				'status_label' => '',
+				'contains'     => array(),
+				'not_contains' => array( '利用者花子', '受診者名' ),
+			),
+			array(
+				'name'         => '利用者名が有効でも値が空 => 行を出力しない',
+				'overrides'    => array( 'attendee_name' => '', 'attendee_name_mode' => 'optional' ),
+				'status_label' => '',
+				'contains'     => array(),
+				'not_contains' => array( '受診者名' ),
+			),
 			array(
 				'name'         => '指名ON・人数3・ステータスなし => スタッフ行と人数行あり / ステータス行なし',
 				'overrides'    => array(

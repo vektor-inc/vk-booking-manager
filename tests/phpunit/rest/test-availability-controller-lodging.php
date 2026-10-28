@@ -17,6 +17,8 @@ use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
+use VKBookingManager\Availability\Availability_Service;
+use ReflectionMethod;
 use WP_REST_Request;
 use WP_UnitTestCase;
 
@@ -28,7 +30,8 @@ use WP_UnitTestCase;
  */
 class Availability_Controller_Lodging_Test extends WP_UnitTestCase {
 
-	private const ROUTE = '/vkbm/v1/lodging-availabilities';
+	private const ROUTE          = '/vkbm/v1/lodging-availabilities';
+	private const CALENDAR_ROUTE = '/vkbm/v1/lodging-calendar-meta';
 
 	/**
 	 * setUp で退避する全体設定。
@@ -183,6 +186,21 @@ class Availability_Controller_Lodging_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 宿泊カレンダーの REST リクエストを実行する。
+	 *
+	 * @param array<string, mixed> $params クエリのパラメータ。
+	 * @return \WP_REST_Response
+	 */
+	private function calendar_request( array $params ): \WP_REST_Response {
+		$request = new WP_REST_Request( 'GET', self::CALENDAR_ROUTE );
+		foreach ( $params as $key => $value ) {
+			$request->set_param( $key, $value );
+		}
+
+		return rest_do_request( $request );
+	}
+
+	/**
 	 * 宿泊が有効なサイトでだけルートが登録されることを検証する。
 	 */
 	public function test_register_routes_registers_lodging_route_only_when_lodging_is_enabled(): void {
@@ -212,9 +230,90 @@ class Availability_Controller_Lodging_Test extends WP_UnitTestCase {
 			$this->set_site( $case['preset'] );
 			$routes = rest_get_server()->get_routes();
 			$this->assertSame( $case['expected'], isset( $routes[ self::ROUTE ] ), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], isset( $routes[ self::CALENDAR_ROUTE ] ), $case['test_condition_name'] . '（宿泊カレンダー）' );
 			// 既存の空き状況のルートは常に登録されたまま。
 			$this->assertArrayHasKey( '/vkbm/v1/availabilities', $routes, $case['test_condition_name'] . '（既存のルート）' );
 			$this->assertArrayHasKey( '/vkbm/v1/calendar-meta', $routes, $case['test_condition_name'] . '（既存のルート）' );
+		}
+	}
+
+	/**
+	 * 宿泊カレンダーの一時保存の名前が、世代番号とメニュー ID が大きくても transient 名の上限（172 文字）に収まり、条件が違えば別の名前になることを検証する。
+	 */
+	public function test_lodging_calendar_cache_key_fits_transient_name_limit(): void {
+		$method = new ReflectionMethod( Availability_Service::class, 'build_lodging_calendar_cache_key' );
+		$method->setAccessible( true );
+		$service = new Availability_Service();
+
+		$key = $method->invoke( $service, 9999999999, array( 1234567890, 2234567890, 3234567890 ), '2026-11-01', '2026-11-30', '2026-11-15', 'Asia/Tokyo' );
+		// 世代番号が最大桁数のときも収まることを、プレフィックス込みの最大長で確かめる（g + 10 桁の世代番号を想定）。
+		$max_length = strlen( 'vkbm_lodging_calendar_g' ) + 10 + strlen( '_bg' ) + 32 + strlen( '_' ) + 10 + strlen( '_' ) + 32;
+		$this->assertLessThanOrEqual( 172, strlen( $key ) );
+		$this->assertLessThanOrEqual( 172, $max_length );
+
+		$other_check_in = $method->invoke( $service, 9999999999, array( 1234567890, 2234567890, 3234567890 ), '2026-11-01', '2026-11-30', '', 'Asia/Tokyo' );
+		$other_rooms    = $method->invoke( $service, 9999999999, array( 1234567890 ), '2026-11-01', '2026-11-30', '2026-11-15', 'Asia/Tokyo' );
+		$this->assertNotSame( $key, $other_check_in );
+		$this->assertNotSame( $key, $other_rooms );
+	}
+
+	/**
+	 * 宿泊カレンダーが月の日ごとの空き状況を返すことを検証する。
+	 */
+	public function test_lodging_calendar_meta_returns_monthly_days(): void {
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '宿泊は Pro 版限定のため、無料版ではスキップする。' );
+		}
+		$this->set_site( 'lodging' );
+		$room_id = $this->create_room( '客室A' );
+		$menu_id = $this->create_menu( array( $room_id ) );
+		$target  = new DateTimeImmutable( $this->date_after( 10 ), wp_timezone() );
+		$request = new WP_REST_Request( 'GET', self::CALENDAR_ROUTE );
+		$request->set_param( 'menu_id', $menu_id );
+		$request->set_param( 'year', (int) $target->format( 'Y' ) );
+		$request->set_param( 'month', (int) $target->format( 'm' ) );
+		$response = rest_do_request( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertNotEmpty( $response->get_data()['days'] ?? array() );
+		$this->assertArrayHasKey( 'available', $response->get_data()['days'][0] );
+	}
+
+	/**
+	 * チェックイン日が受付範囲外なら、公開 REST でも入力エラーとして 400 を返すことを検証する。
+	 */
+	public function test_lodging_calendar_meta_rejects_check_in_outside_booking_range(): void {
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '宿泊は Pro 版限定のため、無料版ではスキップする。' );
+		}
+		$this->set_site( 'lodging' );
+		$room_id = $this->create_room( '客室A' );
+		$menu_id = $this->create_menu( array( $room_id ) );
+		update_post_meta( $menu_id, '_vkbm_max_advance_booking_days', 30 );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '昨日 => 400 invalid_date',
+				'check_in_date'       => $this->date_after( -1 ),
+			),
+			array(
+				'test_condition_name' => '受付上限より先 => 400 invalid_date',
+				'check_in_date'       => $this->date_after( 31 ),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$target   = new DateTimeImmutable( $case['check_in_date'], wp_timezone() );
+			$response = $this->calendar_request(
+				array(
+					'menu_id'       => $menu_id,
+					'year'          => (int) $target->format( 'Y' ),
+					'month'         => (int) $target->format( 'm' ),
+					'check_in_date' => $case['check_in_date'],
+				)
+			);
+			$this->assertSame( 400, $response->get_status(), $case['test_condition_name'] );
+			$this->assertSame( 'invalid_date', $response->get_data()['code'], $case['test_condition_name'] );
 		}
 	}
 

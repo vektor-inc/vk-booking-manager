@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Auth;
 
+use VKBookingManager\Attendees\Attendee_Roster;
 use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Auth\Email_Verification;
@@ -17,6 +18,13 @@ use WP_UnitTestCase;
  * テスト用サブクラス。redirect_and_exit で exit() を呼ばないようにする。
  */
 class Testable_Auth_Shortcodes extends Auth_Shortcodes {
+	/**
+	 * テスト中に保存された通知 Cookie。
+	 *
+	 * @var array<string,string>
+	 */
+	public $notice_cookies = array();
+
 	/**
 	 * Last redirect URL captured during tests.
 	 * テスト中にキャプチャされた最後のリダイレクト URL。
@@ -33,6 +41,18 @@ class Testable_Auth_Shortcodes extends Auth_Shortcodes {
 	 */
 	protected function redirect_and_exit( string $url ): void {
 		$this->last_redirect_url = $url;
+	}
+
+	/**
+	 * 通知 Cookie をブラウザーからの次回送信として再現する。
+	 *
+	 * @param string      $name    Cookie キー。
+	 * @param string      $message 通知文またはエラーコード。
+	 * @param string|null $path    Cookie パス。
+	 * @return void
+	 */
+	protected function set_notice_cookie( string $name, string $message, ?string $path = null ): void {
+		$this->notice_cookies[ $name ] = $message;
 	}
 }
 
@@ -2283,6 +2303,153 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			} else {
 				$this->assertNotSame( '', $message, $case['test_condition_name'] );
 			}
+		}
+	}
+
+	/**
+	 * 名簿保存エラーを原因別の案内へ変換することを確認する。
+	 *
+	 * @return void
+	 */
+	public function test_get_attendee_roster_error_message(): void {
+		$shortcodes = new Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+		$cases      = array(
+			array(
+				'code'                => 'vkbm_attendee_name_required',
+				'expected'            => __( 'Please enter a name for every person.', 'vk-booking-manager' ),
+				'test_condition_name' => '名前未入力は名前の案内を返す',
+			),
+			array(
+				'code'                => 'vkbm_attendee_limit',
+				'expected'            => sprintf( __( 'You can register up to %d other people.', 'vk-booking-manager' ), Attendee_Roster::MAX_ATTENDEES ),
+				'test_condition_name' => '上限超過は上限の案内を返す',
+			),
+			array(
+				'code'                => 'vkbm_attendee_roster_conflict',
+				'expected'            => __( 'The list could not be saved. Please wait a moment and try again.', 'vk-booking-manager' ),
+				'test_condition_name' => '競合は再試行の案内を返す',
+			),
+			array(
+				'code'                => '<script>',
+				'expected'            => __( 'The list could not be saved. Please wait a moment and try again.', 'vk-booking-manager' ),
+				'test_condition_name' => '許可リスト外も安全な汎用文を返す',
+			),
+			array(
+				'code'                => '',
+				'expected'            => '',
+				'test_condition_name' => 'エラー無しは空文字を返す',
+			),
+		);
+		foreach ( $cases as $case ) {
+			$this->assertSame( $case['expected'], $shortcodes->get_attendee_roster_error_message( $case['code'] ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * マイページの名簿保存で、ふりがなの送信状態を区別することを確認する。
+	 *
+	 * @return void
+	 */
+	public function test_process_attendee_roster_request(): void {
+		$user_id = $this->factory()->user->create( array( 'display_name' => '申込者' ) );
+		wp_set_current_user( $user_id );
+		$repository                               = new Settings_Repository();
+		$settings                                 = $repository->get_settings();
+		$settings['attendee_roster_enabled']      = true;
+		$settings['attendee_roster_kana_enabled'] = false;
+		$repository->update_settings( $settings );
+		$shortcodes      = new Testable_Auth_Shortcodes( new Settings_Service( $repository, new Settings_Sanitizer() ) );
+		$roster          = new Attendee_Roster();
+		$previous_post   = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- テスト前のグローバルを退避する。
+		$previous_server = $_SERVER;
+		$cases           = array(
+			array(
+				'test_condition_name' => 'ふりがな未送信の保存では既存値を維持する',
+				'action'              => 'save',
+				'kana_is_sent'        => false,
+				'kana'                => '',
+				'expected_kana'       => 'ほぞんずみ',
+				'expected_number'     => '会員-01',
+			),
+			array(
+				'test_condition_name' => '空のふりがなを送信した保存では既存値を消す',
+				'action'              => 'save',
+				'kana_is_sent'        => true,
+				'kana'                => '',
+				'expected_kana'       => '',
+				'expected_number'     => '会員-01',
+			),
+			array(
+				'test_condition_name' => 'ふりがな未送信の追加では空で保存する',
+				'action'              => 'add',
+				'kana_is_sent'        => false,
+				'kana'                => '',
+				'expected_kana'       => '',
+				'expected_number'     => '',
+			),
+		);
+
+		try {
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			foreach ( $cases as $case ) {
+				// 各ケースを同じ保存済み名簿から開始する。
+				$roster->save(
+					$user_id,
+					array(
+						array(
+							'id'     => 'self',
+							'name'   => '申込者',
+							'kana'   => '',
+							'number' => '',
+						),
+						array(
+							'id'     => 'attendee-1',
+							'name'   => '保存済み氏名',
+							'kana'   => 'ほぞんずみ',
+							'number' => '会員-01',
+						),
+					)
+				);
+				$_POST = array(
+					'vkbm_attendee_roster_form'  => '1',
+					'vkbm_attendee_roster_nonce' => wp_create_nonce( 'vkbm_attendee_roster' ),
+					'attendee_id'                => 'attendee-1',
+					'attendee_action'            => $case['action'],
+					'attendee_name'              => '更新後氏名',
+					'redirect_to'                => home_url( '/mypage/' ),
+				);
+				if ( $case['kana_is_sent'] ) {
+					$_POST['attendee_kana'] = $case['kana'];
+				}
+
+				// 公開ハンドラー経由で名簿保存処理を実行する。
+				$shortcodes->handle_form_submission();
+				$saved = $roster->get( $user_id );
+				if ( 'add' === $case['action'] ) {
+					$target = end( $saved );
+				} else {
+					$matching_rows = array_values(
+						array_filter(
+							$saved,
+							static function ( array $row ): bool {
+								return 'attendee-1' === $row['id'];
+							}
+						)
+					);
+					$target        = $matching_rows[0];
+				}
+				$this->assertSame( $case['expected_kana'], $target['kana'], $case['test_condition_name'] );
+				$this->assertSame( $case['expected_number'], $target['number'], $case['test_condition_name'] . '（番号）' );
+				$this->assertSame(
+					__( 'The list has been updated.', 'vk-booking-manager' ),
+					$shortcodes->notice_cookies['vkbm_attendee_roster_notice'] ?? '',
+					$case['test_condition_name'] . '（成功通知 Cookie）'
+				);
+				$this->assertStringNotContainsString( 'vkbm_roster_updated', (string) $shortcodes->last_redirect_url, $case['test_condition_name'] );
+			}
+		} finally {
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
 		}
 	}
 

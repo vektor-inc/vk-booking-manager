@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.5.0
+ * Version:     3.6.0
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
@@ -58,11 +58,15 @@ require_once __DIR__ . '/src/common/trait-rate-limit.php';
 require_once __DIR__ . '/src/post-types/class-booking-post-type.php';
 require_once __DIR__ . '/src/bookings/class-booking-overlap.php';
 require_once __DIR__ . '/src/bookings/class-reserver-search.php';
+require_once __DIR__ . '/src/bookings/class-booking-anonymizer.php';
+require_once __DIR__ . '/src/bookings/class-booking-privacy-eraser.php';
+require_once __DIR__ . '/src/bookings/class-booking-anonymize-bulk-action.php';
 require_once __DIR__ . '/src/bookings/class-booking-admin.php';
 require_once __DIR__ . '/src/bookings/class-booking-draft-controller.php';
 require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
 require_once __DIR__ . '/src/bookings/class-user-favorites-controller.php';
 require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
+require_once __DIR__ . '/src/common/class-attendee-name.php';
 require_once __DIR__ . '/src/common/class-mail-from.php';
 require_once __DIR__ . '/src/common/class-site-url.php';
 require_once __DIR__ . '/src/common/class-scheduled-events.php';
@@ -108,6 +112,8 @@ require_once __DIR__ . '/src/integrations/class-booking-event-dispatcher.php';
 
 require_once __DIR__ . '/src/auth/class-email-verification.php';
 require_once __DIR__ . '/src/auth/class-auth-shortcodes.php';
+require_once __DIR__ . '/src/attendees/class-attendee-roster.php';
+require_once __DIR__ . '/src/attendees/class-attendee-roster-user-profile.php';
 require_once __DIR__ . '/src/post-order/class-post-order-manager.php';
 require_once __DIR__ . '/src/admin/class-owner-admin-menu-filter.php';
 require_once __DIR__ . '/src/admin/class-pro-upsell.php';
@@ -141,12 +147,17 @@ use VKBookingManager\Admin\Setup_Notices;
 use VKBookingManager\Admin\User_Profile_Fields;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
+use VKBookingManager\Attendees\Attendee_Roster;
+use VKBookingManager\Attendees\Attendee_Roster_User_Profile;
 use VKBookingManager\Availability\Availability_Booking_Cache_Generation;
 use VKBookingManager\Availability\Availability_Cache_Generation;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\REST\Auth_Form_Controller;
 use VKBookingManager\REST\Current_User_Controller;
 use VKBookingManager\Bookings\Booking_Admin;
+use VKBookingManager\Bookings\Booking_Anonymize_Bulk_Action;
+use VKBookingManager\Bookings\Booking_Anonymizer;
+use VKBookingManager\Bookings\Booking_Privacy_Eraser;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
@@ -175,6 +186,9 @@ use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync_Settings;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
+use VKBookingManager\Integrations\ICalImport\External_Booking_Display;
+use VKBookingManager\Integrations\ICalImport\External_Calendar_Admin;
+use VKBookingManager\Integrations\ICalImport\External_Calendar_Cron;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\OEmbed\OEmbed_Override;
 use VKBookingManager\PostOrder\Post_Order_Manager;
@@ -198,6 +212,7 @@ use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Resources\Resource_Delete_Guard;
+use VKBookingManager\Bookings\Booking_Auto_Anonymizer;
 
 if ( ! function_exists( 'vkbm_plugin' ) ) {
 	/**
@@ -219,6 +234,9 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$settings_repository = new Settings_Repository();
 		$settings_sanitizer  = new Settings_Sanitizer();
 		$settings_service    = new Settings_Service( $settings_repository, $settings_sanitizer );
+		if ( class_exists( Booking_Auto_Anonymizer::class ) ) {
+			( new Booking_Auto_Anonymizer() )->register();
+		}
 
 		$common_styles = new Common_Styles();
 		$roles_manager = new Roles_Manager();
@@ -273,6 +291,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$style_guide_page             = new Style_Guide_Page( Capabilities::MANAGE_PROVIDER_SETTINGS );
 		$setup_notices                = new Setup_Notices();
 		$user_profile_fields          = new User_Profile_Fields();
+		$attendee_roster              = new Attendee_Roster();
+		$attendee_roster_profile      = new Attendee_Roster_User_Profile( $attendee_roster );
 		$resource_schedule_repository = new Resource_Schedule_Template_Repository();
 		$resource_schedule_meta_box   = new Resource_Schedule_Meta_Box( $resource_schedule_repository );
 		$staff_editor                 = new Staff_Editor();
@@ -349,6 +369,21 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 			$google_calendar_event_sync->register();
 		}
 
+		// 予約一覧の一括操作「個人情報を匿名化」を登録する（無料版・Pro 版とも。issue #870）。
+		// 匿名化の処理本体は共有のディスパッチャーを渡し、Google カレンダーの予定も匿名化した値で上書きさせる。
+		Booking_Anonymizer::register();
+		( new Booking_Anonymize_Bulk_Action( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();
+		( new Booking_Privacy_Eraser( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();
+
+		// 外部カレンダー（iCal）の取り込み（issue #947。Pro 版の宿泊限定）。30 分ごとの自動取得、
+		// 客室の編集画面・客室一覧の画面、取り込み予約の見せ方を登録する。宿泊が有効でないサイトでは、
+		// 各クラスの内部で何もしない。無料版の配布物にはこれらのクラスのファイルが無いため、クラスの有無も確認する。
+		if ( class_exists( External_Calendar_Cron::class ) ) {
+			( new External_Calendar_Cron() )->register();
+			( new External_Calendar_Admin() )->register();
+			( new External_Booking_Display() )->register();
+		}
+
 		// リソース（スタッフ）削除ガードを登録（実質 Pro 版限定機能。register() 内部で判定する）。
 		// Register the resource (staff) delete guard (effectively Pro edition only; gated inside register()).
 		// 無料版の配布物にはこのクラスのファイルが無いため、クラスの有無も確認する。
@@ -369,6 +404,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$style_guide_page->register();
 		$setup_notices->register();
 		$email_log_page->register();
+		$attendee_roster_profile->register();
 
 		// 顧客フラグ機能（種別定義ページ・予約編集メタボックス・ユーザー編集画面の編集欄・予約ブロック連携）を登録する。
 		$customer_flag_settings_page = new Customer_Flag_Settings_Page( $customer_flag_service );

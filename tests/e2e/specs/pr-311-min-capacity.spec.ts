@@ -494,6 +494,17 @@ function ensureShiftForMonth(
 }
 
 /**
+ * availability などのトランジェントキャッシュを全消去する PHP 断片（`wp transient delete --all` と同じ範囲）。
+ * 予約の投入・削除と同じ WP-CLI 呼び出しの中で実行し、wp-env の呼び出し回数
+ * （1 回あたり数秒かかり、重い環境ではテスト 1 本の制限時間の大半を占める）を減らす。
+ */
+const CLEAR_TRANSIENTS_PHP = `
+		global $wpdb;
+		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_%' OR option_name LIKE '\\_site\\_transient\\_%'" );
+		wp_cache_flush();
+`;
+
+/**
  * vkbm_booking を1件作成して特定スロットに予約人数を投入するヘルパー。
  * 値はすべて整数・固定書式の文字列のみ埋め込む（PHP 脱出リスクを排除）。
  *
@@ -543,6 +554,7 @@ function createBooking(
 		update_post_meta( $bid, '_vkbm_booking_service_id', ${ svc } );
 		update_post_meta( $bid, '_vkbm_booking_guests', ${ g } );
 		update_post_meta( $bid, '_vkbm_booking_status', '${ status }' );
+		${ CLEAR_TRANSIENTS_PHP }
 		echo $bid;
 	`;
 	return wpEvalPhp( phpCode );
@@ -552,21 +564,24 @@ function createBooking(
  * テストで作成した vkbm_booking を全削除するヘルパー（テスト間の干渉防止）。
  */
 function deleteAllBookings(): void {
-	const ids = wpCliArgs( [
-		'post',
-		'list',
-		'--post_type=vkbm_booking',
-		'--post_status=any',
-		'--format=ids',
-	] ).trim();
-	if ( ids ) {
-		wpCliArgs( [ 'post', 'delete', ...ids.split( /\s+/ ).filter( Boolean ), '--force' ] );
-	}
+	wpEvalPhp( `
+		foreach ( get_posts( array(
+			'post_type'   => 'vkbm_booking',
+			'post_status' => 'any',
+			'numberposts' => -1,
+			'fields'      => 'ids',
+		) ) as $bid ) {
+			wp_delete_post( $bid, true );
+		}
+		${ CLEAR_TRANSIENTS_PHP }
+		echo 'ok';
+	` );
 }
 
 /**
  * availability REST（/vkbm/v1/availabilities）を叩いて指定開始時刻のスロットを返すヘルパー。
- * Availability はトランジェントでキャッシュされるため、毎回キャッシュをクリアしてから取得する。
+ * Availability はトランジェントでキャッシュされるが、キャッシュは予約の投入・削除（createBooking /
+ * deleteAllBookings）が同じ WP-CLI 呼び出しの中で消すため、ここでは消さない（nocache も付ける）。
  *
  * @param page       Playwright Page（baseURL 相対の request に使う）
  * @param menuId     サービスメニューID
@@ -580,10 +595,11 @@ async function fetchSlotByStart(
 	date: string,
 	startHHMM: string
 ): Promise< any | null > {
-	// availability のトランジェントキャッシュをクリア（予約投入が即時反映されるように）。
-	wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
+	// トランジェントは予約の投入・削除の側で消去済み。キャッシュを消した直後の初回は、月分の空き状況を計算し直すため重い環境で十数秒かかる
+	// （この describe の 1 本あたりの実測は 25〜55 秒）。応答待ちには余裕を持たせる。
 	const res = await page.request.get(
-		`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ date }&timezone=Asia%2FTokyo&nocache=${ Date.now() }`
+		`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ date }&timezone=Asia%2FTokyo&nocache=${ Date.now() }`,
+		{ timeout: 90000 }
 	);
 	const data = await res.json();
 	const slots: any[] = Array.isArray( data?.slots ) ? data.slots : [];
@@ -595,6 +611,9 @@ async function fetchSlotByStart(
 }
 
 test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの催行状態（REST データ）', () => {
+	// 予約の投入（WP-CLI）と、キャッシュ消去直後の空き状況の取得が重い環境で長引くため、制限時間に余裕を持たせる。
+	test.describe.configure( { timeout: 120000 } );
+
 	let menuId: string;
 	let staffId: string;
 
@@ -794,6 +813,73 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	} );
 } );
 
+/**
+ * 予約ページを開き、メニューを選んで翌月カレンダーの 1 日を選択し、スロット一覧が出るまで進む共通ヘルパー。
+ *
+ * 待ちはすべて「画面の状態」で行う（固定待ちはしない）。
+ * - 「予約に進む」を押す前に、最初の月の calendar-meta 応答を待つ準備をしておき、最初の月の読み込み完了後に
+ *   「次の月」を押す（読み込み途中に押すと、遅れて届いた最初の月のデータが翌月の表示を上書きしうる）。
+ * - 「次の月」は応答の受信と見出しの変化、読み込み表示の消滅まで待つ。
+ *
+ * @param page   Playwright ページ
+ * @param menuId 予約するサービスメニューの投稿 ID
+ */
+async function selectNextMonthDayOne(
+	page: Page,
+	menuId: string
+): Promise< void > {
+	await page.goto( '/booking/' );
+	const reserveLink = page
+		.locator(
+			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
+		)
+		.first();
+	await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
+
+	const isCalendarMeta = ( res: { url(): string; status(): number } ) =>
+		res.url().includes( 'calendar-meta' ) && res.status() === 200;
+
+	// 最初の月の応答を取りこぼさないよう、押す前に待ち受けを作る。
+	const initialMeta = page.waitForResponse( isCalendarMeta, {
+		timeout: 30000,
+	} );
+	await reserveLink.click();
+	await page
+		.locator( '.vkbm-calendar' )
+		.first()
+		.waitFor( { state: 'visible', timeout: 15000 } );
+	await initialMeta;
+	await expect( page.locator( '.vkbm-calendar__spinner' ) ).toHaveCount( 0 );
+
+	// 対象日は翌月のため「次の月」へ 1 回進める。
+	const heading = page.locator( '.vkbm-calendar__current' );
+	const before = await heading.textContent();
+	await Promise.all( [
+		page.waitForResponse( isCalendarMeta, { timeout: 30000 } ),
+		page.locator( '.vkbm-calendar__nav' ).last().click(),
+	] );
+	await expect( heading ).not.toHaveText( before ?? '' );
+	await expect( page.locator( '.vkbm-calendar__spinner' ) ).toHaveCount( 0 );
+
+	// 全日 available のため、ラベルが「1」かつ muted でない（当月内）セルを選ぶ。
+	const dayOne = page
+		.locator(
+			'.vkbm-calendar__day--available:not(.vkbm-calendar__day--muted)'
+		)
+		.filter( {
+			has: page
+				.locator( '.vkbm-calendar__day-label' )
+				.filter( { hasText: /^1$/ } ),
+		} )
+		.first();
+	await dayOne.waitFor( { state: 'visible', timeout: 15000 } );
+	await dayOne.click();
+	await page
+		.locator( '.vkbm-slot-list__item' )
+		.first()
+		.waitFor( { state: 'visible', timeout: 15000 } );
+}
+
 test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッジ＋スクリーンショット）', () => {
 	let menuId: string;
 	let staffId: string;
@@ -823,7 +909,6 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 			1,
 			'confirmed'
 		);
-		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 	} );
 
 	test.afterAll( () => {
@@ -833,57 +918,8 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 	test( '予約ページのスロット一覧に「開催決定」「あと N 名で開催」バッジが表示される', async ( {
 		page,
 	} ) => {
-		// 予約ページ（/booking/）を開く。ここには menu-loop ブロックのメニューカードが並ぶ。
-		await page.goto( '/booking/' );
-		await page.waitForLoadState( 'domcontentloaded' );
-
-		// メニューカードの「予約に進む」リンク（vkbm-menu-loop__button--reserve）をクリックすると、
-		// 同ページ内で予約ブロックがプラン要約＋カレンダー表示に切り替わる。
-		// 先頭カードではなく data-menu-id でこの describe のメニューを指定する（#566）。
-		const reserveLink = page
-			.locator(
-				`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
-			)
-			.first();
-		await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
-		await reserveLink.click();
-
-		// カレンダーが描画されるのを待つ
-		await page
-			.locator( '.vkbm-calendar' )
-			.first()
-			.waitFor( { state: 'visible', timeout: 15000 } );
-
-		// 対象日（7/1）は翌月のため「次の月（›）」へ1回進める。
-		// カレンダーのナビゲーションは「前の月」「次の月」の2ボタン。最後の方が「次の月」。
-		const nextBtn = page.locator( '.vkbm-calendar__nav' ).last();
-		if ( ( await nextBtn.count() ) > 0 ) {
-			await nextBtn.click();
-			await page.waitForTimeout( 1000 );
-		}
-
-		// 予約を投入した 7/1（ラベル「1」・当月内・予約可能）の日セルをクリックする。
-		// 全日 available のため、ラベルが「1」かつ muted でない（当月）セルを厳密に選ぶ。
-		await page
-			.locator( '.vkbm-calendar__day--available' )
-			.first()
-			.waitFor( { state: 'visible', timeout: 15000 } );
-		const dayOne = page
-			.locator(
-				'.vkbm-calendar__day--available:not(.vkbm-calendar__day--muted)'
-			)
-			.filter( {
-				has: page
-					.locator( '.vkbm-calendar__day-label' )
-					.filter( { hasText: /^1$/ } ),
-			} );
-		await dayOne.first().click();
-
-		// スロット一覧が描画されるのを待つ
-		await page
-			.locator( '.vkbm-slot-list__item' )
-			.first()
-			.waitFor( { state: 'visible', timeout: 15000 } );
+		// 予約ページ（/booking/）を開き、メニューを選んで翌月 1 日（7/1 相当・予約を投入した日）を選ぶ。
+		await selectNextMonthDayOne( page, menuId );
 
 		// 催行状態バッジ（開催決定 or あと N 名）のいずれかが少なくとも1件表示される
 		const fulfillmentBadges = page.locator(
@@ -921,40 +957,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 	 * @param page Playwright ページ。
 	 */
 	const openCalendarWithDayOneSelected = async ( page: Page ) => {
-		await page.goto( '/booking/' );
-		await page.waitForLoadState( 'domcontentloaded' );
-
-		// メニューカードの「予約に進む」でカレンダーを表示する。
-		const reserveLink = page
-			.locator(
-				`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
-			)
-			.first();
-		await reserveLink.waitFor( { state: 'visible', timeout: 15000 } );
-		await reserveLink.click();
-		await page
-			.locator( '.vkbm-calendar' )
-			.first()
-			.waitFor( { state: 'visible', timeout: 15000 } );
-
-		// 対象日は翌月のため「次の月」へ 1 回進めてから 1 日を選ぶ。
-		await page.locator( '.vkbm-calendar__nav' ).last().click();
-		const dayOne = page
-			.locator(
-				'.vkbm-calendar__day--available:not(.vkbm-calendar__day--muted)'
-			)
-			.filter( {
-				has: page
-					.locator( '.vkbm-calendar__day-label' )
-					.filter( { hasText: /^1$/ } ),
-			} )
-			.first();
-		await dayOne.waitFor( { state: 'visible', timeout: 15000 } );
-		await dayOne.click();
-		await page
-			.locator( '.vkbm-slot-list__item' )
-			.first()
-			.waitFor( { state: 'visible', timeout: 15000 } );
+		await selectNextMonthDayOne( page, menuId );
 	};
 
 	test( 'issue #844: 選択済みの日へ Tab で移動すると、2 色のフォーカス枠が出る', async ( {
@@ -1319,88 +1322,95 @@ test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け�
 		expect( shouldShowMinCapacityNote( 0, 5, 3 ) ).toBe( false );
 	} );
 
-	/**
-	 * 実機での確定画面注記の出し分け（CodeRabbit #3 修正の回帰確認）。
-	 *
-	 * 修正により save_draft / get_draft が slot に min_capacity / booked_guests を伝搬するようになった。
-	 * これにより確定画面の showMinCapacityNote が実データで評価され、
-	 * - 未達スロット（今回予約を足しても合計 < 最小催行人数）→ 注記が表示される
-	 * - 充足スロット（合計 >= 最小催行人数）→ 注記が表示されない
-	 * の両方向が実機で正しく動くことを確認する。
-	 *
-	 * 予約フロントの確定画面はログインが必要なため admin で操作する。
-	 * 7/1 の 09:00 枠（予約ゼロ・最小3）を選び、今回1名で合計1<3 → 注記あり。
-	 */
-	test( '実機: 未達スロットの確定画面に「最少催行人数に満たない場合〜」注記が日本語で表示される', async ( {
-		page,
-	} ) => {
-		const staffId = getStaffId();
-		const menuId = getServiceMenuId();
-		setupGroupSessionMenu( menuId, staffId );
-		ensureShiftForMonth( staffId, FRONT_TEST_YEAR, FRONT_TEST_MONTH );
-		deleteAllBookings();
-		// 予約ゼロ＝7/1 09:00 枠は booked_guests=0, min=3。今回1名で合計1<3 → 注記が出るべき。
-		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
+	// 実機（ログイン〜確定画面まで）のテスト。WP-CLI の呼び出しは 1 回あたり数秒かかり、
+	// 重い環境ではテスト本体の制限時間を食うため、メニュー・シフトの準備は beforeAll に出し、
+	// ログイン・画面遷移・確認の分だけ制限時間に余裕を持たせる。
+	test.describe( '実機の確定画面', () => {
+		test.describe.configure( { timeout: 120000 } );
 
-		await loginAsAdmin( page );
-		await gotoConfirmScreenForFirstSlot( page );
+		let menuId: string;
+		let staffId: string;
 
-		// 注記が表示される（CodeRabbit #3 修正後の正しい挙動）
-		const note = page.locator( '#vkbm-confirm-min-capacity-note' );
-		await expect( note ).toBeVisible( { timeout: 15000 } );
-		// 文言が日本語であること（i18n 修正の確認）
-		await expect( note ).toContainText( '最少催行人数に満たない場合' );
-
-		// 確定ボタンに aria-describedby で注記が関連付けられていること（アクセシビリティ）
-		const confirmBtn = page.locator( '.vkbm-confirm__button' ).first();
-		await expect( confirmBtn ).toHaveAttribute(
-			'aria-describedby',
-			'vkbm-confirm-min-capacity-note'
-		);
-
-		await page.screenshot( {
-			path: 'tests/e2e/screenshots/pr-311/after-confirm-note-pending.png',
-			fullPage: true,
+		test.beforeAll( () => {
+			staffId = getStaffId();
+			menuId = getServiceMenuId();
+			setupGroupSessionMenu( menuId, staffId );
+			ensureShiftForMonth( staffId, FRONT_TEST_YEAR, FRONT_TEST_MONTH );
 		} );
 
-		deleteAllBookings();
-	} );
+		/**
+		 * 実機での確定画面注記の出し分け（CodeRabbit #3 修正の回帰確認）。
+		 *
+		 * 修正により save_draft / get_draft が slot に min_capacity / booked_guests を伝搬するようになった。
+		 * これにより確定画面の showMinCapacityNote が実データで評価され、
+		 * - 未達スロット（今回予約を足しても合計 < 最小催行人数）→ 注記が表示される
+		 * - 充足スロット（合計 >= 最小催行人数）→ 注記が表示されない
+		 * の両方向が実機で正しく動くことを確認する。
+		 *
+		 * 予約フロントの確定画面はログインが必要なため admin で操作する。
+		 * 7/1 の 09:00 枠（予約ゼロ・最小3）を選び、今回1名で合計1<3 → 注記あり。
+		 */
+		test( '実機: 未達スロットの確定画面に「最少催行人数に満たない場合〜」注記が日本語で表示される', async ( {
+			page,
+		} ) => {
+			deleteAllBookings();
+			// 予約ゼロ＝7/1 09:00 枠は booked_guests=0, min=3。今回1名で合計1<3 → 注記が出るべき。
 
-	test( '実機: 充足スロット（合計が最小催行人数以上）の確定画面では注記が出ない', async ( {
-		page,
-	} ) => {
-		const staffId = getStaffId();
-		const menuId = getServiceMenuId();
-		setupGroupSessionMenu( menuId, staffId );
-		ensureShiftForMonth( staffId, FRONT_TEST_YEAR, FRONT_TEST_MONTH );
-		deleteAllBookings();
-		// 7/1 09:00 枠に既存3名（最小3を満たす・最大5なので空きあり）。
-		// 今回1名を足しても合計4>=3 で充足 → 注記は出ない。
-		createBooking(
-			menuId,
-			staffId,
-			FRONT_TEST_DATE,
-			FRONT_BASE_HOUR_FULFILLED,
-			'10:00',
-			3,
-			'confirmed'
-		);
-		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
+			await loginAsAdmin( page );
+			await gotoConfirmScreenForFirstSlot( page, menuId );
 
-		await loginAsAdmin( page );
-		await gotoConfirmScreenForFirstSlot( page );
+			// 注記が表示される（CodeRabbit #3 修正後の正しい挙動）
+			const note = page.locator( '#vkbm-confirm-min-capacity-note' );
+			await expect( note ).toBeVisible( { timeout: 15000 } );
+			// 文言が日本語であること（i18n 修正の確認）
+			await expect( note ).toContainText( '最少催行人数に満たない場合' );
 
-		// 充足済みスロットなので注記は表示されない（CodeRabbit #3 の「常時表示しない」回帰）
-		await expect(
-			page.locator( '#vkbm-confirm-min-capacity-note' )
-		).toHaveCount( 0 );
+			// 確定ボタンに aria-describedby で注記が関連付けられていること（アクセシビリティ）
+			const confirmBtn = page.locator( '.vkbm-confirm__button' ).first();
+			await expect( confirmBtn ).toHaveAttribute(
+				'aria-describedby',
+				'vkbm-confirm-min-capacity-note'
+			);
 
-		await page.screenshot( {
-			path: 'tests/e2e/screenshots/pr-311/after-confirm-note-fulfilled.png',
-			fullPage: true,
+			await page.screenshot( {
+				path: 'tests/e2e/screenshots/pr-311/after-confirm-note-pending.png',
+				fullPage: true,
+			} );
+
+			deleteAllBookings();
 		} );
 
-		deleteAllBookings();
+		test( '実機: 充足スロット（合計が最小催行人数以上）の確定画面では注記が出ない', async ( {
+			page,
+		} ) => {
+			deleteAllBookings();
+			// 7/1 09:00 枠に既存3名（最小3を満たす・最大5なので空きあり）。
+			// 今回1名を足しても合計4>=3 で充足 → 注記は出ない。
+			createBooking(
+				menuId,
+				staffId,
+				FRONT_TEST_DATE,
+				FRONT_BASE_HOUR_FULFILLED,
+				'10:00',
+				3,
+				'confirmed'
+			);
+
+			await loginAsAdmin( page );
+			await gotoConfirmScreenForFirstSlot( page, menuId );
+
+			// 充足済みスロットなので注記は表示されない（CodeRabbit #3 の「常時表示しない」回帰）
+			await expect(
+				page.locator( '#vkbm-confirm-min-capacity-note' )
+			).toHaveCount( 0 );
+
+			await page.screenshot( {
+				path: 'tests/e2e/screenshots/pr-311/after-confirm-note-fulfilled.png',
+				fullPage: true,
+			} );
+
+			deleteAllBookings();
+		} );
 	} );
 } );
 
@@ -1408,44 +1418,20 @@ test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け�
  * 予約フロントで 7/1 の先頭スロット（09:00）を選び、確定画面まで進む共通ヘルパー。
  * ログイン済みの page を前提とする。確定ボタンが見えるまで待って戻る。
  *
- * @param page ログイン済みの Playwright Page
+ * @param page   ログイン済みの Playwright Page
+ * @param menuId 予約するサービスメニューの投稿 ID
  */
 async function gotoConfirmScreenForFirstSlot(
-	page: import('@playwright/test').Page
+	page: import('@playwright/test').Page,
+	menuId: string
 ): Promise< void > {
-	await page.goto( '/booking/' );
-	await page.waitForLoadState( 'domcontentloaded' );
 	// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
-	const menuId = getServiceMenuId();
-	await page
-		.locator(
-			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`
-		)
-		.first()
-		.click();
-	await page
-		.locator( '.vkbm-calendar' )
-		.first()
-		.waitFor( { state: 'visible', timeout: 15000 } );
-	await page.locator( '.vkbm-calendar__nav' ).last().click();
-	await page.waitForTimeout( 1000 );
-	const dayOne = page
-		.locator(
-			'.vkbm-calendar__day--available:not(.vkbm-calendar__day--muted)'
-		)
-		.filter( {
-			has: page
-				.locator( '.vkbm-calendar__day-label' )
-				.filter( { hasText: /^1$/ } ),
-		} );
-	await dayOne.first().click();
-	await page
-		.locator( '.vkbm-slot-list__item' )
-		.first()
-		.waitFor( { state: 'visible', timeout: 15000 } );
+	await selectNextMonthDayOne( page, menuId );
 	// 09:00 枠（先頭）を選択
-	await page.locator( '.vkbm-slot-list__item' ).first().click();
-	await page.waitForTimeout( 1500 );
+	const firstSlot = page.locator( '.vkbm-slot-list__item' ).first();
+	await firstSlot.click();
+	// 選択が反映されると「選択中」のクラスが付き、次へ進むボタンが押せるようになる。
+	await expect( firstSlot ).toHaveClass( /is-selected/ );
 	const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 	await expect( proceed ).toBeEnabled( { timeout: 15000 } );
 	await proceed.click();

@@ -65,6 +65,13 @@ class Setup_Notices {
 	private ?bool $missing_permalink_htaccess_rules_cache = null;
 
 	/**
+	 * 宿泊プリセットかどうかのリクエスト内キャッシュ。
+	 *
+	 * @var bool|null
+	 */
+	private ?bool $is_lodging_cache = null;
+
+	/**
 	 * Cached result of get_missing_setup_items() for the current request（#712）.
 	 * null は未判定。render_notices() 内で is_setup_complete() と get_missing_setup_items_for_user() が
 	 * 同じ判定を重ねて行わないようにする.
@@ -1098,24 +1105,52 @@ class Setup_Notices {
 	}
 
 	/**
+	 * 宿泊プリセットかどうかをリクエスト内で1回だけ判定する。
+	 *
+	 * @return bool 宿泊プリセットなら true。
+	 */
+	private function is_lodging(): bool {
+		if ( null === $this->is_lodging_cache ) {
+			$this->is_lodging_cache = Industry_Presets::supports( 'lodging' );
+		}
+
+		return $this->is_lodging_cache;
+	}
+
+	/**
 	 * Render shift notice markup.
 	 *
 	 * @param array<int, array{year:int,month:int}> $missing_months Missing shift months.
 	 * @param bool                                  $show_action     Whether to show action button.
 	 */
 	private function render_shift_notice_markup( array $missing_months, bool $show_action ): void {
+		$is_lodging = $this->is_lodging();
 		?>
 		<div class="notice vkbm-notice vkbm-notice__warning">
-			<h3><?php echo esc_html__( 'Shift not registered', 'vk-booking-manager' ); ?></h3>
+			<h3><?php echo esc_html( $is_lodging ? __( 'Days on Sale not registered', 'vk-booking-manager' ) : __( 'Shift not registered', 'vk-booking-manager' ) ); ?></h3>
 			<ul>
 				<?php foreach ( $missing_months as $item ) : ?>
 					<li>
 						<?php
-						printf(
-							/* translators: %d: month number */
-							esc_html__( '%d Monthly shift is not registered.', 'vk-booking-manager' ),
-							(int) $item['month']
-						);
+						if ( $is_lodging ) {
+							printf(
+								/* translators: %d: month number */
+								esc_html__( 'Days on sale for month %d are not registered.', 'vk-booking-manager' ),
+								(int) $item['month']
+							);
+							echo ' ';
+							printf(
+								/* translators: %s: resource label (plural), e.g. "staff" or "rooms". */
+								esc_html__( '%s cannot be booked for that month until they are registered.', 'vk-booking-manager' ),
+								esc_html( vkbm_get_resource_label_plural() )
+							);
+						} else {
+							printf(
+								/* translators: %d: month number */
+								esc_html__( '%d Monthly shift is not registered.', 'vk-booking-manager' ),
+								(int) $item['month']
+							);
+						}
 						?>
 					</li>
 				<?php endforeach; ?>
@@ -1123,7 +1158,7 @@ class Setup_Notices {
 			<?php if ( $show_action ) : ?>
 				<div class="vkbm-buttons">
 					<a class="button button-primary" href="<?php echo esc_url( admin_url( 'edit.php?post_type=' . Shift_Post_Type::POST_TYPE ) ); ?>">
-						<?php echo esc_html__( 'Register shift', 'vk-booking-manager' ); ?>
+						<?php echo esc_html( $is_lodging ? __( 'Register days on sale', 'vk-booking-manager' ) : __( 'Register shift', 'vk-booking-manager' ) ); ?>
 					</a>
 				</div>
 			<?php endif; ?>
@@ -1198,7 +1233,7 @@ class Setup_Notices {
 			return;
 		}
 
-		$label = __( 'Shift auto registration', 'vk-booking-manager' );
+		$label = Provider_Settings_Page::get_shift_auto_register_label();
 
 		if ( current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
 			$link_url = admin_url( 'admin.php?page=vkbm-provider-settings&tab=advanced#vkbm-shift-auto-register-months' );
@@ -1215,7 +1250,9 @@ class Setup_Notices {
 			__( '%s is configured.', 'vk-booking-manager' ),
 			$label
 		);
-		$message .= __( ' Please check carefully that there are no discrepancies between the registered shift information and the actual shifts.', 'vk-booking-manager' );
+		$message .= Industry_Presets::supports( 'lodging' )
+			? __( ' Please check carefully that there are no discrepancies between the registered days on sale information and the actual days on sale.', 'vk-booking-manager' )
+			: __( ' Please check carefully that there are no discrepancies between the registered shift information and the actual shifts.', 'vk-booking-manager' );
 		?>
 		<div class="notice vkbm-notice vkbm-notice__warning">
 			<p><?php echo wp_kses( $message, array( 'a' => array( 'href' => array() ) ) ); ?></p>

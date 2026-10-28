@@ -422,7 +422,7 @@ class Service_Menu_Editor_Booking_Unit_Test extends WP_UnitTestCase {
 				'test_condition_name' => '宿泊以外のサイトで泊のメニューを開く: 案内とリンクを表示し、ラジオは出さない',
 				'preset'              => 'salon',
 				'meta'                => 'night',
-				'contains'            => array( 'id="vkbm-booking-unit-inactive-notice"', 'vkbm-provider-settings&#038;tab=system#vkbm-industry-preset' ),
+				'contains'            => array( 'id="vkbm-booking-unit-inactive-notice"', 'vkbm-provider-settings&#038;tab=store#vkbm-industry-preset' ),
 				'row_hidden'          => array(
 					'vkbm-duration-field' => false,
 				),

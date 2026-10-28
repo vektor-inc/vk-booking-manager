@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\Bookings;
 
 use VKBookingManager\Admin\Pro_Upsell;
+use VKBookingManager\Attendees\Attendee_Roster;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Capabilities\Capabilities;
@@ -105,6 +106,121 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		Staff_Editor::clear_nomination_enabled_cache();
 	}
 
+	/**
+	 * 代理予約の名前未入力は、予約作成・ロック取得・決済確認より前に拒否する。
+	 */
+	public function test_create_booking_requires_proxy_customer_name(): void {
+		global $wpdb;
+
+		$this->disable_nomination();
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		wp_set_current_user( $this->create_admin_user() );
+		$start = '2026-08-01T10:00:00+09:00';
+		$end   = '2026-08-01T10:30:00+09:00';
+
+		$test_cases = array(
+			'名前を送らない' => null,
+			'空文字'         => '',
+			'半角空白のみ'   => '   ',
+			'全角空白のみ'   => '　　',
+			'混在する空白'   => " \t　 \n",
+			'タグ除去後に空' => '<b>　 </b>',
+		);
+		$payment_calls = 0;
+		$payment_check = static function ( $result ) use ( &$payment_calls ) {
+			++$payment_calls;
+			return $result;
+		};
+		$mutex_insert_queries = array();
+		$record_mutex_insert = static function ( $query ) use ( &$mutex_insert_queries ) {
+			if ( false !== strpos( $query, 'INSERT IGNORE' ) && false !== strpos( $query, '_transient_vkbm_booking_mutex_' ) ) {
+				$mutex_insert_queries[] = $query;
+			}
+			return $query;
+		};
+		add_filter( 'vkbm_booking_payment_check', $payment_check );
+		add_filter( 'query', $record_mutex_insert );
+		try {
+			foreach ( $test_cases as $label => $name ) {
+				$token   = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+				$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+				$request->set_param( 'token', $token );
+				if ( null !== $name ) {
+					$request->set_param( 'customer_name', $name );
+				}
+				$response = $this->build_controller( $staff_id, $start, $end )->create_booking( $request );
+
+				$this->assertInstanceOf( WP_Error::class, $response, $label );
+				$this->assertSame( 'customer_name_required', $response->get_error_code(), $label );
+				$this->assertSame( 400, $response->get_error_data()['status'], $label );
+				$this->assertSame( 0, $payment_calls, $label );
+				$this->assertSame( array(), get_posts( array( 'post_type' => Booking_Post_Type::POST_TYPE, 'post_status' => 'any' ) ), $label );
+				// ミューテックスは直接 SQL で作るので、クエリ履歴と残存行の両方を確認する。
+				$this->assertSame( array(), $mutex_insert_queries, $label );
+				$this->assertSame( '0', $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( '_transient_vkbm_booking_mutex_' ) . '%' ) ), $label );
+			}
+		} finally {
+			remove_filter( 'vkbm_booking_payment_check', $payment_check );
+			remove_filter( 'query', $record_mutex_insert );
+		}
+	}
+
+	/**
+	 * 会員の本人予約はプロフィール名を使い、代理入力の名前を受け付けない。
+	 */
+	public function test_create_booking_customer_name_by_capability(): void {
+		$this->disable_nomination();
+		$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+		$test_cases = array(
+			array(
+				'label'    => '本人予約はプロフィール名',
+				'manager'  => false,
+				'input'    => null,
+				'expected' => '会員 姓名',
+			),
+			array(
+				'label'    => '会員からの名前指定を無視',
+				'manager'  => false,
+				'input'    => '別のお客様',
+				'expected' => '会員 姓名',
+			),
+			array(
+				'label'    => '代理予約は電話なしでも入力名を保存',
+				'manager'  => true,
+				'input'    => '<b>お客様</b>',
+				'expected' => 'お客様',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			// 管理者ロールではなく予約管理権限だけを付け、判定の範囲を確認する。
+			$user_id = $this->factory()->user->create( array( 'first_name' => '姓名', 'last_name' => '会員' ) );
+			if ( $case['manager'] ) {
+				get_user_by( 'id', $user_id )->add_cap( Capabilities::MANAGE_RESERVATIONS );
+			}
+			wp_set_current_user( $user_id );
+			$menu_id  = $this->create_menu();
+			$staff_id = $this->create_staff();
+			$start    = '2026-08-01T10:00:00+09:00';
+			$end      = '2026-08-01T10:30:00+09:00';
+			$token    = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+			$request  = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+			if ( null !== $case['input'] ) {
+				$request->set_param( 'customer_name', $case['input'] );
+			}
+			$response = $this->build_controller( $staff_id, $start, $end )->create_booking( $request );
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['label'] );
+			$booking_id = (int) $response->get_data()['booking_id'];
+			$this->assertSame( $case['expected'], get_post_meta( $booking_id, '_vkbm_booking_customer_name', true ), $case['label'] );
+			$this->assertSame( $user_id, (int) get_post( $booking_id )->post_author, $case['label'] );
+		}
+	}
+
+	/**
+	 * 代理予約で電話番号が一致する会員の重複予約を拒否する。
+	 */
 	public function test_admin_booking_conflict_when_phone_matches_user(): void {
 		$menu_id  = $this->create_menu();
 		$staff_id = $this->create_staff();
@@ -138,6 +254,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 
 		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 		$request->set_param( 'token', $token );
+		$request->set_param( 'customer_name', '代理予約のお客様' );
 		$request->set_param( 'customer_phone', $phone );
 
 		$response = $controller->create_booking( $request );
@@ -145,6 +262,9 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 'booking_time_conflict', $response->get_error_code() );
 	}
 
+	/**
+	 * 入力した予約者名を保存し、電話番号が一致した会員を予約の持ち主にする。
+	 */
 	public function test_admin_booking_author_matches_user_when_phone_matches(): void {
 		$menu_id  = $this->create_menu();
 		$staff_id = $this->create_staff();
@@ -173,6 +293,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 
 		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 		$request->set_param( 'token', $token );
+		$request->set_param( 'customer_name', '代理予約のお客様' );
 		$request->set_param( 'customer_phone', $phone );
 
 		$response = $controller->create_booking( $request );
@@ -184,6 +305,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 
 		$booking = get_post( $booking_id );
 		$this->assertSame( $matched_user_id, (int) $booking->post_author );
+		$this->assertSame( '代理予約のお客様', get_post_meta( $booking_id, '_vkbm_booking_customer_name', true ) );
 		$this->assertSame( 'matched@example.com', (string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ) );
 	}
 
@@ -253,6 +375,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 
 			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 			$request->set_param( 'token', $token );
+			$request->set_param( 'customer_name', '代理予約のお客様' );
 			$request->set_param( 'customer_phone', $case['input_phone'] );
 
 			$response = $controller->create_booking( $request );
@@ -280,6 +403,9 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		}
 	}
 
+	/**
+	 * 会員と一致しない電話番号での代理予約は、操作した管理者を持ち主にする。
+	 */
 	public function test_admin_booking_author_is_admin_when_phone_missing_or_unmatched(): void {
 		$menu_id  = $this->create_menu();
 		$staff_id = $this->create_staff();
@@ -302,6 +428,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 
 		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 		$request->set_param( 'token', $token );
+		$request->set_param( 'customer_name', '代理予約のお客様' );
 		$request->set_param( 'customer_phone', '090-9999-9999' );
 
 		$response = $controller->create_booking( $request );
@@ -790,6 +917,507 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				),
 				$case['test_condition_name']
 			);
+		}
+	}
+
+	/**
+	 * 確定時点の設定と予約者の権限に従って利用者名を保存・検証する。
+	 */
+	public function test_create_booking_attendee_name(): void {
+		$repository = new Settings_Repository();
+		$menu_id    = $this->create_menu();
+		$staff_id   = $this->create_staff();
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '任意・会員・値あり => 保存する',
+				'mode'                => 'optional',
+				'manager'             => false,
+				'draft_value'         => '利用者花子',
+				'request_value'       => null,
+				'expected'            => '利用者花子',
+				'error'               => '',
+			),
+			array(
+				'test_condition_name' => '必須・会員・空 => エラー',
+				'mode'                => 'required',
+				'manager'             => false,
+				'draft_value'         => '',
+				'request_value'       => null,
+				'expected'            => '',
+				'error'               => 'attendee_name_required',
+			),
+			array(
+				'test_condition_name' => '必須・代理予約・空 => 保存できる',
+				'mode'                => 'required',
+				'manager'             => true,
+				'draft_value'         => '',
+				'request_value'       => null,
+				'expected'            => '',
+				'error'               => '',
+			),
+			array(
+				'test_condition_name' => '無効・送信値あり => 保存しない',
+				'mode'                => 'disabled',
+				'manager'             => false,
+				'draft_value'         => '下書き値',
+				'request_value'       => '改ざん値',
+				'expected'            => '',
+				'error'               => '',
+			),
+			array(
+				'test_condition_name' => '下書き後に必須へ変更・空 => 確定時にエラー',
+				'mode'                => 'required',
+				'manager'             => false,
+				'draft_value'         => '',
+				'request_value'       => null,
+				'expected'            => '',
+				'error'               => 'attendee_name_required',
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			$settings                               = $repository->get_settings();
+			$settings['booking_attendee_name_mode'] = $case['mode'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			$user_id = $case['manager'] ? $this->create_admin_user() : $this->factory()->user->create();
+			wp_set_current_user( $user_id );
+			$day = 10 + $index;
+
+			$start = sprintf( '2027-01-%02dT10:00:00+09:00', $day );
+
+			$end = sprintf( '2027-01-%02dT10:30:00+09:00', $day );
+
+			$token = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+
+			$draft                  = get_transient( self::TRANSIENT_PREFIX . $token );
+			$draft['attendee_name'] = $case['draft_value'];
+			$draft['owner_user_id'] = $user_id;
+			set_transient( self::TRANSIENT_PREFIX . $token, $draft );
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+			if ( $case['manager'] ) {
+				$request->set_param( 'customer_name', '代理予約のお客様' );
+			}
+			if ( null !== $case['request_value'] ) {
+				$request->set_param( 'attendee_name', $case['request_value'] );
+			}
+			$response = $this->build_controller( $staff_id, $start, $end )->create_booking( $request );
+			if ( '' !== $case['error'] ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['error'], $response->get_error_code(), $case['test_condition_name'] );
+				continue;
+			}
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] . ( is_wp_error( $response ) ? ': ' . $response->get_error_code() : '' ) );
+			$booking_id = (int) $response->get_data()['booking_id'];
+			$this->assertSame( $case['expected'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_name', true ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 名簿機能を有効にした設定を保存する。
+	 *
+	 * @param array<string,mixed> $override 上書きする設定。
+	 */
+	private function enable_attendee_roster( array $override = [] ): void {
+		$settings = array_merge(
+			( new Settings_Repository() )->get_settings(),
+			[
+				'attendee_roster_enabled'   => true,
+				'attendee_roster_show_self' => true,
+				'attendee_number_enabled'   => true,
+			],
+			$override
+		);
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+	}
+
+	/**
+	 * 予約確定のリクエストを組み立てて実行する。
+	 *
+	 * @param int                 $user_id  ログインさせるユーザー。
+	 * @param int                 $menu_id  メニュー ID。
+	 * @param int                 $staff_id スタッフ ID。
+	 * @param string              $day      日付（Y-m-d）。
+	 * @param array<string,mixed> $params   リクエストの追加パラメーター。
+	 * @return WP_REST_Response|WP_Error 予約確定の結果。
+	 */
+	private function create_booking_with_params( int $user_id, int $menu_id, int $staff_id, string $day, array $params ) {
+		wp_set_current_user( $user_id );
+		$start = $day . 'T10:00:00+09:00';
+		$end   = $day . 'T10:30:00+09:00';
+		$token = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+
+		$draft                  = get_transient( self::TRANSIENT_PREFIX . $token );
+		$draft['owner_user_id'] = $user_id;
+		set_transient( self::TRANSIENT_PREFIX . $token, $draft );
+
+		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+		$request->set_param( 'token', $token );
+		$request->set_param( 'agree_terms', true );
+		foreach ( $params as $key => $value ) {
+			$request->set_param( $key, $value );
+		}
+		return $this->build_controller( $staff_id, $start, $end )->create_booking( $request );
+	}
+
+	/**
+	 * 名簿の選択を、予約者の名簿と照合して予約へ保存する。
+	 */
+	public function test_create_booking_attendee_roster(): void {
+		$this->enable_attendee_roster();
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$roster   = new Attendee_Roster();
+
+		$family_id = '11111111-1111-4111-8111-111111111111';
+		$others_id = '22222222-2222-4222-8222-222222222222';
+		$new_id    = '33333333-3333-4333-8333-333333333333';
+		$user_id   = $this->factory()->user->create(
+			[
+				'first_name' => '一郎',
+				'last_name'  => '山田',
+			]
+		);
+		$other_id  = $this->factory()->user->create();
+		$roster->save(
+			$user_id,
+			[
+				[ 'id' => 'self', 'name' => '山田 一郎', 'kana' => '', 'number' => 'S-1' ],
+				[ 'id' => $family_id, 'name' => 'ポチ', 'kana' => '', 'number' => 'P-2' ],
+			]
+		);
+		$roster->save(
+			$other_id,
+			[
+				[ 'id' => 'self', 'name' => '他人', 'kana' => '', 'number' => '' ],
+				[ 'id' => $others_id, 'name' => '他人のペット', 'kana' => '', 'number' => 'O-9' ],
+			]
+		);
+
+		$test_cases = [
+			[
+				'test_condition_name' => '名簿の人を選ぶ => 名簿の名前と番号が予約に保存される',
+				'params'              => [ 'attendee_id' => $family_id, 'attendee_name' => '改ざん', 'attendee_number' => '999' ],
+				'expected'            => [ 'id' => $family_id, 'name' => 'ポチ', 'number' => 'P-2' ],
+			],
+			[
+				'test_condition_name' => '本人を選ぶ => self とプロフィールの名前・名簿の番号が保存される',
+				'params'              => [ 'attendee_id' => 'self' ],
+				'expected'            => [ 'id' => 'self', 'name' => '一郎 山田', 'number' => 'S-1' ],
+			],
+			[
+				'test_condition_name' => '名簿に無い人を手入力 => manual と名前だけが保存される',
+				'params'              => [ 'attendee_id' => 'manual', 'attendee_name' => '知人の犬', 'attendee_number' => 'X-1' ],
+				'expected'            => [ 'id' => 'manual', 'name' => '知人の犬', 'number' => '' ],
+			],
+			[
+				'test_condition_name' => '手入力して名簿に保存 => 指定した UUID が ID になり名簿にも入る',
+				'params'              => [ 'attendee_id' => 'manual', 'attendee_name' => '新しい子', 'attendee_new_id' => $new_id, 'attendee_save_to_roster' => true ],
+				'expected'            => [ 'id' => $new_id, 'name' => '新しい子', 'number' => '' ],
+			],
+			[
+				'test_condition_name' => '同じ UUID で再度保存 => 名簿は増えず同じ ID で予約される',
+				'params'              => [ 'attendee_id' => 'manual', 'attendee_name' => '新しい子', 'attendee_new_id' => $new_id, 'attendee_save_to_roster' => true ],
+				'expected'            => [ 'id' => $new_id, 'name' => '新しい子', 'number' => '' ],
+			],
+			[
+				'test_condition_name' => '他人の名簿の UUID => 確定しない',
+				'params'              => [ 'attendee_id' => $others_id ],
+				'error'               => 'attendee_not_found',
+			],
+			[
+				'test_condition_name' => '存在しない UUID => 確定しない',
+				'params'              => [ 'attendee_id' => '99999999-9999-4999-8999-999999999999' ],
+				'error'               => 'attendee_not_found',
+			],
+			[
+				'test_condition_name' => '手入力の名前が空 => 確定しない',
+				'params'              => [ 'attendee_id' => 'manual', 'attendee_name' => '' ],
+				'error'               => 'attendee_name_required',
+			],
+		];
+
+		foreach ( $test_cases as $index => $case ) {
+			$before   = $this->count_booking_posts();
+			$response = $this->create_booking_with_params( $user_id, $menu_id, $staff_id, sprintf( '2027-03-%02d', 1 + $index ), $case['params'] );
+			if ( isset( $case['error'] ) ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['error'], $response->get_error_code(), $case['test_condition_name'] );
+				$this->assertSame( $before, $this->count_booking_posts(), $case['test_condition_name'] . '（予約は作られない）' );
+				continue;
+			}
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] . ( is_wp_error( $response ) ? ': ' . $response->get_error_code() : '' ) );
+			$booking_id = (int) $response->get_data()['booking_id'];
+			$this->assertSame( $case['expected']['id'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_id', true ), $case['test_condition_name'] . '（ID）' );
+			$this->assertSame( $case['expected']['name'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_name', true ), $case['test_condition_name'] . '（名前）' );
+			$this->assertSame( $case['expected']['number'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_number', true ), $case['test_condition_name'] . '（番号）' );
+		}
+
+		// 保存した新しい子は名簿に1件だけ入り、他人の名簿は変わらない。
+		$this->assertSame( [ 'self', $family_id, $new_id ], array_column( $roster->get( $user_id ), 'id' ), '名簿には新しい子が1件だけ増える' );
+		$this->assertSame( [ 'self', $others_id ], array_column( $roster->get( $other_id ), 'id' ), '他人の名簿は変わらない' );
+	}
+
+	/**
+	 * 予約が失敗しても、先に保存した名簿の登録は残る。
+	 */
+	public function test_create_booking_keeps_roster_when_booking_fails(): void {
+		$this->enable_attendee_roster();
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$user_id  = $this->factory()->user->create();
+		$new_id   = '55555555-5555-4555-8555-555555555555';
+
+		// 同じ会員が同じ時間に予約済みで、確定は時間の重複で失敗する。
+		$this->create_booking_post( $user_id, $staff_id, '2027-04-01T10:00:00+09:00', '2027-04-01T10:30:00+09:00' );
+		$response = $this->create_booking_with_params(
+			$user_id,
+			$menu_id,
+			$staff_id,
+			'2027-04-01',
+			[
+				'attendee_id'             => 'manual',
+				'attendee_name'           => '残る子',
+				'attendee_new_id'         => $new_id,
+				'attendee_save_to_roster' => true,
+			]
+		);
+
+		$this->assertInstanceOf( WP_Error::class, $response, '時間が重複して確定は失敗する' );
+		$this->assertSame( 'booking_time_conflict', $response->get_error_code() );
+		$this->assertContains( $new_id, array_column( ( new Attendee_Roster() )->get( $user_id ), 'id' ), '名簿の登録は残る' );
+	}
+
+	/**
+	 * 代理予約では、電話番号が一致した会員の名簿と照合し、会員の名簿へ保存できる。
+	 */
+	public function test_create_booking_attendee_roster_proxy(): void {
+		$this->enable_attendee_roster();
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$roster   = new Attendee_Roster();
+
+		$family_id = '11111111-1111-4111-8111-111111111111';
+		$others_id = '77777777-7777-4777-8777-777777777777';
+		$new_id    = '66666666-6666-4666-8666-666666666666';
+		$member_id = $this->factory()->user->create( [ 'user_email' => 'member-proxy@example.com' ] );
+		$other_id  = $this->factory()->user->create();
+		$phone     = '090-3333-4444';
+		update_user_meta( $member_id, 'phone_number', VKBM_Helper::normalize_phone_number( $phone ) );
+		$roster->save(
+			$member_id,
+			[
+				[ 'id' => 'self', 'name' => '会員', 'kana' => '', 'number' => 'M-0' ],
+				[ 'id' => $family_id, 'name' => '会員のペット', 'kana' => '', 'number' => 'M-5' ],
+			]
+		);
+		$roster->save(
+			$other_id,
+			[
+				[ 'id' => 'self', 'name' => '他人', 'kana' => '', 'number' => '' ],
+				[ 'id' => $others_id, 'name' => '他人のペット', 'kana' => '', 'number' => '' ],
+			]
+		);
+		$admin_id = $this->create_admin_user();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '一致した会員の名簿の人を選ぶ => 名簿の名前と番号が保存される',
+				'params'              => [ 'customer_name' => '代理のお客様', 'customer_phone' => $phone, 'attendee_id' => $family_id ],
+				'expected'            => [ 'id' => $family_id, 'name' => '会員のペット', 'number' => 'M-5' ],
+			],
+			[
+				'test_condition_name' => '一致しない会員の UUID を選ぶ => 確定しない',
+				'params'              => [ 'customer_name' => '代理のお客様', 'customer_phone' => $phone, 'attendee_id' => $others_id ],
+				'error'               => 'attendee_not_found',
+			],
+			[
+				'test_condition_name' => '手入力して会員の名簿に保存 => 会員の名簿に入り、番号も保存される',
+				'params'              => [ 'customer_name' => '代理のお客様', 'customer_phone' => $phone, 'attendee_id' => 'manual', 'attendee_name' => '代理で追加', 'attendee_number' => 'M-6', 'attendee_new_id' => $new_id, 'attendee_save_to_roster' => true ],
+				'expected'            => [ 'id' => $new_id, 'name' => '代理で追加', 'number' => 'M-6' ],
+			],
+			[
+				'test_condition_name' => '一致した会員の代理予約で空のまま確定 => manual（名前なし）が入り、本人の番号は出ない',
+				'params'              => [ 'customer_name' => '代理のお客様', 'customer_phone' => $phone ],
+				'expected'            => [ 'id' => 'manual', 'name' => '', 'number' => '' ],
+				'display_number'      => '',
+			],
+			[
+				'test_condition_name' => '電話番号が一致しない代理予約で手入力 => manual で保存される',
+				'params'              => [ 'customer_name' => '代理のお客様', 'customer_phone' => '', 'attendee_id' => 'manual', 'attendee_name' => '飛び込みの子' ],
+				'expected'            => [ 'id' => 'manual', 'name' => '飛び込みの子', 'number' => '' ],
+			],
+		];
+
+		foreach ( $test_cases as $index => $case ) {
+			$response = $this->create_booking_with_params( $admin_id, $menu_id, $staff_id, sprintf( '2027-05-%02d', 1 + $index ), $case['params'] );
+			if ( isset( $case['error'] ) ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['error'], $response->get_error_code(), $case['test_condition_name'] );
+				continue;
+			}
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] . ( is_wp_error( $response ) ? ': ' . $response->get_error_code() : '' ) );
+			$booking_id = (int) $response->get_data()['booking_id'];
+			$this->assertSame( $case['expected']['id'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_id', true ), $case['test_condition_name'] . '（ID）' );
+			$this->assertSame( $case['expected']['name'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_name', true ), $case['test_condition_name'] . '（名前）' );
+			$this->assertSame( $case['expected']['number'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_number', true ), $case['test_condition_name'] . '（番号）' );
+			if ( isset( $case['display_number'] ) ) {
+				$this->assertSame( $case['display_number'], \VKBookingManager\Attendees\Booking_Attendee_Display::get( $booking_id )['number'], $case['test_condition_name'] . '（一覧の番号）' );
+			}
+		}
+
+		$this->assertSame( [ 'self', $family_id, $new_id ], array_column( $roster->get( $member_id ), 'id' ), '会員の名簿に1件だけ増える' );
+	}
+
+	/**
+	 * 選択肢の取得は、会員自身の名簿・代理予約で一致した会員の名簿を返す。
+	 */
+	public function test_get_booking_attendee_options(): void {
+		$this->enable_attendee_roster();
+		$staff_id  = $this->create_staff();
+		$family_id = '11111111-1111-4111-8111-111111111111';
+		$member_id = $this->factory()->user->create(
+			[
+				'first_name' => '一郎',
+				'last_name'  => '山田',
+			]
+		);
+		$phone     = '090-5555-6666';
+		update_user_meta( $member_id, 'phone_number', VKBM_Helper::normalize_phone_number( $phone ) );
+		( new Attendee_Roster() )->save(
+			$member_id,
+			[
+				[ 'id' => 'self', 'name' => '山田 一郎', 'kana' => '', 'number' => 'S-1' ],
+				[ 'id' => $family_id, 'name' => 'ポチ', 'kana' => '', 'number' => 'P-2' ],
+			]
+		);
+		$admin_id = $this->create_admin_user();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '会員自身 => 自分の名簿を返す',
+				'user_id'             => $member_id,
+				'phone'               => null,
+				'expected_ids'        => [ 'self', $family_id ],
+			],
+			[
+				'test_condition_name' => '代理予約で電話番号が一致 => その会員の名簿を返す',
+				'user_id'             => $admin_id,
+				'phone'               => $phone,
+				'expected_ids'        => [ 'self', $family_id ],
+			],
+			[
+				'test_condition_name' => '代理予約で電話番号が未入力 => 選択肢は空',
+				'user_id'             => $admin_id,
+				'phone'               => null,
+				'expected_ids'        => [],
+			],
+			[
+				'test_condition_name' => '代理予約で電話番号が一致しない => 選択肢は空',
+				'user_id'             => $admin_id,
+				'phone'               => '090-0000-0000',
+				'expected_ids'        => [],
+			],
+		];
+
+		$controller = $this->build_controller( $staff_id, '2027-06-01T10:00:00+09:00', '2027-06-01T10:30:00+09:00' );
+		foreach ( $test_cases as $case ) {
+			wp_set_current_user( $case['user_id'] );
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/booking-attendees' );
+			if ( null !== $case['phone'] ) {
+				$request->set_param( 'customer_phone', $case['phone'] );
+			}
+			$data = $controller->get_booking_attendee_options( $request )->get_data();
+			$this->assertTrue( $data['enabled'], $case['test_condition_name'] );
+			$this->assertSame( $case['expected_ids'], array_column( $data['items'], 'id' ), $case['test_condition_name'] );
+		}
+
+		// 名簿機能が無効なら enabled だけを返す。
+		$this->enable_attendee_roster( [ 'attendee_roster_enabled' => false ] );
+		wp_set_current_user( $member_id );
+		$data = $controller->get_booking_attendee_options( new WP_REST_Request( 'GET', '/vkbm/v1/booking-attendees' ) )->get_data();
+		$this->assertSame( [ 'enabled' => false ], $data, '名簿機能が無効 => enabled が false' );
+	}
+
+	/**
+	 * 一般の利用者の予約が、基本設定の予約ステータスに応じた初期ステータスと通知で保存されることを検証する（#924）。
+	 */
+	public function test_create_booking_initial_status_by_settings(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$user_id  = $this->factory()->user->create();
+
+		$test_cases = [
+			[
+				'test_condition_name' => '基本設定が未保存の新規サイト => pending で保存され、仮予約の通知が送られる',
+				'saved_option'        => null,
+				'expected_status'     => 'pending',
+				'expected_calls'      => [ 'pending' ],
+			],
+			[
+				'test_condition_name' => '保存済みで予約ステータスのキーが無い既存サイト => confirmed で保存され、確定の通知が送られる',
+				'saved_option'        => [ 'provider_name' => 'テスト店舗' ],
+				'expected_status'     => 'confirmed',
+				'expected_calls'      => [ 'confirmed' ],
+			],
+			[
+				'test_condition_name' => '予約ステータスが pending => pending で保存され、仮予約の通知が送られる',
+				'saved_option'        => [ 'provider_booking_status_mode' => 'pending' ],
+				'expected_status'     => 'pending',
+				'expected_calls'      => [ 'pending' ],
+			],
+			[
+				'test_condition_name' => '予約ステータスが confirmed => confirmed で保存され、確定の通知が送られる',
+				'saved_option'        => [ 'provider_booking_status_mode' => 'confirmed' ],
+				'expected_status'     => 'confirmed',
+				'expected_calls'      => [ 'confirmed' ],
+			],
+		];
+
+		foreach ( $test_cases as $index => $case ) {
+			delete_option( Settings_Repository::OPTION_KEY );
+			if ( null !== $case['saved_option'] ) {
+				update_option( Settings_Repository::OPTION_KEY, $case['saved_option'] );
+			}
+
+			// 一般の利用者として、通知の呼び出しを記録するコントローラーで予約する。
+			wp_set_current_user( $user_id );
+			$day   = sprintf( '2027-05-%02d', 1 + $index );
+			$start = $day . 'T10:00:00+09:00';
+			$end   = $day . 'T10:30:00+09:00';
+			$token = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+			$draft = get_transient( self::TRANSIENT_PREFIX . $token );
+			$draft['owner_user_id'] = $user_id;
+			set_transient( self::TRANSIENT_PREFIX . $token, $draft );
+
+			$notification = new Booking_Notification_Service_Recording_Double();
+			$controller   = new Booking_Confirmation_Controller(
+				$notification,
+				new Settings_Repository(),
+				new Availability_Service_Test_Double(
+					[
+						'slot_id'              => 'slot-1',
+						'start_at'             => $start,
+						'end_at'               => $end,
+						'service_end_at'       => $end,
+						'staff'                => [ 'id' => $staff_id ],
+						'assignable_staff_ids' => [ $staff_id ],
+					]
+				)
+			);
+
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+			$response = $controller->create_booking( $request );
+
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] . ( is_wp_error( $response ) ? ': ' . $response->get_error_code() : '' ) );
+			$booking_id = (int) $response->get_data()['booking_id'];
+			$this->assertSame( $case['expected_status'], (string) get_post_meta( $booking_id, '_vkbm_booking_status', true ), $case['test_condition_name'] . '（保存されたステータス）' );
+			$this->assertSame( $case['expected_calls'], $notification->calls, $case['test_condition_name'] . '（通知）' );
 		}
 	}
 
@@ -1850,6 +2478,9 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 				$request->set_param( 'token', $token );
 				$request->set_param( 'agree_terms', true );
+				if ( $case['conditions']['is_admin'] ) {
+					$request->set_param( 'customer_name', '代理予約のお客様' );
+				}
 
 				$response = $controller->create_booking( $request );
 
@@ -2477,6 +3108,30 @@ class Booking_Notification_Service_Test_Double extends Booking_Notification_Serv
 
 	public function handle_pending_creation( int $booking_id ): void {
 		// Do nothing in tests.
+	}
+}
+
+/**
+ * 通知の呼び出し（仮予約か確定か）を記録するテスト用ダブル。
+ */
+class Booking_Notification_Service_Recording_Double extends Booking_Notification_Service {
+	/**
+	 * 呼ばれた通知の種類（'pending' / 'confirmed'）を呼ばれた順に記録する。
+	 *
+	 * @var array<int,string>
+	 */
+	public array $calls = [];
+
+	public function __construct() {
+		parent::__construct( new Settings_Repository() );
+	}
+
+	public function handle_confirmed_creation( int $booking_id ): void {
+		$this->calls[] = 'confirmed';
+	}
+
+	public function handle_pending_creation( int $booking_id ): void {
+		$this->calls[] = 'pending';
 	}
 }
 

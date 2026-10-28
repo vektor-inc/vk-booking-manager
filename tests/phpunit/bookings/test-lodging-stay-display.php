@@ -681,10 +681,18 @@ class Lodging_Stay_Display_Test extends WP_UnitTestCase {
 		$stay_html = $this->render_edit_screen( $this->create_stay_booking( $menu_id ) );
 		$this->assertStringNotContainsString( 'vkbm_booking[is_staff_preferred]', $stay_html );
 		$this->assertStringNotContainsString( 'Nomination category', $stay_html );
+		$this->assertStringNotContainsString( 'Selection category', $stay_html );
 
 		$slot_html = $this->render_edit_screen( $this->create_booking( $menu_id, '2026-10-10 10:00:00', '2026-10-10 11:00:00' ) );
 		$this->assertStringContainsString( 'name="vkbm_booking[is_staff_preferred]"', $slot_html );
-		$this->assertStringContainsString( 'Nomination category', $slot_html );
+		$this->assertStringContainsString( 'Selection category', $slot_html );
+
+		// 宿泊以外のサイトでは、時間枠の予約に指名区分の見出しが出る。
+		$this->set_site( 'salon' );
+		$salon_html = $this->render_edit_screen( $this->create_booking( $menu_id, '2026-10-10 10:00:00', '2026-10-10 11:00:00' ) );
+		$this->assertStringContainsString( 'name="vkbm_booking[is_staff_preferred]"', $salon_html );
+		$this->assertStringContainsString( 'Nomination category', $salon_html );
+		$this->assertStringNotContainsString( 'Selection category', $salon_html );
 	}
 
 	/**

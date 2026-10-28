@@ -2721,6 +2721,85 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 利用者名のモード・権限に応じた一時保存を検証する。
+	 */
+	public function test_save_draft_attendee_name(): void {
+		$menu_id    = $this->create_menu();
+		$repository = new Settings_Repository();
+		$user_id    = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$this->owner_ids[] = 'user:' . $user_id;
+
+		$test_cases = [
+			[
+				'test_condition_name' => '任意・値あり => 保存する',
+				'mode'                => 'optional',
+				'value'               => '  花子  ',
+				'manager'             => false,
+				'expected'            => '花子',
+				'error'               => '',
+			],
+			[
+				'test_condition_name' => '任意・空 => 空で保存する',
+				'mode'                => 'optional',
+				'value'               => '',
+				'manager'             => false,
+				'expected'            => '',
+				'error'               => '',
+			],
+			[
+				'test_condition_name' => '無効・値あり => 保存しない',
+				'mode'                => 'disabled',
+				'value'               => '送信値',
+				'manager'             => false,
+				'expected'            => '',
+				'error'               => '',
+			],
+			[
+				'test_condition_name' => '必須・会員・空 => 空で一時保存する',
+				'mode'                => 'required',
+				'value'               => '',
+				'manager'             => false,
+				'expected'            => '',
+				'error'               => '',
+			],
+			[
+				'test_condition_name' => '必須・代理予約・空 => 空で保存する',
+				'mode'                => 'required',
+				'value'               => '',
+				'manager'             => true,
+				'expected'            => '',
+				'error'               => '',
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			$settings                               = $repository->get_settings();
+			$settings['booking_attendee_name_mode'] = $case['mode'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			if ( $case['manager'] ) {
+				get_userdata( $user_id )->add_cap( \VKBookingManager\Capabilities\Capabilities::MANAGE_RESERVATIONS );
+			} else {
+				get_userdata( $user_id )->remove_cap( \VKBookingManager\Capabilities\Capabilities::MANAGE_RESERVATIONS );
+			}
+			wp_set_current_user( 0 );
+			wp_set_current_user( $user_id );
+			$payload                  = $this->build_payload( $menu_id, '2026-11-01T10:00:00+09:00' );
+			$payload['attendee_name'] = $case['value'];
+			$result                   = $this->save_draft_raw( new Booking_Draft_Controller( $repository ), $payload );
+			if ( '' !== $case['error'] ) {
+				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+				$this->assertSame( $case['error'], $result->get_error_code(), $case['test_condition_name'] );
+				continue;
+			}
+			$this->assertInstanceOf( WP_REST_Response::class, $result, $case['test_condition_name'] . ( is_wp_error( $result ) ? ': ' . $result->get_error_code() : '' ) );
+			$token          = (string) $result->get_data()['token'];
+			$this->tokens[] = $token;
+			$this->assertSame( $case['expected'], get_transient( self::TRANSIENT_PREFIX . $token )['attendee_name'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * save_draft → get_draft で slot.min_capacity / slot.booked_guests が伝搬・サニタイズされることを検証する。
 	 *
 	 * 確定画面の催行注記（未達時のみ表示）はこの2値に依存するため、保存・取得の往復で

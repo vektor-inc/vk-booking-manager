@@ -30,7 +30,8 @@ import {
 	extractAssignableStaffIds,
 	filterLodgingStaffOptions,
 } from './booking-ui/staff-options';
-import { formatStayDate, getTodayIso } from './lodging/stay-dates';
+import { getTodayIso } from './lodging/stay-dates';
+import { formatReservationDate } from './date-format';
 import {
 	extractMenuBasePrice,
 	formatCurrency,
@@ -39,6 +40,7 @@ import {
 import { resolveLoginState } from '../shared/auth';
 import { resolveApiErrorMessage } from '../shared/rest-error-message';
 import { BookingConfirmApp } from './booking-confirm-app';
+import { isLodgingReservation } from '../shared/reservation-config';
 import {
 	buildPriceTierRows,
 	buildServiceBasicFeeRow,
@@ -3282,6 +3284,7 @@ export const ReservationApp = ( {
 		? 'member'
 		: 'guest';
 	const navProps = {
+		isLodging: isLodgingReservation(),
 		screen: 'reservation',
 		variant: navVariant,
 		ariaLabel: navAriaLabel,
@@ -3957,7 +3960,7 @@ export const ReservationApp = ( {
 															'The date you selected (%s) cannot be booked for this menu.',
 															'vk-booking-manager'
 														),
-														formatStayDate(
+														formatReservationDate(
 															carryNotice.date,
 															userBootstrap?.locale
 														)

@@ -119,44 +119,70 @@ function ensureJapaneseLocale(): void {
 }
 
 /**
+ * 指定の認証状態でユーザーを作り直す（既存の同名ユーザーは削除する）。
+ *
+ * 削除・作成・メタ更新を WP-CLI 1 回（wp eval）にまとめる。1 回の WP-CLI 実行は
+ * wp-env 経由で数秒かかり、以前は 3 回に分けていたため 1 件あたり十数秒を消費して
+ * 制限時間（45 秒）に近づいていた（#897）。
+ *
+ * @param login    ユーザー名。
+ * @param email    メールアドレス。
+ * @param password パスワード（空なら自動生成）。
+ * @param status   vkbm_email_verified に入れる値（'0' 未認証 / 'manual' 手動承認）。
+ */
+function recreateUserWithVerification(
+	login: string,
+	email: string,
+	password: string,
+	status: string
+): void {
+	// 値は JSON → base64 で PHP へ渡し、PHP 側で復元する（文字列リテラルへ直接埋め込まない）。
+	const payload = Buffer.from(
+		JSON.stringify( { login, email, password, status } )
+	).toString( 'base64' );
+	wpEvalPhp( `
+		require_once ABSPATH . "wp-admin/includes/user.php";
+		$d = json_decode( base64_decode( '${ payload }' ), true );
+		$old = get_user_by( "login", $d["login"] );
+		if ( $old ) {
+			wp_delete_user( $old->ID );
+		}
+		$pass = "" !== $d["password"] ? $d["password"] : wp_generate_password( 24 );
+		$id   = wp_insert_user( array(
+			"user_login" => $d["login"],
+			"user_email" => $d["email"],
+			"user_pass"  => $pass,
+			"role"       => "subscriber",
+		) );
+		if ( is_wp_error( $id ) ) {
+			throw new Exception( $id->get_error_message() );
+		}
+		update_user_meta( $id, "vkbm_email_verified", $d["status"] );
+	` );
+}
+
+/**
  * メール未認証（'0'）の状態でユーザーを作り直す。
  */
 function ensureUnverifiedUser(): void {
-	try {
-		wpCliArgs( [ 'user', 'delete', UNVERIFIED_USER_LOGIN, '--yes' ] );
-	} catch ( _e ) {
-		// ignore
-	}
-	wpCliArgs( [
-		'user',
-		'create',
+	recreateUserWithVerification(
 		UNVERIFIED_USER_LOGIN,
 		UNVERIFIED_USER_EMAIL,
-		`--user_pass=${ UNVERIFIED_USER_PASSWORD }`,
-		'--role=subscriber',
-		'--porcelain',
-	] );
-	wpCliArgs( [ 'user', 'meta', 'update', UNVERIFIED_USER_LOGIN, 'vkbm_email_verified', '0' ] );
+		UNVERIFIED_USER_PASSWORD,
+		'0'
+	);
 }
 
 /**
  * 手動承認（'manual'）の状態でユーザーを作り直す。
  */
 function ensureManualUser(): void {
-	try {
-		wpCliArgs( [ 'user', 'delete', MANUAL_USER_LOGIN, '--yes' ] );
-	} catch ( _e ) {
-		// ignore
-	}
-	wpCliArgs( [
-		'user',
-		'create',
+	recreateUserWithVerification(
 		MANUAL_USER_LOGIN,
 		MANUAL_USER_EMAIL,
-		'--role=subscriber',
-		'--porcelain',
-	] );
-	wpCliArgs( [ 'user', 'meta', 'update', MANUAL_USER_LOGIN, 'vkbm_email_verified', 'manual' ] );
+		'',
+		'manual'
+	);
 }
 
 /**
@@ -294,12 +320,21 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 		await page.locator( '#user_login' ).fill( ADMIN_USER );
 		await page.locator( '#user_pass' ).fill( ADMIN_PASSWORD );
 		await page.locator( '#wp-submit' ).click();
-		await page.waitForLoadState( 'networkidle' );
+		// 管理画面への遷移（=ログイン Cookie の発行）が終わるまで待つ。
+		// 以前は networkidle を待っていたが、クリック直後はまだ遷移が始まっておらず
+		// 即座に解決することがあり、ログイン POST の完了前に次の goto が走って
+		// 未ログインのままログイン画面へ戻され、バッジが見つからないことがあった（#897）。
+		await page.waitForURL( /\/wp-admin\//, { timeout: 30000 } );
 
 		await page.goto( `${ WP_BASE_URL }/wp-admin/users.php?s=${ MANUAL_USER_LOGIN }` );
-		await page.waitForLoadState( 'networkidle' );
+		// ユーザー一覧の表（検索結果の行）が描画されてからバッジを探す。
+		const userRow = page.locator( '#the-list tr', {
+			hasText: MANUAL_USER_LOGIN,
+		} );
+		await expect( userRow ).toBeVisible( { timeout: 15000 } );
 
-		const badge = page.locator( '.vkbm-email-verification-badge--manual' );
+		// 別ユーザーの行のバッジで合格しないよう、対象ユーザーの行の中だけを探す。
+		const badge = userRow.locator( '.vkbm-email-verification-badge--manual' );
 		await expect( badge ).toBeVisible( { timeout: 10000 } );
 	} );
 } );

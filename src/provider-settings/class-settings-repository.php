@@ -43,6 +43,26 @@ class Settings_Repository {
 	public const DETAIL_DISPLAY_MODES = array( self::DETAIL_DISPLAY_MODE_BLOCK, self::DETAIL_DISPLAY_MODE_TEMPLATE );
 
 	/**
+	 * 予約ステータス（利用者の予約の初期ステータス）の設定キー（#924）。
+	 */
+	public const KEY_BOOKING_STATUS_MODE = 'provider_booking_status_mode';
+
+	/**
+	 * 予約ステータス: 即時確定。
+	 */
+	public const BOOKING_STATUS_MODE_CONFIRMED = 'confirmed';
+
+	/**
+	 * 予約ステータス: 仮予約にする。新規インストールの初期値。
+	 */
+	public const BOOKING_STATUS_MODE_PENDING = 'pending';
+
+	/**
+	 * 予約ステータスとして保存してよい値。
+	 */
+	public const BOOKING_STATUS_MODES = array( self::BOOKING_STATUS_MODE_CONFIRMED, self::BOOKING_STATUS_MODE_PENDING );
+
+	/**
 	 * Option key used for persistence.
 	 *
 	 * @var string
@@ -101,12 +121,21 @@ class Settings_Repository {
 			'provider_max_advance_booking_days'          => 0,
 			'provider_slot_step_minutes'                 => 15,
 			'provider_service_menu_buffer_after_minutes' => 0,
-			'provider_booking_status_mode'               => 'confirmed',
+			'provider_booking_status_mode'               => self::BOOKING_STATUS_MODE_PENDING,
 			// 仮予約の完了画面で見出しの下に表示する案内文。空文字のときは get_default_booking_complete_message_pending() の標準文を表示する。
 			'provider_booking_complete_message_pending'  => '',
 			'provider_booking_cancel_mode'               => 'hours',
 			'provider_booking_cancel_deadline_hours'     => 24,
 			'provider_allow_staff_overlap_admin'         => false,
+			'booking_attendee_name_mode'                 => 'disabled',
+			'booking_attendee_name_label'                => '',
+			'attendee_roster_enabled'                    => false,
+			'attendee_roster_label'                      => '',
+			'attendee_roster_show_self'                  => true,
+			'attendee_roster_kana_enabled'               => false,
+			'attendee_roster_kana_label'                 => '',
+			'attendee_number_enabled'                    => false,
+			'attendee_number_label'                      => '',
 			'provider_website_url'                       => '',
 			'provider_email'                             => '',
 			'mail_from_email'                            => '',
@@ -114,6 +143,7 @@ class Settings_Repository {
 			// シフトの自動登録設定。0=無効（既定）、1〜3=翌月〜3ヶ月先までを自動登録する。
 			// 未保存時は既定の0（無効）が適用されるため、導入前の既存サイトの挙動は変わらない。
 			'shift_auto_register_months'                 => 0,
+			'booking_auto_anonymize_months'              => 0,
 			'booking_reminder_hours'                     => array(),
 			// プラグイン削除時の片付け。既定は「残す（Google連携情報は削除）」。
 			// 既存のサイトが何も変えずにプラグインを削除したとき、予約データが消えないようにするため。
@@ -126,6 +156,8 @@ class Settings_Repository {
 			// #825: フッターの背景色・文字色。空文字は「指定なし」で、CSS 変数を出力せず従来の見た目のままにする。
 			'design_footer_background_color'             => '',
 			'design_footer_text_color'                   => '',
+			// #864: メニューループブロックのグループ見出しと、予約ブロックのメニュー詳細の見出しを、フッターと同じ色にするか。既定はオフ（従来の見た目のまま）。
+			'design_menu_heading_use_footer_color'       => false,
 			// ヘッダーに表示する店舗ロゴ画像の横幅（px）。空は未指定（現状の表示幅のまま）。
 			'design_header_logo_width'                   => '',
 			// 絞り込み検索のデザイン（plain / framed）。選択肢は Settings_Sanitizer::get_design_menu_search_style_choices() で定義する。
@@ -270,6 +302,7 @@ Contact us: Please contact our store.",
 		$settings = array_merge( $defaults, $stored );
 
 		$settings[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] = $this->resolve_service_menu_detail_display_mode( $stored, $has_saved_value );
+		$settings[ self::KEY_BOOKING_STATUS_MODE ]              = $this->resolve_booking_status_mode( $stored, $has_saved_value );
 		$settings = Industry_Presets::apply_effective_values( $settings, $defaults );
 
 		$settings['provider_business_hours_basic'] = $this->normalize_business_hours_basic(
@@ -303,6 +336,28 @@ Contact us: Please contact our store.",
 		$mode = is_string( $stored[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] ) ? $stored[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] : '';
 
 		return in_array( $mode, self::DETAIL_DISPLAY_MODES, true ) ? $mode : self::DETAIL_DISPLAY_MODE_TEMPLATE;
+	}
+
+	/**
+	 * 予約ステータスの実効値を決める（#924）。
+	 *
+	 * 導入直後のサイトだけ仮予約を初期値にし、運用中のサイトの動作は更新で変えない。
+	 * - 保存値がある: 保存値（許可外の値は、確認なしで確定させない 'pending'）
+	 * - 設定は保存済みだがこのキーが無い（予約ステータスの設定が追加される前から使っている既存サイト）: 'confirmed'
+	 * - 設定が一度も保存されていない（新規インストール）: 'pending'
+	 *
+	 * @param array<string,mixed> $stored          保存済みの設定（未保存なら空配列）。
+	 * @param bool                $has_saved_value 設定のオプション自体が保存されているか。
+	 * @return string 'confirmed' または 'pending'。
+	 */
+	private function resolve_booking_status_mode( array $stored, bool $has_saved_value ): string {
+		if ( ! array_key_exists( self::KEY_BOOKING_STATUS_MODE, $stored ) ) {
+			return $has_saved_value ? self::BOOKING_STATUS_MODE_CONFIRMED : self::BOOKING_STATUS_MODE_PENDING;
+		}
+
+		$mode = is_string( $stored[ self::KEY_BOOKING_STATUS_MODE ] ) ? $stored[ self::KEY_BOOKING_STATUS_MODE ] : '';
+
+		return in_array( $mode, self::BOOKING_STATUS_MODES, true ) ? $mode : self::BOOKING_STATUS_MODE_PENDING;
 	}
 
 	/**

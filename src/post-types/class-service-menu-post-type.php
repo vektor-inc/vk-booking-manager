@@ -102,6 +102,20 @@ class Service_Menu_Post_Type {
 	public const META_NIGHT_PRICE_UNIT = '_vkbm_night_price_unit';
 
 	/**
+	 * 「1室1泊あたり」のプランで、規定人数を超えた分の追加料金を使うかのメタキー（#934）。
+	 *
+	 * 使うときだけ '1' を保存する（使わないときは保存しない）。料金の単位が「1室1泊あたり」のときだけ効く。
+	 */
+	public const META_NIGHT_EXTRA_GUEST_ENABLED = '_vkbm_night_extra_guest_enabled';
+
+	/**
+	 * 「1室1泊あたり」のプランで、基本料金に含まれる人数のメタキー（#934）。
+	 *
+	 * 1 以上の整数。追加料金を使うときだけ保存する。
+	 */
+	public const META_NIGHT_INCLUDED_GUESTS = '_vkbm_night_included_guests';
+
+	/**
 	 * 泊単位のプランの基本料金のうち、休前日の料金のメタキー（#737）。
 	 *
 	 * 空欄（未設定）のときは保存しない。未設定の泊は平日の料金（_vkbm_base_price）で計算する。
@@ -194,6 +208,7 @@ class Service_Menu_Post_Type {
 		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
 		// カスタムメタもリビジョンに保存・復元できるよう、対象メタキーを登録する。
 		add_filter( 'wp_post_revision_meta_keys', array( $this, 'filter_revision_meta_keys' ), 10, 2 );
+		add_filter( 'get_sample_permalink', array( $this, 'filter_sample_permalink' ), 10, 5 );
 		add_action( self::TAXONOMY_GROUP . '_add_form_fields', array( $this, 'render_group_term_add_fields' ) );
 		add_action( self::TAXONOMY_GROUP . '_edit_form_fields', array( $this, 'render_group_term_edit_fields' ), 10, 2 );
 		add_action( 'created_' . self::TAXONOMY_GROUP, array( $this, 'save_group_term_display_mode' ) );
@@ -254,6 +269,36 @@ class Service_Menu_Post_Type {
 		);
 
 		register_post_type( self::POST_TYPE, $args );
+	}
+
+	/**
+	 * サービスメニューのサンプルパーマリンクをスラッグ編集可能な形式にする。
+	 *
+	 * rewrite を無効にした投稿タイプでは WordPress 本体が実際のスラッグを含む
+	 * クエリ形式を返すため、ブロックエディターが必要とするプレースホルダーを補う。
+	 *
+	 * @param mixed        $permalink サンプルパーマリンクとスラッグ。
+	 * @param mixed        $post_id   投稿 ID。
+	 * @param mixed        $title     上書きする投稿タイトル。
+	 * @param mixed        $name      上書きする投稿スラッグ。
+	 * @param WP_Post|null $post      投稿オブジェクト。
+	 * @return mixed 補正したサンプルパーマリンクと元のスラッグ。
+	 */
+	public function filter_sample_permalink( $permalink, $post_id, $title, $name, $post = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- フィルターフックのシグネチャに合わせる。
+		// フィルターには未検証の値が届くため、対象を安全に判定できない場合は変更しない。
+		if ( ! is_array( $permalink ) || ! $post instanceof WP_Post || self::POST_TYPE !== $post->post_type ) {
+			return $permalink;
+		}
+
+		$post_type = get_post_type_object( $post->post_type );
+		if ( ! $post_type || ! is_string( $post_type->query_var ) || '' === $post_type->query_var ) {
+			return $permalink;
+		}
+
+		// 実際の個別 URL と同じクエリ形式を保ちつつ、スラッグ部分だけを編集用にする。
+		$permalink[0] = home_url( '?' . $post_type->query_var . '=%postname%' );
+
+		return $permalink;
 	}
 
 	/**
@@ -1830,6 +1875,34 @@ class Service_Menu_Post_Type {
 				'auth_callback'     => $lodging_auth_callback,
 			)
 		);
+		// 1室1泊あたりのプランで規定人数を超えた分の追加料金を使うか（#934）。使うときだけ '1' を保存する。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_NIGHT_EXTRA_GUEST_ENABLED,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): string {
+					return '1' === (string) $value ? '1' : '';
+				},
+				'auth_callback'     => $lodging_auth_callback,
+			)
+		);
+		// 基本料金に含まれる人数（#934）。1 以上の整数。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_NIGHT_INCLUDED_GUESTS,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): int {
+					return max( 1, is_numeric( $value ) ? (int) $value : 1 );
+				},
+				'auth_callback'     => $lodging_auth_callback,
+			)
+		);
 		foreach ( array( self::META_CHECK_IN_TIME, self::META_CHECK_OUT_TIME ) as $time_meta_key ) {
 			register_post_meta(
 				self::POST_TYPE,
@@ -1979,6 +2052,34 @@ class Service_Menu_Post_Type {
 	}
 
 	/**
+	 * 「1室1泊あたり」のプランで、規定人数を超えた分の追加料金を使うかを返す（#934）。
+	 *
+	 * 宿泊が有効な泊単位のメニューで、料金の単位が「1室1泊あたり」かつチェックが入っているときだけ true。
+	 * 宿泊以外の業種へ切り替えたときや時間枠・1名1泊あたりのメニューでは、メタが残っていても false（消さずに効かせないだけ）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 追加料金を使うなら true。
+	 */
+	public static function is_night_extra_guest_fee_enabled( int $menu_id ): bool {
+		return self::is_night_price_per_room( $menu_id )
+			&& '1' === (string) get_post_meta( $menu_id, self::META_NIGHT_EXTRA_GUEST_ENABLED, true );
+	}
+
+	/**
+	 * 基本料金に含まれる人数を返す（#934）。保存値が無い・1 未満は 1。
+	 *
+	 * 追加料金を使うかの判定（is_night_extra_guest_fee_enabled()）は含まない。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return int 基本料金に含まれる人数（1 以上）。
+	 */
+	public static function get_night_included_guests( int $menu_id ): int {
+		$raw = get_post_meta( $menu_id, self::META_NIGHT_INCLUDED_GUESTS, true );
+
+		return max( 1, is_numeric( $raw ) ? (int) $raw : 1 );
+	}
+
+	/**
 	 * このメニューで複数人一括予約が有効か（許可フラグの実効値）を返す（#831）。
 	 *
 	 * 1室1泊あたりの泊のプランは、人数が料金に影響しない代わりに「部屋に泊まれる最大人数」までを常に受け付けるため、
@@ -2062,6 +2163,8 @@ class Service_Menu_Post_Type {
 			'_vkbm_fixed_start_times',
 			self::META_BOOKING_UNIT,
 			self::META_NIGHT_PRICE_UNIT,
+			self::META_NIGHT_EXTRA_GUEST_ENABLED,
+			self::META_NIGHT_INCLUDED_GUESTS,
 			self::META_NIGHT_PRICE_PRE_HOLIDAY,
 			self::META_NIGHT_PRICE_SPECIAL,
 			self::META_CHECK_IN_TIME,
@@ -2178,7 +2281,7 @@ class Service_Menu_Post_Type {
 	 * 予約画面（app.js）はこの値が null かどうかで、宿泊用の画面に切り替えるかを決める。
 	 *
 	 * @param array<string, mixed> $post REST post data.
-	 * @return array{max_guests: int, guest_tiers: array<int, array{label: string, price: int}>, price_unit: string, base_price: int, has_variable_rate: bool, lowest_price: int, check_in_time: string, check_out_time: string}|null 泊単位のプランの情報。泊単位でなければ null。
+	 * @return array{max_guests: int, guest_tiers: array<int, array{label: string, price: int}>, price_unit: string, extra_guest_fee: bool, included_guests: int, base_price: int, has_variable_rate: bool, lowest_price: int, check_in_time: string, check_out_time: string}|null 泊単位のプランの情報。泊単位でなければ null。
 	 */
 	public function get_lodging_rest_field( array $post ): ?array {
 		$post_id = isset( $post['id'] ) ? (int) $post['id'] : 0;
@@ -2186,16 +2289,20 @@ class Service_Menu_Post_Type {
 			return null;
 		}
 
-		$max_guests = Lodging_Booking::get_guest_limit( $post_id );
-		$base_price = (int) get_post_meta( $post_id, '_vkbm_base_price', true );
+		$max_guests  = Lodging_Booking::get_guest_limit( $post_id );
+		$guest_tiers = Lodging_Booking::get_menu_price_tiers( $post_id, $max_guests );
+		$base_price  = (int) get_post_meta( $post_id, '_vkbm_base_price', true );
 
 		// カードの料金行は1回だけ計算し、「〜」の有無と最安の金額の両方に使う。
 		$price_summary = self::summarize_menu_price_rows( Lodging_Price_Display::get_menu_price_rows( $post_id ), $base_price );
 
 		return array(
 			'max_guests'        => $max_guests,
-			'guest_tiers'       => Lodging_Booking::get_menu_price_tiers( $post_id, $max_guests ),
+			'guest_tiers'       => $guest_tiers,
 			'price_unit'        => self::get_night_price_unit( $post_id ),
+			// 規定人数を超えた分の追加料金を使うか、基本料金に含まれる人数（#934）。区分（guest_tiers）が1件も無いときは追加料金を使わない扱い。
+			'extra_guest_fee'   => self::is_night_extra_guest_fee_enabled( $post_id ) && array() !== $guest_tiers,
+			'included_guests'   => self::get_night_included_guests( $post_id ),
 			'base_price'        => $base_price,
 			// 休前日・特定日の料金が平日と違う金額か、その場合の最安の金額。メニューのカードの「〜」の判定と金額（#738）と同じ値にそろえる。
 			'has_variable_rate' => $price_summary['has_variable_rate'],

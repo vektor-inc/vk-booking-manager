@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\Staff\Staff_Editor;
@@ -203,6 +204,8 @@ class Provider_Settings_Controller {
 			// 数量の見出し（実効値）と単位（実効値。null はロケール既定に解決済み）。
 			'guests_count_label'                 => $guests_count_label,
 			'guests_unit_label'                  => $guests_unit_label,
+			'booking_attendee_name_mode'         => Attendee_Name::get_mode( $settings ),
+			'booking_attendee_name_label'        => Attendee_Name::get_label( $settings ),
 		);
 
 		/**

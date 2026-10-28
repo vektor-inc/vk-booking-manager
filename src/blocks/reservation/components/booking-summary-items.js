@@ -46,6 +46,17 @@ export const BookingSummaryItems = ( {
 					{ menuName }
 				</dd>
 			</dl>
+			{ typeof booking?.attendee_name === 'string' &&
+				booking.attendee_name.trim() !== '' && (
+					<dl className="vkbm-confirm__summary-item">
+						<dt className="vkbm-confirm__summary-item-title">
+							{ booking.attendee_name_label }
+						</dt>
+						<dd className="vkbm-confirm__summary-item-value">
+							{ booking.attendee_name }
+						</dd>
+					</dl>
+				) }
 			{ /* 料金区分の予約: 区分ごとの人数を表示する（0名の区分は省略）。 */ }
 			{ Array.isArray( booking?.guest_tiers ) &&
 				booking.guest_tiers.length > 0 &&

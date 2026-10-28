@@ -162,6 +162,7 @@ class Booking_User_Conflict_Recheck_Test extends WP_UnitTestCase {
 			$request->set_param( 'token', $token );
 			$request->set_param( 'agree_terms', true );
 			if ( $case['as_manager'] ) {
+				$request->set_param( 'customer_name', '代理予約のお客様' );
 				$request->set_param( 'customer_phone', $phone );
 			}
 

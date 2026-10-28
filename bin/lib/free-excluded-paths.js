@@ -14,13 +14,21 @@ const path = require( 'path' );
 const FREE_EXCLUDED_PATHS = [
 	// Pro 版の自動更新（無料版は class-vkbm-github-updater.php を使う）。
 	'class-vkbm-pro-updater.php',
+	// 予約の個人情報の自動匿名化（Pro 版限定）。
+	'src/bookings/class-booking-auto-anonymizer.php',
+	'tests/phpunit/bookings/test-booking-auto-anonymizer.php',
 	// Google カレンダー連携（Pro 版限定）。
 	'src/integrations/google-calendar',
+	// 外部カレンダー（iCal）の取り込み（Pro 版の宿泊限定）。
+	'src/integrations/ical-import',
+	'assets/js/external-calendar.js',
 	// リソース（スタッフ）削除ガード（無料版ではスタッフの管理画面が出ないため動かない）。
 	'src/resources/class-resource-delete-guard.php',
 	'assets/js/resource-delete-guard.js',
 	// 上記を対象にしたテスト（無料版の dist の tests/ に残すと、削除済みのクラスを読んで失敗する）。
 	'tests/phpunit/integrations/google-calendar',
+	'tests/phpunit/integrations/ical-import',
+	'tests/e2e/specs/issue-947-ical-import-admin.spec.ts',
 	'tests/phpunit/admin/test-setup-notices-google-calendar.php',
 	'tests/phpunit/admin/test-provider-settings-page-integration-tab.php',
 	'tests/phpunit/resources/test-resource-delete-guard.php',

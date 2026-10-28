@@ -92,5 +92,17 @@ describe( 'FREE_EXCLUDED_PATHS', () => {
 		expect( FREE_EXCLUDED_PATHS ).toContain(
 			'src/integrations/google-calendar'
 		);
+		expect( FREE_EXCLUDED_PATHS ).toContain(
+			'src/integrations/ical-import'
+		);
+		expect( FREE_EXCLUDED_PATHS ).toContain(
+			'tests/phpunit/integrations/ical-import'
+		);
+		expect( FREE_EXCLUDED_PATHS ).toContain(
+			'assets/js/external-calendar.js'
+		);
+		expect( FREE_EXCLUDED_PATHS ).toContain(
+			'tests/e2e/specs/issue-947-ical-import-admin.spec.ts'
+		);
 	} );
 } );

@@ -33,7 +33,7 @@
 // =============================================================================
 // 切り替えるタブの一覧。タブを足すときは、ここに名前を1つ足すだけで切替の CSS が揃う
 // （PHP 側は、そのタブの行に vkbm-provider-settings__tab-{名前} を付ける）。
-$vkbm-provider-settings-tabs: store, system, email, registration, consent, design, advanced, faq, license;
+$vkbm-provider-settings-tabs: store, system, attendees, email, registration, consent, design, advanced, faq, license;
 
 .vkbm-provider-settings {
 

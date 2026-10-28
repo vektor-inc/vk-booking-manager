@@ -44,6 +44,14 @@
 		cursor: not-allowed;
 	}
 
+	.vkbm-calendar__day--unavailable {
+		cursor: not-allowed;
+
+		.vkbm-calendar__day-label {
+			opacity: 0.4;
+		}
+	}
+
 	// 途中の日は、枠線なしの淡い背景で期間を帯のように見せる。
 	.vkbm-calendar__day--range-between {
 		background: color-mix(in srgb, var(--vkbm--color--accent, #1d8fcb) 12%, transparent);
@@ -61,10 +69,31 @@
 	}
 }
 
+.vkbm-calendar__day-unavailable-mark,
+.vkbm-calendar__day-badge {
+	min-height: 1rem;
+	line-height: 1;
+}
+
+.vkbm-calendar__day-unavailable-mark {
+	font-weight: 700;
+}
+
+.vkbm-stay-calendar__loading {
+	margin-left: 0.5rem;
+	font-size: var(--vkbm--font-size--sm, 0.875rem);
+	font-weight: 400;
+}
+
+.vkbm-lodging__availability-legend {
+	margin: 0 0 var(--vkbm--spacing--xs, 0.5rem);
+	font-size: var(--vkbm--font-size--sm, 0.875rem);
+	color: inherit;
+}
+
 // 端の日の小ラベル（IN / OUT）。
 .vkbm-calendar__day-badge {
 	font-size: 0.625rem;
-	line-height: 1;
 	font-weight: 700;
 }
 

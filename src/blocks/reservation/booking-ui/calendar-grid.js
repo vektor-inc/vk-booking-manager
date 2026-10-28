@@ -1,5 +1,6 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { useMemo } from '@wordpress/element';
+import { formatReservationDate } from '../date-format';
 
 const WEEKDAYS = [
 	__( 'Sun', 'vk-booking-manager' ),
@@ -87,8 +88,6 @@ const buildCalendarMatrix = ( year, month ) => {
 	return weeks;
 };
 
-const todayIso = toISODate( new Date() );
-
 export const CalendarGrid = ( {
 	year,
 	month,
@@ -100,6 +99,8 @@ export const CalendarGrid = ( {
 	locale,
 	closedDayLabel = '',
 } ) => {
+	const todayIso = toISODate( new Date() );
+
 	const renderStatusLabel = ( status ) => {
 		if ( ! status || status === 'normal' ) {
 			return '';
@@ -121,6 +122,19 @@ export const CalendarGrid = ( {
 			default:
 				return status;
 		}
+	};
+
+	const describeDisabledDay = ( day, meta ) => {
+		if ( day.iso < todayIso ) {
+			return __( 'Not selectable (past date)', 'vk-booking-manager' );
+		}
+		if ( meta.shift_status === 'holiday' ) {
+			return closedDayLabel || __( 'Closed days', 'vk-booking-manager' );
+		}
+		if ( meta.shift_status === 'special_close' ) {
+			return __( 'Temporary closure', 'vk-booking-manager' );
+		}
+		return __( 'Not selectable (unavailable date)', 'vk-booking-manager' );
 	};
 
 	const weeks = useMemo(
@@ -179,6 +193,21 @@ export const CalendarGrid = ( {
 								! day.inMonth ||
 								Boolean( meta.is_disabled ) ||
 								day.iso < todayIso;
+							const disabledLabel =
+								day.inMonth && disabled
+									? sprintf(
+											/* translators: 1: date (e.g. October 10, 2026 (Sat)), 2: state of the date (e.g. Closed days). */
+											__(
+												'%1$s, %2$s',
+												'vk-booking-manager'
+											),
+											formatReservationDate(
+												day.iso,
+												locale
+											),
+											describeDisabledDay( day, meta )
+									  )
+									: undefined;
 
 							return (
 								<button
@@ -192,12 +221,15 @@ export const CalendarGrid = ( {
 											'vkbm-calendar__day--selected',
 										meta.available_slots > 0 &&
 											'vkbm-calendar__day--available',
+										disabled &&
+											'vkbm-calendar__day--disabled',
 									]
 										.filter( Boolean )
 										.join( ' ' ) }
 									onClick={ () => onSelectDate( day.iso ) }
 									aria-pressed={ isSelected }
 									disabled={ disabled }
+									aria-label={ disabledLabel }
 								>
 									<span className="vkbm-calendar__day-label">
 										{ day.label }

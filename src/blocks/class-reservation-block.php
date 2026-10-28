@@ -19,6 +19,7 @@ use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Site_Url;
 use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use WP_HTML_Tag_Processor;
 use WP_Post;
 use function add_filter;
@@ -127,6 +128,8 @@ class Reservation_Block {
 		// テンプレートやパターン内の予約ブロックでも効くよう、has_block() ではなく描画時に読み込む
 		// （予約ブロックのほかのアセットは従来どおり has_block() で判定している）。
 		add_filter( 'render_block', array( $this, 'enqueue_auth_assets_on_render' ), 10, 2 );
+		// テンプレートや同期パターン内の予約ブロックでも、フロント用の設定を描画時に読み込む。
+		add_filter( 'render_block', array( $this, 'enqueue_reservation_config_on_render' ), 10, 2 );
 		// issue #516: 会員登録エラー時、入力値・エラー文を含む Cookie
 		// （`vkbm_registration_errors`）を発行する代わりに、同一リクエスト内で発行された
 		// トークンだけを wrapper の data 属性へ埋め込む。
@@ -153,6 +156,26 @@ class Reservation_Block {
 		}
 
 		$this->auth_shortcodes->enqueue_assets();
+
+		return $block_content;
+	}
+
+	/**
+	 * 予約ブロックの描画時に、フロント用の設定を読み込む。
+	 *
+	 * 出力の HTML は変更せず、そのまま返す。
+	 *
+	 * @param string               $block_content 描画済みのブロック HTML。
+	 * @param array<string, mixed> $block         ブロックの情報。
+	 * @return string 引数の $block_content をそのまま返す。
+	 */
+	public function enqueue_reservation_config_on_render( string $block_content, array $block ): string {
+		// 予約ブロック以外、または本文の has_block() 経路で読み込み済みの場合は何もしない。
+		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) || wp_script_is( self::RESERVATION_CONFIG_HANDLE, 'enqueued' ) ) {
+			return $block_content;
+		}
+
+		$this->maybe_enqueue_reservation_config();
 
 		return $block_content;
 	}
@@ -300,6 +323,10 @@ class Reservation_Block {
 	 * @return void
 	 */
 	private function maybe_enqueue_reservation_config(): void {
+		if ( wp_script_is( self::RESERVATION_CONFIG_HANDLE, 'enqueued' ) ) {
+			return;
+		}
+
 		// 空のスクリプトハンドルを登録してインラインスクリプトの土台として使う。
 		// Register an empty script handle so we can attach the inline config to it.
 		if ( ! wp_script_is( self::RESERVATION_CONFIG_HANDLE, 'registered' ) ) {
@@ -313,6 +340,7 @@ class Reservation_Block {
 		}
 
 		$config = array(
+			'isLodging'            => Industry_Presets::supports( 'lodging' ),
 			// memo textarea の maxlength。`vkbm_draft_memo_max_length` フィルタを反映する。
 			// memo textarea maxlength, reflecting the vkbm_draft_memo_max_length filter result.
 			'memoMaxLength'        => Booking_Draft_Controller::resolve_memo_max_length(),

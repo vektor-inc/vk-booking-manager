@@ -31,6 +31,24 @@ use WP_UnitTestCase;
  */
 class Provider_Settings_Controller_Menu_Display_Test extends WP_UnitTestCase {
 	/**
+	 * 公開設定には利用者名のモードと見出しだけを返す。
+	 */
+	public function test_get_settings_attendee_name(): void {
+		$repository = new Settings_Repository();
+		$settings   = $repository->get_default_settings();
+		$settings['booking_attendee_name_mode']  = 'required';
+		$settings['booking_attendee_name_label'] = 'ペットのお名前';
+		$settings['attendee_name']               = '保存済みの秘密の名前';
+		$repository->update_settings( $settings );
+
+		$data = ( new Provider_Settings_Controller( $repository ) )->get_settings()->get_data();
+
+		$this->assertSame( 'required', $data['booking_attendee_name_mode'] );
+		$this->assertSame( 'ペットのお名前', $data['booking_attendee_name_label'] );
+		$this->assertArrayNotHasKey( 'attendee_name', $data );
+		$this->assertNotContains( '保存済みの秘密の名前', $data, '保存済みの名前を公開設定へ含めない' );
+	}
+	/**
 	 * get_settings() のレスポンスが、保存済みの
 	 * reservation_show_menu_search / reservation_show_menu_list の組み合わせを
 	 * そのまま返すことを検証する。

@@ -938,6 +938,23 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 				'price' => 6000,
 			),
 		);
+		// 1室1泊あたりで規定人数を超えた分の追加料金（#934）。1室10,000円、規定 4 名、最大 6 名。
+		$extra_guest_meta = array(
+			Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
+			Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED => '1',
+			Service_Menu_Post_Type::META_NIGHT_INCLUDED_GUESTS => 4,
+			'_vkbm_max_capacity' => '6',
+			'_vkbm_price_tiers'  => array(
+				array(
+					'label' => '大人',
+					'price' => 3000,
+				),
+				array(
+					'label' => '子供',
+					'price' => 2000,
+				),
+			),
+		);
 
 		$test_cases = array(
 			array(
@@ -1029,6 +1046,61 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 				'extra'               => array( 'guests' => 3 ),
 				'expected'            => 'ok',
 				'expected_total'      => 20000,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・追加料金あり・規定 4 名・大人 2 名＋子供 2 名（規定人数以内）: 10000 × 2（基本料金のみ。#934）',
+				'meta'                => $extra_guest_meta,
+				'extra'               => array( 'guest_tiers' => array( 2, 2 ) ),
+				'expected'            => 'ok',
+				'expected_total'      => 20000,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・追加料金あり・規定 4 名・大人 3 名＋子供 2 名: (10000 + 子供 1 名分 2000) × 2（#934）',
+				'meta'                => $extra_guest_meta,
+				'extra'               => array( 'guest_tiers' => array( 3, 2 ) ),
+				'expected'            => 'ok',
+				'expected_total'      => 24000,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・追加料金あり・規定 4 名・大人 5 名＋子供 1 名（最大 6 名ちょうど）: 高い大人 4 名が含まれ、大人 1 名 3000 円＋子供 1 名 2000 円を加算 (10000 + 5000) × 2（#934）',
+				'meta'                => $extra_guest_meta,
+				'extra'               => array( 'guest_tiers' => array( 5, 1 ) ),
+				'expected'            => 'ok',
+				'expected_total'      => 30000,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・追加料金あり・合計が最大 6 名を超える（大人 6 名＋子供 1 名） => guests_exceeded（#934）',
+				'meta'                => $extra_guest_meta,
+				'extra'               => array( 'guest_tiers' => array( 6, 1 ) ),
+				'expected'            => 'guests_exceeded:400',
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・追加料金あり・区分の人数なし => guests_required（#934）',
+				'meta'                => $extra_guest_meta,
+				'extra'               => array( 'guests' => 2 ),
+				'expected'            => 'guests_required:400',
+				'expected_total'      => 0,
+			),
+			array(
+				'test_condition_name' => '1室1泊あたり・追加料金のチェックなし（区分のデータが残っている）・大人 3 名＋子供 2 名: 区分は使わず 10000 × 2（#934）',
+				'meta'                => array_merge( $extra_guest_meta, array( Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED => '' ) ),
+				'extra'               => array( 'guest_tiers' => array( 3, 2 ) ),
+				'expected'            => 'ok',
+				'expected_total'      => 20000,
+			),
+			array(
+				'test_condition_name' => '1名1泊あたりに戻した（追加料金のメタは残っている）・大人 3 名＋子供 2 名: 区分の単価 × 人数 = (3000 × 3 + 2000 × 2) × 2（#934）',
+				'meta'                => array_merge(
+					$extra_guest_meta,
+					array(
+						Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => '',
+						'_vkbm_allow_multiple_guests' => '1',
+					)
+				),
+				'extra'               => array( 'guest_tiers' => array( 3, 2 ) ),
+				'expected'            => 'ok',
+				'expected_total'      => 26000,
 			),
 			array(
 				'test_condition_name' => '料金区分あり・大人2名＋子供1名: (12000 × 2 + 6000) × 2',

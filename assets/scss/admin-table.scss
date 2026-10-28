@@ -80,3 +80,115 @@
 .vkbm-price-chunk {
 	white-space: nowrap;
 }
+
+/* ==========================================================================
+   予約一覧：予約者名と検索案内
+   ========================================================================== */
+
+// 語の途中での分断を避けつつ、列幅を超える長い名前だけは折り返して欠けを防ぐ。
+.vkbm-booking-customer-column__name,
+.vkbm-booking-customer-column__account {
+	line-break: strict;
+	word-break: keep-all;
+	overflow-wrap: anywhere;
+}
+
+.vkbm-booking-customer-column__name {
+	font-weight: 600;
+}
+
+.vkbm-booking-customer-column__tel,
+.vkbm-booking-customer-column__account {
+	color: var(--vkbm--admin--color--text-secondary);
+}
+
+.vkbm-booking-search-help {
+	clear: both;
+	margin: 4px 0 12px;
+	overflow-wrap: anywhere;
+}
+
+// 番号の欄と標準の検索欄は、標準の float を解除して並べる。標準の検索欄の float より後に効かせるため、親を挟んで詳細度を上げている。
+.vkbm-booking-search-fields {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: flex-end;
+	gap: 16px;
+
+	.search-box {
+		float: none;
+		margin: 0 0 4px;
+	}
+}
+
+.vkbm-attendee-number-search {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 30px;
+
+	label {
+		white-space: nowrap;
+	}
+
+	input[type="search"] {
+		float: none;
+		margin: 0;
+	}
+}
+
+// 狭い幅では、番号の欄・検索欄の順に1列で積み、入力欄を幅いっぱいにそろえる。
+// 親は flex で新しい整形コンテキストになり、左に浮く投稿状態のリンク（subsubsub）の右へ押し込まれるため、clear で全幅の行に戻す。
+@media (max-width: 782px) {
+
+	.vkbm-booking-search-fields {
+		clear: both;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 12px;
+
+		.search-box {
+			width: 100%;
+			margin-bottom: 0;
+		}
+	}
+
+	.vkbm-attendee-number-search {
+		flex-wrap: wrap;
+
+		// 長いラベルでも幅からはみ出さないよう、狭い幅では nowrap を外して折り返す。
+		label {
+			flex: 0 0 100%;
+			min-width: 0;
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+
+		input[type="search"] {
+			flex: 1 1 0;
+			width: auto;
+			min-width: 0;
+
+			// 標準の検索入力（左右 1px の margin）と左右端をそろえる。
+			margin: 0 1px;
+		}
+	}
+}
+
+.vkbm-attendee-number-result__people {
+	margin: 0 0 0.5em;
+	padding-left: 1.5em;
+	list-style: disc;
+}
+
+// 客室編集画面の「外部カレンダーの取り込み」欄。ラベルが狭い列で「形／式）」のように
+// 語の途中で折れないよう、PC 幅ではラベル列を内容の幅に合わせて 1 行で表示する。
+// WordPress は 782px 以下で th を縦積みにするため、そこでは通常の折り返しに戻す。
+@media (min-width: 783px) {
+
+	.vkbm-external-calendar .vkbm-setting-table th {
+		width: 1%;
+		white-space: nowrap;
+	}
+}

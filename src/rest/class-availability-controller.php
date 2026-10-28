@@ -107,6 +107,16 @@ class Availability_Controller {
 		if ( Industry_Presets::supports( 'lodging' ) ) {
 			register_rest_route(
 				self::NAMESPACE,
+				'/lodging-calendar-meta',
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'handle_lodging_calendar_meta' ),
+					'permission_callback' => '__return_true',
+					'args'                => $this->get_lodging_calendar_args(),
+				)
+			);
+			register_rest_route(
+				self::NAMESPACE,
 				'/lodging-availabilities',
 				array(
 					'methods'             => WP_REST_Server::READABLE,
@@ -116,6 +126,33 @@ class Availability_Controller {
 				)
 			);
 		}
+	}
+
+	/**
+	 * 宿泊カレンダーの空き状況を返す。
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function handle_lodging_calendar_meta( WP_REST_Request $request ) {
+		$data = $this->service->get_lodging_calendar_meta(
+			array(
+				'menu_id'       => (int) $request['menu_id'],
+				'year'          => (int) $request['year'],
+				'month'         => (int) $request['month'],
+				'check_in_date' => (string) ( $request['check_in_date'] ?? '' ),
+			)
+		);
+		if ( is_wp_error( $data ) ) {
+			if ( 'rest_no_route' === $data->get_error_code() ) {
+				return $data;
+			}
+			if ( in_array( $data->get_error_code(), self::LODGING_INPUT_ERROR_CODES, true ) ) {
+				return $data;
+			}
+			return $this->mask_error_for_public_visitors( $data );
+		}
+		return new WP_REST_Response( $data );
 	}
 
 	/**
@@ -358,6 +395,25 @@ class Availability_Controller {
 					'minimum' => 0,
 					'maximum' => 99,
 				),
+			),
+		);
+	}
+
+	/**
+	 * 宿泊カレンダー API の引数。
+	 *
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function get_lodging_calendar_args(): array {
+		return array(
+			'menu_id'       => $this->get_calendar_args()['menu_id'],
+			'year'          => $this->get_calendar_args()['year'],
+			'month'         => $this->get_calendar_args()['month'],
+			'check_in_date' => array(
+				'required'    => false,
+				'type'        => 'string',
+				'pattern'     => '^\d{4}-\d{2}-\d{2}$',
+				'description' => __( 'Check-in date (YYYY-MM-DD)', 'vk-booking-manager' ),
 			),
 		);
 	}

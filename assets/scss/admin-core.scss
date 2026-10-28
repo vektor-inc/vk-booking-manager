@@ -267,6 +267,30 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /**
+ * サービスメニュー編集：「1室1泊あたり」で規定人数を超えた分の追加料金（チェックと、基本料金に含まれる人数）。
+ * 料金の単位のラジオとは別のまとまりとして、ラジオとの間に余白を取る。
+ * 人数の欄はチェックの従属項目のため、左に細い区切り線とインデントを付けて親チェックへの従属を示す.
+ */
+.vkbm-night-extra-guest {
+	margin-top: var(--vkbm--spacing--sm);
+}
+
+.vkbm-night-included-guests {
+	margin-top: var(--vkbm--spacing--xs);
+	padding-left: var(--vkbm--spacing--sm);
+	border-left: 2px solid var(--vkbm--admin--color--border, #dcdcde);
+
+	// ラベルと入力欄は近づけて 1 組にし、説明文との間は少し空ける.
+	> label {
+		margin-right: 4px;
+	}
+
+	> .description {
+		margin-top: 4px;
+	}
+}
+
+/**
  * サービスメニュー編集：ユーザーによる貸し切り指定の第二段（貸切料金・適用しない申込人数）。
  * 「予約者による貸切指定を受け付ける」ON 時のみ表示する従属フィールド群。
  * 左に細い区切り線とインデントを付けて、親チェックボックスへの従属関係を視覚的に示す。
@@ -676,6 +700,55 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 		.button {
 			width: 100%;
 			text-align: center;
+		}
+	}
+}
+
+.vkbm-attendee-roster-table .regular-text {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+}
+
+@media (max-width: 782px) {
+
+	.vkbm-attendee-roster-table {
+		display: block;
+
+		thead {
+			display: none;
+		}
+
+		tbody,
+		tr,
+		td {
+			display: block;
+		}
+
+		tr {
+			padding: 12px 10px;
+			border-bottom: 1px solid var(--vkbm--admin--color--border);
+		}
+
+		td {
+			display: grid;
+			grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+			gap: 8px;
+			align-items: center;
+			padding: 6px 0;
+			border: 0;
+			line-break: strict;
+
+			&::before {
+				content: attr(data-colname);
+				font-weight: 600;
+				white-space: nowrap;
+			}
+		}
+
+		&__empty-action {
+			display: none;
 		}
 	}
 }

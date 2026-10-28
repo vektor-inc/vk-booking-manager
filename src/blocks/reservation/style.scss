@@ -39,8 +39,9 @@ $vkbm-plan-summary-control-height: 44px;
 	gap: var(--vkbm--spacing--sm);
 	border-top: 1px solid var(--vkbm--color--primary);
 	border-bottom: 1px solid var(--vkbm--color--border);
-	background-color: #f5f5f5;
-	color: var(--vkbm--color--surface-text, #333);
+	// メニューループブロックのグループ見出しと同じ CSS 変数を使う。変数の出力条件は menu-loop/style.scss を参照。
+	background-color: var(--vkbm--color--menu-heading-bg, #f5f5f5);
+	color: var(--vkbm--color--menu-heading-text, var(--vkbm--color--surface-text, #333));
 	padding: var(--vkbm--spacing--sm) var(--vkbm--spacing--md);
 }
 
@@ -947,6 +948,12 @@ $vkbm-plan-summary-control-height: 44px;
 	color: inherit;
 	cursor: pointer;
 
+	&--disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	// 表示月外は disabled だが、月移動の補助表示なので禁止カーソルにせず既定のままにする。この規則を disabled より後ろに置くこと。
 	&--muted {
 		opacity: 0.4;
 		cursor: default;
@@ -1581,33 +1588,53 @@ $vkbm-plan-summary-control-height: 44px;
 		margin-top: 0.5rem;
 	}
 
-	/* 入力欄（ご要望・備考）
+	/* 入力欄（利用者名・ご要望／備考・管理者向け入力欄）
 	   ========================================================================== */
 
-	// 管理者向け入力欄（.vkbm-confirm__admin-field）と文字サイズを揃える。
-	// 未指定だとテーマ本文サイズを継承し、ラベルが大きく表示される。
+	// 確認フォームの入力欄は同じ縦積みの様式にし、テーマ既定の横並びや太い枠を防ぐ。
 	.vkbm-confirm__form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
 		font-size: 0.9rem;
 	}
 
-	.vkbm-confirm__form textarea {
+	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])),
+	.vkbm-confirm__form textarea,
+	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])),
+	.vkbm-confirm__admin-field textarea {
+		box-sizing: border-box;
 		width: 100%;
-		min-height: 120px;
 		border-radius: var(--vkbm--radius--md, 8px);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
-		padding: 0.75rem;
+		padding: 0.5rem 0.75rem;
 		font-size: 0.95rem;
+	}
+
+	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible,
+	.vkbm-confirm__form textarea:focus-visible,
+	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible,
+	.vkbm-confirm__admin-field textarea:focus-visible {
+
+		@include vkbm-focus-ring;
+	}
+
+	.vkbm-confirm__form textarea {
+		min-height: 120px;
 	}
 
 	.vkbm-confirm__admin-fields {
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		border-radius: var(--vkbm--radius--md, 8px);
-		padding: 1rem;
+		padding: 1.75rem;
 		background: var(--vkbm--color--bg-primary, #fff);
 		color: var(--vkbm--color--surface-text, #333);
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+
+		// 欄どうし（グループ間）は、ラベル〜入力欄（グループ内）より必ず広くする。
+		// 見える間隔は、この gap に各欄の端の行の高さ（約 3px 前後）が加わるため、箱の内側の余白（1.75rem）以下に収まる値にする。
+		gap: 1.25rem;
 	}
 
 	.vkbm-confirm__admin-field {
@@ -1617,17 +1644,151 @@ $vkbm-plan-summary-control-height: 44px;
 		font-size: 0.9rem;
 	}
 
-	.vkbm-confirm__admin-field input,
-	.vkbm-confirm__admin-field textarea {
-		border-radius: var(--vkbm--radius--md, 8px);
-		border: 1px solid var(--vkbm--color--border, #e0e0e0);
-		padding: 0.5rem 0.75rem;
-		font-size: 0.95rem;
+	// 欄の中の見出しは、テーマの margin や大きな line-height を持ち込まず、入力欄との間隔を gap だけで決める。
+	// 欄どうしの見える間隔が gap より大きく膨らむのを防ぐ。
+	.vkbm-confirm__admin-field > label,
+	.vkbm-confirm__admin-field > span {
+		margin: 0;
+		line-height: 1.4;
+	}
+
+	// 選択肢の最後の行は、タップ領域のための min-height（28px）と行間で字面の下に約 10.7px の空きができる。
+	// 見える間隔が次の欄との gap と合わせて箱の内側の余白（1.75rem）を超えないよう、空きの分だけ下の余白を引き戻す（タップ領域は保つ）。
+	.vkbm-confirm__admin-fields .vkbm-confirm__attendee-options {
+		margin-bottom: -0.5rem;
+	}
+
+	// テーマの p の余白を打ち消し、補足を入力欄に寄せる。
+	.vkbm-confirm__admin-fields .vkbm-confirm__admin-field-help {
+		margin: 0;
+		font-size: 0.8125rem;
+		line-height: 1.5;
+		font-weight: 400;
+		color: var(--vkbm--color--text-secondary, #666);
 	}
 
 	.vkbm-confirm__admin-field textarea {
 		min-height: 80px;
 		resize: vertical;
+	}
+
+	/* ご利用になる方の選択
+	   ========================================================================== */
+
+	// fieldset の既定の枠・余白・最小幅を打ち消す。
+	.vkbm-confirm__attendee {
+		margin: 0;
+		padding: 0;
+		border: 0;
+		min-width: 0;
+		gap: 0.5rem;
+	}
+
+	.vkbm-confirm__attendee-legend {
+
+		// fieldset の legend には gap が効かないため、最初の選択肢までの間隔はこの margin だけで取る。
+		// 見える間隔（約 17.8px）を、選択肢どうしの見える間隔（約 17.6px）以上にする。
+		margin: 0 0 0.75rem;
+		padding: 0;
+		font-size: 0.9rem;
+		line-height: 1.4;
+	}
+
+	// attendee の中の label・p・入力欄は、テーマの margin と大きな line-height を持ち込まない。
+	// 間隔は gap と margin-top だけで決め、見える間隔が指定値より広がるのを防ぐ。
+	.vkbm-confirm__form.vkbm-confirm__attendee label,
+	.vkbm-confirm__form.vkbm-confirm__attendee p,
+	.vkbm-confirm__form.vkbm-confirm__attendee input:where(:not([type="radio"]):not([type="checkbox"])) {
+		margin: 0;
+		line-height: 1.4;
+	}
+
+	.vkbm-confirm__attendee .vkbm-confirm__attendee-help {
+		margin: 0;
+		font-size: 0.8125rem;
+		line-height: 1.5;
+		color: var(--vkbm--color--text-secondary, #666);
+	}
+
+	// コントロールとラベルの間隔（0.4em）＜ 選択肢どうしの間隔 ＜ 選択肢群と隣のまとまりの間隔、の順に広げる。
+	.vkbm-confirm__attendee-options {
+		display: flex;
+		flex-direction: column;
+
+		// 各行は min-height で字面の下に約 8px の空きができるため、見える間隔は gap + 約 13.6px になる。
+		gap: 0.25rem;
+	}
+
+	.vkbm-confirm__attendee-options label {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.4em;
+		min-height: 1.75rem;
+		cursor: pointer;
+	}
+
+	// 文言が長くなってもラジオが潰れないよう縮小させない。1 行目の文字に高さを合わせる。
+	.vkbm-confirm__attendee-options input[type="radio"] {
+		flex-shrink: 0;
+		margin: 0.2em 0 0;
+	}
+
+	.vkbm-confirm__attendee-option-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+		line-height: 1.4;
+		overflow-wrap: anywhere;
+	}
+
+	.vkbm-confirm__attendee-number {
+		font-size: 0.8125rem;
+		color: var(--vkbm--color--text-secondary, #666);
+	}
+
+	.vkbm-confirm__attendee-manual {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	// 選択肢群の下の空き（約 10.7px）に attendee の gap（0.5rem）が加わり、字面どうしの見える間隔は約 21.6px になる。
+	// 代理予約の枠では選択肢群の下を引き戻しているため、同じ見える間隔になるよう差分を足す。
+	.vkbm-confirm__admin-fields .vkbm-confirm__attendee-manual {
+		margin-top: 0.5rem;
+	}
+
+	// 選択肢の取得中は、選択欄が出たときに画面が大きく動かないよう高さを確保する。
+	.vkbm-confirm__attendee-loading {
+		margin: 0;
+		min-height: 5rem;
+		font-size: 0.9rem;
+		line-height: 1.4;
+		color: var(--vkbm--color--text-secondary, #666);
+	}
+
+	// 読み上げ用の状態通知。見た目には出さない。
+	.vkbm-confirm__attendee-status {
+
+		@include vkbm-visually-hidden;
+	}
+
+	.vkbm-confirm__attendee-save {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.vkbm-confirm__attendee-save input[type="checkbox"] {
+		flex-shrink: 0;
+		margin: 0;
+	}
+
+	.vkbm-confirm__attendee-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
 	}
 
 	/* 決済方法の選択肢（一般ユーザー向け・管理者向け共通）

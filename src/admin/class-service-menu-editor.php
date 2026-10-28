@@ -61,6 +61,71 @@ class Service_Menu_Editor {
 		add_action( 'save_post_' . Service_Menu_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'admin_notices', array( $this, 'render_reservation_day_notice' ) );
+		add_action( 'rest_api_init', array( $this, 'register_notice_route' ) );
+	}
+
+	/**
+	 * 保存時のお知らせをブロックエディタへ渡す REST ルートを登録する。
+	 *
+	 * ブロックエディタ画面では PHP 側で表示も消費もせず、エディタの JS がこのルートで取得（取得と同時に消費）して
+	 * core/notices で表示する。
+	 */
+	public function register_notice_route(): void {
+		register_rest_route(
+			'vkbm/v1',
+			'/service-menu-notice',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'rest_consume_notice' ),
+				'permission_callback' => array( $this, 'can_read_notice' ),
+				'args'                => array(
+					'post_id' => array(
+						'type'              => 'integer',
+						'required'          => true,
+						'sanitize_callback' => 'absint',
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * お知らせ取得ルートの権限判定（対象のサービスメニューを編集できる利用者のみ）。
+	 *
+	 * Cookie 認証の nonce（X-WP-Nonce）は REST 基盤が検証する。
+	 *
+	 * @param \WP_REST_Request $request リクエスト。
+	 * @return bool
+	 */
+	public function can_read_notice( $request ): bool {
+		$post_id = (int) $request->get_param( 'post_id' );
+		return $post_id > 0
+			&& Service_Menu_Post_Type::POST_TYPE === get_post_type( $post_id )
+			&& current_user_can( 'edit_post', $post_id );
+	}
+
+	/**
+	 * お知らせを一時保存するキーを返す（ログイン中の利用者ごと）。
+	 *
+	 * @return string 一時保存のキー。
+	 */
+	private static function get_notice_transient_key(): string {
+		return self::NOTICE_TRANSIENT_PREFIX . get_current_user_id();
+	}
+
+	/**
+	 * ログイン中の利用者向けのお知らせを返し、同時に消費する。
+	 *
+	 * @return \WP_REST_Response
+	 */
+	public function rest_consume_notice() {
+		$transient_key = self::get_notice_transient_key();
+		$message       = get_transient( $transient_key );
+		if ( ! is_string( $message ) || '' === $message ) {
+			return rest_ensure_response( array( 'message' => '' ) );
+		}
+		delete_transient( $transient_key );
+		return rest_ensure_response( array( 'message' => $message ) );
 	}
 
 	/**
@@ -75,7 +140,14 @@ class Service_Menu_Editor {
 			return;
 		}
 
-		$transient_key = self::NOTICE_TRANSIENT_PREFIX . get_current_user_id();
+		// ブロックエディタ画面では、お知らせをエディタの JS が REST で取得して表示する（ここでは表示も消費もしない）。
+		// 保存時の meta-box-loader の POST のリダイレクト先もブロックエディタ画面として描画されるが、その応答は
+		// 利用者に見えないため、ここで消費するとお知らせが届く前に消えてしまう。
+		if ( $screen->is_block_editor() ) {
+			return;
+		}
+
+		$transient_key = self::get_notice_transient_key();
 		$message       = get_transient( $transient_key );
 		if ( ! is_string( $message ) || '' === $message ) {
 			return;
@@ -219,6 +291,22 @@ class Service_Menu_Editor {
 			true
 		);
 
+		// 保存時のお知らせをブロックエディタの通知（core/notices）で表示する。
+		if ( $screen->is_block_editor() ) {
+			wp_enqueue_script(
+				'vkbm-service-menu-editor-notices',
+				$base_url . 'assets/js/service-menu-editor-notices.js',
+				array( 'wp-data', 'wp-api-fetch', 'wp-notices', 'wp-edit-post' ),
+				VKBM_VERSION,
+				true
+			);
+			wp_localize_script(
+				'vkbm-service-menu-editor-notices',
+				'vkbmServiceMenuNotices',
+				array( 'postId' => (int) get_the_ID() )
+			);
+		}
+
 		// サブ画像欄（#623）。メディア選択画面・並び替え・読み上げに必要な依存を読み込む。
 		wp_enqueue_media();
 		wp_enqueue_script(
@@ -228,6 +316,7 @@ class Service_Menu_Editor {
 			VKBM_VERSION,
 			true
 		);
+		$resource_selection_strings = vkbm_get_resource_selection_strings();
 		wp_localize_script(
 			'vkbm-service-menu-gallery',
 			'vkbmServiceMenuGallery',
@@ -254,10 +343,13 @@ class Service_Menu_Editor {
 					'minCapacityDefaultDescription1'    => __( 'When bookings sharing the same time slot reach this number, the session is treated as confirmed.', 'vk-booking-manager' ),
 					'minCapacityDefaultDescription2'    => __( 'Enter 0 to disable the minimum and accept any number of bookings.', 'vk-booking-manager' ),
 					'minCapacityDefaultDescription3'    => __( 'Values above the time slot capacity are reduced to that capacity.', 'vk-booking-manager' ),
-					'minCapacityNominationDescription1' => __( 'This menu uses staff nomination, so each booking becomes a private booking for one group.', 'vk-booking-manager' ),
+					'minCapacityNominationDescription1' => $resource_selection_strings['min_capacity_nomination_1'],
 					'minCapacityNominationDescription2' => __( 'If the number of guests is below this value, the reservation cannot be accepted.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription3' => __( 'Enter 0 to remove the minimum and accept bookings from 1 guest.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription4' => __( 'Values above the time slot capacity (the maximum guests per group) are reduced to that capacity.', 'vk-booking-manager' ),
+					// #935: 宿泊の「1名1泊あたり」プランで人数の下限・予約枠の定員の欄に出す文言（PHP 初期描画と同じ文言）。
+					'minCapacityNightDescription1'      => __( 'Each booking is for one group using one room.', 'vk-booking-manager' ),
+					'maxCapacityNightDescription1'      => __( 'Maximum number of guests that can be booked together in a single reservation.', 'vk-booking-manager' ),
 					// #485: 担当できるリソースが「選ぶ」かつチェック0件のときに role="status" 領域へ入れる案内文
 					// （PHP 初期描画 render_staff_meta_box() と同じ文言）。
 					'staffUnselectedNotice'             => self::get_staff_unselected_notice(),
@@ -273,15 +365,22 @@ class Service_Menu_Editor {
 					'priceTierSpecialAria'              => __( 'Price (special date)', 'vk-booking-manager' ),
 					'priceHeadDefault'                  => __( 'Price', 'vk-booking-manager' ),
 					'priceHeadNight'                    => __( 'Price (per guest, per night)', 'vk-booking-manager' ),
+					// #934: 1室1泊あたりで規定人数を超えた分の追加料金を使うときに切り替える、区分の列見出しと1室の最大人数の説明文。
+					'priceHeadExtraGuest'               => __( 'Additional fee per extra guest, per night', 'vk-booking-manager' ),
+					'maxCapacityExtraGuestNote'         => __( 'The price does not change with the number of people up to the number included in the basic price.', 'vk-booking-manager' ),
 					'multipleGuestsPriceNoteDefault'    => __( 'The price is multiplied by the number of people.', 'vk-booking-manager' ),
 					'multipleGuestsPriceNotePerRoom'    => __( 'The price does not change with the number of people.', 'vk-booking-manager' ),
 					// #831: 1室1泊あたりのときに「予約枠の定員」から切り替える、1室の最大人数のラベル・説明文。
 					'maxCapacityDefaultLabel'           => __( 'Time slot capacity', 'vk-booking-manager' ),
-					'maxCapacityDefaultDescription1'    => __( 'Maximum number of people who can share this time slot when staff auto-assignment is used.', 'vk-booking-manager' ),
-					'maxCapacityDefaultDescription2'    => __( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ),
-					'maxCapacityNominationDescription1' => __( 'Maximum number of guests that can be booked together in a single reservation when a staff member is nominated.', 'vk-booking-manager' ),
-					'maxCapacityNominationDescription2' => __( 'Once a booking is placed, that staff member is fully booked for the slot (private to that group) and cannot be shared with another customer.', 'vk-booking-manager' ),
+					'maxCapacityDefaultDescription1'    => $resource_selection_strings['max_capacity_default_1'],
+					'maxCapacityDefaultDescription2'    => $resource_selection_strings['max_capacity_default_2'],
+					'maxCapacityNominationDescription1' => $resource_selection_strings['max_capacity_nomination_1'],
+					'maxCapacityNominationDescription2' => $resource_selection_strings['max_capacity_nomination_2'],
 					'maxCapacityDefaultNote'            => __( 'Default is 1.', 'vk-booking-manager' ),
+					'exclusiveWhenBookedSlot'           => $resource_selection_strings['exclusive_when_booked'],
+					'exclusiveWhenBookedNight'          => $resource_selection_strings['exclusive_when_booked_night'],
+					'exclusiveUserSelectableSlot'       => $resource_selection_strings['exclusive_user_selectable'],
+					'exclusiveUserSelectableNight'      => $resource_selection_strings['exclusive_user_night'],
 					'maxCapacityPerRoomLabel'           => __( 'Maximum guests per room', 'vk-booking-manager' ),
 					'maxCapacityPerRoomDescription1'    => __( 'Enter the maximum number of guests who can stay in this room.', 'vk-booking-manager' ),
 					'maxCapacityPerRoomDescription2'    => __( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ),
@@ -556,16 +655,18 @@ class Service_Menu_Editor {
 		if ( $is_nomination_enabled_globally ) :
 			$nomination_disabled_for_menu  = (bool) get_post_meta( $post->ID, self::META_DISABLE_NOMINATION, true );
 			$use_nomination_description_id = 'vkbm-use-nomination-description';
+			$resource_selection_strings    = vkbm_get_resource_selection_strings();
+			$hide_nomination_row           = Service_Menu_Post_Type::is_night_unit( $post->ID );
 			?>
-			<tr id="vkbm-use-nomination-field">
-				<th scope="row"><?php esc_html_e( 'Staff nomination', 'vk-booking-manager' ); ?></th>
+			<tr id="vkbm-use-nomination-field" <?php echo $hide_nomination_row ? 'hidden' : ''; ?>>
+				<th scope="row"><?php echo esc_html( $resource_selection_strings['heading'] ); ?></th>
 				<td>
 					<label>
 						<input type="checkbox" id="vkbm_service_menu_use_nomination" name="vkbm_service_menu[use_nomination]" value="1" aria-describedby="<?php echo esc_attr( $use_nomination_description_id ); ?>" <?php checked( ! $nomination_disabled_for_menu ); ?> />
-						<?php esc_html_e( 'Use staff nomination for this service menu.', 'vk-booking-manager' ); ?>
+						<?php echo esc_html( $resource_selection_strings['checkbox'] ); ?>
 					</label>
 					<p class="description" id="<?php echo esc_attr( $use_nomination_description_id ); ?>">
-						<?php esc_html_e( 'When unchecked, staff are assigned automatically for this service menu and customers cannot choose a specific staff member.', 'vk-booking-manager' ); ?><br>
+						<?php echo esc_html( $resource_selection_strings['unchecked'] ); ?><br>
 						<?php
 						// #392: 旧仕様の説明文「このチェックを外すと下の予約枠の定員・複数人一括予約の
 						// 設定が現れる」は、常時表示に変えたことと矛盾するため削除した。指名を使う担当者が
@@ -630,17 +731,20 @@ class Service_Menu_Editor {
 	 * @param WP_Post $post Current post object.
 	 */
 	public function render_conditions_meta_box( WP_Post $post ): void {
-		$duration_minutes     = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
-		$buffer_after_minutes = get_post_meta( $post->ID, '_vkbm_buffer_after_minutes', true );
-		$other_conditions     = get_post_meta( $post->ID, self::META_OTHER_CONDITIONS, true );
+		$resource_selection_strings = vkbm_get_resource_selection_strings();
+		$duration_minutes           = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
+		$buffer_after_minutes       = get_post_meta( $post->ID, '_vkbm_buffer_after_minutes', true );
+		$other_conditions           = get_post_meta( $post->ID, self::META_OTHER_CONDITIONS, true );
 
-		// 宿泊の機能を使うサイトでだけ「予約の単位」とチェックイン／チェックアウト時刻を描画する（#570）。
+		// 宿泊の機能を使うサイトでだけ「予約の単位」、チェックイン／チェックアウト時刻、料金の単位を描画する（#570、#900）。
 		// 「泊」のときは所要時間・サービス後バッファ・固定開始時刻の行を hidden にする（値は残す）。
 		$supports_lodging = Industry_Presets::supports( 'lodging' );
 		$is_night_unit    = Service_Menu_Post_Type::is_night_unit( $post->ID );
 		$slot_only_hidden = $is_night_unit ? 'hidden' : '';
 		// 泊単位で「1室1泊あたり」のプランは料金区分を使わない（#572）。
 		$is_per_room_night = Service_Menu_Post_Type::is_night_price_per_room( $post->ID );
+		// 1室1泊あたりで、規定人数を超えた分の追加料金を使うプランは、料金区分を超過1名・1泊あたりの追加料金として使う（#934）。
+		$is_extra_guest_fee = Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $post->ID );
 		if ( $supports_lodging ) {
 			$this->render_booking_unit_fields( $post, $is_night_unit );
 		} elseif ( ! Pro_Upsell::is_free_edition() && Service_Menu_Post_Type::BOOKING_UNIT_NIGHT === get_post_meta( $post->ID, Service_Menu_Post_Type::META_BOOKING_UNIT, true ) ) {
@@ -684,7 +788,10 @@ class Service_Menu_Editor {
 				<label for="vkbm_service_menu_other_conditions"><?php echo esc_html( vkbm_get_other_conditions_label() ); ?></label>
 			</th>
 			<td>
-				<textarea id="vkbm_service_menu_other_conditions" name="vkbm_service_menu[other_conditions]" class="large-text" rows="4"><?php echo esc_textarea( (string) $other_conditions ); ?></textarea>
+				<textarea id="vkbm_service_menu_other_conditions" name="vkbm_service_menu[other_conditions]" class="large-text" rows="4" aria-describedby="vkbm-service-menu-other-conditions-description"><?php echo esc_textarea( (string) $other_conditions ); ?></textarea>
+				<p id="vkbm-service-menu-other-conditions-description" class="description">
+					<?php esc_html_e( 'If there is anything customers should know in advance, such as additional fees that may apply under certain conditions, enter it here.', 'vk-booking-manager' ); ?>
+				</p>
 			</td>
 		</tr>
 		<?php
@@ -692,12 +799,11 @@ class Service_Menu_Editor {
 		// Display max capacity field only in Pro edition.
 		$is_pro_edition = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
 		if ( $is_pro_edition ) :
-			// このメニューで実際に指名が使われるか（サイト全体の設定とメニュー単位の設定の両方を反映）。
-			// 既存メニューは新メタ未設定＝「指名を使う」が既定のため、サイト全体の設定のみだった
-			// 従来の判定と等価になり、この置き換えで既存メニューの挙動は変わらない。
-			// 「Staff nomination」チェックボックス自体は render_basic_meta_box() 側にある
-			// （#412 B-2: 依存先の「Nomination fee」より依存元を先に表示するため）。
-			$is_nomination_enabled = Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
+			// #935: 人数の下限・予約枠の定員の欄の文言は、受付処理（Availability_Service::get_menu_nomination_min_guests()）と
+			// 同じ条件（1室1泊あたりは対象外・サイト全体とメニュー単位の両方で指名を使うメニューが対象）で切り替える。
+			// render_basic_meta_box() の $hide_nomination_row（泊単位で客室の指定行を隠す判定）とは別にする。
+			$is_min_guests_applied = ! $is_per_room_night && Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
+			$is_night_plan         = $supports_lodging && $is_night_unit;
 			// 予約枠の定員（同一枠で複数人を受け入れる）機能（親スイッチ）が有効かどうかを判定する。
 			$is_slot_capacity_enabled = Staff_Editor::is_slot_capacity_enabled();
 
@@ -788,13 +894,15 @@ class Service_Menu_Editor {
 							<?php if ( $is_per_room_night ) : ?>
 								<?php esc_html_e( 'Enter the maximum number of guests who can stay in this room.', 'vk-booking-manager' ); ?><br>
 								<?php esc_html_e( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ); ?><br>
-								<?php esc_html_e( 'The price does not change with the number of people.', 'vk-booking-manager' ); ?><br>
-							<?php elseif ( $is_nomination_enabled ) : ?>
-								<?php esc_html_e( 'Maximum number of guests that can be booked together in a single reservation when a staff member is nominated.', 'vk-booking-manager' ); ?><br>
-								<?php esc_html_e( 'Once a booking is placed, that staff member is fully booked for the slot (private to that group) and cannot be shared with another customer.', 'vk-booking-manager' ); ?><br>
+								<?php echo esc_html( $is_extra_guest_fee ? __( 'The price does not change with the number of people up to the number included in the basic price.', 'vk-booking-manager' ) : __( 'The price does not change with the number of people.', 'vk-booking-manager' ) ); ?><br>
+							<?php elseif ( $is_min_guests_applied && $is_night_plan ) : ?>
+									<?php esc_html_e( 'Maximum number of guests that can be booked together in a single reservation.', 'vk-booking-manager' ); ?><br>
+							<?php elseif ( $is_min_guests_applied ) : ?>
+								<?php echo esc_html( $resource_selection_strings['max_capacity_nomination_1'] ); ?><br>
+								<?php echo esc_html( $resource_selection_strings['max_capacity_nomination_2'] ); ?><br>
 							<?php else : ?>
-								<?php esc_html_e( 'Maximum number of people who can share this time slot when staff auto-assignment is used.', 'vk-booking-manager' ); ?><br>
-								<?php esc_html_e( 'When a specific staff member is selected, only one booking per slot is allowed.', 'vk-booking-manager' ); ?><br>
+								<?php echo esc_html( $resource_selection_strings['max_capacity_default_1'] ); ?><br>
+								<?php echo esc_html( $resource_selection_strings['max_capacity_default_2'] ); ?><br>
 							<?php endif; ?>
 							<?php esc_html_e( 'Default is 1.', 'vk-booking-manager' ); ?>
 						</p>
@@ -807,7 +915,7 @@ class Service_Menu_Editor {
 							// #393: 指名を使うメニューでは「1件の予約＝1組の貸切」を占有できてしまう人数の
 							// 下限を意味するため、ラベルを「最低申し込み人数」に切り替える。指名を使わない
 							// メニューは従来どおり「最少催行人数」（催行状態表示のしきい値）のまま変更しない。
-							if ( $is_nomination_enabled ) {
+							if ( $is_min_guests_applied ) {
 								esc_html_e( 'Minimum guests to accept a booking', 'vk-booking-manager' );
 							} else {
 								esc_html_e( 'Minimum participants to confirm', 'vk-booking-manager' );
@@ -818,11 +926,19 @@ class Service_Menu_Editor {
 					<td>
 						<input type="number" id="vkbm_service_menu_min_capacity" name="vkbm_service_menu[min_capacity]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $min_capacity ); ?>" aria-describedby="vkbm-min-capacity-description" />
 						<p class="description" id="vkbm-min-capacity-description">
-							<?php if ( $is_nomination_enabled ) : ?>
-								<?php esc_html_e( 'This menu uses staff nomination, so each booking becomes a private booking for one group.', 'vk-booking-manager' ); ?><br>
+							<?php if ( $is_min_guests_applied ) : ?>
+								<?php if ( $is_night_plan ) : ?>
+									<?php esc_html_e( 'Each booking is for one group using one room.', 'vk-booking-manager' ); ?><br>
+								<?php else : ?>
+									<?php echo esc_html( $resource_selection_strings['min_capacity_nomination_1'] ); ?><br>
+								<?php endif; ?>
 								<?php esc_html_e( 'If the number of guests is below this value, the reservation cannot be accepted.', 'vk-booking-manager' ); ?><br>
 								<?php esc_html_e( 'Enter 0 to remove the minimum and accept bookings from 1 guest.', 'vk-booking-manager' ); ?><br>
-								<?php esc_html_e( 'Values above the time slot capacity (the maximum guests per group) are reduced to that capacity.', 'vk-booking-manager' ); ?>
+								<?php if ( $is_night_plan ) : ?>
+									<?php esc_html_e( 'Values above the time slot capacity are reduced to that capacity.', 'vk-booking-manager' ); ?>
+								<?php else : ?>
+									<?php esc_html_e( 'Values above the time slot capacity (the maximum guests per group) are reduced to that capacity.', 'vk-booking-manager' ); ?>
+								<?php endif; ?>
 							<?php else : ?>
 								<?php esc_html_e( 'When bookings sharing the same time slot reach this number, the session is treated as confirmed.', 'vk-booking-manager' ); ?><br>
 								<?php esc_html_e( 'Enter 0 to disable the minimum and accept any number of bookings.', 'vk-booking-manager' ); ?><br>
@@ -842,7 +958,7 @@ class Service_Menu_Editor {
 						</label>
 						<p class="description">
 							<?php esc_html_e( 'A single booking can reserve for multiple people by entering the number of people.', 'vk-booking-manager' ); ?><br>
-							<?php esc_html_e( 'The maximum number per booking is the time slot capacity, because each booking is assigned to a single staff member.', 'vk-booking-manager' ); ?><br>
+							<?php echo esc_html( $resource_selection_strings['multiple_guests_assignment'] ); ?><br>
 							<span id="vkbm-multiple-guests-price-note">
 								<?php
 								if ( $is_per_room_night ) {
@@ -853,14 +969,6 @@ class Service_Menu_Editor {
 								?>
 							</span><br>
 							<?php
-							printf(
-								/* translators: %s: Provider settings page link to customize the quantity heading and unit. */
-								esc_html__( 'You can customize the quantity heading and unit in %s.', 'vk-booking-manager' ),
-								'<a href="' . esc_url( admin_url( 'admin.php?page=vkbm-provider-settings' ) ) . '">' . esc_html__( 'Basic settings', 'vk-booking-manager' ) . '</a>'
-							);
-							?>
-							<br>
-							<?php
 							// 「消えた」誤解の予防：追加設定が現れる条件を一行で案内する（#320）。
 							// #440: 画面を開いた時点の指名の有無で文言が固定され、保存せず
 							// 「このメニューで指名を使う」を切り替えると実際に出る欄と説明文がずれるため、
@@ -868,7 +976,7 @@ class Service_Menu_Editor {
 							// 指名の有無に関わらず表示されるため（$show_multi_guest_dependent_fields を
 							// 参照）、最少催行人数・料金区分・貸し切り予約系設定をまとめて1文で言い切る
 							// （「など」は使わず、実際に表示される設定をすべて列挙する）。
-							esc_html_e( 'When this is enabled and the time slot capacity is 2 or more, the minimum participants (labeled "minimum guests to accept a booking" for menus that use staff nomination), price category, and private booking settings are shown.', 'vk-booking-manager' );
+							echo esc_html( $resource_selection_strings['multiple_guests_conditions'] );
 							?>
 						</p>
 					</td>
@@ -880,10 +988,11 @@ class Service_Menu_Editor {
 				<?php
 				// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
 				$this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields && ! $is_night_unit );
-				// 1室1泊あたりのプランは料金区分を使わないため、料金区分の行を出さない（#572）。
-				$show_price_tiers = $show_multi_guest_dependent_fields && ! $is_per_room_night;
+				// 1室1泊あたりのプランは、追加料金を使うときだけ料金区分の行を出す（#572、#934）。
+				$show_price_tiers = $show_multi_guest_dependent_fields && ( ! $is_per_room_night || $is_extra_guest_fee );
 				// #514: 基本料金の行を料金区分の行の直前に配置する。
-				$this->render_base_price_field( $post, $show_price_tiers );
+				// 1室1泊あたりは基本料金が常に使われる（区分は超過分の追加料金）ため、基本料金を区分で上書き扱いにしない。
+				$this->render_base_price_field( $post, $show_price_tiers && ! $is_per_room_night );
 				$this->render_price_tiers_field( $post, $show_price_tiers );
 				?>
 			<?php endif; ?>
@@ -1118,10 +1227,88 @@ class Service_Menu_Editor {
 	}
 
 	/**
+	 * 1室1泊あたりで、規定人数を超えた分の追加料金に関する設定を保存する（#934）。
+	 *
+	 * - 追加料金を使うか（チェック）と、基本料金に含まれる人数を保存する。予約の単位や料金の単位に関わらず保存する
+	 *   （時間枠・1名1泊あたりへ戻しても入力を残すため。読み取り側が1室1泊あたりのときだけ使う）。
+	 * - 基本料金に含まれる人数は 1 以上にする。予約枠の定員機能が ON のときは、1室の最大人数を超える値を最大人数に丸めて保存し、
+	 *   追加料金を使うときは丸めたことを管理画面の上部で知らせる（OFF のときは入力値を保持する）。
+	 * - 追加料金を使うのに料金区分が1件も無いときは、追加料金が加算されないことを管理画面の上部で知らせる（保存は止めない）。
+	 * - 1室1泊あたりで追加料金を使うときは、料金区分を超過1名・1泊あたりの追加料金として保存する
+	 *   （「複数人一括予約を許可」のチェックは1室1泊あたりでは使わないため、そのチェックに関わらず保存する）。
+	 * 宿泊以外のサイト・項目が送られない保存（料金の単位の欄が無い画面）では何もしない。
+	 *
+	 * @param int                              $post_id        投稿ID。
+	 * @param array<string, mixed>             $data           送信された vkbm_service_menu 配列。
+	 * @param array<int, array<string, mixed>> $price_tiers    サニタイズ済みの料金区分。
+	 * @param bool                             $is_pro_edition Pro 版か。
+	 */
+	private function save_night_extra_guest_meta( int $post_id, array $data, array $price_tiers, bool $is_pro_edition ): void {
+		if ( ! Industry_Presets::supports( 'lodging' ) || ! isset( $data['night_price_unit'] ) ) {
+			return;
+		}
+
+		$is_per_room = Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === $data['night_price_unit'];
+		$is_enabled  = isset( $data['night_extra_guest_enabled'] ) && '1' === (string) $data['night_extra_guest_enabled'];
+		if ( $is_enabled ) {
+			update_post_meta( $post_id, Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED, '1' );
+		} else {
+			delete_post_meta( $post_id, Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED );
+		}
+
+		// 基本料金に含まれる人数。1 未満・空欄は 1。予約枠の定員機能が ON のときだけ、最大人数を超える値を最大人数に丸める。
+		// 宿泊プリセットでは定員機能は ON に固定されるため、OFF の分岐は vkbm_industry_presets フィルターでプリセットを変えた場合だけ通る。
+		// OFF のときは最大人数の欄が送られず保存済みの値が古いことがあるため、入力値を保持する（#412 の親スイッチ OFF は保持する方針）。
+		$is_capacity_enabled = $is_pro_edition && Staff_Editor::is_slot_capacity_enabled();
+		$requested           = max( 1, (int) $this->sanitize_integer_value( $data, 'night_included_guests' ) );
+		$max_capacity_raw    = get_post_meta( $post_id, self::META_MAX_CAPACITY, true );
+		$max_capacity        = '' === $max_capacity_raw ? 1 : max( 1, (int) $max_capacity_raw );
+		$included_guests     = $is_capacity_enabled ? min( $max_capacity, $requested ) : $requested;
+		update_post_meta( $post_id, Service_Menu_Post_Type::META_NIGHT_INCLUDED_GUESTS, $included_guests );
+		if ( $is_per_room && $is_enabled && $included_guests < $requested ) {
+			$this->add_admin_notice(
+				sprintf(
+					/* translators: %d: maximum number of guests per room (the number of guests included in the basic price was reduced to this value). */
+					__( 'The number of guests included in the basic price exceeded the maximum guests per room, so it was reduced to %d.', 'vk-booking-manager' ),
+					$max_capacity
+				)
+			);
+		}
+
+		// 追加料金を使う1室1泊あたりは、複数人一括予約のチェックの保存分岐を通らないため、料金区分をここで保存する。
+		if ( $is_capacity_enabled && $is_per_room && $is_enabled ) {
+			if ( ! empty( $price_tiers ) ) {
+				update_post_meta( $post_id, self::META_PRICE_TIERS, wp_slash( $price_tiers ) );
+			} else {
+				delete_post_meta( $post_id, self::META_PRICE_TIERS );
+				// 料金区分が無いと予約画面に区分ごとの人数欄が出ず、追加料金が加算されないため知らせる（保存は止めない）。
+				$this->add_admin_notice(
+					__( 'No price category is entered, so the extra guest fee is not added to the price. Enter at least one price category to charge the extra guest fee.', 'vk-booking-manager' )
+				);
+			}
+		}
+	}
+
+	/**
+	 * 管理画面の上部に出すお知らせを、保存後の画面表示のために一時保存へ追記する。
+	 *
+	 * 予約可能日の保存のお知らせ（render_reservation_day_notice()）と同じ一時保存に、同じ利用者向けの文として追記する。
+	 *
+	 * @param string $message お知らせの文。
+	 */
+	private function add_admin_notice( string $message ): void {
+		$transient_key = self::get_notice_transient_key();
+		$current       = get_transient( $transient_key );
+		$messages      = is_string( $current ) && '' !== $current ? $current . ' ' : '';
+
+		set_transient( $transient_key, $messages . $message, MINUTE_IN_SECONDS );
+	}
+
+	/**
 	 * 泊単位のメニューで使わない設定のメタを削除する（#572）。
 	 *
 	 * - 予約者が選ぶ貸切（貸切指定・貸切料金・適用外人数）は泊単位では使わない。
-	 * - 1室1泊あたりでは料金区分を使わない。値が残ると読み取り側の分岐漏れで1室料金に人数が掛かるため削除する。
+	 * - 1室1泊あたりで規定人数を超えた分の追加料金を使わないときは、料金区分を使わない。値が残ると読み取り側の分岐漏れで1室料金に人数が掛かるため削除する。
 	 * 宿泊が有効でない、または時間枠のメニューでは何もしない。
 	 *
 	 * @param int $post_id 投稿ID。
@@ -1135,7 +1322,8 @@ class Service_Menu_Editor {
 		delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_PER_PERSON );
 		delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS );
 
-		if ( Service_Menu_Post_Type::is_night_price_per_room( $post_id ) ) {
+		// 1室1泊あたりでも、規定人数を超えた分の追加料金を使うときは区分を超過分の追加料金として使うため残す（#934）。
+		if ( Service_Menu_Post_Type::is_night_price_per_room( $post_id ) && ! Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $post_id ) ) {
 			delete_post_meta( $post_id, self::META_PRICE_TIERS );
 		}
 	}
@@ -1162,7 +1350,7 @@ class Service_Menu_Editor {
 	}
 
 	/**
-	 * 「予約の単位」ラジオとチェックイン／チェックアウト時刻の行を出力する（#570）。
+	 * 「予約の単位」ラジオ、チェックイン／チェックアウト時刻、料金の単位の行を出力する（#570、#572、#900）。
 	 *
 	 * 宿泊の機能を使うサイト（Industry_Presets::supports( 'lodging' )）でだけ呼ぶ。
 	 * 時刻の行は「時間枠」のときも hidden にするだけで DOM に残し、送信値を保持する
@@ -1174,6 +1362,8 @@ class Service_Menu_Editor {
 	private function render_booking_unit_fields( WP_Post $post, bool $is_night_unit ): void {
 		$night_only_hidden = $is_night_unit ? '' : 'hidden';
 		$description_id    = 'vkbm-booking-unit-description';
+		// 時間枠へ戻したメニューでも、料金の単位ラジオには保存済みの選択を表示する。
+		$night_price_unit = Service_Menu_Post_Type::get_stored_night_price_unit( $post->ID );
 		?>
 		<tr id="vkbm-booking-unit-field">
 			<th scope="row"><?php esc_html_e( 'Booking unit', 'vk-booking-manager' ); ?></th>
@@ -1213,6 +1403,8 @@ class Service_Menu_Editor {
 			</td>
 		</tr>
 		<?php
+		// 表示が切り替わる時間枠専用の欄より前に、泊の料金設定をまとめて表示する（#900）。
+		$this->render_night_price_unit_field( $post, $night_price_unit, $is_night_unit );
 	}
 
 	/**
@@ -1232,15 +1424,22 @@ class Service_Menu_Editor {
 	/**
 	 * 「料金の単位」ラジオの行を出力する（#572）。
 	 *
-	 * 宿泊が有効なサイトでだけ呼ぶ。基本料金の行の直上に置く。時間枠のメニューでは hidden にするだけで
-	 * DOM に残す（泊へ切り替えたときに選択を保てるようにするため）。
+	 * 宿泊が有効なサイトで render_booking_unit_fields() から呼び、チェックアウト時刻の行の直後に置く。
+	 * 時間枠のメニューでは hidden にするだけで DOM に残す（泊へ切り替えたときに選択を保てるようにするため）。
 	 *
-	 * @param string $night_price_unit 現在の料金の単位。
-	 * @param bool   $is_night_unit    予約の単位が「泊」か。
+	 * 「1室1泊あたり」を選んだときだけ、規定人数を超えた分の追加料金のチェックと、基本料金に含まれる人数の欄を出す（#934）。
+	 * 欄は hidden にするだけで DOM に残し、1名1泊あたりへ切り替えても入力を保持する。
+	 *
+	 * @param WP_Post $post             Current post object.
+	 * @param string  $night_price_unit 現在の料金の単位。
+	 * @param bool    $is_night_unit    予約の単位が「泊」か。
 	 */
-	private function render_night_price_unit_field( string $night_price_unit, bool $is_night_unit ): void {
+	private function render_night_price_unit_field( WP_Post $post, string $night_price_unit, bool $is_night_unit ): void {
 		$is_per_room    = Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === $night_price_unit;
 		$description_id = 'vkbm-night-price-unit-description';
+		// 時間枠・1名1泊あたりへ戻したメニューでも、保存済みの選択と人数を表示する（再保存で消さないため）。
+		$is_extra_guest_checked = '1' === (string) get_post_meta( $post->ID, Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED, true );
+		$included_guests        = Service_Menu_Post_Type::get_night_included_guests( $post->ID );
 		?>
 		<tr id="vkbm-night-price-unit-field" class="vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>>
 			<th scope="row"><?php esc_html_e( 'Price unit', 'vk-booking-manager' ); ?></th>
@@ -1259,8 +1458,28 @@ class Service_Menu_Editor {
 				</fieldset>
 				<p class="description" id="<?php echo esc_attr( $description_id ); ?>">
 					<?php esc_html_e( 'If you choose "Per room, per night", enter the price of one room per night as the basic price. It is not multiplied by the number of guests.', 'vk-booking-manager' ); ?><br>
-					<?php esc_html_e( 'Price categories cannot be used with "Per room, per night". Price categories you have already set are deleted when you save.', 'vk-booking-manager' ); ?>
+					<?php esc_html_e( 'Price categories can be used with "Per room, per night" only when the additional fee for exceeding the specified number is enabled.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'If it is not enabled, price categories you have already set are deleted when you save.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'When you switch between "Per room, per night" with the additional fee and "Per guest, per night", review the amounts in the price categories.', 'vk-booking-manager' ); ?>
 				</p>
+				<div id="vkbm-night-extra-guest-fields" class="vkbm-night-extra-guest" <?php echo $is_per_room ? '' : 'hidden'; ?>>
+					<label>
+						<input type="checkbox" id="vkbm_service_menu_night_extra_guest_enabled" name="vkbm_service_menu[night_extra_guest_enabled]" value="1" <?php checked( true, $is_extra_guest_checked ); ?> />
+						<?php esc_html_e( 'An additional fee applies, depending on the number of guests, when the specified number is exceeded', 'vk-booking-manager' ); ?>
+					</label>
+					<div id="vkbm-night-included-guests-field" class="vkbm-night-included-guests" <?php echo $is_extra_guest_checked ? '' : 'hidden'; ?>>
+						<label for="vkbm_service_menu_night_included_guests"><?php esc_html_e( 'Guests included in the basic price', 'vk-booking-manager' ); ?></label>
+						<span class="vkbm-night-included-guests__input text-nowrap">
+							<input type="number" id="vkbm_service_menu_night_included_guests" name="vkbm_service_menu[night_included_guests]" class="small-text" min="1" step="1" value="<?php echo esc_attr( (string) $included_guests ); ?>" aria-describedby="vkbm-night-included-guests-description" />
+							<?php esc_html_e( 'guests or fewer', 'vk-booking-manager' ); ?>
+						</span>
+						<p class="description" id="vkbm-night-included-guests-description">
+							<?php esc_html_e( 'Enter the specified number of guests (the number included in the basic price) as 1 or more.', 'vk-booking-manager' ); ?><br>
+							<?php esc_html_e( 'Set the basic price in the "Basic price" field below.', 'vk-booking-manager' ); ?><br>
+							<?php esc_html_e( 'Values above the maximum guests per room are reduced to that maximum.', 'vk-booking-manager' ); ?>
+						</p>
+					</div>
+				</div>
 			</td>
 		</tr>
 		<?php
@@ -1279,7 +1498,7 @@ class Service_Menu_Editor {
 				<p class="description">
 					<?php esc_html_e( 'This menu is saved with the "Nights" booking unit. Because the industry preset is not "Lodging", it is currently handled as a time-slot menu.', 'vk-booking-manager' ); ?><br>
 					<?php esc_html_e( 'To switch back to "Lodging", change the industry preset to "Lodging" at the link below.', 'vk-booking-manager' ); ?><br>
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-industry-preset' ) ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Industry preset on the General Settings page', 'vk-booking-manager' ); ?></a>
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=store#vkbm-industry-preset' ) ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Industry preset on the General Settings page', 'vk-booking-manager' ); ?></a>
 				</p>
 			</td>
 		</tr>
@@ -1395,7 +1614,9 @@ class Service_Menu_Editor {
 	 * @param bool    $show_field 初期表示するか（複数人一括予約ON かつ 予約枠の定員2以上）。
 	 */
 	private function render_exclusive_when_booked_field( WP_Post $post, bool $show_field ): void {
-		$exclusive_when_booked = (bool) get_post_meta( $post->ID, self::META_EXCLUSIVE_WHEN_BOOKED, true );
+		$exclusive_when_booked      = (bool) get_post_meta( $post->ID, self::META_EXCLUSIVE_WHEN_BOOKED, true );
+		$resource_selection_strings = vkbm_get_resource_selection_strings();
+		$is_night_unit              = Service_Menu_Post_Type::is_night_unit( $post->ID );
 		// 説明文と input を aria-describedby で紐付けるための ID。
 		$description_id = 'vkbm-exclusive-when-booked-description';
 		?>
@@ -1411,7 +1632,7 @@ class Service_Menu_Editor {
 					<?php
 					// 編集画面は保存せずに「このメニューで指名を使う」を切り替えられるため、
 					// この文言も指名の有無で出し分けず1本の文言に統一し、両方の動きを1文で説明する。
-					esc_html_e( 'For menus that use staff nomination, this only closes that booking\'s staff member for the time slot, and other staff members remain bookable.', 'vk-booking-manager' );
+					echo '<span id="vkbm-exclusive-when-booked-resource-description">' . esc_html( $is_night_unit ? $resource_selection_strings['exclusive_when_booked_night'] : $resource_selection_strings['exclusive_when_booked'] ) . '</span>';
 					?>
 					<br>
 					<?php esc_html_e( 'This is intended for tours where strangers should not share the same slot (e.g. SUP, diving).', 'vk-booking-manager' ); ?>
@@ -1435,9 +1656,11 @@ class Service_Menu_Editor {
 	 * @param bool    $show_field 初期表示するか（複数人一括予約ON かつ 予約枠の定員2以上）。
 	 */
 	private function render_exclusive_user_selectable_field( WP_Post $post, bool $show_field ): void {
-		$user_selectable = (bool) get_post_meta( $post->ID, self::META_EXCLUSIVE_USER_SELECTABLE, true );
-		$fee_per_person  = get_post_meta( $post->ID, self::META_EXCLUSIVE_FEE_PER_PERSON, true );
-		$fee_exempt      = get_post_meta( $post->ID, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS, true );
+		$user_selectable            = (bool) get_post_meta( $post->ID, self::META_EXCLUSIVE_USER_SELECTABLE, true );
+		$resource_selection_strings = vkbm_get_resource_selection_strings();
+		$is_night_unit              = Service_Menu_Post_Type::is_night_unit( $post->ID );
+		$fee_per_person             = get_post_meta( $post->ID, self::META_EXCLUSIVE_FEE_PER_PERSON, true );
+		$fee_exempt                 = get_post_meta( $post->ID, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS, true );
 		// 貸し切り料金欄に表示する通貨記号（税込ラベルは付けない＝1人あたり単価のため）。
 		$currency_symbol = VKBM_Helper::get_currency_symbol();
 		// 説明文と input を aria-describedby で紐付けるための ID。
@@ -1455,7 +1678,7 @@ class Service_Menu_Editor {
 					<?php
 					// 編集画面は保存せずに「このメニューで指名を使う」を切り替えられるため、
 					// この文言も指名の有無で出し分けず1本の文言に統一し、両方の動きを1文で説明する。
-					esc_html_e( 'For menus that use staff nomination, this is judged per staff member, not for the whole time slot.', 'vk-booking-manager' );
+					echo '<span id="vkbm-exclusive-user-selectable-resource-description">' . esc_html( $is_night_unit ? $resource_selection_strings['exclusive_user_night'] : $resource_selection_strings['exclusive_user_selectable'] ) . '</span>';
 					?>
 					<br>
 					<?php
@@ -1465,7 +1688,7 @@ class Service_Menu_Editor {
 					// （指名を使うメニューでは "minimum guests to accept a booking"）」という
 					// 言い回しに揃えた。ラベル違いをこの1文で説明できるため、重複していた
 					// 「指名を使うメニューでは…最低申し込み人数です」という別文は削除した。
-					esc_html_e( 'It can be chosen only when the number of guests meets this menu\'s minimum participants (labeled "minimum guests to accept a booking" for menus that use staff nomination).', 'vk-booking-manager' );
+					echo esc_html( $resource_selection_strings['exclusive_minimum_condition'] );
 					?>
 					<br>
 					<?php esc_html_e( 'This setting cannot be used together with "Private booking" for this menu.', 'vk-booking-manager' ); ?><br>
@@ -1538,10 +1761,10 @@ class Service_Menu_Editor {
 
 		$description_id = 'vkbm-base-price-overridden-description';
 
-		// 宿泊が有効なサイトでは、泊単位のプランに「料金の単位」と基本料金の単位表記を出す（#572）。
+		// 宿泊が有効なサイトでは、泊単位のプランに基本料金の単位表記を出す（#572）。
 		$supports_lodging = Industry_Presets::supports( 'lodging' );
 		$is_night_unit    = Service_Menu_Post_Type::is_night_unit( $post->ID );
-		// ラジオと単位表記は、時間枠へ戻したメニューでも保存済みの選択を表示する。
+		// 時間枠へ戻したメニューでも、基本料金の単位表記には保存済みの選択を使う。
 		$night_price_unit = Service_Menu_Post_Type::get_stored_night_price_unit( $post->ID );
 		$unit_suffix_id   = 'vkbm-base-price-unit';
 
@@ -1552,10 +1775,6 @@ class Service_Menu_Editor {
 		}
 		if ( $has_active_tier ) {
 			$describedby_ids[] = $description_id;
-		}
-
-		if ( $supports_lodging ) {
-			$this->render_night_price_unit_field( $night_price_unit, $is_night_unit );
 		}
 
 		// 泊のプランの休前日・特定日の基本料金（#737）。空欄の欄には、平日の金額を灰色のプレースホルダーで示す。
@@ -1690,7 +1909,11 @@ class Service_Menu_Editor {
 		$price_head_label = __( 'Price', 'vk-booking-manager' );
 		// 泊単位のときは列見出しに単位を付ける（#572）。切り替えは JS が行う。
 		$is_night_unit = Service_Menu_Post_Type::is_night_unit( $post->ID );
-		if ( $is_night_unit ) {
+		// 1室1泊あたりで追加料金を使うときは、区分の料金を超過1名・1泊あたりの追加料金として扱う（#934）。
+		$is_extra_guest_fee = Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $post->ID );
+		if ( $is_extra_guest_fee ) {
+			$price_head_label = __( 'Additional fee per extra guest, per night', 'vk-booking-manager' );
+		} elseif ( $is_night_unit ) {
 			$price_head_label = __( 'Price (per guest, per night)', 'vk-booking-manager' );
 		}
 		// 宿泊のサイトでは、区分ごとの料金を「平日・休前日・特定日」の 3 つにする（#737）。
@@ -1764,8 +1987,11 @@ class Service_Menu_Editor {
 				</div>
 				<button type="button" id="vkbm-price-tier-add" class="button"><?php esc_html_e( '+ Add price category', 'vk-booking-manager' ); ?></button>
 				<p class="description"><?php esc_html_e( 'Define categories such as "Adult" and "Child", each with its own price.', 'vk-booking-manager' ); ?></p>
-				<p class="description"><?php esc_html_e( 'When one or more categories are defined, the basic price is ignored and the price is calculated from the categories.', 'vk-booking-manager' ); ?></p>
-				<p class="description"><?php esc_html_e( 'If no category is defined, the basic price multiplied by the number of guests is used.', 'vk-booking-manager' ); ?></p>
+				<?php // 追加料金を使う1室1泊あたりでは基本料金は区分で上書きされないため、既定の 2 文ではなく追加料金用の 2 文を出す（#934）。 ?>
+				<p class="description vkbm-price-tiers-description-default" <?php echo $is_extra_guest_fee ? 'hidden' : ''; ?>><?php esc_html_e( 'When one or more categories are defined, the basic price is ignored and the price is calculated from the categories.', 'vk-booking-manager' ); ?></p>
+				<p class="description vkbm-price-tiers-description-default" <?php echo $is_extra_guest_fee ? 'hidden' : ''; ?>><?php esc_html_e( 'If no category is defined, the basic price multiplied by the number of guests is used.', 'vk-booking-manager' ); ?></p>
+				<p class="description vkbm-price-tiers-description-extra-guest" <?php echo $is_extra_guest_fee ? '' : 'hidden'; ?>><?php esc_html_e( 'Enter the fee added for each guest over the number included in the basic price, per night.', 'vk-booking-manager' ); ?></p>
+				<p class="description vkbm-price-tiers-description-extra-guest" <?php echo $is_extra_guest_fee ? '' : 'hidden'; ?>><?php esc_html_e( 'Guests in the highest-priced categories are included in the basic price first, and the remaining guests are charged.', 'vk-booking-manager' ); ?></p>
 			</td>
 		</tr>
 		<?php
@@ -2054,7 +2280,7 @@ class Service_Menu_Editor {
 
 		if ( ! empty( $reservation_day_notices ) ) {
 			set_transient(
-				self::NOTICE_TRANSIENT_PREFIX . get_current_user_id(),
+				self::get_notice_transient_key(),
 				implode( ' ', $reservation_day_notices ),
 				MINUTE_IN_SECONDS
 			);
@@ -2119,7 +2345,9 @@ class Service_Menu_Editor {
 		// サイト全体の指名機能がONのときだけフォームにこのフィールドが存在するため、
 		// OFF時は送信されず、既存のメニュー単位設定をそのまま保持する
 		// （他の「親スイッチOFF時はフォームに項目が無いため保持する」箇所と同じ方針）。
-		if ( $is_pro_edition && Staff_Editor::is_nomination_enabled() ) {
+		$is_lodging_night_submission = Industry_Presets::supports( 'lodging' )
+			&& Service_Menu_Post_Type::BOOKING_UNIT_NIGHT === ( $data['booking_unit'] ?? '' );
+		if ( $is_pro_edition && Staff_Editor::is_nomination_enabled() && ! $is_lodging_night_submission ) {
 			$use_nomination = isset( $data['use_nomination'] );
 			if ( $use_nomination ) {
 				// 「使う」（既定）に戻すため、無効化メタを削除する。
@@ -2255,6 +2483,8 @@ class Service_Menu_Editor {
 			delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_PER_PERSON );
 			delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS );
 		}
+		// 1室1泊あたりで規定人数を超えた分の追加料金を使う設定（#934）。料金区分を残すか消すかの判断に使うため、下の削除より先に保存する。
+		$this->save_night_extra_guest_meta( $post_id, $data, $price_tiers, $is_pro_edition );
 		// 予約枠の定員機能がオフでフォームに貸切・料金区分の欄が無い構成でも、泊単位では使わない値を残さない。
 		$this->delete_night_unit_unsupported_meta( $post_id );
 		if ( Staff_Editor::is_enabled() ) {

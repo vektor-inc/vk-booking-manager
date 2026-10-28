@@ -26,7 +26,7 @@ const BUNDLES = {
 	// 全フロントページ）。
 	'vkbm-components.min.css': [ 'alert.scss', 'utility.scss', 'buttons.scss' ],
 	// 認証フォーム固有の部分のみ。buttons / alert は vkbm-components に依存して読み込む。
-	'vkbm-auth.min.css': [ 'auth-forms.scss' ],
+	'vkbm-auth.min.css': [ 'auth-forms.scss', 'attendee-roster.scss' ],
 	// id が付いていて `wp-` で始まらず、`.editor-styles-wrapper` / `.wp-block` を含むスタイルシートは、
 	// ブロックエディターのキャンバスの末尾へ複製され、ブロックの CSS を上書きする。
 	// ブロックエディター用の補正のみ。ボタン・アラートなどの部品は含めない。部品は

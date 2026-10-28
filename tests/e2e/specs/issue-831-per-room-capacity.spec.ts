@@ -278,10 +278,14 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		);
 		const capacityLabel = page.locator( '#vkbm-max-capacity-label' );
 		const capacityInput = page.locator( '#vkbm_service_menu_max_capacity' );
+		const resourceSelectionRow = page.locator(
+			'#vkbm-use-nomination-field'
+		);
 		await capacityInput.waitFor( { state: 'attached', timeout: 15000 } );
 
 		// 1室1泊あたり: 複数人一括予約の行は出さず、ラベルは「1室の最大人数」。
 		await expect( multiGuestsRow ).toBeHidden();
+		await expect( resourceSelectionRow ).toBeHidden();
 		await expect( capacityLabel ).toHaveText( '1室の最大人数' );
 		await expect(
 			page.locator( '#vkbm-max-capacity-description' )
@@ -322,6 +326,60 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 				{ stdio: 'pipe' }
 			)
 		).toBe( '' );
+		// 指定欄が hidden のまま保存されても、メニュー単位の有効値は OFF に落ちない。
+		expect(
+			wpCliArgs(
+				[
+					'post',
+					'meta',
+					'get',
+					nightMenuId,
+					'_vkbm_disable_nomination',
+				],
+				{ stdio: 'pipe' }
+			)
+		).toBe( '' );
+
+		// 時間枠へ戻すと「客室指定」が表示され、チェック切り替え後も宿泊向け説明文を維持する。
+		await page.evaluate( () => {
+			const radio = document.querySelector< HTMLInputElement >(
+				'input[name="vkbm_service_menu[booking_unit]"][value="slot"]'
+			);
+			if ( ! radio ) {
+				throw new Error( '時間枠のラジオボタンが見つかりません。' );
+			}
+			radio.checked = true;
+			radio.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		} );
+		await expect( resourceSelectionRow ).toBeVisible();
+		await expect( resourceSelectionRow.locator( 'th' ) ).toHaveText(
+			'客室指定'
+		);
+		await resourceSelectionRow
+			.locator( 'input[type="checkbox"]' )
+			.uncheck();
+		await expect( resourceSelectionRow ).toContainText(
+			'このサービスメニューでは客室が自動で割り当てられ'
+		);
+		await expect(
+			page.getByText( 'スタッフ指名', { exact: true } )
+		).toHaveCount( 0 );
+		await expect( page.locator( '#vkbm-min-capacity-label' ) ).toHaveText(
+			'最少催行人数'
+		);
+
+		// 泊単位へ戻すと指定欄は隠れ、隠れたチェックが OFF でも定員文言は指定なし側に固定される。
+		await page.evaluate( () => {
+			const radio = document.querySelector< HTMLInputElement >(
+				'input[name="vkbm_service_menu[booking_unit]"][value="night"]'
+			);
+			if ( ! radio ) {
+				throw new Error( '泊単位のラジオボタンが見つかりません。' );
+			}
+			radio.checked = true;
+			radio.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+		} );
+		await expect( resourceSelectionRow ).toBeHidden();
 
 		// 料金の単位を 1名1泊あたりへ切り替えると、行とラベルが元に戻る。
 		await page.evaluate( () => {
@@ -338,6 +396,9 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		} );
 		await expect( multiGuestsRow ).toBeVisible();
 		await expect( capacityLabel ).toHaveText( '予約枠の定員' );
+		await expect(
+			page.locator( '#vkbm-max-capacity-description' )
+		).toContainText( '客室が自動で割り当てられる場合' );
 	} );
 
 	test( '複数人一括予約が OFF のままでも、予約画面の人数欄が「1室の最大人数」を上限に出る', async ( {

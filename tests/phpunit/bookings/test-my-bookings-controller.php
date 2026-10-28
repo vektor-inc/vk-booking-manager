@@ -6,6 +6,7 @@ namespace VKBookingManager\Tests\Bookings;
 
 use VKBookingManager\Bookings\My_Bookings_Controller;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_REST_Request;
 use WP_UnitTestCase;
 use function update_post_meta;
@@ -18,6 +19,32 @@ use function wp_set_current_user;
  * @group bookings
  */
 class My_Bookings_Controller_Test extends WP_UnitTestCase {
+	/**
+	 * 有効時だけ、値がある予約へ利用者名を返す。
+	 */
+	public function test_get_bookings_attendee_name(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$with_name    = $this->create_booking_post( $user_id, '+2 days' );
+		$without_name = $this->create_booking_post( $user_id, '+3 days' );
+		update_post_meta( $with_name, '_vkbm_booking_attendee_name', '利用者花子' );
+		$repository = new Settings_Repository();
+		$settings   = $repository->get_settings();
+
+		$test_cases = array(
+			array( 'test_condition_name' => '任意 => 値がある予約だけ返す', 'mode' => 'optional', 'expected' => '利用者花子' ),
+			array( 'test_condition_name' => '無効 => 保存値を返さない', 'mode' => 'disabled', 'expected' => '' ),
+		);
+		foreach ( $test_cases as $case ) {
+			$settings['booking_attendee_name_mode'] = $case['mode'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/my-bookings' );
+			$items   = ( new My_Bookings_Controller( $repository ) )->get_bookings( $request )->get_data();
+			$by_id   = array_column( $items, null, 'id' );
+			$this->assertSame( $case['expected'], $by_id[ $with_name ]['attendee_name'], $case['test_condition_name'] );
+			$this->assertSame( '', $by_id[ $without_name ]['attendee_name'], $case['test_condition_name'] );
+		}
+	}
 
 	protected function tearDown(): void {
 		wp_set_current_user( 0 );

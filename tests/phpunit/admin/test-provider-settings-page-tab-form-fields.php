@@ -516,6 +516,172 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 「見出しをフッターと同じ色にする」（デザイン設定タブのチェックボックス）が、どのタブから保存しても保存済みの値を保ち、
+	 * デザイン設定タブでオン・オフを切り替えて保存できることを検証する（#864）。
+	 *
+	 * チェックを外すとチェックボックスは値を送らないため、直前に置いた値 0 の hidden が送られてオフで保存される。
+	 * フッターの色がどちらも空欄で行を隠しているときも、hidden とチェックボックスは送信され、チェックの状態が保たれる。
+	 */
+	public function test_save_settings_design_menu_heading_use_footer_color(): void {
+		$key      = 'design_menu_heading_use_footer_color';
+		$field_id = 'vkbm-design-menu-heading-use-footer-color';
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '保存済みオフ・フッターの背景色あり（行を表示）・「デザイン」タブでチェックを入れて保存 => オン',
+				'saved'               => false,
+				'footer_bg'           => '#1e3a8a',
+				'tab'                 => 'design',
+				'check'               => true,
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '保存済みオン・フッターの背景色あり（行を表示）・「デザイン」タブでチェックを外して保存 => オフ',
+				'saved'               => true,
+				'footer_bg'           => '#1e3a8a',
+				'tab'                 => 'design',
+				'check'               => false,
+				'expected'            => false,
+			),
+		);
+		// フッターの色の有無（行の表示・非表示）を問わず、どのタブ（タブ指定なしを含む）から、チェックを触らずに保存 => 保存済みの値のまま。
+		foreach ( array( '', '#1e3a8a' ) as $footer_bg ) {
+			foreach ( array( true, false ) as $saved ) {
+				foreach ( array_merge( self::FORM_TABS, array( '' ) ) as $tab ) {
+					$test_cases[] = array(
+						'test_condition_name' => '保存済み' . ( $saved ? 'オン' : 'オフ' ) . '・フッターの色' . ( '' === $footer_bg ? 'なし（行を隠す）' : 'あり（行を表示）' ) . '・「' . ( '' === $tab ? 'タブ指定なし' : $tab ) . '」タブから保存 => 保存済みの値のまま',
+						'saved'               => $saved,
+						'footer_bg'           => $footer_bg,
+						'tab'                 => $tab,
+						'check'               => null,
+						'expected'            => $saved,
+					);
+				}
+			}
+		}
+
+		$page    = $this->create_page();
+		$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+		foreach ( $test_cases as $case ) {
+			// 保存済みの設定を用意する。
+			delete_option( Settings_Repository::OPTION_KEY );
+			$repository = new Settings_Repository();
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array_merge(
+					$repository->get_default_settings(),
+					array(
+						$key                             => $case['saved'],
+						'design_footer_background_color' => $case['footer_bg'],
+					)
+				)
+			);
+
+			$html = $this->render_tab( $page, $case['tab'] );
+
+			// どのタブでも、hidden とチェックボックスが 1 つずつ、デザイン設定タブの行に出力される。
+			$this->assertSame( 2, substr_count( $html, 'name="vkbm_provider_settings[' . $key . ']"' ), $case['test_condition_name'] . '（出力数）' );
+			$this->assertMatchesRegularExpression(
+				'/<tr class="vkbm-provider-settings__tab-design(?: [^"]*)?"[^>]*>(?:(?!<\/tr>).)*<input type="hidden" name="vkbm_provider_settings\[' . $key . '\]" value="0" \/>(?:(?!<\/tr>).)*id="' . $field_id . '"/s',
+				$html,
+				$case['test_condition_name'] . '（hidden がチェックボックスより前にあること）'
+			);
+
+			// チェックの付け外しを再現する。
+			if ( null !== $case['check'] ) {
+				$html = preg_replace( '/(id="' . $field_id . '"[^>]*?)\s+checked=\'checked\'/', '${1}', $html );
+				if ( $case['check'] ) {
+					$html = preg_replace( '/(id="' . $field_id . '")/', '${1} checked=\'checked\'', $html, -1, $replaced );
+					$this->assertSame( 1, $replaced, $case['test_condition_name'] . '（前提: チェックを入れられる）' );
+				}
+			}
+
+			$submitted = $this->get_submitted_values( $html );
+			$payload   = $submitted['vkbm_provider_settings'] ?? array();
+			unset( $payload['license_key'], $payload['delete_license_key'] );
+
+			$result = $service->save_settings( $payload );
+			$this->assertNotWPError( $result, $case['test_condition_name'] . '（前提: 保存できる）' );
+
+			$saved_settings = get_option( Settings_Repository::OPTION_KEY, array() );
+			$this->assertSame( $case['expected'], $saved_settings[ $key ] ?? '(保存されていない)', $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 「見出しをフッターと同じ色にする」の行が、行見出しを持たず、
+	 * 保存済みのフッターの背景色・文字色のどちらかがあるときだけ表示で出力されることを検証する（#864）。
+	 */
+	public function test_render_page_design_menu_heading_use_footer_color_row(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'フッターの背景色・文字色とも空欄 => 行を隠して出力',
+				'footer_bg'           => '',
+				'footer_text'         => '',
+				'expected_hidden'     => true,
+			),
+			array(
+				'test_condition_name' => 'フッターの背景色だけ設定 => 行を表示で出力',
+				'footer_bg'           => '#1e3a8a',
+				'footer_text'         => '',
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => 'フッターの文字色だけ設定 => 行を表示で出力',
+				'footer_bg'           => '',
+				'footer_text'         => '#ffcc00',
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => 'フッターの背景色・文字色とも設定 => 行を表示で出力',
+				'footer_bg'           => '#1e3a8a',
+				'footer_text'         => '#ffcc00',
+				'expected_hidden'     => false,
+			),
+		);
+
+		$page = $this->create_page();
+
+		foreach ( $test_cases as $case ) {
+			// 保存済みのフッターの色を用意する（チェックはオンにして、隠すかどうかがチェックの状態に左右されないことも確かめる）。
+			delete_option( Settings_Repository::OPTION_KEY );
+			$repository = new Settings_Repository();
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array_merge(
+					$repository->get_default_settings(),
+					array(
+						'design_footer_background_color'       => $case['footer_bg'],
+						'design_footer_text_color'             => $case['footer_text'],
+						'design_menu_heading_use_footer_color' => true,
+					)
+				)
+			);
+
+			$html = $this->render_tab( $page, 'design' );
+
+			// 行の開始タグと、行の中身（</tr> まで）を取り出す。
+			$this->assertSame(
+				1,
+				preg_match( '/<tr class="vkbm-provider-settings__tab-design" id="vkbm-design-menu-heading-use-footer-color-row"([^>]*)>(.*?)<\/tr>/s', $html, $matches ),
+				$case['test_condition_name'] . '（前提: 行が 1 つ出力される）'
+			);
+
+			// 行見出し（th）は置かず、先頭は空の td にする（チェックボックスの左端を上の入力欄とそろえるため colspan でまとめない）。
+			$this->assertStringNotContainsString( '<th', $matches[2], $case['test_condition_name'] . '（行見出しを置かない）' );
+			$this->assertMatchesRegularExpression( '/^\s*<td><\/td>\s*<td>/', $matches[2], $case['test_condition_name'] . '（先頭が空の td）' );
+			$this->assertStringNotContainsString( 'colspan', $matches[2], $case['test_condition_name'] . '（colspan でまとめない）' );
+
+			// フッターの色の有無で hidden 属性を出し分ける。
+			$this->assertSame( $case['expected_hidden'], 1 === preg_match( '/(^|\s)hidden(\s|$)/', $matches[1] ), $case['test_condition_name'] );
+
+			// 隠していても、チェック状態は保存済みのまま出力する。
+			$this->assertMatchesRegularExpression( '/id="vkbm-design-menu-heading-use-footer-color"[^>]*checked=\'checked\'/', $html, $case['test_condition_name'] . '（チェック状態を保つ）' );
+		}
+	}
+
+	/**
 	 * 指定タブで設定画面を描画し、HTML を返す。
 	 *
 	 * @param Provider_Settings_Page $page 設定画面。

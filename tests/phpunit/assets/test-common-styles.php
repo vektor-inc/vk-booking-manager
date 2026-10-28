@@ -186,6 +186,42 @@ class Common_Styles_Test extends WP_UnitTestCase {
 				'expected'            => ':root{--vkbm--color--footer-bg: #1e3a8a;--vkbm--color--footer-text: #ffcc00;--vkbm--color--footer-border: rgb(255 204 0 / 20%);}',
 			],
 			[
+				'test_condition_name' => '#864 見出しをフッターと同じ色にする（オン）とフッターの色 => フッターと同じ値で見出しの色も出力される',
+				'conditions'          => [
+					'options' => [
+						'design_footer_background_color'       => '#1e3a8a',
+						'design_footer_text_color'             => '#ffcc00',
+						'design_menu_heading_use_footer_color' => true,
+						'design_radius_md'                     => '',
+					],
+				],
+				'expected'            => ':root{--vkbm--color--footer-bg: #1e3a8a;--vkbm--color--footer-text: #ffcc00;--vkbm--color--footer-border: rgb(255 204 0 / 20%);--vkbm--color--menu-heading-bg: #1e3a8a;--vkbm--color--menu-heading-text: #ffcc00;}',
+			],
+			[
+				'test_condition_name' => '#864 見出しをフッターと同じ色にする（オフ）とフッターの色 => 見出しの色は出力しない',
+				'conditions'          => [
+					'options' => [
+						'design_footer_background_color'       => '#1e3a8a',
+						'design_footer_text_color'             => '#ffcc00',
+						'design_menu_heading_use_footer_color' => false,
+						'design_radius_md'                     => '',
+					],
+				],
+				'expected'            => ':root{--vkbm--color--footer-bg: #1e3a8a;--vkbm--color--footer-text: #ffcc00;--vkbm--color--footer-border: rgb(255 204 0 / 20%);}',
+			],
+			[
+				'test_condition_name' => '#864 見出しをフッターと同じ色にする（オン）でフッターの色が空 => 何も出力しない',
+				'conditions'          => [
+					'options' => [
+						'design_footer_background_color'       => '',
+						'design_footer_text_color'             => '',
+						'design_menu_heading_use_footer_color' => true,
+						'design_radius_md'                     => '',
+					],
+				],
+				'expected'            => '',
+			],
+			[
 				'test_condition_name' => '#825 フッターの色がどちらも空 => 何も出力しない',
 				'conditions'          => [
 					'options' => [
@@ -331,6 +367,89 @@ class Common_Styles_Test extends WP_UnitTestCase {
 
 		foreach ( $test_cases as $case ) {
 			$actual = Common_Styles::get_footer_color_properties( $case['conditions'] );
+
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * #864: get_menu_heading_color_properties() が、「見出しをフッターと同じ色にする」がオンのときだけ
+	 * フッターと同じ色で見出しの CSS 変数を組み立てることを検証する。
+	 */
+	public function test_get_menu_heading_color_properties(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'オン・背景色と文字色を設定 => 見出しの背景色・文字色がフッターと同じ値',
+				'conditions'          => array(
+					'design_menu_heading_use_footer_color' => true,
+					'design_footer_background_color'       => '#1e3a8a',
+					'design_footer_text_color'             => '#ffcc00',
+				),
+				'expected'            => array(
+					'--vkbm--color--menu-heading-bg'   => '#1e3a8a',
+					'--vkbm--color--menu-heading-text' => '#ffcc00',
+				),
+			),
+			array(
+				'test_condition_name' => 'オン・濃い背景色だけ設定 => 文字色はフッターと同じく自動で白',
+				'conditions'          => array(
+					'design_menu_heading_use_footer_color' => true,
+					'design_footer_background_color'       => '#1e3a8a',
+					'design_footer_text_color'             => '',
+				),
+				'expected'            => array(
+					'--vkbm--color--menu-heading-bg'   => '#1e3a8a',
+					'--vkbm--color--menu-heading-text' => '#ffffff',
+				),
+			),
+			array(
+				'test_condition_name' => 'オン・文字色だけ設定 => 文字色だけ出力し、背景色は既定のまま',
+				'conditions'          => array(
+					'design_menu_heading_use_footer_color' => true,
+					'design_footer_background_color'       => '',
+					'design_footer_text_color'             => '#abc',
+				),
+				'expected'            => array(
+					'--vkbm--color--menu-heading-text' => '#abc',
+				),
+			),
+			array(
+				'test_condition_name' => 'オン・フッターの色がどちらも空 => 何も出力しない',
+				'conditions'          => array(
+					'design_menu_heading_use_footer_color' => true,
+					'design_footer_background_color'       => '',
+					'design_footer_text_color'             => '',
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => 'オン・不正な背景色 => 何も出力しない',
+				'conditions'          => array(
+					'design_menu_heading_use_footer_color' => true,
+					'design_footer_background_color'       => '#fff;}body{display:none}',
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => 'オフ・背景色と文字色を設定 => 何も出力しない',
+				'conditions'          => array(
+					'design_menu_heading_use_footer_color' => false,
+					'design_footer_background_color'       => '#1e3a8a',
+					'design_footer_text_color'             => '#ffcc00',
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '設定キーが無い（未保存のサイト）・背景色を設定 => 何も出力しない',
+				'conditions'          => array(
+					'design_footer_background_color' => '#1e3a8a',
+				),
+				'expected'            => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Common_Styles::get_menu_heading_color_properties( $case['conditions'] );
 
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
 		}

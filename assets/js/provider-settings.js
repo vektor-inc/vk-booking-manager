@@ -95,6 +95,24 @@
 			} );
 	}
 
+	/** 利用者名の利用モードに合わせて見出し欄を切り替える。 */
+	function initAttendeeNameMode() {
+		const mode = document.getElementById(
+			'vkbm-booking-attendee-name-mode'
+		);
+		const label = document.getElementById(
+			'vkbm-booking-attendee-name-label'
+		);
+		if ( ! mode || ! label ) {
+			return;
+		}
+		const update = () => {
+			label.disabled = mode.value === 'disabled';
+		};
+		mode.addEventListener( 'change', update );
+		update();
+	}
+
 	/**
 	 * 業種プリセットの値をフォーム用の文字列へ変換する。
 	 *
@@ -450,6 +468,36 @@
 		}
 	}
 
+	// #864: フッターの背景色・文字色のどちらかが入っているときだけ、
+	// 「見出しをフッターと同じ色にする」チェックボックスの行を表示する（サーバー側の初期表示と同じ条件）。
+	// 隠してもチェックの状態は送信・保持する。
+	// カラーピッカーの change は入力欄の値を書き換える前に呼ばれるため、
+	// 変更中の入力欄は changedInput / changedValue で受け取った新しい値で判定する。
+	function updateMenuHeadingUseFooterColorRow( changedInput, changedValue ) {
+		const row = document.getElementById(
+			'vkbm-design-menu-heading-use-footer-color-row'
+		);
+		if ( ! row ) {
+			return;
+		}
+
+		const hasFooterColor = [
+			'vkbm-design-footer-background-color',
+			'vkbm-design-footer-text-color',
+		].some( function ( id ) {
+			const input = document.getElementById( id );
+			if ( ! input ) {
+				return false;
+			}
+			const value = input === changedInput ? changedValue : input.value;
+			// カラーピッカーは「#」だけの入力も空欄として扱う。
+			const trimmedValue = String( value ).trim();
+			return '' !== trimmedValue && '#' !== trimmedValue;
+		} );
+
+		row.hidden = ! hasFooterColor;
+	}
+
 	function initColorPicker() {
 		if ( typeof $.fn.wpColorPicker !== 'function' ) {
 			return;
@@ -457,7 +505,18 @@
 
 		$( '.vkbm-color-picker' ).wpColorPicker( {
 			defaultColor: false,
+			// 色を選んだとき（入力欄への直接入力を含む）。this は変更された入力欄。
+			change( event, ui ) {
+				updateMenuHeadingUseFooterColorRow( this, ui.color.toString() );
+			},
+			// 「クリア」ボタン、または入力欄を空にしたとき。入力欄の値は空になっている。
+			clear() {
+				updateMenuHeadingUseFooterColorRow();
+			},
 		} );
+
+		// 再読み込み時にブラウザが入力欄の値を戻した場合も、行の表示を入力欄の値に合わせる。
+		updateMenuHeadingUseFooterColorRow();
 	}
 
 	function setLogo( attachment ) {
@@ -1024,6 +1083,147 @@
 		return true;
 	}
 
+	/**
+	 * 利用者が操作できる設定項目の現在値を比較用の文字列へ変換する。
+	 *
+	 * name を持たない項目と disabled の項目は、送信されないため除外する。
+	 *
+	 * @param {HTMLFormElement} form 設定フォーム。
+	 * @return {string} 比較用に直列化したフォームの内容。
+	 */
+	function serializeEditableSettings( form ) {
+		const values = [];
+
+		form.querySelectorAll( 'input, select, textarea' ).forEach(
+			function ( control ) {
+				if ( control.disabled || ! control.name ) {
+					return;
+				}
+
+				const entry = {
+					name: control.name,
+					type: control.type,
+					value: control.value,
+				};
+
+				if (
+					control instanceof HTMLInputElement &&
+					( 'checkbox' === control.type || 'radio' === control.type )
+				) {
+					entry.checked = control.checked;
+				}
+
+				if (
+					control instanceof HTMLSelectElement &&
+					control.multiple
+				) {
+					entry.value = Array.from( control.selectedOptions ).map(
+						function ( option ) {
+							return option.value;
+						}
+					);
+				}
+
+				values.push( entry );
+			}
+		);
+
+		return JSON.stringify( values );
+	}
+
+	/**
+	 * 未保存の設定がある状態で画面を離れる操作に確認を追加する。
+	 */
+	function initUnsavedChangesGuard() {
+		const page = document.querySelector( '.vkbm-provider-settings' );
+		const form = page
+			? page.querySelector( '.vkbm-provider-settings__form' )
+			: null;
+		if ( ! page || ! form ) {
+			return;
+		}
+
+		const initialValues = serializeEditableSettings( form );
+		const hasRestoredInput = '1' === page.dataset.hasRestoredInput;
+		let guardEnabled = true;
+		let lastSubmitEvent = null;
+
+		const hasUnsavedChanges = function () {
+			return (
+				guardEnabled &&
+				( hasRestoredInput ||
+					initialValues !== serializeEditableSettings( form ) )
+			);
+		};
+
+		const handleBeforeUnload = function ( event ) {
+			if (
+				! hasUnsavedChanges() ||
+				( lastSubmitEvent && ! lastSubmitEvent.defaultPrevented )
+			) {
+				return;
+			}
+
+			event.preventDefault();
+			event.returnValue = '';
+		};
+
+		window.addEventListener( 'beforeunload', handleBeforeUnload );
+
+		// submit が別処理で取り消された場合は、未保存変更の監視を継続する。
+		form.addEventListener( 'submit', function ( event ) {
+			lastSubmitEvent = event;
+		} );
+
+		// 本体と拡張プラグインのタブ、および本文内にある別タブへのリンクを一括で扱う。
+		page.addEventListener( 'click', function ( event ) {
+			const eventTarget = event.target;
+			const link =
+				eventTarget instanceof Element
+					? eventTarget.closest( 'a[href]' )
+					: null;
+			if (
+				! link ||
+				event.defaultPrevented ||
+				0 !== event.button ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.shiftKey ||
+				'_blank' === link.target
+			) {
+				return;
+			}
+
+			const targetUrl = new URL( link.href, window.location.href );
+			const currentUrl = new URL( window.location.href );
+			targetUrl.hash = '';
+			currentUrl.hash = '';
+			if ( targetUrl.href === currentUrl.href ) {
+				return;
+			}
+
+			const targetTab = targetUrl.searchParams.get( 'tab' ) || 'store';
+			const isSettingsTabLink =
+				targetUrl.origin === window.location.origin &&
+				targetUrl.pathname === window.location.pathname &&
+				'vkbm-provider-settings' ===
+					targetUrl.searchParams.get( 'page' ) &&
+				targetTab !== page.getAttribute( 'data-active-tab' );
+
+			if ( ! isSettingsTabLink || ! hasUnsavedChanges() ) {
+				return;
+			}
+
+			if ( ! window.confirm( settings.unsavedChangesMessage || '' ) ) {
+				event.preventDefault();
+				return;
+			}
+
+			guardEnabled = false;
+			window.removeEventListener( 'beforeunload', handleBeforeUnload );
+		} );
+	}
+
 	$( function () {
 		if ( redirectToTabOfHashTarget() ) {
 			return;
@@ -1082,7 +1282,9 @@
 		updatePrivacyPolicyModeState();
 		initColorPicker();
 		initIconPickers();
+		initAttendeeNameMode();
 		initIndustryPreset();
 		initServiceMenuDetailDisplayModeNotice();
+		initUnsavedChangesGuard();
 	} );
 } )( jQuery );

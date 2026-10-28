@@ -302,6 +302,61 @@ class Booking_Admin_Reserver_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 予約者を付け替えたときだけ、ご利用になる方の ID を manual へ置き換え、名前・番号の写しは残す。
+	 */
+	public function test_save_post_attendee_id_on_author_change(): void {
+		$original_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+		$other_id    = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '名簿の人の予約を別の会員へ付け替える => manual に置き換わり、写しは残る',
+				'attendee_id'         => '11111111-1111-4111-8111-111111111111',
+				'sent_author_id'      => $other_id,
+				'expected_id'         => 'manual',
+			),
+			array(
+				'test_condition_name' => '本人の予約を別の会員へ付け替える => manual に置き換わり、写しは残る',
+				'attendee_id'         => 'self',
+				'sent_author_id'      => $other_id,
+				'expected_id'         => 'manual',
+			),
+			array(
+				'test_condition_name' => 'ID の値が無い過去予約を別の会員へ付け替える => manual になる',
+				'attendee_id'         => null,
+				'sent_author_id'      => $other_id,
+				'expected_id'         => 'manual',
+			),
+			array(
+				'test_condition_name' => '予約者を変えずに保存する => ID はそのまま',
+				'attendee_id'         => '11111111-1111-4111-8111-111111111111',
+				'sent_author_id'      => $original_id,
+				'expected_id'         => '11111111-1111-4111-8111-111111111111',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$booking_id = $this->factory()->post->create(
+				array(
+					'post_type'   => Booking_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+					'post_author' => $original_id,
+				)
+			);
+			update_post_meta( $booking_id, '_vkbm_booking_attendee_name', 'ポチ' );
+			update_post_meta( $booking_id, '_vkbm_booking_attendee_number', 'A-100' );
+			if ( null !== $case['attendee_id'] ) {
+				update_post_meta( $booking_id, '_vkbm_booking_attendee_id', $case['attendee_id'] );
+			}
+
+			$this->save_with_author( $booking_id, $case['sent_author_id'] );
+
+			$this->assertSame( $case['expected_id'], (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_id', true ), $case['test_condition_name'] . '（ID）' );
+			$this->assertSame( 'A-100', (string) get_post_meta( $booking_id, '_vkbm_booking_attendee_number', true ), $case['test_condition_name'] . '（番号の写し）' );
+		}
+	}
+
+	/**
 	 * 初期表示は現在の予約者だけを出し、全ユーザーを並べるプルダウンを出さない。
 	 */
 	public function test_render_meta_box_reserver_field(): void {

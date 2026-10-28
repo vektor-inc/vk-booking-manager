@@ -1,4 +1,9 @@
 <?php
+/**
+ * プロバイダー設定のサニタイズを検証する。
+ *
+ * @package VKBookingManager
+ */
 
 declare( strict_types=1 );
 
@@ -7,12 +12,95 @@ namespace VKBookingManager\Tests\ProviderSettings;
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
+use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_UnitTestCase;
 
 /**
+ * プロバイダー設定のサニタイズを検証する。
+ *
  * @group provider-settings
  */
 class Settings_Sanitizer_Test extends WP_UnitTestCase {
+	/** 名簿設定のチェックを外した送信値を false として保存できる。 */
+	public function test_sanitize_attendee_roster_checkboxes_off(): void {
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+		$input    = array(
+			'attendee_roster_enabled'      => '0',
+			'attendee_roster_show_self'    => '0',
+			'attendee_roster_kana_enabled' => '0',
+			'attendee_number_enabled'      => '0',
+		);
+		$result   = ( new Settings_Sanitizer() )->sanitize( $input, $defaults );
+		foreach ( array_keys( $input ) as $key ) {
+			$this->assertFalse( $result[ $key ], $key . ' はチェックを外すと false になる' );
+		}
+	}
+
+	/** 実際の保存経路で、名簿をオフにしても未送信の配下設定を保持する。 */
+	public function test_save_settings_preserves_attendee_roster_children_when_disabled(): void {
+		$stored                                 = ( new Settings_Repository() )->get_default_settings();
+		$stored['attendee_roster_label']        = '登録済み名簿';
+		$stored['attendee_roster_show_self']    = true;
+		$stored['attendee_roster_kana_enabled'] = true;
+		$stored['attendee_roster_kana_label']   = 'ふりがな';
+		$stored['attendee_number_enabled']      = true;
+		$stored['attendee_number_label']        = '会員番号';
+		update_option( Settings_Repository::OPTION_KEY, $stored );
+		$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$this->assertTrue( $service->save_settings( array( 'attendee_roster_enabled' => '0' ) ) );
+		$result = $service->get_settings();
+
+		$this->assertFalse( $result['attendee_roster_enabled'], '名簿機能自体はオフにできる' );
+		foreach ( array( 'attendee_roster_label', 'attendee_roster_show_self', 'attendee_roster_kana_enabled', 'attendee_roster_kana_label', 'attendee_number_enabled', 'attendee_number_label' ) as $key ) {
+			$this->assertSame( $stored[ $key ], $result[ $key ], $key . ' は未送信なら保存済み値を保持する' );
+		}
+	}
+
+	/** 利用者名設定のモードと見出しを正規化する。 */
+	public function test_sanitize_booking_attendee_name_settings(): void {
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+		$sanitizer = new Settings_Sanitizer();
+
+		$valid = $sanitizer->sanitize(
+			array(
+				'booking_attendee_name_mode'  => 'required',
+				'booking_attendee_name_label' => '<b>ペットのお名前</b>',
+			),
+			$defaults
+		);
+		$this->assertSame( 'required', $valid['booking_attendee_name_mode'] );
+		$this->assertSame( 'ペットのお名前', $valid['booking_attendee_name_label'] );
+
+		$stored                                = $defaults;
+		$stored['booking_attendee_name_mode']  = 'optional';
+		$stored['booking_attendee_name_label'] = '保存済みの見出し';
+		$missing                               = $sanitizer->sanitize( array(), $stored );
+		$this->assertSame( 'optional', $missing['booking_attendee_name_mode'] );
+		$this->assertSame( '保存済みの見出し', $missing['booking_attendee_name_label'] );
+
+		$long_label = str_repeat( '名', Settings_Sanitizer::BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH + 1 );
+		$limited    = $sanitizer->sanitize( array( 'booking_attendee_name_label' => $long_label ), $defaults );
+		$this->assertSame( Settings_Sanitizer::BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH, mb_strlen( $limited['booking_attendee_name_label'] ) );
+
+		$invalid = $sanitizer->sanitize( array( 'booking_attendee_name_mode' => 'invalid' ), $defaults );
+		$this->assertSame( 'disabled', $invalid['booking_attendee_name_mode'] );
+	}
+
+	/**
+	 * 無料版では自動匿名化の保存値を 0 に固定する。
+	 */
+	public function test_sanitize_forces_booking_auto_anonymize_months_to_zero_in_free_edition(): void {
+		if ( ! Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '無料版成果物で検証する。' );
+		}
+
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+		$result   = ( new Settings_Sanitizer() )->sanitize( array( 'booking_auto_anonymize_months' => 12 ), $defaults );
+
+		$this->assertSame( 0, $result['booking_auto_anonymize_months'] );
+	}
+
+	/** 基本設定の値を正規化する。 */
 	public function test_sanitize_normalizes_values(): void {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
@@ -162,6 +250,7 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$this->assertSame( array(), $sanitizer->get_errors() );
 	}
 
+	/** 未送信の値へ既定値を適用する。 */
 	public function test_sanitize_handles_missing_values_with_defaults(): void {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
@@ -474,6 +563,7 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		}
 	}
 
+	/** 不正なメールアドレスを破棄する。 */
 	public function test_sanitize_discards_invalid_email(): void {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
@@ -488,6 +578,7 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 		$this->assertSame( (string) get_option( 'admin_email' ), $result['provider_email'] );
 	}
 
+	/** 不正な営業時間のエラーを記録する。 */
 	public function test_sanitize_records_errors_for_invalid_business_hours(): void {
 		$sanitizer = new Settings_Sanitizer();
 		$defaults  = ( new Settings_Repository() )->get_default_settings();
@@ -893,6 +984,42 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 				'design_footer_text_color'       => $result['design_footer_text_color'],
 			);
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * #864: 「見出しをフッターと同じ色にする」は既定がオフで、フォームの hidden（'0'）とチェックボックス（'1'）の
+	 * 送信値を真偽値で保存することを検証する。
+	 */
+	public function test_sanitize_design_menu_heading_use_footer_color(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		// 既定値はオフ（既存サイトの見出しの見た目を変えない）。
+		$this->assertFalse( $defaults['design_menu_heading_use_footer_color'] );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'チェックあり（\'1\'） => オン',
+				'input'               => array( 'design_menu_heading_use_footer_color' => '1' ),
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'チェックなし（hidden の \'0\'） => オフ',
+				'input'               => array( 'design_menu_heading_use_footer_color' => '0' ),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '未送信 => 既定値（オフ）',
+				'input'               => array(),
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+
+			$this->assertSame( $case['expected'], $result['design_menu_heading_use_footer_color'], $case['test_condition_name'] );
 		}
 	}
 

@@ -123,6 +123,7 @@ class Service_Menu_Editor_Basic_Settings_Anchor_Link_Test extends WP_UnitTestCas
 	/**
 	 * render_conditions_meta_box() の出力に、「サービス後バッファ（分）」の説明文から
 	 * 基本設定画面の該当欄への完全なリンクが含まれることを確認する。
+	 * その他条件の説明文と入力欄の関連付け（#899）も確認する。
 	 *
 	 * この出力には基本設定画面への別リンク（指名機能の設定リンク等）も含まれるため、
 	 * リンク単位の正規表現で検証しないと、対象リンクの target/rel 欠落を見逃してしまう。
@@ -143,6 +144,23 @@ class Service_Menu_Editor_Basic_Settings_Anchor_Link_Test extends WP_UnitTestCas
 			$pattern,
 			$output,
 			'サービス後バッファの説明文に基本設定画面の該当欄への完全なリンクが含まれる'
+		);
+
+		// その他条件の入力欄と説明文が関連付けられて出力されることを確認する。
+		$this->assertStringContainsString(
+			'aria-describedby="vkbm-service-menu-other-conditions-description"',
+			$output,
+			'その他条件の入力欄に説明文との関連付けが含まれる'
+		);
+		$this->assertStringContainsString(
+			'<p id="vkbm-service-menu-other-conditions-description" class="description">',
+			$output,
+			'その他条件の説明文が既存の説明文と同じクラスで出力される'
+		);
+		$this->assertStringContainsString(
+			'If there is anything customers should know in advance, such as additional fees that may apply under certain conditions, enter it here.',
+			$output,
+			'その他条件に記載する内容の説明が出力される'
 		);
 	}
 }

@@ -197,12 +197,6 @@ class Shift_Lodging_Editor {
 			<p>
 				<?php
 				/* translators: %s: label of the resource (e.g. room). */
-				echo esc_html( sprintf( __( 'For lodging, shifts are used to set the days each %s is on sale.', 'vk-booking-manager' ), $resource_label ) );
-				?>
-			</p>
-			<p>
-				<?php
-				/* translators: %s: label of the resource (e.g. room). */
 				echo esc_html( sprintf( __( 'Check the days this %s is on sale.', 'vk-booking-manager' ), $resource_label ) );
 				?>
 				<?php esc_html_e( 'Bookings are not accepted on unchecked days.', 'vk-booking-manager' ); ?>

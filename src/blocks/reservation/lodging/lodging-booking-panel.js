@@ -14,18 +14,22 @@ import { GuestCountInput } from '../booking-ui/guest-count-input';
 import { formatCurrency } from '../../shared/pricing';
 import { formatGuestsCount } from '../../shared/guests';
 import { resolveApiErrorMessage } from '../../shared/rest-error-message';
+import { formatReservationDate } from '../date-format';
 import { LodgingRangeCalendar } from './lodging-range-calendar';
 import { LodgingRoomList } from './lodging-room-list';
 import { NightBreakdown, NightRates } from './night-rates';
 import {
+	addDays,
 	applyDateClick,
 	countNights,
-	formatStayDate,
 	getTodayIso,
 	parseIsoDate,
 	shiftMonth,
 } from './stay-dates';
 import './lodging.scss';
+
+// 空き状況の窓口が受け付ける年の上限（今年 + 2 年）。PHP の get_lodging_calendar_meta() と同じ値を持つ。
+const LODGING_CALENDAR_YEARS_AHEAD = 2;
 
 /**
  * 人数の入力値を、1 以上の整数にそろえる。
@@ -118,6 +122,12 @@ const LodgingBookingPanel = ( {
 		[ lodging ]
 	);
 	const hasTiers = tiers.length > 0;
+	// 1室1泊あたりで、規定人数を超えた分の追加料金を使うプランか。区分の金額は超過1名・1泊あたりの追加料金になる。
+	const isExtraGuestFee = hasTiers && Boolean( lodging?.extra_guest_fee );
+	const includedGuests = Math.max(
+		1,
+		Number( lodging?.included_guests ) || 1
+	);
 	const basePrice = Number( lodging?.base_price ) || 0;
 
 	// 今日はブラウザの日付（サーバー側でも過去日・受付期間は検証される）。
@@ -156,6 +166,20 @@ const LodgingBookingPanel = ( {
 		data: null,
 		error: '',
 	} );
+	const [ calendarAvailability, setCalendarAvailability ] = useState( {
+		status: 'loading',
+		days: [],
+	} );
+	const [ checkoutAvailability, setCheckoutAvailability ] = useState( {
+		status: 'idle',
+		days: [],
+		maxNights: 30,
+	} );
+	const [ unavailableNotice, setUnavailableNotice ] = useState( null );
+	const [ isUnavailableNoticePending, setIsUnavailableNoticePending ] =
+		useState( false );
+	const unavailableNoticeNonceRef = useRef( 0 );
+	const unavailableNoticeFrameRef = useRef( null );
 	const [ selectedRoomId, setSelectedRoomId ] = useState( 0 );
 	const [ isRoomLost, setIsRoomLost ] = useState( false );
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
@@ -169,6 +193,87 @@ const LodgingBookingPanel = ( {
 	const tierCountsKey = tierCounts.join( ',' );
 	const isRangeComplete = Boolean( range.checkIn && range.checkOut );
 	const nights = countNights( range.checkIn, range.checkOut );
+
+	// 表示月の1泊の空き状況は、チェックアウト選択中も月送りに合わせて問い合わせる。
+	useEffect( () => {
+		let active = true;
+		setCalendarAvailability( ( current ) => ( {
+			...current,
+			status: 'loading',
+		} ) );
+		apiFetch( {
+			path: addQueryArgs( '/vkbm/v1/lodging-calendar-meta', {
+				menu_id: menuId,
+				year: monthCursor.year,
+				month: monthCursor.month,
+			} ),
+		} )
+			.then( ( response ) => {
+				if ( active ) {
+					setCalendarAvailability( {
+						status: 'done',
+						days: response?.days ?? [],
+					} );
+				}
+			} )
+			.catch( () => {
+				if ( active ) {
+					setCalendarAvailability( ( current ) => ( {
+						...current,
+						status: 'error',
+					} ) );
+				}
+			} );
+		return () => {
+			active = false;
+		};
+	}, [ menuId, monthCursor.year, monthCursor.month ] );
+
+	// チェックイン日が決まったときだけ、滞在全体のチェックアウト候補を問い合わせる。
+	useEffect( () => {
+		if ( ! range.checkIn || range.checkOut ) {
+			setCheckoutAvailability( {
+				status: 'idle',
+				days: [],
+				maxNights: 30,
+			} );
+			return undefined;
+		}
+		let active = true;
+		setCheckoutAvailability( ( current ) => ( {
+			status: 'loading',
+			days: [],
+			maxNights: current.maxNights,
+		} ) );
+		apiFetch( {
+			path: addQueryArgs( '/vkbm/v1/lodging-calendar-meta', {
+				menu_id: menuId,
+				year: monthCursor.year,
+				month: monthCursor.month,
+				check_in_date: range.checkIn,
+			} ),
+		} )
+			.then( ( response ) => {
+				if ( active ) {
+					setCheckoutAvailability( {
+						status: 'done',
+						days: response?.days ?? [],
+						maxNights: Number( response?.max_nights ) || 30,
+					} );
+				}
+			} )
+			.catch( () => {
+				if ( active ) {
+					setCheckoutAvailability( ( current ) => ( {
+						...current,
+						status: 'error',
+					} ) );
+				}
+			} );
+		return () => {
+			active = false;
+		};
+	}, [ menuId, range.checkIn, range.checkOut ] );
 
 	// 日程・人数が変わったら、空いている客室を問い合わせ直す。
 	useEffect( () => {
@@ -299,13 +404,118 @@ const LodgingBookingPanel = ( {
 		setSubmitError( '' );
 	}, [ range, selectedRoomId, guestCount ] );
 
-	const handleSelectDate = useCallback( ( iso ) => {
-		carriedRangeRef.current = null;
-		setCarryNotice( null );
-		setSelectedRoomId( 0 );
-		setIsRoomLost( false );
-		setRange( ( current ) => applyDateClick( current, iso ) );
+	// 同じ案内も live region の中身を空から入れ直して読み上げられるよう、予約済みの更新を管理する。
+	const cancelUnavailableNoticeFrame = useCallback( () => {
+		const scheduled = unavailableNoticeFrameRef.current;
+		if ( ! scheduled ) {
+			return;
+		}
+		if ( scheduled.type === 'animation-frame' ) {
+			window.cancelAnimationFrame( scheduled.id );
+		} else {
+			window.clearTimeout( scheduled.id );
+		}
+		unavailableNoticeFrameRef.current = null;
 	}, [] );
+
+	useEffect(
+		() => () => {
+			cancelUnavailableNoticeFrame();
+		},
+		[ cancelUnavailableNoticeFrame ]
+	);
+
+	const handleSelectDate = useCallback(
+		( iso ) => {
+			carriedRangeRef.current = null;
+			cancelUnavailableNoticeFrame();
+			setCarryNotice( null );
+			setSelectedRoomId( 0 );
+			setIsRoomLost( false );
+			setUnavailableNotice( null );
+			setIsUnavailableNoticePending( false );
+			setRange( ( current ) => applyDateClick( current, iso ) );
+		},
+		[ cancelUnavailableNoticeFrame ]
+	);
+
+	const handleUnavailableDate = useCallback(
+		( iso ) => {
+			setCarryNotice( null );
+			const firstBlocked = checkoutAvailability.days.find(
+				( day ) => ! day.available
+			)?.date;
+			// チェックアウト用の理由は、チェックイン済みでチェックアウト未選択のときだけ使う。
+			const isChoosingCheckOut = Boolean(
+				range.checkIn && ! range.checkOut
+			);
+			const isStayBlocked = Boolean(
+				isChoosingCheckOut && firstBlocked && iso >= firstBlocked
+			);
+			const isBeyondMaxNights = Boolean(
+				isChoosingCheckOut &&
+					iso >
+						addDays( range.checkIn, checkoutAvailability.maxNights )
+			);
+			const message = isBeyondMaxNights
+				? sprintf(
+						/* translators: %s: unavailable check-out date. */
+						__(
+							'%s cannot be selected as the check-out date because it exceeds the maximum number of nights.',
+							'vk-booking-manager'
+						),
+						formatReservationDate( iso, locale )
+				  )
+				: isStayBlocked
+				? sprintf(
+						/* translators: %s: unavailable check-out date. */
+						__(
+							'%s cannot be selected as the check-out date because the stay includes an unavailable night.',
+							'vk-booking-manager'
+						),
+						formatReservationDate( iso, locale )
+				  )
+				: sprintf(
+						/* translators: %s: unavailable date. */
+						__(
+							'%s is not available. Please choose another date.',
+							'vk-booking-manager'
+						),
+						formatReservationDate( iso, locale )
+				  );
+			cancelUnavailableNoticeFrame();
+			setUnavailableNotice( null );
+			setIsUnavailableNoticePending( true );
+			const showNotice = () => {
+				unavailableNoticeFrameRef.current = null;
+				unavailableNoticeNonceRef.current += 1;
+				setIsUnavailableNoticePending( false );
+				setUnavailableNotice( {
+					message,
+					nonce: unavailableNoticeNonceRef.current,
+				} );
+			};
+			if ( typeof window.requestAnimationFrame === 'function' ) {
+				unavailableNoticeFrameRef.current = {
+					type: 'animation-frame',
+					id: window.requestAnimationFrame( showNotice ),
+				};
+			} else {
+				unavailableNoticeFrameRef.current = {
+					type: 'timeout',
+					id: window.setTimeout( showNotice, 0 ),
+				};
+			}
+		},
+		[
+			cancelUnavailableNoticeFrame,
+			checkoutAvailability.days,
+			checkoutAvailability.maxNights,
+			locale,
+			range.checkIn,
+			range.checkOut,
+		]
+	);
 
 	const handleSelectRoom = useCallback( ( roomId ) => {
 		setIsRoomLost( false );
@@ -314,9 +524,12 @@ const LodgingBookingPanel = ( {
 
 	const handleResetRange = () => {
 		carriedRangeRef.current = null;
+		cancelUnavailableNoticeFrame();
 		setCarryNotice( null );
 		setSelectedRoomId( 0 );
 		setIsRoomLost( false );
+		setUnavailableNotice( null );
+		setIsUnavailableNoticePending( false );
 		setRange( { checkIn: '', checkOut: '' } );
 	};
 
@@ -329,15 +542,29 @@ const LodgingBookingPanel = ( {
 		);
 	}, [ todayIso, monthCursor ] );
 
+	// 今年 + 2 年の 12 月より先へは動かさない（空き状況の窓口が 400 を返すため）。
+	// 窓口の範囲は PHP の Availability_Service::get_lodging_calendar_meta() と同じ値で、2 か所にある。
+	const isLastMonth = useMemo( () => {
+		const today = parseIsoDate( todayIso );
+		return (
+			monthCursor.year >= today.year + LODGING_CALENDAR_YEARS_AHEAD &&
+			monthCursor.month >= 12
+		);
+	}, [ todayIso, monthCursor ] );
+
 	const handleMonthChange = useCallback(
 		( delta ) => {
 			setMonthCursor( ( current ) => {
 				const today = parseIsoDate( todayIso );
 				const next = shiftMonth( current, delta );
-				return next.year * 12 + next.month <
-					today.year * 12 + today.month
-					? current
-					: next;
+				if (
+					next.year * 12 + next.month <
+						today.year * 12 + today.month ||
+					next.year > today.year + LODGING_CALENDAR_YEARS_AHEAD
+				) {
+					return current;
+				}
+				return next;
 			} );
 		},
 		[ todayIso ]
@@ -395,16 +622,43 @@ const LodgingBookingPanel = ( {
 		rooms.length > 0;
 
 	// カレンダーの下のガイド行（今の状態と次にすることを伝える）。
-	let guideText = __( 'Select the check-in date.', 'vk-booking-manager' );
-	if ( range.checkIn && ! range.checkOut ) {
-		guideText = sprintf(
-			/* translators: %s: check-in date (e.g. October 10, 2026 (Sat)). */
-			__(
-				'Check-in: %s. Next, select the check-out date.',
+	let guideText = isUnavailableNoticePending
+		? ''
+		: __( 'Select the check-in date.', 'vk-booking-manager' );
+	if ( unavailableNotice ) {
+		guideText = unavailableNotice.message;
+	} else if ( range.checkIn && ! range.checkOut ) {
+		const firstUnavailable = checkoutAvailability.days.find(
+			( day ) => ! day.available
+		)?.date;
+		const maxCheckout = firstUnavailable
+			? addDays( firstUnavailable, -1 )
+			: checkoutAvailability.days.at( -1 )?.date;
+		if ( checkoutAvailability.status !== 'done' || ! maxCheckout ) {
+			guideText = sprintf(
+				/* translators: %s: check-in date. */
+				__(
+					'Check-in: %s. Next, select the check-out date.',
+					'vk-booking-manager'
+				),
+				formatReservationDate( range.checkIn, locale )
+			);
+		} else if ( maxCheckout <= range.checkIn ) {
+			guideText = __(
+				'No stay is available from this check-in date. Please choose another date.',
 				'vk-booking-manager'
-			),
-			formatStayDate( range.checkIn, locale )
-		);
+			);
+		} else {
+			guideText = sprintf(
+				/* translators: 1: check-in date, 2: latest check-out date. */
+				__(
+					'Check-in: %1$s. Next, select the check-out date (up to %2$s).',
+					'vk-booking-manager'
+				),
+				formatReservationDate( range.checkIn, locale ),
+				maxCheckout ? formatReservationDate( maxCheckout, locale ) : ''
+			);
+		}
 	} else if ( shouldPromptRoomSelection ) {
 		guideText = sprintf(
 			/* translators: 1: check-in date, 2: check-out date, 3: label for a room (e.g. room). */
@@ -412,8 +666,8 @@ const LodgingBookingPanel = ( {
 				'Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the list. Select a date to choose again.',
 				'vk-booking-manager'
 			),
-			formatStayDate( range.checkIn, locale ),
-			formatStayDate( range.checkOut, locale ),
+			formatReservationDate( range.checkIn, locale ),
+			formatReservationDate( range.checkOut, locale ),
 			resourceLabelSingular
 		);
 	} else if ( isRangeComplete ) {
@@ -423,8 +677,8 @@ const LodgingBookingPanel = ( {
 				'Check-in: %1$s, check-out: %2$s. Select a date to choose again.',
 				'vk-booking-manager'
 			),
-			formatStayDate( range.checkIn, locale ),
-			formatStayDate( range.checkOut, locale )
+			formatReservationDate( range.checkIn, locale ),
+			formatReservationDate( range.checkOut, locale )
 		);
 	}
 
@@ -494,6 +748,7 @@ const LodgingBookingPanel = ( {
 									{ tier.label }
 								</span>
 								<span className="vkbm-plan-summary__guest-tier-price">
+									{ isExtraGuestFee ? '+' : '' }
 									{ formatCurrency(
 										tier.price,
 										currencySymbol
@@ -578,12 +833,16 @@ const LodgingBookingPanel = ( {
 		);
 	};
 
-	// 料金の単位の補足。区分のあるメニューは区分ごとの単価が人数欄に出ているため出さない。
+	// 料金の単位の補足。1名1泊あたりの区分のあるメニューは区分ごとの単価が人数欄に出ているため出さない。
+	// 追加料金を使う1室1泊あたりは、基本料金に含まれる人数と、超えた分に追加料金がかかることを案内する。
 	// 日によって料金が変わるプランは、最安の金額を「〜」付きにして、日付と客室を選ぶと泊ごとの料金が出ることを添える。
 	const renderPriceUnitNote = () => {
 		const hasVariableRate = Boolean( lodging?.has_variable_rate );
 		// 平日が0円でも、休前日・特定日に金額があればカードは「¥0〜」を出すため、補足も出す。
-		if ( hasTiers || ( basePrice <= 0 && ! hasVariableRate ) ) {
+		if (
+			( hasTiers && ! isExtraGuestFee ) ||
+			( ! isExtraGuestFee && basePrice <= 0 && ! hasVariableRate )
+		) {
 			return null;
 		}
 
@@ -601,24 +860,43 @@ const LodgingBookingPanel = ( {
 					formattedPrice
 			  )
 			: formattedPrice;
-		const text =
-			lodging?.price_unit === 'per_room'
-				? sprintf(
-						/* translators: %s: plan price per room per night. */
-						__(
-							'The rate is %s per room per night. It does not change with the number of guests.',
-							'vk-booking-manager'
-						),
-						price
-				  )
-				: sprintf(
-						/* translators: %s: plan price per guest per night. */
-						__(
-							'The rate is %s per guest per night.',
-							'vk-booking-manager'
-						),
-						price
-				  );
+		let text;
+		if ( isExtraGuestFee ) {
+			text = joinSentences(
+				sprintf(
+					/* translators: 1: base price per room per night, 2: number of guests included in the base price with unit (e.g. 4). */
+					__(
+						'The rate is %1$s per room per night, which includes up to %2$s.',
+						'vk-booking-manager'
+					),
+					price,
+					formatGuestsCount( includedGuests, guestsUnitLabel )
+				),
+				__(
+					'Guests beyond the included number are charged the additional fee shown for each guest category, per extra guest, per night.',
+					'vk-booking-manager'
+				)
+			);
+		} else {
+			text =
+				lodging?.price_unit === 'per_room'
+					? sprintf(
+							/* translators: %s: plan price per room per night. */
+							__(
+								'The rate is %s per room per night. It does not change with the number of guests.',
+								'vk-booking-manager'
+							),
+							price
+					  )
+					: sprintf(
+							/* translators: %s: plan price per guest per night. */
+							__(
+								'The rate is %s per guest per night.',
+								'vk-booking-manager'
+							),
+							price
+					  );
+		}
 
 		if ( ! hasVariableRate ) {
 			return <p className="vkbm-plan-summary__hint">{ text }</p>;
@@ -665,7 +943,7 @@ const LodgingBookingPanel = ( {
 						'The dates you selected (%1$s, %2$s) cannot be booked for this plan because no rooms are available or they are outside the booking period.',
 						'vk-booking-manager'
 					),
-					formatStayDate( carryNotice.range.checkIn, locale ),
+					formatReservationDate( carryNotice.range.checkIn, locale ),
 					sprintf(
 						/* translators: %d: number of nights. */
 						_n(
@@ -711,11 +989,31 @@ const LodgingBookingPanel = ( {
 				range={ range }
 				todayIso={ todayIso }
 				onSelectDate={ handleSelectDate }
+				onUnavailableDate={ handleUnavailableDate }
 				onMonthChange={ handleMonthChange }
 				isPrevDisabled={ isCurrentMonth }
+				isNextDisabled={ isLastMonth }
 				guideId={ guideId }
 				locale={ locale }
+				availability={ calendarAvailability }
+				checkoutAvailability={ checkoutAvailability }
+				maxNights={ checkoutAvailability.maxNights }
 			/>
+			<p className="vkbm-lodging__availability-legend">
+				{ calendarAvailability.status === 'error'
+					? sprintf(
+							/* translators: %s: label for a room (e.g. room). */
+							__(
+								'Could not load availability. Select your dates to check whether a %s is available.',
+								'vk-booking-manager'
+							),
+							resourceLabelSingular
+					  )
+					: __(
+							'× : Not available for check-in (fully booked, etc.). Within the selectable range, it can still be your check-out date.',
+							'vk-booking-manager'
+					  ) }
+			</p>
 
 			<div className="vkbm-lodging__guide-row">
 				<p id={ guideId } className="vkbm-lodging__guide" role="status">
@@ -777,7 +1075,7 @@ const LodgingBookingPanel = ( {
 												'vk-booking-manager'
 											) }
 											value={ DateTimeValue(
-												formatStayDate(
+												formatReservationDate(
 													range.checkIn,
 													locale
 												),
@@ -790,7 +1088,7 @@ const LodgingBookingPanel = ( {
 												'vk-booking-manager'
 											) }
 											value={ DateTimeValue(
-												formatStayDate(
+												formatReservationDate(
 													range.checkOut,
 													locale
 												),

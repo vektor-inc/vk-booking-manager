@@ -1,6 +1,9 @@
+@use "mixins" as *;
+
 /* ==========================================================================
    リソース（スタッフ）削除ガードのダイアログ・通知
    ネイティブ confirm() の代わりに使うアクセシブルなアラートダイアログ。
+   予約の個人情報の匿名化の確認ダイアログも、同じダイアログ（.vkbm-guard-dialog）を使う。
    ========================================================================== */
 
 .vkbm-guard-dialog__overlay {
@@ -74,6 +77,22 @@
 	justify-content: flex-end;
 	gap: 8px;
 	margin-top: 16px;
+
+	// 削除系の操作（元に戻せない操作）のボタン。文字色は白地の赤と同じ 4.5:1 以上を保つ。
+	.button.vkbm-guard-dialog__button--danger {
+		background: var(--vkbm--admin--color--danger);
+		border-color: var(--vkbm--admin--color--danger);
+		color: #fff;
+
+		&:hover,
+		&:focus {
+
+			@include vkbm-hover-darken(var(--vkbm--admin--color--danger));
+
+			border-color: var(--vkbm--admin--color--danger);
+			color: #fff;
+		}
+	}
 }
 
 /* ==========================================================================

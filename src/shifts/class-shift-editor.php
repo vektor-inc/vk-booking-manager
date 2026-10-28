@@ -596,17 +596,18 @@ class Shift_Editor {
 		$action_url = admin_url( 'admin-post.php' );
 		?>
 		<div class="vkbm-shift-bulk-create">
-			<h2 class="vkbm-shift-bulk-create__title"><?php esc_html_e( 'Add shifts in bulk', 'vk-booking-manager' ); ?></h2>
+			<h2 class="vkbm-shift-bulk-create__title"><?php echo esc_html( Shift_Lodging_Editor::is_lodging_screen() ? __( 'Add days on sale in bulk', 'vk-booking-manager' ) : __( 'Add shifts in bulk', 'vk-booking-manager' ) ); ?></h2>
 			<p class="vkbm-shift-bulk-create__description">
 				<?php
 				// 1翻訳関数=1文のため、2文を別々に翻訳してから続けて出す。
-				echo esc_html(
-					sprintf(
-						/* translators: %s: label of the resource (e.g. room). */
-						__( 'Register draft shifts for the specified month for each %s at once.', 'vk-booking-manager' ),
-						vkbm_get_resource_label_singular()
-					)
-				);
+				if ( Shift_Lodging_Editor::is_lodging_screen() ) {
+					/* translators: %s: label of the resource (e.g. room). */
+					$bulk_description = __( 'Register draft days on sale for the specified month for each %s at once.', 'vk-booking-manager' );
+				} else {
+					/* translators: %s: label of the resource (e.g. room). */
+					$bulk_description = __( 'Register draft shifts for the specified month for each %s at once.', 'vk-booking-manager' );
+				}
+				echo esc_html( sprintf( $bulk_description, vkbm_get_resource_label_singular() ) );
 				echo ' ';
 				esc_html_e( 'Drafts are not used for reservations until they are published.', 'vk-booking-manager' );
 				?>
@@ -1164,7 +1165,7 @@ class Shift_Editor {
 		if ( 'invalid_period' === $error ) {
 			?>
 			<div class="notice notice-error is-dismissible">
-				<p><?php esc_html_e( 'Bulk registration of shifts failed. The year and month specification is invalid.', 'vk-booking-manager' ); ?></p>
+				<p><?php echo esc_html( Shift_Lodging_Editor::is_lodging_screen() ? __( 'Bulk registration of days on sale failed. The year and month specification is invalid.', 'vk-booking-manager' ) : __( 'Bulk registration of shifts failed. The year and month specification is invalid.', 'vk-booking-manager' ) ); ?></p>
 			</div>
 			<?php
 			return;
@@ -1179,9 +1180,15 @@ class Shift_Editor {
 		$year    = isset( $_GET['vkbm_shift_bulk_year'] ) ? (int) $_GET['vkbm_shift_bulk_year'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display only.
 		$month   = isset( $_GET['vkbm_shift_bulk_month'] ) ? (int) $_GET['vkbm_shift_bulk_month'] : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display only.
 
-		$message = sprintf(
+		if ( Shift_Lodging_Editor::is_lodging_screen() ) {
 			/* translators: 1: year, 2: month, 3: created count, 4: skipped count */
-			__( 'Shifts for %2$02d month of %1$d were registered in bulk (Created: %3$d / Skip: %4$d).', 'vk-booking-manager' ),
+			$notice_format = __( 'Days on sale for %2$02d month of %1$d were registered in bulk (Created: %3$d / Skip: %4$d).', 'vk-booking-manager' );
+		} else {
+			/* translators: 1: year, 2: month, 3: created count, 4: skipped count */
+			$notice_format = __( 'Shifts for %2$02d month of %1$d were registered in bulk (Created: %3$d / Skip: %4$d).', 'vk-booking-manager' );
+		}
+		$message = sprintf(
+			$notice_format,
 			$year,
 			$month,
 			max( 0, $created ),

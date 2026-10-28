@@ -181,6 +181,143 @@ class Auth_Form_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * REST 経由のプロフィール描画でも、名簿フォームの戻り先に表示ページを使うことを確認する。
+	 *
+	 * @return void
+	 */
+	public function test_profile_form_response_uses_requested_redirect_for_attendee_roster(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$previous_request_uri = $_SERVER['REQUEST_URI'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- テスト前の値を復元するために退避する。
+
+		$repository                          = new Settings_Repository();
+		$original                            = $repository->get_settings();
+		$settings                            = $original;
+		$settings['attendee_roster_enabled'] = true;
+		$repository->update_settings( $settings );
+
+		try {
+			$_SERVER['REQUEST_URI'] = '/wp-json/vkbm/v1/auth-form?type=profile';
+
+			$controller          = new Auth_Form_Controller( new Auth_Shortcodes( new Settings_Service( $repository, new Settings_Sanitizer() ) ) );
+			$redirect_url        = home_url( '/reservation/' );
+			$legacy_redirect_url = home_url( '/wp-json/vkbm/v1/auth-form?type=profile' );
+			$request             = new WP_REST_Request( 'GET', '/vkbm/v1/auth-form' );
+			$request->set_param( 'type', 'profile' );
+			$request->set_param( 'redirect', $redirect_url );
+
+			$response = $controller->get_form( $request );
+			$html     = (string) ( $response->get_data()['html'] ?? '' );
+
+			$this->assertStringContainsString( 'vkbm-attendee-roster', $html );
+			$this->assertGreaterThanOrEqual( 2, substr_count( $html, 'name="redirect_to" value="' . esc_attr( $redirect_url ) . '"' ) );
+			$this->assertStringNotContainsString( esc_attr( $legacy_redirect_url ), $html );
+		} finally {
+			$repository->update_settings( $original );
+			wp_set_current_user( 0 );
+			if ( null === $previous_request_uri ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $previous_request_uri;
+			}
+		}
+	}
+
+	/**
+	 * 名簿保存結果が Cookie を介して REST 描画に一度だけ表示されることを確認する。
+	 *
+	 * @return void
+	 */
+	public function test_profile_form_response_consumes_attendee_roster_notice_cookie(): void {
+		$user_id = $this->factory()->user->create( array( 'display_name' => '申込者' ) );
+		wp_set_current_user( $user_id );
+		$repository                          = new Settings_Repository();
+		$original                            = $repository->get_settings();
+		$settings                            = $original;
+		$settings['attendee_roster_enabled'] = true;
+		$repository->update_settings( $settings );
+		$shortcodes      = new Auth_Shortcodes( new Settings_Service( $repository, new Settings_Sanitizer() ) );
+		$controller      = new Auth_Form_Controller( $shortcodes );
+		$previous_cookie = $_COOKIE;
+
+		try {
+			// 保存後にブラウザーが送り返す専用 Cookie を再現する。
+			$_COOKIE['vkbm_attendee_roster_notice'] = rawurlencode( __( 'The list has been updated.', 'vk-booking-manager' ) );
+
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/auth-form' );
+			$request->set_param( 'type', 'profile' );
+			$request->set_param( 'redirect', home_url( '/reservation/' ) );
+			$response = $controller->get_form( $request );
+			$html     = (string) ( $response->get_data()['html'] ?? '' );
+			$this->assertStringContainsString( 'vkbm-alert vkbm-alert__success', $html );
+			$this->assertStringContainsString( __( 'The list has been updated.', 'vk-booking-manager' ), $html );
+			$this->assertArrayNotHasKey( 'vkbm_attendee_roster_notice', $_COOKIE );
+
+			// 同じインスタンスで再描画しても通知は再表示しない。
+			$second_response = $controller->get_form( $request );
+			$second_html     = (string) ( $second_response->get_data()['html'] ?? '' );
+			$this->assertStringNotContainsString( __( 'The list has been updated.', 'vk-booking-manager' ), $second_html );
+		} finally {
+			$repository->update_settings( $original );
+			$_COOKIE = $previous_cookie;
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
+	 * 名簿エラー Cookie が REST 描画で対応する警告へ変換されることを確認する。
+	 *
+	 * @return void
+	 */
+	public function test_profile_form_response_converts_attendee_roster_error_cookie(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$repository                          = new Settings_Repository();
+		$original                            = $repository->get_settings();
+		$settings                            = $original;
+		$settings['attendee_roster_enabled'] = true;
+		$repository->update_settings( $settings );
+		$controller      = new Auth_Form_Controller( new Auth_Shortcodes( new Settings_Service( $repository, new Settings_Sanitizer() ) ) );
+		$previous_cookie = $_COOKIE;
+		$cases           = array(
+			array(
+				'test_condition_name' => '名前未入力 => 名前の案内を表示',
+				'code'                => 'vkbm_attendee_name_required',
+				'expected'            => __( 'Please enter a name for every person.', 'vk-booking-manager' ),
+			),
+			array(
+				'test_condition_name' => '上限超過 => 上限の案内を表示',
+				'code'                => 'vkbm_attendee_limit',
+				/* translators: %d: Maximum number of other people that can be registered. */
+				'expected'            => sprintf( __( 'You can register up to %d other people.', 'vk-booking-manager' ), 20 ),
+			),
+			array(
+				'test_condition_name' => 'その他の保存失敗 => 汎用案内を表示',
+				'code'                => 'vkbm_attendee_roster_conflict',
+				'expected'            => __( 'The list could not be saved. Please wait a moment and try again.', 'vk-booking-manager' ),
+			),
+		);
+
+		try {
+			foreach ( $cases as $case ) {
+				$_COOKIE['vkbm_attendee_roster_error'] = rawurlencode( $case['code'] );
+
+				$request = new WP_REST_Request( 'GET', '/vkbm/v1/auth-form' );
+				$request->set_param( 'type', 'profile' );
+				$response = $controller->get_form( $request );
+				$html     = (string) ( $response->get_data()['html'] ?? '' );
+				$this->assertStringContainsString( 'role="alert"', $html, $case['test_condition_name'] );
+				$this->assertStringContainsString( $case['expected'], $html, $case['test_condition_name'] );
+				$this->assertArrayNotHasKey( 'vkbm_attendee_roster_error', $_COOKIE, $case['test_condition_name'] );
+			}
+		} finally {
+			$repository->update_settings( $original );
+			$_COOKIE = $previous_cookie;
+			wp_set_current_user( 0 );
+		}
+	}
+
+	/**
 	 * issue #516 安藤さんレビュー指摘（LOW）: `registration_error_key` は空文字、または
 	 * `wp_generate_password( 32, false, false )` の出力形式（半角英数字32文字）だけを
 	 * 許可し、それ以外は DB（get_transient()）に触れる前に弾くこと。

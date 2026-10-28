@@ -299,6 +299,11 @@
 	color: var(--vkbm--admin--color--text-secondary);
 }
 
+.vkbm-notification-card__attendee {
+	font-size: var(--vkbm--admin--font-size--xs);
+	color: var(--vkbm--admin--color--text-secondary);
+}
+
 .vkbm-notification-card__reason {
 	font-size: var(--vkbm--admin--font-size--sm);
 	font-weight: 600;
@@ -618,6 +623,14 @@
 
 .vkbm-booking-card__customer {
 	color: var(--vkbm--admin--color--accent);
+}
+
+.vkbm-booking-card__attendee {
+	flex-basis: 100%;
+	font-size: var(--vkbm--admin--font-size--xs);
+	font-weight: 400;
+	color: var(--vkbm--admin--color--text-secondary);
+	overflow-wrap: anywhere;
 }
 
 .vkbm-booking-card__service {

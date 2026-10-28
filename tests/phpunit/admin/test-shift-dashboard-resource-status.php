@@ -137,10 +137,10 @@ class Shift_Dashboard_Resource_Status_Test extends WP_UnitTestCase {
 				'free_type'           => 'off',
 			),
 			array(
-				'test_condition_name' => '宿泊のシフトが無い月 => シフト未設定',
+				'test_condition_name' => '宿泊の販売日が無い月 => 販売日未登録',
 				'preset'              => 'lodging',
 				'status'              => 'not_set',
-				'expected_label'      => __( 'Shift not set', 'vk-booking-manager' ),
+				'expected_label'      => __( 'Days on Sale not registered', 'vk-booking-manager' ),
 				'expected_type'       => 'pending',
 			),
 			array(
@@ -209,13 +209,14 @@ class Shift_Dashboard_Resource_Status_Test extends WP_UnitTestCase {
 				'free_expected'       => __( 'Temporary closure', 'vk-booking-manager' ),
 			),
 			array(
-				'test_condition_name' => '宿泊のシフト未設定日（時間帯なし）=> 未設定案内',
+				'test_condition_name' => '宿泊の販売日未登録（時間帯なし）=> 未登録案内',
 				'preset'              => 'lodging',
 				'status_info'         => array(
-					'label' => __( 'Shift not set', 'vk-booking-manager' ),
+					'label' => __( 'Days on Sale not registered', 'vk-booking-manager' ),
 					'type'  => 'pending',
 				),
-				'expected'            => __( 'Shift not set.', 'vk-booking-manager' ),
+				'expected'            => __( 'Days on sale are not registered.', 'vk-booking-manager' ),
+				'free_expected'       => __( 'Shift not set.', 'vk-booking-manager' ),
 			),
 			array(
 				'test_condition_name' => '宿泊以外の勤務日（時間帯なし）=> 未設定案内',

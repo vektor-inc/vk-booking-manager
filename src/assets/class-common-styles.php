@@ -258,6 +258,7 @@ class Common_Styles {
 		}
 
 		$properties = array_merge( $properties, self::get_footer_color_properties( $settings ) );
+		$properties = array_merge( $properties, self::get_menu_heading_color_properties( $settings ) );
 
 		$radius_raw = $settings['design_radius_md'] ?? null;
 		if ( '' !== $radius_raw && null !== $radius_raw ) {
@@ -300,6 +301,37 @@ class Common_Styles {
 			$rgb                                        = self::hex_to_rgb( $text_color );
 			$properties['--vkbm--color--footer-text']   = $text_color;
 			$properties['--vkbm--color--footer-border'] = sprintf( 'rgb(%d %d %d / 20%%)', $rgb[0], $rgb[1], $rgb[2] );
+		}
+
+		return $properties;
+	}
+
+	/**
+	 * メニューループブロックのグループ見出しと、予約ブロックのメニュー詳細の見出しの背景色・文字色の CSS 変数を組み立てる（#864）。
+	 *
+	 * 「見出しをフッターと同じ色にする」がオンのときだけ、フッターに出力する色と同じ値を返す。
+	 * オフのとき、またはフッターの色が未設定のときは空の配列を返し、見出しは SCSS 側の既定の色のままにする。
+	 *
+	 * @param array<string, mixed> $settings 保存済みの設定。
+	 * @return array<string, string> CSS 変数名 => 値。
+	 */
+	public static function get_menu_heading_color_properties( array $settings ): array {
+		if ( empty( $settings['design_menu_heading_use_footer_color'] ) ) {
+			return array();
+		}
+
+		// フッターの色（文字色の自動決定を含む）をそのまま見出しの色に割り当てる。
+		$footer_properties = self::get_footer_color_properties( $settings );
+		$property_map      = array(
+			'--vkbm--color--footer-bg'   => '--vkbm--color--menu-heading-bg',
+			'--vkbm--color--footer-text' => '--vkbm--color--menu-heading-text',
+		);
+
+		$properties = array();
+		foreach ( $property_map as $footer_property => $heading_property ) {
+			if ( isset( $footer_properties[ $footer_property ] ) ) {
+				$properties[ $heading_property ] = $footer_properties[ $footer_property ];
+			}
 		}
 
 		return $properties;

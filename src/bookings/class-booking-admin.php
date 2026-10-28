@@ -15,6 +15,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Attendees\Booking_Attendee_Display;
+use VKBookingManager\Attendees\Booking_Attendee_Resolver;
 use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
@@ -26,6 +28,7 @@ use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
@@ -44,6 +47,25 @@ use function number_format_i18n;
  * Handles Booking post type admin UI and meta persistence.
  */
 class Booking_Admin {
+	/**
+	 * 一覧・予約表の描画中に使い回す設定値。予約1件ごとに読み直さないよう、最初の1回だけ読む。
+	 *
+	 * @var array<string,mixed>|null
+	 */
+	private $display_settings = null;
+
+	/**
+	 * 描画中に使い回す設定値を返す。
+	 *
+	 * @return array<string,mixed> 設定値。
+	 */
+	private function get_display_settings(): array {
+		if ( null === $this->display_settings ) {
+			$this->display_settings = ( new Settings_Repository() )->get_settings();
+		}
+		return $this->display_settings;
+	}
+
 	private const NONCE_ACTION = 'vkbm_booking_meta';
 	private const NONCE_NAME   = '_vkbm_booking_meta_nonce';
 
@@ -59,6 +81,7 @@ class Booking_Admin {
 	private const META_RESOURCE_TAG_IDS       = '_vkbm_booking_resource_tag_ids';
 	private const META_SERVICE_ID             = '_vkbm_booking_service_id';
 	private const META_CUSTOMER               = '_vkbm_booking_customer_name';
+	private const META_ATTENDEE_NAME          = '_vkbm_booking_attendee_name';
 	private const META_CUSTOMER_TEL           = '_vkbm_booking_customer_tel';
 	private const META_CUSTOMER_MAIL          = '_vkbm_booking_customer_email';
 	private const META_ATTACHMENTS            = '_vkbm_booking_attachment_ids';
@@ -155,6 +178,7 @@ class Booking_Admin {
 	 * Register admin hooks.
 	 */
 	public function register(): void {
+		( new Booking_List_Search() )->register();
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
 		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
 		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_quick_edit' ), 10, 3 );
@@ -526,6 +550,12 @@ class Booking_Admin {
 	public function render_meta_box( WP_Post $post ): void {
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
+		// issue #870: 個人情報を匿名化済みの予約は、上部に注記を出し、個人情報の欄を表示のみにする。
+		$is_anonymized = Booking_Anonymizer::is_anonymized( $post->ID );
+		if ( $is_anonymized ) {
+			$this->render_anonymized_notice( $post->ID );
+		}
+
 		// issue #507: 予約者がメール未確認（'manual'）の場合、Google カレンダー連携の
 		// notice と同じ位置・形式で注意を出す。
 		$this->render_email_unconfirmed_notice( $post );
@@ -535,6 +565,9 @@ class Booking_Admin {
 		if ( null !== $this->google_calendar_event_sync ) {
 			$this->google_calendar_event_sync->render_booking_notice( $post->ID );
 		}
+
+		// 外部カレンダーから取り込んだ予約の注意など、予約編集画面の上部に足したいお知らせの口。
+		do_action( 'vkbm_booking_meta_box_notices', $post );
 
 		$start       = get_post_meta( $post->ID, self::META_DATE_START, true );
 		$end         = get_post_meta( $post->ID, self::META_DATE_END, true );
@@ -549,6 +582,7 @@ class Booking_Admin {
 			? (int) get_post_meta( $post->ID, self::META_SERVICE_BASE_PRICE, true )
 			: ( $service_id > 0 ? max( 0, (int) get_post_meta( $service_id, '_vkbm_base_price', true ) ) : 0 );
 		$customer                = (string) get_post_meta( $post->ID, self::META_CUSTOMER, true );
+		$attendee_name           = (string) get_post_meta( $post->ID, self::META_ATTENDEE_NAME, true );
 		$customer_tel            = (string) get_post_meta( $post->ID, self::META_CUSTOMER_TEL, true );
 		$customer_mail           = (string) get_post_meta( $post->ID, self::META_CUSTOMER_MAIL, true );
 		$status                  = (string) get_post_meta( $post->ID, self::META_STATUS, true );
@@ -575,6 +609,8 @@ class Booking_Admin {
 		$has_billed_total_price = metadata_exists( 'post', $post->ID, self::META_BILLED_TOTAL_PRICE );
 		$billed_total_price     = $has_billed_total_price ? (int) get_post_meta( $post->ID, self::META_BILLED_TOTAL_PRICE, true ) : '';
 		$is_preferred           = '1' === (string) get_post_meta( $post->ID, self::META_IS_PREFERRED, true );
+		$show_attendee_name     = 'disabled' !== \VKBookingManager\Common\Attendee_Name::get_mode() || '' !== trim( $attendee_name );
+		$attendee_number        = Booking_Attendee_Display::get( $post->ID, $this->get_display_settings() )['number'];
 		$attachment_ids         = $this->normalize_attachment_ids( get_post_meta( $post->ID, self::META_ATTACHMENTS, true ) );
 		$attachment_ids_csv     = implode( ',', $attachment_ids );
 
@@ -894,8 +930,11 @@ class Booking_Admin {
 										<br />
 										<?php
 										printf(
-											/* translators: %s: Resource label (singular), e.g. "staff". */
-											esc_html__( 'Because this menu uses nomination, the nominated %s will take charge of this entire group, making the time slot exclusive to this booking.', 'vk-booking-manager' ),
+											Industry_Presets::supports( 'lodging' )
+												? /* translators: %1$s: Resource label (singular), e.g. "room". */
+												esc_html__( 'Because this menu allows %1$s selection, the selected %1$s will be assigned to this entire group, making the time slot exclusive to this booking.', 'vk-booking-manager' )
+												: /* translators: %s: Resource label (singular), e.g. "staff". */
+												esc_html__( 'Because this menu uses nomination, the nominated %s will take charge of this entire group, making the time slot exclusive to this booking.', 'vk-booking-manager' ),
 											esc_html( $vkbm_singular )
 										);
 										?>
@@ -906,7 +945,7 @@ class Booking_Admin {
 					</tr>
 					<?php if ( $show_nomination_category ) : ?>
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Nomination category', 'vk-booking-manager' ); ?></th>
+						<th scope="row"><?php echo esc_html( Industry_Presets::supports( 'lodging' ) ? __( 'Selection category', 'vk-booking-manager' ) : __( 'Nomination category', 'vk-booking-manager' ) ); ?></th>
 						<td>
 							<label>
 								<input type="checkbox" name="vkbm_booking[is_staff_preferred]" value="1" <?php checked( $is_preferred ); ?> />
@@ -914,7 +953,7 @@ class Booking_Admin {
 								$singular = vkbm_get_resource_label_singular();
 								printf(
 									/* translators: %s: Resource label (singular). */
-									esc_html__( 'Reservation of %s nomination by customer', 'vk-booking-manager' ),
+									Industry_Presets::supports( 'lodging' ) ? esc_html__( 'Reservation with %s selected by customer', 'vk-booking-manager' ) : esc_html__( 'Reservation of %s nomination by customer', 'vk-booking-manager' ),
 									esc_html( $singular )
 								);
 								?>
@@ -924,7 +963,7 @@ class Booking_Admin {
 								$singular = vkbm_get_resource_label_singular();
 								printf(
 									/* translators: %s: Resource label (singular). */
-									esc_html__( 'Checked when a customer makes a reservation by naming %s.', 'vk-booking-manager' ),
+									Industry_Presets::supports( 'lodging' ) ? esc_html__( 'Checked when a customer makes a reservation by selecting %s.', 'vk-booking-manager' ) : esc_html__( 'Checked when a customer makes a reservation by naming %s.', 'vk-booking-manager' ),
 									esc_html( $singular )
 								);
 								?>
@@ -1061,6 +1100,24 @@ class Booking_Admin {
 							</p>
 						</td>
 					</tr>
+					<?php if ( $show_attendee_name ) : ?>
+						<?php if ( $is_anonymized ) : ?>
+							<?php $this->render_readonly_row( \VKBookingManager\Common\Attendee_Name::get_label(), $attendee_name ); ?>
+						<?php else : ?>
+						<tr>
+							<th scope="row"><label for="vkbm-booking-attendee-name"><?php echo esc_html( \VKBookingManager\Common\Attendee_Name::get_label() ); ?></label></th>
+							<td><input type="text" id="vkbm-booking-attendee-name" name="vkbm_booking[attendee_name]" value="<?php echo esc_attr( $attendee_name ); ?>" maxlength="<?php echo esc_attr( (string) \VKBookingManager\Common\Attendee_Name::MAX_LENGTH ); ?>" /></td>
+						</tr>
+						<?php endif; ?>
+					<?php endif; ?>
+					<?php if ( ! $is_anonymized && '' !== $attendee_number ) : ?>
+						<?php $this->render_readonly_row( Booking_Attendee_Resolver::get_number_label( $this->get_display_settings() ), $attendee_number ); ?>
+					<?php endif; ?>
+					<?php if ( $is_anonymized ) : ?>
+						<?php $this->render_readonly_row( __( 'customer name', 'vk-booking-manager' ), $customer ); ?>
+						<?php $this->render_readonly_row( __( 'telephone number', 'vk-booking-manager' ), $customer_tel ); ?>
+						<?php $this->render_readonly_row( __( 'email address', 'vk-booking-manager' ), $customer_mail ); ?>
+					<?php else : ?>
 					<tr>
 						<th scope="row"><label for="vkbm-booking-customer"><?php esc_html_e( 'customer name', 'vk-booking-manager' ); ?></label></th>
 						<td>
@@ -1079,6 +1136,7 @@ class Booking_Admin {
 							<input type="email" id="vkbm-booking-email" name="vkbm_booking[customer_email]" value="<?php echo esc_attr( $customer_mail ); ?>" />
 						</td>
 					</tr>
+					<?php endif; ?>
 					<tr>
 						<th scope="row"><label for="vkbm-booking-attachments"><?php esc_html_e( 'History image', 'vk-booking-manager' ); ?></label></th>
 						<td>
@@ -1128,6 +1186,10 @@ class Booking_Admin {
 							</div>
 						</td>
 					</tr>
+					<?php if ( $is_anonymized ) : ?>
+						<?php $this->render_readonly_row( __( 'memo', 'vk-booking-manager' ), $note ); ?>
+						<?php $this->render_readonly_row( __( 'Management memo', 'vk-booking-manager' ), $internal_note ); ?>
+					<?php else : ?>
 					<tr>
 						<th scope="row"><label for="vkbm-booking-note"><?php esc_html_e( 'memo', 'vk-booking-manager' ); ?></label></th>
 						<td>
@@ -1140,6 +1202,7 @@ class Booking_Admin {
 							<textarea id="vkbm-booking-internal-note" name="vkbm_booking[internal_note]" rows="3" class="large-text"><?php echo esc_textarea( $internal_note ); ?></textarea>
 						</td>
 					</tr>
+					<?php endif; ?>
 				</tbody>
 			</table>
 		</div>
@@ -1227,6 +1290,8 @@ class Booking_Admin {
 		$allow_service_change = $data['allow_service_change'];
 		$service_id           = $allow_service_change ? $service_id_select : $service_id_locked;
 		$customer             = $data['customer'];
+		$attendee_name        = $data['attendee_name'];
+		$has_attendee_name    = $data['has_attendee_name'];
 		$customer_tel         = $data['customer_tel'];
 		$customer_mail        = $data['customer_email'];
 		$billed_total_price   = $data['billed_total_price'];
@@ -1317,8 +1382,15 @@ class Booking_Admin {
 			$service_base_price = ( '' !== $raw_price && is_numeric( $raw_price ) ) ? max( 0, (int) $raw_price ) : '';
 		}
 
+		// issue #870: 匿名化済みの予約は、個人情報の欄と投稿者（予約者）を書き換えない。
+		// 編集画面は表示のみにしているが、送信された値で入れ直されないよう保存処理でも止める。
+		$is_anonymized = Booking_Anonymizer::is_anonymized( $post_id );
+		if ( ! $is_anonymized && $has_attendee_name ) {
+			$this->update_meta_value( $post_id, self::META_ATTENDEE_NAME, $attendee_name );
+		}
+
 		// 予約者の変更は、検索 API と同じ list_users 権限を持つユーザーだけに許可する。
-		if ( $author_id > 0 && (int) $post->post_author !== $author_id && current_user_can( 'list_users' ) ) {
+		if ( ! $is_anonymized && $author_id > 0 && (int) $post->post_author !== $author_id && current_user_can( 'list_users' ) ) {
 			// Update booking author when a valid user is selected.
 			// 有効なユーザーが選択された場合に予約投稿者を更新する.
 			wp_update_post(
@@ -1327,6 +1399,8 @@ class Booking_Admin {
 					'post_author' => $author_id,
 				)
 			);
+			// 付け替え先の会員の名簿とは無関係になるため、ID は手入力扱いへ置き換える。名前・番号の写しは残す。
+			update_post_meta( $post_id, Booking_Attendee_Resolver::META_ID, Booking_Attendee_Resolver::ID_MANUAL );
 		}
 
 		$this->update_meta_value( $post_id, self::META_DATE_START, $start );
@@ -1370,14 +1444,18 @@ class Booking_Admin {
 		}
 		$this->update_meta_value_allow_zero( $post_id, self::META_BASE_TOTAL_PRICE, $base_total_price );
 		$this->update_meta_value_allow_zero( $post_id, self::META_BILLED_TOTAL_PRICE, $billed_total_price );
-		$this->update_meta_value( $post_id, self::META_CUSTOMER, $customer );
-		$this->update_meta_value( $post_id, self::META_CUSTOMER_TEL, $customer_tel );
-		$this->update_meta_value( $post_id, self::META_CUSTOMER_MAIL, $customer_mail );
+		if ( ! $is_anonymized ) {
+			$this->update_meta_value( $post_id, self::META_CUSTOMER, $customer );
+			$this->update_meta_value( $post_id, self::META_CUSTOMER_TEL, $customer_tel );
+			$this->update_meta_value( $post_id, self::META_CUSTOMER_MAIL, $customer_mail );
+		}
 		$this->update_attachment_meta( $post_id, $attachment_ids );
 		$this->maybe_optimize_booking_attachments( $attachment_ids );
 		$this->update_meta_value( $post_id, self::META_STATUS, $status );
-		$this->update_meta_value( $post_id, self::META_NOTE, $note );
-		$this->update_meta_value( $post_id, self::META_INTERNAL_NOTE, $internal_note );
+		if ( ! $is_anonymized ) {
+			$this->update_meta_value( $post_id, self::META_NOTE, $note );
+			$this->update_meta_value( $post_id, self::META_INTERNAL_NOTE, $internal_note );
+		}
 		// #828: 泊の予約は編集画面に指名区分を出さないため、欄が送られない。保存済みの泊数で判定し、
 		// 保存済みの指名区分を保つ（空の値を渡すとメタが削除されてしまう）。
 		if ( ! $is_stay_booking ) {
@@ -1396,15 +1474,16 @@ class Booking_Admin {
 	}
 
 	/**
-	 * Customize admin list columns.
+	 * 予約一覧の列を設定する。
 	 *
-	 * @param array<string, string> $columns Columns.
+	 * @param array<string, string> $columns 既存の列。
 	 * @return array<string, string>
 	 */
 	public function register_columns( array $columns ): array {
 		$new                              = array();
 		$new['cb']                        = $columns['cb'] ?? '';
 		$new['title']                     = __( 'Reservation title', 'vk-booking-manager' );
+		$new['vkbm_booking_reserver']     = __( 'Reserved name', 'vk-booking-manager' );
 		$new['vkbm_booking_datetime']     = __( 'Reservation date and time', 'vk-booking-manager' );
 		$new['vkbm_booking_service']      = __( 'Menu', 'vk-booking-manager' );
 		$new['vkbm_booking_resource']     = __( 'In charge', 'vk-booking-manager' );
@@ -1415,13 +1494,108 @@ class Booking_Admin {
 	}
 
 	/**
-	 * Render custom column content.
+	 * 予約者名列に必要な保存値と現在の権限を取得する。
 	 *
-	 * @param string $column  Column name.
-	 * @param int    $post_id Post ID.
+	 * @param int $post_id 予約ID。
+	 * @return array<string, string> 行の種類と表示文字列。
+	 */
+	private function get_booking_customer_column_rows( int $post_id ): array {
+		// 匿名化済みなら個人情報を読み込まない。
+		if ( Booking_Anonymizer::is_anonymized( $post_id ) ) {
+			return self::get_customer_column_rows( '', '', null, false, true, false, false );
+		}
+		$user          = get_userdata( (int) get_post_field( 'post_author', $post_id ) );
+		$rows          = self::get_customer_column_rows(
+			(string) get_post_meta( $post_id, self::META_CUSTOMER, true ),
+			(string) get_post_meta( $post_id, self::META_CUSTOMER_TEL, true ),
+			$user ? $user : null,
+			$user ? Reserver_Matcher::is_staff( $user ) : false,
+			false,
+			current_user_can( 'list_users' ),
+			$user ? Reserver_Matcher::is_site_member( $user ) : false
+		);
+		$attendee      = Booking_Attendee_Display::get( $post_id, $this->get_display_settings() );
+		$attendee_rows = array();
+		if ( '' !== $attendee['name'] ) {
+			$attendee_rows['attendee'] = sprintf(
+				/* translators: 1: Attendee name field label, 2: Attendee name. */
+				__( '%1$s: %2$s', 'vk-booking-manager' ),
+				\VKBookingManager\Common\Attendee_Name::get_label(),
+				$attendee['name']
+			);
+		}
+		if ( '' !== $attendee['number'] ) {
+			$attendee_rows['attendee_number'] = sprintf(
+				/* translators: 1: Customer number label, 2: Customer number. */
+				__( '%1$s: %2$s', 'vk-booking-manager' ),
+				Booking_Attendee_Resolver::get_number_label( $this->get_display_settings() ),
+				$attendee['number']
+			);
+		}
+		if ( array() !== $attendee_rows ) {
+			$rows = array_merge( array( 'name' => $rows['name'] ), $attendee_rows, array_diff_key( $rows, array( 'name' => true ) ) );
+		}
+
+		/**
+		 * 予約一覧の予約者名の列に出す行を差し替える口（外部カレンダーから取り込んだ予約の表示に使う）。
+		 *
+		 * @param array<string, string> $rows    行の種類と未エスケープの表示文字列。
+		 * @param int                   $post_id 予約ID。
+		 */
+		return apply_filters( 'vkbm_booking_customer_column_rows', $rows, $post_id );
+	}
+
+	/**
+	 * 入力値から予約者名列の行を決定する。
+	 *
+	 * @param string        $customer_name 予約に保存された顧客名。
+	 * @param string        $tel 保存された電話番号。
+	 * @param \WP_User|null $user 予約者（存在しなければnull）。
+	 * @param bool          $is_staff 予約者が現在スタッフか。
+	 * @param bool          $is_anonymized 匿名化済みか。
+	 * @param bool          $can_list_users 閲覧者がユーザー一覧を見られるか。
+	 * @param bool          $is_site_member 予約者がこのサイトに所属するか。
+	 * @return array<string, string> 行の種類と未エスケープの表示文字列。
+	 */
+	public static function get_customer_column_rows( string $customer_name, string $tel, ?\WP_User $user, bool $is_staff, bool $is_anonymized, bool $can_list_users, bool $is_site_member ): array {
+		if ( $is_anonymized ) {
+			return array( 'name' => __( 'Anonymized', 'vk-booking-manager' ) );
+		}
+
+		// 顧客名が空なら、サイト所属の会員名だけを補完する。
+		$account_name = $user && $user->exists() && $is_site_member && ! $is_staff ? VKBM_Helper::get_user_display_name( $user ) : '';
+		$name         = '' !== trim( $customer_name ) ? $customer_name : ( '' !== $account_name ? $account_name : __( 'Name not entered', 'vk-booking-manager' ) );
+		$rows         = array( 'name' => $name );
+
+		// 携帯電話と代表的な固定電話の番号を読みやすく区切る。
+		if ( '' !== $tel ) {
+			if ( preg_match( '/^(0[5789]0)([0-9]{4})([0-9]{4})$/', $tel, $matches ) || preg_match( '/^(0[36])([0-9]{4})([0-9]{4})$/', $tel, $matches ) || preg_match( '/^(0[0-9]{2})([0-9]{3})([0-9]{4})$/', $tel, $matches ) ) {
+				$tel = $matches[1] . '-' . $matches[2] . '-' . $matches[3];
+			}
+			$rows['tel'] = $tel;
+		}
+
+		// 検索語の文字数制限を使わず、名前全体の半角・全角空白だけを除いて比較する。
+		if ( $can_list_users && '' !== $account_name && str_replace( array( ' ', '　' ), '', $name ) !== str_replace( array( ' ', '　' ), '', $account_name ) ) {
+			/* translators: %s: 予約を所有する会員の現在の名前。 */
+			$rows['account'] = sprintf( __( 'Booking account: %s', 'vk-booking-manager' ), $account_name );
+		}
+		return $rows;
+	}
+
+	/**
+	 * 予約一覧の独自列を出力する。
+	 *
+	 * @param string $column  列名。
+	 * @param int    $post_id 予約ID。
 	 */
 	public function render_column( string $column, int $post_id ): void {
 		switch ( $column ) {
+			case 'vkbm_booking_reserver':
+				foreach ( $this->get_booking_customer_column_rows( $post_id ) as $type => $text ) {
+					printf( '<div class="vkbm-booking-customer-column__%s%s">%s</div>', esc_attr( $type ), 'tel' === $type ? ' text-nowrap' : '', esc_html( $text ) );
+				}
+				break;
 			case 'vkbm_booking_datetime':
 				$start = get_post_meta( $post_id, self::META_DATE_START, true );
 				$end   = get_post_meta( $post_id, self::META_DATE_END, true );
@@ -1706,6 +1880,8 @@ class Booking_Admin {
 		$service_id_select    = isset( $raw['service_id_select'] ) ? $this->sanitize_service_id( (int) $raw['service_id_select'] ) : 0;
 		$allow_service_change = isset( $raw['allow_service_change'] );
 		$customer             = isset( $raw['customer'] ) ? sanitize_text_field( (string) $raw['customer'] ) : '';
+		$has_attendee_name    = array_key_exists( 'attendee_name', $raw );
+		$attendee_name        = \VKBookingManager\Common\Attendee_Name::sanitize( $raw['attendee_name'] ?? '' );
 		// 電話番号を正規化する：全角数字を半角に変換し、数字以外の文字（ハイフン・スペース・括弧など）を除去する.
 		$customer_tel       = isset( $raw['customer_tel'] ) ? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) $raw['customer_tel'] ) ) : '';
 		$customer_email     = isset( $raw['customer_email'] ) ? $this->sanitize_email( $raw['customer_email'] ) : '';
@@ -1731,6 +1907,8 @@ class Booking_Admin {
 			'service_id_select'    => $service_id_select,
 			'allow_service_change' => $allow_service_change,
 			'customer'             => $customer,
+			'attendee_name'        => $attendee_name,
+			'has_attendee_name'    => $has_attendee_name,
 			'customer_tel'         => $customer_tel,
 			'customer_email'       => $customer_email,
 			'billed_total_price'   => $billed_total_price,
@@ -2610,6 +2788,65 @@ class Booking_Admin {
 	}
 
 	/**
+	 * 匿名化済みの予約の編集画面の上部に出す注記を出力する（issue #870）。
+	 *
+	 * 消去済みの欄名は、匿名化の対象の定義（Booking_Anonymizer::get_meta_fields()）から作る。
+	 *
+	 * @param int $post_id 予約の投稿ID。
+	 */
+	private function render_anonymized_notice( int $post_id ): void {
+		$anonymized_at      = Booking_Anonymizer::get_anonymized_at( $post_id );
+		$date_label         = '' !== $anonymized_at ? get_date_from_gmt( $anonymized_at, 'Y.n.j H:i' ) : '';
+		$anonymized_by      = Booking_Anonymizer::get_anonymized_by( $post_id );
+		$anonymized_message = '';
+		if ( Booking_Anonymizer::ANONYMIZED_BY_BULK === $anonymized_by ) {
+			/* translators: %s: Date and time when the personal data was anonymized. */
+			$anonymized_message = sprintf( __( 'The personal data of this reservation was anonymized on %s by the bulk action on the reservation list.', 'vk-booking-manager' ), $date_label );
+		} elseif ( Booking_Anonymizer::ANONYMIZED_BY_PRIVACY_REQUEST === $anonymized_by ) {
+			/* translators: %s: Date and time when the personal data was anonymized. */
+			$anonymized_message = sprintf( __( 'The personal data of this reservation was anonymized on %s by a personal data erasure request.', 'vk-booking-manager' ), $date_label );
+		} elseif ( Booking_Anonymizer::ANONYMIZED_BY_AUTO === $anonymized_by ) {
+			/* translators: %s: Date and time when the personal data was anonymized. */
+			$anonymized_message = sprintf( __( 'The personal data of this reservation was anonymized on %s by the automatic anonymization setting.', 'vk-booking-manager' ), $date_label );
+		} else {
+			/* translators: %s: Date and time when the personal data was anonymized. */
+			$anonymized_message = sprintf( __( 'The personal data of this reservation was anonymized on %s.', 'vk-booking-manager' ), $date_label );
+		}
+		?>
+		<div class="notice notice-info inline">
+			<p>
+				<?php
+				echo esc_html( $anonymized_message );
+				echo ' ';
+				echo esc_html(
+					sprintf(
+						/* translators: %s: Names of the fields that were cleared, e.g. "customer name, telephone number". */
+						__( '%s have been cleared and cannot be restored.', 'vk-booking-manager' ),
+						Booking_Anonymizer::get_field_labels_text()
+					)
+				);
+				?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * 個人情報の欄を、編集できない文字だけの1行として出力する（匿名化済みの予約用。issue #870）。
+	 *
+	 * @param string $label 欄名。
+	 * @param string $value 表示する値。空のときは「—」を表示する。
+	 */
+	private function render_readonly_row( string $label, string $value ): void {
+		?>
+		<tr>
+			<th scope="row"><?php echo esc_html( $label ); ?></th>
+			<td><?php echo '' !== $value ? nl2br( esc_html( $value ) ) : '&mdash;'; ?></td>
+		</tr>
+		<?php
+	}
+
+	/**
 	 * 予約者欄（現在の予約者の表示と、検索して選び直すパネル）を出力する。
 	 *
 	 * 初期表示は現在の予約者だけ。変更するときは JavaScript の検索パネルで選び直す
@@ -2618,6 +2855,19 @@ class Booking_Admin {
 	 * @param WP_Post $post 予約の投稿。
 	 */
 	private function render_reserver_field( WP_Post $post ): void {
+		// issue #870: 匿名化済みの予約は、予約者を選び直せない（選び直すとそのお客様のマイページにまた表示されるため）。
+		// 検索・変更の部品（data-vkbm-reserver）を出さず、「匿名化済み」の文字だけを表示する。
+		if ( Booking_Anonymizer::is_anonymized( $post->ID ) ) {
+			?>
+			<div class="vkbm-reserver">
+				<div class="vkbm-reserver__current">
+					<p class="vkbm-reserver__name"><?php esc_html_e( 'Anonymized', 'vk-booking-manager' ); ?></p>
+				</div>
+			</div>
+			<?php
+			return;
+		}
+
 		$author_id   = (int) $post->post_author;
 		$author_user = $author_id > 0 ? get_userdata( $author_id ) : false;
 
@@ -2772,7 +3022,12 @@ class Booking_Admin {
 			return $metadata;
 		}
 
-		$jpg_file = $path_info['dirname'] . '/' . $path_info['filename'] . '.jpg';
+		$jpg_name = $path_info['filename'] . '.jpg';
+		// 変換後のファイル名が元のファイルと異なる場合は、同じフォルダーの既存のファイルと重ならない名前にする。
+		if ( $path_info['basename'] !== $jpg_name ) {
+			$jpg_name = wp_unique_filename( $path_info['dirname'], $jpg_name );
+		}
+		$jpg_file = $path_info['dirname'] . '/' . $jpg_name;
 		$saved    = $editor->save( $jpg_file, 'image/jpeg' );
 		if ( is_wp_error( $saved ) || ! is_array( $saved ) ) {
 			return $metadata;
@@ -2812,6 +3067,16 @@ class Booking_Admin {
 			return false;
 		}
 
-		return '1' === sanitize_text_field( wp_unslash( $_REQUEST['vkbm_booking_upload'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Uploads are validated by core.
+		if ( '1' !== sanitize_text_field( wp_unslash( $_REQUEST['vkbm_booking_upload'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Uploads are validated by core.
+			return false;
+		}
+
+		// 予約の投稿に対するアップロードで、かつ予約を管理する権限がある場合だけ予約画面からのアップロードとみなす。
+		$post_id = isset( $_REQUEST['post_id'] ) ? absint( wp_unslash( $_REQUEST['post_id'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Uploads are validated by core.
+		if ( $post_id <= 0 || Booking_Post_Type::POST_TYPE !== get_post_type( $post_id ) ) {
+			return false;
+		}
+
+		return current_user_can( Capabilities::MANAGE_RESERVATIONS, $post_id );
 	}
 }

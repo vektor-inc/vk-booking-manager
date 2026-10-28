@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Admin\Email_Log_Repository;
+use VKBookingManager\Attendees\Attendee_Roster;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Mail_From;
@@ -557,6 +558,10 @@ class Auth_Shortcodes {
 			$this->process_profile_request();
 		}
 
+		if ( isset( $_POST['vkbm_attendee_roster_form'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in the handler.
+			$this->process_attendee_roster_request();
+		}
+
 		if ( isset( $_POST['vkbm_resend_verification_form'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in the handler.
 			$this->process_resend_verification_request();
 		}
@@ -777,6 +782,196 @@ class Auth_Shortcodes {
 		</div>
 		<?php
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * マイページ用の名簿カードを描画する。
+	 *
+	 * @param string $redirect_to 保存後に戻る URL。
+	 * @return string 名簿カード HTML。機能が無効な場合は空文字。
+	 */
+	private function render_attendee_roster_form( string $redirect_to ): string {
+		$settings = $this->settings_service->get_settings();
+		if ( empty( $settings['attendee_roster_enabled'] ) || ! is_user_logged_in() ) {
+			return '';
+		}
+
+		$user      = wp_get_current_user();
+		$roster    = new Attendee_Roster();
+		$rows      = $roster->get( $user->ID );
+		$self_name = trim( $user->first_name . ' ' . $user->last_name );
+		$self      = array(
+			'id'     => 'self',
+			'name'   => '' !== $self_name ? $self_name : $user->display_name,
+			'kana'   => (string) get_user_meta( $user->ID, 'vkbm_kana_name', true ),
+			'number' => '',
+		);
+		foreach ( $rows as $index => $row ) {
+			if ( 'self' === $row['id'] ) {
+				$self['number'] = $row['number'];
+				unset( $rows[ $index ] );
+			}
+		}
+		$rows         = array_merge( array( $self ), array_values( $rows ) );
+		$label        = trim( (string) ( $settings['attendee_roster_label'] ?? '' ) );
+		$label        = '' !== $label ? $label : __( 'People receiving the service', 'vk-booking-manager' );
+		$notice       = $this->consume_notice_cookie( 'vkbm_attendee_roster_notice' ) ?? '';
+		$error_code   = sanitize_key( $this->consume_notice_cookie( 'vkbm_attendee_roster_error' ) ?? '' );
+		$error_notice = $this->get_attendee_roster_error_message( $error_code );
+
+		ob_start();
+		// phpcs:disable WordPress.WP.I18n.MissingTranslatorsComment -- 各プレースホルダーには同じ行で名簿名、対象者名または上限値を渡す。
+		?>
+		<div class="vkbm-auth-form vkbm-attendee-roster">
+			<h2><?php echo esc_html( $label ); ?></h2>
+			<div aria-live="polite">
+			<?php
+			if ( '' !== $notice ) :
+				?>
+				<div id="vkbm-roster-notice" class="vkbm-alert vkbm-alert__success" role="status" tabindex="-1"><?php echo esc_html( $notice ); ?></div><?php endif; ?>
+			<?php
+			if ( '' !== $error_notice ) :
+				?>
+				<div id="vkbm-roster-notice" class="vkbm-alert vkbm-alert__danger" role="alert" tabindex="-1"><?php echo esc_html( $error_notice ); ?></div><?php endif; ?>
+			</div>
+			<?php
+			if ( 1 === count( $rows ) ) :
+				?>
+				<p><?php printf( esc_html__( 'Register %s in advance to select them quickly when making a reservation.', 'vk-booking-manager' ), esc_html( $label ) ); ?></p><?php endif; ?>
+			<?php foreach ( $rows as $row ) : ?>
+			<form method="post" class="vkbm-attendee-roster__row">
+				<fieldset><legend><?php echo esc_html( $row['name'] ); ?></legend>
+				<input type="hidden" name="attendee_id" value="<?php echo esc_attr( $row['id'] ); ?>">
+				<label><?php esc_html_e( 'Name', 'vk-booking-manager' ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_name" value="<?php echo esc_attr( $row['name'] ); ?>" required <?php wp_readonly( 'self' === $row['id'] ); ?>></label>
+				<?php
+				if ( ! empty( $settings['attendee_roster_kana_enabled'] ) ) :
+					?>
+					<label><?php echo esc_html( '' !== (string) $settings['attendee_roster_kana_label'] ? (string) $settings['attendee_roster_kana_label'] : __( 'Furigana', 'vk-booking-manager' ) ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_kana" value="<?php echo esc_attr( $row['kana'] ); ?>" <?php wp_readonly( 'self' === $row['id'] ); ?>></label><?php endif; ?>
+				<?php
+				if ( ! empty( $settings['attendee_number_enabled'] ) ) :
+					?>
+					<label><?php echo esc_html( '' !== (string) $settings['attendee_number_label'] ? (string) $settings['attendee_number_label'] : __( 'Customer number', 'vk-booking-manager' ) ); ?>
+					<?php
+					if ( '' !== $row['number'] ) :
+						?>
+						<input class="vkbm-auth-form__input" type="text" value="<?php echo esc_attr( $row['number'] ); ?>" readonly>
+						<?php
+else :
+	?>
+						<span class="vkbm-attendee-roster__unregistered"><?php esc_html_e( 'Not registered', 'vk-booking-manager' ); ?></span><?php endif; ?></label><p class="vkbm-auth-form__note"><?php esc_html_e( 'The store registers customer numbers. Please contact the store if needed.', 'vk-booking-manager' ); ?></p><?php endif; ?>
+				<?php
+				if ( 'self' !== $row['id'] ) :
+					?>
+					<div class="vkbm-attendee-roster__actions"><button class="vkbm-button vkbm-button__sm vkbm-button__secondary" aria-label="<?php echo esc_attr( sprintf( __( 'Save %s', 'vk-booking-manager' ), $row['name'] ) ); ?>" name="attendee_action" value="save" type="submit"><?php esc_html_e( 'Save', 'vk-booking-manager' ); ?></button><button class="vkbm-button vkbm-button__sm vkbm-button__link" aria-label="<?php echo esc_attr( sprintf( __( 'Delete %s', 'vk-booking-manager' ), $row['name'] ) ); ?>" name="attendee_action" value="delete" type="submit" onclick="return confirm('<?php echo esc_js( sprintf( __( 'Delete “%s” from the list? Past reservation records will remain unchanged.', 'vk-booking-manager' ), $row['name'] ) ); ?>');"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button></div>
+					<?php
+					else :
+						?>
+																																					<p class="vkbm-auth-form__note"><?php esc_html_e( 'Edit your name and furigana in the user information form above.', 'vk-booking-manager' ); ?></p><?php endif; ?>
+				<?php wp_nonce_field( 'vkbm_attendee_roster', 'vkbm_attendee_roster_nonce' ); ?>
+				<input type="hidden" name="vkbm_attendee_roster_form" value="1"><input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>"></fieldset>
+			</form>
+			<?php endforeach; ?>
+			<?php if ( count( $rows ) - 1 < Attendee_Roster::MAX_ATTENDEES ) : ?>
+			<form method="post" class="vkbm-attendee-roster__row"><fieldset><legend><?php esc_html_e( 'Add an entry', 'vk-booking-manager' ); ?></legend><label><?php esc_html_e( 'Name', 'vk-booking-manager' ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_name" required></label>
+				<?php
+				if ( ! empty( $settings['attendee_roster_kana_enabled'] ) ) :
+					?>
+				<label><?php echo esc_html( '' !== (string) $settings['attendee_roster_kana_label'] ? (string) $settings['attendee_roster_kana_label'] : __( 'Furigana', 'vk-booking-manager' ) ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_kana"></label><?php endif; ?><button class="vkbm-button vkbm-button__md vkbm-button__primary" name="attendee_action" value="add" type="submit"><?php esc_html_e( 'Add', 'vk-booking-manager' ); ?></button><?php wp_nonce_field( 'vkbm_attendee_roster', 'vkbm_attendee_roster_nonce' ); ?><input type="hidden" name="vkbm_attendee_roster_form" value="1"><input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>"></fieldset></form>
+				<?php
+			else :
+				?>
+				<p id="vkbm-attendee-limit"><?php printf( esc_html__( 'You have reached the maximum of %d registered entries.', 'vk-booking-manager' ), esc_html( (string) Attendee_Roster::MAX_ATTENDEES ) ); ?></p><button class="vkbm-button" disabled aria-describedby="vkbm-attendee-limit"><?php esc_html_e( 'Add', 'vk-booking-manager' ); ?></button><?php endif; ?>
+		</div>
+		<?php
+		// phpcs:enable WordPress.WP.I18n.MissingTranslatorsComment
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * 名簿保存エラーコードに対応する案内を返す。
+	 *
+	 * @param string $code エラーコード。
+	 * @return string 表示文。許可リスト外は汎用文。
+	 */
+	public function get_attendee_roster_error_message( string $code ): string {
+		if ( '' === $code ) {
+			return '';
+		}
+		$messages = array(
+			'vkbm_attendee_name_required' => __( 'Please enter a name for every person.', 'vk-booking-manager' ),
+			/* translators: %d: Maximum number of other people that can be registered. */
+			'vkbm_attendee_limit'         => sprintf( __( 'You can register up to %d other people.', 'vk-booking-manager' ), Attendee_Roster::MAX_ATTENDEES ),
+			'default'                     => __( 'The list could not be saved. Please wait a moment and try again.', 'vk-booking-manager' ),
+		);
+		return $messages[ $code ] ?? $messages['default'];
+	}
+
+	/**
+	 * マイページの名簿を1件単位で保存する。
+	 *
+	 * @return void
+	 */
+	private function process_attendee_roster_request(): void {
+		if ( ! is_user_logged_in() || empty( $_POST['vkbm_attendee_roster_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['vkbm_attendee_roster_nonce'] ) ), 'vkbm_attendee_roster' ) ) {
+			return;
+		}
+		$settings = $this->settings_service->get_settings();
+		if ( empty( $settings['attendee_roster_enabled'] ) ) {
+			return;
+		}
+		$user   = wp_get_current_user();
+		$roster = new Attendee_Roster();
+		$rows   = $roster->get( $user->ID );
+		if ( ! array_filter(
+			$rows,
+			static function ( array $row ): bool {
+				return 'self' === $row['id']; }
+		) ) {
+			array_unshift(
+				$rows,
+				array(
+					'id'     => 'self',
+					'name'   => '' !== trim( $user->first_name . ' ' . $user->last_name ) ? trim( $user->first_name . ' ' . $user->last_name ) : $user->display_name,
+					'kana'   => (string) get_user_meta( $user->ID, 'vkbm_kana_name', true ),
+					'number' => '',
+				)
+			);
+		}
+		$id     = sanitize_key( wp_unslash( $_POST['attendee_id'] ?? '' ) );
+		$action = sanitize_key( wp_unslash( $_POST['attendee_action'] ?? '' ) );
+		$name   = sanitize_text_field( wp_unslash( $_POST['attendee_name'] ?? '' ) );
+		$kana   = isset( $_POST['attendee_kana'] ) ? sanitize_text_field( wp_unslash( $_POST['attendee_kana'] ) ) : null;
+		if ( 'add' === $action ) {
+			$rows[] = array(
+				'id'     => wp_generate_uuid4(),
+				'name'   => $name,
+				'kana'   => $kana ?? '',
+				'number' => '',
+			);
+		} else {
+			foreach ( $rows as $index => $row ) {
+				if ( $row['id'] !== $id || 'self' === $id ) {
+					continue;
+				}
+				if ( 'delete' === $action ) {
+					unset( $rows[ $index ] );
+				} elseif ( 'save' === $action ) {
+					$rows[ $index ]['name'] = $name;
+					// 無効な入力欄は送信されないため、未送信時は保存済みのふりがなを維持する。
+					if ( null !== $kana ) {
+						$rows[ $index ]['kana'] = $kana;
+					}
+				}
+			}
+		}
+		$result      = $roster->save( $user->ID, array_values( $rows ) );
+		$redirect_to = $this->normalize_redirect( sanitize_url( wp_unslash( $_POST['redirect_to'] ?? $this->get_current_url() ) ) );
+		if ( ! is_wp_error( $result ) ) {
+			$this->set_notice_cookie( 'vkbm_attendee_roster_notice', __( 'The list has been updated.', 'vk-booking-manager' ) );
+		} else {
+			$this->set_notice_cookie( 'vkbm_attendee_roster_error', $result->get_error_code() );
+		}
+		$this->redirect_and_exit( add_query_arg( 'vkbm_auth', 'profile', $redirect_to ) );
 	}
 
 	/**
@@ -1243,7 +1438,7 @@ class Auth_Shortcodes {
 			</form>
 		</div>
 		<?php
-		return (string) ob_get_clean();
+		return (string) ob_get_clean() . $this->render_attendee_roster_form( $redirect_to );
 	}
 
 	/**
@@ -2572,7 +2767,7 @@ class Auth_Shortcodes {
 	 * @param string      $message Notice.
 	 * @param string|null $path    Cookie path. Defaults to the reservation page path.
 	 */
-	private function set_notice_cookie( string $name, string $message, ?string $path = null ): void {
+	protected function set_notice_cookie( string $name, string $message, ?string $path = null ): void {
 		if ( headers_sent() ) {
 			return;
 		}
@@ -2624,6 +2819,7 @@ class Auth_Shortcodes {
 		$value = isset( $_COOKIE[ $name ] )
 			? sanitize_text_field( rawurldecode( (string) wp_unslash( $_COOKIE[ $name ] ) ) ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Correctly sanitized AFTER decode to prevent XSS. WPCS scanner does not track through rawurldecode.
 			: '';
+		unset( $_COOKIE[ $name ] );
 
 		if ( headers_sent() ) {
 			return $value;

@@ -264,7 +264,8 @@ class Lodging_Booking {
 	 * 設定が揃っていなければ上限は 1 名。上限を超える人数は 1 名に丸めず 400（guests_exceeded）で拒否する
 	 * （丸めると、表示した料金より安い金額で予約が確定してしまうため）。
 	 * 料金区分（1名1泊あたりのメニューで、区分があり上限が 2 名以上のとき）は、人数を区分ごとの内訳から決める（合計 0 名は 400）。
-	 * 1室1泊あたりのメニューは区分を使わず、人数は 1 名以上であればよい（料金には影響しない）。
+	 * 追加料金を使わない1室1泊あたりのメニューは区分を使わず、人数は 1 名以上であればよい（料金には影響しない）。
+	 * 追加料金を使う1室1泊あたりのメニューは、1名1泊あたりと同じく区分ごとの人数から人数を決める（#934）。
 	 *
 	 * @param int   $menu_id         メニューの投稿 ID。
 	 * @param int   $requested       送られた人数。
@@ -323,16 +324,19 @@ class Lodging_Booking {
 	/**
 	 * 人数を料金区分ごとに数えるメニューの区分（名前・単価）を返す。
 	 *
-	 * 区分ごとの人数で料金が決まるのは、1名1泊あたりのメニューで、区分が定義され、上限が 2 名以上のときだけ。
-	 * 1室1泊あたりのメニューと、それ以外のメニューは空配列（人数は単一の数値で決まる）。
+	 * 区分ごとの人数で料金が決まるのは、区分が定義され、上限が 2 名以上の、次のどちらかのメニューだけ。
+	 * - 1名1泊あたりのメニュー（区分ごとの単価 × 人数）。
+	 * - 1室1泊あたりで、規定人数を超えた分の追加料金を使うメニュー（区分は超過1名・1泊あたりの追加料金。#934）。
+	 * それ以外のメニュー（追加料金を使わない1室1泊あたり・区分が無い・上限が 1 名）は空配列（人数は単一の数値で決まる）。
 	 *
 	 * @param int      $menu_id メニューの投稿 ID。
 	 * @param int|null $max     get_max_guests() の結果。呼び出し側で求め済みなら渡して再計算を避ける。
 	 * @return array<int, array{label: string, price: int}> 区分の一覧。区分を使わないときは空配列。
 	 */
 	public static function get_menu_price_tiers( int $menu_id, ?int $max = null ): array {
-		$max = $max ?? self::get_max_guests( $menu_id );
-		if ( $max < 2 || Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === Service_Menu_Post_Type::get_night_price_unit( $menu_id ) ) {
+		$max         = $max ?? self::get_max_guests( $menu_id );
+		$is_per_room = Service_Menu_Post_Type::is_night_price_per_room( $menu_id );
+		if ( $max < 2 || ( $is_per_room && ! Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $menu_id ) ) ) {
 			return array();
 		}
 

@@ -13,8 +13,10 @@
 .vkbm-menu-loop__group-title {
 	font-size: 1.25rem;
 	margin: 0 0 1rem;
-	background-color: #f5f5f5;
-	color: var(--vkbm--color--surface-text, #333);
+	// --vkbm--color--menu-heading-* は「見出しをフッターと同じ色にする」がオンのときだけ :root に出力される（#864）。
+	// variables.scss などで既定値を定義すると、オフのサイトの見た目が変わるため定義しないこと。
+	background-color: var(--vkbm--color--menu-heading-bg, #f5f5f5);
+	color: var(--vkbm--color--menu-heading-text, var(--vkbm--color--surface-text, #333));
 	border-left: 3px solid var(--vkbm--color--primary, #2563eb);
 	padding: 0.6em 0.7em;
 

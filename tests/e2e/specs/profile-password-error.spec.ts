@@ -94,16 +94,28 @@ test.describe( 'Profile password change error display (#74)', () => {
 	const loginAsTestUser = async ( page: Page ) => {
 		// WordPress のログインページでログイン
 		await page.goto( '/wp-login.php' );
-		await page
-			.getByLabel( /ユーザー名|Username/ )
-			.fill( 'profile_e2e_user' );
-		await page
-			.getByLabel( /パスワード|Password/, { exact: false } )
-			.first()
-			.fill( 'OldPassword123' );
+		// wp-login.js は load の少し後（setTimeout）にユーザー名欄へフォーカスして全選択する。
+		// 先にパスワード欄へ入力するとフォーカスを奪われ、入力がユーザー名欄に入るため、
+		// フォーカスが移るのを待ってから入力し、入力値を確かめてから送信する。
+		const userField = page.locator( '#user_login' );
+		const passField = page.locator( '#user_pass' );
+		await expect( userField )
+			.toBeFocused( { timeout: 5000 } )
+			.catch( () => {
+				// フォーカス処理が無い画面では待たずに進む。
+			} );
+		await userField.fill( 'profile_e2e_user' );
+		await passField.fill( 'OldPassword123' );
+		await expect( userField ).toHaveValue( 'profile_e2e_user' );
+		await expect( passField ).toHaveValue( 'OldPassword123' );
 		await page.getByRole( 'button', { name: /ログイン|Log In/ } ).click();
-		// ログイン完了を待つ
-		await page.waitForURL( /wp-admin|booking/ );
+		// ログイン完了を待つ。ログイン画面から離れたことで判定する。
+		// 離れた先（ダッシュボード）の load までは待たない（重い環境で時間切れになりやすく、
+		// この後すぐ別の画面へ移動するため不要。ログイン Cookie は離れた時点で設定済み）。
+		await page.waitForURL(
+			( url ) => ! url.pathname.includes( 'wp-login.php' ),
+			{ waitUntil: 'domcontentloaded', timeout: 30000 }
+		);
 	};
 
 	test( 'パスワード不一致時にエラーメッセージが表示される', async ( {
@@ -134,16 +146,14 @@ test.describe( 'Profile password change error display (#74)', () => {
 			.getByRole( 'button', { name: /保存|Save/ } )
 			.click();
 
-		// ページ遷移を待つ（リダイレクト後）
-		await page.waitForSelector( '.vkbm-auth-card--profile', {
-			timeout: 15000,
-		} );
+		// 保存は POST → リダイレクトで画面が読み込み直される。保存前のフォームは通知を持たないため、
+		// 下の通知の表示待ち（リダイレクト後にだけ出る）がそのまま保存完了の待ちになる。
 
 		// エラーメッセージが表示されることを確認
 		const errorAlert = page.locator(
 			'.vkbm-auth-card--profile .vkbm-alert__danger'
 		);
-		await expect( errorAlert ).toBeVisible( { timeout: 10000 } );
+		await expect( errorAlert ).toBeVisible( { timeout: 20000 } );
 
 		// エラーメッセージの内容を確認（日本語 or 英語）
 		const errorText = await errorAlert.textContent();
@@ -179,16 +189,14 @@ test.describe( 'Profile password change error display (#74)', () => {
 			.getByRole( 'button', { name: /保存|Save/ } )
 			.click();
 
-		// ページ遷移を待つ（リダイレクト後）
-		await page.waitForSelector( '.vkbm-auth-card--profile', {
-			timeout: 15000,
-		} );
+		// 保存は POST → リダイレクトで画面が読み込み直される。保存前のフォームは通知を持たないため、
+		// 下の通知の表示待ち（リダイレクト後にだけ出る）がそのまま保存完了の待ちになる。
 
 		// エラーメッセージが表示されることを確認
 		const errorAlert = page.locator(
 			'.vkbm-auth-card--profile .vkbm-alert__danger'
 		);
-		await expect( errorAlert ).toBeVisible( { timeout: 10000 } );
+		await expect( errorAlert ).toBeVisible( { timeout: 20000 } );
 
 		// エラーメッセージの内容を確認（日本語 or 英語）
 		const errorText = await errorAlert.textContent();
@@ -221,16 +229,14 @@ test.describe( 'Profile password change error display (#74)', () => {
 			.getByRole( 'button', { name: /保存|Save/ } )
 			.click();
 
-		// リダイレクト後にプロフィールフォームが再表示されるまで待つ
-		await page.waitForSelector( '.vkbm-auth-card--profile', {
-			timeout: 15000,
-		} );
+		// 保存は POST → リダイレクトで画面が読み込み直される。保存前のフォームは通知を持たないため、
+		// 下の通知の表示待ち（リダイレクト後にだけ出る）がそのまま保存完了の待ちになる。
 
 		// 成功メッセージが表示されることを確認
 		const successAlert = page.locator(
 			'.vkbm-auth-card--profile .vkbm-alert__success'
 		);
-		await expect( successAlert ).toBeVisible( { timeout: 10000 } );
+		await expect( successAlert ).toBeVisible( { timeout: 20000 } );
 
 		// エラーメッセージが表示されていないことを確認
 		const errorAlert = page.locator(

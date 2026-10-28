@@ -94,12 +94,12 @@ function setMenuDisableNomination( menuId: string, disable: boolean ): void {
 	if ( disable ) {
 		wpCli( `post meta update ${ menuId } _vkbm_disable_nomination 1` );
 	} else {
-		try {
-			wpCli( `post meta delete ${ menuId } _vkbm_disable_nomination` );
-		} catch ( e ) {
-			// 既定（指名を使う）状態ではこのメタキーが元々存在しないため、
-			// WP-CLI の削除失敗（Failed to delete custom field）は無視してよい。
-		}
+		// 既定（指名を使う）状態ではこのメタキーが元々存在しない。`wp post meta delete` は
+		// キーが無いと「Failed to delete custom field」でエラー終了し、ログにエラーが残るため、
+		// 無くても失敗にならない delete_post_meta で消す。
+		wpEvalPhp(
+			`delete_post_meta( ${ Number.parseInt( menuId, 10 ) }, '_vkbm_disable_nomination' );`
+		);
 	}
 }
 
@@ -147,7 +147,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		// staff becomes fully booked for the group) is present. Assert against
 		// the actual ja translation, not the untranslated English source.
 		expect( html ).toContain(
-			'スタッフを指名した予約で、1回の予約にまとめて申し込める最大人数です。'
+			'スタッフを指名した1件の予約で、一度に申し込める最大人数です。'
 		);
 		expect( html ).toContain(
 			'その時間帯は貸切（その1組専用）扱いとなり、他のお客様と共有されません。'
@@ -220,7 +220,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		// The nomination-specific description is not present. Assert against
 		// the actual ja translation for the same reason as above.
 		expect( html ).not.toContain(
-			'スタッフを指名した予約で、1回の予約にまとめて申し込める最大人数です。'
+			'スタッフを指名した1件の予約で、一度に申し込める最大人数です。'
 		);
 
 		// #392: 旧仕様の案内メッセージ要素も、指名OFF時から一貫して DOM に存在しない。

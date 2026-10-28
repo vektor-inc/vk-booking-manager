@@ -64,6 +64,13 @@ class Provider_Settings_Page_Industry_Preset_Options_Test extends WP_UnitTestCas
 		$select_html = $select_match[0] ?? '';
 		preg_match_all( '/<option value="([^"]*)"/', $select_html, $option_matches );
 
+		// 無料版の案内を含め、業種プリセット行は事業者情報タブの先頭へ表示する。
+		$industry_row_position  = strpos( $html, '<tr class="vkbm-provider-settings__tab-store vkbm-industry-preset-row">' );
+		$provider_name_position = strpos( $html, 'id="vkbm-provider-name"' );
+		$this->assertNotFalse( $industry_row_position, '業種プリセット行は事業者情報タブに属する' );
+		$this->assertNotFalse( $provider_name_position, '事業者名の入力欄が出る' );
+		$this->assertLessThan( $provider_name_position, $industry_row_position, '業種プリセット行は事業者名より前に出る' );
+
 		if ( Pro_Upsell::is_free_edition() ) {
 			$this->assertSame( '', $select_html, '無料版では業種プリセットの選択欄が出ない' );
 			$this->assertStringNotContainsString( 'value="lodging"', $html, '無料版では宿泊の選択肢が出ない' );
@@ -75,6 +82,11 @@ class Provider_Settings_Page_Industry_Preset_Options_Test extends WP_UnitTestCas
 			$option_matches[1],
 			'Pro 版の選択肢に宿泊が末尾に加わる（既存の選択肢の順序は変わらない）'
 		);
+
+		// 移動後も自動設定の対象はシステム設定タブであり、保存後に反映されることを案内する。
+		$this->assertStringContainsString( esc_html__( 'Other items are configured automatically in the "System settings" tab.', 'vk-booking-manager' ), $html );
+		$this->assertStringContainsString( esc_html__( 'Save the industry preset to apply the changes to that tab.', 'vk-booking-manager' ), $html );
+		$this->assertStringContainsString( esc_html__( 'These items are automatically saved with these values and cannot be changed individually in the "System settings" tab.', 'vk-booking-manager' ), $html );
 	}
 
 	/**

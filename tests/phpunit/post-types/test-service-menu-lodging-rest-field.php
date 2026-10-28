@@ -126,6 +126,8 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 					'max_guests'        => 1,
 					'guest_tiers'       => array(),
 					'price_unit'        => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_GUEST,
+					'extra_guest_fee'   => false,
+					'included_guests'   => 1,
 					'base_price'        => 0,
 					'has_variable_rate' => false,
 					'lowest_price'      => 0,
@@ -145,6 +147,8 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 					'max_guests'        => 1,
 					'guest_tiers'       => array(),
 					'price_unit'        => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_GUEST,
+					'extra_guest_fee'   => false,
+					'included_guests'   => 1,
 					'base_price'        => 0,
 					'has_variable_rate' => false,
 					'lowest_price'      => 0,
@@ -164,6 +168,8 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 					'max_guests'        => 4,
 					'guest_tiers'       => array(),
 					'price_unit'        => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_GUEST,
+					'extra_guest_fee'   => false,
+					'included_guests'   => 1,
 					'base_price'        => 0,
 					'has_variable_rate' => false,
 					'lowest_price'      => 0,
@@ -237,6 +243,92 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 		$this->assertSame( array(), $single_info['guest_tiers'], '複数人一括予約でない（上限 1 名） => 区分は使わない' );
 
 		$this->assertSame( 3, Lodging_Booking::get_guest_limit( $per_guest ), '人数の上限は resolve_guests と同じ値' );
+	}
+
+	/**
+	 * 1室1泊あたりで規定人数を超えた分の追加料金を使うメニューは、区分・追加料金を使うこと・基本料金に含まれる人数を返す（#934）。
+	 *
+	 * メニューのカードの料金（lowest_price）は基本料金のままで、超過分の追加料金は含めない。
+	 */
+	public function test_get_lodging_rest_field_extra_guest_fee(): void {
+		$this->set_site( 'lodging' );
+		$tiers     = array(
+			array(
+				'label' => '大人',
+				'price' => 3000,
+			),
+			array(
+				'label' => '子供',
+				'price' => 2000,
+			),
+		);
+		$per_room  = array(
+			Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
+			'_vkbm_base_price'                            => 20000,
+			'_vkbm_max_capacity'                          => '6',
+		);
+		$extra_on  = array(
+			Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED => '1',
+			Service_Menu_Post_Type::META_NIGHT_INCLUDED_GUESTS => 4,
+			'_vkbm_price_tiers' => $tiers,
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '1室あたり・追加料金あり・区分あり => 区分を返し、追加料金を使う・含まれる人数 4。最安は基本料金のまま',
+				'meta'                => array_merge( $per_room, $extra_on ),
+				'expected'            => array(
+					'guest_labels'    => array( '大人', '子供' ),
+					'extra_guest_fee' => true,
+					'included_guests' => 4,
+					'max_guests'      => 6,
+					'lowest_price'    => 20000,
+				),
+			),
+			array(
+				'test_condition_name' => '1室あたり・追加料金あり・区分が 1 件も無い => 区分なし・追加料金は使わない扱い',
+				'meta'                => array_merge( $per_room, $extra_on, array( '_vkbm_price_tiers' => array() ) ),
+				'expected'            => array(
+					'guest_labels'    => array(),
+					'extra_guest_fee' => false,
+					'included_guests' => 4,
+					'max_guests'      => 6,
+					'lowest_price'    => 20000,
+				),
+			),
+			array(
+				'test_condition_name' => '1室あたり・チェックなし（区分のデータが残っている）=> 区分を返さず、追加料金は使わない',
+				'meta'                => array_merge( $per_room, $extra_on, array( Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED => '' ) ),
+				'expected'            => array(
+					'guest_labels'    => array(),
+					'extra_guest_fee' => false,
+					'included_guests' => 4,
+					'max_guests'      => 6,
+					'lowest_price'    => 20000,
+				),
+			),
+			array(
+				'test_condition_name' => '1室あたり・追加料金あり・最大 1 名（区分は使えない上限）=> 区分なし・追加料金は使わない扱い',
+				'meta'                => array_merge( $per_room, $extra_on, array( '_vkbm_max_capacity' => '1' ) ),
+				'expected'            => array(
+					'guest_labels'    => array(),
+					'extra_guest_fee' => false,
+					'included_guests' => 4,
+					'max_guests'      => 1,
+					'lowest_price'    => 20000,
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$menu_id = $this->create_menu( true, $case['meta'] );
+			$actual  = ( new Service_Menu_Post_Type() )->get_lodging_rest_field( array( 'id' => $menu_id ) );
+
+			$this->assertSame( $case['expected']['guest_labels'], array_column( $actual['guest_tiers'], 'label' ), $case['test_condition_name'] . ': guest_tiers' );
+			foreach ( array( 'extra_guest_fee', 'included_guests', 'max_guests', 'lowest_price' ) as $key ) {
+				$this->assertSame( $case['expected'][ $key ], $actual[ $key ], $case['test_condition_name'] . ': ' . $key );
+			}
+		}
 	}
 
 	/**

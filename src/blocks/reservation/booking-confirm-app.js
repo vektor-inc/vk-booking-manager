@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	lazy,
 	Suspense,
@@ -20,6 +20,7 @@ import {
 	notifyBookingFailed,
 	parseJsonWithFallback,
 } from './booking-confirm-error';
+import { isLodgingReservation } from '../shared/reservation-config';
 import { sanitizeDraftToken } from '../shared/draft-token';
 import { formatGuestsCount } from '../shared/guests';
 import { BookingSummaryItems } from './components/booking-summary-items';
@@ -42,6 +43,8 @@ import {
 } from './components/footer-model';
 import { PricingRowLabel } from './components/pricing-row-label';
 import { BookingCompleteNotice } from './components/booking-complete-notice';
+import { AttendeeSelector } from './components/attendee-selector';
+import { useAttendeeOptions, useAttendeeSelection } from './attendee-selection';
 
 // 宿泊予約の確認画面のサマリは別チャンクに分け、宿泊の予約を確認するときだけ読み込む。
 const LodgingConfirmSummary = lazy( () =>
@@ -233,6 +236,13 @@ export const BookingConfirmApp = ( {
 	const [ loading, setLoading ] = useState( true );
 	const [ loadError, setLoadError ] = useState( '' );
 	const [ memo, setMemo ] = useState( '' );
+	const [ attendeeName, setAttendeeName ] = useState( '' );
+	const [ attendeeNameMode, setAttendeeNameMode ] = useState( 'disabled' );
+	const [ attendeeNameLabel, setAttendeeNameLabel ] = useState(
+		__( 'Name of the person receiving the service', 'vk-booking-manager' )
+	);
+	const [ attendeeNameError, setAttendeeNameError ] = useState( '' );
+	const attendeeNameRef = useRef( null );
 	const [ agreeCancellationPolicy, setAgreeCancellationPolicy ] =
 		useState( false );
 	const [ agreeTermsOfService, setAgreeTermsOfService ] = useState( false );
@@ -246,6 +256,10 @@ export const BookingConfirmApp = ( {
 	const [ favoriteError, setFavoriteError ] = useState( '' );
 	const [ createdStatus, setCreatedStatus ] = useState( '' );
 	const [ customerName, setCustomerName ] = useState( '' );
+	const [ customerNameError, setCustomerNameError ] = useState( '' );
+	const customerNameRef = useRef( null );
+	const [ customerNameFocusRequest, setCustomerNameFocusRequest ] =
+		useState( 0 );
 	const [ customerPhone, setCustomerPhone ] = useState( '' );
 	const [ providerNote, setProviderNote ] = useState( '' );
 	const [ paymentMethod, setPaymentMethod ] = useState( 'onsite' );
@@ -300,6 +314,22 @@ export const BookingConfirmApp = ( {
 	const [ currencySymbol, setCurrencySymbol ] = useState( '' );
 
 	const isLoggedIn = resolveLoginState( { userBootstrap, isEditor } );
+	// 名簿から「ご利用になる方」を選ぶ機能。無効、または取得できない場合は従来の名前の入力欄にする。
+	const {
+		options: attendeeOptions,
+		loading: attendeeLoading,
+		stale: attendeeStale,
+		refetch: refetchAttendeeOptions,
+	} = useAttendeeOptions( {
+		enabled: isLoggedIn,
+		isProxy: canManageReservations,
+		customerPhone,
+	} );
+	const attendeeRosterActive = attendeeOptions?.enabled === true;
+	const attendee = useAttendeeSelection( {
+		options: attendeeOptions,
+		isProxy: canManageReservations,
+	} );
 
 	const queryDefaults = useMemo( () => parseQueryParams(), [] );
 	const [ authMode, setAuthMode ] = useState( queryDefaults.auth || '' );
@@ -485,6 +515,7 @@ export const BookingConfirmApp = ( {
 			.then( ( data ) => {
 				setDraft( data );
 				setMemo( data?.memo || '' );
+				setAttendeeName( '' );
 				const agreedAll = Boolean( data?.agree_terms );
 				setAgreeCancellationPolicy(
 					data?.agree_cancellation_policy !== undefined
@@ -550,6 +581,21 @@ export const BookingConfirmApp = ( {
 						? response.payment_method
 						: ''
 				);
+				setAttendeeNameMode(
+					[ 'optional', 'required' ].includes(
+						response?.booking_attendee_name_mode
+					)
+						? response.booking_attendee_name_mode
+						: 'disabled'
+				);
+				if (
+					typeof response?.booking_attendee_name_label === 'string' &&
+					response.booking_attendee_name_label.trim() !== ''
+				) {
+					setAttendeeNameLabel(
+						response.booking_attendee_name_label
+					);
+				}
 				setPendingCompleteMessage(
 					typeof response?.booking_complete_message_pending ===
 						'string'
@@ -1134,7 +1180,7 @@ export const BookingConfirmApp = ( {
 	};
 
 	const handleConfirm = async () => {
-		if ( ! draftToken ) {
+		if ( ! draftToken || attendeeStale ) {
 			return;
 		}
 
@@ -1149,6 +1195,26 @@ export const BookingConfirmApp = ( {
 				? providerTermsOfService
 				: '';
 		const requiresAgreements = ! canManageReservations;
+
+		if ( attendeeRosterActive ) {
+			if ( ! attendee.validate() ) {
+				return;
+			}
+		} else if (
+			attendeeNameMode === 'required' &&
+			! canManageReservations &&
+			attendeeName.trim() === ''
+		) {
+			setAttendeeNameError(
+				sprintf(
+					__( 'Please enter %s.', 'vk-booking-manager' ),
+					attendeeNameLabel
+				)
+			);
+			window.setTimeout( () => attendeeNameRef.current?.focus(), 0 );
+			return;
+		}
+		setAttendeeNameError( '' );
 
 		if (
 			requiresAgreements &&
@@ -1179,11 +1245,24 @@ export const BookingConfirmApp = ( {
 			  ( ! termsText || agreeTermsOfService )
 			: true;
 
+		// 決済の事前処理を始める前に、代理予約の入力漏れを知らせる。
+		if ( canManageReservations && ! customerName.trim() ) {
+			setCustomerNameError(
+				__( 'Please enter the customer name.', 'vk-booking-manager' )
+			);
+			setCustomerNameFocusRequest( ( request ) => request + 1 );
+			return;
+		}
+		setCustomerNameError( '' );
+
 		setSubmitting( true );
 		setSubmitError( '' );
 		const payload = {
 			token: draftToken,
 			memo,
+			...( attendeeRosterActive
+				? attendee.buildPayload()
+				: { attendee_name: attendeeName } ),
 			agree_terms: agreedAll,
 			agree_cancellation_policy: requiresAgreements
 				? agreeCancellationPolicy
@@ -1311,6 +1390,11 @@ export const BookingConfirmApp = ( {
 				}
 			} )
 			.catch( async ( error ) => {
+				// 名簿へ保存する指定で予約だけが失敗した場合は、名簿を取り直して保存された人を選択済みにする。
+				if ( payload.attendee_save_to_roster ) {
+					attendee.selectAfterRefresh( payload.attendee_new_id );
+					refetchAttendeeOptions();
+				}
 				// HTTP エラー（Response）・通信エラー・解析失敗のいずれでも、code / message を取り出す。
 				const failure = await normalizeBookingError( error );
 
@@ -1378,6 +1462,13 @@ export const BookingConfirmApp = ( {
 		url.searchParams.delete( 'draft' );
 		window.history.replaceState( null, '', url.toString() );
 	}, [ success, redirectUrl ] );
+
+	// エラーと ARIA 属性の描画後に移す。同じエラーで再確定した場合も実行する。
+	useEffect( () => {
+		if ( customerNameFocusRequest > 0 ) {
+			customerNameRef.current?.focus();
+		}
+	}, [ customerNameFocusRequest ] );
 
 	// 予約完了時に完了ブロックへフォーカスを移し、支援技術に完了を伝える。
 	useEffect( () => {
@@ -1488,6 +1579,76 @@ export const BookingConfirmApp = ( {
 			/>
 		);
 	};
+
+	const renderAttendeeNameField = () => {
+		if ( attendeeNameMode === 'disabled' ) {
+			return null;
+		}
+		const required =
+			attendeeNameMode === 'required' && ! canManageReservations;
+		const errorId = 'vkbm-confirm-attendee-name-error';
+		return (
+			<div className="vkbm-confirm__form">
+				<label htmlFor="vkbm-confirm-attendee-name">
+					{ attendeeNameLabel }
+					{ required && <span aria-hidden="true"> *</span> }
+				</label>
+				<input
+					ref={ attendeeNameRef }
+					type="text"
+					id="vkbm-confirm-attendee-name"
+					value={ attendeeName }
+					onChange={ ( event ) => {
+						setAttendeeName( event.target.value );
+						setAttendeeNameError( '' );
+					} }
+					maxLength={ 200 }
+					autoComplete="off"
+					required={ required }
+					aria-required={ required }
+					aria-invalid={ Boolean( attendeeNameError ) }
+					aria-describedby={ attendeeNameError ? errorId : undefined }
+					readOnly={ showSuccessMessage }
+				/>
+				{ attendeeNameError && (
+					<p
+						id={ errorId }
+						className="vkbm-alert vkbm-alert__danger"
+						role="alert"
+					>
+						{ attendeeNameError }
+					</p>
+				) }
+			</div>
+		);
+	};
+
+	// 選択肢の取得が終わるまで、選択欄と同じくらいの高さを確保して入れ替わりを目立たせない。
+	// 読み上げへの通知は renderAttendeeStatus の1つの要素にまとめるため、ここには role を付けない。
+	const renderAttendeeLoading = () => (
+		<p className="vkbm-confirm__attendee-loading">
+			{ __( 'Loading…', 'vk-booking-manager' ) }
+		</p>
+	);
+
+	// 読み上げ用の状態通知。要素は常に置き、中の文言だけを切り替える。
+	const renderAttendeeStatus = () => (
+		<p className="vkbm-confirm__attendee-status" role="status">
+			{ attendeeStale ? __( 'Loading…', 'vk-booking-manager' ) : '' }
+		</p>
+	);
+
+	const renderAttendeeSelector = () => (
+		<AttendeeSelector
+			options={ attendeeOptions }
+			state={ attendee }
+			nameLabel={ attendeeNameLabel }
+			isProxy={ canManageReservations }
+			readOnly={ showSuccessMessage }
+			profileUrl={ buildReservationModeUrl( 'profile' ) }
+			guests={ Math.max( 1, Math.floor( Number( draft?.guests ) || 1 ) ) }
+		/>
+	);
 
 	const renderAgreements = () => {
 		if ( showSuccessMessage || canManageReservations ) {
@@ -1697,6 +1858,7 @@ export const BookingConfirmApp = ( {
 			: '';
 	const canSubmit =
 		isLoggedIn &&
+		! attendeeStale &&
 		! submitting &&
 		( canManageReservations ||
 			! cancellationPolicyRequired ||
@@ -1774,6 +1936,7 @@ export const BookingConfirmApp = ( {
 			: '';
 	const navProps = navVariant
 		? {
+				isLodging: isLodgingReservation(),
 				screen: 'booking-confirm',
 				variant: navVariant,
 				ariaLabel: navAriaLabel,
@@ -2312,6 +2475,14 @@ export const BookingConfirmApp = ( {
 						</div>
 					) }
 
+					{ attendeeLoading && renderAttendeeLoading() }
+					{ ! attendeeLoading &&
+						( attendeeRosterActive
+							? ! canManageReservations &&
+							  renderAttendeeSelector()
+							: renderAttendeeNameField() ) }
+					{ renderAttendeeStatus() }
+
 					<div className="vkbm-confirm__form">
 						<label htmlFor="vkbm-confirm-memo">
 							{ __( 'Requests/Notes', 'vk-booking-manager' ) }
@@ -2324,22 +2495,52 @@ export const BookingConfirmApp = ( {
 							<div className="vkbm-confirm__admin-field">
 								<label htmlFor="vkbm-confirm-customer-name">
 									{ __(
-										'Reserved name',
+										'Reserved name (required)',
 										'vk-booking-manager'
 									) }
 								</label>
 								<input
 									type="text"
 									id="vkbm-confirm-customer-name"
-									value={ customerName }
-									onChange={ ( event ) =>
-										setCustomerName( event.target.value )
+									ref={ customerNameRef }
+									required
+									aria-required="true"
+									aria-invalid={
+										customerNameError ? 'true' : undefined
 									}
+									aria-describedby={
+										customerNameError
+											? 'vkbm-confirm-customer-name-error vkbm-confirm-customer-name-help'
+											: 'vkbm-confirm-customer-name-help'
+									}
+									value={ customerName }
+									onChange={ ( event ) => {
+										setCustomerName( event.target.value );
+										setCustomerNameError( '' );
+									} }
 									placeholder={ __(
 										'Please enter customer name.',
 										'vk-booking-manager'
 									) }
 								/>
+								{ customerNameError && (
+									<div
+										id="vkbm-confirm-customer-name-error"
+										className="vkbm-alert vkbm-alert__danger vkbm-alert--compact"
+										role="alert"
+									>
+										{ customerNameError }
+									</div>
+								) }
+								<p
+									id="vkbm-confirm-customer-name-help"
+									className="vkbm-confirm__admin-field-help"
+								>
+									{ __(
+										'If the customer name is unknown, enter "Unknown" or a similar placeholder.',
+										'vk-booking-manager'
+									) }
+								</p>
 							</div>
 							<div className="vkbm-confirm__admin-field">
 								<label htmlFor="vkbm-confirm-customer-phone">
@@ -2361,6 +2562,16 @@ export const BookingConfirmApp = ( {
 									) }
 								/>
 							</div>
+							{ attendeeStale && attendeeRosterActive && (
+								<div className="vkbm-confirm__admin-field">
+									{ renderAttendeeLoading() }
+								</div>
+							) }
+							{ ! attendeeStale && attendeeRosterActive && (
+								<div className="vkbm-confirm__admin-field">
+									{ renderAttendeeSelector() }
+								</div>
+							) }
 							{ window.vkbmPaymentConfig?.payment_enabled && (
 								<div className="vkbm-confirm__admin-field">
 									<span id="vkbm-payment-method-label">

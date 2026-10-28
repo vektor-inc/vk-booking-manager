@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 
 /**
  * Registers the Shift custom post type.
@@ -36,22 +37,23 @@ class Shift_Post_Type {
 			return;
 		}
 
-		$labels = array(
-			'name'               => __( 'Shift', 'vk-booking-manager' ),
-			'singular_name'      => __( 'Shift', 'vk-booking-manager' ),
-			'menu_name'          => __( 'BM Shift', 'vk-booking-manager' ),
-			'name_admin_bar'     => __( 'Shift', 'vk-booking-manager' ),
+		$is_lodging = Industry_Presets::supports( 'lodging' );
+		$labels     = array(
+			'name'               => $is_lodging ? __( 'Days on Sale', 'vk-booking-manager' ) : __( 'Shift', 'vk-booking-manager' ),
+			'singular_name'      => $is_lodging ? __( 'Day on Sale', 'vk-booking-manager' ) : __( 'Shift', 'vk-booking-manager' ),
+			'menu_name'          => $is_lodging ? __( 'BM Days on Sale', 'vk-booking-manager' ) : __( 'BM Shift', 'vk-booking-manager' ),
+			'name_admin_bar'     => $is_lodging ? __( 'Day on Sale', 'vk-booking-manager' ) : __( 'Shift', 'vk-booking-manager' ),
 			'add_new'            => __( 'Add New', 'vk-booking-manager' ),
-			'add_new_item'       => __( 'Add Shift', 'vk-booking-manager' ),
-			'edit_item'          => __( 'Edit Shift', 'vk-booking-manager' ),
-			'new_item'           => __( 'New Shift', 'vk-booking-manager' ),
-			'view_item'          => __( 'Show Shift', 'vk-booking-manager' ),
-			'search_items'       => __( 'Search Shift', 'vk-booking-manager' ),
-			'not_found'          => __( 'Shift not found.', 'vk-booking-manager' ),
-			'not_found_in_trash' => __( 'There are no shifts in the trash.', 'vk-booking-manager' ),
-			'all_items'          => __( 'All Shifts', 'vk-booking-manager' ),
-			'archives'           => __( 'Shift Archive', 'vk-booking-manager' ),
-			'attributes'         => __( 'Shift Attribute', 'vk-booking-manager' ),
+			'add_new_item'       => $is_lodging ? __( 'Add Day on Sale', 'vk-booking-manager' ) : __( 'Add Shift', 'vk-booking-manager' ),
+			'edit_item'          => $is_lodging ? __( 'Edit Day on Sale', 'vk-booking-manager' ) : __( 'Edit Shift', 'vk-booking-manager' ),
+			'new_item'           => $is_lodging ? __( 'New Day on Sale', 'vk-booking-manager' ) : __( 'New Shift', 'vk-booking-manager' ),
+			'view_item'          => $is_lodging ? __( 'View Day on Sale', 'vk-booking-manager' ) : __( 'Show Shift', 'vk-booking-manager' ),
+			'search_items'       => $is_lodging ? __( 'Search Days on Sale', 'vk-booking-manager' ) : __( 'Search Shift', 'vk-booking-manager' ),
+			'not_found'          => $is_lodging ? __( 'No days on sale found.', 'vk-booking-manager' ) : __( 'Shift not found.', 'vk-booking-manager' ),
+			'not_found_in_trash' => $is_lodging ? __( 'There are no days on sale in the trash.', 'vk-booking-manager' ) : __( 'There are no shifts in the trash.', 'vk-booking-manager' ),
+			'all_items'          => $is_lodging ? __( 'All Days on Sale', 'vk-booking-manager' ) : __( 'All Shifts', 'vk-booking-manager' ),
+			'archives'           => $is_lodging ? __( 'Days on Sale Archives', 'vk-booking-manager' ) : __( 'Shift Archive', 'vk-booking-manager' ),
+			'attributes'         => $is_lodging ? __( 'Days on Sale Attributes', 'vk-booking-manager' ) : __( 'Shift Attribute', 'vk-booking-manager' ),
 		);
 
 		$args = array(

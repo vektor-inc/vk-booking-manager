@@ -69,8 +69,9 @@ class Surface_Text_Styles_Test extends TestCase {
 			preg_match( '/' . preg_quote( $selector, '/' ) . '\s*\{([^{}]*)/s', $content, $matches ),
 			$selector . ' のルールが見つかりません。'
 		);
-		$this->assertMatchesRegularExpression( '/background(-color)?:\s*(#|var\(--vkbm--color--bg-)/', $matches[1], $selector . ' に背景色の指定がありません。' );
-		$this->assertStringContainsString( 'color: var(--vkbm--color--surface-text', $matches[1], $selector . ' に surface-text の文字色が対で指定されていません。' );
+		// 見出し（#864）は、オン時だけ出力する --vkbm--color--menu-heading-* の代替値として背景色・surface-text を持つ。
+		$this->assertMatchesRegularExpression( '/background(-color)?:\s*(#|var\(--vkbm--color--bg-|var\(--vkbm--color--menu-heading-bg,\s*#)/', $matches[1], $selector . ' に背景色の指定がありません。' );
+		$this->assertMatchesRegularExpression( '/(?<![\w-])color:\s*var\((--vkbm--color--menu-heading-text,\s*var\()?--vkbm--color--surface-text/', $matches[1], $selector . ' に surface-text の文字色が対で指定されていません。' );
 		$this->assertStringNotContainsString( 'color: var(--vkbm--color--text-primary', $matches[1], $selector . ' で text-primary を使わないでください。' );
 	}
 

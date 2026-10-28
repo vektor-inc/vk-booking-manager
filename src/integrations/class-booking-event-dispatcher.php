@@ -301,9 +301,12 @@ class Booking_Event_Dispatcher {
 	 *
 	 * @param int                       $booking_id 予約投稿ID。
 	 * @param array<string, mixed>|null $before    保存前のスナップショット（新規作成は null）。
+	 * @param bool                      $force_updated true のとき、差分が無くても「変更」として発火する
+	 *                                              （匿名化の再実行など、外部に出ている値が既に書き換わった後でも、
+	 *                                              外部連携へ上書きを必ず知らせたい場合に使う）。
 	 * @return void
 	 */
-	public function dispatch_change( int $booking_id, ?array $before ): void {
+	public function dispatch_change( int $booking_id, ?array $before, bool $force_updated = false ): void {
 		$post = get_post( $booking_id );
 
 		if ( ! $post instanceof WP_Post || Booking_Post_Type::POST_TYPE !== $post->post_type ) {
@@ -325,9 +328,14 @@ class Booking_Event_Dispatcher {
 
 		$changed = $this->diff_snapshot( $before, $after );
 
-		if ( array() === $changed ) {
+		if ( array() === $changed && ! $force_updated ) {
 			// 変更なしの再保存（例: 内容を何も変えずに保存ボタンを押した）は発火しない。
 			return;
+		}
+
+		if ( array() === $changed ) {
+			// 強制通知で差分が無い場合は、購読側が内容を読み直せるよう全項目を変更扱いにする。
+			$changed = array_keys( $after );
 		}
 
 		$before_status = (string) ( $before['status'] ?? '' );

@@ -27,6 +27,8 @@ class Scheduled_Events {
 	 * 値をそろえる必要がある。新しい予定処理を登録したら、ここにも足すこと（足さないと無効化・削除時に残る）。
 	 */
 	public const HOOKS = array(
+		// 予約の個人情報の自動匿名化（毎日）。
+		'vkbm_booking_auto_anonymize_daily',
 		// シフトの自動登録（毎日）。
 		'vkbm_shift_auto_register_daily',
 		// 予約リマインダーメールの送信（15 分ごと）。
@@ -37,6 +39,8 @@ class Scheduled_Events {
 		'vkbm_google_calendar_sync_booking',
 		// Google カレンダー連携が切れていた間の予約を、再接続後に順に反映するまとめ役（単発の処理）。
 		'vkbm_google_calendar_flush_pending_sync',
+		// 外部カレンダー（iCal）の自動取得（30 分ごと。Pro 版の宿泊限定）。
+		'vkbm_import_external_calendars',
 	);
 
 	/**

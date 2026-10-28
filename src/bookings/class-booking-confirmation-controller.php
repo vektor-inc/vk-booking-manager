@@ -17,6 +17,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Exception;
 use VKBookingManager\Availability\Availability_Service;
+use VKBookingManager\Attendees\Booking_Attendee_Resolver;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Exclusive_Fee;
 use VKBookingManager\Common\Lodging_Price;
@@ -26,6 +27,7 @@ use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\Common\Staff_Load_Calculator;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -182,11 +184,73 @@ class Booking_Confirmation_Controller {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'create_booking' ),
+				'args'                => array(
+					'attendee_name'           => array(
+						'type'      => 'string',
+						'maxLength' => Attendee_Name::MAX_LENGTH,
+					),
+					'attendee_id'             => array(
+						'type'      => 'string',
+						'maxLength' => 64,
+					),
+					'attendee_new_id'         => array(
+						'type'      => 'string',
+						'maxLength' => 64,
+					),
+					'attendee_kana'           => array(
+						'type'      => 'string',
+						'maxLength' => 100,
+					),
+					'attendee_number'         => array(
+						'type'      => 'string',
+						'maxLength' => 50,
+					),
+					'attendee_save_to_roster' => array(
+						'type' => 'boolean',
+					),
+				),
 				// Booking creation requires an authenticated user.
 				// 予約作成はログインユーザーのみ許可する。
 				'permission_callback' => array( $this, 'check_create_booking_permission' ),
 			)
 		);
+
+		// 予約確認画面で「ご利用になる方」を選ぶための名簿の選択肢を返す。
+		register_rest_route(
+			self::REST_NAMESPACE,
+			'/booking-attendees',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_booking_attendee_options' ),
+				'args'                => array(
+					'customer_phone' => array(
+						'type'      => 'string',
+						'maxLength' => 50,
+					),
+				),
+				'permission_callback' => array( $this, 'check_create_booking_permission' ),
+			)
+		);
+	}
+
+	/**
+	 * 予約確認画面に出す「ご利用になる方」の選択肢を返す。
+	 *
+	 * 会員自身の予約では自分の名簿を、代理予約では電話番号が一致した会員の名簿を返す。
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_booking_attendee_options( WP_REST_Request $request ): WP_REST_Response {
+		$is_proxy = current_user_can( Capabilities::MANAGE_RESERVATIONS );
+		$owner    = wp_get_current_user();
+		if ( $is_proxy ) {
+			$phone = VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) ( $request['customer_phone'] ?? '' ) ) );
+			$owner = $this->get_user_by_phone_number( $phone );
+		}
+
+		$options = ( new Booking_Attendee_Resolver() )->get_options( $this->settings_repository->get_settings(), $owner, $is_proxy );
+		return new WP_REST_Response( $options );
 	}
 
 	/**
@@ -521,6 +585,14 @@ class Booking_Confirmation_Controller {
 		$customer_name_override = $can_override_contact
 			? sanitize_text_field( (string) ( $request['customer_name'] ?? '' ) )
 			: '';
+		// 代理予約は、枠のロックや決済の確認より前に予約者名を検証する。
+		if ( $can_override_contact && '' === preg_replace( '/[\s\p{Z}]+/u', '', $customer_name_override ) ) {
+			return new WP_Error(
+				'customer_name_required',
+				__( 'Please enter the customer name.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
+			);
+		}
 		// 電話番号を正規化する：全角数字を半角に変換し、数字以外の文字（ハイフン・スペース・括弧など）を除去する.
 		$customer_phone      = $can_override_contact
 			? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) ( $request['customer_phone'] ?? '' ) ) )
@@ -554,7 +626,7 @@ class Booking_Confirmation_Controller {
 		$settings              = $this->settings_repository->get_settings();
 		$requires_cancellation = '' !== trim( (string) ( $settings['provider_cancellation_policy'] ?? '' ) );
 		$requires_tos          = '' !== trim( (string) ( $settings['provider_terms_of_service'] ?? '' ) );
-		$status_mode           = sanitize_key( (string) ( $settings['provider_booking_status_mode'] ?? self::BOOKING_STATUS_CONFIRMED ) );
+		$status_mode           = sanitize_key( (string) ( $settings['provider_booking_status_mode'] ?? self::BOOKING_STATUS_PENDING ) );
 		$initial_status        = self::BOOKING_STATUS_PENDING === $status_mode ? self::BOOKING_STATUS_PENDING : self::BOOKING_STATUS_CONFIRMED;
 
 		if ( $can_override_contact ) {
@@ -577,6 +649,25 @@ class Booking_Confirmation_Controller {
 				__( 'You must agree to the terms of use.', 'vk-booking-manager' ),
 				array( 'status' => 400 )
 			);
+		}
+
+		// ご利用になる方を、確定時点の設定と名簿に照らして決める。名簿への保存は予約の成否にかかわらず残す。
+		// 名簿の持ち主は、会員自身の予約では予約者、代理予約では電話番号で一致した会員。
+		$attendee = ( new Booking_Attendee_Resolver() )->resolve(
+			$settings,
+			$can_override_contact ? $matched_user_id : (int) $user->ID,
+			array(
+				'attendee_id'             => $request['attendee_id'] ?? '',
+				'attendee_name'           => $request['attendee_name'] ?? ( $draft['attendee_name'] ?? '' ),
+				'attendee_kana'           => $request['attendee_kana'] ?? '',
+				'attendee_number'         => $request['attendee_number'] ?? '',
+				'attendee_new_id'         => $request['attendee_new_id'] ?? '',
+				'attendee_save_to_roster' => ! empty( $request['attendee_save_to_roster'] ),
+			),
+			$can_override_contact
+		);
+		if ( is_wp_error( $attendee ) ) {
+			return $attendee;
 		}
 
 		// ロック取得前の早期拒否。同時リクエスト対策の本判定は、ロック取得後に行う（下記）。
@@ -773,6 +864,15 @@ class Booking_Confirmation_Controller {
 			}
 			update_post_meta( $booking_id, self::META_SERVICE_BASE_PRICE, $service_base_price );
 			update_post_meta( $booking_id, self::META_CUSTOMER, $customer_name_value );
+			if ( '' !== $attendee['id'] ) {
+				update_post_meta( $booking_id, Booking_Attendee_Resolver::META_ID, $attendee['id'] );
+			}
+			if ( '' !== $attendee['name'] ) {
+				update_post_meta( $booking_id, Attendee_Name::META_KEY, $attendee['name'] );
+			}
+			if ( '' !== $attendee['number'] ) {
+				update_post_meta( $booking_id, Booking_Attendee_Resolver::META_NUMBER, $attendee['number'] );
+			}
 			update_post_meta( $booking_id, self::META_CUSTOMER_MAIL, $customer_email );
 			if ( '' !== $customer_phone ) {
 				update_post_meta( $booking_id, self::META_CUSTOMER_TEL, $customer_phone );

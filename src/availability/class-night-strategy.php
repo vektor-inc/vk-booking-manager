@@ -162,6 +162,110 @@ class Night_Strategy {
 	}
 
 	/**
+	 * 月内の1泊、または指定チェックイン日からのチェックアウト候補を一括判定する。
+	 *
+	 * 販売日と予約は対象期間ごとに1回だけ取得し、各候補はメモリ上で滞在全体の重なりを判定する。
+	 *
+	 * @param array<int, int> $room_ids       候補の客室 ID。
+	 * @param string          $first_date     最初の候補日（Y-m-d）。
+	 * @param string          $last_date      最後の候補日（Y-m-d）。
+	 * @param string          $check_in_time  チェックイン時刻（HH:MM）。
+	 * @param string          $check_out_time チェックアウト時刻（HH:MM）。
+	 * @param string          $check_in_date  指定時はチェックアウト候補を判定するチェックイン日。
+	 * @return array<string, array{available:bool, reason:string}> 日付ごとの判定。
+	 */
+	public function get_calendar_availability( array $room_ids, string $first_date, string $last_date, string $check_in_time, string $check_out_time, string $check_in_date = '' ): array {
+		$room_ids = array_values( array_unique( array_filter( array_map( 'intval', $room_ids ), static fn( int $id ): bool => $id > 0 ) ) );
+		$dates    = array();
+		$cursor   = new DateTimeImmutable( $first_date );
+		$last     = new DateTimeImmutable( $last_date );
+		while ( $cursor <= $last ) {
+			$dates[] = $cursor->format( 'Y-m-d' );
+			$cursor  = $cursor->modify( '+1 day' );
+		}
+		if ( empty( $room_ids ) || empty( $dates ) ) {
+			return array();
+		}
+
+		// 月末の1泊、または最後のチェックアウト候補までを含めてまとめて読む。
+		$query_start = ( '' !== $check_in_date ? $check_in_date : $first_date ) . ' ' . $check_in_time . ':00';
+		$query_end   = ( new DateTimeImmutable( $last_date ) )->modify( '+1 day' )->format( 'Y-m-d' ) . ' ' . $check_out_time . ':00';
+		$sale_start  = '' !== $check_in_date ? $check_in_date : $first_date;
+		$sale_dates  = $this->sale_days->get_sale_dates( $room_ids, $sale_start, $last_date );
+		$bookings    = $this->find_overlapping_bookings( $room_ids, $query_start, $query_end );
+		$result      = array();
+
+		foreach ( $dates as $date ) {
+			$stay_start = '' !== $check_in_date ? $check_in_date : $date;
+			$stay_end   = '' !== $check_in_date ? $date : ( new DateTimeImmutable( $date ) )->modify( '+1 day' )->format( 'Y-m-d' );
+			$nights     = $this->get_night_dates( $stay_start, $stay_end );
+			$has_sale   = false;
+			$available  = false;
+
+			foreach ( $room_ids as $room_id ) {
+				if ( array() !== array_diff( $nights, $sale_dates[ $room_id ] ?? array() ) ) {
+					continue;
+				}
+				$has_sale    = true;
+				$range_start = $stay_start . ' ' . $check_in_time . ':00';
+				$range_end   = $stay_end . ' ' . $check_out_time . ':00';
+				$conflict    = false;
+				foreach ( $bookings[ $room_id ] ?? array() as $booking ) {
+					if ( Booking_Overlap::overlaps( $booking['start'], $booking['end'], $booking['total_end'], $range_start, $range_end ) ) {
+						$conflict = true;
+						break;
+					}
+				}
+				if ( ! $conflict ) {
+					$available = true;
+					break;
+				}
+			}
+
+			$result[ $date ] = array(
+				'available' => $available,
+				'reason'    => $available ? '' : ( $has_sale ? 'fully_booked' : 'unavailable_date' ),
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * 対象期間に重なる予約を客室別にまとめて返す。
+	 *
+	 * @param array<int, int> $room_ids    客室 ID。
+	 * @param string          $range_start 開始日時。
+	 * @param string          $range_end   終了日時。
+	 * @return array<int, array<int, array{start:string,end:string,total_end:string}>>
+	 */
+	private function find_overlapping_bookings( array $room_ids, string $range_start, string $range_end ): array {
+		$query = new WP_Query(
+			array(
+				'post_type'              => Booking_Post_Type::POST_TYPE,
+				'post_status'            => array( 'publish' ),
+				'posts_per_page'         => -1,
+				'no_found_rows'          => true,
+				'fields'                 => 'ids',
+				'update_post_term_cache' => false,
+				'update_post_meta_cache' => false,
+				'meta_query'             => Booking_Overlap::build_meta_query( $room_ids, $range_start, $range_end ), // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+			)
+		);
+		update_meta_cache( 'post', $query->posts );
+		$bookings = array();
+		foreach ( $query->posts as $booking_id ) {
+			$room_id                = (int) get_post_meta( (int) $booking_id, Booking_Overlap::META_RESOURCE, true );
+			$bookings[ $room_id ][] = array(
+				'start'     => Booking_Datetime::normalize( get_post_meta( (int) $booking_id, Booking_Overlap::META_START, true ) ),
+				'end'       => Booking_Datetime::normalize( get_post_meta( (int) $booking_id, Booking_Overlap::META_END, true ) ),
+				'total_end' => Booking_Datetime::normalize( get_post_meta( (int) $booking_id, Booking_Overlap::META_TOTAL_END, true ) ),
+			);
+		}
+		return $bookings;
+	}
+
+	/**
 	 * 滞在全体の時間帯に重なる予約を持つ客室の ID を返す。
 	 *
 	 * @param array<int, int> $room_ids    候補の客室 ID。

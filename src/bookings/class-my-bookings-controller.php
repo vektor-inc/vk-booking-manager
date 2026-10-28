@@ -257,29 +257,31 @@ class My_Bookings_Controller {
 			$can_cancel = $this->can_cancel_booking( $start_timestamp, $now, $status, $cancel_mode, $cancel_hours );
 
 			$items[] = array(
-				'id'                 => $booking_id,
-				'start_at'           => $start_at,
-				'end_at'             => $end_at,
+				'id'                  => $booking_id,
+				'start_at'            => $start_at,
+				'end_at'              => $end_at,
 				// 泊の予約の泊数（予約に保存した値。泊の予約でなければ 0）。画面はこの値でチェックイン／チェックアウト表示に切り替える。
-				'nights'             => Lodging_Booking::get_booking_nights( $booking_id ),
+				'nights'              => Lodging_Booking::get_booking_nights( $booking_id ),
 				// 過去の予約かどうか（開始日時が現在より前）。タイムゾーン依存の判定を
 				// サーバ側に寄せ、フロントの誤判定を防ぐ。「同じ内容で予約する」での
 				// 過去／今後セクションの振り分けに使う。
-				'is_past'            => ( $start_timestamp < $now ),
-				'can_cancel'         => $can_cancel,
-				'is_staff_preferred' => $is_staff_preferred,
-				'other_conditions'   => $other_conditions,
-				'menu_id'            => $menu_id,
-				'menu_name'          => $menu_name,
-				'resource_id'        => $resource_id,
-				'resource_name'      => $resource_name,
-				'base_price'         => $base_price,
-				'guests'             => $guests,
-				'guest_tiers'        => $guest_tiers,
-				'nomination_fee'     => $nomination_fee,
-				'total_price'        => max( 0, $base_total ),
-				'status'             => $status,
-				'start_ts'           => $start_timestamp,
+				'is_past'             => ( $start_timestamp < $now ),
+				'can_cancel'          => $can_cancel,
+				'is_staff_preferred'  => $is_staff_preferred,
+				'other_conditions'    => $other_conditions,
+				'menu_id'             => $menu_id,
+				'menu_name'           => $menu_name,
+				'resource_id'         => $resource_id,
+				'resource_name'       => $resource_name,
+				'attendee_name'       => 'disabled' !== \VKBookingManager\Common\Attendee_Name::get_mode( $settings ) ? \VKBookingManager\Common\Attendee_Name::sanitize( get_post_meta( $booking_id, \VKBookingManager\Common\Attendee_Name::META_KEY, true ) ) : '',
+				'attendee_name_label' => \VKBookingManager\Common\Attendee_Name::get_label( $settings ),
+				'base_price'          => $base_price,
+				'guests'              => $guests,
+				'guest_tiers'         => $guest_tiers,
+				'nomination_fee'      => $nomination_fee,
+				'total_price'         => max( 0, $base_total ),
+				'status'              => $status,
+				'start_ts'            => $start_timestamp,
 			);
 		}
 

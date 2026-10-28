@@ -6,6 +6,7 @@
  */
 
 import { execFileSync, ExecFileSyncOptions } from 'child_process';
+import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 /**
@@ -149,20 +150,38 @@ export const loginAsAdmin = async (
 ) => {
 	// まずダッシュボードにアクセスして、既にログイン済みか確認
 	// First check if already logged in by accessing wp-admin
-	await page.goto( '/wp-admin/' );
-	await page.waitForLoadState( 'domcontentloaded' );
+	// 待つのは DOM の構築まで。ダッシュボードは画像・外部リソース・Heartbeat を含み、
+	// load イベントまで待つと重い環境で時間切れになりやすい（ログイン済みかの判定には不要）。
+	await page.goto( '/wp-admin/', { waitUntil: 'domcontentloaded' } );
 
 	// ログインフォームが表示された場合のみログイン処理を行う
 	// Only perform login if the login form is displayed
 	if ( page.url().includes( 'wp-login.php' ) ) {
+		// ログイン画面は load 後のスクリプト（wp-login.js）が入力欄を空にしてフォーカスし直すため、
+		// load を待ってから入力する（待たないと入力した値が消える・欄を取り違える）。
+		await page.waitForLoadState( 'load' );
+		// さらに wp-login.js は load の少し後（setTimeout）にユーザー名欄へフォーカスして全選択する。
+		// 先にパスワード欄へ入力するとその最中にフォーカスを奪われ、入力がユーザー名欄に入るため、
+		// ユーザー名欄にフォーカスが移るのを待ってから入力する。
+		await expect( page.locator( '#user_login' ) )
+			.toBeFocused( { timeout: 5000 } )
+			.catch( () => {
+				// フォーカス処理が無い画面では待たずに進む。
+			} );
 		await page.locator( '#user_login' ).fill( user );
 		await page.locator( '#user_pass' ).fill( password );
+		// 入力が取り違えられていないことを確かめてから送信する。
+		await expect( page.locator( '#user_login' ) ).toHaveValue( user );
+		await expect( page.locator( '#user_pass' ) ).toHaveValue( password );
 		await page.locator( '#wp-submit' ).click();
 		// ログイン画面の URL にも redirect_to=…/wp-admin/ が含まれるため、/wp-admin/ の一致では
 		// 送信前に待ちが終わってしまう。ログイン画面から離れたことで待つ。
 		await page.waitForURL(
 			( url ) => ! url.pathname.includes( 'wp-login.php' ),
 			{
+				// ログイン後の画面（ダッシュボード等）の load までは待たない。
+				// 離れた時点でログイン Cookie は設定済みで、後続の goto は Cookie を使える。
+				waitUntil: 'domcontentloaded',
 				timeout: 30000,
 			}
 		);

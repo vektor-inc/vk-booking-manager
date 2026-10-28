@@ -915,6 +915,9 @@ class Booking_Notification_Service {
 			'menu_title'                   => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
 			'staff_title'                  => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
 			'reservation_datetime'         => $nights > 0 ? $this->format_stay_datetime_range( $start, $end ) : $this->format_reservation_datetime_range( $start, $end ),
+			'attendee_name'                => \VKBookingManager\Common\Attendee_Name::sanitize( get_post_meta( $booking_id, \VKBookingManager\Common\Attendee_Name::META_KEY, true ) ),
+			'attendee_name_mode'           => \VKBookingManager\Common\Attendee_Name::get_mode( $settings ),
+			'attendee_name_label'          => \VKBookingManager\Common\Attendee_Name::get_label( $settings ),
 			'duration_label'               => $duration,
 			'guests'                       => $guests,
 			'guest_tiers'                  => $guest_tiers,
@@ -1055,6 +1058,14 @@ class Booking_Notification_Service {
 		}
 		/* translators: %s: Reservation datetime range. */
 		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
+		if ( 'disabled' !== ( $payload['attendee_name_mode'] ?? 'disabled' ) && '' !== ( $payload['attendee_name'] ?? '' ) ) {
+			$lines[] = sprintf(
+				/* translators: 1: Attendee name field label, 2: Attendee name. */
+				__( '%1$s: %2$s', 'vk-booking-manager' ),
+				(string) $payload['attendee_name_label'],
+				(string) $payload['attendee_name']
+			);
+		}
 		// 複数人予約の場合のみ数量行を出力する。
 		// 見出し・単位は基本設定でカスタマイズ可能（単位が空なら数値のみ）。
 		if ( isset( $payload['guests'] ) && (int) $payload['guests'] > 1 ) {

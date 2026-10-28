@@ -110,6 +110,12 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 	// テストデータの存在を確認（グローバルセットアップで作成済み）
 	// Verify test data exists (created by global setup)
+	// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
+	// WP-CLI 経由の取得は 1 回数秒かかるため、テスト本体の制限時間（45 秒）を
+	// 消費しないよう beforeAll で 1 度だけ取得する（#897）。
+	// 見つからないエラーを握りつぶさないよう、取得失敗は beforeAll の失敗として表に出す。
+	let menuId = '';
+
 	test.beforeAll( async () => {
 		// サービスメニューが存在するか確認
 		// Verify service menus exist
@@ -144,6 +150,8 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 				'No booking page found. Global setup may have failed.'
 			);
 		}
+
+		menuId = getServiceMenuId();
 	} );
 
 	test.use( { storageState: { cookies: [], origins: [] } } );
@@ -153,6 +161,11 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 	test( 'should allow a new user to register and complete a booking', async ( {
 		page,
 	} ) => {
+		// 手順の固定待ちを条件待ちに置き換えた後（#897）も、画面遷移 8 回前後と
+		// beforeEach の WP-CLI（約 5 秒）が残り、遅い環境では 30〜40 秒かかる。
+		// 既定の 45 秒では余裕が薄いため、この 1 件だけ 60 秒にする。
+		test.setTimeout( 60000 );
+
 		const username = `user-${ Date.now() }-${ Math.random()
 			.toString( 36 )
 			.substring( 7 ) }`;
@@ -191,69 +204,13 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		} );
 
 		// 1. 予約ページに移動
+		// goto は load まで待つ。以降は「次に操作する要素が出るまで」を待つ（固定待ち・networkidle は使わない #897）。
 		console.log( 'Initial Page URL:', `${ WP_BASE_URL }/booking/` );
 		await page.goto( `${ WP_BASE_URL }/booking/` );
-		await page.waitForLoadState( 'networkidle' );
-
-		// ページが正しく読み込まれたか確認
-		const pageTitle = await page.title();
-		console.log( 'Page title:', pageTitle );
-
-		const initialUrl = page.url();
-		console.log( 'Current URL after navigation:', initialUrl );
-
-		// 404エラーでないことを確認
-		const is404 = await page
-			.locator( 'body' )
-			.evaluate( ( el ) => el.textContent?.includes( '404' ) || false );
-		if ( is404 ) {
-			console.error( 'ERROR: Booking page returned 404!' );
-			// デバッグ用にページ一覧を取得（execFileSync ベース）
-			// Fetch the page list for debugging (execFileSync-based)
-			const pages = wpCliArgs( [
-				'post',
-				'list',
-				'--post_type=page',
-				'--format=table',
-			] );
-			console.log( 'Available pages:', pages );
-		}
 
 		// 2. サービスメニューを選択
+		// （公開メニューの有無は beforeAll で確認・menuId 取得済み。WP-CLI の再実行は時間がかかるため行わない）
 		console.log( 'Waiting for service menu button...' );
-
-		// まずサービスメニューが実際に存在するか確認
-		// Verify the published service menus actually exist
-		const serviceMenuCount = wpCliArgs( [
-			'post',
-			'list',
-			'--post_type=vkbm_service_menu',
-			'--post_status=publish',
-			'--format=count',
-		] );
-		console.log(
-			`Published service menus in database: ${ serviceMenuCount }`
-		);
-
-		if ( serviceMenuCount === '0' ) {
-			console.error(
-				'CRITICAL: No published service menus found in database!'
-			);
-			// すべてのサービスメニューを確認（下書きなども含む）
-			// Inspect all service menus including drafts for debugging
-			const allMenus = wpCliArgs( [
-				'post',
-				'list',
-				'--post_type=vkbm_service_menu',
-				'--post_status=any',
-				'--format=table',
-			] );
-			console.log( 'All service menus (any status):', allMenus );
-		}
-
-		// 先頭カードではなく data-menu-id で「Service Menu 1」を指定する（#566）。
-		// 見つからないエラーを下の catch（旧スタイルへのフォールバック）で握りつぶさないよう try の外で取得する。
-		const menuId = getServiceMenuId();
 
 		// 適切なタイムアウトでサービスメニューボタンを探す
 		try {
@@ -345,10 +302,11 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 				'Failed to click an enabled calendar day after retries.'
 			);
 		}
-		await page.waitForTimeout( 1000 );
 
 		// 5. ランダムな時間枠を選択
+		// 日付クリック後にスロット一覧が描画されるまで待つ（固定待ちの代わり）。
 		const slots = page.locator( '.vkbm-slot-list__item' );
+		await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
 		const count = await slots.count();
 		if ( count > 0 ) {
 			const randomIndex = Math.floor( Math.random() * count );
@@ -361,15 +319,15 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			// スロットが見つからない場合は敢えてクリックして自然な失敗に委ねる。
 			await slots.first().click();
 		}
-		await page.waitForTimeout( 1000 );
 
 		// 6. 「予約内容を確認」ボタンをクリック
+		// クリック後は /vkbm/v1/drafts の応答を受けて ?draft=<token> 付き URL へ遷移する。
+		// 固定待ちの代わりに、その URL への遷移完了を待つ。
 		const confirmButton = page
 			.locator( '.vkbm-plan-summary__action' )
 			.first();
 		await confirmButton.click();
-		await page.waitForLoadState( 'networkidle', { timeout: 10000 } );
-		await page.waitForTimeout( 2000 );
+		await page.waitForURL( /[?&]draft=/, { timeout: 15000 } );
 
 		// URLからドラフトトークンを保存（デバッグ用、WP-CLIハック用ではない）
 		const currentUrl = page.url();
@@ -378,9 +336,12 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 7. ページ最上部にスクロールし、認証選択または登録ボタンを確認
 		await page.evaluate( () => window.scrollTo( 0, 0 ) );
-		await page.waitForTimeout( 1000 );
 
 		const authSelect = page.locator( '.vkbm-confirm__auth' );
+		// 確認画面の描画（未ログイン時の認証欄）を待つ。出ない場合は下のフォールバックに任せる。
+		await authSelect
+			.waitFor( { state: 'visible', timeout: 10000 } )
+			.catch( () => {} );
 		const authSelectVisible = await authSelect
 			.isVisible()
 			.catch( () => false );
@@ -403,7 +364,6 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		if ( registerButtonVisible ) {
 			console.log( 'Clicking register button...' );
 			await registerButton.click();
-			await page.waitForTimeout( 2000 );
 		} else {
 			// 登録ボタンが見つからない場合は、登録ページに直接移動
 			console.log(
@@ -414,9 +374,6 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			);
 		}
 
-		await page.waitForLoadState( 'networkidle', { timeout: 10000 } );
-		await page.waitForTimeout( 2000 );
-
 		// 8. 登録フォームが表示されている場合は入力
 		// 実装では特定のID/name属性を使用しているため、様々なセレクタを試行
 		const usernameInput = page
@@ -426,7 +383,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 登録ボタンクリック後、ユーザー名入力欄が表示されるまで待機
 		try {
-			await usernameInput.waitFor( { state: 'visible', timeout: 5000 } );
+			await usernameInput.waitFor( { state: 'visible', timeout: 15000 } );
 		} catch ( e ) {
 			console.log( 'Username input not visible after waiting' );
 
@@ -551,7 +508,6 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			if ( termsVisible ) {
 				console.log( 'Checking registration terms...' );
 				await registerTerms.check();
-				await page.waitForTimeout( 500 ); // チェックボックスの状態が更新されるまで待機
 
 				// チェックボックスがチェックされたことを確認
 				const isChecked = await registerTerms
@@ -599,11 +555,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			if ( privacyVisible ) {
 				console.log( 'Checking privacy policy...' );
 				await privacyPolicy.check();
-				await page.waitForTimeout( 500 );
 			}
-
-			// 送信前に少し待機して、すべてのバリデーションが完了するのを確認
-			await page.waitForTimeout( 1000 );
 
 			// 登録のデバッグ用にネットワークレスポンスをリッスン
 			let _registrationResponse: any = null;
@@ -705,11 +657,10 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 				// クリック前にナビゲーションリスナーを設定
 				// 送信後に遷移する場合/しない場合のどちらでもログを残せるようにする。
+				// 登録成功後はログイン画面（vkbm_auth=login）へ遷移するため、その URL への遷移を待つ。
+				// （networkidle や固定待ちは使わない #897）
 				const navigationPromise = page
-					.waitForNavigation( {
-						waitUntil: 'networkidle',
-						timeout: 30000,
-					} )
+					.waitForURL( /vkbm_auth=login/, { timeout: 30000 } )
 					.catch( ( e ) =>
 						console.log( 'Navigation wait error or timeout:', e )
 					);
@@ -723,10 +674,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 				console.log( 'ERROR: Submit button not found!' );
 			}
 
-			// 登録完了を待つ
-			await page.waitForLoadState( 'networkidle', { timeout: 10000 } );
-			await page.waitForTimeout( 3000 );
-
+			// 登録完了（上の URL 遷移）は待機済み。
 			console.log( 'User registration completed' );
 
 			// デバッグ: 登録が実際に成功したか失敗したかを確認
@@ -768,42 +716,49 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			);
 
 			// 新規作成したユーザーでログイン
-			// 確認ページに移動してログインフォームにアクセス
-			console.log( 'Navigating to login...' );
-			if ( draftToken ) {
-				await page.goto(
-					`${ WP_BASE_URL }/booking/?draft=${ draftToken }`
-				);
-				await page.waitForLoadState( 'networkidle', {
-					timeout: 10000,
-				} );
-				await page.waitForTimeout( 2000 );
-			}
-
-			// ログインボタンをクリック
-			const loginButton = page
-				.getByRole( 'button', { name: 'ログイン', exact: false } )
-				.or(
-					page.getByRole( 'button', { name: 'Log in', exact: false } )
-				);
-
-			const loginButtonVisible = await loginButton
-				.isVisible()
-				.catch( () => false );
-			if ( loginButtonVisible ) {
-				console.log( 'Clicking login button...' );
-				await loginButton.click();
-				await page.waitForTimeout( 2000 );
-				await page.waitForLoadState( 'networkidle', {
-					timeout: 10000,
-				} );
-			}
-
-			// ログインフォームに入力
+			// 登録成功後はすでにログインフォームが表示されている。
+			// 表示されていない場合だけ、確認ページを開き直してログインボタンから開く。
 			const loginUsernameInput = page
 				.locator( 'input[name="log"]' )
 				.or( page.locator( 'input[name="username"]' ) )
 				.or( page.locator( '#vkbm-login-username' ) ); // IDセレクタを追加
+
+			const loginFormShown = await loginUsernameInput
+				.waitFor( { state: 'visible', timeout: 15000 } )
+				.then( () => true )
+				.catch( () => false );
+
+			if ( ! loginFormShown ) {
+				console.log( 'Navigating to login...' );
+				if ( draftToken ) {
+					await page.goto(
+						`${ WP_BASE_URL }/booking/?draft=${ draftToken }`
+					);
+				}
+
+				// ログインボタンをクリック
+				const loginButton = page
+					.getByRole( 'button', { name: 'ログイン', exact: false } )
+					.or(
+						page.getByRole( 'button', { name: 'Log in', exact: false } )
+					);
+
+				// goto 直後は描画前のことがあるため、表示を待ってから判定する。
+				const loginButtonVisible = await loginButton
+					.waitFor( { state: 'visible', timeout: 10000 } )
+					.then( () => true )
+					.catch( () => false );
+				if ( loginButtonVisible ) {
+					console.log( 'Clicking login button...' );
+					await loginButton.click();
+				}
+			}
+
+			// ログインフォームに入力
+			// （ボタンから開いた場合は表示まで待つ。表示されなければ入力をスキップする従来動作のまま）
+			await loginUsernameInput
+				.waitFor( { state: 'visible', timeout: 10000 } )
+				.catch( () => {} );
 
 			if ( await loginUsernameInput.isVisible().catch( () => false ) ) {
 				console.log( 'Filling in login form...' );
@@ -821,13 +776,28 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 						'#vkbm-provider-login-form button[type="submit"]'
 					)
 					.or( page.locator( '.vkbm-auth-button[type="submit"]' ) );
+				// ログイン送信後のリダイレクト先の読み込み完了を待つため、クリック前に仕掛けておく。
+				// Cookie は 302 応答で付くので、Cookie 確認だけでは遷移先がまだ読み込み中のことがあり、
+				// 直後の reload と衝突する（Navigation interrupted）。
+				const afterLoginLoad = page.waitForEvent( 'load', {
+					timeout: 15000,
+				} );
 				await loginSubmitButton.click();
 
 				// ログイン完了を待つ
-				await page.waitForLoadState( 'networkidle', {
-					timeout: 10000,
-				} );
-				await page.waitForTimeout( 3000 ); // 待機時間を増加
+				// ログイン成功の実体は WordPress のログイン Cookie の発行。
+				// 固定待ち・networkidle の代わりに、この Cookie が付くまでポーリングする。
+				await expect
+					.poll(
+						async () =>
+							( await page.context().cookies() ).some( ( c ) =>
+								c.name.startsWith( 'wordpress_logged_in_' )
+							),
+						{ timeout: 15000 }
+					)
+					.toBe( true );
+				// リダイレクト先の読み込み完了まで待ってから、URL 取得・reload を行う。
+				await afterLoginLoad;
 
 				console.log( 'Login request completed' );
 				console.log( 'Current URL after login:', page.url() );
@@ -846,8 +816,6 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 				// ログイン状態がbodyクラスに反映されるように明示的にリロード
 				// 一部環境でSPA描画の状態同期が遅れるため、再読込で安定化させる。
 				await page.reload();
-				await page.waitForLoadState( 'networkidle' );
-				await page.waitForTimeout( 2000 );
 			}
 		}
 
@@ -861,6 +829,11 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 9. 同意事項をチェック
 		console.log( 'Checking for agreement checkboxes...' );
+
+		// 確認画面のまとめが描画されるのを待ってから同意欄を処理する（reload 後の固定待ちの代わり）。
+		await page
+			.locator( '.vkbm-confirm__summary' )
+			.waitFor( { state: 'visible', timeout: 15000 } );
 
 		// 文面の描画を待ってから、表示される同意欄だけチェックする（固定待ちは使わない）。
 		await checkConfirmConsents( page );
@@ -876,10 +849,11 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 11. 完了を確認
 		// 「予約が完了しました」メッセージ
+		// 予約作成は REST（/vkbm/v1/bookings）の応答後に表示されるため、既定の 5 秒では足りない環境がある。
 		await expect(
 			page
 				.getByText( '予約が完了しました', { exact: false } )
 				.or( page.getByText( 'Booking completed', { exact: false } ) )
-		).toBeVisible();
+		).toBeVisible( { timeout: 15000 } );
 	} );
 } );

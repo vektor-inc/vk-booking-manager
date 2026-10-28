@@ -172,6 +172,16 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
+				'test_condition_name' => '#864 見出しをフッターと同じ色にするがチェックあり => オンが復元される',
+				'input'               => array( 'design_menu_heading_use_footer_color' => '1' ),
+				'expected'            => array( 'design_menu_heading_use_footer_color' => true ),
+			),
+			array(
+				'test_condition_name' => '#864 見出しをフッターと同じ色にするがチェックなし（hidden の 0） => オフが復元される',
+				'input'               => array( 'design_menu_heading_use_footer_color' => '0' ),
+				'expected'            => array( 'design_menu_heading_use_footer_color' => false ),
+			),
+			array(
 				'test_condition_name' => '同じく漏れていたチェックボックスがチェックなし => OFF が復元される',
 				'input'               => array(),
 				'expected'            => array(
@@ -181,6 +191,27 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 					'membership_redirect_wp_register'    => false,
 					'auth_rate_limit_enabled'            => false,
 				),
+			),
+			array(
+				'test_condition_name' => '利用者名の見出しが未送信 => 保存済みの値を表示するため再表示用の値に含めない',
+				'input'               => array( 'booking_attendee_name_mode' => 'disabled' ),
+				'expected'            => array( 'booking_attendee_name_label' => '(再表示用の値に含まれない)' ),
+			),
+			array(
+				'test_condition_name' => '利用者名の見出しを送信 => 送信値が復元される',
+				'input'               => array(
+					'booking_attendee_name_mode'  => 'optional',
+					'booking_attendee_name_label' => '施術を受ける方のお名前',
+				),
+				'expected'            => array( 'booking_attendee_name_label' => '施術を受ける方のお名前' ),
+			),
+			array(
+				'test_condition_name' => '利用者名の見出しに空文字を送信 => 空文字が復元される',
+				'input'               => array(
+					'booking_attendee_name_mode'  => 'optional',
+					'booking_attendee_name_label' => '',
+				),
+				'expected'            => array( 'booking_attendee_name_label' => '' ),
 			),
 		);
 
@@ -214,8 +245,8 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 			$form_keys = array_merge( $form_keys, $matches[1] );
 		}
 		$_GET = array();
-		// ライセンスキーは設定項目ではなく、保存処理の前に取り除かれるため対象外。
-		$form_keys = array_diff( array_unique( $form_keys ), array( 'license_key', 'delete_license_key' ) );
+		// ライセンスキーは保存処理の前に取り除かれ、利用者名の見出しはモード無効時に送信されないため対象外。
+		$form_keys = array_diff( array_unique( $form_keys ), array( 'license_key', 'delete_license_key', 'booking_attendee_name_label' ) );
 		$this->assertNotEmpty( $form_keys, '前提: フォームから設定項目を取得できる' );
 
 		// 何も送信されなかった場合でも、フォームの全項目が再表示用の値に含まれていること。
@@ -289,6 +320,14 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 			ob_start();
 			$page->render_page();
 			$html = (string) ob_get_clean();
+
+			// JS が URL に依存せず、復元された入力の有無を判定できる属性を確認する。
+			$this->assertStringContainsString(
+				'data-has-restored-input="' . ( null !== $case['input'] ? '1' : '0' ) . '"',
+				$html,
+				$case['test_condition_name'] . '（再表示フラグ）'
+			);
+			$this->assertStringContainsString( 'class="vkbm-provider-settings__form"', $html );
 
 			// 自動登録の月数: セレクトボックスの範囲だけを切り出し、選択状態の option の value を取り出す。
 			preg_match( '/name="vkbm_provider_settings\[shift_auto_register_months\]".*?<\/select>/s', $html, $select_match );

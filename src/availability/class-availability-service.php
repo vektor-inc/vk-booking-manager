@@ -48,6 +48,7 @@ use function current_user_can;
 use function get_current_user_id;
 use function is_user_logged_in;
 use function vkbm_get_resource_label_plural;
+use function vkbm_get_resource_label_singular;
 
 /**
  * Provides calculated availability data for menus and staff resources.
@@ -719,10 +720,26 @@ class Availability_Service {
 		if ( ! $any_day_open ) {
 			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は
 			// join_sentences()（#411 植草さんレビュー指摘。理由は上記コメント参照）。
-			$message = Nomination_Min_Guests_Message::join_sentences(
-				__( 'There are no business days in the displayed month for the in-charge staff members, due to their closed-day settings (regular holidays / temporary closures).', 'vk-booking-manager' ),
-				__( 'Check the shift settings in staff management.', 'vk-booking-manager' )
-			);
+			$resource_label = vkbm_get_resource_label_singular();
+			if ( Industry_Presets::supports( 'lodging' ) ) {
+				$message = Nomination_Min_Guests_Message::join_sentences(
+					sprintf(
+						/* translators: %s: resource label (singular), e.g. "staff" or "room". */
+						__( 'There are no business days in the displayed month for the assigned %s, due to their closed-day settings (regular holidays / temporary closures).', 'vk-booking-manager' ),
+						$resource_label
+					),
+					sprintf(
+						/* translators: %s: resource label (singular), e.g. "staff" or "room". */
+						__( 'Check the days on sale for each %s.', 'vk-booking-manager' ),
+						$resource_label
+					)
+				);
+			} else {
+				$message = Nomination_Min_Guests_Message::join_sentences(
+					__( 'There are no business days in the displayed month for the in-charge staff members, due to their closed-day settings (regular holidays / temporary closures).', 'vk-booking-manager' ),
+					__( 'Check the shift settings in staff management.', 'vk-booking-manager' )
+				);
+			}
 
 			return $this->build_diagnostic_reason( 'all_days_closed', $message );
 		}
@@ -2584,6 +2601,108 @@ class Availability_Service {
 		);
 
 		return $payload;
+	}
+
+	/**
+	 * 宿泊カレンダーの月内1泊、またはチェックアウト候補の空き状況を返す。
+	 *
+	 * @param array<string, mixed> $args menu_id、year、month、check_in_date（任意）。
+	 * @return array<string, mixed>|WP_Error
+	 */
+	public function get_lodging_calendar_meta( array $args ) {
+		if ( ! Industry_Presets::supports( 'lodging' ) ) {
+			return new WP_Error( 'rest_no_route', __( 'No route was found matching the URL and request method.', 'vk-booking-manager' ), array( 'status' => 404 ) );
+		}
+		$menu = $this->validate_menu( (int) ( $args['menu_id'] ?? 0 ) );
+		if ( is_wp_error( $menu ) ) {
+			return $menu;
+		}
+		if ( ! Lodging_Price::is_applicable( $menu->ID ) ) {
+			return new WP_Error( 'menu_not_night_unit', __( 'This menu is not a plan billed per night.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+		}
+
+		$year  = (int) ( $args['year'] ?? 0 );
+		$month = (int) ( $args['month'] ?? 0 );
+		$now   = current_datetime();
+		if ( $year < (int) $now->format( 'Y' ) - 1 || $year > (int) $now->format( 'Y' ) + 2 || $month < 1 || $month > 12 ) {
+			return new WP_Error( 'invalid_date', __( 'The selected date is not valid. Please choose the check-in and check-out dates again.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+		}
+
+		$room_ids = $this->resolve_lodging_room_ids( $menu, 0 );
+		if ( is_wp_error( $room_ids ) ) {
+			return $room_ids;
+		}
+		$timezone      = wp_timezone();
+		$check_in_date = (string) ( $args['check_in_date'] ?? '' );
+		if ( '' !== $check_in_date && ( ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $check_in_date, $matches ) || ! checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] ) ) ) {
+			return new WP_Error( 'invalid_date', __( 'The selected date is not valid. Please choose the check-in and check-out dates again.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+		}
+		if ( '' !== $check_in_date ) {
+			$strategy   = $this->resolve_night_strategy();
+			$date_error = $this->validate_lodging_dates( $menu, $check_in_date, ( new DateTimeImmutable( $check_in_date ) )->modify( '+1 day' )->format( 'Y-m-d' ), $timezone, $strategy );
+			if ( null !== $date_error ) {
+				return new WP_Error( 'invalid_date', __( 'The selected date is not valid. Please choose the check-in and check-out dates again.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			}
+		}
+		$month_first = sprintf( '%04d-%02d-01', $year, $month );
+		$month_last  = ( new DateTimeImmutable( $month_first ) )->format( 'Y-m-t' );
+		$first_date  = '' !== $check_in_date ? ( new DateTimeImmutable( $check_in_date ) )->modify( '+1 day' )->format( 'Y-m-d' ) : $month_first;
+		$last_date   = '' !== $check_in_date ? ( new DateTimeImmutable( $check_in_date ) )->modify( '+' . Night_Strategy::MAX_NIGHTS . ' days' )->format( 'Y-m-d' ) : $month_last;
+		$cache_key   = $this->build_lodging_calendar_cache_key( $menu->ID, $room_ids, $first_date, $last_date, $check_in_date, $timezone->getName() );
+		$raw_days    = get_transient( $cache_key );
+		if ( ! is_array( $raw_days ) ) {
+			$raw_days = $this->resolve_night_strategy()->get_calendar_availability(
+				$room_ids,
+				$first_date,
+				$last_date,
+				Service_Menu_Post_Type::get_check_in_time( $menu->ID ),
+				Service_Menu_Post_Type::get_check_out_time( $menu->ID ),
+				$check_in_date
+			);
+			set_transient( $cache_key, $raw_days, MINUTE_IN_SECONDS );
+		}
+
+		$settings = $this->get_menu_settings( $menu );
+		$today    = $now->setTimezone( $timezone )->format( 'Y-m-d' );
+		$days     = array();
+		foreach ( $raw_days as $date => $state ) {
+			$reason = (string) $state['reason'];
+			if ( '' === $check_in_date ) {
+				if ( $date < $today || ! $this->is_date_allowed_for_menu( $settings, $date, $timezone ) || ! $this->is_within_max_advance_days( $settings, $date, $timezone ) || null !== $this->validate_lodging_deadline( $menu, $date, $timezone ) ) {
+					$state['available'] = false;
+					$reason             = 'unavailable_date';
+				}
+			}
+			$days[] = array(
+				'date'      => $date,
+				'available' => (bool) $state['available'],
+				'reason'    => $reason,
+			);
+		}
+
+		return array(
+			'days'          => $days,
+			'check_in_date' => $check_in_date,
+			'max_nights'    => Night_Strategy::MAX_NIGHTS,
+		);
+	}
+
+	/**
+	 * 宿泊カレンダー専用キャッシュ名を作る。
+	 *
+	 * @param int        $menu_id      メニュー ID。
+	 * @param array<int> $room_ids     客室 ID。
+	 * @param string     $first_date   対象開始日。
+	 * @param string     $last_date    対象終了日。
+	 * @param string     $check_in     チェックイン日。
+	 * @param string     $timezone     タイムゾーン。
+	 * @return string キャッシュ名。
+	 */
+	private function build_lodging_calendar_cache_key( int $menu_id, array $room_ids, string $first_date, string $last_date, string $check_in, string $timezone ): string {
+		$generation_start = '' !== $check_in ? $check_in : $first_date;
+		// transient 名の上限（172 文字）を超えないよう、客室・日付・チェックイン日・タイムゾーンは区切り文字付きで1つのハッシュにまとめる。
+		$scope_hash = md5( implode( '|', array( implode( '-', $room_ids ), $first_date, $last_date, $check_in, $timezone ) ) );
+		return sprintf( 'vkbm_lodging_calendar_g%d_bg%s_%d_%s', Availability_Cache_Generation::get_generation(), Availability_Booking_Cache_Generation::get_range_generation_hash( $generation_start, ( new DateTimeImmutable( $last_date ) )->modify( '+1 day' )->format( 'Y-m-d' ) ), $menu_id, $scope_hash );
 	}
 
 	/**

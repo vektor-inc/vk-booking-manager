@@ -117,6 +117,44 @@ class Booking_Event_Dispatcher_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * dispatch_change() の $force_updated は、差分が無くても updated を1回発火する。
+	 */
+	public function test_dispatch_change_force_updated(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '差分なし・強制なし（既定） => 発火しない',
+				'force'               => false,
+				'expected_count'      => 0,
+			),
+			array(
+				'test_condition_name' => '差分なし・強制あり => updated で1回発火',
+				'force'               => true,
+				'expected_count'      => 1,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->dispatched = array();
+			$dispatcher       = new Booking_Event_Dispatcher();
+			$booking_id       = $this->create_booking_post();
+			update_post_meta( $booking_id, self::META_STATUS, 'confirmed' );
+
+			$before = $dispatcher->capture_snapshot( $booking_id );
+
+			if ( $case['force'] ) {
+				$dispatcher->dispatch_change( $booking_id, $before, true );
+			} else {
+				$dispatcher->dispatch_change( $booking_id, $before );
+			}
+
+			$this->assertCount( $case['expected_count'], $this->dispatched, $case['test_condition_name'] );
+			if ( $case['expected_count'] > 0 ) {
+				$this->assertSame( Booking_Event_Dispatcher::EVENT_UPDATED, $this->dispatched[0][0], $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
 	 * Booking_Event_Dispatcher::dispatch_change() の種別判定を検証する。
 	 *
 	 * capture_snapshot() で取得した「変更前」と、実際にメタを書き換えた後の「変更後」を渡し、
@@ -546,6 +584,9 @@ class Booking_Event_Dispatcher_Test extends WP_UnitTestCase {
 
 		$start = '2026-09-01T10:00:00+09:00';
 		$end   = '2026-09-01T10:30:00+09:00';
+
+		// 未保存の初期値は仮予約（#924）のため、確定の通知メールを検証するここでは即時確定を明示する。
+		update_option( Settings_Repository::OPTION_KEY, array( 'provider_booking_status_mode' => 'confirmed' ) );
 
 		$notification = new Counting_Notification_Service_Double( new Settings_Repository() );
 		$availability = new Availability_Service_Test_Double(

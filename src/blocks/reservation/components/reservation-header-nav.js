@@ -19,6 +19,7 @@ export const ReservationHeaderNav = ( {
 	isRegisterActive = false,
 	listReturnHref = '',
 	listReturnLabel = '',
+	isLodging = false,
 } ) => {
 	let navItems = [];
 	if ( variant === 'staff' ) {
@@ -27,7 +28,12 @@ export const ReservationHeaderNav = ( {
 			{
 				key: 'dashboard',
 				type: 'link',
-				label: __( 'Shift/reservation table', 'vk-booking-manager' ),
+				label: isLodging
+					? __(
+							'Days on sale/reservation table',
+							'vk-booking-manager'
+					  )
+					: __( 'Shift/reservation table', 'vk-booking-manager' ),
 				href: staffDashboardHref,
 			},
 			{

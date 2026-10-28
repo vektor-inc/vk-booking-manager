@@ -24,6 +24,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * - 泊ごとの料金区分（平日・休前日・特定日）で、プランの料金の単価が変わる。客室の追加料金は区分によらず一定。
  * - 1名1泊あたり: プランの料金 ＝ 料金区分の金額 × 区分ごとの人数（区分が無ければ 基本料金 × 人数）。
  * - 1室1泊あたり: プランの料金 ＝ 基本料金（人数・料金区分は無視する）。
+ * - 1室1泊あたりで規定人数を超えた分の追加料金を使うとき（#934）: プランの料金 ＝ 基本料金 ＋ 超過した人の区分の単価の合計。
+ *   単価の高い区分の人から順に基本料金に含め、残った人を超過扱いにする（泊ごとに、その泊の単価で並べる）。
  *
  * calculate() は WordPress のメタを読まない純粋な計算。メタを読む処理は
  * is_applicable() と resolve_room_surcharge_per_night() に分けている。
@@ -65,13 +67,15 @@ class Lodging_Price {
 	 * 足して calculate() に渡す。休前日・特定日の料金が空欄のメニューは該当キーが空文字になる。
 	 *
 	 * @param int $menu_id サービスメニューの投稿ID。
-	 * @return array<string, mixed> price_unit, base_price, base_price_pre_holiday, base_price_special, pre_holiday_weekdays, special_periods。
+	 * @return array<string, mixed> price_unit, extra_guest_enabled, included_guests, base_price, base_price_pre_holiday, base_price_special, pre_holiday_weekdays, special_periods。
 	 */
 	public static function get_plan_inputs( int $menu_id ): array {
 		$rate_settings = Lodging_Rate::get_settings();
 
 		return array(
 			'price_unit'             => Service_Menu_Post_Type::get_night_price_unit( $menu_id ),
+			'extra_guest_enabled'    => Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $menu_id ),
+			'included_guests'        => Service_Menu_Post_Type::get_night_included_guests( $menu_id ),
 			'base_price'             => (int) get_post_meta( $menu_id, '_vkbm_base_price', true ),
 			'base_price_pre_holiday' => get_post_meta( $menu_id, Service_Menu_Post_Type::META_NIGHT_PRICE_PRE_HOLIDAY, true ),
 			'base_price_special'     => get_post_meta( $menu_id, Service_Menu_Post_Type::META_NIGHT_PRICE_SPECIAL, true ),
@@ -134,11 +138,14 @@ class Lodging_Price {
 	 * - special_periods      (array)  特定日の期間 `[ [ 'start' => ..., 'end' => ... ], ... ]`。
 	 * - guests               (int)    人数。1名あたりのときだけ使う。
 	 * - price_unit           (string) Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM のとき1室あたり。それ以外は1名あたり。
+	 * - extra_guest_enabled  (bool)   1室あたりで、規定人数を超えた分の追加料金を使うか（#934）。true で guest_tiers が1件以上あるときだけ追加料金を足す。
+	 * - included_guests      (int)    基本料金に含まれる人数（extra_guest_enabled のときだけ使う。1 未満は 1）。
 	 * - base_price           (int)    基本料金（平日。1名・1泊、または1室・1泊）。
 	 * - base_price_pre_holiday (int|string|null) 基本料金の休前日。空欄・null は未設定。
 	 * - base_price_special     (int|string|null) 基本料金の特定日。空欄・null は未設定。
 	 * - guest_tiers          (array)  料金区分の内訳 `[ [ 'label' => ..., 'price' => ..., 'count' => ..., 'pre_holiday_price' => ..., 'special_price' => ... ], ... ]`。
-	 *                                 休前日・特定日の料金は任意。1名あたりで1件以上あるときは基本料金の代わりに使う。1室あたりでは無視する。
+	 *                                 休前日・特定日の料金は任意。1名あたりで1件以上あるときは基本料金の代わりに使う。
+	 *                                 1室あたりでは、extra_guest_enabled のときだけ、超過1名・1泊あたりの追加料金として使う（それ以外は無視する）。
 	 * - room_surcharge       (int)    客室の追加料金（1室・1泊）。人数にも区分にもよらず一定。
 	 *
 	 * 戻り値の plan_price_per_night / price_per_night は、すべての泊で同じ金額のときだけ金額が入り、
@@ -165,13 +172,21 @@ class Lodging_Price {
 
 		$items = self::collect_items( $args, $is_per_room );
 
+		// 規定人数を超えた分の追加料金（#934）。使うときは、泊ごとに超過する人を決めて、その人数ぶんの区分を項目に足す。
+		$extra_guest_items = self::collect_extra_guest_items( $args, $is_per_room );
+		$included_guests   = max( 1, self::to_int( $args['included_guests'] ?? 1 ) );
+
 		// 泊ごとの料金を求める。泊数が 0 のときは、1泊あたりの値を返すために日付なし（平日）の1泊分だけ求める。
 		$evaluated_dates = array() !== $night_dates ? $night_dates : array_fill( 0, max( 1, $nights ), '' );
 		$night_breakdown = array();
 		foreach ( $evaluated_dates as $date ) {
-			$is_special        = '' !== $date && Lodging_Rate::is_special_date( $date, $special_periods );
-			$is_pre_holiday    = '' !== $date && Lodging_Rate::is_pre_holiday_date( $date, $weekdays );
-			$resolved          = self::resolve_night_plan_price( $items, $is_special, $is_pre_holiday );
+			$is_special     = '' !== $date && Lodging_Rate::is_special_date( $date, $special_periods );
+			$is_pre_holiday = '' !== $date && Lodging_Rate::is_pre_holiday_date( $date, $weekdays );
+			$night_items    = $items;
+			if ( array() !== $extra_guest_items ) {
+				$night_items = array_merge( $items, self::exclude_included_guests( $extra_guest_items, $included_guests, $is_special, $is_pre_holiday ) );
+			}
+			$resolved          = self::resolve_night_plan_price( $night_items, $is_special, $is_pre_holiday );
 			$night_breakdown[] = array(
 				'date'           => $date,
 				'rate'           => $resolved['rate'],
@@ -212,7 +227,7 @@ class Lodging_Price {
 	 * 休前日・特定日の料金が、この滞在に使う料金の項目に1つでも入っているかを返す。
 	 *
 	 * 予約画面で泊ごとの区分・内訳を出すかどうかの判定に使う。calculate() と同じ項目（1室あたりは基本料金、
-	 * 料金区分があれば区分の各行、なければ基本料金）だけを見る。人数が 0 の料金区分の行も、プランに設定された項目として見る
+	 * 料金区分があれば区分の各行、なければ基本料金。1室あたりで追加料金を使うときは基本料金と区分の各行の両方）だけを見る。人数が 0 の料金区分の行も、プランに設定された項目として見る
 	 * （この滞在で人数が付いたかによらず、プランの設定で決まる）。使われない項目に金額が残っていても true にしない。
 	 * 平日と同じ金額が入っている場合も「設定している」として true を返す。
 	 *
@@ -222,7 +237,8 @@ class Lodging_Price {
 	public static function has_rate_tiers( array $args ): bool {
 		$is_per_room = Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM === ( $args['price_unit'] ?? '' );
 
-		foreach ( self::collect_items( $args, $is_per_room ) as $item ) {
+		$items = array_merge( self::collect_items( $args, $is_per_room ), self::collect_extra_guest_items( $args, $is_per_room ) );
+		foreach ( $items as $item ) {
 			if ( null !== $item['pre_holiday'] || null !== $item['special'] ) {
 				return true;
 			}
@@ -264,6 +280,99 @@ class Lodging_Price {
 	}
 
 	/**
+	 * 1室あたりで規定人数を超えた分の追加料金に使う項目（料金区分の各行。人数は送られた区分ごとの人数）を並べる（#934）。
+	 *
+	 * 追加料金を使わないとき（1名あたり・extra_guest_enabled が false・区分が1件も無い）は空配列。
+	 *
+	 * @param array<string, mixed> $args        calculate() と同じキー。
+	 * @param bool                 $is_per_room 1室あたりの料金か。
+	 * @return array<int, array{weekday: int, pre_holiday: int|null, special: int|null, count: int}> 追加料金の項目。
+	 */
+	private static function collect_extra_guest_items( array $args, bool $is_per_room ): array {
+		$guest_tiers = isset( $args['guest_tiers'] ) && is_array( $args['guest_tiers'] ) ? $args['guest_tiers'] : array();
+		if ( ! $is_per_room || empty( $args['extra_guest_enabled'] ) || array() === $guest_tiers ) {
+			return array();
+		}
+
+		$items = array();
+		foreach ( $guest_tiers as $tier ) {
+			if ( is_array( $tier ) ) {
+				$items[] = self::build_item( $tier['price'] ?? 0, $tier['pre_holiday_price'] ?? null, $tier['special_price'] ?? null, $tier['count'] ?? 0 );
+			}
+		}
+
+		return $items;
+	}
+
+	/**
+	 * 1泊分の追加料金の項目から、基本料金に含まれる人数を除いた超過分の項目を返す（#934）。
+	 *
+	 * その泊に使う単価（特定日 > 休前日 > 平日）で区分を比べ、単価の高い区分の人から順に基本料金に含める。
+	 * 返す項目の count は超過した人数。
+	 *
+	 * @param array<int, array{weekday: int, pre_holiday: int|null, special: int|null, count: int}> $items           追加料金の項目（count は区分ごとの人数）。
+	 * @param int                                                                                   $included_guests 基本料金に含まれる人数。
+	 * @param bool                                                                                  $is_special      泊の日付が特定日か。
+	 * @param bool                                                                                  $is_pre_holiday  泊の日付が休前日か。
+	 * @return array<int, array{weekday: int, pre_holiday: int|null, special: int|null, count: int}> 超過分の項目。
+	 */
+	private static function exclude_included_guests( array $items, int $included_guests, bool $is_special, bool $is_pre_holiday ): array {
+		$unit_prices = array();
+		$counts      = array();
+		foreach ( $items as $index => $item ) {
+			$unit_prices[ $index ] = self::resolve_item_unit_price( $item, $is_special, $is_pre_holiday )['unit_price'];
+			$counts[ $index ]      = $item['count'];
+		}
+
+		$excess_counts = self::distribute_excess_guests( $unit_prices, $counts, $included_guests );
+		foreach ( $items as $index => $item ) {
+			$items[ $index ]['count'] = $excess_counts[ $index ];
+		}
+
+		return $items;
+	}
+
+	/**
+	 * 区分ごとの人数から、基本料金に含まれる人数を除いた超過人数を区分ごとに返す（#934）。
+	 *
+	 * 単価の高い区分の人から順に基本料金に含め、残った人を超過扱いにする（客にとって一番安くなる選び方）。
+	 * 単価が同じ区分は、並びの先の区分から含める。人数の合計が含まれる人数以内なら、超過は全区分 0。
+	 *
+	 * @param array<int, int> $unit_prices     区分ごとの単価（キーは区分の並び順）。
+	 * @param array<int, int> $counts          区分ごとの人数（$unit_prices と同じキー）。
+	 * @param int             $included_guests 基本料金に含まれる人数。
+	 * @return array<int, int> 区分ごとの超過人数（$unit_prices と同じキー・並び順）。
+	 */
+	public static function distribute_excess_guests( array $unit_prices, array $counts, int $included_guests ): array {
+		$order = array_keys( $unit_prices );
+		usort(
+			$order,
+			static function ( $a, $b ) use ( $unit_prices ): int {
+				// 単価の高い順。同額は元の並びの順を保つ。
+				if ( $unit_prices[ $a ] === $unit_prices[ $b ] ) {
+					return $a <=> $b;
+				}
+
+				return $unit_prices[ $b ] <=> $unit_prices[ $a ];
+			}
+		);
+
+		$remaining_included = max( 0, $included_guests );
+		$excess_counts      = array();
+		foreach ( $order as $index ) {
+			$count                   = max( 0, (int) ( $counts[ $index ] ?? 0 ) );
+			$included_count          = min( $count, $remaining_included );
+			$remaining_included     -= $included_count;
+			$excess_counts[ $index ] = $count - $included_count;
+		}
+
+		// 呼び出し元が区分の並び順で受け取れるよう、キーの順に戻す。
+		ksort( $excess_counts );
+
+		return $excess_counts;
+	}
+
+	/**
 	 * 料金の1項目（基本料金、または料金区分の1行）を、計算用の形に整える。
 	 *
 	 * @param mixed $weekday_price     平日の料金。
@@ -297,28 +406,50 @@ class Lodging_Price {
 		$rate       = Lodging_Rate::RATE_WEEKDAY;
 
 		foreach ( $items as $item ) {
-			if ( $is_special && null !== $item['special'] ) {
-				$unit_price = $item['special'];
-				$item_rate  = Lodging_Rate::RATE_SPECIAL;
-			} elseif ( $is_pre_holiday && null !== $item['pre_holiday'] ) {
-				$unit_price = $item['pre_holiday'];
-				$item_rate  = Lodging_Rate::RATE_PRE_HOLIDAY;
-			} else {
-				$unit_price = $item['weekday'];
-				$item_rate  = Lodging_Rate::RATE_WEEKDAY;
-			}
+			$resolved = self::resolve_item_unit_price( $item, $is_special, $is_pre_holiday );
 
-			$plan_price += $unit_price * $item['count'];
+			$plan_price += $resolved['unit_price'] * $item['count'];
 
 			// 人数のない項目（区分の人数が 0）は、泊の区分の判定に使わない。
-			if ( $item['count'] > 0 && self::get_rate_priority( $item_rate ) > self::get_rate_priority( $rate ) ) {
-				$rate = $item_rate;
+			if ( $item['count'] > 0 && self::get_rate_priority( $resolved['rate'] ) > self::get_rate_priority( $rate ) ) {
+				$rate = $resolved['rate'];
 			}
 		}
 
 		return array(
 			'rate'       => $rate,
 			'plan_price' => $plan_price,
+		);
+	}
+
+	/**
+	 * 料金の1項目の、その泊に使う単価と料金区分を求める。
+	 *
+	 * 特定日の料金 → 休前日の料金 → 平日の料金の順で、入っている最初の金額を使う。
+	 *
+	 * @param array{weekday: int, pre_holiday: int|null, special: int|null, count: int} $item           料金の項目。
+	 * @param bool                                                                      $is_special     泊の日付が特定日か。
+	 * @param bool                                                                      $is_pre_holiday 泊の日付が休前日か。
+	 * @return array{unit_price: int, rate: string} その泊の単価と、使った料金区分。
+	 */
+	private static function resolve_item_unit_price( array $item, bool $is_special, bool $is_pre_holiday ): array {
+		if ( $is_special && null !== $item['special'] ) {
+			return array(
+				'unit_price' => $item['special'],
+				'rate'       => Lodging_Rate::RATE_SPECIAL,
+			);
+		}
+
+		if ( $is_pre_holiday && null !== $item['pre_holiday'] ) {
+			return array(
+				'unit_price' => $item['pre_holiday'],
+				'rate'       => Lodging_Rate::RATE_PRE_HOLIDAY,
+			);
+		}
+
+		return array(
+			'unit_price' => $item['weekday'],
+			'rate'       => Lodging_Rate::RATE_WEEKDAY,
 		);
 	}
 

@@ -23,6 +23,7 @@ use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Staff\Staff_Editor;
@@ -183,6 +184,12 @@ class Booking_Draft_Controller {
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'save_draft' ),
 				'permission_callback' => '__return_true',
+				'args'                => array(
+					'attendee_name' => array(
+						'type'      => 'string',
+						'maxLength' => Attendee_Name::MAX_LENGTH,
+					),
+				),
 			)
 		);
 
@@ -573,7 +580,8 @@ class Booking_Draft_Controller {
 			// メニューがユーザー貸し切り指定を受け付けない設定なら user_exclusive=false のまま（フラグは無視）。
 		}
 
-		$payload = array(
+		$attendee_name_mode = Attendee_Name::get_mode( $this->settings_repository->get_settings() );
+		$payload            = array(
 			'menu_id'                   => $menu_id,
 			'resource_id'               => $resource_id,
 			// #431: リソースタグ絞り込み（ターム ID配列・AND条件）。予約確定時の再検証・
@@ -611,6 +619,7 @@ class Booking_Draft_Controller {
 			'is_staff_preferred'        => $is_staff_preferred,
 			'nomination_fee'            => $nomination_fee,
 			'owner_user_id'             => (int) get_current_user_id(),
+			'attendee_name'             => 'disabled' === $attendee_name_mode ? '' : Attendee_Name::sanitize( $params['attendee_name'] ?? '' ),
 		);
 
 		if ( null !== $lodging_stay ) {

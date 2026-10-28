@@ -26,6 +26,7 @@ use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Admin\Service_Menu_Editor;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
@@ -78,9 +79,98 @@ class Service_Menu_Editor_Nomination_Toggle_Test extends WP_UnitTestCase {
 			update_option( Settings_Repository::OPTION_KEY, $this->original_settings );
 		}
 		Staff_Editor::clear_nomination_enabled_cache();
+		Industry_Presets::clear_cache();
 		wp_set_current_user( 0 );
 		$_POST = array();
 		parent::tearDown();
+	}
+
+	/**
+	 * 宿泊の泊単位プランで指定欄が非表示でも、メニュー単位の設定を変更しないことを確認する。
+	 */
+	public function test_save_post_preserves_nomination_for_lodging_night_plan(): void {
+		$repository                        = new Settings_Repository();
+		$settings                          = $repository->get_settings();
+		$settings['industry_preset']       = 'lodging';
+		$settings['staff_enabled']         = true;
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+		Industry_Presets::clear_cache();
+
+		$menu_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $user_id );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '未保存値は未保存のまま残る',
+				'existing'            => null,
+			),
+			array(
+				'test_condition_name' => '無効化済みの値1は1のまま残る',
+				'existing'            => true,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			if ( null === $case['existing'] ) {
+				delete_post_meta( $menu_id, '_vkbm_disable_nomination' );
+			} else {
+				update_post_meta( $menu_id, '_vkbm_disable_nomination', '1' );
+			}
+			$_POST = array(
+				self::NONCE_NAME    => wp_create_nonce( self::NONCE_ACTION ),
+				'vkbm_service_menu' => array(
+					'booking_unit' => Service_Menu_Post_Type::BOOKING_UNIT_NIGHT,
+				),
+			);
+
+			( new Service_Menu_Editor() )->save_post( $menu_id, get_post( $menu_id ) );
+
+			$this->assertSame(
+				$case['existing'],
+				metadata_exists( 'post', $menu_id, '_vkbm_disable_nomination' ) ? (bool) get_post_meta( $menu_id, '_vkbm_disable_nomination', true ) : null,
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
+	 * 宿泊サイトの時間枠プランで指定チェックを外すと、無効化値を保存することを確認する。
+	 */
+	public function test_save_post_disables_nomination_for_lodging_slot_plan(): void {
+		$repository                        = new Settings_Repository();
+		$settings                          = $repository->get_settings();
+		$settings['industry_preset']       = 'lodging';
+		$settings['staff_enabled']         = true;
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Staff_Editor::clear_nomination_enabled_cache();
+		Industry_Presets::clear_cache();
+
+		$menu_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+		wp_set_current_user( $user_id );
+		$_POST = array(
+			self::NONCE_NAME    => wp_create_nonce( self::NONCE_ACTION ),
+			'vkbm_service_menu' => array(
+				'booking_unit' => 'slot',
+			),
+		);
+
+		( new Service_Menu_Editor() )->save_post( $menu_id, get_post( $menu_id ) );
+
+		$this->assertSame( '1', get_post_meta( $menu_id, '_vkbm_disable_nomination', true ) );
 	}
 
 	/**
