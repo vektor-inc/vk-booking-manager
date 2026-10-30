@@ -406,14 +406,15 @@ class Email_Log_Page {
 	 */
 	private function get_type_label( string $type ): string {
 		$labels = array(
-			'pending_customer'          => __( 'Pending reservation (to customer)', 'vk-booking-manager' ),
-			'pending_provider'          => __( 'Pending reservation (to provider)', 'vk-booking-manager' ),
-			'confirmed_customer'        => __( 'Reservation confirmed (to customer)', 'vk-booking-manager' ),
-			'confirmed_provider'        => __( 'Reservation confirmed (to provider)', 'vk-booking-manager' ),
-			'cancelled_customer'        => __( 'Reservation cancelled (to customer)', 'vk-booking-manager' ),
-			'cancelled_provider'        => __( 'Reservation cancelled (to provider)', 'vk-booking-manager' ),
-			'reminder_customer'         => __( 'Reservation reminder (to customer)', 'vk-booking-manager' ),
-			'registration_confirmation' => __( 'Email address confirmation', 'vk-booking-manager' ),
+			'pending_customer'            => __( 'Pending reservation (to customer)', 'vk-booking-manager' ),
+			'pending_provider'            => __( 'Pending reservation (to provider)', 'vk-booking-manager' ),
+			'confirmed_customer'          => __( 'Reservation confirmed (to customer)', 'vk-booking-manager' ),
+			'confirmed_provider'          => __( 'Reservation confirmed (to provider)', 'vk-booking-manager' ),
+			'cancelled_customer'          => __( 'Reservation cancelled (to customer)', 'vk-booking-manager' ),
+			'cancelled_provider'          => __( 'Reservation cancelled (to provider)', 'vk-booking-manager' ),
+			'reminder_customer'           => __( 'Reservation reminder (to customer)', 'vk-booking-manager' ),
+			'guest_verification_customer' => __( 'Guest reservation confirmation (to customer)', 'vk-booking-manager' ),
+			'registration_confirmation'   => __( 'Email address confirmation', 'vk-booking-manager' ),
 		);
 
 		return $labels[ $type ] ?? '';

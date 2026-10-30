@@ -367,6 +367,41 @@
 		return $useNomination.length > 0 && $useNomination.prop( 'checked' );
 	}
 
+	// 複数人一括予約に関連する欄を出す条件（複数人予約 ON かつ 最大受付数が2以上）を満たすかを返す（#320・#393・#440）。
+	// 1室1泊あたりのプランは複数人一括予約を常に ON として扱う（#831）。
+	function isMultiGuestDependentShown() {
+		const $checkbox = $( '#vkbm_service_menu_allow_multiple_guests' );
+		if ( $checkbox.length === 0 ) {
+			return false;
+		}
+		const $maxCapacity = $( '#vkbm_service_menu_max_capacity' );
+		let maxCapacity = 1;
+		if ( $maxCapacity.length > 0 ) {
+			const parsed = parseInt( $maxCapacity.val(), 10 );
+			maxCapacity = isNaN( parsed ) ? 1 : parsed;
+		}
+		return (
+			( $checkbox.prop( 'checked' ) || isPerRoomNightSelected() ) &&
+			maxCapacity >= 2
+		);
+	}
+
+	// 「貸し切り予約」が有効か（#968）。サーバー（Availability_Service::is_menu_exclusive_when_booked()）と同じく、
+	// チェックONに加えて複数人一括予約ON・定員2以上を満たし、1室1泊あたりは対象外とする。
+	function isExclusiveMinGuestsApplied() {
+		if ( isPerRoomNightSelected() ) {
+			return false;
+		}
+		const $exclusiveWhenBooked = $(
+			'#vkbm_service_menu_exclusive_when_booked'
+		);
+		return (
+			$exclusiveWhenBooked.length > 0 &&
+			$exclusiveWhenBooked.prop( 'checked' ) &&
+			isMultiGuestDependentShown()
+		);
+	}
+
 	// 「このメニューで指名を使う」チェックの切り替えに連動して、「Nomination fee」欄の表示を
 	// 即座に切り替える（#412 B-4）。
 	// #392: 予約枠の定員（vkbm-max-capacity-field）・複数人一括予約（vkbm-allow-multiple-guests-field）は
@@ -431,7 +466,9 @@
 		if ( $label.length === 0 || $description.length === 0 ) {
 			return;
 		}
-		const isNomination = isMinGuestsCopyApplied();
+		const isExclusive = isExclusiveMinGuestsApplied();
+		// 最少人数欄だけは、指名を使わなくても貸し切り予約が有効なら受付制限の表記にする（#968）。
+		const isNomination = isMinGuestsCopyApplied() || isExclusive;
 		const isNightPlan = isNightPlanSelected();
 
 		const labelText = isNomination
@@ -445,6 +482,8 @@
 			? [
 					isNightPlan
 						? i18n.minCapacityNightDescription1
+						: isExclusive
+						? i18n.minCapacityExclusiveDescription1
 						: i18n.minCapacityNominationDescription1,
 					i18n.minCapacityNominationDescription2,
 					i18n.minCapacityNominationDescription3,
@@ -622,6 +661,13 @@
 		'change',
 		'#vkbm_service_menu_exclusive_when_booked',
 		syncExclusiveWhenBookedExclusivity
+	);
+
+	// 「貸し切り予約」の切り替えで、最少人数欄のラベル・説明文も即時に切り替える（#968）。
+	$( document ).on(
+		'change',
+		'#vkbm_service_menu_exclusive_when_booked',
+		syncMinCapacityFieldCopy
 	);
 
 	// 「このメニューで指名を使う」チェックの切り替えに連動させる（#412 B-4）。

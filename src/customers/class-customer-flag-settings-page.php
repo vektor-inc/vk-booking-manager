@@ -16,7 +16,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
+use VKBookingManager\PostTypes\Booking_Post_Type;
 use function __;
+use function absint;
 use function add_action;
 use function add_query_arg;
 use function add_submenu_page;
@@ -25,11 +27,24 @@ use function check_admin_referer;
 use function checked;
 use function current_user_can;
 use function esc_attr;
+use function esc_attr__;
 use function esc_html;
 use function esc_html__;
 use function esc_textarea;
 use function esc_url;
+use function get_option;
+use function get_post_type;
+use function get_userdata;
 use function is_array;
+use function mysql2date;
+use function esc_html_x;
+use function paginate_links;
+use function remove_query_arg;
+use function sanitize_key;
+use function sanitize_text_field;
+use function selected;
+use function wp_kses;
+use function wp_kses_post;
 use function submit_button;
 use function wp_add_inline_script;
 use function wp_die;
@@ -73,6 +88,26 @@ class Customer_Flag_Settings_Page {
 	private const EMPTY_ROWS = 3;
 
 	/**
+	 * ゲストに付けたフラグの解除用 nonce アクション名。
+	 */
+	private const GUEST_REMOVE_NONCE_ACTION = 'vkbm_guest_flag_remove';
+
+	/**
+	 * ゲストに付けたフラグの解除用 nonce フィールド名。
+	 */
+	private const GUEST_REMOVE_NONCE_NAME = '_vkbm_guest_flag_remove_nonce';
+
+	/**
+	 * ゲストに付けたフラグの一覧で、1 ページに表示する件数。
+	 */
+	private const GUEST_PER_PAGE = 50;
+
+	/**
+	 * ゲストに付けたフラグの一覧の見出し要素 ID（他の画面からのリンク先）。
+	 */
+	private const GUEST_SECTION_ID = 'vkbm-guest-flags';
+
+	/**
 	 * 顧客フラグサービス。
 	 *
 	 * @var Customer_Flag_Service
@@ -110,6 +145,7 @@ class Customer_Flag_Settings_Page {
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'register_menu' ), 11 );
 		add_action( 'admin_init', array( $this, 'handle_submission' ) );
+		add_action( 'admin_init', array( $this, 'handle_guest_flag_removal' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 	}
 
@@ -161,6 +197,56 @@ class Customer_Flag_Settings_Page {
 			});
 		})();";
 		wp_add_inline_script( 'vkbm-customer-flags', $placeholder_toggle );
+
+		// ゲストに付けたフラグの解除ボタンは、押したあと確認ダイアログで了承された場合だけ送信する。
+		$confirm_submit = "(function () {
+			document.querySelectorAll('form[data-vkbm-confirm]').forEach(function (form) {
+				form.addEventListener('submit', function (event) {
+					if (!window.confirm(form.getAttribute('data-vkbm-confirm'))) {
+						event.preventDefault();
+					}
+				});
+			});
+		})();";
+		wp_add_inline_script( 'vkbm-customer-flags', $confirm_submit );
+	}
+
+	/**
+	 * ゲストに付けたフラグの解除リクエストを処理する。
+	 */
+	public function handle_guest_flag_removal(): void {
+		// 解除ボタンからのリクエスト以外は処理しない。
+		if ( ! isset( $_POST[ self::GUEST_REMOVE_NONCE_NAME ] ) ) {
+			return;
+		}
+
+		if ( ! current_user_can( $this->capability ) ) {
+			return;
+		}
+
+		check_admin_referer( self::GUEST_REMOVE_NONCE_ACTION, self::GUEST_REMOVE_NONCE_NAME );
+
+		// 解除する記録の ID と、解除後に表示を戻す絞り込み条件を取り出す。
+		$record_id = isset( $_POST['vkbm_guest_flag_id'] ) ? sanitize_key( wp_unslash( $_POST['vkbm_guest_flag_id'] ) ) : '';
+		$removed   = $this->service->delete_guest_flag_by_id( $record_id );
+
+		$query_args = array( 'page' => self::MENU_SLUG );
+		if ( $removed ) {
+			$query_args['guest_removed'] = '1';
+		} else {
+			$query_args['guest_error'] = '1';
+		}
+		$type_filter = isset( $_POST['guest_type'] ) ? sanitize_key( wp_unslash( $_POST['guest_type'] ) ) : '';
+		if ( '' !== $type_filter ) {
+			$query_args['guest_type'] = $type_filter;
+		}
+		$search = isset( $_POST['guest_q'] ) ? sanitize_text_field( wp_unslash( $_POST['guest_q'] ) ) : '';
+		if ( '' !== $search ) {
+			$query_args['guest_q'] = $search;
+		}
+
+		wp_safe_redirect( add_query_arg( $query_args, admin_url( 'admin.php' ) ) . '#' . self::GUEST_SECTION_ID );
+		exit;
 	}
 
 	/**
@@ -189,6 +275,10 @@ class Customer_Flag_Settings_Page {
 		$query_args = array( 'page' => self::MENU_SLUG );
 		if ( $saved ) {
 			$query_args['updated'] = '1';
+			// 種別は保存できたが、削除した種別のゲストの記録を消せなかった場合は、画面で知らせる。
+			if ( $this->service->has_guest_cleanup_failed() ) {
+				$query_args['guest_cleanup_error'] = '1';
+			}
 		} else {
 			$query_args['error'] = '1';
 		}
@@ -212,6 +302,8 @@ class Customer_Flag_Settings_Page {
 		$updated = isset( $_GET['updated'] ) && '1' === $_GET['updated'];
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 表示専用のフラグ。
 		$has_error = isset( $_GET['error'] ) && '1' === $_GET['error'];
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 表示専用のフラグ。
+		$has_cleanup_error = isset( $_GET['guest_cleanup_error'] ) && '1' === $_GET['guest_cleanup_error'];
 		?>
 		<div class="wrap">
 			<h1><?php echo esc_html__( 'Customer flags', 'vk-booking-manager' ); ?></h1>
@@ -219,6 +311,22 @@ class Customer_Flag_Settings_Page {
 			<?php if ( $updated ) : ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php echo esc_html__( 'Customer flag types saved.', 'vk-booking-manager' ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( $has_cleanup_error ) : ?>
+				<div class="notice notice-warning is-dismissible">
+					<p>
+						<?php
+						// 1 つの翻訳関数に 1 文ずつ入れ、言語に応じた区切りで結合する。
+						echo esc_html(
+							Nomination_Min_Guests_Message::join_sentences(
+								__( 'The customer flag types were saved, but some guest flags of the deleted types could not be removed.', 'vk-booking-manager' ),
+								__( 'Please wait a moment and save again.', 'vk-booking-manager' )
+							)
+						);
+						?>
+					</p>
 				</div>
 			<?php endif; ?>
 
@@ -250,6 +358,9 @@ class Customer_Flag_Settings_Page {
 					)
 				);
 				?>
+			</p>
+			<p class="description">
+				<?php echo esc_html__( 'Customers who book without signing up always see the default message instead of the message below.', 'vk-booking-manager' ); ?>
 			</p>
 
 			<form method="post" action="">
@@ -283,8 +394,233 @@ class Customer_Flag_Settings_Page {
 				</table>
 				<?php submit_button( __( 'Save', 'vk-booking-manager' ) ); ?>
 			</form>
+
+			<?php $this->render_guest_flags_section( $types ); ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * 「ゲストに付けたフラグ」の一覧（種別での絞り込み・メール／電話の検索・解除ボタン付き）を描画する。
+	 *
+	 * @param array<int, array<string, mixed>> $types フラグ種別定義（絞り込みの選択肢に使う）。
+	 */
+	private function render_guest_flags_section( array $types ): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- 表示専用の絞り込み条件。
+		$type_filter = isset( $_GET['guest_type'] ) ? sanitize_key( wp_unslash( $_GET['guest_type'] ) ) : '';
+		$search      = isset( $_GET['guest_q'] ) ? sanitize_text_field( wp_unslash( $_GET['guest_q'] ) ) : '';
+		$paged       = isset( $_GET['guest_paged'] ) ? max( 1, absint( wp_unslash( $_GET['guest_paged'] ) ) ) : 1;
+		$removed     = isset( $_GET['guest_removed'] ) && '1' === $_GET['guest_removed'];
+		$has_error   = isset( $_GET['guest_error'] ) && '1' === $_GET['guest_error'];
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$flags       = $this->service->list_guest_flags( $type_filter, $search );
+		$total       = count( $flags );
+		$total_pages = max( 1, (int) ceil( $total / self::GUEST_PER_PAGE ) );
+		$paged       = min( $paged, $total_pages );
+		$page_flags  = array_slice( $flags, ( $paged - 1 ) * self::GUEST_PER_PAGE, self::GUEST_PER_PAGE );
+		$is_filtered = '' !== $type_filter || '' !== $search;
+		?>
+		<h2 id="<?php echo esc_attr( self::GUEST_SECTION_ID ); ?>"><?php echo esc_html__( 'Flags set for guests', 'vk-booking-manager' ); ?></h2>
+
+		<?php if ( $removed ) : ?>
+			<div class="notice notice-success is-dismissible">
+				<p><?php echo esc_html__( 'The flag was removed.', 'vk-booking-manager' ); ?></p>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( $has_error ) : ?>
+			<div class="notice notice-error is-dismissible">
+				<p><?php echo esc_html__( 'Failed to remove the flag.', 'vk-booking-manager' ); ?></p>
+			</div>
+		<?php endif; ?>
+
+		<p class="description">
+			<?php
+			echo esc_html(
+				Nomination_Min_Guests_Message::join_sentences(
+					__( 'These are the flags set for customers who book without signing up.', 'vk-booking-manager' ),
+					__( 'You can set them on the reservation edit screen.', 'vk-booking-manager' )
+				)
+			);
+			?>
+		</p>
+		<p class="description">
+			<?php
+			echo esc_html(
+				Nomination_Min_Guests_Message::join_sentences(
+					__( 'The flags stay here even after the reservation is anonymized.', 'vk-booking-manager' ),
+					__( 'Flags for members are managed on the user edit screen.', 'vk-booking-manager' )
+				)
+			);
+			?>
+		</p>
+
+		<form method="get" action="" class="vkbm-customer-flag__guest-filter">
+			<input type="hidden" name="page" value="<?php echo esc_attr( self::MENU_SLUG ); ?>" />
+			<label for="vkbm-guest-flag-type" class="screen-reader-text"><?php echo esc_html__( 'Filter by flag type', 'vk-booking-manager' ); ?></label>
+			<select id="vkbm-guest-flag-type" name="guest_type">
+				<option value=""><?php echo esc_html__( 'All flag types', 'vk-booking-manager' ); ?></option>
+				<?php foreach ( $types as $type ) : ?>
+					<option value="<?php echo esc_attr( (string) $type['id'] ); ?>" <?php selected( $type_filter, (string) $type['id'] ); ?>><?php echo esc_html( (string) $type['label'] ); ?></option>
+				<?php endforeach; ?>
+			</select>
+			<label for="vkbm-guest-flag-search" class="screen-reader-text"><?php echo esc_html__( 'Search by email address or telephone number', 'vk-booking-manager' ); ?></label>
+			<input type="search" id="vkbm-guest-flag-search" name="guest_q" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php echo esc_attr__( 'Email address or telephone number', 'vk-booking-manager' ); ?>" />
+			<button type="submit" class="button"><?php echo esc_html__( 'Filter', 'vk-booking-manager' ); ?></button>
+			<?php if ( $is_filtered ) : ?>
+				<a href="<?php echo esc_url( self::get_guest_list_url() ); ?>"><?php echo esc_html__( 'Clear conditions', 'vk-booking-manager' ); ?></a>
+			<?php endif; ?>
+		</form>
+
+		<div class="vkbm-customer-flag__guest-table-wrap">
+		<table class="wp-list-table widefat fixed striped vkbm-customer-flag__guest-table">
+			<thead>
+				<tr>
+					<th scope="col" class="vkbm-customer-flag__col-guest-type"><?php echo esc_html__( 'Flag', 'vk-booking-manager' ); ?></th>
+					<th scope="col" class="vkbm-customer-flag__col-guest-contact"><?php echo esc_html__( 'Email address / Telephone number', 'vk-booking-manager' ); ?></th>
+					<th scope="col"><?php echo esc_html__( 'Memo (reason)', 'vk-booking-manager' ); ?></th>
+					<th scope="col" class="vkbm-customer-flag__col-guest-date"><?php echo esc_html__( 'Set on / Set by', 'vk-booking-manager' ); ?></th>
+					<th scope="col" class="vkbm-customer-flag__col-guest-source"><?php echo esc_html__( 'Original reservation', 'vk-booking-manager' ); ?></th>
+					<th scope="col" class="vkbm-customer-flag__col-guest-action"><?php echo esc_html__( 'Action', 'vk-booking-manager' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php if ( empty( $page_flags ) ) : ?>
+					<tr>
+						<td colspan="6">
+							<?php echo esc_html( $is_filtered ? __( 'No flags match the conditions.', 'vk-booking-manager' ) : __( 'No flags have been set for guests yet.', 'vk-booking-manager' ) ); ?>
+						</td>
+					</tr>
+				<?php endif; ?>
+				<?php foreach ( $page_flags as $flag ) : ?>
+					<?php $this->render_guest_flag_row( $flag, $type_filter, $search ); ?>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+		</div>
+
+		<?php if ( $total_pages > 1 ) : ?>
+			<div class="tablenav">
+				<div class="tablenav-pages">
+					<?php
+					echo wp_kses_post(
+						(string) paginate_links(
+							array(
+								'base'      => add_query_arg( 'guest_paged', '%#%', remove_query_arg( array( 'guest_removed', 'guest_error' ) ) ) . '#' . self::GUEST_SECTION_ID,
+								'format'    => '',
+								'current'   => $paged,
+								'total'     => $total_pages,
+								'prev_text' => '&laquo;',
+								'next_text' => '&raquo;',
+							)
+						)
+					);
+					?>
+				</div>
+			</div>
+		<?php endif; ?>
+		<?php
+	}
+
+	/**
+	 * ゲストに付けたフラグ 1 件分の行を描画する。
+	 *
+	 * @param array<string, mixed> $flag        Customer_Flag_Service::list_guest_flags() が返す解決済みフラグ情報。
+	 * @param string               $type_filter 表示中の種別での絞り込み（解除後に表示を戻すため）。
+	 * @param string               $search      表示中の検索語（解除後に表示を戻すため）。
+	 */
+	private function render_guest_flag_row( array $flag, string $type_filter, string $search ): void {
+		$contact_label = '' !== (string) $flag['email'] ? (string) $flag['email'] : (string) $flag['phone'];
+		/* translators: %s: 解除するフラグの連絡先（メールアドレスまたは電話番号）。 */
+		$remove_aria = sprintf( __( 'Remove the flag set for %s', 'vk-booking-manager' ), $contact_label );
+
+		// 確認ダイアログには、解除する対象の連絡先を入れる。
+		$confirm_message = Nomination_Min_Guests_Message::join_sentences(
+			/* translators: %s: 解除するフラグの連絡先（メールアドレスまたは電話番号）。 */
+			sprintf( __( 'Remove the flag set for %s?', 'vk-booking-manager' ), $contact_label ),
+			__( 'It will no longer be applied to this customer, including booking blocks.', 'vk-booking-manager' )
+		);
+
+		// 付けた日時と、付けたユーザー名。
+		$assigned_at = '' !== (string) $flag['assigned_at'] ? mysql2date( (string) get_option( 'date_format' ), (string) $flag['assigned_at'] ) : '';
+		$assigned_by = (int) $flag['assigned_by'] > 0 ? get_userdata( (int) $flag['assigned_by'] ) : false;
+
+		// 元の予約。消えている・開けない予約はリンクにしない。
+		$source_id   = (int) $flag['source_booking_id'];
+		$source_url  = '';
+		$source_gone = false;
+		if ( $source_id > 0 ) {
+			if ( Booking_Post_Type::POST_TYPE !== get_post_type( $source_id ) ) {
+				$source_gone = true;
+			} elseif ( current_user_can( Capabilities::MANAGE_RESERVATIONS ) ) {
+				$source_url = admin_url( 'post.php?post=' . $source_id . '&action=edit' );
+			}
+		}
+		?>
+		<tr>
+			<td>
+				<strong><?php echo esc_html( (string) $flag['label'] ); ?></strong>
+				<?php if ( ! empty( $flag['blocks_booking'] ) ) : ?>
+					<br /><span class="vkbm-customer-flag__guest-blocks"><?php echo esc_html__( 'Blocks new bookings', 'vk-booking-manager' ); ?></span>
+				<?php endif; ?>
+			</td>
+			<td>
+				<?php if ( '' !== (string) $flag['email'] ) : ?>
+					<?php echo esc_html( (string) $flag['email'] ); ?><br />
+				<?php endif; ?>
+				<?php echo esc_html( (string) $flag['phone'] ); ?>
+			</td>
+			<td><?php echo wp_kses( nl2br( esc_html( (string) $flag['memo'] ) ), array( 'br' => array() ) ); ?></td>
+			<td>
+				<?php echo esc_html( $assigned_at ); ?>
+				<?php if ( $assigned_by instanceof \WP_User ) : ?>
+					<br /><?php echo esc_html( (string) $assigned_by->display_name ); ?>
+				<?php endif; ?>
+			</td>
+			<td>
+				<?php if ( '' !== $source_url ) : ?>
+					<a href="<?php echo esc_url( $source_url ); ?>">#<?php echo esc_html( (string) $source_id ); ?></a>
+				<?php elseif ( $source_gone ) : ?>
+					<?php echo esc_html__( 'Deleted', 'vk-booking-manager' ); ?>
+				<?php endif; ?>
+			</td>
+			<td>
+				<form method="post" action="" data-vkbm-confirm="<?php echo esc_attr( $confirm_message ); ?>">
+					<?php wp_nonce_field( self::GUEST_REMOVE_NONCE_ACTION, self::GUEST_REMOVE_NONCE_NAME ); ?>
+					<input type="hidden" name="vkbm_guest_flag_id" value="<?php echo esc_attr( (string) $flag['id'] ); ?>" />
+					<input type="hidden" name="guest_type" value="<?php echo esc_attr( $type_filter ); ?>" />
+					<input type="hidden" name="guest_q" value="<?php echo esc_attr( $search ); ?>" />
+					<button type="submit" class="button button-small" aria-label="<?php echo esc_attr( $remove_aria ); ?>"><?php echo esc_html_x( 'Remove', 'button to remove a customer flag', 'vk-booking-manager' ); ?></button>
+				</form>
+			</td>
+		</tr>
+		<?php
+	}
+
+	/**
+	 * ゲストに付けたフラグの一覧（この設定ページ内の節）の URL を返す。
+	 *
+	 * @return string 一覧の URL。
+	 */
+	public static function get_guest_list_url(): string {
+		return admin_url( 'admin.php?page=' . self::MENU_SLUG ) . '#' . self::GUEST_SECTION_ID;
+	}
+
+	/**
+	 * ゲストに付けたフラグの一覧へのリンクを描画する。
+	 *
+	 * 一覧を開く権限（フラグ種別の設定ページと同じ）が無いユーザーには、何も出さない。
+	 *
+	 * @param string $link_text リンクの文言。
+	 * @return void
+	 */
+	public static function render_guest_list_link( string $link_text ): void {
+		if ( ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			return;
+		}
+
+		echo '<p><a href="' . esc_url( self::get_guest_list_url() ) . '">' . esc_html( $link_text ) . '</a></p>';
 	}
 
 	/**

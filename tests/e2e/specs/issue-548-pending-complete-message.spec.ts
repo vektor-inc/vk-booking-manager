@@ -22,6 +22,7 @@ const OPTION_NAME = 'vkbm_provider_settings';
  * - 即時確定の場合は従来どおり「予約が完了しました。」のみ（案内文なし）。
  * - 管理画面の案内文入力欄は「仮予約にする」選択時のみ表示される。
  */
+// @title issue #548: 仮予約の完了画面に見出しと案内文を出す
 test.describe( 'Issue #548: tentative reservation completion message', () => {
 	const password = 'TestPassword123!';
 	// グローバルセットアップの user_* クリーンアップ対象に合わせた接頭辞を使う。
@@ -50,6 +51,7 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 
 	test.beforeAll( async () => {
 		// 元の設定値を控える（未保存の場合は空配列）。
+		// @step 管理画面で予約用の購読者ユーザーを1名作っておく
 		originalSettingsJson = wpEvalPhp(
 			`echo wp_json_encode( get_option( "${ OPTION_NAME }", array() ) );`
 		);
@@ -159,19 +161,23 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		await confirmButton.click();
 	};
 
+	// @title 仮予約のとき、完了画面に見出しと設定した案内文が出る
 	test( 'pending reservation shows the heading and the custom guidance text', async ( {
 		page,
 	} ) => {
 		// 仮予約＋案内文（2行）を設定する。
+		// @step BM 設定の「予約ステータス」を「仮予約にする」にし、「仮予約完了時の案内文」に「24時間以内にメールでご連絡します。」「しばらくお待ちください。」の2行を入れて保存しておく
 		updateSettings( {
 			provider_booking_status_mode: 'pending',
 			provider_booking_complete_message_pending:
 				'24時間以内にメールでご連絡します。\nしばらくお待ちください。',
 		} );
 
+		// @step 購読者のユーザーでログインし、予約ページでサービス「Service Menu 1」を選び、空きのある日と時間枠を選んで確認画面へ進み、同意にチェックして予約を確定する
 		await login( page );
 		await reserve( page );
 
+		// @check 完了画面に見出し「仮予約を受け付けました」が出る
 		const complete = page.locator( '.vkbm-confirm__complete' );
 		await expect( complete ).toBeVisible( { timeout: 15000 } );
 
@@ -183,6 +189,7 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		);
 
 		// 設定した案内文が表示され、改行が保持される（white-space: pre-line）こと。
+		// @check 設定した案内文が2行に分かれたまま表示される
 		const message = complete.locator( '.vkbm-confirm__complete-message' );
 		await expect( message ).toContainText(
 			'24時間以内にメールでご連絡します。'
@@ -191,22 +198,27 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		await expect( message ).toHaveCSS( 'white-space', 'pre-line' );
 
 		// 完了ブロックにフォーカスが移り、二重読み上げを避けるため role="status" は付かないこと。
+		// @check 完了画面の枠にフォーカスが移っている（読み上げが二重にならないよう、状態通知の役割は付いていない）
 		await expect( complete ).toBeFocused();
 		await expect( complete ).not.toHaveAttribute( 'role', 'status' );
 	} );
 
+	// @title 仮予約で案内文が空欄のとき、完了画面に標準の案内文が出る
 	test( 'pending reservation with empty guidance text shows the standard text', async ( {
 		page,
 	} ) => {
 		// 仮予約＋案内文は空欄。
+		// @step BM 設定の「予約ステータス」を「仮予約にする」にし、「仮予約完了時の案内文」を空欄にして保存しておく
 		updateSettings( {
 			provider_booking_status_mode: 'pending',
 			provider_booking_complete_message_pending: '',
 		} );
 
+		// @step 購読者のユーザーでログインし、予約ページでサービス「Service Menu 1」を選び、空きのある日と時間枠を選んで確認画面へ進み、同意にチェックして予約を確定する
 		await login( page );
 		await reserve( page );
 
+		// @check 完了画面に見出し「仮予約を受け付けました」が出る
 		const complete = page.locator( '.vkbm-confirm__complete' );
 		await expect( complete ).toBeVisible( { timeout: 15000 } );
 		await expect(
@@ -216,6 +228,7 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		);
 
 		// 標準の案内文が表示されること。
+		// @check 標準の案内文「確定のメールが届くまで、しばらくお待ちください」が出る
 		await expect(
 			complete.locator( '.vkbm-confirm__complete-message' )
 		).toContainText(
@@ -223,18 +236,22 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		);
 	} );
 
+	// @title 即時確定のとき、完了画面は「予約が完了しました。」だけで案内文は出ない
 	test( 'instant confirmation shows only the completion message without guidance text', async ( {
 		page,
 	} ) => {
 		// 即時確定。案内文を保存していても表示されないこと。
+		// @step BM 設定の「予約ステータス」を「即時確定」にし、「仮予約完了時の案内文」に「表示されてはいけない案内文」を入れて保存しておく
 		updateSettings( {
 			provider_booking_status_mode: 'confirmed',
 			provider_booking_complete_message_pending: '表示されてはいけない案内文',
 		} );
 
+		// @step 購読者のユーザーでログインし、予約ページでサービス「Service Menu 1」を選び、空きのある日と時間枠を選んで確認画面へ進み、同意にチェックして予約を確定する
 		await login( page );
 		await reserve( page );
 
+		// @check 完了画面に見出し「予約が完了しました。」が出る
 		const complete = page.locator( '.vkbm-confirm__complete' );
 		await expect( complete ).toBeVisible( { timeout: 15000 } );
 		await expect(
@@ -242,15 +259,18 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		).toHaveText(
 			/予約が完了しました。|Your reservation has been completed\./
 		);
+		// @check 案内文は表示されない
 		await expect(
 			complete.locator( '.vkbm-confirm__complete-message' )
 		).toHaveCount( 0 );
 	} );
 
+	// @title 「仮予約完了時の案内文」の入力欄は、「仮予約にする」を選んだときだけ出る
 	test( 'admin guidance text field is shown only when tentative reservation is selected', async ( {
 		browser,
 	} ) => {
 		// 管理者として設定画面を開く（ログイン済み状態を持たない前提のため新規コンテキストを使う）。
+		// @step 管理者でログインし、BM 設定の「システム」タブを開く
 		const context = await browser.newContext( { baseURL: WP_BASE_URL } );
 		const page = await context.newPage();
 		await loginAsAdmin( page );
@@ -264,9 +284,13 @@ test.describe( 'Issue #548: tentative reservation completion message', () => {
 		);
 
 		// 「仮予約にする」を選ぶと表示され、「即時確定」に戻すと非表示になる。
+		// @step 「予約ステータス」で「仮予約にする」を選ぶ
 		await statusSelect.selectOption( 'pending' );
+		// @check 「仮予約完了時の案内文」の入力欄が表示される
 		await expect( textarea ).toBeVisible();
+		// @step 「予約ステータス」を「即時確定」に戻す
 		await statusSelect.selectOption( 'confirmed' );
+		// @check 「仮予約完了時の案内文」の入力欄が隠れる
 		await expect( textarea ).toBeHidden();
 
 		await context.close();

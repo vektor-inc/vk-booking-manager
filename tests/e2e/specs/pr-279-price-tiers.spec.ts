@@ -142,6 +142,7 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 	// Global setup leaves nomination ON with no tier menu, so toggle nomination OFF
 	// and seed the menu for the duration of this describe block.
 	test.beforeAll( () => {
+		// @step 管理画面でスタッフ指名を OFF にし、料金区分（一般 4,000円・子供 3,000円）・定員 10 名の複数人予約のメニュー「Tier Menu」を作っておく
 		originalStaffEnabled = getStaffEnabled();
 		setStaffEnabled( false );
 		tierMenuId = seedTierMenu();
@@ -161,8 +162,10 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 	test( '区分ごとの人数セレクトが表示され、一般2・子供1で概算11000円', async ( {
 		page,
 	} ) => {
+		// @step ログインしていない状態で予約ページを開き、「Tier Menu」の「予約する」を押して、空きのある日と押せる最初の時間枠を選ぶ
 		await gotoTierPlanSummary( page );
 
+		// @check 「一般」「子供」の2つの区分の人数欄だけが表示される
 		// 区分は2件（一般／子供）→ tier-0, tier-1 が存在する。
 		await expect(
 			page.locator( '#vkbm-reservation-tier-0' )
@@ -180,11 +183,13 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 		await expect( tierBlock ).toContainText( '一般' );
 		await expect( tierBlock ).toContainText( '子供' );
 
+		// @step 一般 2・子供 1 を入れる
 		// 一般2・子供1 を入力する。
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '2' );
 		await page.locator( '#vkbm-reservation-tier-1' ).fill( '1' );
 		await page.waitForTimeout( 300 );
 
+		// @check 概算の合計に 11,000 円が表示される
 		// 概算合計 11,000 が表示される（4000*2 + 3000*1）。
 		const total = page.locator( '.vkbm-plan-summary__guest-tiers-total' );
 		await expect( total ).toContainText( '11,000' );
@@ -195,19 +200,23 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 			fullPage: true,
 		} );
 
+		// @check 「予約へ進む」ボタンが押せる
 		// 「予約へ進む」が押せる（合計1名以上・残枠内）。
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 		await expect( proceed ).toBeEnabled();
 	} );
 
 	test( '残枠超過で警告メッセージが表示される', async ( { page } ) => {
+		// @step ログインしていない状態で予約ページを開き、「Tier Menu」の「予約する」を押して、空きのある日と押せる最初の時間枠を選ぶ
 		await gotoTierPlanSummary( page );
 
+		// @step 一般 10・子供 1（定員の 10 名を超える）を入れる
 		// 容量は 10。一般10・子供1 = 11 で残枠超過させる。
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '10' );
 		await page.locator( '#vkbm-reservation-tier-1' ).fill( '1' );
 		await page.waitForTimeout( 300 );
 
+		// @check 残りの枠を超えている旨の警告が表示され、「予約へ進む」ボタンは押せない
 		// 残枠超過の警告が表示される（無言で進めない、ではなく理由が出る）。
 		const warning = page.locator( '.vkbm-plan-summary__hint--warning' );
 		await expect( warning ).toBeVisible();
@@ -222,21 +231,27 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 	} );
 
 	test( '一般3・子供0で進める／全区分0では進めない', async ( { page } ) => {
+		// @step ログインしていない状態で予約ページを開き、「Tier Menu」の「予約する」を押して、空きのある日と押せる最初の時間枠を選ぶ
 		await gotoTierPlanSummary( page );
 
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 
+		// @step 一般 0・子供 0 を入れる
 		// 初期は全区分0 → 進めない。
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '0' );
 		await page.locator( '#vkbm-reservation-tier-1' ).fill( '0' );
 		await page.waitForTimeout( 300 );
+		// @check 「予約へ進む」ボタンは押せない
 		await expect( proceed ).toBeDisabled();
 
+		// @step 一般を 3 にする
 		// 一般3・子供0（合計1名以上・特定区分0）→ 進める。
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '3' );
 		await page.waitForTimeout( 300 );
+		// @check 「予約へ進む」ボタンが押せる
 		await expect( proceed ).toBeEnabled();
 
+		// @check 概算の合計に 12,000 円が表示される
 		// 概算合計 12,000（4000*3）。
 		await expect(
 			page.locator( '.vkbm-plan-summary__guest-tiers-total' )
@@ -246,8 +261,10 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 	test( '確認画面に区分内訳と合計が表示される（count 回帰確認）', async ( {
 		page,
 	} ) => {
+		// @step ログインしていない状態で予約ページを開き、「Tier Menu」の「予約する」を押して、空きのある日と押せる最初の時間枠を選ぶ
 		await gotoTierPlanSummary( page );
 
+		// @step 一般 2・子供 1 を入れて「予約へ進む」ボタンを押す
 		// 一般2・子供1 を入力。
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '2' );
 		await page.locator( '#vkbm-reservation-tier-1' ).fill( '1' );
@@ -262,6 +279,7 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 		const summary = page.locator( '.vkbm-confirm__summary, .vkbm-confirm' );
 		await summary.first().waitFor( { state: 'visible', timeout: 15000 } );
 
+		// @check 確認画面に「一般」「子供」の区分が出て、人数がそれぞれ 2 名・1 名になっている
 		// 区分名（一般・子供）が確認サマリに出る。
 		await expect( page.locator( 'body' ) ).toContainText( '一般' );
 		await expect( page.locator( 'body' ) ).toContainText( '子供' );
@@ -277,6 +295,7 @@ test.describe( 'PR #279: 料金区分フロント', () => {
 		await expect( generalItem ).toContainText( '2' );
 		await expect( childItem ).toContainText( '1' );
 
+		// @check 合計に 11,000 円が表示される
 		// 合計（基本料金合計）に 11,000 が出る。
 		await expect( page.locator( 'body' ) ).toContainText( '11,000' );
 

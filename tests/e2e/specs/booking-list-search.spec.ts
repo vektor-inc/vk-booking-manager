@@ -10,6 +10,7 @@ test( '長い日本語名と英数字アカウント名がPCとモバイルで�
 	const name = '山田太郎'.repeat( 8 );
 	const account = 'LongAccount0123456789'.repeat( 2 );
 	// 名前を持たない会員のログイン名を、予約アカウントの補足として表示する。
+	// @step 名前の無い会員（ログイン名は長い英数字）と、その会員の予約（予約者名は「山田太郎」を8回繰り返した長い名前）を登録しておく
 	const fixture = JSON.parse(
 		wpEvalPhp( `
 		$user = wp_insert_user(array('user_login' => '${ account }', 'user_pass' => wp_generate_password(), 'role' => 'subscriber'));
@@ -19,11 +20,13 @@ test( '長い日本語名と英数字アカウント名がPCとモバイルで�
 	` )
 	);
 	try {
+		// @step 管理者でログインし、予約一覧で「longname891」を検索する
 		await loginAsAdmin( page );
 		await page.goto(
 			'/wp-admin/edit.php?post_type=vkbm_booking&s=longname891'
 		);
 		const row = page.locator( `#post-${ fixture.id }` );
+		// @step 画面幅を PC（1440px）とスマホ（375px）に変えて表示する（スマホでは行の詳細を開く）
 		for ( const width of [ 1440, 375 ] ) {
 			await page.setViewportSize( { width, height: 1000 } );
 			if ( width === 375 ) {
@@ -33,6 +36,7 @@ test( '長い日本語名と英数字アカウント名がPCとモバイルで�
 				[ 'name', name ],
 				[ 'account', `予約アカウント: ${ account }` ],
 			] ) {
+				// @check 予約者名と「予約アカウント: （ログイン名）」が全文表示され、セルからはみ出さずに複数行に折り返されている
 				const element = row.locator(
 					`.vkbm-booking-customer-column__${ kind }`
 				);
@@ -82,6 +86,7 @@ test( '長い日本語名と英数字アカウント名がPCとモバイルで�
 				);
 				expect( layout.lines ).toBeGreaterThan( 1 );
 			}
+			// @check ページが横にはみ出していない
 			expect(
 				await page.evaluate(
 					() => document.documentElement.scrollWidth
@@ -112,6 +117,7 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 	await page.setViewportSize( { width: 1440, height: 1000 } );
 	// 保存氏名とアカウント名が異なるきょうだい予約を用意する。
 	const fixture = JSON.parse(
+		// @step 名前「会員 次郎」の会員と、その会員の予約2件（予約者名「歯科太郎」「歯科花子」・電話 09011112222）、会員でない予約1件（予約者名「山田090」・電話 08033334444）を登録しておく
 		wpEvalPhp( `
 		$login = 'search891_' . wp_generate_password(8, false);
 		$user = wp_insert_user(array('user_login' => $login, 'user_pass' => wp_generate_password(), 'role' => 'subscriber', 'last_name' => '会員', 'first_name' => '次郎'));
@@ -126,8 +132,10 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 	` )
 	);
 	try {
+		// @step 管理者でログインし、予約一覧を開く
 		await loginAsAdmin( page );
 		await page.goto( '/wp-admin/edit.php?post_type=vkbm_booking' );
+		// @check 検索欄の下に「ユーザー名」を含む検索の案内が表示され、検索欄と結び付いている
 		await expect(
 			page.locator( '.vkbm-booking-search-help' )
 		).toContainText( 'ユーザー名' );
@@ -150,8 +158,10 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 			'歯科 09011112222',
 			fixture.login,
 		] ) {
+			// @step 検索欄に電話番号をいろいろな書き方（ハイフン・空白・かっこ・全角）や「歯科 09011112222」、会員のログイン名で入れて検索する
 			await page.locator( '#post-search-input' ).fill( keyword );
 			await page.locator( '#search-submit' ).click();
+			// @check どの書き方でも「歯科太郎」「歯科花子」の2件だけが、「予約アカウント: 会員 次郎」と電話番号「090-1111-2222」付きで表示され、「予約者名」列の見出しと件数 2 が出る
 			await expect( page.locator( '#post-search-input' ) ).toHaveValue(
 				keyword
 			);
@@ -184,17 +194,21 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 			[ '山田 090', 1 ],
 			[ '山田 080', 0 ],
 		] as const ) {
+			// @step 「山田 090」「山田 080」で検索する
 			await page.locator( '#post-search-input' ).fill( keyword );
 			await page.locator( '#search-submit' ).click();
+			// @check 「山田 090」は1件、「山田 080」は0件になる
 			await expect(
 				page.locator( '#the-list tr[id^="post-"]' )
 			).toHaveCount( count );
 		}
+		// @step 「09011112222」で検索する
 		await page.goto(
 			'/wp-admin/edit.php?post_type=vkbm_booking&s=09011112222'
 		);
 		// 補足行は標準サイズを保ち、主要な名前だけを強調する。
 		const first = page.locator( `#post-${ fixture.ids[ 0 ] }` );
+		// @check 予約者名だけが太字で、電話番号と予約アカウントの行は標準サイズ（13px）の灰色になっている
 		await expect(
 			first.locator( '.vkbm-booking-customer-column__name' )
 		).toHaveCSS( 'font-weight', '600' );
@@ -207,6 +221,7 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 			).toHaveCSS( 'font-size', '13px' );
 		}
 		// 見える字面の間隔を測り、セル内余白が行間以上か確認する。
+		// @check 予約者名の欄の上下の余白が、行と行の間隔以上ある
 		const spacing = await first
 			.locator( '.column-vkbm_booking_reserver' )
 			.evaluate( ( cell ) => {
@@ -267,13 +282,16 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 				expect( layout.width ).toBeLessThanOrEqual( layout.available );
 			}
 		};
+		// @check 名前・電話番号・予約アカウントの各語が途中で折り返されず、欄からはみ出さない
 		await checkWordWrapping();
 		await page.screenshot( {
 			path: testInfo.outputPath( 'desktop.png' ),
 			fullPage: true,
 		} );
 		// 狭い画面でも案内が検索欄に隣接し、画面からはみ出さない。
+		// @step 画面幅をスマホ（375px）にして、1件目の行の詳細を開く
 		await page.setViewportSize( { width: 375, height: 812 } );
+		// @check 検索の案内が検索欄のすぐ後ろに画面からはみ出さずに表示され、予約アカウントの行が表示され、各語が途中で折り返されない
 		await expect(
 			page.locator( '.search-box + #vkbm-booking-search-help' )
 		).toBeVisible();
@@ -291,12 +309,14 @@ test( '電話番号とユーザー名で予約を探し、予約者名列と件�
 			fullPage: true,
 		} );
 		// ロールを外すと、保存電話で探せても会員名は補足しない。
+		// @step 管理画面で会員「会員 次郎」の権限グループを外しておき、もう一度「09011112222」で検索する
 		wpEvalPhp(
 			`(new WP_User(${ Number( fixture.user ) }))->set_role('');`
 		);
 		await page.goto(
 			'/wp-admin/edit.php?post_type=vkbm_booking&s=09011112222'
 		);
+		// @check 予約アカウントの行が表示されない
 		await expect(
 			page.locator(
 				`#post-${ fixture.ids[ 0 ] } .vkbm-booking-customer-column__account`
@@ -322,6 +342,7 @@ test( 'アカウント一致の上限超過を警告し、保存情報の検索�
 } ) => {
 	test.setTimeout( 90000 );
 	// 実際の上限を超える会員と、保存情報だけで一致する予約を用意する。
+	// @step ログイン名が同じ文字列で始まる会員を 101 人と、予約者名がその文字列の予約、その会員の1人が予約した予約者名なしの予約を登録しておく
 	const fixture = JSON.parse(
 		wpEvalPhp( `
 		$prefix = 'overflow891_' . wp_generate_password(8, false);
@@ -335,10 +356,12 @@ test( 'アカウント一致の上限超過を警告し、保存情報の検索�
 	` )
 	);
 	try {
+		// @step 管理者でログインし、予約一覧でその文字列を検索する
 		await loginAsAdmin( page );
 		await page.goto(
 			`/wp-admin/edit.php?post_type=vkbm_booking&s=${ fixture.prefix }`
 		);
+		// @check 「アカウント情報での検索を省略しました」の警告に「予約に保存された情報での検索結果を表示しています。」「名前やメールアドレスなどを詳しく入力して、再検索してください。」が表示される
 		const notice = page
 			.locator( '.notice.notice-warning' )
 			.filter( { hasText: 'アカウント情報での検索を省略しました' } );
@@ -348,12 +371,14 @@ test( 'アカウント一致の上限超過を警告し、保存情報の検索�
 		await expect( notice ).toContainText(
 			'名前やメールアドレスなどを詳しく入力して、再検索してください。'
 		);
+		// @check 予約者名で一致した予約は表示され、会員のアカウントでしか一致しない予約は表示されない
 		await expect(
 			page.locator( `#post-${ fixture.saved }` )
 		).toBeVisible();
 		await expect(
 			page.locator( `#post-${ fixture.account }` )
 		).toHaveCount( 0 );
+		// @check 警告が一覧の見出しより下に表示される
 		const heading = await page
 			.locator( '.wp-heading-inline' )
 			.boundingBox();
@@ -395,6 +420,7 @@ for ( const scenario of [
 		browser,
 	}, testInfo ) => {
 		// ログイン後のセッションだけを引き継いで、JS無効時も同じ画面を開く。
+		// @step 管理者でログインし、ブラウザの条件（通常／375px 幅／375px 幅で JavaScript 無効／375px 幅でスクリプトの読み込み失敗）を変えて、予約一覧で一致しない語「missing891help」を検索する
 		const auth = await browser.newContext();
 		const login = await auth.newPage();
 		await loginAsAdmin( login );
@@ -417,6 +443,7 @@ for ( const scenario of [
 			const response = await page.goto(
 				'/wp-admin/edit.php?post_type=vkbm_booking&s=missing891help'
 			);
+			// @check 最初に読み込まれる画面の時点で、検索欄の直後に検索の案内があり、検索欄と結び付いている
 			const html = await response!.text();
 			expect( html ).toMatch(
 				/<input(?=[^>]+id="post-search-input")(?=[^>]+aria-describedby="vkbm-booking-search-help")[^>]*>/
@@ -424,6 +451,7 @@ for ( const scenario of [
 			expect( html ).toMatch(
 				/<\/p>\s*<p id="vkbm-booking-search-help"/
 			);
+			// @check 検索の案内が検索欄のすぐ後ろに表示され、ページの読み込みが終わっても位置が動かず、画面からはみ出さない
 			const help = page.locator(
 				'.search-box + #vkbm-booking-search-help'
 			);

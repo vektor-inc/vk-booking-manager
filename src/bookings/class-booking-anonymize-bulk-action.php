@@ -332,6 +332,7 @@ class Booking_Anonymize_Bulk_Action {
 			'bodyAttachment' => __( 'Files uploaded to the History image field on the reservation edit screen are also deleted from the media library, and images chosen from the media library are only removed from the reservation.', 'vk-booking-manager' ),
 			'bodyMyPage'     => __( 'The reservations will also no longer appear in the reservation list on My Page.', 'vk-booking-manager' ),
 			'bodyKept'       => __( 'Date and time, menu, price, and reservation status are kept, so sales and booking counts do not change.', 'vk-booking-manager' ),
+			'bodyFlags'      => __( 'Customer flags set for guests are kept, so they keep applying to new bookings.', 'vk-booking-manager' ),
 			'bodyNotEnded'   => __( 'Reservations whose end date and time has not passed yet are not anonymized.', 'vk-booking-manager' ),
 			'bodyIrrevers'   => __( 'This action cannot be undone.', 'vk-booking-manager' ),
 			'cancel'         => __( 'Cancel', 'vk-booking-manager' ),

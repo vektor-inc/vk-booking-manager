@@ -76,7 +76,9 @@ test.describe( 'PR #279 後方互換: 区分なしメニュー', () => {
 	// 複数人予約は指名OFF時のみ有効。describe の間だけ指名OFFに切り替えてメニューを用意する。
 	test.beforeAll( () => {
 		originalStaffEnabled = getStaffEnabled();
+		// @step 管理画面でスタッフ指名を使わない設定にしておく
 		setStaffEnabled( false );
+		// @step 料金区分なし・複数人予約あり・基本料金 5,000円・最大 10 名の「Legacy Menu」を作成しておく
 		legacyMenuId = seedLegacyMenu();
 	} );
 
@@ -93,6 +95,7 @@ test.describe( 'PR #279 後方互換: 区分なしメニュー', () => {
 	test( '区分なしメニューは単一人数入力・基本料金×人数', async ( {
 		page,
 	} ) => {
+		// @step ログインせずに予約ページを開き、「Legacy Menu」の「予約する」ボタンを押す
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 		const legacyCard = page
@@ -109,6 +112,7 @@ test.describe( 'PR #279 後方互換: 区分なしメニュー', () => {
 			.first()
 			.click();
 		// カレンダーのロード完了を待ってから、空き枠のある日を安定して選ぶ（フレーク対策）。
+		// @step 空きのある日と、選べる最初の時間枠を選ぶ
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
 		await page.waitForTimeout( 1000 );
 		// 先に走る spec が残した予約で先頭の枠が満枠（disabled）のことがあるため、押せる最初の枠を選ぶ。
@@ -119,6 +123,7 @@ test.describe( 'PR #279 後方互換: 区分なしメニュー', () => {
 		await page.waitForTimeout( 1000 );
 
 		// 単一の人数入力（#vkbm-reservation-guests）が出て、区分入力（tier-0）は出ない。
+		// @check 人数の入力欄が1つだけ表示され、料金区分ごとの人数欄と区分の合計欄は出ない
 		await expect(
 			page.locator( '#vkbm-reservation-guests' )
 		).toBeVisible();
@@ -131,12 +136,14 @@ test.describe( 'PR #279 後方互換: 区分なしメニュー', () => {
 		).toHaveCount( 0 );
 
 		// 2名にして確認画面へ → 基本料金5000×2=10000。
+		// @step 人数に 2 を入れて、確認画面へ進む
 		await page.locator( '#vkbm-reservation-guests' ).fill( '2' );
 		await page.waitForTimeout( 300 );
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 		await page.waitForTimeout( 2000 );
 		// 確認画面: メニュー名と人数2名が表示される。
+		// @check 確認画面にメニュー名「Legacy Menu」と「2名」が表示され、区分の内訳（一般など）は出ない
 		await expect(
 			page.locator( '.vkbm-confirm__summary-item', {
 				hasText: LEGACY_MENU_TITLE,

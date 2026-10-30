@@ -1492,6 +1492,36 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'requested_guests'      => 1,
 				'expected_error'        => '',
 			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人予約ON・定員3・最低2・申込1名 => nomination_min_guests（#968：異常系）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'exclusive_when_booked' => true,
+				'requested_guests'      => 1,
+				'expected_error'        => 'nomination_min_guests',
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人予約ON・定員3・最低2・申込2名 => 保存できる（#968：ちょうど）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'exclusive_when_booked' => true,
+				'requested_guests'      => 2,
+				'expected_error'        => '',
+			),
+			array(
+				'test_condition_name'   => '指名ON・貸し切り予約ON・複数人予約ON・定員3・最低2・申込1名 => nomination_min_guests（#968：指名ありでも拒否）',
+				'nomination_enabled'    => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'exclusive_when_booked' => true,
+				'requested_guests'      => 1,
+				'expected_error'        => 'nomination_min_guests',
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -1509,6 +1539,9 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			update_post_meta( $menu_id, '_vkbm_min_capacity', $case['min_capacity'] );
 			if ( $case['allow_multiple_guests'] ) {
 				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+			if ( ! empty( $case['exclusive_when_booked'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
 			}
 			// 複数人一括予約はスタッフ割当が前提のため、メニューにスタッフを割り当てる。
 			$staff_id = (int) $this->factory()->post->create(

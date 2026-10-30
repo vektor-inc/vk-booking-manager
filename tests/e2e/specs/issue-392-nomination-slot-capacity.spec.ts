@@ -209,10 +209,12 @@ async function getDailySlots(
 
 test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）', () => {
 	test.beforeAll( () => {
+		// @step BM 設定で指名機能を有効にしておく
 		originalStaffEnabled = getStaffEnabled();
 		// サイト全体の指名機能をONにする（メニューは既定で指名を使う）。
 		setStaffEnabled( true );
 
+		// @step 管理画面で、既存のスタッフ（ガイドA。指名料 500円）と新しいスタッフ「Nomination Capacity Staff B」（ガイドB）を担当にした、指名を使うサービス「Nomination Capacity Menu」（基本料金 1,000円・所要時間60分・複数人の一括予約を許可・予約枠の定員3名）を作っておく
 		staffAId = getStaffId();
 		staffBId = seedStaffB();
 		menuId = seedNominationMenu();
@@ -220,6 +222,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		// 以降のテストで使う来月分のシフトを、ここで両ガイド分まとめて作成しておく
 		// （個別テスト内で作成すると、そのテストが失敗した場合に後続テストの前提が
 		// 崩れてしまうため #392）。
+		// @step 両ガイドに来月分のシフトを登録しておく
 		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
 		createShiftForMonth(
 			staffAId,
@@ -268,6 +271,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 	test( 'フロント: ガイドを指名して定員3名で予約内容確認まで進められ、4名入力は3名にクランプされる', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で予約ページを開き、サービス「Nomination Capacity Menu」のカードの「予約に進む」を押す
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
@@ -289,12 +293,14 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 			.click();
 
 		// このメニューは指名を使うため、スタッフ選択欄が表示される。ガイドAを指名する。
+		// @check 選択欄がサービスとスタッフの2つ表示される
 		const staffSelect = page.locator(
 			'.vkbm-plan-summary__selectors select'
 		);
 		await expect
 			.poll( async () => staffSelect.count(), { timeout: 10000 } )
 			.toBe( 2 );
+		// @step スタッフの選択欄でガイドAを指名し、カレンダーで空きのある日を選んで、最初の時間枠を選ぶ
 		await staffSelect.nth( 1 ).selectOption( { value: staffAId } );
 
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
@@ -306,10 +312,12 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		await page.waitForTimeout( 1000 );
 
 		// 人数入力欄が表示され、3名まで入力できる。
+		// @step 人数の欄に 3 を入れる
 		const guestsInput = page.locator( '#vkbm-reservation-guests' );
 		await guestsInput.waitFor( { state: 'visible', timeout: 10000 } );
 		await guestsInput.fill( '3' );
 		await page.waitForTimeout( 300 );
+		// @check 人数が 3 のまま入り、「予約に進む」ボタンが押せる
 		await expect( guestsInput ).toHaveValue( '3' );
 
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
@@ -317,11 +325,14 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 
 		// 4名を入力しても、定員（3）を超えた分は自動的にクランプされる
 		// （app.js の onChange が maxSelectableGuests＝選択中スロットの remaining でクランプする）。
+		// @step 人数の欄に 4 を入れる
 		await guestsInput.fill( '4' );
 		await page.waitForTimeout( 300 );
+		// @check 人数は定員の 3 に戻される
 		await expect( guestsInput ).toHaveValue( '3' );
 
 		// 予約内容確認へ進む。
+		// @step 「予約に進む」を押す
 		await proceed.click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 		await page.waitForTimeout( 2000 );
@@ -329,6 +340,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		// 合計金額は 基本料金1000×3名 + 指名料500×1回 = 3500。
 		// 指名料が人数分（500×3=1500）加算されていれば 4500 になるはずで、3500 と 4500 を
 		// 区別することで「指名料は人数によらず1回だけ」を確認する。
+		// @check 合計金額が「3,500」円（基本料金 1,000円×3名＋指名料 500円×1回）で、指名料を人数分足した「4,500」円にはなっていない
 		await expect( page.locator( 'body' ) ).toContainText( '3,500' );
 		await expect( page.locator( 'body' ) ).not.toContainText( '4,500' );
 	} );
@@ -336,6 +348,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 	test( 'フロント: 指名を使うメニューの空き枠一覧に残数・催行状態が表示されない（満枠ラベルは表示される・#392）', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で予約ページを開き、サービス「Nomination Capacity Menu」のカードの「予約に進む」を押す
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
@@ -351,6 +364,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 			.first()
 			.click();
 
+		// @step カレンダーで空きのある日を選び、時間枠の一覧が出るまで待つ
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
 		await page.waitForTimeout( 1000 );
 
@@ -364,6 +378,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		// #392: ただし「満枠（Fully booked）」ラベル自体は残数の数値を含まない
 		// 二値表示のため、他クラスと区別して「数値バッジ（--full・--closed 修飾子が付かない方）」
 		// だけが無いことを確認する（満枠ラベル自体は次のテストで別途確認する）。
+		// @check 時間枠の一覧に「残 X / 満 Y」のような残数の表示も、「開催決定」「あとN名で開催」のような催行状態の表示も出ない
 		await expect(
 			page.locator(
 				'.vkbm-slot-list__remaining:not(.vkbm-slot-list__remaining--full):not(.vkbm-slot-list__remaining--closed)'
@@ -382,9 +397,11 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		const month = String( nextTokyoMonth.month ).padStart( 2, '0' );
 		// 他のテストと日付が競合しないよう別日（17日）を使う。両ガイドとも占有済みにする。
 		const dateStr = `${ year }-${ month }-17`;
+		// @step 来月17日の 9:00〜10:00 に、ガイドAへ3名、ガイドBへ1名の確定済みの予約を管理画面で入れておく
 		seedBooking( staffAId, dateStr, MENU_MAX_CAPACITY );
 		seedBooking( staffBId, dateStr, 1 );
 
+		// @step ログアウトした状態で、サービス「Nomination Capacity Menu」の予約画面を開く
 		await page.goto( `/booking/?menu_id=${ menuId }` );
 		await page.waitForLoadState( 'networkidle' );
 
@@ -394,6 +411,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		} );
 
 		// 対象は翌月のため「次の月」を1回送ってから対象日（17日）を選ぶ。
+		// @step カレンダーで「次の月」を押し、17日を選ぶ
 		await page.getByRole( 'button', { name: '次の月' } ).click();
 		await page.waitForTimeout( 800 );
 		await page
@@ -407,6 +425,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		// #392: 「指名なし」の一覧で、両ガイドとも占有済みの09:00枠は
 		// disabled で選択できない（表示文言は翻訳後だと「満枠」になるため、
 		// ここでは可視・非活性の二値のみを検証し、文言自体はアサートしない）。
+		// @check 両ガイドとも予約済みの時間枠が満枠として表示され、選べない
 		const fullSlot = page
 			.locator( '.vkbm-slot-list__item.is-full' )
 			.first();
@@ -423,17 +442,22 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		const dateStr = `${ year }-${ month }-15`;
 
 		// ガイドAを指名して3名で予約が入っている状態を再現する。
+		// @step 来月15日の 9:00〜10:00 に、ガイドAを指名した3名の確定済み予約を管理画面で入れておく
 		seedBooking( staffAId, dateStr, MENU_MAX_CAPACITY );
 
 		// ガイドAを指名して空き枠を見ると、09:00の枠は（予約済みのため）出てこない。
+		// @step ガイドAを指名して、来月15日の空き枠を確かめる
 		const staffASlots = await getDailySlots( request, dateStr, staffAId );
+		// @check 9:00 の枠は出てこない
 		const staffANineOClock = staffASlots.find( ( slot ) =>
 			String( slot.start_at ).includes( 'T09:00:00' )
 		);
 		expect( staffANineOClock ).toBeUndefined();
 
 		// ガイドBを指名すれば、同じ時間帯でも影響を受けず定員（3）のまま選べる。
+		// @step ガイドBを指名して、来月15日の空き枠を確かめる
 		const staffBSlots = await getDailySlots( request, dateStr, staffBId );
+		// @check 9:00 の枠があり、定員も残りも3名のまま
 		const staffBNineOClock = staffBSlots.find( ( slot ) =>
 			String( slot.start_at ).includes( 'T09:00:00' )
 		);
@@ -452,11 +476,14 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		const dateStr = `${ year }-${ month }-16`;
 
 		// ガイドAを指名して3名で予約が入っている状態（前テストと同じ状況を別日で再現）。
+		// @step 来月16日の 9:00〜10:00 に、ガイドAを指名した3名の確定済み予約を管理画面で入れておく
 		seedBooking( staffAId, dateStr, MENU_MAX_CAPACITY );
 
 		// 「指名なし」（自動割当）の空き枠は、ガイドBがまだ空いているため
 		// 定員（3）まで受け付けられる（定員はスタッフ1人あたりのため）。
+		// @step 指名なしで、来月16日の空き枠を確かめる
 		const autoSlotsBeforeStaffB = await getDailySlots( request, dateStr );
+		// @check ガイドBが空いているので、9:00 の枠は残り3名で受け付けられる
 		const autoNineOClockBefore = autoSlotsBeforeStaffB.find( ( slot ) =>
 			String( slot.start_at ).includes( 'T09:00:00' )
 		);
@@ -464,6 +491,7 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		expect( autoNineOClockBefore?.remaining ).toBe( MENU_MAX_CAPACITY );
 
 		// 続けて「指名なし」でガイドBに1名だけ予約が入る（定員3名のうち1名だけ）。
+		// @step 来月16日の 9:00〜10:00 に、ガイドBへ1名の確定済み予約を管理画面で入れ、キャッシュを消しておく
 		seedBooking( staffBId, dateStr, 1 );
 		// availability のトランジェントキャッシュ（日別スロットはTTL1分）をクリアする。
 		// これを忘れると、直前の autoSlotsBeforeStaffB 取得時にキャッシュされた古い
@@ -473,7 +501,9 @@ test.describe( 'issue #392: 指名を使うメニュー（1枠1組・貸切）',
 		// #392: 指名を使うメニューは1枠1組（貸切）のため、ガイドBの残り2名分の余地があっても
 		// 相乗りはさせない。両ガイドとも予約済みとなり、「指名なし」の空き枠は受付不可
 		// （remaining=0）になる（#392より前の複数人相乗り仕様なら 3-1=2 が残るはずだった）。
+		// @step 指名なしで、来月16日の空き枠をもう一度確かめる
 		const autoSlotsAfterStaffB = await getDailySlots( request, dateStr );
+		// @check ガイドBの定員にまだ2名分の余裕があっても相乗りにはならず、9:00 の枠は残り0名（受付不可）になる
 		const autoNineOClockAfter = autoSlotsAfterStaffB.find( ( slot ) =>
 			String( slot.start_at ).includes( 'T09:00:00' )
 		);
@@ -541,6 +571,7 @@ test.describe( 'issue #440: 指名を使うメニューで複数人一括予約�
 	}
 
 	test.beforeAll( () => {
+		// @step BM 設定で指名機能と予約枠の定員を有効にし、複数人の一括予約の設定は外しておく
 		originalStaffEnabledForGuestsInput = getStaffEnabled();
 		setStaffEnabled( true );
 		wpEvalPhp( `
@@ -550,6 +581,7 @@ test.describe( 'issue #440: 指名を使うメニューで複数人一括予約�
 			update_option( 'vkbm_provider_settings', $s );
 		` );
 		// グローバルセットアップ済みのスタッフ（当月・翌月分のシフト入り）を再利用する。
+		// @step 管理画面で、既存のスタッフを担当にした、指名を使い複数人の一括予約を許可しないサービス「Nomination No Multi Guests Menu」（基本料金 1,000円・所要時間60分）を作っておく
 		const staffId = getStaffId();
 		noMultiGuestMenuId = seedNominationMenuWithoutMultiGuests( staffId );
 	} );
@@ -567,10 +599,12 @@ test.describe( 'issue #440: 指名を使うメニューで複数人一括予約�
 	test( 'フロント: 指名を使うメニューでも複数人一括予約が無効なら人数入力欄が表示されない', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で、サービス「Nomination No Multi Guests Menu」の予約画面を開く
 		await page.goto( `/booking/?menu_id=${ noMultiGuestMenuId }` );
 		await page.waitForLoadState( 'networkidle' );
 
 		// このメニューは指名を使うため、スタッフ選択欄が表示される（自動割当＋指名スタッフ分）。
+		// @check スタッフの指名欄を含む選択欄が表示される
 		const staffSelect = page.locator(
 			'.vkbm-plan-summary__selectors select'
 		);
@@ -578,6 +612,7 @@ test.describe( 'issue #440: 指名を使うメニューで複数人一括予約�
 			.poll( async () => staffSelect.count(), { timeout: 10000 } )
 			.toBeGreaterThan( 0 );
 
+		// @step 指名なしのまま、カレンダーで空きのある日を選び、最初の時間枠を選ぶ
 		const calendarMetaResponse = page.waitForResponse(
 			( res ) => /calendar-meta/.test( res.url() ),
 			{ timeout: 15000 }
@@ -592,11 +627,13 @@ test.describe( 'issue #440: 指名を使うメニューで複数人一括予約�
 		await page.waitForTimeout( 1000 );
 
 		// 複数人一括予約が無効なため、人数入力欄自体が存在しない。
+		// @check 人数の欄は表示されない
 		await expect( page.locator( '#vkbm-reservation-guests' ) ).toHaveCount(
 			0
 		);
 
 		// 予約内容確認へ進める（人数=1名固定として扱われる）。
+		// @check 「予約に進む」ボタンが押せる
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 		await expect( proceed ).toBeEnabled();
 	} );

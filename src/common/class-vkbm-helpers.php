@@ -95,6 +95,19 @@ class VKBM_Helper {
 
 		return preg_replace( '/\D+/', '', $normalized ) ?? '';
 	}
+
+	/**
+	 * Normalize an email address for comparison (trim and lowercase).
+	 *
+	 * メールアドレスを比較用にそろえる。前後の空白を除き、小文字にする（ゲスト予約の顧客フラグ照合・重複予約の判定に使う）。
+	 *
+	 * @param string $value Raw email address.
+	 * @return string
+	 */
+	public static function normalize_email( string $value ): string {
+		return strtolower( trim( $value ) );
+	}
+
 	/**
 	 * Determine whether a post has a thumbnail.
 	 *

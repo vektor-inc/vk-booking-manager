@@ -110,13 +110,17 @@ test.describe( 'issue #787: 絞り込み検索の ON/OFF によらず「枠で�
 	test( '枠 ON・検索 OFF・メニュー選択後: プルダウンを含む検索欄が枠で囲われる', async ( {
 		page,
 	} ) => {
+		// @step 共通設定の「デザイン設定」で絞り込み検索のデザインを「枠で囲う」にし、「予約ページの表示要素」で絞り込み検索 OFF・サービスメニュー一覧 ON にする
 		configure( true, false );
+		// @step 「Service Menu 1」を選んだ状態の予約ページを開く
 		await page.goto( `/booking/?menu_id=${ getServiceMenuId() }` );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check メニュー・スタッフのプルダウンが表示される
 		const selectors = page.locator( '.vkbm-plan-summary__selectors' );
 		await expect( selectors ).toBeVisible( { timeout: 10000 } );
 
+		// @check プルダウンの欄が枠で囲われ、1px の枠線と内側の余白が付いている
 		// プルダウンの行が、枠の要素の中にある。
 		const frame = page.locator( FRAME );
 		await expect( frame ).toHaveCount( 1 );
@@ -139,15 +143,19 @@ test.describe( 'issue #787: 絞り込み検索の ON/OFF によらず「枠で�
 	test( '枠 ON・検索 OFF・メニュー未選択: 検索欄が描画されず、枠も出ない', async ( {
 		page,
 	} ) => {
+		// @step 共通設定で絞り込み検索のデザインを「枠で囲う」にし、絞り込み検索 OFF・サービスメニュー一覧 ON にする
 		configure( true, false );
+		// @step メニューを選ばずに予約ページを開く
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check サービスメニュー一覧のカードが表示される
 		// 一覧（カード）は出ている。
 		await expect(
 			page.locator( '.vkbm-reservation-content__menu-list' )
 		).toBeVisible( { timeout: 10000 } );
 
+		// @check 検索欄は無く、枠も出ない
 		// 検索欄そのものが無く、枠のクラスも付かない。
 		await expect(
 			page.locator( '.vkbm-plan-summary__search' )
@@ -158,10 +166,13 @@ test.describe( 'issue #787: 絞り込み検索の ON/OFF によらず「枠で�
 	test( '枠 ON・検索 ON・メニュー選択後: 従来どおり枠が付く', async ( {
 		page,
 	} ) => {
+		// @step 共通設定で絞り込み検索のデザインを「枠で囲う」にし、絞り込み検索 ON・サービスメニュー一覧 ON にする
 		configure( true, true );
+		// @step 「Service Menu 1」を選んだ状態の予約ページを開く
 		await page.goto( `/booking/?menu_id=${ getServiceMenuId() }` );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check プルダウンの欄が表示され、枠で囲われている
 		await expect(
 			page.locator( '.vkbm-plan-summary__selectors' )
 		).toBeVisible( { timeout: 10000 } );
@@ -171,10 +182,13 @@ test.describe( 'issue #787: 絞り込み検索の ON/OFF によらず「枠で�
 	test( '枠 OFF（プレーン）・検索 OFF・メニュー選択後: 枠は付かない', async ( {
 		page,
 	} ) => {
+		// @step 共通設定で絞り込み検索のデザインを「プレーン」にし、絞り込み検索 OFF・サービスメニュー一覧 ON にする
 		configure( false, false );
+		// @step 「Service Menu 1」を選んだ状態の予約ページを開く
 		await page.goto( `/booking/?menu_id=${ getServiceMenuId() }` );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check プルダウンの欄は表示されるが、枠で囲われていない
 		await expect(
 			page.locator( '.vkbm-plan-summary__selectors' )
 		).toBeVisible( { timeout: 10000 } );

@@ -116,6 +116,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 	} );
 
 	test( '指名機能が有効な場合: max_capacity入力フィールドが表示され、指名向けの説明文が出力される', () => {
+		// @step 管理画面で指名機能を有効にし、「Service Menu 1」のメニュー個別の指名設定は既定（指名を使う）のままで、編集画面の予約条件の欄を開く
 		// --- 準備: サイト全体・このメニューともに指名機能を使う状態にする ---
 		// Setup: Enable the nomination feature site-wide, and make sure this menu
 		// does not opt out of nomination (uses the default "use nomination" state).
@@ -126,6 +127,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		// Get the HTML output of the metabox
 		const html = getConditionsMetaboxHtml( menuId );
 
+		// @check 「予約枠の定員」の入力欄が表示される
 		// #392: max_capacity フィールドは指名の有無に関わらず常に表示される（hidden 属性が付かない）。
 		// #392: the max_capacity field is always shown regardless of nomination
 		// (no `hidden` attribute).
@@ -141,6 +143,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		expect( html ).toContain( 'id="vkbm_service_menu_max_capacity"' );
 		expect( html ).toContain( 'name="vkbm_service_menu[max_capacity]"' );
 
+		// @check 説明文に「スタッフを指名した1件の予約で、一度に申し込める最大人数です。」「その時間帯は貸切（その1組専用）扱いとなり、他のお客様と共有されません。」が出る
 		// #392: 指名向けの説明文（1組の最大人数・スタッフが枠を専有する旨）が出力される。
 		// ja ロケールの翻訳文言をアサートする（英語原文の直接アサートはしない）。
 		// #392: the nomination-specific description (max group size per booking,
@@ -153,6 +156,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 			'その時間帯は貸切（その1組専用）扱いとなり、他のお客様と共有されません。'
 		);
 
+		// @check 指名なし向けの説明文「スタッフ指名なし（自動割り当て）の予約で、1つの予約枠を共有できる最大人数です。」は出ない
 		// 旧仕様（PR #163・#412）の非指名向け説明文は出力されない。
 		// ja ロケールの翻訳文言で否定チェックする（英語原文は実際には描画されないため
 		// 英語のままだと常に成立してしまい、検証になっていなかった）。
@@ -165,11 +169,13 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 	} );
 
 	test( '指名機能が有効な場合: 旧仕様の案内メッセージ要素は撤去されている（回帰確認）', () => {
+		// @step 管理画面で指名機能を有効にし、「Service Menu 1」のメニュー個別の指名設定は既定（指名を使う）のままで、編集画面の予約条件の欄を開く
 		setStaffEnabled( true );
 		setMenuDisableNomination( menuId, false );
 
 		const html = getConditionsMetaboxHtml( menuId );
 
+		// @check 旧仕様の「指名機能を使っているため定員設定は使えない」旨の案内が無い
 		// #392: 「指名機能を使っているため定員設定は使えない」案内メッセージ
 		// （id="vkbm-nomination-enabled-notice"）自体を撤去した。hidden 属性で隠すのではなく
 		// 要素そのものが DOM に存在しないことを確認する。
@@ -181,6 +187,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 	} );
 
 	test( '指名機能が無効な場合: max_capacity入力フィールドが表示され、非指名向けの説明文が出力される', () => {
+		// @step 管理画面で指名機能を無効にし、「Service Menu 1」の編集画面の予約条件の欄を開く
 		// --- 準備: 指名機能を無効にする ---
 		// Setup: Disable the nomination feature
 		setStaffEnabled( false );
@@ -189,6 +196,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		// Get the HTML output of the metabox
 		const html = getConditionsMetaboxHtml( menuId );
 
+		// @check 「予約枠の定員」の数値の入力欄が表示される
 		// max_capacity 入力フィールドが出力されていることを確認
 		// Verify max_capacity input field IS present in the output
 		expect( html ).toContain( 'id="vkbm_service_menu_max_capacity"' );
@@ -206,6 +214,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		expect( maxCapacityTag ).not.toBe( '' );
 		expect( maxCapacityTag ).not.toContain( 'hidden' );
 
+		// @check 説明文「スタッフ指名なし（自動割り当て）の予約で、1つの予約枠を共有できる最大人数です。」が出る
 		// 非指名向けの説明文（スタッフ自動割り当て時の相乗り人数）が出力される。
 		// ja ロケールの翻訳文言をアサートする（この文言は#392より前から翻訳済み）。
 		// The non-nomination description (max people sharing a slot under
@@ -215,6 +224,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 			'スタッフ指名なし（自動割り当て）の予約で、1つの予約枠を共有できる最大人数です。'
 		);
 
+		// @check 指名向けの説明文「スタッフを指名した1件の予約で、一度に申し込める最大人数です。」は出ない
 		// 指名向けの説明文は出力されない。
 		// ja ロケールの翻訳文言で否定チェックする（理由は上のコメントと同じ）。
 		// The nomination-specific description is not present. Assert against
@@ -223,6 +233,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 			'スタッフを指名した1件の予約で、一度に申し込める最大人数です。'
 		);
 
+		// @check 旧仕様の指名機能に関する案内も無い
 		// #392: 旧仕様の案内メッセージ要素も、指名OFF時から一貫して DOM に存在しない。
 		// The old guidance message element is likewise absent when nomination is
 		// disabled.
@@ -239,6 +250,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 		test( `max_capacityの値をWP-CLIで保存すると値が保持される（回帰確認・指名${
 			nominationEnabled ? '有効' : '無効'
 		}）`, () => {
+			// @step 管理画面で指名機能を有効（指名無効のケースでは無効）にする
 			setStaffEnabled( nominationEnabled );
 			setMenuDisableNomination( menuId, false );
 
@@ -249,6 +261,7 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 			);
 
 			try {
+				// @step 「Service Menu 1」の「予約枠の定員」を 5 にして保存し、編集画面の予約条件の欄を開く
 				// WP-CLI で max_capacity メタ値を 5 に設定
 				// Set max_capacity meta value to 5 via WP-CLI
 				wpCli( `post meta update ${ menuId } _vkbm_max_capacity 5` );
@@ -259,14 +272,17 @@ test.describe( 'issue #392: 指名を使うメニューでもmax_capacityフィ�
 				expect( html ).toContain(
 					'id="vkbm_service_menu_max_capacity"'
 				);
+				// @check 「予約枠の定員」が 5 になっている
 				// value="5" が input フィールドに含まれていることを確認
 				// Verify value="5" is present in the input field
 				expect( html ).toContain( 'value="5"' );
 
+				// @step 「予約枠の定員」を 3 に変えて保存し、編集画面を開き直す
 				// 別の値（3）に変更して保存し、再度確認
 				// Change to a different value (3), save, and verify again
 				wpCli( `post meta update ${ menuId } _vkbm_max_capacity 3` );
 				const htmlAfter = getConditionsMetaboxHtml( menuId );
+				// @check 「予約枠の定員」が 3 になっている
 				expect( htmlAfter ).toContain( 'value="3"' );
 			} finally {
 				// テスト後にメタ値を元の状態に復元（失敗時にも必ず実行）

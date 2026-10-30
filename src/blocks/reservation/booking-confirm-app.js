@@ -9,8 +9,8 @@ import {
 	useState,
 } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
-import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
 import { formatCurrency, normalizePriceValue } from '../shared/pricing';
+import { formatBookingDateTimeParts } from './format-wp-date';
 import { resolveLoginState } from '../shared/auth';
 import { resolveApiErrorMessage } from '../shared/rest-error-message';
 import {
@@ -43,6 +43,20 @@ import {
 } from './components/footer-model';
 import { PricingRowLabel } from './components/pricing-row-label';
 import { BookingCompleteNotice } from './components/booking-complete-notice';
+import {
+	GuestBackButton,
+	GuestContactFields,
+	GuestLoginPrompt,
+} from './components/guest-contact-fields';
+import { GuestVerificationSent } from './components/guest-verification-sent';
+import {
+	BOOKING_CUSTOMER_MODE,
+	buildGuestBookingPayload,
+	hasGuestContactErrors,
+	normalizeBookingCustomerMode,
+	postGuestBooking,
+	validateGuestContact,
+} from './guest-booking';
 import { AttendeeSelector } from './components/attendee-selector';
 import { useAttendeeOptions, useAttendeeSelection } from './attendee-selection';
 
@@ -60,94 +74,6 @@ const getQueryParam = ( key ) => {
 	const params = new URLSearchParams( window.location.search );
 	const value = params.get( key ) || '';
 	return key === 'draft' ? sanitizeDraftToken( value ) : value;
-};
-
-const formatBookingDateTimeParts = ( startAt, endAt, timezone ) => {
-	if ( ! startAt ) {
-		return { date: '', time: '' };
-	}
-
-	const dateLabel = formatDate( startAt, timezone, {
-		includeTime: false,
-		includeDate: true,
-		includeWeekday: true,
-	} );
-	const startTimeLabel = formatDate( startAt, timezone, {
-		includeTime: true,
-		includeDate: false,
-	} );
-	const endTimeLabel = endAt
-		? formatDate( endAt, timezone, {
-				includeTime: true,
-				includeDate: false,
-		  } )
-		: '';
-	const timeLabel = endTimeLabel
-		? `${ startTimeLabel } - ${ endTimeLabel }`.trim()
-		: startTimeLabel;
-
-	return {
-		date: dateLabel,
-		time: timeLabel,
-	};
-};
-
-const formatDate = (
-	iso,
-	timezone,
-	{ includeTime = true, includeDate = true, includeWeekday = false } = {}
-) => {
-	if ( ! iso ) {
-		return '';
-	}
-	try {
-		const date = new Date( iso );
-		if ( Number.isNaN( date.getTime() ) ) {
-			return iso;
-		}
-
-		let settings;
-		try {
-			settings =
-				typeof __experimentalGetSettings === 'function'
-					? __experimentalGetSettings()
-					: undefined;
-		} catch ( error ) {
-			settings = undefined;
-		}
-
-		const dateFormat = settings?.formats?.date || 'Y/m/d';
-		const timeFormat = settings?.formats?.time || 'H:i';
-		const wpTimezone = timezone || settings?.timezone?.string;
-
-		const datePart = includeDate
-			? dateI18n( dateFormat, date, wpTimezone )
-			: '';
-		const timePart = includeTime
-			? dateI18n( timeFormat, date, wpTimezone )
-			: '';
-		const weekdayPart = includeWeekday
-			? dateI18n( 'D', date, wpTimezone )
-			: '';
-
-		if ( includeDate && includeTime ) {
-			if ( includeWeekday && weekdayPart ) {
-				return `${ datePart }(${ weekdayPart }) ${ timePart }`.trim();
-			}
-			return `${ datePart } ${ timePart }`.trim();
-		}
-
-		if ( includeDate ) {
-			if ( includeWeekday && weekdayPart ) {
-				return `${ datePart }(${ weekdayPart })`.trim();
-			}
-			return datePart;
-		}
-
-		return timePart;
-	} catch ( error ) {
-		return iso;
-	}
 };
 
 const parseQueryParams = () => {
@@ -312,6 +238,13 @@ export const BookingConfirmApp = ( {
 		useState( reservationPageUrl || '' );
 	const [ taxLabelText, setTaxLabelText ] = useState( '' );
 	const [ currencySymbol, setCurrencySymbol ] = useState( '' );
+	// 予約の受付方法（基本設定）。読み込みが終わるまでは「会員のみ」（今までの画面）として扱う。
+	const [ bookingCustomerMode, setBookingCustomerMode ] = useState(
+		BOOKING_CUSTOMER_MODE.MEMBER
+	);
+	// 基本設定の読み込みが終わったか（成功・失敗を問わない）。未ログインのお客様に、受付方法が決まる前の画面を一瞬見せないために使う。
+	const [ providerSettingsSettled, setProviderSettingsSettled ] =
+		useState( false );
 
 	const isLoggedIn = resolveLoginState( { userBootstrap, isEditor } );
 	// 名簿から「ご利用になる方」を選ぶ機能。無効、または取得できない場合は従来の名前の入力欄にする。
@@ -351,6 +284,28 @@ export const BookingConfirmApp = ( {
 	const [ bookingsError, setBookingsError ] = useState( '' );
 	const [ bookings, setBookings ] = useState( [] );
 	const [ cancellingBookingId, setCancellingBookingId ] = useState( 0 );
+	// 会員登録せずに予約するお客様の入力。ログイン・新規登録の欄へ切り替えても消さない（親のこの state が持つ）。
+	const [ guestContact, setGuestContact ] = useState( {
+		name: '',
+		email: '',
+		phone: '',
+	} );
+	const [ guestErrors, setGuestErrors ] = useState( {
+		name: '',
+		email: '',
+		phone: '',
+	} );
+	const [ guestHoneypot, setGuestHoneypot ] = useState( '' );
+	// 確認メールを送ったあとの画面の内容（送り前は null）。
+	const [ guestSent, setGuestSent ] = useState( null );
+	const guestNameRef = useRef( null );
+	const guestEmailRef = useRef( null );
+	const guestPhoneRef = useRef( null );
+	const guestSentRef = useRef( null );
+	const [ guestEmailFocusRequest, setGuestEmailFocusRequest ] = useState( 0 );
+	// 「どちらでも」で入力欄を切り替えたあとに、切り替え先の最初の入力欄へフォーカスを移すための要求。
+	const [ guestNameFocusRequest, setGuestNameFocusRequest ] = useState( 0 );
+	const [ authFocusPending, setAuthFocusPending ] = useState( false );
 	const timezone = draft?.meta?.timezone || '';
 
 	const pricingSummary = useMemo( () => {
@@ -680,9 +635,19 @@ export const BookingConfirmApp = ( {
 						response.reservation_page_url
 					);
 				}
+				setBookingCustomerMode(
+					normalizeBookingCustomerMode(
+						response?.booking_customer_mode
+					)
+				);
 			} )
 			.catch( () => {
 				// Ignore provider settings fetch errors (fallback to defaults).
+			} )
+			.finally( () => {
+				if ( isMounted ) {
+					setProviderSettingsSettled( true );
+				}
 			} );
 
 		return () => {
@@ -1179,6 +1144,93 @@ export const BookingConfirmApp = ( {
 			} );
 	};
 
+	// 未ログインで、受付方法が「ゲストのみ」または「どちらでも」のとき、会員登録せずに予約するための「お客様情報」欄を出す。
+	// 「どちらでも」では、ログイン・新規登録の欄へ切り替えている間だけ出さない。
+	const isGuestBookingAvailable =
+		! isLoggedIn && bookingCustomerMode !== BOOKING_CUSTOMER_MODE.MEMBER;
+	const showGuestForm =
+		isGuestBookingAvailable &&
+		( bookingCustomerMode === BOOKING_CUSTOMER_MODE.GUEST ||
+			( authMode !== 'login' && authMode !== 'register' ) );
+
+	// お客様情報欄の入力を更新する（直したいエラーだけ消す）。
+	const handleGuestContactChange = ( field, value ) => {
+		setGuestContact( ( current ) => ( { ...current, [ field ]: value } ) );
+		setGuestErrors( ( current ) => ( { ...current, [ field ]: '' } ) );
+	};
+
+	// 最初にエラーのある欄へフォーカスを移す。
+	const focusFirstGuestError = ( errors ) => {
+		const target = errors.name
+			? guestNameRef
+			: errors.email
+			? guestEmailRef
+			: guestPhoneRef;
+		window.setTimeout( () => target.current?.focus(), 0 );
+	};
+
+	// 会員登録せずに予約する申し込みを送る。確認メールのリンクを開くまで、予約は作られない。
+	const handleGuestSubmit = async ( agreement ) => {
+		// 入力の検査（お名前・メールアドレス・電話番号はすべて必須）。
+		const errors = validateGuestContact( guestContact );
+		setGuestErrors( errors );
+		if ( hasGuestContactErrors( errors ) ) {
+			focusFirstGuestError( errors );
+			return;
+		}
+
+		setSubmitting( true );
+		setSubmitError( '' );
+
+		try {
+			const response = await postGuestBooking(
+				buildGuestBookingPayload( {
+					draftToken,
+					contact: guestContact,
+					honeypot: guestHoneypot,
+					memo,
+					attendeeName,
+					...agreement,
+				} )
+			);
+			setGuestSent( {
+				email: response?.email || guestContact.email.trim(),
+				expiresAt: response?.expires_at || '',
+			} );
+		} catch ( error ) {
+			// メールアドレスの誤りは、該当の欄の直下に出して戻る。
+			if ( error?.code === 'guest_email_invalid' ) {
+				const emailErrors = {
+					name: '',
+					email: error.message,
+					phone: '',
+				};
+				setGuestErrors( emailErrors );
+				focusFirstGuestError( emailErrors );
+			} else {
+				setSubmitError(
+					resolveApiErrorMessage(
+						error,
+						__(
+							'The confirmation email could not be sent.',
+							'vk-booking-manager'
+						),
+						false
+					)
+				);
+			}
+		} finally {
+			setSubmitting( false );
+		}
+	};
+
+	// 「メールアドレスを修正して送り直す」: 送信後の画面を閉じ、お名前・電話番号を残したままお客様情報欄へ戻し、メールアドレス欄へフォーカスする。
+	const handleGuestResend = () => {
+		setGuestSent( null );
+		setSubmitError( '' );
+		setGuestEmailFocusRequest( ( request ) => request + 1 );
+	};
+
 	const handleConfirm = async () => {
 		if ( ! draftToken || attendeeStale ) {
 			return;
@@ -1244,6 +1296,16 @@ export const BookingConfirmApp = ( {
 			? ( ! cancellationText || agreeCancellationPolicy ) &&
 			  ( ! termsText || agreeTermsOfService )
 			: true;
+
+		// 会員登録せずに予約する場合は、確認メールの申し込みを送って終わる（予約は、メールのリンクを開いたときに作られる）。
+		if ( showGuestForm ) {
+			await handleGuestSubmit( {
+				agreeTerms: agreedAll,
+				agreeCancellationPolicy,
+				agreeTermsOfService,
+			} );
+			return;
+		}
 
 		// 決済の事前処理を始める前に、代理予約の入力漏れを知らせる。
 		if ( canManageReservations && ! customerName.trim() ) {
@@ -1477,7 +1539,41 @@ export const BookingConfirmApp = ( {
 		}
 	}, [ success, redirectUrl ] );
 
-	if ( loading ) {
+	// 確認メールを送ったら、送信後の画面へフォーカスを移して読み上げさせる。
+	useEffect( () => {
+		if ( guestSent ) {
+			guestSentRef.current?.focus();
+		}
+	}, [ guestSent ] );
+
+	// 「会員登録せずに予約する」で戻ったら、お客様情報欄のお名前欄へフォーカスを移す。
+	useEffect( () => {
+		if ( guestNameFocusRequest > 0 ) {
+			guestNameRef.current?.focus();
+		}
+	}, [ guestNameFocusRequest ] );
+
+	// 案内のログイン・新規登録を押したら、フォームが描画されてから最初の入力欄へフォーカスを移す。
+	useEffect( () => {
+		if ( ! authFocusPending || ! authFormHtml ) {
+			return;
+		}
+		authFormContainerRef.current
+			?.querySelector( 'input:not([type="hidden"])' )
+			?.focus();
+		setAuthFocusPending( false );
+	}, [ authFocusPending, authFormHtml ] );
+
+	// 送り直すときは、お客様情報欄が戻ってから、メールアドレス欄にフォーカスを移す。
+	useEffect( () => {
+		if ( guestEmailFocusRequest > 0 ) {
+			guestEmailRef.current?.focus();
+		}
+	}, [ guestEmailFocusRequest ] );
+
+	// 未ログインのお客様には、受付方法（基本設定）が決まるまで読み込み中の表示を続ける。
+	// 決まる前に会員向けの画面を見せてから、お客様情報欄へ切り替わるのを避けるため。
+	if ( loading || ( ! isLoggedIn && ! providerSettingsSettled ) ) {
 		return (
 			<div className="vkbm-confirm">
 				<div className="vkbm-alert vkbm-alert__info" role="status">
@@ -1512,7 +1608,7 @@ export const BookingConfirmApp = ( {
 	const isPendingComplete = createdStatus === 'pending';
 	const completeTitle = isPendingComplete
 		? __(
-				'Your tentative reservation has been received.',
+				'Your tentative reservation has been received',
 				'vk-booking-manager'
 		  )
 		: successMessage;
@@ -1542,6 +1638,8 @@ export const BookingConfirmApp = ( {
 
 	const logoutHref = logoutUrl || buildLogoutFallbackUrl();
 	const showSuccessMessage = success && ! redirectUrl;
+	// 予約の完了後、または確認メールの送信後は、入力欄を読み取り専用にする。
+	const isFormLocked = showSuccessMessage || Boolean( guestSent );
 
 	const renderMemoField = () => {
 		// バックエンド (Booking_Draft_Controller::resolve_memo_max_length) と
@@ -1566,7 +1664,7 @@ export const BookingConfirmApp = ( {
 			/>
 		);
 
-		if ( ! showSuccessMessage ) {
+		if ( ! isFormLocked ) {
 			return commonTextarea;
 		}
 
@@ -1608,7 +1706,7 @@ export const BookingConfirmApp = ( {
 					aria-required={ required }
 					aria-invalid={ Boolean( attendeeNameError ) }
 					aria-describedby={ attendeeNameError ? errorId : undefined }
-					readOnly={ showSuccessMessage }
+					readOnly={ isFormLocked }
 				/>
 				{ attendeeNameError && (
 					<p
@@ -1651,7 +1749,7 @@ export const BookingConfirmApp = ( {
 	);
 
 	const renderAgreements = () => {
-		if ( showSuccessMessage || canManageReservations ) {
+		if ( isFormLocked || canManageReservations ) {
 			return null;
 		}
 
@@ -1667,9 +1765,10 @@ export const BookingConfirmApp = ( {
 				: '';
 
 		// 決済プラグインが有効なときは、案内文が空でも決済方法の選択肢を出すためブロックを表示する。
-		const isPaymentEnabled = Boolean(
-			window.vkbmPaymentConfig?.payment_enabled
-		);
+		// 会員登録せずに予約する場合、決済はまだ使えない（決済プラグインの対応時に決める）ため選択肢を出さない。
+		const isPaymentEnabled =
+			! showGuestForm &&
+			Boolean( window.vkbmPaymentConfig?.payment_enabled );
 
 		const hasAgreements = Boolean(
 			cancellationPolicyText ||
@@ -1857,7 +1956,8 @@ export const BookingConfirmApp = ( {
 			? providerPaymentMethod
 			: '';
 	const canSubmit =
-		isLoggedIn &&
+		( isLoggedIn || showGuestForm ) &&
+		! guestSent &&
 		! attendeeStale &&
 		! submitting &&
 		( canManageReservations ||
@@ -2401,13 +2501,49 @@ export const BookingConfirmApp = ( {
 						) }
 					</div>
 
-					{ ! isLoggedIn && (
+					{ showGuestForm && ! guestSent && (
+						<div className="vkbm-confirm__guest">
+							{ /* 「どちらでも」のときだけ、会員のお客様がログイン・新規登録へ切り替える案内を出す。 */ }
+							{ bookingCustomerMode ===
+								BOOKING_CUSTOMER_MODE.BOTH && (
+								<GuestLoginPrompt
+									onLogin={ () => {
+										setAuthFocusPending( true );
+										toggleAuthMode( 'login' );
+									} }
+									onRegister={ () => {
+										setAuthFocusPending( true );
+										toggleAuthMode( 'register' );
+									} }
+								/>
+							) }
+							<GuestContactFields
+								values={ guestContact }
+								errors={ guestErrors }
+								inputRefs={ {
+									name: guestNameRef,
+									email: guestEmailRef,
+									phone: guestPhoneRef,
+								} }
+								honeypot={ guestHoneypot }
+								onChange={ handleGuestContactChange }
+								onHoneypotChange={ setGuestHoneypot }
+							/>
+						</div>
+					) }
+
+					{ ! isLoggedIn && ! showGuestForm && (
 						<div className="vkbm-confirm__auth">
 							<p className="vkbm-confirm__auth-label">
-								{ __(
-									'You must log in to confirm your reservation.',
-									'vk-booking-manager'
-								) }
+								{ isGuestBookingAvailable
+									? __(
+											'Members can log in to make a reservation.',
+											'vk-booking-manager'
+									  )
+									: __(
+											'You must log in to confirm your reservation.',
+											'vk-booking-manager'
+									  ) }
 							</p>
 							<div className="vkbm-buttons vkbm-buttons__center">
 								<button
@@ -2440,6 +2576,17 @@ export const BookingConfirmApp = ( {
 									{ __( 'Sign up', 'vk-booking-manager' ) }
 								</button>
 							</div>
+							{ /* 「どちらでも」のときは、会員登録せずに予約する入力欄へ戻る導線を 1 つ置く（入力途中の内容は消えない）。 */ }
+							{ isGuestBookingAvailable && (
+								<GuestBackButton
+									onClick={ () => {
+										toggleAuthMode( authMode );
+										setGuestNameFocusRequest(
+											( request ) => request + 1
+										);
+									} }
+								/>
+							) }
 							{ authMode && (
 								<div className="vkbm-confirm__auth-panel">
 									{ authLoading && (
@@ -2645,7 +2792,7 @@ export const BookingConfirmApp = ( {
 					{ renderAgreements() }
 
 					<div className="vkbm-confirm__actions">
-						{ ! success && showMinCapacityNote && (
+						{ ! success && ! guestSent && showMinCapacityNote && (
 							<p
 								id="vkbm-confirm-min-capacity-note"
 								className="vkbm-confirm__min-capacity-note description"
@@ -2656,7 +2803,16 @@ export const BookingConfirmApp = ( {
 								) }
 							</p>
 						) }
-						{ ! success && (
+						{ /* 会員登録せずに予約するときだけ、送信ボタンの直上で、予約が確定する流れを伝える。 */ }
+						{ ! success && ! guestSent && showGuestForm && (
+							<p className="vkbm-confirm__guest-submit-note">
+								{ __(
+									'We will send you a confirmation email after you submit. Your reservation will be completed when you open the link in the email.',
+									'vk-booking-manager'
+								) }
+							</p>
+						) }
+						{ ! success && ! guestSent && (
 							<button
 								type="button"
 								className="vkbm-confirm__button vkbm-button vkbm-button__md vkbm-button__primary"
@@ -2670,11 +2826,24 @@ export const BookingConfirmApp = ( {
 							>
 								{ submitting
 									? __( 'Processing…', 'vk-booking-manager' )
+									: showGuestForm
+									? __(
+											'Send confirmation email',
+											'vk-booking-manager'
+									  )
 									: __(
 											'Reserve with this content',
 											'vk-booking-manager'
 									  ) }
 							</button>
+						) }
+						{ guestSent && (
+							<GuestVerificationSent
+								email={ guestSent.email }
+								expiresAt={ guestSent.expiresAt }
+								containerRef={ guestSentRef }
+								onResend={ handleGuestResend }
+							/>
 						) }
 						{ showSuccessMessage && (
 							<BookingCompleteNotice

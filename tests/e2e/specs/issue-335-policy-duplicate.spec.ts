@@ -118,16 +118,19 @@ test.describe( 'issue #335: 予約確認画面のキャンセルポリシー案�
 	} ) => {
 		// 再現条件へ設定を切り替える:
 		// - キャンセルポリシー: 空 / 利用規約: 空 / 決済方法: 入力あり
+		// @step 管理画面でキャンセルポリシーと利用規約を空にし、決済方法の案内文を入れておく
 		await configureProviderSettings( {
 			provider_cancellation_policy: '',
 			provider_terms_of_service: '',
 			provider_payment_method: PAYMENT_METHOD_TEXT,
 		} );
 
+		// @step ログインせずに予約ページを開き、「Service Menu 1」の「予約する」ボタンを押して、空きのある日と最初の時間枠を選び、確認画面へ進む
 		await gotoConfirmScreen( page );
 
 		// 案内文（p.vkbm-confirm__policy）の要素数を検証する（期待: ちょうど 1）。
 		// 修正前はここが 2 になり FAIL する（JSX 直書き＋renderAgreements() 内の 2 箇所）。
+		// @check 「予約前にキャンセルポリシーをご確認ください。」の案内文が1箇所だけ表示される
 		const policy = page.locator( 'p.vkbm-confirm__policy' );
 		await expect( policy.first() ).toBeVisible( { timeout: 10000 } );
 		await expect( policy ).toHaveCount( 1 );
@@ -135,6 +138,7 @@ test.describe( 'issue #335: 予約確認画面のキャンセルポリシー案�
 		await expect( policy ).toContainText( POLICY_NOTICE_JA );
 
 		// 決済方法テキストは agreement として表示されている（再現条件が満たされている確証）。
+		// @check 決済方法の案内文が表示されている
 		await expect(
 			page.locator( '.vkbm-agreements', { hasText: PAYMENT_METHOD_TEXT } )
 		).toBeVisible();
@@ -150,15 +154,18 @@ test.describe( 'issue #335: 予約確認画面のキャンセルポリシー案�
 		page,
 	} ) => {
 		// キャンセルポリシー本文を設定（利用規約は空のまま・決済方法あり）。
+		// @step 管理画面でキャンセルポリシー「3日前までにご連絡ください。」を入れ、利用規約は空、決済方法の案内文を入れておく
 		await configureProviderSettings( {
 			provider_cancellation_policy: CANCELLATION_POLICY_TEXT,
 			provider_terms_of_service: '',
 			provider_payment_method: PAYMENT_METHOD_TEXT,
 		} );
 
+		// @step ログインせずに予約ページを開き、「Service Menu 1」の「予約する」ボタンを押して、空きのある日と最初の時間枠を選び、確認画面へ進む
 		await gotoConfirmScreen( page );
 
 		// キャンセルポリシーの agreement 本文が表示される。
+		// @check キャンセルポリシーの本文と、同意のチェックボックスが表示される
 		await expect(
 			page.locator( '.vkbm-agreement', {
 				hasText: CANCELLATION_POLICY_TEXT,
@@ -171,6 +178,7 @@ test.describe( 'issue #335: 予約確認画面のキャンセルポリシー案�
 
 		// 案内文（p.vkbm-confirm__policy）はキャンセルポリシー設定時には出さない仕様。
 		// いずれにせよ二重表示（2 箇所以上）にならないことを担保する。
+		// @check 「予約前にキャンセルポリシーをご確認ください。」の案内文は多くても1箇所しか出ない
 		await expect(
 			page.locator( 'p.vkbm-confirm__policy' ).count()
 		).resolves.toBeLessThanOrEqual( 1 );

@@ -142,10 +142,12 @@ function seedMenu(
 
 test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	test.beforeAll( () => {
+		// @step BM 設定の「システム」タブで指名機能を有効にしておく
 		originalStaffEnabled = getStaffEnabled();
 		// サイト全体の指名機能はONのまま検証する（メニュー単位トグルが意味を持つ前提）。
 		setStaffEnabled( true );
 
+		// @step 管理画面で、どちらもスタッフ1名を担当にし、所要時間60分・複数人の一括予約を許可・「予約枠の定員」3名のサービスを2つ作る。「Menu Level No Nomination Menu」は「このメニューで指名を使う」を外し、「Menu Level Uses Nomination Menu」はそのままにしておく
 		const staffId = getStaffId();
 		noNominationMenuId = seedMenu(
 			NO_NOMINATION_MENU_TITLE,
@@ -182,9 +184,11 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	} );
 
 	test( '管理画面: サイト全体の指名機能ON・メニュー単位設定なし（既定） => 「このメニューで指名を使う」がチェック済みで表示され、予約枠の定員フィールドも表示される（#392）', () => {
+		// @step BM 設定で指名機能を有効にしたまま、管理画面でサービス「Menu Level Uses Nomination Menu」の編集画面を開く
 		setStaffEnabled( true );
 		const html = getMenuMetaboxHtml( usesNominationMenuId );
 
+		// @check 「このメニューで指名を使う」のチェックボックスがあり、チェックが入っている
 		expect( html ).toContain( 'vkbm_service_menu[use_nomination]' );
 		// checked 属性が付いていること（既定＝使う）。
 		expect( html ).toMatch(
@@ -192,6 +196,7 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 		);
 		// #392: 旧仕様（PR #163・#412）の案内メッセージ要素（vkbm-nomination-enabled-notice）は
 		// 撤去済みで、DOM に存在しない。
+		// @check 指名を使うメニュー向けの旧い案内メッセージは出ていない
 		expect(
 			extractOpeningTagById( html, 'vkbm-nomination-enabled-notice' )
 		).toBe( '' );
@@ -201,6 +206,7 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 		// #412 F-3: extractOpeningTagById() は要素が見つからないと空文字を返し、
 		// 空文字は `.not.toContain( 'hidden' )` を素通りしてしまう（空振り）。
 		// 否定チェックの前に要素が実際に DOM に存在すること（空文字でないこと）を確認する。
+		// @check 「予約枠の定員」の欄と「指名料」の欄が表示されている
 		const maxCapacityTag = extractOpeningTagById(
 			html,
 			'vkbm-max-capacity-field'
@@ -217,21 +223,25 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	} );
 
 	test( '管理画面: サイト全体は指名ONだがメニュー単位で指名を無効化 => チェックが外れた状態で表示され、予約枠の定員フィールドが表示される', () => {
+		// @step BM 設定で指名機能を有効にしたまま、管理画面でサービス「Menu Level No Nomination Menu」の編集画面を開く
 		setStaffEnabled( true );
 		const html = getMenuMetaboxHtml( noNominationMenuId );
 
+		// @check 「このメニューで指名を使う」のチェックボックスがあり、チェックが外れている
 		expect( html ).toContain( 'vkbm_service_menu[use_nomination]' );
 		// checked 属性が付いていないこと（メニュー単位で無効化済み）。
 		expect( html ).not.toMatch(
 			/name="vkbm_service_menu\[use_nomination\]"[^>]*checked/
 		);
 		// #392: 旧仕様の案内メッセージ要素は撤去済みで、指名OFF時も DOM に存在しない。
+		// @check 指名を使うメニュー向けの旧い案内メッセージは出ていない
 		expect(
 			extractOpeningTagById( html, 'vkbm-nomination-enabled-notice' )
 		).toBe( '' );
 		// #412 F-3: 否定チェックの前に要素が DOM に存在すること（空文字でないこと）を確認する
 		// （extractOpeningTagById() は見つからないと空文字を返し、空文字は
 		// `.not.toContain( 'hidden' )` を素通りしてしまうため）。
+		// @check 「予約枠の定員」の欄は表示され、「指名料」の欄は隠れている
 		const maxCapacityTag = extractOpeningTagById(
 			html,
 			'vkbm-max-capacity-field'
@@ -245,13 +255,16 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	} );
 
 	test( '管理画面: サイト全体の指名機能がOFFのサイトでは、メニュー単位トグル自体が現れない', () => {
+		// @step BM 設定で指名機能を無効にし、管理画面でサービス「Menu Level Uses Nomination Menu」の編集画面を開く
 		setStaffEnabled( false );
 		const html = getMenuMetaboxHtml( usesNominationMenuId );
 
+		// @check 「このメニューで指名を使う」のチェックボックスが出ていない
 		expect( html ).not.toContain( 'vkbm_service_menu[use_nomination]' );
 		// サイト全体OFFなので、このメニューも通常どおり予約枠の定員フィールドが表示される
 		// （メニュー単位設定の有無に関わらず、サイト全体OFFの挙動は変わらない）。
 		// #412 F-3: 否定チェックの前に要素が DOM に存在すること（空文字でないこと）を確認する。
+		// @check 「予約枠の定員」の欄は表示されている
 		const maxCapacityTagWhenGloballyOff = extractOpeningTagById(
 			html,
 			'vkbm-max-capacity-field'
@@ -265,6 +278,7 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	test( 'REST: 予約枠の定員・複数人一括予約許可が同一なら、指名の有無に関わらず空き枠のcapacityは同じ（#392：定員は1組の最大人数）', async ( {
 		page,
 	} ) => {
+		// @step BM 設定で指名機能を有効にし、担当スタッフに来月分のシフトを登録しておく
 		setStaffEnabled( true );
 		const staffId = getStaffId();
 		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
@@ -279,9 +293,11 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 		const dateStr = `${ year }-${ month }-15`;
 
 		// メニュー単位で指名を無効化したメニュー => 自動割り当てで相乗り可（capacity=3）。
+		// @step ログアウトした状態で、サービス「Menu Level No Nomination Menu」の来月15日の空き枠を確かめる
 		const noNominationResponse = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ noNominationMenuId }&date=${ dateStr }&timezone=Asia/Tokyo`
 		);
+		// @check 空き枠があり、1枠の定員が3名になっている
 		expect( noNominationResponse.status() ).toBe( 200 );
 		const noNominationData = await noNominationResponse.json();
 		const noNominationSlots = Array.isArray( noNominationData )
@@ -295,9 +311,11 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 		// （#392より前は常に1対1・capacity=1に固定されていた）。1枠1組（貸切）の排他制御は
 		// capacity の値ではなく remaining/予約確定時のスタッフ競合判定で担保される
 		// （issue-392-nomination-slot-capacity.spec.ts を参照）。
+		// @step サービス「Menu Level Uses Nomination Menu」の来月15日の空き枠を確かめる
 		const usesNominationResponse = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ usesNominationMenuId }&date=${ dateStr }&timezone=Asia/Tokyo`
 		);
+		// @check 指名を使うサービスでも空き枠があり、1枠の定員が3名になっている
 		expect( usesNominationResponse.status() ).toBe( 200 );
 		const usesNominationData = await usesNominationResponse.json();
 		const usesNominationSlots = Array.isArray( usesNominationData )
@@ -310,8 +328,10 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	test( 'フロント: メニュー単位で指名を無効化したメニューはスタッフの指名欄が出ない', async ( {
 		page,
 	} ) => {
+		// @step BM 設定で指名機能を有効にしておく
 		setStaffEnabled( true );
 
+		// @step ログアウトした状態で、サービス「Menu Level No Nomination Menu」を選んだ予約ページを開き、カレンダーが出るまで待つ
 		await page.goto( `/booking/?menu_id=${ noNominationMenuId }` );
 		await page.waitForLoadState( 'networkidle' );
 
@@ -322,6 +342,7 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 
 		// メニュー選択済みの状態で表示される selector（select）は menu 分の1つだけで、
 		// スタッフ選択欄は出ない。
+		// @check 選択欄はサービスの1つだけで、スタッフの指名欄は出ない
 		const selectors = page.locator(
 			'.vkbm-plan-summary__selectors select'
 		);
@@ -333,8 +354,10 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 	test( 'フロント（回帰）: 指名を使うメニューはこの変更後も引き続きスタッフの指名欄が表示される', async ( {
 		page,
 	} ) => {
+		// @step BM 設定で指名機能を有効にしておく
 		setStaffEnabled( true );
 
+		// @step ログアウトした状態で、サービス「Menu Level Uses Nomination Menu」を選んだ予約ページを開き、カレンダーが出るまで待つ
 		await page.goto( `/booking/?menu_id=${ usesNominationMenuId }` );
 		await page.waitForLoadState( 'networkidle' );
 
@@ -344,6 +367,7 @@ test.describe( 'メニュー単位の指名機能設定（#391）', () => {
 		} );
 
 		// メニュー選択済みの状態で、メニュー用とスタッフ用の2つの selector が表示される。
+		// @check 選択欄はサービスとスタッフの2つで、スタッフの指名欄が表示される
 		const selectors = page.locator(
 			'.vkbm-plan-summary__selectors select'
 		);

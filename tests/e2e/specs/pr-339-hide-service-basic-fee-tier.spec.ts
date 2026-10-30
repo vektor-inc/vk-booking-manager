@@ -210,6 +210,7 @@ test.describe( 'PR #339: 料金区分メニューで「サービス基本料金�
 	// 料金区分は「指名OFF＋複数人予約ON」でのみ有効。グローバルセットアップは指名ON・
 	// 料金区分なしのため、この describe の間だけ指名OFFに切り替え、メニューを用意する。
 	test.beforeAll( () => {
+		// @step 管理画面でスタッフ指名を OFF にし、料金区分（一般 4,000円・子供 3,000円）を持つ複数人予約のメニュー「Tier Menu 339」と、区分なし 5,000円のメニュー「Single Menu 339」を作っておく
 		originalStaffEnabled = getStaffEnabled();
 		setStaffEnabled( false );
 		tierMenuId = seedTierMenu();
@@ -233,6 +234,7 @@ test.describe( 'PR #339: 料金区分メニューで「サービス基本料金�
 	test( '区分あり: 確認画面に「サービス基本料金」行が出ない／区分内訳・基本料金合計は出る', async ( {
 		page,
 	} ) => {
+		// @step ログインしていない状態で予約ページを開き、「Tier Menu 339」の「予約する」を押して、空きのある日と最初の時間枠を選ぶ
 		await gotoMenuPlanSummary( page, TIER_MENU_TITLE );
 
 		// 区分ごとの人数セレクトが表示されるまで待つ。
@@ -241,11 +243,13 @@ test.describe( 'PR #339: 料金区分メニューで「サービス基本料金�
 			timeout: 10000,
 		} );
 
+		// @step 区分の人数に一般 2・子供 1 を入れる
 		// 一般2・子供1 を入力する。
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '2' );
 		await page.locator( '#vkbm-reservation-tier-1' ).fill( '1' );
 		await page.waitForTimeout( 300 );
 
+		// @step 「予約へ進む」ボタンを押す
 		// 予約へ進む → 確認画面へ。
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 		await expect( proceed ).toBeEnabled( { timeout: 10000 } );
@@ -260,13 +264,16 @@ test.describe( 'PR #339: 料金区分メニューで「サービス基本料金�
 			.first()
 			.waitFor( { state: 'attached', timeout: 15000 } );
 
+		// @check 確認画面に「サービス基本料金」の行が無い
 		// 本丸: 「サービス基本料金」行が描画されない（区分ありのため非表示）。
 		await expect( summaryRowByTitle( page, LABEL_BASE ) ).toHaveCount( 0 );
 
+		// @check 「一般」「子供」の区分の行が表示される
 		// 区分内訳（一般・子供）は表示される。
 		await expect( summaryRowByTitle( page, '一般' ).first() ).toBeVisible();
 		await expect( summaryRowByTitle( page, '子供' ).first() ).toBeVisible();
 
+		// @check 「基本料金合計」の行が1つだけ表示され、11,000 円になっている
 		// 基本料金合計は表示される（区分ありでも据え置き）。合計は 4000*2 + 3000*1 = 11,000。
 		const totalRow = summaryRowByTitle( page, LABEL_TOTAL );
 		await expect( totalRow ).toHaveCount( 1 );
@@ -283,8 +290,10 @@ test.describe( 'PR #339: 料金区分メニューで「サービス基本料金�
 	test( '区分なし: 確認画面に「サービス基本料金」行が出る（デグレ確認）', async ( {
 		page,
 	} ) => {
+		// @step ログインしていない状態で予約ページを開き、「Single Menu 339」の「予約する」を押して、空きのある日と最初の時間枠を選ぶ
 		await gotoMenuPlanSummary( page, SINGLE_MENU_TITLE );
 
+		// @step 「予約へ進む」ボタンを押す
 		// 単一料金メニューは区分セレクトが無く、そのまま「予約へ進む」が押せる。
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 		await expect( proceed ).toBeEnabled( { timeout: 10000 } );
@@ -299,12 +308,14 @@ test.describe( 'PR #339: 料金区分メニューで「サービス基本料金�
 			.first()
 			.waitFor( { state: 'attached', timeout: 15000 } );
 
+		// @check 確認画面に「サービス基本料金」の行が1つ出て、5,000 円になっている
 		// 本丸: 区分なしメニューでは「サービス基本料金」行が表示される（従来どおり）。
 		const baseRow = summaryRowByTitle( page, LABEL_BASE );
 		await expect( baseRow ).toHaveCount( 1 );
 		await expect( baseRow ).toBeVisible();
 		await expect( baseRow ).toContainText( '5,000' );
 
+		// @check 「基本料金合計」の行も表示され、5,000 円になっている
 		// 基本料金合計も表示される。
 		const totalRow = summaryRowByTitle( page, LABEL_TOTAL );
 		await expect( totalRow ).toHaveCount( 1 );
@@ -401,6 +412,7 @@ function metaRowByTh( page: Page, label: string ) {
 
 test.describe( 'PR #339: 料金区分予約で「サービス基本料金」行を非表示（管理画面メタボックス）', () => {
 	test.beforeAll( () => {
+		// @step 管理画面で、区分（一般 2 名・子供 1 名）付きの予約「PR339 Tier Booking」と、区分なしの予約「PR339 Single Booking」を作っておく
 		adminTierBookingId = seedBooking( ADMIN_TIER_BOOKING_TITLE, true );
 		adminSingleBookingId = seedBooking( ADMIN_SINGLE_BOOKING_TITLE, false );
 	} );
@@ -420,12 +432,15 @@ test.describe( 'PR #339: 料金区分予約で「サービス基本料金」行�
 	test( '区分あり予約: メタボックスに「サービス基本料金」行が出ない／基本料金合計は出る', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、予約「PR339 Tier Booking」の編集画面を開く
 		await loginAsAdmin( page );
 		await openBookingEdit( page, adminTierBookingId );
 
+		// @check 予約内容の欄に「サービス基本料金」の行が無い
 		// 本丸: 区分あり予約では「サービス基本料金」の行が出力されない。
 		await expect( metaRowByTh( page, LABEL_BASE ) ).toHaveCount( 0 );
 
+		// @check 「基本料金合計」の行は表示される
 		// 基本料金合計の行は出る（区分ありでも据え置き）。
 		await expect( metaRowByTh( page, LABEL_TOTAL ) ).toHaveCount( 1 );
 		await expect( metaRowByTh( page, LABEL_TOTAL ) ).toBeVisible();
@@ -439,13 +454,16 @@ test.describe( 'PR #339: 料金区分予約で「サービス基本料金」行�
 	test( '区分なし予約: メタボックスに「サービス基本料金」行が出る（デグレ確認）', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、予約「PR339 Single Booking」の編集画面を開く
 		await loginAsAdmin( page );
 		await openBookingEdit( page, adminSingleBookingId );
 
+		// @check 予約内容の欄に「サービス基本料金」の行が表示される
 		// 本丸: 区分なし予約では「サービス基本料金」の行が表示される（従来どおり）。
 		await expect( metaRowByTh( page, LABEL_BASE ) ).toHaveCount( 1 );
 		await expect( metaRowByTh( page, LABEL_BASE ) ).toBeVisible();
 
+		// @check 「基本料金合計」の行も表示される
 		// 基本料金合計の行も出る。
 		await expect( metaRowByTh( page, LABEL_TOTAL ) ).toHaveCount( 1 );
 		await expect( metaRowByTh( page, LABEL_TOTAL ) ).toBeVisible();

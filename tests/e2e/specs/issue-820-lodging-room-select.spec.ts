@@ -206,6 +206,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 			originalSettingsJson = null;
 		}
 
+		// @step 客室「E2E820 Room A」「E2E820 Room B」を作成し、それぞれ今月と来月のシフトを登録しておく
 		roomAId = seedRoom( `${ PREFIX } Room A` );
 		roomBId = seedRoom( `${ PREFIX } Room B` );
 		for ( const { year, month } of getCurrentAndNextTokyoMonths() ) {
@@ -213,6 +214,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 			createShiftForMonth( roomBId, year, month );
 		}
 		const staffIds = `${ Number( roomAId ) }, ${ Number( roomBId ) }`;
+		// @step 予約の単位「泊」・基本料金 10,000円で、2 つの客室を割り当てたプラン「E2E820 Night Plan」を作成しておく
 		nightMenuId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -231,6 +233,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		// 宿泊のサイトにする。「リソースの呼び方」は自由入力の値で翻訳されないため、
 		// 宿泊のサイトで運営者が入れる呼び方（客室）を直接入れる。option だけを書き換える e2e では
 		// 呼び方が空のままで「スタッフ」と表示され、「客室」の文言を確かめられないため。
+		// @step 管理画面で業種を宿泊・スタッフの呼び名を「客室」にしておく
 		await configureProviderSettings( {
 			industry_preset: 'lodging',
 			resource_label_singular: '客室',
@@ -249,6 +252,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 	test( '客室を選ぶ前は次の操作を案内し、選ぶと案内が消えて予約に進める', async ( {
 		page,
 	} ) => {
+		// @step プランの予約ページを開き、2 日後をチェックイン日、4 日後をチェックアウト日に選ぶ
 		await openAndPickDates( page );
 
 		const guide = page.locator( '.vkbm-lodging__guide' );
@@ -258,6 +262,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		const rooms = page.locator( '.vkbm-lodging__room' );
 
 		// 未選択: ガイド行・予約内容の枠・ボタン上の案内。自動では選ばれない。
+		// @check 「次に、空いている客室から1つ選んでください。」の案内が出て、予約内容の枠に「客室 未選択」と人数の行が出る
 		await expect( guide ).toContainText(
 			'次に、空いている客室から1つ選んでください。'
 		);
@@ -265,6 +270,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		await expect( summary ).toContainText( '未選択' );
 		// 人数の行の見出しは「人数」（既存の表示。仕様書の「宿泊人数」は行の種類を指す呼び名）。
 		await expect( summary ).toContainText( '人数' );
+		// @check 「予約に進む」の上に「客室を選ぶと、予約に進めます。」が出て、ボタンは押せず、2 つの客室はどちらも選ばれていない
 		await expect( hint ).toHaveText( '客室を選ぶと、予約に進めます。' );
 		await expect( proceed ).toBeDisabled();
 		await expect( rooms.nth( 0 ) ).toHaveAttribute(
@@ -277,6 +283,7 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		);
 
 		// 丸（::before）が描かれている。
+		// @check 客室カードの左端に丸印が付いている
 		const marker = await rooms.first().evaluate( ( el ) => {
 			const style = window.getComputedStyle( el, '::before' );
 			return { content: style.content, width: style.width };
@@ -285,10 +292,12 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		expect( marker.width ).toBe( '20px' );
 
 		// 選ぶ: 選択中の見た目に変わり、案内が消えてボタンが押せる。
+		// @step 1 つ目の客室を選ぶ
 		const backgroundBefore = await rooms
 			.first()
 			.evaluate( ( el ) => getComputedStyle( el ).backgroundColor );
 		await rooms.first().click();
+		// @check 客室が選択中の見た目（背景色が変わる）になり、「日付を押すと選び直せます。」の案内に変わり、ボタン上の案内と「未選択」が消えて「予約に進む」が押せる
 		await expect( rooms.first() ).toHaveAttribute( 'aria-pressed', 'true' );
 		const backgroundAfter = await rooms
 			.first()
@@ -304,11 +313,13 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 	test( 'スマホ幅では、ボタン上の案内が左寄せでボタンの上に出る', async ( {
 		page,
 	} ) => {
+		// @step スマホの画面幅（375px）で、プランの予約ページを開き、2 日後をチェックイン日、4 日後をチェックアウト日に選ぶ
 		await page.setViewportSize( { width: 375, height: 800 } );
 		await openAndPickDates( page );
 
 		const hint = page.locator( '.vkbm-lodging__action-hint' );
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
+		// @check 「客室を選ぶと、予約に進めます。」の案内が「予約に進む」ボタンの上に、ボタンの左端にそろえて左寄せで表示される
 		await expect( hint ).toBeVisible();
 
 		const hintBox = await hint.boundingBox();

@@ -631,6 +631,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 	let menuId: string;
 
 	test.beforeAll( () => {
+		// @step 既存のサービスメニューを1つ使う（基本設定とメニューの設定は控えておき、最後に戻す）
 		menuId = getServiceMenuId();
 		// 共有フィクスチャ（先頭メニュー）と provider 設定を汚染しないよう、変更前に全退避する。
 		snapshotProviderSettings();
@@ -645,8 +646,10 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 
 	test( '指名OFF・複数人予約ON のとき: ユーザー貸切指定チェックと第二段の欄が出力される', () => {
 		// Pro版・指名OFF・複数人予約ON の構成にする。
+		// @step 基本設定で指名機能を「無効」、複数人予約を「有効」にしておく
 		setProviderGates( false, true );
 		// 本物の save_post で「複数人予約ON・ユーザー貸切ON・単価・適用外」を保存する。
+		// @step サービスメニューの編集画面で、複数人予約と「予約者による貸切指定を受け付ける」にチェックを入れ、貸切料金 1,000円/人・貸切料金が無料になる申込人数 4 名を入れて保存する
 		savePostViaEditor(
 			menuId,
 			true,
@@ -655,9 +658,11 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			FEE_EXEMPT_GUESTS
 		);
 
+		// @step サービスメニューの編集画面の予約条件の欄を開く
 		const html = getConditionsMetaboxHtml( menuId );
 
 		// ユーザー貸切指定の行・チェックボックスが出力されること。
+		// @check 「予約者による貸切指定を受け付ける」のチェックボックスと、その説明文が出ている
 		expect( html ).toContain( 'vkbm-exclusive-user-selectable-field' );
 		expect( html ).toContain(
 			'id="vkbm_service_menu_exclusive_user_selectable"'
@@ -667,6 +672,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			'aria-describedby="vkbm-exclusive-user-selectable-description"'
 		);
 		// 第二段（貸切料金・適用外人数）の入力欄が出力されること。
+		// @check 「貸切料金 ￥/人」と「貸切料金が無料になる申込人数」の欄が出ている
 		expect( html ).toContain( 'id="vkbm-exclusive-fee-fields"' );
 		expect( html ).toContain(
 			'id="vkbm_service_menu_exclusive_fee_per_person"'
@@ -675,6 +681,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			'id="vkbm_service_menu_exclusive_fee_exempt_guests"'
 		);
 		// 保存した値が value に反映されていること（保存→復元）。
+		// @check 貸切料金の欄に 1,000、無料になる申込人数の欄に 4 が入っている
 		expect( html ).toMatch(
 			new RegExp(
 				`id="vkbm_service_menu_exclusive_fee_per_person"[^>]*value="${ FEE_PER_PERSON }"`
@@ -688,7 +695,9 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 	} );
 
 	test( 'メタが保存・復元される（_vkbm_exclusive_user_selectable / 単価 / 適用外人数）', () => {
+		// @step 基本設定で指名機能を「無効」、複数人予約を「有効」にしておく
 		setProviderGates( false, true );
+		// @step サービスメニューの編集画面で、複数人予約と「予約者による貸切指定を受け付ける」にチェックを入れ、貸切料金 1,000円/人・無料になる申込人数 4 名を入れて保存する
 		savePostViaEditor(
 			menuId,
 			true,
@@ -697,6 +706,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			FEE_EXEMPT_GUESTS
 		);
 
+		// @check 保存されたメニューの設定で、貸切指定が有効、貸切料金が 1,000、無料になる申込人数が 4 になっている
 		const selectable = wpEvalPhp(
 			`echo get_post_meta( ${ Number.parseInt(
 				menuId,
@@ -721,8 +731,10 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 	} );
 
 	test( '複数人予約 OFF で保存すると貸切系メタが削除される', () => {
+		// @step 基本設定で指名機能を「無効」、複数人予約を「有効」にしておく
 		setProviderGates( false, true );
 		// まずON状態で保存しておく。
+		// @step サービスメニューの編集画面で、複数人予約と貸切指定にチェックを入れ、貸切料金と無料になる申込人数を入れて保存する
 		savePostViaEditor(
 			menuId,
 			true,
@@ -731,10 +743,12 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			FEE_EXEMPT_GUESTS
 		);
 		// 複数人予約 OFF（フィールドは描画されるが未チェック送信）で保存する。
+		// @step 複数人予約と貸切指定のチェックを外して、もう一度保存する
 		savePostViaEditor( menuId, false, false, 0, 0 );
 
 		// register_post_meta の default（false/0）が get_post_meta に効くため、=== '' では判定できない。
 		// メタ行が DB から実際に消えたか（metadata_exists）を確認する。
+		// @check 保存されたメニューの設定から、貸切指定・貸切料金・無料になる申込人数の値が消えている
 		const id = Number.parseInt( menuId, 10 );
 		const selectable = wpEvalPhp(
 			`echo metadata_exists( 'post', ${ id }, '_vkbm_exclusive_user_selectable' ) ? 'present' : 'deleted';`
@@ -753,6 +767,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 	test( '実機エディタ: 複数人予約ON時に貸切行が表示され、チェックON で第二段が出る', async ( {
 		page,
 	} ) => {
+		// @step 基本設定で指名機能を「無効」、複数人予約を「有効」にし、メニューを貸切指定あり（貸切料金 1,000円/人・無料になる申込人数 4 名）で保存しておく
 		setProviderGates( false, true );
 		savePostViaEditor(
 			menuId,
@@ -762,6 +777,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			FEE_EXEMPT_GUESTS
 		);
 
+		// @step 管理者でログインし、サービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto(
 			`/wp-admin/post.php?post=${ Number.parseInt(
@@ -772,6 +788,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 複数人予約を ON にして JS の表示連動を起こす（管理画面メタボックスは可視判定が不安定なため DOM 経由）。
+		// @step 複数人予約のチェックを入れる
 		const multiGuests = page.locator(
 			'#vkbm_service_menu_allow_multiple_guests'
 		);
@@ -785,6 +802,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 		} );
 
 		// ユーザー貸切指定の行が表示される（hidden が外れる）。
+		// @check 「予約者による貸切指定を受け付ける」の行が表示される
 		const row = page.locator( '#vkbm-exclusive-user-selectable-field' );
 		await expect
 			.poll( async () =>
@@ -793,6 +811,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			.toBe( false );
 
 		// チェックは保存値で ON のはず → 第二段（貸切料金欄）が表示されている。
+		// @check 貸切指定のチェックが入っているので、貸切料金と無料になる申込人数の欄が表示される
 		const feeFields = page.locator( '#vkbm-exclusive-fee-fields' );
 		await expect
 			.poll( async () =>
@@ -801,6 +820,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			.toBe( false );
 
 		// チェックを OFF にすると第二段が隠れる（JS 連動）。
+		// @step 「予約者による貸切指定を受け付ける」のチェックを外す
 		await page
 			.locator( '#vkbm_service_menu_exclusive_user_selectable' )
 			.evaluate( ( el ) => {
@@ -808,6 +828,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 				input.checked = false;
 				input.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 			} );
+		// @check 貸切料金と無料になる申込人数の欄が隠れる
 		await expect
 			.poll( async () =>
 				feeFields.evaluate( ( el ) => ( el as HTMLElement ).hidden )
@@ -815,6 +836,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			.toBe( true );
 
 		// スクリーンショット（管理画面・第二段表示状態）。
+		// @step 「予約者による貸切指定を受け付ける」にもう一度チェックを入れる
 		await page
 			.locator( '#vkbm_service_menu_exclusive_user_selectable' )
 			.evaluate( ( el ) => {
@@ -824,6 +846,7 @@ test.describe( 'PR #316: A. 管理画面 - ユーザー貸切指定UIの表示�
 			} );
 		// 第二段が表示状態であることを確認してからフルページ撮影する（行は metabox 内のため
 		// scrollIntoView ではなく fullPage で確実に収める）。
+		// @check 貸切料金と無料になる申込人数の欄が再び表示される
 		await expect
 			.poll( async () =>
 				feeFields.evaluate( ( el ) => ( el as HTMLElement ).hidden )
@@ -844,6 +867,7 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 	let staffId: string;
 
 	test.beforeAll( () => {
+		// @step 既存のスタッフとサービスメニューを1つずつ使う（基本設定・メニューの設定・翌月のシフトは控えておき、最後に戻す）
 		staffId = getStaffId();
 		menuId = getServiceMenuId();
 		// 共有フィクスチャ（provider 設定・メニューメタ・対象月シフト）を変更前に全退避する。
@@ -851,7 +875,9 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		snapshotMenuMeta( menuId );
 		snapshotShiftForMonth( staffId, FRONT_TEST_YEAR, FRONT_TEST_MONTH );
 
+		// @step 基本設定で指名機能を「無効」、予約枠の定員を「有効」にし、メニューを最大 5 名・最小催行 2 名・所要 60 分・複数人予約あり・貸切指定あり（貸切料金 1,000円/人・無料になる申込人数 4 名）にしておく
 		setupUserExclusiveMenu( menuId, staffId );
+		// @step スタッフの翌月のシフトを毎日 9:00〜18:00 で入れ、既存の予約をすべて消しておく
 		ensureShiftForMonth( staffId, FRONT_TEST_YEAR, FRONT_TEST_MONTH );
 		deleteAllBookings();
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
@@ -868,17 +894,21 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 	test( 'B-1/B-2: 空き枠で貸切チェックが有効表示され、ON で貸切料金行が加算される', async ( {
 		page,
 	} ) => {
+		// @step 予約をすべて消しておく
 		deleteAllBookings();
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 
+		// @step 予約ページでメニューの「予約に進む」を押し、翌月1日を選んで、最初の空いている時間枠を選ぶ
 		await gotoFrontSlotSummary( page );
 
 		// 人数入力を 2（最小催行人数）にする。
+		// @step 人数に 2 を入れる
 		const guestsInput = page.locator( '#vkbm-reservation-guests' );
 		await guestsInput.waitFor( { state: 'visible', timeout: 15000 } );
 		await guestsInput.fill( '2' );
 
 		// 貸切チェックが有効（disabled でない）で表示される。
+		// @check 「この時間帯を貸切にする」のチェックボックスが表示され、選べる状態になっている
 		const checkbox = page.locator(
 			'.vkbm-plan-summary__exclusive-checkbox'
 		);
@@ -886,7 +916,9 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		await expect( checkbox ).toBeEnabled();
 
 		// チェックを入れる → 貸切料金行が現れて加算される（1000×2=2000）。
+		// @step 「この時間帯を貸切にする」にチェックを入れる
 		await checkbox.check();
+		// @check 料金の内訳に貸切料金の行が出て、2,000円（1,000円 × 2 名）が加算され、読み上げソフトにも変化が伝わる
 		const feeLive = page.locator(
 			'.vkbm-plan-summary__exclusive-fee-live'
 		);
@@ -908,11 +940,14 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 	test( 'B-3: 適用外人数（4名）到達で ¥0 ＋「4名以上のお申し込みのため貸切料金はかかりません」', async ( {
 		page,
 	} ) => {
+		// @step 予約をすべて消しておく
 		deleteAllBookings();
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 
+		// @step 予約ページでメニューの「予約に進む」を押し、翌月1日を選んで、最初の空いている時間枠を選ぶ
 		await gotoFrontSlotSummary( page );
 
+		// @step 人数に 2 を入れ、「この時間帯を貸切にする」にチェックを入れる
 		const guestsInput = page.locator( '#vkbm-reservation-guests' );
 		await guestsInput.waitFor( { state: 'visible', timeout: 15000 } );
 		await guestsInput.fill( '2' );
@@ -923,13 +958,16 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		await checkbox.check();
 
 		// 2名のときは加算（2000）。
+		// @check 貸切料金が 2,000円になる
 		const feeValue = page.locator(
 			'.vkbm-plan-summary__exclusive-fee-value'
 		);
 		await expect( feeValue ).toContainText( /2[,，]?000/ );
 
 		// 人数を 4（適用外人数）にする → ¥0 ＋ 注記に切替（行は消えない）。
+		// @step 人数を 4 に変える
 		await guestsInput.fill( '4' );
+		// @check 貸切料金の行は残ったまま ¥0 になり、「4名以上のお申し込みのため貸切料金はかかりません」の注記が出る
 		const mutedValue = page.locator(
 			'.vkbm-plan-summary__exclusive-fee-value--muted'
 		);
@@ -942,7 +980,9 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		await expect( feeNote ).toContainText( '貸切料金はかかりません' );
 
 		// 人数を 3 に戻す → 1000×3=3000 が再加算される。
+		// @step 人数を 3 に戻す
 		await guestsInput.fill( '3' );
+		// @check 貸切料金が 3,000円（1,000円 × 3 名）になる
 		await expect(
 			page.locator( '.vkbm-plan-summary__exclusive-fee-value' )
 		).toContainText( /3[,，]?000/ );
@@ -956,6 +996,7 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 	test( 'C: 既存予約のある枠では貸切チェックが無効化＋理由テキスト表示', async ( {
 		page,
 	} ) => {
+		// @step 予約をすべて消し、翌月1日の 9:00〜10:00 に1名の通常の予約を入れておく
 		deleteAllBookings();
 		// 対象日の 09:00-10:00 に通常予約を1件入れる（残席はあるが既存予約あり）。
 		createBooking(
@@ -969,13 +1010,16 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		);
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 
+		// @step 予約ページでメニューの「予約に進む」を押し、翌月1日を選んで、最初の空いている時間枠を選ぶ
 		await gotoFrontSlotSummary( page );
 
+		// @step 人数に 2 を入れる
 		const guestsInput = page.locator( '#vkbm-reservation-guests' );
 		await guestsInput.waitFor( { state: 'visible', timeout: 15000 } );
 		await guestsInput.fill( '2' );
 
 		// 貸切チェックは表示されるが無効化されている。
+		// @check 「この時間帯を貸切にする」のチェックボックスは表示されるが、選べない
 		const checkbox = page.locator(
 			'.vkbm-plan-summary__exclusive-checkbox'
 		);
@@ -983,6 +1027,7 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		await expect( checkbox ).toBeDisabled();
 
 		// 理由テキストが表示される（色だけでなくテキストで明示）。
+		// @check 選べない理由として「既にご予約があるため」の文言が表示される
 		const disabledNote = page.locator(
 			'.vkbm-plan-summary__exclusive-note--disabled'
 		);
@@ -999,6 +1044,7 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		page,
 		request,
 	} ) => {
+		// @step 予約をすべて消し、翌月1日の 9:00〜10:00 に2名の貸切の予約を入れておく
 		deleteAllBookings();
 		// 対象日の 09:00-10:00 に「貸切」予約を1件入れる（残席はあるが受付停止になるはず）。
 		createBooking(
@@ -1015,12 +1061,14 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		// availabilities REST（公開エンドポイント）を直接叩いて該当スロットが exclusive_closed であることを確認する。
 		// resource_id は渡さない（指名OFF＝自動割り当ての実フロントと同じ経路にする）。
 		// resource_id を渡すと指名（staff-preferred）扱いで貸切枠がスキップされ受付停止枠が一覧から消えるため。
+		// @step 翌月1日の空き状況（公開の REST API）を開く
 		const res = await request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ Number.parseInt(
 				menuId,
 				10
 			) }&date=${ FRONT_TEST_DATE }&timezone=Asia/Tokyo`
 		);
+		// @check 9:00 の枠が貸切により受付を止めた枠として返る
 		expect( res.ok() ).toBeTruthy();
 		const body = await res.json();
 		const bodyStr = JSON.stringify( body );
@@ -1028,8 +1076,10 @@ test.describe( 'PR #316: B/C/D. フロント貸切指定・料金加算・受付
 		expect( bodyStr ).toContain( '"exclusive_closed":true' );
 
 		// 実機: 09:00 枠が「予約受付終了」状態（is-exclusive-closed・選択不可）であること。
+		// @step ログアウトした状態で予約ページを開き、メニューの「予約に進む」を押して、翌月1日を選ぶ
 		await page.context().clearCookies();
 		await gotoFrontSlotSummaryUntilSlots( page );
+		// @check 9:00 の時間枠が「予約受付終了」と表示され、選べない
 		const closedSlot = page
 			.locator( '.vkbm-slot-list__item.is-exclusive-closed' )
 			.first();
@@ -1253,6 +1303,7 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 
 	test.beforeAll( () => {
 		// 共有の provider 設定を変更前に全退避する（他 spec を汚染しない）。
+		// @step 基本設定で指名機能を「有効」、予約枠の定員を「有効」にしておく（元の設定は控えて、最後に戻す）
 		snapshotProviderSettings();
 		wpEvalPhp( `
 				$s = get_option( 'vkbm_provider_settings', array() );
@@ -1262,10 +1313,12 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 				update_option( 'vkbm_provider_settings', $s );
 			` );
 
+		// @step スタッフ A・B を作り、A・B を担当にした、指名を使うメニュー（複数人予約あり・最大 2 名・貸切指定あり・最小催行人数なし）を作っておく
 		staffAId = seedExclusiveCheckboxStaff( STAFF_A_TITLE );
 		staffBId = seedExclusiveCheckboxStaff( STAFF_B_TITLE );
 		menuId = seedExclusiveCheckboxMenu();
 
+		// @step スタッフ A・B の翌月22日に、10:00〜11:00 の時間枠だけのシフトを入れておく
 		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
 		dateStr = `${ nextTokyoMonth.year }-${ String(
 			nextTokyoMonth.month
@@ -1309,6 +1362,7 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 	test( '担当Aが貸切予約で埋まっていても、Bが空いていれば「指名なし」枠は選択可能で貸切指定チェックも有効になる（#440）', async ( {
 		page,
 	} ) => {
+		// @step 予約をすべて消し、スタッフ A にだけ翌月22日 10:00〜11:00 の貸切の予約を入れておく
 		deleteAllBookings();
 		// 担当Aにだけ、対象スロットの貸切予約を入れる（担当Bは空きのまま）。
 		createBooking(
@@ -1322,6 +1376,7 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 		);
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 
+		// @step そのメニューの予約画面を開き、スタッフは「指名なし」のまま、翌月へ送って22日を選ぶ
 		await page.goto( `/booking/?menu_id=${ menuId }` );
 		await page.waitForLoadState( 'networkidle' );
 		await page.waitForSelector( '.vkbm-calendar', {
@@ -1341,16 +1396,19 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 
 		// #440: 担当Aの貸切予約だけで枠全体が受付停止になっていた不具合の修正確認。
 		// 担当Bが空いているため、この時間枠は選択可能なまま。
+		// @check 10:00 の時間枠が選べる状態になっている
 		const slot = page
 			.locator( '.vkbm-slot-list__item' )
 			.filter( { hasText: SLOT_START } )
 			.first();
 		await slot.waitFor( { state: 'visible', timeout: 15000 } );
 		await expect( slot ).toBeEnabled();
+		// @step 10:00 の時間枠を選ぶ
 		await slot.click();
 
 		// #440: 貸切チェックの無効化判定を booked_guests（全担当合計）ではなく
 		// remaining（担当Bの空き）で行うよう修正したことの確認。
+		// @check 「この時間帯を貸切にする」のチェックボックスが表示され、選べる状態になっている
 		const checkbox = page.locator(
 			'.vkbm-plan-summary__exclusive-checkbox'
 		);
@@ -1361,6 +1419,7 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 	test( '担当A・Bとも貸切予約で埋まっていれば「指名なし」ではその日が選べなくなる（回帰）', async ( {
 		page,
 	} ) => {
+		// @step 予約をすべて消し、スタッフ A・B の両方に翌月22日 10:00〜11:00 の貸切の予約を入れておく
 		deleteAllBookings();
 		// 担当A・Bの両方に、対象スロットの貸切予約を入れる（候補が全員貸切）。
 		createBooking(
@@ -1383,6 +1442,7 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 		);
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 
+		// @step そのメニューの予約画面を開き、スタッフは「指名なし」のまま、翌月へ送る
 		await page.goto( `/booking/?menu_id=${ menuId }` );
 		await page.waitForLoadState( 'networkidle' );
 		await page.waitForSelector( '.vkbm-calendar', {
@@ -1411,6 +1471,7 @@ test.describe( 'PR #316 / #440: 指名を使うメニューの「指名なし」
 
 		// #440回帰確認: 候補の担当（A・B）が全員貸切のときだけ、指名を使うメニューの
 		// 「指名なし」枠は受付停止になる（カレンダー日単位で disabled・--available 無し）。
+		// @check カレンダーの22日が空きの表示にならず、選べない
 		const targetDayButton = page
 			.locator( '.vkbm-calendar__day', {
 				hasText: new RegExp( `^${ TARGET_DAY }$` ),

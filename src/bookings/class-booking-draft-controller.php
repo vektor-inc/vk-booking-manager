@@ -519,9 +519,9 @@ class Booking_Draft_Controller {
 			$has_price_tiers = ! empty( $guest_tiers );
 		}
 
-		// 指名を使うメニューの最低申し込み人数（受付制限。#393）。
+		// 指名を使うメニュー、または貸し切り予約ONのメニューの最低申し込み人数（受付制限。#393・#968）。
 		// フロントの入力欄下限・警告表示は迂回可能なため、下書き保存時にもサーバ側で権威的に判定する。
-		// Availability_Service::get_menu_min_capacity()（催行状態の表示専用、常に指名メニューで0）とは
+		// Availability_Service::get_menu_min_capacity()（催行状態の表示専用、指名メニュー・貸し切り予約ONのメニューで常に0）とは
 		// 別の取得経路。判定は Availability_Service::get_menu_nomination_min_guests() へ委譲する
 		// （確定コントローラと同型。以前はここに閉じた実装として複製していたが、判定条件を1箇所に
 		// 集約するため委譲に統一した）。
@@ -542,13 +542,13 @@ class Booking_Draft_Controller {
 				// 最小催行人数（>=）を満たさない場合は貸し切り指定を拒否する。
 				// 最大受付数が1以下のメニューでは最小催行人数は意味を持たないため実効0（判定無効）にする（#320）。
 				// max_capacity を上限にクランプする点は Availability_Service::get_menu_min_capacity() と同じだが、
-				// 同メソッドは先頭で「このメニューで指名を使うなら常に0」を返す（催行判定は指名を使うメニューには
-				// 存在しない概念のため）。ここではその分岐を複製せず、常に生の _vkbm_min_capacity メタを
-				// 読んでいる。これは同じメタが指名を使うメニューでは「最低申し込み人数」（#393。
+				// 同メソッドは先頭で「指名を使うメニュー、または貸し切り予約ONのメニューなら常に0」を返す
+				// （催行判定はこれらのメニューには存在しない概念のため）。ここではその分岐を複製せず、常に生の _vkbm_min_capacity メタを
+				// 読んでいる。これは同じメタが指名を使うメニュー・貸し切り予約ONのメニューでは「最低申し込み人数」（#393・#968。
 				// Availability_Service::get_menu_nomination_min_guests() が読む値）としても使われており、
-				// 指名を使うメニューは既に上の $nomination_min_guests チェック（$guests と比較する
+				// 指名を使うメニュー・貸し切り予約ONのメニューは既に上の $nomination_min_guests チェック（$guests と比較する
 				// ブロック）で guests がこの値以上であることを保証済みのため、ここでの再チェックは
-				// 同じ値に対する無害な多層防御になる（指名OFFを要求する前提は無い）。
+				// 同じ値に対する無害な多層防御になる（指名OFFや貸し切り予約OFFを要求する前提は無い）。
 				$max_capacity = $this->get_menu_max_capacity( $menu_id );
 				$min_capacity = $max_capacity <= 1
 					? 0
@@ -1143,7 +1143,7 @@ class Booking_Draft_Controller {
 	 * get_menu_nomination_min_guests() と同型。#393 安藤レビュー指摘: 以前はロジックを
 	 * ここに閉じた実装として複製していたが、Availability_Service は Settings_Repository 1つで
 	 * 生成できるため複製の必要が無く、判定条件を1箇所に集約するため委譲に統一した）。
-	 * get_menu_min_capacity 系（催行状態の表示専用、常に指名メニューで0）とは別の取得経路。
+	 * get_menu_min_capacity 系（催行状態の表示専用、指名メニュー・貸し切り予約ONのメニューで常に0）とは別の取得経路。
 	 *
 	 * @param int $menu_id サービスメニューID。
 	 * @return int 実効の最低申し込み人数（0=制限なし）。

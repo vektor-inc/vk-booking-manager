@@ -157,6 +157,7 @@ async function postDraft(
 
 test.describe( 'issue #393: 指名を使うメニューの最低申し込み人数（受付制限）', () => {
 	test.beforeAll( () => {
+		// @step 管理画面で指名機能を ON にし、予約枠の定員 3・最低申し込み人数 2 のメニューを3つ（指名を使う／指名を使わない／「複数人一括予約」OFF）作り、スタッフの来月のシフトを登録しておく
 		originalStaffEnabled = getStaffEnabled();
 		// サイト全体の指名機能をONにする（メニューは既定で指名を使う）。
 		setStaffEnabled( true );
@@ -189,6 +190,7 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 	test( 'フロント: 指名を使う・最低申し込み人数2のメニューで、申込人数の下限・初期値が2になり案内文が出る', async ( {
 		page,
 	} ) => {
+		// @step メニュー「Nomination Min Guests Menu」を選んだ状態の予約ページを開き、空きのある日と最初の時間枠を選ぶ
 		await page.goto( `/booking/?menu_id=${ menuId }` );
 		await page.waitForLoadState( 'networkidle' );
 
@@ -207,6 +209,7 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 		const guestsInput = page.locator( '#vkbm-reservation-guests' );
 		await guestsInput.waitFor( { state: 'visible', timeout: 10000 } );
 
+		// @check 人数の入力欄の初期値と下限が 2 になっている
 		// #393: 初期値・下限が最低申し込み人数（2）に合わせて補正されるため、
 		// 複数人一括予約メニューの既定初期値である1にはならない。
 		await expect( guestsInput ).toHaveValue( String( MENU_MIN_GUESTS ) );
@@ -215,11 +218,14 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 			String( MENU_MIN_GUESTS )
 		);
 
+		// @step 人数を 1 にしようとする
 		// 1名にしようとしても、onChange のクランプにより下限未満へは下がらない。
 		await guestsInput.fill( '1' );
 		await page.waitForTimeout( 300 );
+		// @check 人数は 2 のまま下がらない
 		await expect( guestsInput ).toHaveValue( String( MENU_MIN_GUESTS ) );
 
+		// @check 人数欄の下に「〜からのお申し込みです」の案内が出て、「以上にしてください」の警告は出ていない
 		// #393: 常時案内文（buildNominationMinGuestsHint()。状態に依存しない中立の文言。
 		// 植草レビュー指摘を受け、命令形のエラー・警告文言（buildNominationMinGuestsMessage()）
 		// とは別の文言になっている）。要素を特定して照合し、無関係な箇所に当たって
@@ -229,6 +235,7 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 		await expect( guestsHint ).toContainText( 'からのお申し込みです' );
 		await expect( guestsHint ).not.toContainText( '以上にしてください' );
 
+		// @check 「予約へ進む」ボタンが押せる
 		// 下限どおり（2名）なら「予約へ進む」が有効になる。
 		const proceed = page.locator( '.vkbm-plan-summary__action' ).first();
 		await expect( proceed ).toBeEnabled();
@@ -237,11 +244,15 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 	test( 'REST: 指名を使う・最低申し込み人数2のメニューで、下書き保存は1名だとエラー、2名・3名なら成功する', async ( {
 		request,
 	} ) => {
+		// @step 「Nomination Min Guests Menu」で、人数 1 名の予約内容を確認画面へ送る（予約の仮保存）
 		const rejected = await postDraft( request, menuId, 1 );
+		// @check 最低申し込み人数に満たない旨のエラーになり、仮保存されない
 		expect( rejected.status ).toBe( 400 );
 		expect( rejected.body.code ).toBe( 'nomination_min_guests' );
 
+		// @step 人数 2 名と 3 名で、同じく確認画面へ送る
 		const acceptedAtMinimum = await postDraft( request, menuId, 2 );
+		// @check どちらも仮保存できる
 		expect( acceptedAtMinimum.status ).toBe( 200 );
 		expect( typeof acceptedAtMinimum.body.token ).toBe( 'string' );
 
@@ -253,7 +264,9 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 	test( 'REST: 指名を使わないメニューでは、最低申し込み人数の設定に関わらず1名でも下書き保存できる（従来どおり表示専用）', async ( {
 		request,
 	} ) => {
+		// @step 「Nomination Min Guests Menu (No Nomination)」（指名を使わないメニュー）で、人数 1 名の予約内容を確認画面へ送る（予約の仮保存）
 		const result = await postDraft( request, noNominationMenuId, 1 );
+		// @check 最低申し込み人数の設定があっても、エラーにならず仮保存できる
 		expect( result.status ).toBe( 200 );
 		expect( typeof result.body.token ).toBe( 'string' );
 	} );
@@ -261,7 +274,9 @@ test.describe( 'issue #393: 指名を使うメニューの最低申し込み人�
 	test( 'REST: 複数人一括予約OFFのメニューでは、最低申し込み人数に2以上が保存されていても1名で下書き保存できる（実効0のクランプ）', async ( {
 		request,
 	} ) => {
+		// @step 「Nomination Min Guests Menu (No Multi Guest)」（「複数人一括予約」OFF のメニュー）で、人数 1 名の予約内容を確認画面へ送る（予約の仮保存）
 		const result = await postDraft( request, noAllowMultiMenuId, 1 );
+		// @check 最低申し込み人数に 2 以上が保存されていても、エラーにならず仮保存できる
 		expect( result.status ).toBe( 200 );
 		expect( typeof result.body.token ).toBe( 'string' );
 	} );

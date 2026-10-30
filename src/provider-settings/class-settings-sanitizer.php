@@ -206,6 +206,9 @@ class Settings_Sanitizer {
 			);
 			$booking_status_mode                                = sanitize_key( (string) ( $input['provider_booking_status_mode'] ?? ( $data['provider_booking_status_mode'] ?? Settings_Repository::BOOKING_STATUS_MODE_PENDING ) ) );
 			$data['provider_booking_status_mode']               = in_array( $booking_status_mode, Settings_Repository::BOOKING_STATUS_MODES, true ) ? $booking_status_mode : Settings_Repository::BOOKING_STATUS_MODE_PENDING;
+		// #958: 予約の受付方法。送られなかった場合は保存済みの値（なければ初期値の member）を使い、許可外の値は member に倒す。
+		$customer_mode_raw                              = $input['booking_customer_mode'] ?? ( $data['booking_customer_mode'] ?? Settings_Repository::BOOKING_CUSTOMER_MODE_MEMBER );
+		$data['booking_customer_mode']                  = Settings_Repository::normalize_booking_customer_mode( is_string( $customer_mode_raw ) ? sanitize_key( $customer_mode_raw ) : '' );
 		$cancel_mode                                    = sanitize_key( (string) ( $input['provider_booking_cancel_mode'] ?? ( $data['provider_booking_cancel_mode'] ?? 'hours' ) ) );
 		$data['provider_booking_cancel_mode']           = in_array( $cancel_mode, array( 'hours', 'none' ), true ) ? $cancel_mode : 'hours';
 		$data['provider_booking_cancel_deadline_hours'] = $this->sanitize_non_negative_int(

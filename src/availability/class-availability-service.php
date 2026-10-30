@@ -2252,10 +2252,40 @@ class Availability_Service {
 	}
 
 	/**
+	 * メニューが「貸し切り予約」（最初の予約が入った時点でその枠を貸切にする設定）として有効かを返す（#968）。
+	 *
+	 * Booking_Confirmation_Controller::is_menu_exclusive_when_booked() と同じフルゲート
+	 * （メタON・Pro版かつ予約枠の定員機能ON・複数人一括予約の許可・実効の定員2以上）を適用する。
+	 * 保存済みのメタが残っていても、ゲートを満たさなければ無効として扱う（#320）。
+	 *
+	 * @param WP_Post $menu_post メニューの投稿オブジェクト。
+	 * @return bool 貸し切り予約が有効なら true。
+	 */
+	public function is_menu_exclusive_when_booked( WP_Post $menu_post ): bool {
+		// メタが立っていなければ対象外。
+		if ( ! get_post_meta( $menu_post->ID, self::MENU_META_EXCLUSIVE_WHEN_BOOKED, true ) ) {
+			return false;
+		}
+
+		// Pro版・予約枠の定員機能ONのフルゲートを満たさなければ無効。
+		if ( ! Staff_Editor::is_exclusive_booking_available_for_menu( $menu_post->ID ) ) {
+			return false;
+		}
+
+		// 複数人一括予約が許可されていなければ無効。
+		if ( ! get_post_meta( $menu_post->ID, self::MENU_META_ALLOW_MULTIPLE_GUESTS, true ) ) {
+			return false;
+		}
+
+		// 実効の定員が1以下なら貸し切りは意味を持たないため無効。
+		return $this->get_menu_max_capacity( $menu_post ) > 1;
+	}
+
+	/**
 	 * サービスメニューの最小催行人数（グループ開催型）を取得する。
 	 *
 	 * 同じ時間枠の合計予約人数がこの値に達したら開催確定とみなす表示用の値です。
-	 * 0 は「制約なし（催行判定なし）」で、未設定・Free版・指名ON・複数人予約OFF時は 0 を返します。
+	 * 0 は「制約なし（催行判定なし）」で、未設定・Free版・指名ON・貸し切り予約ON・複数人予約OFF時は 0 を返します。
 	 * 最大同時予約人数（get_menu_max_capacity）を上限としてクランプします。
 	 *
 	 * #392: 指名を使うメニューは常に1枠1組（貸切）のため、複数の別々の予約が相乗りして
@@ -2269,6 +2299,12 @@ class Availability_Service {
 	public function get_menu_min_capacity( WP_Post $menu_post ): int {
 		// 指名を使うメニューは1枠1組（貸切）が確定しており、催行判定の概念が無いため常に0。
 		if ( Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) ) {
+			return 0;
+		}
+
+		// #968: 「貸し切り予約」ONのメニューも最初の1件で枠が閉じ、後から人数が合流しないため催行判定の概念が無い。
+		// 最低人数は表示専用ではなく get_menu_nomination_min_guests() の受付制限として扱う。
+		if ( $this->is_menu_exclusive_when_booked( $menu_post ) ) {
 			return 0;
 		}
 
@@ -2286,16 +2322,18 @@ class Availability_Service {
 	}
 
 	/**
-	 * 指名を使うメニューの「最低申し込み人数」（受付制限）を取得する（#393）。
+	 * 指名を使うメニュー、または貸し切り予約ONのメニューの「最低申し込み人数」（受付制限）を取得する（#393・#968）。
 	 *
-	 * get_menu_min_capacity()（催行状態の表示専用。指名を使うメニューでは常に0を返す）とは別の
-	 * 取得経路。指名を使うメニューは1件の予約が1組の貸切になるため、この値は「1組の最低人数」を
-	 * 意味する受付制限として使う。この値が1以上のとき、申込人数がこれを下回る予約は受け付けない
+	 * get_menu_min_capacity()（催行状態の表示専用。指名を使うメニュー・貸し切り予約ONのメニューでは
+	 * 常に0を返す）とは別の取得経路。指名を使うメニューは1件の予約が1組の貸切になり、貸し切り予約ON
+	 * （#968）のメニューも最初の1件で枠が閉じるため、この値は「1組の最低人数」を意味する
+	 * 受付制限として使う。この値が1以上のとき、申込人数がこれを下回る予約は受け付けない
 	 * （Booking_Draft_Controller / Booking_Confirmation_Controller が本メソッドの値でサーバ側の
 	 * 申込を拒否する）。
 	 *
-	 * 有効になるのは「指名を使う」かつ「複数人一括予約ON」かつ「予約枠の定員2以上」のときだけで、
-	 * それ以外は実効0（制限なし）を返す。複数人一括予約OFFのメニューはフロントの人数入力欄が出ず
+	 * 有効になるのは「指名を使う、または貸し切り予約ON（#968）」かつ「複数人一括予約ON」かつ
+	 * 「予約枠の定員2以上」のときだけで、それ以外は実効0（制限なし）を返す。
+	 * 複数人一括予約OFFのメニューはフロントの人数入力欄が出ず
 	 * 申込人数が常に1名固定になるため、最低申し込み人数に2以上が保存されていると誰も予約できない
 	 * メニューになってしまう。これを避けるため既存の最少催行人数（#320）と同じ型のクランプを行う。
 	 *
@@ -2308,8 +2346,9 @@ class Availability_Service {
 			return 0;
 		}
 
-		// 指名を使わないメニューではこの受付制限は無効（このメニューの最少催行人数は表示専用のまま）。
-		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) ) {
+		// 指名を使わず、かつ「貸し切り予約」もOFFのメニューではこの受付制限は無効（このメニューの最少催行人数は表示専用のまま）。
+		// 「貸し切り予約」ON（#968）は最初の1件で枠が閉じ、後から人数が合流しないため、指名を使うメニューと同じ受付制限にする。
+		if ( ! Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) && ! $this->is_menu_exclusive_when_booked( $menu_post ) ) {
 			return 0;
 		}
 

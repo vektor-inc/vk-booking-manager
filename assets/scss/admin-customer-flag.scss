@@ -30,3 +30,48 @@
 .vkbm-customer-flag__col-delete {
 	width: 10%;
 }
+
+/* ゲストに付けたフラグの一覧
+   ========================================================================== */
+.vkbm-customer-flag__guest-filter {
+	margin: 12px 0;
+}
+
+.vkbm-customer-flag__col-guest-type {
+	width: 14%;
+}
+
+.vkbm-customer-flag__col-guest-contact {
+	width: 24%;
+}
+
+.vkbm-customer-flag__col-guest-date {
+	width: 14%;
+}
+
+.vkbm-customer-flag__col-guest-source {
+	width: 10%;
+}
+
+.vkbm-customer-flag__col-guest-action {
+	width: 10%;
+}
+
+/* 狭い画面で表がはみ出すときは、表だけを横にスクロールさせる。min-width は列が折り返し・見切れしない幅。 */
+.vkbm-customer-flag__guest-table-wrap {
+	overflow-x: auto;
+}
+
+.vkbm-customer-flag__guest-table {
+	min-width: 760px;
+}
+
+/* 解除ボタンは「解除」の語が途中で折り返されないようにする。 */
+.vkbm-customer-flag__guest-table .button {
+	white-space: nowrap;
+}
+
+/* 予約を止める種別は、色だけに頼らず文言でも示す（文言は PHP 側）。 */
+.vkbm-customer-flag__guest-blocks {
+	color: var(--vkbm--admin--color--danger);
+}

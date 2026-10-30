@@ -157,6 +157,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		menuId = getServiceMenuId();
 
 		// 対象月のシフトを全日 09:00〜18:00 に戻しておく（前回実行の影響を消す）
+		// @step 管理画面で翌月のシフトを全日 9:00〜18:00 にしておく
 		createShiftForMonth( staffId, TARGET_YEAR, TARGET_MONTH );
 		shiftId = findShiftId();
 
@@ -174,6 +175,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 			}
 			echo wp_json_encode( $out );
 		` ).trim();
+		// @step サービスメニューを所要 60 分・後ろの余白 0 分・開始時刻の固定なし・予約受付期間は無制限にしておく
 		wpEvalPhp( `
 			update_post_meta( ${ Number( menuId ) }, '_vkbm_duration_minutes', 60 );
 			update_post_meta( ${ Number( menuId ) }, '_vkbm_buffer_after_minutes', 0 );
@@ -208,10 +210,12 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 	test( '15:00〜24:00 を保存して開き直すと、そのまま残る', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、翌月のシフトの編集画面を開く
 		await loginAsAdmin( page );
 		await openShiftEditor( page );
 
 		// 10日: 15:00〜24:00 にする
+		// @step 10 日の時間帯を 15:00〜24:00、11 日の時間帯を 10:30〜20:50 にする
 		const slot24 = slotSelects(
 			dayRow( page, DAY_END_24 ).locator( '.vkbm-shift-slot' ).first()
 		);
@@ -230,6 +234,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		await slotRegular.endMinute.selectOption( '50' );
 
 		// 「更新」を押して保存し、保存後の画面遷移を待つ
+		// @step 「更新」ボタンを押して保存し、編集画面を開き直す
 		await Promise.all( [
 			page.waitForURL( /post\.php\?post=\d+&action=edit&message=/, {
 				timeout: 30000,
@@ -241,6 +246,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		await openShiftEditor( page );
 
 		// 画面上の値: 10日は 15:00〜24:00、11日は 10:30〜20:50、12日は既定の 09:00〜18:00 のまま
+		// @check 10 日は 15:00〜24:00、11 日は 10:30〜20:50、変更していない 12 日は 9:00〜18:00 のまま表示される
 		await expect(
 			dayRow( page, DAY_END_24 ).locator( '.vkbm-shift-slot' )
 		).toHaveCount( 1 );
@@ -265,6 +271,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		).toBe( '09:00-18:00' );
 
 		// DB に保存された値も確認する（画面の既定値表示と取り違えないため）
+		// @check 保存された内容も、10 日 15:00〜24:00、11 日 10:30〜20:50、12 日 9:00〜18:00 になっている
 		expect( readSavedSlots( DAY_END_24 ) ).toEqual( [
 			{ start: '15:00', end: '24:00' },
 		] );
@@ -279,10 +286,12 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 	test( '終了（時）を 24 にすると分は 00 に固定され、23 に戻すと全部選べる', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、翌月のシフトの編集画面を開く
 		await loginAsAdmin( page );
 		await openShiftEditor( page );
 
 		// 保存済みの 24:00 の行（初回表示）でも、分は 00 のみ選べる
+		// @check 保存済みの 10 日（終了 24:00）の行では、終了（分）で 00 以外を選べない
 		const loaded24 = dayRow( page, DAY_END_24 )
 			.locator( '.vkbm-shift-slot' )
 			.first();
@@ -295,6 +304,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		] );
 
 		// 12日: 15:00〜23:30 にしてから、終了（時）だけを 24 に変える
+		// @step 12 日の時間帯を 15:00〜23:30 にする
 		const slotEl = dayRow( page, DAY_UNTOUCHED )
 			.locator( '.vkbm-shift-slot' )
 			.first();
@@ -302,9 +312,12 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		await slot.startHour.selectOption( '15' );
 		await slot.endHour.selectOption( '23' );
 		await slot.endMinute.selectOption( '30' );
+		// @check 終了（分）はすべて選べる
 		expect( await disabledMinuteValues( slotEl ) ).toEqual( [] );
 
+		// @step 12 日の終了（時）を 24 にする
 		await slot.endHour.selectOption( '24' );
+		// @check 終了（分）が 00 になり、10〜50 は選べない
 		// 分が 00 になり、10〜50 は選べない
 		await expect( slot.endMinute ).toHaveValue( '00' );
 		expect( await disabledMinuteValues( slotEl ) ).toEqual( [
@@ -316,14 +329,18 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		] );
 
 		// 終了（時）を 23 に戻すと全部選べる（値は 00 のまま）
+		// @step 終了（時）を 23 に戻す
 		await slot.endHour.selectOption( '23' );
+		// @check 終了（分）は 00 のまま、すべて選べるようになる
 		await expect( slot.endMinute ).toHaveValue( '00' );
 		expect( await disabledMinuteValues( slotEl ) ).toEqual( [] );
 
 		// 「時間帯を追加」で行を増やし、その行の終了（時）を 24 にしても同じ
+		// @step 12 日の「時間帯を追加」を押して行を増やし、その行の終了（分）を 30 にしてから終了（時）を 24 にする
 		await dayRow( page, DAY_UNTOUCHED )
 			.locator( '.vkbm-shift-add-slot' )
 			.click();
+		// @check 12 日の時間帯が2行になり、追加した行でも終了（分）が 00 になって 10〜50 は選べない
 		await expect(
 			dayRow( page, DAY_UNTOUCHED ).locator( '.vkbm-shift-slot' )
 		).toHaveCount( 2 );
@@ -343,6 +360,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		] );
 
 		// 保存用の隠し項目にも 24:00 で入っている（24:30 などの不正値にならない）
+		// @check 保存される内容でも、12 日の時間帯の終了が 24:00 になっている
 		const daysJson = await page
 			.locator( '#vkbm-shift-days-json' )
 			.inputValue();
@@ -359,12 +377,14 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		page,
 	} ) => {
 		// 空き枠 API のキャッシュを消してから取得する
+		// @step 翌月 10 日の空き枠の一覧を取得する
 		wpCliArgs( [ 'transient', 'delete', '--all' ], { stdio: 'pipe' } );
 		const res = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ targetDate(
 				DAY_END_24
 			) }&timezone=Asia%2FTokyo&nocache=${ Date.now() }`
 		);
+		// @check 15:00 開始の枠から 23:00 開始の枠まで受け付けている
 		expect( res.ok() ).toBe( true );
 		const data = await res.json();
 		const starts: string[] = (
@@ -380,6 +400,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		);
 
 		// 画面でも確認する: 予約ページで対象日を選ぶと 23:00 の枠が表示される
+		// @step 予約ページを開き、サービスメニューの「予約する」ボタンを押す
 		await page.goto( '/booking/' );
 		// 対象メニュー（menuId）の予約ボタンに絞る。予約ページ未設定の環境では
 		// href が menu_id を含まないメニューのパーマリンクになるため、href ではなく
@@ -397,6 +418,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 			.waitFor( { state: 'visible', timeout: 15000 } );
 
 		// 対象日は翌月のため「次の月」へ進める（ナビの最後のボタンが「次の月」）
+		// @step カレンダーで「次の月」へ進み、10 日を選ぶ
 		await page.locator( '.vkbm-calendar__nav' ).last().click();
 		const targetDay = page
 			.locator(
@@ -410,6 +432,7 @@ test.describe.serial( 'Issue #501: シフトの終了時刻 24:00', () => {
 		await targetDay.first().waitFor( { state: 'visible', timeout: 15000 } );
 		await targetDay.first().click();
 
+		// @check 「23:00 - 」で始まる時間枠が表示される
 		const slotItems = page.locator( '.vkbm-slot-list__item' );
 		await slotItems.first().waitFor( { state: 'visible', timeout: 15000 } );
 		// 「22:00 - 23:00」に一致しないよう、時刻表示が 23:00 で始まる枠を探す

@@ -15,6 +15,7 @@ import {
 test.beforeAll( async () => {
 	// 制限日数超過テスト用に、将来月のシフトも作成しておく
 	// Create shifts for future months for advance booking limit tests
+	// @step 管理画面でスタッフの今月・翌月・翌々月のシフトを登録しておく
 	const staffId = getStaffId();
 	const now = new Date();
 	// Asia/Tokyo の現在月を formatToParts で取得（locale 依存を排除）
@@ -36,6 +37,7 @@ test.beforeAll( async () => {
 // 各テスト前後で予約可能期間の設定をリセット（テスト間の状態汚染を防止）
 // Reset max advance booking settings before/after each test to prevent state pollution
 test.beforeEach( async () => {
+	// @step 管理画面で共通設定の「予約可能な最大日数」を 0（無制限）にし、「Service Menu 1」個別の「予約可能な最大日数」を空にしておく
 	await configureProviderSettings( {
 		provider_max_advance_booking_days: 0,
 	} );
@@ -85,21 +87,25 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 	test( '共通設定画面に Max advance booking period フィールドが表示され、保存できること', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインする
 		// 管理画面にログイン
 		await loginAsAdmin( page );
 
+		// @step 共通設定画面の「システム」タブを開く
 		// プロバイダー設定画面の「システム」タブに直接移動（tab=system クエリパラメータ指定）
 		await page.goto(
 			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
 		);
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check 「予約可能な最大日数」の入力欄が表示される
 		// Max advance booking period の入力フィールドが存在することを確認
 		const maxAdvanceInput = page.locator(
 			'#vkbm-provider-max-advance-booking-days'
 		);
 		await expect( maxAdvanceInput ).toBeVisible( { timeout: 10000 } );
 
+		// @step 「予約可能な最大日数」に 14 を入れて保存する
 		// 14 を入力
 		await maxAdvanceInput.fill( '14' );
 
@@ -108,12 +114,14 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		await submitButton.click();
 		await page.waitForLoadState( 'networkidle' );
 
+		// @step 「システム」タブを開き直す
 		// 保存後、システムタブに再アクセスして値を確認
 		await page.goto(
 			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=system'
 		);
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check 「予約可能な最大日数」が 14 のまま残っている
 		// 保存された値を確認
 		const savedValue = await page
 			.locator( '#vkbm-provider-max-advance-booking-days' )
@@ -127,6 +135,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		const menuId = getServiceMenuId();
 		expect( menuId ).toBeTruthy();
 
+		// @step 管理画面で「Service Menu 1」個別の「予約可能な最大日数」を 7 にして保存する
 		// メタを 7 に設定
 		// Set the meta value to 7
 		wpCliArgs( [
@@ -138,6 +147,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 			'7',
 		] );
 
+		// @check 「Service Menu 1」個別の「予約可能な最大日数」が 7 として保存されている
 		// 設定した値が取得できることを確認（wpCliArgs は trim 済み文字列を返す）
 		// Verify the stored value (wpCliArgs returns a trimmed string)
 		const savedValue = wpCliArgs( [
@@ -153,11 +163,13 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 	test( 'REST API: 制限日数を超える日付のスロットが空で、制限内はスロットが存在すること（共通設定: 7日）', async ( {
 		page,
 	} ) => {
+		// @step 管理画面で共通設定の「予約可能な最大日数」を 7 にする
 		// wp-cli 経由で共通設定に max_advance_booking_days = 7 を設定
 		await configureProviderSettings( {
 			provider_max_advance_booking_days: 7,
 		} );
 
+		// @step 予約ページで「Service Menu 1」の 8 日後と 2 日後の空き枠を見る
 		const menuId = getServiceMenuId();
 
 		// Asia/Tokyo タイムゾーンで日付を計算（UTC との日付ずれを防止）
@@ -171,6 +183,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		const withinDate = new Date( now.getTime() + 2 * 24 * 60 * 60 * 1000 );
 		const withinDateStr = formatDateTokyo( withinDate );
 
+		// @check 8 日後（7 日の範囲の外）は、予約できる時間枠が1つも無い
 		// 制限外の日付: スロットが空であること
 		const beyondResponse = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ beyondDateStr }&timezone=Asia/Tokyo`
@@ -182,6 +195,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 			: beyondData.slots || [];
 		expect( beyondSlots ).toEqual( [] );
 
+		// @check 2 日後（範囲の中）は、予約できる時間枠がある
 		// 制限内の日付: スロットが存在すること（シフトが設定済みなので空でないはず）
 		const withinResponse = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ withinDateStr }&timezone=Asia/Tokyo`
@@ -199,6 +213,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 	} ) => {
 		// beforeEach で provider_max_advance_booking_days = 0 にリセット済み
 
+		// @step 共通設定の「予約可能な最大日数」が 0（無制限）のまま、予約ページで「Service Menu 1」の 30 日後の空き枠を見る
 		const menuId = getServiceMenuId();
 
 		// 30日後の日付（シフトが存在する将来日）
@@ -206,6 +221,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		const farDate = new Date( now.getTime() + 30 * 24 * 60 * 60 * 1000 );
 		const farDateStr = formatDateTokyo( farDate );
 
+		// @check 30 日後でも予約できる時間枠がある
 		// 無制限なので将来日でもスロットが返ること
 		const response = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ farDateStr }&timezone=Asia/Tokyo`
@@ -219,11 +235,13 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 	test( 'REST API: サービス個別設定が共通設定より優先されること', async ( {
 		page,
 	} ) => {
+		// @step 管理画面で共通設定の「予約可能な最大日数」を 30 にする
 		// 共通設定: 30日
 		await configureProviderSettings( {
 			provider_max_advance_booking_days: 30,
 		} );
 
+		// @step 「Service Menu 1」個別の「予約可能な最大日数」を 3 にする
 		// サービスメニューの個別設定: 3日
 		// Per-menu setting: 3 days
 		const menuId = getServiceMenuId();
@@ -244,6 +262,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 		);
 		const beyondMenuDateStr = formatDateTokyo( beyondMenuDate );
 
+		// @check 予約ページで「Service Menu 1」の 5 日後（共通設定の範囲内だが個別設定の範囲外）を見ると、予約できる時間枠が無い
 		// 個別設定（3日）が優先されるため、5日後のスロットは空であること
 		const beyondResponse = await page.request.get(
 			`/wp-json/vkbm/v1/availabilities?menu_id=${ menuId }&date=${ beyondMenuDateStr }&timezone=Asia/Tokyo`
@@ -255,6 +274,7 @@ test.describe( '予約可能期間（Max advance booking period）の設定機�
 			: beyondData.slots || [];
 		expect( beyondSlots ).toEqual( [] );
 
+		// @check 2 日後（個別設定の範囲内）は、予約できる時間枠がある
 		// 2日後の日付（個別設定3日以内）: スロットが存在すること
 		const withinDate = new Date( now.getTime() + 2 * 24 * 60 * 60 * 1000 );
 		const withinDateStr = formatDateTokyo( withinDate );

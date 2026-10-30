@@ -42,13 +42,17 @@ use WP_REST_Server;
 use WP_Query;
 use WP_User;
 use function __;
+use function add_filter;
 use function apply_filters;
+use function remove_filter;
 use function delete_post_meta;
 use function is_wp_error;
 use function delete_transient;
 use function get_post;
 use function get_post_meta;
 use function get_transient;
+use function get_user_by;
+use function get_userdata;
 use function get_users;
 use function is_user_logged_in;
 use function sanitize_key;
@@ -273,21 +277,16 @@ class Booking_Confirmation_Controller {
 	}
 
 	/**
-	 * Finalize a reservation temporary data into a booking post.
+	 * Load a temporary reservation data payload the current requester may use.
 	 *
-	 * @param WP_REST_Request $request Request.
-	 * @return WP_REST_Response|WP_Error
+	 * トークンから仮予約データを読み、現在の操作者が使ってよいもの（所有者の確認を通したもの）だけを返す。
+	 * 会員の予約作成（create_booking）と、ゲスト予約の申し込み受付が共有する。
+	 *
+	 * @param string $token Sanitized temporary reservation data token.
+	 * @return array<string, mixed>|WP_Error 仮予約データ。トークンが空・データが無い・壊れている・他人のデータのときは WP_Error。
 	 */
-	public function create_booking( WP_REST_Request $request ) {
-		// Defense in depth: the permission_callback already enforces login,
-		// but we re-check here so direct callers (e.g. tests) still get a 401.
-		// 多重防御: permission_callback で既にチェック済みだが、
-		// 直接呼び出された場合（テスト等）にも 401 を返すため再チェックする。
-		if ( ! is_user_logged_in() ) {
-			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
-		}
-
-		$token = $this->sanitize_token( $request['token'] ?? '' );
+	public function load_accessible_draft( string $token ) {
+		$token = $this->sanitize_token( $token );
 		if ( '' === $token ) {
 			return new WP_Error(
 				'missing_token',
@@ -316,6 +315,92 @@ class Booking_Confirmation_Controller {
 				__( 'You do not have permission to access this temporary reservation data.', 'vk-booking-manager' ),
 				array( 'status' => 403 )
 			);
+		}
+
+		return $draft;
+	}
+
+	/**
+	 * Finalize a reservation temporary data into a booking post.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_booking( WP_REST_Request $request ) {
+		// Defense in depth: the permission_callback already enforces login,
+		// but we re-check here so direct callers (e.g. tests) still get a 401.
+		// 多重防御: permission_callback で既にチェック済みだが、
+		// 直接呼び出された場合（テスト等）にも 401 を返すため再チェックする。
+		if ( ! is_user_logged_in() ) {
+			return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
+		}
+
+		$token = $this->sanitize_token( $request['token'] ?? '' );
+		$draft = $this->load_accessible_draft( $token );
+		if ( is_wp_error( $draft ) ) {
+			return $draft;
+		}
+
+		$can_override_contact = current_user_can( Capabilities::MANAGE_RESERVATIONS );
+		$result               = $this->create_booking_from_draft( $draft, $token, (int) get_current_user_id(), $can_override_contact, $request );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return new WP_REST_Response( $result );
+	}
+
+	/**
+	 * Create a booking post from a reservation draft (entry-point independent).
+	 *
+	 * 予約の下書きと予約者を受け取り、空きの再確認・同時予約の防止（ロック）・予約投稿の作成・通知までを行う。
+	 * REST 以外の入口（ゲスト予約の受付など）からも呼べるよう、ログイン確認・トークン検証・下書きの取得・
+	 * 下書きの権限確認は呼び出し側で済ませてから渡す。
+	 * フォーム入力（備考・同意・予約者名・電話番号・ご利用になる方など）は、拡張フックへ渡す互換性のため $request から読む。
+	 *
+	 * 呼び出し側の責務（この関数では確認しない）:
+	 * - $draft は、操作者が利用してよいもの（can_access_draft() 相当の確認を通したもの）に限る。
+	 * - $can_override_contact は、呼び出し側が current_user_can( Capabilities::MANAGE_RESERVATIONS ) で判定した値だけを渡す。
+	 *   リクエストの値や下書きの値から決めてはならない。true にすると、顧客フラグのブロック判定の省略・規約同意の省略・
+	 *   確定ステータスでの作成・連絡先の上書き・電話番号が一致する会員への投稿者の付け替えが有効になる。
+	 *
+	 * 空き枠エラーの詳細を出すかどうか（revalidate_draft_slot() 内の MANAGE_SYSTEM_SETTINGS 判定）だけは、
+	 * 引数ではなく現在ログイン中のユーザーの権限で決まる。
+	 *
+	 * @param array           $draft                仮予約データ（権限確認済みのもの）。
+	 * @param string          $token                仮予約データのトークン。作成後に仮予約データを削除する。空文字なら削除しない。
+	 * @param int             $acting_user_id       操作者のユーザー ID。本人予約では予約者本人、代理予約では操作者（管理者・オーナー）。予約投稿の投稿者・連絡先・顧客フラグ判定に使う。
+	 * @param bool            $can_override_contact 操作者が代理予約の権限（MANAGE_RESERVATIONS）を持つか。
+	 * @param WP_REST_Request $request              フォーム入力を持つリクエスト。
+	 * @param array|null      $guest                ゲスト予約のお客様情報（name・email・phone・verified_at）。渡すとゲスト予約として作る（docs/specification-guest-booking.md）。
+	 *                                              ゲスト予約では $acting_user_id を 0、$can_override_contact を false で渡す。予約したユーザーは無し（投稿者 0）、
+	 *                                              予約者の名前・メール・電話番号は $guest の値、ご利用になる方は手入力だけ、重複予約はメールアドレスで判定する。
+	 *                                              呼び出し側は、$guest の値をメールの持ち主が確認した後（確認リンクを開いた後）にだけ渡す。
+	 * @return array{booking_id:int,status:string}|WP_Error 作成した予約 ID と初期ステータス。失敗時は WP_Error。
+	 */
+	public function create_booking_from_draft( array $draft, string $token, int $acting_user_id, bool $can_override_contact, WP_REST_Request $request, ?array $guest = null ) {
+		$is_guest = null !== $guest;
+		if ( $is_guest ) {
+			// ゲスト予約は代理予約の権限と両立しない（顧客フラグの判定・規約同意を省略させないため）。
+			$can_override_contact = false;
+			$acting_user_id       = 0;
+			$guest_name           = sanitize_text_field( (string) ( $guest['name'] ?? '' ) );
+			$guest_email          = VKBM_Helper::normalize_email( (string) ( $guest['email'] ?? '' ) );
+			$guest_phone          = VKBM_Helper::normalize_phone_number( (string) ( $guest['phone'] ?? '' ) );
+			$guest_verified_at    = (string) ( $guest['verified_at'] ?? gmdate( 'Y-m-d H:i:s' ) );
+			if ( '' === $guest_name || '' === $guest_email || '' === $guest_phone ) {
+				return new WP_Error( 'guest_contact_required', __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			}
+			$user = null;
+		} else {
+			// 操作者が実在することを最初に確かめる。
+			$user = get_userdata( $acting_user_id );
+			if ( ! $user instanceof WP_User ) {
+				return new WP_Error( 'not_logged_in', __( 'Login required.', 'vk-booking-manager' ), array( 'status' => 401 ) );
+			}
+			$guest_name  = '';
+			$guest_email = '';
+			$guest_phone = '';
 		}
 
 		$menu_id = isset( $draft['menu_id'] ) ? (int) $draft['menu_id'] : 0;
@@ -350,8 +435,13 @@ class Booking_Confirmation_Controller {
 		// フロントからの予約（顧客本人）のみを対象とし、管理者・オーナーによる代理作成はブロックしない。
 		// 空き状況・capacity の再検証より前に判定し、ブロック対象の顧客を早期に弾く（設定メッセージを確実に返す）。
 		// 連携処理（顧客フラグ機能）が vkbm_booking_block_check フィルターで WP_Error を返した場合は確定を中止する。
-		if ( ! current_user_can( Capabilities::MANAGE_RESERVATIONS ) ) {
-			$block_check = apply_filters( 'vkbm_booking_block_check', null, get_current_user_id() );
+		if ( ! $can_override_contact ) {
+			// 第3引数は予約者の連絡先（メールアドレス・電話番号をそろえた値）。ゲスト予約ではユーザーがいないため、これで会員のフラグと照合する。
+			$block_contact = $is_guest ? array(
+				'email' => $guest_email,
+				'phone' => $guest_phone,
+			) : array();
+			$block_check   = apply_filters( 'vkbm_booking_block_check', null, $acting_user_id, $block_contact );
 			if ( is_wp_error( $block_check ) ) {
 				return $block_check;
 			}
@@ -411,9 +501,9 @@ class Booking_Confirmation_Controller {
 			$guests = $this->resolve_guests( $menu_id, isset( $draft['guests'] ) ? (int) $draft['guests'] : 1 );
 		}
 
-		// 指名を使うメニューの最低申し込み人数（受付制限。#393）。
+		// 指名を使うメニュー、または貸し切り予約ONのメニューの最低申し込み人数（受付制限。#393・#968）。
 		// フロントの入力欄下限・警告表示は迂回可能なため、確定時にサーバ側でも権威的に再判定する。
-		// get_menu_min_capacity()（催行状態の表示専用、常に指名メニューで0）とは別の取得経路。
+		// get_menu_min_capacity()（催行状態の表示専用、指名メニュー・貸し切り予約ONのメニューで常に0）とは別の取得経路。
 		$nomination_min_guests = $this->get_menu_nomination_min_guests( $menu_id );
 		if ( $nomination_min_guests > 0 && $guests < $nomination_min_guests ) {
 			return new WP_Error(
@@ -570,18 +660,16 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-			// 備考は下書きと同じ上限（vkbm_draft_memo_max_length）で切り詰める。
-			// Truncate memo with the same limit as the draft controller.
-			$user               = wp_get_current_user();
-			$memo               = Booking_Draft_Controller::truncate_memo( sanitize_textarea_field( (string) ( $request['memo'] ?? '' ) ) );
-			$agree              = ! empty( $request['agree_terms'] );
-			$agree_cancellation = $request->has_param( 'agree_cancellation_policy' )
-				? ! empty( $request['agree_cancellation_policy'] )
-				: $agree;
-			$agree_tos          = $request->has_param( 'agree_terms_of_service' )
-				? ! empty( $request['agree_terms_of_service'] )
-				: $agree;
-		$can_override_contact   = current_user_can( Capabilities::MANAGE_RESERVATIONS );
+		// 備考は下書きと同じ上限（vkbm_draft_memo_max_length）で切り詰める。
+		// Truncate memo with the same limit as the draft controller.
+		$memo                   = Booking_Draft_Controller::truncate_memo( sanitize_textarea_field( (string) ( $request['memo'] ?? '' ) ) );
+		$agree                  = ! empty( $request['agree_terms'] );
+		$agree_cancellation     = $request->has_param( 'agree_cancellation_policy' )
+			? ! empty( $request['agree_cancellation_policy'] )
+			: $agree;
+		$agree_tos              = $request->has_param( 'agree_terms_of_service' )
+			? ! empty( $request['agree_terms_of_service'] )
+			: $agree;
 		$customer_name_override = $can_override_contact
 			? sanitize_text_field( (string) ( $request['customer_name'] ?? '' ) )
 			: '';
@@ -594,16 +682,26 @@ class Booking_Confirmation_Controller {
 			);
 		}
 		// 電話番号を正規化する：全角数字を半角に変換し、数字以外の文字（ハイフン・スペース・括弧など）を除去する.
-		$customer_phone      = $can_override_contact
-			? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) ( $request['customer_phone'] ?? '' ) ) )
-			: VKBM_Helper::normalize_phone_number( $this->get_user_phone_number( $user->ID ) );
-		$internal_note       = $can_override_contact
+		$customer_phone = $is_guest
+			? $guest_phone
+			: ( $can_override_contact
+				? VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) ( $request['customer_phone'] ?? '' ) ) )
+				: VKBM_Helper::normalize_phone_number( $this->get_user_phone_number( $user->ID ) ) );
+		$internal_note  = $can_override_contact
 			? sanitize_textarea_field( (string) ( $request['internal_note'] ?? '' ) )
 			: '';
-		$customer_name_value = '' !== $customer_name_override ? $customer_name_override : VKBM_Helper::get_user_display_name( $user );
-		$booking_author_id   = (int) $user->ID;
-		$customer_email      = (string) $user->user_email;
-		$matched_user_id     = 0;
+		if ( $is_guest ) {
+			// ゲスト予約: 予約したユーザーは無し（投稿者 0）。名前・メールアドレスは確認済みの入力値。
+			$customer_name_value = $guest_name;
+			$booking_author_id   = 0;
+			$customer_email      = $guest_email;
+		} else {
+			$customer_name_value = '' !== $customer_name_override ? $customer_name_override : VKBM_Helper::get_user_display_name( $user );
+			$booking_author_id   = (int) $user->ID;
+			$customer_email      = (string) $user->user_email;
+		}
+		$matched_user_id = 0;
+		$acting_id       = $is_guest ? 0 : (int) $user->ID;
 
 		if ( $can_override_contact ) {
 			// $customer_phone は既に正規化済みのためそのままユーザー検索に使用する.
@@ -653,17 +751,21 @@ class Booking_Confirmation_Controller {
 
 		// ご利用になる方を、確定時点の設定と名簿に照らして決める。名簿への保存は予約の成否にかかわらず残す。
 		// 名簿の持ち主は、会員自身の予約では予約者、代理予約では電話番号で一致した会員。
-		$attendee = ( new Booking_Attendee_Resolver() )->resolve(
-			$settings,
-			$can_override_contact ? $matched_user_id : (int) $user->ID,
-			array(
+		// ゲスト予約は名簿を持たないため、名前の手入力だけを受け付ける（名簿の選択・保存・番号は無視する）。
+		$attendee_input = $is_guest
+			? array( 'attendee_name' => $request['attendee_name'] ?? ( $draft['attendee_name'] ?? '' ) )
+			: array(
 				'attendee_id'             => $request['attendee_id'] ?? '',
 				'attendee_name'           => $request['attendee_name'] ?? ( $draft['attendee_name'] ?? '' ),
 				'attendee_kana'           => $request['attendee_kana'] ?? '',
 				'attendee_number'         => $request['attendee_number'] ?? '',
 				'attendee_new_id'         => $request['attendee_new_id'] ?? '',
 				'attendee_save_to_roster' => ! empty( $request['attendee_save_to_roster'] ),
-			),
+			);
+		$attendee       = ( new Booking_Attendee_Resolver() )->resolve(
+			$settings,
+			$is_guest ? 0 : ( $can_override_contact ? $matched_user_id : $acting_id ),
+			$attendee_input,
 			$can_override_contact
 		);
 		if ( is_wp_error( $attendee ) ) {
@@ -671,8 +773,8 @@ class Booking_Confirmation_Controller {
 		}
 
 		// ロック取得前の早期拒否。同時リクエスト対策の本判定は、ロック取得後に行う（下記）。
-		if ( $this->has_booking_user_conflict( $can_override_contact, (int) $user->ID, $matched_user_id, $start_at, $end_at ) ) {
-			return $this->create_user_conflict_error();
+		if ( $this->has_booking_user_conflict( $can_override_contact, $acting_id, $matched_user_id, $start_at, $end_at, $guest_email ) ) {
+			return $this->create_user_conflict_error( $is_guest );
 		}
 
 		// 予約確定直前に capacity 上限を再チェック（簡易排他制御付き）。
@@ -700,8 +802,8 @@ class Booking_Confirmation_Controller {
 		try {
 			// 同じ利用者の同時リクエストが先に予約を確定している場合があるため、ロック取得後に重複予約をもう一度確認する（#692）。
 			// 上のロック前の確認だけでは、2件のリクエストが同時に確認を通り抜けて両方確定してしまう。
-			if ( $this->has_booking_user_conflict( $can_override_contact, (int) $user->ID, $matched_user_id, $start_at, $end_at ) ) {
-				return $this->create_user_conflict_error();
+			if ( $this->has_booking_user_conflict( $can_override_contact, $acting_id, $matched_user_id, $start_at, $end_at, $guest_email ) ) {
+				return $this->create_user_conflict_error( $is_guest );
 			}
 
 			// 自動割当時はベストフィットで確定したスタッフIDを採用する。指名予約は渡した staff_id がそのまま返る。
@@ -770,21 +872,44 @@ class Booking_Confirmation_Controller {
 			 * @param WP_REST_Request $request          現在のリクエスト（payment_intent_id を含む場合がある）。
 			 * @param array           $draft            仮予約データ。
 			 * @param int             $base_total_price 指名料・貸し切り料金を含む基本料金合計（円）。
+			 * @param array           $booking_context  予約の種類。is_guest（ゲスト予約か）、ゲスト予約では guest（name・email・phone）。
 			 */
-			$payment_check = apply_filters( 'vkbm_booking_payment_check', true, $request, $draft, $base_total_price );
+			$payment_check = apply_filters(
+				'vkbm_booking_payment_check',
+				true,
+				$request,
+				$draft,
+				$base_total_price,
+				$this->build_booking_context( $is_guest, $guest_name, $guest_email, $guest_phone )
+			);
 			if ( is_wp_error( $payment_check ) ) {
 				// ロックは finally で解放される。
 				return $payment_check;
 			}
 
-			$booking_id = wp_insert_post(
-				array(
-					'post_type'   => Booking_Post_Type::POST_TYPE,
-					'post_status' => 'publish',
-					'post_title'  => $this->generate_booking_title( $customer_name_value, $start_at ),
-					'post_author' => $booking_author_id,
-				)
-			);
+			// WordPress は投稿者 0 を空とみなして、保存した人（確認リンクを開いたログイン中のユーザーなど）に置き換える。
+			// ゲスト予約は予約したユーザーを持たないため、保存する直前に投稿者を 0 へ戻す。
+			$keep_guest_author = static function ( $data ) {
+				$data['post_author'] = 0;
+				return $data;
+			};
+			if ( $is_guest ) {
+				add_filter( 'wp_insert_post_data', $keep_guest_author, PHP_INT_MAX );
+			}
+			try {
+				$booking_id = wp_insert_post(
+					array(
+						'post_type'   => Booking_Post_Type::POST_TYPE,
+						'post_status' => 'publish',
+						'post_title'  => $this->generate_booking_title( $customer_name_value, $start_at ),
+						'post_author' => $booking_author_id,
+					)
+				);
+			} finally {
+				if ( $is_guest ) {
+					remove_filter( 'wp_insert_post_data', $keep_guest_author, PHP_INT_MAX );
+				}
+			}
 
 			if ( is_wp_error( $booking_id ) ) {
 				return $booking_id;
@@ -894,6 +1019,14 @@ class Booking_Confirmation_Controller {
 			if ( '' !== $memo ) {
 				update_post_meta( $booking_id, self::META_NOTE, wp_slash( $memo ) );
 			}
+			if ( $is_guest ) {
+				// ゲスト予約の印と、メールの持ち主が確認した日時（UTC）。
+				update_post_meta( $booking_id, Booking_Source::META_KEY, Booking_Source::VALUE_GUEST );
+				update_post_meta( $booking_id, Booking_Source::META_GUEST_VERIFIED_AT, $guest_verified_at );
+				// キャンセル用リンクのトークン。ハッシュだけを予約に保存し、生の値は作成直後のお知らせメールの URL にだけ入れる
+				// （同じリクエストの間だけ覚えておき、お知らせメールを組み立てるときに受け取る）。
+				Guest_Cancel_Controller::issue_token( (int) $booking_id, true );
+			}
 			if ( '' !== $internal_note ) {
 				update_post_meta( $booking_id, self::META_INTERNAL_NOTE, wp_slash( $internal_note ) );
 			} else {
@@ -918,9 +1051,10 @@ class Booking_Confirmation_Controller {
 		 * @param int             $booking_id 作成した予約投稿の ID。
 		 * @param array           $draft      仮予約データ（メニュー・金額など）。
 		 * @param WP_REST_Request $request    元の REST リクエスト（payment_intent_id を含む）。
+		 * @param array           $booking_context 予約の種類。is_guest（ゲスト予約か）、ゲスト予約では guest（name・email・phone）。
 		 */
 		try {
-			do_action( 'vkbm_booking_post_created', $booking_id, $draft, $request );
+			do_action( 'vkbm_booking_post_created', $booking_id, $draft, $request, $this->build_booking_context( $is_guest, $guest_name, $guest_email, $guest_phone ) );
 		} catch ( \Throwable $e ) {
 			// 予約は作成済みのため、拡張側の例外で結果を覆さず、管理者が追跡できるようログだけ残す。
 			// 仮予約データ・リクエスト（個人情報を含む）とスタックトレース（引数の値を含むことがある）は記録しない。
@@ -937,7 +1071,9 @@ class Booking_Confirmation_Controller {
 			);
 		}
 
-		delete_transient( $this->build_transient_key( $token ) );
+		if ( '' !== $token ) {
+			delete_transient( $this->build_transient_key( $token ) );
+		}
 
 		if ( self::BOOKING_STATUS_CONFIRMED === $initial_status ) {
 			$this->notification_service->handle_confirmed_creation( (int) $booking_id );
@@ -948,11 +1084,9 @@ class Booking_Confirmation_Controller {
 		// #474: 新規作成のため「変更前」は無い（null）。種別（created）の判定はディスパッチャー側で行う。
 		$this->event_dispatcher->dispatch_change( (int) $booking_id, null );
 
-		return new WP_REST_Response(
-			array(
-				'booking_id' => $booking_id,
-				'status'     => $initial_status,
-			)
+		return array(
+			'booking_id' => $booking_id,
+			'status'     => $initial_status,
 		);
 	}
 
@@ -1064,15 +1198,21 @@ class Booking_Confirmation_Controller {
 	 * 予約者本人（代理入力では電話番号で一致した会員）が、同じ時間帯に予約を持っているかを判定する。
 	 *
 	 * @param bool   $can_override_contact 予約管理権限による代理入力か。
-	 * @param int    $current_user_id      ログイン中のユーザーID。
+	 * @param int    $acting_user_id       操作者のユーザーID。
 	 * @param int    $matched_user_id      代理入力で電話番号が一致した会員のユーザーID（一致なしは 0）。
 	 * @param string $start_at             枠の開始日時（ISO8601）。
 	 * @param string $end_at               枠の終了日時（ISO8601）。
+	 * @param string $guest_email          ゲスト予約のそろえたメールアドレス（会員の予約では空文字）。
 	 * @return bool 重複する予約があれば true。
 	 */
-	private function has_booking_user_conflict( bool $can_override_contact, int $current_user_id, int $matched_user_id, string $start_at, string $end_at ): bool {
+	private function has_booking_user_conflict( bool $can_override_contact, int $acting_user_id, int $matched_user_id, string $start_at, string $end_at, string $guest_email = '' ): bool {
+		// ゲスト予約は予約したユーザーがいないため、そろえたメールアドレスで重複を確認する。
+		if ( '' !== $guest_email ) {
+			return $this->has_guest_email_conflict( $guest_email, $start_at, $end_at );
+		}
+
 		// 代理入力では、一致した会員がいる場合だけ重複を確認する。
-		$target_user_id = $can_override_contact ? $matched_user_id : $current_user_id;
+		$target_user_id = $can_override_contact ? $matched_user_id : $acting_user_id;
 
 		return $target_user_id > 0 && $this->has_user_conflict( $target_user_id, $start_at, $end_at );
 	}
@@ -1080,12 +1220,15 @@ class Booking_Confirmation_Controller {
 	/**
 	 * 同じ日時に予約が既にある場合のエラーを作る。
 	 *
+	 * @param bool $is_guest ゲスト予約か（メールアドレス基準の文言にする）。
 	 * @return WP_Error 409 の booking_time_conflict エラー。
 	 */
-	private function create_user_conflict_error(): WP_Error {
+	private function create_user_conflict_error( bool $is_guest = false ): WP_Error {
 		return new WP_Error(
 			'booking_time_conflict',
-			__( 'A reservation for the same date and time already exists. Please change the date and time.', 'vk-booking-manager' ),
+			$is_guest
+				? __( 'You already have a reservation at the same date and time with this email address. Please change the date and time.', 'vk-booking-manager' )
+				: __( 'A reservation for the same date and time already exists. Please change the date and time.', 'vk-booking-manager' ),
 			array( 'status' => 409 )
 		);
 	}
@@ -1155,6 +1298,121 @@ class Booking_Confirmation_Controller {
 		);
 
 		return $query->have_posts();
+	}
+
+	/**
+	 * 予約の種類を、拡張フック（決済の確認・予約作成後の通知）へ渡す配列にまとめる。
+	 *
+	 * @param bool   $is_guest ゲスト予約か。
+	 * @param string $name     ゲスト予約のお名前。
+	 * @param string $email    ゲスト予約のメールアドレス（そろえた値）。
+	 * @param string $phone    ゲスト予約の電話番号（そろえた値）。
+	 * @return array<string, mixed> is_guest と、ゲスト予約のときだけ guest（name・email・phone）。
+	 */
+	private function build_booking_context( bool $is_guest, string $name, string $email, string $phone ): array {
+		if ( ! $is_guest ) {
+			return array( 'is_guest' => false );
+		}
+
+		return array(
+			'is_guest' => true,
+			'guest'    => array(
+				'name'  => $name,
+				'email' => $email,
+				'phone' => $phone,
+			),
+		);
+	}
+
+	/**
+	 * ゲスト予約のメールアドレスと同じメールアドレスの予約（会員の予約を含む）が、同じ時間帯にあるかを判定する。
+	 *
+	 * 予約に保存したメールアドレスで探す。あわせて、そのメールアドレスを今持つ会員がいれば、その会員の予約も確かめる
+	 * （会員が予約したあとにメールアドレスを変えた場合に備える）。キャンセル・無断キャンセルの予約は重複に含めない。
+	 *
+	 * @param string $email    そろえたメールアドレス（前後の空白を除いた小文字）。
+	 * @param string $start_at 枠の開始日時（ISO8601）。
+	 * @param string $end_at   枠の終了日時（ISO8601）。
+	 * @return bool 重複する予約があれば true。
+	 */
+	private function has_guest_email_conflict( string $email, string $start_at, string $end_at ): bool {
+		if ( '' === $email ) {
+			return false;
+		}
+
+		$start_for_storage = $this->format_datetime_for_storage( $start_at );
+		$end_for_storage   = $this->format_datetime_for_storage( $end_at );
+
+		if ( '' === $start_for_storage ) {
+			return false;
+		}
+
+		if ( '' === $end_for_storage ) {
+			$end_for_storage = $start_for_storage;
+		}
+
+		$query = new WP_Query(
+			array(
+				'post_type'              => Booking_Post_Type::POST_TYPE,
+				'post_status'            => array( 'publish' ),
+				'posts_per_page'         => 1,
+				'no_found_rows'          => true,
+				'fields'                 => 'ids',
+				// 別リクエストが保存した予約をロック取得後の再確認で見落とさないよう、検索結果をキャッシュさせない（#692）。
+				'cache_results'          => false,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+				'meta_query'             => array(
+					'relation' => 'AND',
+					array(
+						'key'   => self::META_CUSTOMER_MAIL,
+						'value' => $email,
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => Booking_Overlap::META_STATUS,
+							'compare' => 'NOT EXISTS',
+						),
+						array(
+							'key'     => Booking_Overlap::META_STATUS,
+							'value'   => array( Booking_Overlap::STATUS_CANCELLED, Booking_Overlap::STATUS_NO_SHOW ),
+							'compare' => 'NOT IN',
+						),
+					),
+					array(
+						'key'     => Booking_Overlap::META_START,
+						'value'   => $end_for_storage,
+						'compare' => '<',
+						'type'    => 'DATETIME',
+					),
+					array(
+						'relation' => 'OR',
+						array(
+							'key'     => Booking_Overlap::META_TOTAL_END,
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+						array(
+							'key'     => Booking_Overlap::META_END,
+							'value'   => $start_for_storage,
+							'compare' => '>',
+							'type'    => 'DATETIME',
+						),
+					),
+				),
+			)
+		);
+
+		if ( $query->have_posts() ) {
+			return true;
+		}
+
+		// 予約のあとにメールアドレスを変えた会員の予約も確かめる。
+		$member = get_user_by( 'email', $email );
+
+		return $member instanceof WP_User && $this->has_user_conflict( (int) $member->ID, $start_at, $end_at );
 	}
 
 	/**
@@ -1404,6 +1662,7 @@ class Booking_Confirmation_Controller {
 	 * Revalidate temporary reservation data slot availability before booking confirmation.
 	 *
 	 * 予約確定前に予約一時データの枠がまだ空いているか再検証します。
+	 * エラーの詳細を出すかどうかは、操作者の引数ではなく現在ログイン中のユーザーの権限（MANAGE_SYSTEM_SETTINGS）で決まります。
 	 *
 	 * @param int                  $menu_id            Menu post ID.
 	 * @param int                  $preferred_staff_id Preferred staff ID (0 for auto).
@@ -2064,37 +2323,13 @@ class Booking_Confirmation_Controller {
 	 * @return bool 貸し切り設定が有効なら true。
 	 */
 	private function is_menu_exclusive_when_booked( int $menu_id ): bool {
-		if ( $menu_id <= 0 ) {
+		$menu_post = $menu_id > 0 ? get_post( $menu_id ) : null;
+		if ( ! $menu_post instanceof \WP_Post ) {
 			return false;
 		}
 
-		// メタが立っていなければそもそも対象外。
-		if ( ! get_post_meta( $menu_id, self::MENU_META_EXCLUSIVE_WHEN_BOOKED, true ) ) {
-			return false;
-		}
-
-		// フルゲート（Pro版・予約枠の定員ON）を再適用する（#391: メニュー単位の判定へ置き換え）。
-		// #412 C-3: 判定を Staff_Editor::is_multi_guest_available_for_menu() へ集約していたが、#392 で
-		// そのメソッドから「指名OFF」条件を外したため、貸切系の3設定（本メソッドが担う「貸し切り予約」も
-		// その1つ）は専用の Staff_Editor::is_exclusive_booking_available_for_menu() へ切り替えた。
-		// そちらのメソッドからも「指名OFF」条件を外したため、指名を使うメニューでもこの判定を通る
-		// （排他の判定範囲は上記のとおり呼び出し元でスタッフ単位に絞る）。
-		if ( ! Staff_Editor::is_exclusive_booking_available_for_menu( $menu_id ) ) {
-			return false;
-		}
-
-		// メニュー単位の複数人一括予約許可（_vkbm_allow_multiple_guests）も必須。
-		if ( ! get_post_meta( $menu_id, self::MENU_META_ALLOW_GUESTS, true ) ) {
-			return false;
-		}
-
-		// 実効の最大予約受付数が1以下なら貸し切りは意味を持たないため無効化する（#320）。
-		// 表示制御（管理画面の hidden）だけに頼らず、保存済みメタが残っていても実効0扱いにする。
-		if ( $this->get_menu_max_capacity( $menu_id ) <= 1 ) {
-			return false;
-		}
-
-		return true;
+		// 判定そのもの（フルゲートの再適用）は Availability_Service に集約している（#968）。
+		return $this->availability_service->is_menu_exclusive_when_booked( $menu_post );
 	}
 
 	/**

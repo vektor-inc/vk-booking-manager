@@ -15,6 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use DateTimeImmutable;
 use VKBookingManager\Admin\Email_Log_Repository;
+use VKBookingManager\Bookings\Booking_Customer_Cancellation;
+use VKBookingManager\Bookings\Booking_Source;
+use VKBookingManager\Bookings\Guest_Cancel_Controller;
 use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Mail_From;
@@ -78,6 +81,7 @@ class Booking_Notification_Service {
 	private const TYPE_CANCELLED_CUSTOMER = 'cancelled_customer';
 	private const TYPE_CANCELLED_PROVIDER = 'cancelled_provider';
 	private const TYPE_REMINDER_CUSTOMER  = 'reminder_customer';
+	private const TYPE_GUEST_VERIFICATION = 'guest_verification_customer';
 
 	/**
 	 * Settings store.
@@ -112,6 +116,178 @@ class Booking_Notification_Service {
 		add_action( self::REMINDER_ACTION, array( $this, 'handle_reminders' ) );
 		add_action( 'init', array( $this, 'ensure_reminder_schedule' ) );
 		add_filter( 'cron_schedules', array( $this, 'register_cron_schedules' ) );
+	}
+
+	/**
+	 * ゲスト予約の確認メール（リンク付き）をお客様へ送る。
+	 *
+	 * この時点では予約（予約データ）がまだ無いため、予約の下書きから本文の予約内容を組み立てる。
+	 * お客様が自由に書ける備考は、他人のメールアドレス宛てに好きな文章を送る手段に使われないよう、本文に載せない。
+	 * 再送はしない（送れなかったときは呼び出し側が申し込みを失敗として扱う）。
+	 *
+	 * @param array<string,mixed> $data 送信内容。name（お名前）、email（宛先）、verify_url（確認リンク）、
+	 *                                  expires_at（リンクの有効期限の Unix タイムスタンプ）、draft（予約の下書き）、
+	 *                                  attendee_name（ご利用になる方）、is_pending（リンクを開いた後が仮予約か）。
+	 * @return bool 送信できたら true。
+	 */
+	public function send_guest_verification( array $data ): bool {
+		$email = sanitize_email( (string) ( $data['email'] ?? '' ) );
+		if ( ! is_email( $email ) ) {
+			return false;
+		}
+
+		$draft   = isset( $data['draft'] ) && is_array( $data['draft'] ) ? $data['draft'] : array();
+		$payload = $this->build_draft_payload( $draft, (string) ( $data['attendee_name'] ?? '' ) );
+
+		$payload['customer_name']  = (string) ( $data['name'] ?? '' );
+		$payload['customer_email'] = $email;
+
+		$subject = sprintf(
+			/* translators: %s: Provider name. */
+			__( '[ %s ] Please complete your reservation (confirmation email)', 'vk-booking-manager' ),
+			$payload['provider_name']
+		);
+
+		$expires_at = (int) ( $data['expires_at'] ?? 0 );
+		$lines      = array();
+		/* translators: %s: Customer name. */
+		$lines[] = sprintf( __( 'Dear %s', 'vk-booking-manager' ), $payload['customer_name'] );
+		$lines[] = '';
+		$lines[] = __( 'Your reservation is not complete yet. Please open the following link to complete your reservation.', 'vk-booking-manager' );
+		$lines[] = '';
+		$lines[] = (string) ( $data['verify_url'] ?? '' );
+		$lines[] = '';
+		if ( $expires_at > 0 ) {
+			$lines[] = sprintf(
+				/* translators: %s: Expiration date and time of the confirmation link. */
+				__( 'This link is valid until %s.', 'vk-booking-manager' ),
+				$this->format_datetime_with_weekday( wp_date( 'Y-m-d H:i:s', $expires_at, wp_timezone() ) )
+			);
+			$lines[] = __( 'If the link has expired, please make the reservation again from the reservation page.', 'vk-booking-manager' );
+		}
+		$lines[] = __( 'We check availability again when you open the link. If the date and time have been taken by another reservation in the meantime, the reservation cannot be made.', 'vk-booking-manager' );
+		if ( ! empty( $data['is_pending'] ) ) {
+			$lines[] = __( 'After you open the link, your reservation will be a provisional reservation. The administrator will review and confirm it.', 'vk-booking-manager' );
+		}
+		$lines[] = '';
+		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload ) );
+		if ( '' !== (string) $payload['price_label'] ) {
+			// 確認メールの料金は下書きからの目安。確定時に指名料・貸し切り料金などを計算し直すため、金額が変わることがある。
+			$lines[] = __( 'The price shown is a guide. The amount in the email sent after confirmation is the final amount.', 'vk-booking-manager' );
+		}
+		$lines[] = '';
+		$lines[] = __( 'If you do not recognize this email, please discard it without opening the link. No reservation will be created.', 'vk-booking-manager' );
+		$lines[] = '';
+		$lines[] = '===========';
+		$lines[] = $payload['provider_name'];
+		if ( $payload['provider_phone'] ) {
+			/* translators: %s: Provider phone number. */
+			$lines[] = sprintf( __( 'TEL: %s', 'vk-booking-manager' ), $payload['provider_phone'] );
+		}
+		if ( $payload['provider_address'] ) {
+			$lines[] = $payload['provider_address'];
+		}
+		if ( $payload['provider_site'] ) {
+			$lines[] = $payload['provider_site'];
+		}
+
+		return $this->send_mail( $email, $subject, implode( "\n", $lines ), self::TYPE_GUEST_VERIFICATION, $payload, 0, 0, 0 );
+	}
+
+	/**
+	 * 予約の下書きから、確認メールの本文に使う予約内容を組み立てる。
+	 *
+	 * 予約が無い時点のため、保存済みの予約メタではなく下書きとメニュー・リソースの設定から作る。
+	 * 料金は目安の表示で、予約の確定後に送るメールの金額が正。
+	 *
+	 * @param array<string,mixed> $draft         予約の下書き。
+	 * @param string              $attendee_name ご利用になる方の名前（入力が無ければ空文字）。
+	 * @return array<string,mixed> build_booking_payload() と同じ形の予約内容（booking_id は 0）。
+	 */
+	private function build_draft_payload( array $draft, string $attendee_name ): array {
+		$settings           = $this->settings_repository->get_settings();
+		$menu_id            = isset( $draft['menu_id'] ) ? (int) $draft['menu_id'] : 0;
+		$staff_id           = isset( $draft['resource_id'] ) ? (int) $draft['resource_id'] : 0;
+		$is_staff_preferred = ! empty( $draft['is_staff_preferred'] ) && Staff_Editor::is_enabled();
+		$guests             = max( 1, isset( $draft['guests'] ) ? (int) $draft['guests'] : 1 );
+		$guest_tiers        = Price_Tiers::normalize_guest_tiers( $draft['guest_tiers'] ?? array() );
+		$nomination_enabled = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
+		$nomination_fee     = $nomination_enabled ? max( 0, isset( $draft['nomination_fee'] ) ? (int) $draft['nomination_fee'] : 0 ) : 0;
+		$lodging            = isset( $draft['lodging'] ) && is_array( $draft['lodging'] ) ? $draft['lodging'] : array();
+		$slot               = isset( $draft['slot'] ) && is_array( $draft['slot'] ) ? $draft['slot'] : array();
+
+		$menu_title = $menu_id > 0 ? get_the_title( $menu_id ) : '';
+		if ( '' === $menu_title ) {
+			$menu_title = (string) ( $draft['menu_label'] ?? '' );
+		}
+
+		$staff_title = '';
+		$nights      = 0;
+		if ( array() !== $lodging ) {
+			// 泊の予約: 客室を出し、日時の行はチェックイン／チェックアウトにする。
+			$nights = (int) ( $lodging['nights'] ?? 0 );
+			if ( $staff_id > 0 ) {
+				$staff_title = vkbm_get_resource_display_name( $staff_id );
+			}
+			$date_format = (string) get_option( 'date_format' );
+			$datetime    = sprintf(
+				/* translators: 1: Check-in date and time, 2: Check-out date and time. */
+				__( 'Check-in %1$s / Check-out %2$s', 'vk-booking-manager' ),
+				wp_date( $date_format, (int) strtotime( (string) ( $lodging['check_in_date'] ?? '' ) ), wp_timezone() ),
+				wp_date( $date_format, (int) strtotime( (string) ( $lodging['check_out_date'] ?? '' ) ), wp_timezone() )
+			);
+		} else {
+			if ( $nomination_enabled ) {
+				$staff_title = $is_staff_preferred && $staff_id > 0 ? vkbm_get_resource_display_name( $staff_id ) : vkbm_get_no_nomination_label();
+			}
+			$start_ts = strtotime( (string) ( $slot['start_at'] ?? '' ) );
+			$end_ts   = strtotime( (string) ( $slot['end_at'] ?? '' ) );
+			$datetime = false !== $start_ts && false !== $end_ts
+				? $this->format_reservation_datetime_range( wp_date( 'Y-m-d H:i:s', $start_ts ), wp_date( 'Y-m-d H:i:s', $end_ts ) )
+				: __( 'Not set', 'vk-booking-manager' );
+		}
+
+		$duration_heading = vkbm_get_duration_label();
+		if ( $nights > 0 ) {
+			$duration         = Lodging_Booking::format_nights_label( $nights );
+			$duration_heading = __( 'Number of nights', 'vk-booking-manager' );
+		} else {
+			$duration = $this->get_menu_duration( $menu_id );
+		}
+
+		// 料金は、泊の予約では確定時に計算するため出さない。料金区分があれば区分の合計、無ければ基本料金×人数。
+		$price_label = '';
+		if ( 0 === $nights ) {
+			if ( ! empty( $guest_tiers ) ) {
+				$price_label = $this->format_price_with_tax_label( max( 0, Price_Tiers::total_price( $guest_tiers ) + $nomination_fee ) );
+			} else {
+				$price_label = $this->get_menu_price_label( max( 0, (int) get_post_meta( $menu_id, '_vkbm_base_price', true ) ), $nomination_fee, $guests );
+			}
+		}
+
+		return array(
+			'booking_id'              => 0,
+			'menu_title'              => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
+			'staff_title'             => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
+			'reservation_datetime'    => $datetime,
+			'attendee_name'           => \VKBookingManager\Common\Attendee_Name::sanitize( $attendee_name ),
+			'attendee_name_mode'      => \VKBookingManager\Common\Attendee_Name::get_mode( $settings ),
+			'attendee_name_label'     => \VKBookingManager\Common\Attendee_Name::get_label( $settings ),
+			'duration_label'          => $duration,
+			'guests'                  => $guests,
+			'guest_tiers'             => $guest_tiers,
+			'price_label'             => $price_label,
+			'provider_email'          => sanitize_email( (string) ( $settings['provider_email'] ?? '' ) ),
+			'provider_name'           => isset( $settings['provider_name'] ) && '' !== $settings['provider_name'] ? $settings['provider_name'] : wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'provider_phone'          => $settings['provider_phone'] ?? '',
+			'provider_address'        => $settings['provider_address'] ?? '',
+			'provider_site'           => isset( $settings['provider_website_url'] ) && '' !== $settings['provider_website_url'] ? $settings['provider_website_url'] : home_url(),
+			'resource_label_singular' => vkbm_get_resource_label_singular(),
+			'duration_label_heading'  => $duration_heading,
+			'staff_enabled'           => array() !== $lodging || $nomination_enabled,
+			'site_name'               => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'resource_tag_labels'     => array(),
+		);
 	}
 
 	/**
@@ -306,9 +482,14 @@ class Booking_Notification_Service {
 			return;
 		}
 
+		$payload = $this->attach_guest_cancel_info( $type, $booking_id, $payload );
+		// このメールのために発行したトークン。メールを送らなかった・送れなかったときは取り消す。
+		$issued_token = (string) ( $payload['guest_cancel_token'] ?? '' );
+
 		$message = $this->build_message( $type, $payload );
 
 		if ( '' === trim( $message['body'] ?? '' ) ) {
+			Guest_Cancel_Controller::revoke_token( $booking_id, $issued_token );
 			return;
 		}
 
@@ -318,6 +499,7 @@ class Booking_Notification_Service {
 		$recipient = $this->resolve_recipient( $type, $payload );
 
 		if ( '' === $recipient['to'] ) {
+			Guest_Cancel_Controller::revoke_token( $booking_id, $issued_token );
 			$this->record_skipped_notification(
 				$type,
 				$booking_id,
@@ -346,6 +528,9 @@ class Booking_Notification_Service {
 			return;
 		}
 
+		// 送れなかったメールのリンクは、お客様に届いていない。残すと上限を使い切り、先に届いたリンクが使えなくなる。
+		Guest_Cancel_Controller::revoke_token( $booking_id, $issued_token );
+
 		if ( $attempt >= self::MAX_ATTEMPTS ) {
 			// Notification failed after max attempts.
 			return;
@@ -360,6 +545,50 @@ class Booking_Notification_Service {
 				$attempt + 1,
 			)
 		);
+	}
+
+	/**
+	 * ゲスト予約のお客様向けメールに、キャンセルについての案内（リンクまたは電話での連絡）を足す。
+	 *
+	 * 対象は、ゲスト予約の確定・仮予約のお知らせメールとリマインドメールだけ（会員の予約・店舗向け・キャンセル通知は変えない）。
+	 * キャンセルできる間はキャンセル用リンク、設定が「キャンセル不可」か締め切りを過ぎているときは電話での連絡の案内にする。
+	 * 予約にはトークンのハッシュしか無いため、予約を作った直後のメールは、そのとき発行した生のトークンを使う
+	 * （{@see Guest_Cancel_Controller::take_fresh_token()}。同じリクエストの間だけ覚えている）。
+	 * それ以外（再送・リマインド・仮予約から確定への切り替え）は、送るたびに新しく発行する
+	 * （前のメールのリンクも上限まで使える。{@see Guest_Cancel_Controller::issue_token()}）。
+	 *
+	 * @param string               $type       通知タイプ。
+	 * @param int                  $booking_id 予約の投稿 ID。
+	 * @param array<string, mixed> $payload    予約データ。
+	 * @return array<string, mixed> 案内を足した予約データ（対象外ならそのまま）。
+	 */
+	private function attach_guest_cancel_info( string $type, int $booking_id, array $payload ): array {
+		if ( ! in_array( $type, array( self::TYPE_PENDING_CUSTOMER, self::TYPE_CONFIRMED_CUSTOMER, self::TYPE_REMINDER_CUSTOMER ), true ) ) {
+			return $payload;
+		}
+
+		if ( Booking_Source::VALUE_GUEST !== (string) get_post_meta( $booking_id, Booking_Source::META_KEY, true ) ) {
+			return $payload;
+		}
+
+		$state = ( new Booking_Customer_Cancellation( $this->settings_repository ) )->get_state( $booking_id );
+
+		if ( Booking_Customer_Cancellation::STATE_CAN_CANCEL === $state ) {
+			$guest_cancel_token = Guest_Cancel_Controller::take_fresh_token( $booking_id );
+			if ( '' === $guest_cancel_token ) {
+				$guest_cancel_token = Guest_Cancel_Controller::issue_token( $booking_id );
+			}
+			$settings                      = $this->settings_repository->get_settings();
+			$payload['guest_cancel_token'] = $guest_cancel_token;
+			$payload['guest_cancel_url']   = Guest_Cancel_Controller::build_cancel_url( $booking_id, $guest_cancel_token, $settings );
+			// 設定が「開始の何時間前まで」のときだけ、いつまでキャンセルできるかを添える。
+			$payload['guest_cancel_hours'] = 'none' === (string) ( $settings['provider_booking_cancel_mode'] ?? 'hours' ) ? 0 : max( 0, (int) ( $settings['provider_booking_cancel_deadline_hours'] ?? 24 ) );
+		} elseif ( Booking_Customer_Cancellation::STATE_CANCEL_DISABLED === $state || Booking_Customer_Cancellation::STATE_DEADLINE_PASSED === $state ) {
+			// 理由の違い（設定で不可／期限を過ぎた）をメール本文に出し分けるため、状態の名前を持たせる。
+			$payload['guest_cancel_unavailable'] = $state;
+		}
+
+		return $payload;
 	}
 
 	/**
@@ -590,6 +819,9 @@ class Booking_Notification_Service {
 			return false;
 		}
 
+		// リマインド時点では生のトークンを持っていない（予約にはハッシュしか無い）ため、送信のたびに新しく発行する。
+		$payload = $this->attach_guest_cancel_info( self::TYPE_REMINDER_CUSTOMER, $booking_id, $payload );
+
 		$subject = sprintf(
 			/* translators: %1$s: Provider name, %2$d: Hours before reservation. */
 			__( '[%1$s] Reservation reminder (%2$d hours before)', 'vk-booking-manager' ),
@@ -605,7 +837,7 @@ class Booking_Notification_Service {
 		$body = $this->render_customer_body( $payload, $lead );
 
 		// リマインダーは再送（attempt）の概念を持たないため 0 を渡す（#510）。
-		return $this->send_mail(
+		$sent = $this->send_mail(
 			(string) $to,
 			(string) $subject,
 			(string) $body,
@@ -615,6 +847,13 @@ class Booking_Notification_Service {
 			0,
 			$booking_id
 		);
+
+		// 送れなかったメールのために発行したトークンは残さない（次の送信窓で、新しく発行し直す）。
+		if ( ! $sent ) {
+			Guest_Cancel_Controller::revoke_token( $booking_id, (string) ( $payload['guest_cancel_token'] ?? '' ) );
+		}
+
+		return $sent;
 	}
 
 	/**
@@ -1035,8 +1274,11 @@ class Booking_Notification_Service {
 	private function get_reservation_information_lines( array $payload, string $status_label = '', bool $show_resource_tag = false ): array {
 		$lines   = array();
 		$lines[] = __( '--- Reservation information ---', 'vk-booking-manager' );
-		/* translators: %d: Booking ID. */
-		$lines[] = sprintf( __( 'Reservation number: #%d', 'vk-booking-manager' ), $payload['booking_id'] );
+		// ゲスト予約の確認メールは、まだ予約が無いため予約番号の行を出さない。
+		if ( (int) $payload['booking_id'] > 0 ) {
+			/* translators: %d: Booking ID. */
+			$lines[] = sprintf( __( 'Reservation number: #%d', 'vk-booking-manager' ), $payload['booking_id'] );
+		}
 		if ( '' !== $status_label ) {
 			/* translators: %s: Booking status label. */
 			$lines[] = sprintf( __( 'Status: %s', 'vk-booking-manager' ), $status_label );
@@ -1143,6 +1385,36 @@ class Booking_Notification_Service {
 			$lines[] = '';
 			$lines[] = __( '--- Cancellation Policy ---', 'vk-booking-manager' );
 			$lines[] = $cancellation_policy;
+			$lines[] = '';
+		}
+		// ゲスト予約だけ、キャンセルの方法を案内する（会員の予約はマイページからキャンセルする）。
+		if ( ! empty( $payload['guest_cancel_url'] ) ) {
+			$lines[] = '';
+			$lines[] = __( '--- About cancellation ---', 'vk-booking-manager' );
+			$lines[] = __( 'You can cancel this reservation from the link below.', 'vk-booking-manager' );
+			if ( (int) ( $payload['guest_cancel_hours'] ?? 0 ) > 0 ) {
+				/* translators: %d: Hours before the reservation starts. */
+				$lines[] = sprintf( __( 'You can cancel up to %d hours before your reservation starts.', 'vk-booking-manager' ), (int) $payload['guest_cancel_hours'] );
+			}
+			$lines[] = __( 'Opening the link does not cancel your reservation. Please press the cancel button on the page.', 'vk-booking-manager' );
+			$lines[] = (string) $payload['guest_cancel_url'];
+			$lines[] = __( 'This link is for you only. Please do not share it with others.', 'vk-booking-manager' );
+			$lines[] = '';
+		} elseif ( ! empty( $payload['guest_cancel_unavailable'] ) ) {
+			$lines[]     = '';
+			$lines[]     = __( '--- About cancellation ---', 'vk-booking-manager' );
+			$is_deadline = Booking_Customer_Cancellation::STATE_DEADLINE_PASSED === $payload['guest_cancel_unavailable'];
+			if ( $payload['provider_phone'] ) {
+				$lines[] = $is_deadline
+					? __( 'The deadline for cancellation requests has passed, so you cannot cancel this reservation on the web. Please call us.', 'vk-booking-manager' )
+					: __( 'You cannot cancel this reservation on the web. Please call us.', 'vk-booking-manager' );
+				/* translators: %s: Provider phone number. */
+				$lines[] = sprintf( __( 'TEL: %s', 'vk-booking-manager' ), $payload['provider_phone'] );
+			} else {
+				$lines[] = $is_deadline
+					? __( 'The deadline for cancellation requests has passed, so you cannot cancel this reservation on the web. Please contact us directly.', 'vk-booking-manager' )
+					: __( 'You cannot cancel this reservation on the web. Please contact us directly.', 'vk-booking-manager' );
+			}
 			$lines[] = '';
 		}
 		$lines[] = '===========';

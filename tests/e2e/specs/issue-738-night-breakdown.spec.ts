@@ -241,6 +241,7 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		}
 
 		// 宿泊のサイトにし、休前日は土曜のみ・特定日なしにする（他の設定は残す）。
+		// @step 管理画面で業種を宿泊にし、休前日を土曜のみ、特定日なしにしておく
 		wpEvalPhp( `
 			$settings = get_option( '${ OPTION_NAME }', array() );
 			$settings = is_array( $settings ) ? $settings : array();
@@ -267,6 +268,7 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 			throw new Error( `Friday lookup failed: "${ fridayIso }"` );
 		}
 
+		// @step 客室「E2E738 Room」を作成し、今月と来月のシフトを登録しておく
 		roomId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -283,6 +285,7 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		for ( const { year, month } of getCurrentAndNextTokyoMonths() ) {
 			createShiftForMonth( roomId, year, month );
 		}
+		// @step 予約の単位「泊」・基本料金 10,000円で、休前日の料金 15,000円のプランと、休前日の料金なしのプランを作成しておく
 		breakdownMenuId = seedNightMenu(
 			`${ PREFIX } Breakdown Plan`,
 			roomId,
@@ -303,9 +306,11 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 	test( '金曜から 2 泊: 客室一覧の上・まとめ欄・確認画面に泊ごとの内訳が出て、合計が泊ごとの単価の合計になる', async ( {
 		page,
 	} ) => {
+		// @step 休前日の料金ありのプランの予約ページを開き、3 日後以降の金曜をチェックイン日、その 2 日後の日曜をチェックアウト日に選ぶ
 		await selectFridayStay( page, breakdownMenuId );
 
 		// 日程を選んだ直後、客室一覧の上に泊ごとの区分が出る（金曜 = 平日、土曜 = 休前日）。
+		// @check 客室一覧の上に、泊ごとの区分（1 泊目「平日」、2 泊目「休前日」）が表示される
 		const nightRates = page.locator( '.vkbm-lodging__night-rates' );
 		await expect( nightRates ).toBeVisible( { timeout: 15000 } );
 		const rateRows = nightRates.locator( '.vkbm-lodging__night' );
@@ -321,7 +326,9 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		expect( rateBox!.y ).toBeLessThan( roomListBox!.y );
 
 		// 客室を選ぶと、まとめ欄に「泊ごとの内訳」が畳まずに出る（#797 で開閉欄から常時表示に変更）。
+		// @step 客室を選ぶ
 		await page.locator( '.vkbm-lodging__room' ).first().click();
+		// @check まとめ欄に「泊ごとの内訳」が畳まずに出て、「平日 ¥10,000」「休前日 ¥15,000」が泊の数だけ並ぶ
 		const breakdown = page.locator(
 			'.vkbm-lodging__summary .vkbm-lodging__breakdown'
 		);
@@ -342,12 +349,14 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		await expect( breakdownRows.nth( 1 ) ).toContainText( '¥15,000' );
 
 		// 「予約に進む」で確認画面へ。
+		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 		const confirm = page.locator( '.vkbm-confirm__summary' ).first();
 		await confirm.waitFor( { state: 'visible', timeout: 15000 } );
 
 		// 「1泊あたりの料金」の行は無く、泊ごとの内訳が常に開いた状態で出る。
+		// @check 確認画面に「1泊あたりの料金」の行は無く、「泊ごとの料金」が開いた状態で「平日」「休前日」の 2 泊分表示される
 		await expect( confirm ).not.toContainText( '1泊あたりの料金' );
 		await expect( confirm ).toContainText( '泊ごとの料金' );
 		await expect( confirm.locator( 'details' ) ).toHaveCount( 0 );
@@ -357,6 +366,7 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		await expect( confirmRows.nth( 1 ) ).toContainText( '休前日' );
 
 		// 合計金額が、泊ごとの単価の合計になっている（10,000 + 15,000 = 25,000円）。
+		// @check 合計金額が泊ごとの料金の合計（10,000 + 15,000 = 25,000円）になっている
 		const nightPrices = await confirm
 			.locator( '.vkbm-lodging__night-price' )
 			.allInnerTexts();
@@ -379,9 +389,11 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 	test( '休前日・特定日の料金を設定していないプラン: 区分も内訳も出さず、確認画面は「1泊あたりの料金」のまま', async ( {
 		page,
 	} ) => {
+		// @step 休前日の料金なしのプランの予約ページを開き、3 日後以降の金曜をチェックイン日、その 2 日後の日曜をチェックアウト日に選ぶ
 		await selectFridayStay( page, plainMenuId );
 
 		// 客室一覧は出るが、泊ごとの区分は出ない。
+		// @check 客室一覧は出るが、泊ごとの区分は出ない
 		await expect(
 			page.locator( '.vkbm-lodging__room' ).first()
 		).toBeVisible( { timeout: 15000 } );
@@ -390,16 +402,20 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		).toHaveCount( 0 );
 
 		// 客室を選んでも、まとめ欄に泊ごとの内訳は出ない。
+		// @step 客室を選ぶ
 		await page.locator( '.vkbm-lodging__room' ).first().click();
+		// @check まとめ欄に泊ごとの内訳は出ない
 		await expect( page.locator( '.vkbm-lodging__breakdown' ) ).toHaveCount(
 			0
 		);
 
 		// 確認画面は従来どおり「1泊あたりの料金」の行で、泊ごとの内訳は出ない。
+		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 		const confirm = page.locator( '.vkbm-confirm__summary' ).first();
 		await confirm.waitFor( { state: 'visible', timeout: 15000 } );
+		// @check 確認画面に「1泊あたりの料金」の行が出て、泊ごとの内訳は出ず、合計が 20,000円になっている
 		await expect( confirm ).toContainText( '1泊あたりの料金' );
 		await expect( confirm.locator( '.vkbm-lodging__night' ) ).toHaveCount(
 			0

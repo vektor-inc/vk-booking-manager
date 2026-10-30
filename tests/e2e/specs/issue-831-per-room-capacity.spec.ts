@@ -210,6 +210,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		}
 
 		// 客室1室と、1室1泊あたり・複数人一括予約が未保存・定員が未設定の泊のプランを作る。
+		// @step 客室「E2E831 Room」を作成し、今月と来月のシフトを登録しておく
 		roomId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -225,6 +226,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		for ( const { year, month } of getCurrentAndNextTokyoMonths() ) {
 			createShiftForMonth( roomId, year, month );
 		}
+		// @step 予約の単位「泊」・料金の単位「1室1泊あたり」・基本料金 10,000円で、複数人一括予約と定員は未設定のプラン「E2E831 Night Plan」を作成しておく
 		nightMenuId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -242,6 +244,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 			'night menu'
 		);
 		// 宿泊のサイトにする（予約枠の定員機能も有効になる）。
+		// @step 管理画面で業種を宿泊・スタッフの呼び名を「客室」にし、予約締切と予約可能日数の制限を外しておく
 		await configureProviderSettings( {
 			industry_preset: 'lodging',
 			resource_label_singular: '客室',
@@ -264,6 +267,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 	test( '1室1泊あたりでは複数人一括予約の行を隠し、定員を「1室の最大人数」として保存できる', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、プランの編集画面を開く
 		prepareBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto(
@@ -284,6 +288,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		await capacityInput.waitFor( { state: 'attached', timeout: 15000 } );
 
 		// 1室1泊あたり: 複数人一括予約の行は出さず、ラベルは「1室の最大人数」。
+		// @check 「複数人一括予約」の行と客室指定の行が隠れ、定員の欄の名前が「1室の最大人数」で、説明文に「予約画面の人数欄では、この人数まで選べます。」が出る
 		await expect( multiGuestsRow ).toBeHidden();
 		await expect( resourceSelectionRow ).toBeHidden();
 		await expect( capacityLabel ).toHaveText( '1室の最大人数' );
@@ -292,12 +297,16 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		).toContainText( '予約画面の人数欄では、この人数まで選べます。' );
 
 		// 4 を入れても、複数人一括予約に依存する貸し切り予約の行は出ない。
+		// @step 「1室の最大人数」に 4 を入れる
 		await capacityInput.fill( '4' );
+		// @check 貸し切り予約の行は出ない
 		await expect( exclusiveRow ).toBeHidden();
 
 		// 保存する。複数人一括予約のチェックは触らない（隠れたまま OFF で保存される）。
 		// ブロックエディターの保存ボタンで、メタボックスの内容もあわせて保存される。
+		// @step 保存する
 		await page.locator( '.editor-post-publish-button' ).click();
+		// @check 1室の最大人数が 4 で保存され、複数人一括予約と客室指定の設定は空のまま保存される
 		await expect
 			.poll(
 				() =>
@@ -341,6 +350,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		).toBe( '' );
 
 		// 時間枠へ戻すと「客室指定」が表示され、チェック切り替え後も宿泊向け説明文を維持する。
+		// @step 予約の単位を時間枠に切り替える
 		await page.evaluate( () => {
 			const radio = document.querySelector< HTMLInputElement >(
 				'input[name="vkbm_service_menu[booking_unit]"][value="slot"]'
@@ -351,13 +361,16 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 			radio.checked = true;
 			radio.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 		} );
+		// @check 「客室指定」の行が表示される
 		await expect( resourceSelectionRow ).toBeVisible();
 		await expect( resourceSelectionRow.locator( 'th' ) ).toHaveText(
 			'客室指定'
 		);
+		// @step 「客室指定」のチェックを外す
 		await resourceSelectionRow
 			.locator( 'input[type="checkbox"]' )
 			.uncheck();
+		// @check 客室が自動で割り当てられる旨の説明が出て、「スタッフ指名」の語は出ず、人数の下限の欄の名前は「最少催行人数」になる
 		await expect( resourceSelectionRow ).toContainText(
 			'このサービスメニューでは客室が自動で割り当てられ'
 		);
@@ -369,6 +382,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		);
 
 		// 泊単位へ戻すと指定欄は隠れ、隠れたチェックが OFF でも定員文言は指定なし側に固定される。
+		// @step 予約の単位を「泊」に戻す
 		await page.evaluate( () => {
 			const radio = document.querySelector< HTMLInputElement >(
 				'input[name="vkbm_service_menu[booking_unit]"][value="night"]'
@@ -379,9 +393,11 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 			radio.checked = true;
 			radio.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 		} );
+		// @check 「客室指定」の行が隠れる
 		await expect( resourceSelectionRow ).toBeHidden();
 
 		// 料金の単位を 1名1泊あたりへ切り替えると、行とラベルが元に戻る。
+		// @step 料金の単位を「1名1泊あたり」に切り替える
 		await page.evaluate( () => {
 			const radio = document.querySelector< HTMLInputElement >(
 				'input[name="vkbm_service_menu[night_price_unit]"][value="per_guest"]'
@@ -394,6 +410,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 			radio.checked = true;
 			radio.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 		} );
+		// @check 「複数人一括予約」の行が表示され、定員の欄の名前が「予約枠の定員」に戻り、説明文に「客室が自動で割り当てられる場合」が出る
 		await expect( multiGuestsRow ).toBeVisible();
 		await expect( capacityLabel ).toHaveText( '予約枠の定員' );
 		await expect(
@@ -404,9 +421,12 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 	test( '複数人一括予約が OFF のままでも、予約画面の人数欄が「1室の最大人数」を上限に出る', async ( {
 		page,
 	} ) => {
+		// @step プランの予約ページを開き、2 日後をチェックイン日、4 日後をチェックアウト日に選ぶ
 		await openAndPickDates( page );
+		// @step 表示された客室を選ぶ
 		await page.locator( '.vkbm-lodging__room' ).first().click();
 
+		// @check 人数の入力欄が表示され、上限が 4 になっている
 		const guestsInput = page.locator(
 			'input.vkbm-plan-summary__guests-select'
 		);

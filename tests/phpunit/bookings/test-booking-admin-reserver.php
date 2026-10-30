@@ -263,6 +263,13 @@ class Booking_Admin_Reserver_Test extends WP_UnitTestCase {
 				'expected'            => $original_id,
 			),
 			array(
+				'test_condition_name' => '投稿者 0・印 guest の予約に会員を送る => 会員に付け替わる（Booking_Admin の許可の包み込みが無いと 0 のまま）',
+				'sent_author_id'      => $other_id,
+				'role'                => 'administrator',
+				'guest'               => true,
+				'expected'            => $other_id,
+			),
+			array(
 				'test_condition_name' => '存在しない ID を送る => 変わらない',
 				'sent_author_id'      => 9999999,
 				'role'                => 'administrator',
@@ -287,9 +294,12 @@ class Booking_Admin_Reserver_Test extends WP_UnitTestCase {
 				array(
 					'post_type'   => Booking_Post_Type::POST_TYPE,
 					'post_status' => 'publish',
-					'post_author' => $original_id,
+					'post_author' => ! empty( $case['guest'] ) ? 0 : $original_id,
 				)
 			);
+			if ( ! empty( $case['guest'] ) ) {
+				update_post_meta( $booking_id, \VKBookingManager\Bookings\Booking_Source::META_KEY, \VKBookingManager\Bookings\Booking_Source::VALUE_GUEST );
+			}
 
 			$this->save_with_author( $booking_id, $case['sent_author_id'], $case['role'] );
 

@@ -206,6 +206,8 @@ class Provider_Settings_Controller {
 			'guests_unit_label'                  => $guests_unit_label,
 			'booking_attendee_name_mode'         => Attendee_Name::get_mode( $settings ),
 			'booking_attendee_name_label'        => Attendee_Name::get_label( $settings ),
+			// 予約の受付方法（member / guest / both。#958）。予約画面が受付方法に応じて表示を切り替えるために読む。
+			'booking_customer_mode'              => Settings_Repository::normalize_booking_customer_mode( $settings['booking_customer_mode'] ?? null ),
 		);
 
 		/**

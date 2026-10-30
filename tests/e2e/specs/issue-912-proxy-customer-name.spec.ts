@@ -59,6 +59,7 @@ test( '代理予約の名前必須・入力欄への案内・サーバーエラ�
 	page,
 } ) => {
 	test.setTimeout( 120000 );
+	// @step 管理者でログインし、予約ページでメニューの「予約する」・空いている日・時間を選んで予約確認画面へ進む
 	await loginAsAdmin( page );
 	await gotoConfirmScreen( page );
 
@@ -67,6 +68,7 @@ test( '代理予約の名前必須・入力欄への案内・サーバーエラ�
 	const confirm = page.locator( '.vkbm-confirm__button' ).first();
 	const error = page.locator( '#vkbm-confirm-customer-name-error' );
 	const help = page.locator( '#vkbm-confirm-customer-name-help' );
+	// @check 予約者名の欄に「必須」が付き、すぐ下に「お名前が分からない場合は「不明」などを入力してください。」の補足が出ている。電話番号は必須ではない
 	await expect( help ).toHaveText(
 		'お名前が分からない場合は「不明」などを入力してください。'
 	);
@@ -211,6 +213,7 @@ test( '代理予約の名前必須・入力欄への案内・サーバーエラ�
 	const rejection = await rejected;
 	expect( rejection.status() ).toBe( 400 );
 	expect( ( await rejection.json() ).code ).toBe( 'customer_name_required' );
+	// @check 確定ボタンの近くに「お客様のお名前を入力してください。」のエラーが表示される
 	await expect(
 		page.locator( '.vkbm-confirm__actions .vkbm-alert__danger' )
 	).toContainText( 'お客様のお名前を入力してください。' );
@@ -223,6 +226,7 @@ test( '代理予約の名前必須・入力欄への案内・サーバーエラ�
 	);
 	await confirm.click();
 	const response = await accepted;
+	// @check 予約が確定し、予約の管理画面で予約者名が「代理予約のお客様」になっている
 	expect( response.ok() ).toBe( true );
 	const result = await response.json();
 	const bookingId = Number( result.booking_id );
@@ -261,6 +265,7 @@ test( '会員本人の画面には予約者名の入力欄と補足が出ない'
 		'--porcelain',
 	] );
 	try {
+		// @step 管理画面で購読者の会員を作っておき、その会員でログインして予約確認画面まで進む
 		await loginAsAdmin( page, login, 'issue912-test-password' );
 		await gotoConfirmScreen( page );
 		// @check 確認画面が表示されても、代理予約用の入力や補足は存在しない。

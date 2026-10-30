@@ -220,12 +220,14 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 			ORIGINAL_LOCALE = 'en_US';
 		}
 
+		// @step サイトの言語を日本語にし、ログインフォームだけを置いたログインページを作り、ログイン試行回数の制限を無効にしておく
 		ensureJapaneseLocale();
 		ensureLoginPage();
 		disableRateLimitSetting();
 	} );
 
 	test.beforeEach( () => {
+		// @step ログイン試行回数の制限の記録をリセットしておく
 		flushRateLimitAndGrantTransients();
 	} );
 
@@ -247,8 +249,10 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 	test( '未認証ユーザー + 正しいパスワード → ログイン用ショートコードページに再送ボタンが表示される', async ( {
 		page,
 	} ) => {
+		// @step 管理画面でメール認証が済んでいない一般ユーザーを作っておく
 		ensureUnverifiedUser();
 
+		// @step ログインしていない状態でログインページを開き、そのユーザーのユーザー名と正しいパスワードを入れてログインする
 		await submitLoginForm(
 			page,
 			`/${ LOGIN_PAGE_SLUG }/`,
@@ -256,6 +260,7 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 			UNVERIFIED_USER_PASSWORD
 		);
 
+		// @check ログインフォームに警告が出て、「認証メールを再送する」ボタンが表示される
 		const warningBox = page.locator(
 			'.vkbm-auth-card--login .vkbm-alert__warning'
 		);
@@ -270,8 +275,10 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 	test( '未認証ユーザー + 間違ったパスワード → 再送ボタンは表示されない（存在確認防止）', async ( {
 		page,
 	} ) => {
+		// @step 管理画面でメール認証が済んでいない一般ユーザーを作っておく
 		ensureUnverifiedUser();
 
+		// @step ログインしていない状態でログインページを開き、そのユーザーのユーザー名と間違ったパスワードを入れてログインする
 		await submitLoginForm(
 			page,
 			`/${ LOGIN_PAGE_SLUG }/`,
@@ -279,6 +286,7 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 			'WrongPassword999!'
 		);
 
+		// @check 「認証メールを再送する」ボタンは表示されない
 		await expect(
 			page.locator( '.vkbm-auth-card--login .vkbm-auth-form__resend' )
 		).toHaveCount( 0 );
@@ -287,8 +295,10 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 	test( '予約ブロック内（REST経由）のログインフォームにも再送ボタンが表示される', async ( {
 		page,
 	} ) => {
+		// @step 管理画面でメール認証が済んでいない一般ユーザーを作っておく
 		ensureUnverifiedUser();
 
+		// @step ログインしていない状態で予約ページのログイン画面を開き、そのユーザーのユーザー名と正しいパスワードを入れてログインする
 		const bookingUrl = new URL( '/booking/', WP_BASE_URL );
 		bookingUrl.searchParams.set( 'vkbm_auth', 'login' );
 
@@ -304,6 +314,7 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 		await page.waitForSelector( '.vkbm-auth-card--login', { timeout: 15000 } );
 
+		// @check 予約ページに戻ったログインフォームに「認証メールを再送する」ボタンが表示される
 		await expect(
 			page.locator(
 				'.vkbm-auth-card--login .vkbm-auth-form__resend button[type="submit"]'
@@ -314,8 +325,10 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 	test( '手動承認済みユーザーは、管理画面のユーザー一覧にバッジが表示される', async ( {
 		page,
 	} ) => {
+		// @step 管理画面で、店舗が手動承認した一般ユーザーを作っておく
 		ensureManualUser();
 
+		// @step 管理者でログインする
 		await page.goto( `${ WP_BASE_URL }/wp-login.php` );
 		await page.locator( '#user_login' ).fill( ADMIN_USER );
 		await page.locator( '#user_pass' ).fill( ADMIN_PASSWORD );
@@ -326,6 +339,7 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 		// 未ログインのままログイン画面へ戻され、バッジが見つからないことがあった（#897）。
 		await page.waitForURL( /\/wp-admin\//, { timeout: 30000 } );
 
+		// @step 「ユーザー」一覧でそのユーザーを検索する
 		await page.goto( `${ WP_BASE_URL }/wp-admin/users.php?s=${ MANUAL_USER_LOGIN }` );
 		// ユーザー一覧の表（検索結果の行）が描画されてからバッジを探す。
 		const userRow = page.locator( '#the-list tr', {
@@ -333,6 +347,7 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 		} );
 		await expect( userRow ).toBeVisible( { timeout: 15000 } );
 
+		// @check そのユーザーの行に手動承認のバッジが表示される
 		// 別ユーザーの行のバッジで合格しないよう、対象ユーザーの行の中だけを探す。
 		const badge = userRow.locator( '.vkbm-email-verification-badge--manual' );
 		await expect( badge ).toBeVisible( { timeout: 10000 } );

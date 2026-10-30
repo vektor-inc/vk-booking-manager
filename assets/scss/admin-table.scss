@@ -87,7 +87,8 @@
 
 // 語の途中での分断を避けつつ、列幅を超える長い名前だけは折り返して欠けを防ぐ。
 .vkbm-booking-customer-column__name,
-.vkbm-booking-customer-column__account {
+.vkbm-booking-customer-column__account,
+.vkbm-booking-customer-column__guest {
 	line-break: strict;
 	word-break: keep-all;
 	overflow-wrap: anywhere;
@@ -98,7 +99,8 @@
 }
 
 .vkbm-booking-customer-column__tel,
-.vkbm-booking-customer-column__account {
+.vkbm-booking-customer-column__account,
+.vkbm-booking-customer-column__guest {
 	color: var(--vkbm--admin--color--text-secondary);
 }
 

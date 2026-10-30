@@ -1335,6 +1335,13 @@ $vkbm-plan-summary-control-height: 44px;
 // 見出しは中央揃え、本文は読みやすいよう左揃えにして管理画面で入力した改行を保持する。
 .vkbm-confirm__complete {
 
+	// 表示時にスクリプトからフォーカスを移す（tabIndex={ -1 }）ため、ブラウザ標準の青い枠ではなく
+	// プロジェクト共通のフォーカス枠で描く。周囲に隙間があり外側に描いても重ならない。
+	&:focus-visible {
+
+		@include vkbm-focus-ring;
+	}
+
 	// テーマの見出し装飾（余白・罫線・背景・下線など）を打ち消す。
 	.vkbm-confirm__complete-title {
 		margin: 0;
@@ -1344,6 +1351,14 @@ $vkbm-plan-summary-control-height: 44px;
 		font-size: 1rem;
 		font-weight: 600;
 		text-align: center;
+
+		// 狭い幅で「ん」だけが次の行に落ちる・小書き文字（ャ など）が行頭に来る折り返しを避ける。
+		// 文節の区切りで折り返し（auto-phrase は html の lang="ja" が前提で非対応ブラウザでは無視される）、
+		// 行頭禁則を厳格にし、最後の行に短い語が 1 つだけ残らないようにする。
+		// 確認メール送信後・確認リンクの結果・予約完了・キャンセル用リンクの各画面で共有している。
+		line-break: strict;
+		word-break: auto-phrase;
+		text-wrap: pretty;
 	}
 
 	.vkbm-confirm__complete-message {
@@ -1602,7 +1617,8 @@ $vkbm-plan-summary-control-height: 44px;
 	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])),
 	.vkbm-confirm__form textarea,
 	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])),
-	.vkbm-confirm__admin-field textarea {
+	.vkbm-confirm__admin-field textarea,
+	.vkbm-confirm__guest-field input:where(:not([type="checkbox"]):not([type="radio"])) {
 		box-sizing: border-box;
 		width: 100%;
 		border-radius: var(--vkbm--radius--md, 8px);
@@ -1614,7 +1630,8 @@ $vkbm-plan-summary-control-height: 44px;
 	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible,
 	.vkbm-confirm__form textarea:focus-visible,
 	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible,
-	.vkbm-confirm__admin-field textarea:focus-visible {
+	.vkbm-confirm__admin-field textarea:focus-visible,
+	.vkbm-confirm__guest-field input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible {
 
 		@include vkbm-focus-ring;
 	}
@@ -1623,7 +1640,8 @@ $vkbm-plan-summary-control-height: 44px;
 		min-height: 120px;
 	}
 
-	.vkbm-confirm__admin-fields {
+	.vkbm-confirm__admin-fields,
+	.vkbm-confirm__guest-fields {
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 1.75rem;
@@ -1637,7 +1655,8 @@ $vkbm-plan-summary-control-height: 44px;
 		gap: 1.25rem;
 	}
 
-	.vkbm-confirm__admin-field {
+	.vkbm-confirm__admin-field,
+	.vkbm-confirm__guest-field {
 		display: flex;
 		flex-direction: column;
 		gap: 0.35rem;
@@ -1647,9 +1666,16 @@ $vkbm-plan-summary-control-height: 44px;
 	// 欄の中の見出しは、テーマの margin や大きな line-height を持ち込まず、入力欄との間隔を gap だけで決める。
 	// 欄どうしの見える間隔が gap より大きく膨らむのを防ぐ。
 	.vkbm-confirm__admin-field > label,
-	.vkbm-confirm__admin-field > span {
+	.vkbm-confirm__admin-field > span,
+	.vkbm-confirm__guest-field > label {
 		margin: 0;
 		line-height: 1.4;
+	}
+
+	// ラベルは語の途中で折らない。日本語は句読点・括弧の位置で折り返し、長い英語の語だけは溢れる前に折る。
+	.vkbm-confirm__guest-field > label {
+		overflow-wrap: break-word;
+		word-break: keep-all;
 	}
 
 	// 選択肢の最後の行は、タップ領域のための min-height（28px）と行間で字面の下に約 10.7px の空きができる。
@@ -1659,7 +1685,8 @@ $vkbm-plan-summary-control-height: 44px;
 	}
 
 	// テーマの p の余白を打ち消し、補足を入力欄に寄せる。
-	.vkbm-confirm__admin-fields .vkbm-confirm__admin-field-help {
+	.vkbm-confirm__admin-fields .vkbm-confirm__admin-field-help,
+	.vkbm-confirm__guest-fields .vkbm-confirm__guest-field-help {
 		margin: 0;
 		font-size: 0.8125rem;
 		line-height: 1.5;
@@ -1670,6 +1697,145 @@ $vkbm-plan-summary-control-height: 44px;
 	.vkbm-confirm__admin-field textarea {
 		min-height: 80px;
 		resize: vertical;
+	}
+
+	/* 会員登録せずに予約するお客様の入力欄
+	   ========================================================================== */
+
+	// ログイン・新規登録の案内（上）と入力欄の箱（下）を 1 つのまとまりにし、案内を箱に寄せる。
+	.vkbm-confirm__guest {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.vkbm-confirm__guest-login-prompt,
+	.vkbm-confirm__guest-back {
+		margin: 0;
+		font-size: 0.9rem;
+		line-height: 1.6;
+	}
+
+	// 見た目はリンクのまま、押せる範囲（高さ 44px）を確保する。
+	.vkbm-confirm__guest-back {
+		margin-bottom: 0.75rem;
+	}
+
+	.vkbm-confirm__guest-back button.vkbm-confirm__link-button.vkbm-confirm__link-button.vkbm-confirm__link-button {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+	}
+
+	// 見出しは、テーマの見出し装飾（余白・罫線・背景）を打ち消し、箱の中の欄より目立たせすぎない。
+	// 下の余白は箱の gap（欄どうしの間隔）を打ち消して、見出しを最初の欄に寄せる。
+	.vkbm-confirm__guest-title {
+		margin: 0 0 -0.5rem;
+		padding: 0;
+		border: 0;
+		background: none;
+		font-size: 1rem;
+		font-weight: 600;
+		line-height: 1.4;
+	}
+
+	// 文章の中のリンクとして使うボタン。ボタンの見た目（枠・背景）を消し、リンクとして読ませる。
+	// テーマのボタン指定（:not() を重ねた背景色・文字色）に負けないよう、クラスを重ねて詳細度を上げる。
+	button.vkbm-confirm__link-button.vkbm-confirm__link-button.vkbm-confirm__link-button {
+		display: inline;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--vkbm--color--primary, #2563eb);
+		font: inherit;
+		font-weight: 600;
+		text-decoration: underline;
+		cursor: pointer;
+	}
+
+	button.vkbm-confirm__link-button.vkbm-confirm__link-button.vkbm-confirm__link-button:hover,
+	button.vkbm-confirm__link-button.vkbm-confirm__link-button.vkbm-confirm__link-button:focus {
+		background: none;
+		color: var(--vkbm--color--primary, #2563eb);
+	}
+
+	button.vkbm-confirm__link-button:focus-visible {
+
+		@include vkbm-focus-ring;
+	}
+
+	// ロボット対策の隠し入力欄。画面外へ出し、人の目にもキー操作にも触れさせない。
+	.vkbm-confirm__guest-hp {
+		position: absolute;
+		left: -9999px;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+	}
+
+	// 送信ボタンの直上の案内。ボタンに寄せ、同意欄などとは離れて見えるようにする。
+	.vkbm-confirm__guest-submit-note {
+		margin: 0;
+		font-size: 0.9rem;
+		line-height: 1.6;
+	}
+
+	// 送信後の画面。メールアドレスは長くなりやすいので、溢れる前に折る。
+	.vkbm-confirm__guest-sent .vkbm-confirm__complete-message {
+		overflow-wrap: anywhere;
+	}
+
+	.vkbm-confirm__guest-sent-subtitle {
+		margin: 1rem 0 0.25rem;
+		padding: 0;
+		border: 0;
+		background: none;
+		font-size: 0.95rem;
+		font-weight: 600;
+		line-height: 1.4;
+	}
+
+	.vkbm-confirm__guest-sent .vkbm-buttons {
+		margin-top: 0.75rem;
+	}
+
+	// 「メールアドレスを修正して送り直す」は文字が長く、ボタンの nowrap のままだと狭い幅で
+	// 入れ物（flex の子）が縮まず親からはみ出し、フォーカス枠が欠ける。
+	// 入れ物を縮められるようにし、ボタンの文字は折り返す（高さ 44px 以上は保つ）。
+	.vkbm-confirm__guest-sent,
+	.vkbm-confirm__guest-result {
+		box-sizing: border-box;
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	// キャンセル用リンクの画面の本文。日本語は文節の区切りで折り返し、最後の 1 文字だけが次の行に落ちないようにする。
+	// auto-phrase は html の lang="ja" が前提で、非対応ブラウザでは無視される。
+	.vkbm-confirm__guest-cancel .vkbm-confirm__complete-message,
+	.vkbm-confirm__guest-cancel-error {
+		word-break: auto-phrase;
+		text-wrap: pretty;
+	}
+
+	// キャンセルに失敗したときの案内。直前の予約内容と、直後のボタンから離して、独立した通知として見せる。
+	.vkbm-confirm__guest-cancel-error {
+		margin: 1rem 0;
+	}
+
+	.vkbm-confirm__guest-sent .vkbm-button,
+	.vkbm-confirm__guest-result .vkbm-button,
+	.vkbm-confirm__guest-actions .vkbm-button {
+		min-height: 44px;
+		max-width: 100%;
+		line-height: 1.4;
+		white-space: normal;
+
+		// 日本語は文節の区切りで折り返す（語句の途中で切らない）。
+		// auto-phrase は html の lang="ja" が前提で、非対応ブラウザでは無視される。
+		// text-wrap: balance は行の長さをそろえ、最後の 1 行に短い語が落ちるのを防ぐ。
+		word-break: auto-phrase;
+		text-wrap: balance;
 	}
 
 	/* ご利用になる方の選択

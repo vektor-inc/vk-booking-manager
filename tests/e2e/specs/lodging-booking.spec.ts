@@ -292,6 +292,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 			originalSettingsJson = null;
 		}
 
+		// @step 管理画面で客室「E2E577 Room A」「E2E577 Room B」を作って今月・来月のシフトを登録し、両方の客室を担当にした泊のプラン「E2E577 Night Plan」と、Room A を担当にした時間枠（60分）のプラン「E2E577 Slot Plan」を作っておく
 		roomAId = seedRoom( `${ PREFIX } Room A` );
 		roomBId = seedRoom( `${ PREFIX } Room B` );
 		// 当月＋翌月のシフト（泊の販売日・時間枠のスロットの両方に使う。月境界でも残るよう両方）。
@@ -318,15 +319,18 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 	test( '管理画面: 業種プリセットの選択肢に「宿泊」が出て、選んで保存でき、サービスメニューに「予約の単位」が出る', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインする（この時点の業種プリセットは「宿泊」ではない）
 		await loginAsAdmin( page );
 
 		// 保存前は宿泊ではない（既存サイトと同じ状態から始める）。
 		expect( getStoredIndustryPreset() ).not.toBe( 'lodging' );
 
 		// 業種プリセットが「事業者情報」タブの先頭に表示されることを確認する。
+		// @step BM 設定の「事業者情報」タブを開く
 		await page.goto(
 			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=store'
 		);
+		// @check 業種プリセットの選択欄が表の先頭の行に表示されている
 		const select = page.locator( '#vkbm-industry-preset' );
 		await expect( select ).toBeVisible();
 		await expect(
@@ -334,6 +338,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		).toHaveClass( /vkbm-industry-preset-row/ );
 
 		// 選択肢の並び（既存の4つの後ろに「宿泊」が加わる）。
+		// @check 業種プリセットの選択肢は、「カスタム」を先頭とする既存の4つの後ろに「宿泊」が並ぶ
 		const values = await select
 			.locator( 'option' )
 			.evaluateAll( ( options ) =>
@@ -348,18 +353,22 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		] );
 
 		// 「宿泊」を選んで保存する。
+		// @step 業種プリセットで「宿泊」を選んで保存する
 		await select.selectOption( 'lodging' );
 		await page.locator( '#submit' ).click();
 		await page.waitForLoadState( 'networkidle' );
+		// @check 保存後も業種プリセットが「宿泊」になっている
 		await expect( page.locator( '#vkbm-industry-preset' ) ).toHaveValue(
 			'lodging'
 		);
 		expect( getStoredIndustryPreset() ).toBe( 'lodging' );
 
 		// サービスメニューの編集画面に「予約の単位」（時間枠／泊）が出て、泊のプランは「泊」が選ばれている。
+		// @step プラン「E2E577 Night Plan」の編集画面を開く
 		await page.goto(
 			`/wp-admin/post.php?post=${ nightMenuId }&action=edit`
 		);
+		// @check 「予約の単位」の欄が出て、「泊」が選ばれている
 		const unitField = page.locator( '#vkbm-booking-unit-field' );
 		await expect( unitField ).toBeAttached( { timeout: 30000 } );
 		await expect(
@@ -372,9 +381,11 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 	test( '予約画面（泊のプラン）: 日付と客室を選んで確認画面まで進み、チェックイン／チェックアウト・泊数・客室が出る', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で、プラン「E2E577 Night Plan」の予約画面を開く
 		await openMenu( page, nightMenuId );
 
 		// 泊のプランでは宿泊用の画面が出て、時間枠の選択（スロット）は出ない。
+		// @check 宿泊用の画面が出て、時間枠の一覧は出ない
 		await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
 			timeout: 15000,
 		} );
@@ -383,26 +394,32 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		);
 
 		// チェックイン日・チェックアウト日を選ぶ。
+		// @step カレンダーで2日後をチェックイン日、4日後をチェックアウト日として選ぶ
 		const checkIn = tokyoDateAfter( CHECK_IN_OFFSET );
 		const checkOut = tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS );
 		await clickStayDay( page, checkIn );
 		await clickStayDay( page, checkOut );
 
 		// 空いている客室（2室）が出て、1室を選ぶ。
+		// @check 空いている客室が2室出て、「2泊」と表示される
 		const rooms = page.locator( '.vkbm-lodging__room' );
 		await expect( rooms ).toHaveCount( 2, { timeout: 15000 } );
 		await expect( rooms.first() ).toContainText( `${ NIGHTS }泊` );
+		// @step 客室「E2E577 Room A」を選ぶ
 		await rooms.filter( { hasText: `${ PREFIX } Room A` } ).click();
 
 		// 選択中のサマリに泊数が出る。
+		// @check 選択中の内容に「2泊」と出る
 		await expect( page.locator( '.vkbm-lodging__summary' ) ).toContainText(
 			`${ NIGHTS }泊`
 		);
 
 		// 「予約に進む」で確認画面へ。
+		// @step 「予約に進む」を押す
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await waitForConfirm( page );
 
+		// @check 確認画面に「チェックイン」「チェックアウト」「2泊」と客室「E2E577 Room A」が出る
 		const confirm = page.locator( '.vkbm-confirm__summary' ).first();
 		await expect( confirm ).toContainText( 'チェックイン' );
 		await expect( confirm ).toContainText( 'チェックアウト' );
@@ -412,6 +429,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		// （例: 「10月 5, 2026(月) 3:00 pm」「2026年10月5日(月) 3:00 PM」。24時間表記のサイトでは 15:00）ため、
 		// 月日と時刻は表記ゆれを許す正規表現で確かめる。既定の時刻はチェックイン 15:00・チェックアウト 10:00。
 		// 「メニュー」「客室」と同じ行の形（.vkbm-confirm__summary-item）で、サマリの先頭 2 行に並ぶ。
+		// @check 確認画面の先頭2行が「チェックイン」「チェックアウト」で、それぞれ選んだ日付と時刻（チェックイン 15:00、チェックアウト 10:00）が出る
 		const rows = confirm.locator( '.vkbm-confirm__summary-item' );
 		const checkInRow = rows.nth( 0 );
 		const checkOutRow = rows.nth( 1 );
@@ -444,6 +462,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 	test( '予約画面（泊のプラン）: 選択中の客室は通常時・ホバー中・押下中のどれでも淡い選択色の背景になる（issue #844）', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で、プラン「E2E577 Night Plan」の予約画面を開き、2日後をチェックイン日、4日後をチェックアウト日として選ぶ
 		await openMenu( page, nightMenuId );
 		await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
 			timeout: 15000,
@@ -455,11 +474,13 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 			tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS )
 		);
 
+		// @step 出てきた2室のうち、客室「E2E577 Room A」を選ぶ
 		const rooms = page.locator( '.vkbm-lodging__room' );
 		await expect( rooms ).toHaveCount( 2, { timeout: 15000 } );
 		const selected = rooms.filter( { hasText: `${ PREFIX } Room A` } );
 		const other = rooms.filter( { hasText: `${ PREFIX } Room B` } );
 		await selected.click();
+		// @check 選んだ客室が選択中の状態になる
 		await expect( selected ).toHaveAttribute( 'aria-pressed', 'true' );
 
 		const background = ( locator: typeof selected ) =>
@@ -470,13 +491,17 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 			color === 'rgb(255, 255, 255)' || color === 'rgba(0, 0, 0, 0)';
 
 		// 通常時: 選択中は白ではなく、選択していない客室は白のまま。
+		// @step マウスを客室の外へ動かす
 		await page.mouse.move( 0, 0 );
+		// @check 選択中の客室は淡い選択色の背景になり、選んでいない客室は白い背景のまま
 		expect( isWhiteOrClear( await background( selected ) ) ).toBe( false );
 		expect( await background( other ) ).toBe( 'rgb(255, 255, 255)' );
 		const normal = await background( selected );
 
 		// ホバー中・押下中も同じ選択色のまま（テーマのホバー色で透明や白に変わらない）。
+		// @step 選択中の客室にマウスを乗せ、そのままマウスのボタンを押し込む
 		await selected.hover();
+		// @check マウスを乗せている間も押し込んでいる間も、背景は同じ淡い選択色のまま（透明や白に変わらない）
 		expect( await background( selected ) ).toBe( normal );
 		await page.mouse.down();
 		expect( await background( selected ) ).toBe( normal );
@@ -486,6 +511,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 	test( '予約画面（時間枠のプラン）: 宿泊プリセットのサイトでも従来どおり日付 → 時間枠 → 確認画面の流れ', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で、プラン「E2E577 Slot Plan」の予約画面を開く
 		const calendarMetaResponse = page.waitForResponse(
 			( res ) => /calendar-meta/.test( res.url() ),
 			{ timeout: 15000 }
@@ -494,8 +520,10 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		await page.waitForLoadState( 'networkidle' );
 
 		// 宿泊用の画面は出ない。
+		// @check 宿泊用の画面は出ない
 		await expect( page.locator( '.vkbm-lodging' ) ).toHaveCount( 0 );
 
+		// @step カレンダーで空きのある日を選び、最初の時間枠を選んで「予約に進む」を押す
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
 		const slots = page.locator( '.vkbm-slot-list__item' );
 		await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
@@ -503,6 +531,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await waitForConfirm( page );
+		// @check 確認画面に「チェックアウト」「2泊」は出ず、「チェックイン」の行も無い
 		const confirm = page.locator( '.vkbm-confirm__summary' ).first();
 		// 泊の予約の表示（チェックイン／チェックアウト・泊数）は出ない。
 		await expect( confirm ).not.toContainText( 'チェックアウト' );
@@ -519,6 +548,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		page,
 	} ) => {
 		// 切り替える日（今日から3日後）の年・月・日。
+		// @step BM 設定で基本営業時間を 09:00〜18:00 にしておく
 		const target = tokyoDateAfter( 3 );
 
 		// 基本営業時間（09:00-18:00）を登録する（BM 設定のその他の値は変えない。afterAll で元へ戻る）。
@@ -530,6 +560,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		` );
 
 		// 専用の客室とプランを作り、対象の月のシフトを「全日 販売しない（時間帯なし）」で用意する。
+		// @step 管理画面で客室「E2E577 Room C」と、Room C を担当にした時間枠のプラン「E2E577 Slot Plan C」を作り、3日後を含む月のシフトを全日「販売しない」で登録しておく
 		roomCId = seedRoom( `${ PREFIX } Room C` );
 		slotMenuCId = seedMenu( `${ PREFIX } Slot Plan C`, false, [ roomCId ] );
 		switchedShiftId = insertAndGetId(
@@ -555,16 +586,19 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		);
 
 		// 切り替え前: 全日が販売しないので、予約画面に予約枠のある日は無い。
+		// @step ログアウトした状態で、プラン「E2E577 Slot Plan C」の予約画面を開く
 		await openMenu( page, slotMenuCId );
 		await page.waitForSelector( '.vkbm-calendar', {
 			state: 'visible',
 			timeout: 15000,
 		} );
+		// @check カレンダーに空きのある日が1日も無い
 		await expect(
 			page.locator( '.vkbm-calendar__day--available' )
 		).toHaveCount( 0 );
 
 		// 管理画面の販売日の画面で、対象の日だけ「販売する」に切り替えて保存する。
+		// @step 管理者でログインし、Room C のシフト（販売日）の編集画面を開いて、3日後の日の「販売する」にチェックを入れて更新する
 		await loginAsAdmin( page );
 		await page.goto(
 			`/wp-admin/post.php?post=${ switchedShiftId }&action=edit`
@@ -576,9 +610,11 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		await saleCheckbox.check();
 		await page.locator( '#publish' ).click();
 		await page.waitForLoadState( 'networkidle' );
+		// @check 3日後の日の「販売する」にチェックが入ったまま保存される
 		await expect( saleCheckbox ).toBeChecked();
 
 		// 保存された日は「販売する」で、基本営業時間の時間帯が入っている。
+		// @check 保存された3日後の日は「販売する」で、時間帯に基本営業時間の 09:00〜18:00 が入っている
 		const savedDay = wpEvalPhp( `
 			$days = get_post_meta( ${ switchedShiftId }, '_vkbm_shift_days', true );
 			echo wp_json_encode( $days[ ${ target.day } ] ?? null );
@@ -589,12 +625,14 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		} );
 
 		// 予約画面: 切り替えた日に予約枠が出る（ほかの日は販売しないままなので、空きのある日はこの日だけ）。
+		// @step プラン「E2E577 Slot Plan C」の予約画面を開き、空きのある日を選ぶ
 		const calendarMetaResponse = page.waitForResponse(
 			( res ) => /calendar-meta/.test( res.url() ),
 			{ timeout: 15000 }
 		);
 		await openMenu( page, slotMenuCId );
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
+		// @check 切り替えた日に時間枠が1つ以上出る
 		const slots = page.locator( '.vkbm-slot-list__item' );
 		await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
 		expect( await slots.count() ).toBeGreaterThan( 0 );
@@ -604,6 +642,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		page,
 	} ) => {
 		// 業種プリセットを「カスタム」へ戻す（BM 設定のその他の値は変えない）。
+		// @step BM 設定の業種プリセットを「カスタム」に戻しておく
 		wpEvalPhp( `
 			$settings = get_option( '${ OPTION_NAME }', array() );
 			$settings['industry_preset'] = 'custom';
@@ -612,10 +651,12 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		` );
 
 		// 管理画面: サービスメニュー編集に「予約の単位」は出ない。
+		// @step 管理者でログインし、プラン「E2E577 Slot Plan」の編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto(
 			`/wp-admin/post.php?post=${ slotMenuId }&action=edit`
 		);
+		// @check 所要時間の欄はあり、「予約の単位」の欄は出ない
 		await expect( page.locator( '#vkbm-duration-field' ) ).toBeAttached( {
 			timeout: 30000,
 		} );
@@ -624,6 +665,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		);
 
 		// 予約画面: 全体設定の既存プラン（global-setup の Service Menu 1）が、確認画面まで進む。
+		// @step サービス「Service Menu 1」の予約画面を開き、空きのある日と最初の時間枠を選んで「予約に進む」を押す
 		const defaultMenuId = getServiceMenuId();
 		const calendarMetaResponse = page.waitForResponse(
 			( res ) => /calendar-meta/.test( res.url() ),
@@ -631,6 +673,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		);
 		await page.goto( `/booking/?menu_id=${ defaultMenuId }` );
 		await page.waitForLoadState( 'networkidle' );
+		// @check 宿泊用の画面は出ずに確認画面まで進み、確認画面に「チェックアウト」は出ない
 		await expect( page.locator( '.vkbm-lodging' ) ).toHaveCount( 0 );
 		await selectAvailableCalendarDay( page, calendarMetaResponse );
 		const slots = page.locator( '.vkbm-slot-list__item' );

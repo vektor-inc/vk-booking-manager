@@ -129,6 +129,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 	} );
 
 	test.beforeEach( async () => {
+		// @step 管理画面で詳細ページを使うメニュー「Detail In Block E2E Menu」（本文あり）を作り、共通設定でサービスメニュー詳細の表示方法を「予約ブロック内で表示」、予約ページURLを /booking/ にしておく
 		( { menuId, permalink, bookingUrl } = createDetailMenu( true ) );
 		// 設定を「予約ブロック内で表示」＋自サイトの予約ページURLにする。
 		await configureProviderSettings( {
@@ -141,8 +142,10 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		page,
 		request,
 	} ) => {
+		// @step 予約ページを開く
 		await page.goto( '/booking/' );
 
+		// @check 「Detail In Block E2E Menu」のカードの「詳細を見る」のリンク先が、予約ページの詳細表示用URL（/booking/?menu_id=…&vkbm_view=detail）になっている
 		// 一覧のカードの「詳細を見る」（primary ボタン）が、予約ページ + menu_id + vkbm_view=detail を指す。
 		const detailLink = page.locator(
 			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] a.vkbm-button__primary`
@@ -155,8 +158,10 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		expect( href.searchParams.get( 'menu_id' ) ).toBe( String( menuId ) );
 		expect( href.searchParams.get( 'vkbm_view' ) ).toBe( 'detail' );
 
+		// @step メニューの個別ページのURLを直接開く
 		// 個別ページへ直接アクセスすると、転送先を変えずに 302 で詳細表示用URLへ移る。
 		const response = await request.get( permalink, { maxRedirects: 0 } );
+		// @check 予約ページの詳細表示用URLへ転送（302）される
 		expect( response.status() ).toBe( 302 );
 		const location = new URL( response.headers().location );
 		expect( location.pathname ).toBe( '/booking/' );
@@ -169,8 +174,10 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 	test( '詳細表示: メニュー名・本文・カードが並び、ヘッダーに「一覧に戻る」がある', async ( {
 		page,
 	} ) => {
+		// @step 予約ページの詳細表示用URLを開く
 		await page.goto( `/booking/?menu_id=${ menuId }&vkbm_view=detail` );
 
+		// @check 見出しにメニュー名が出てフォーカスがあたり、タブのタイトルが「メニュー名 | 元のタイトル」になる
 		const detail = page.locator( '.vkbm-reservation-detail' );
 		const heading = detail.locator( 'h1.vkbm-reservation-detail__title' );
 		await expect( heading ).toHaveText( MENU_TITLE );
@@ -181,6 +188,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 			new RegExp( `^${ MENU_TITLE } \\| ` )
 		);
 
+		// @check 本文、メニューのカードの順に並んでいる
 		// 本文（サーバー側で the_content を通したもの）とカードが、この順で表示される。
 		await expect(
 			detail.locator( '.vkbm-reservation-detail__content' )
@@ -195,6 +203,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		const cardBox = await card.boundingBox();
 		expect( contentBox!.y ).toBeLessThan( cardBox!.y );
 
+		// @check カードに「詳細を見る」やタイトルのリンクは無く、「予約に進む」ボタンはある
 		// カード内には自分自身へのリンク（詳細を見る・タイトルのリンク）が無い。予約に進むボタンはある。
 		await expect( card.locator( 'a.vkbm-button__primary' ) ).toHaveCount(
 			0
@@ -206,6 +215,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 			card.locator( 'a.vkbm-menu-loop__button--reserve' )
 		).toHaveCount( 1 );
 
+		// @check パンくずは無く、ヘッダーのナビの先頭に「一覧に戻る」（予約ページへのリンク）がある
 		// パンくずは無く、ヘッダーのナビ先頭に「一覧に戻る」（予約ページURL・パラメーターなし）がある。
 		await expect(
 			page.locator( 'nav[aria-label*="readcrumb" i], .vkbm-breadcrumb' )
@@ -223,7 +233,9 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		expect( backUrl.search ).toBe( '' );
 
 		// 一覧に戻ると、サービスメニュー一覧が表示される。
+		// @step 「一覧に戻る」を押す
 		await backLink.click();
+		// @check 予約ページのサービスメニュー一覧が表示される
 		await expect( page ).toHaveURL( /\/booking\/$/ );
 		await expect(
 			page.locator( '.vkbm-menu-loop__item' ).first()
@@ -233,6 +245,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 	test( 'カードの「予約に進む」で再読み込みなしに予約画面へ切り替わり、戻るで詳細へ戻れる', async ( {
 		page,
 	} ) => {
+		// @step 予約ページの詳細表示用URLを開く
 		await page.goto( `/booking/?menu_id=${ menuId }&vkbm_view=detail` );
 		const heading = page.locator( 'h1.vkbm-reservation-detail__title' );
 		await expect( heading ).toBeVisible();
@@ -242,12 +255,14 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 			( window as any ).__vkbmDetailMarker = 'kept';
 		} );
 
+		// @step カードの「予約に進む」を押す
 		await page
 			.locator(
 				'.vkbm-reservation-detail__card a.vkbm-menu-loop__button--reserve'
 			)
 			.click();
 
+		// @check ページの再読み込み無しに、そのメニューを選んだ予約画面（カレンダー）へ切り替わり、詳細表示は消える
 		// そのメニューを選択済みの予約画面（カレンダー）へ切り替わる。
 		await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 			timeout: 15000,
@@ -260,6 +275,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		expect(
 			await page.evaluate( () => ( window as any ).__vkbmDetailMarker )
 		).toBe( 'kept' );
+		// @check フォーカスが予約画面の内容へ移り、タブのタイトルが元に戻る
 		// フォーカスは body に落ちず、予約画面の内容領域へ移る。
 		await expect(
 			page.locator( '.vkbm-reservation-content' )
@@ -269,8 +285,10 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 			new RegExp( `^${ MENU_TITLE } \\| ` )
 		);
 
+		// @step ブラウザの「戻る」を押す
 		// ブラウザの戻るで詳細表示へ戻る。
 		await page.goBack();
+		// @check 詳細表示へ戻り、メニュー名の見出しが表示される
 		await expect( heading ).toBeVisible();
 		await expect( heading ).toHaveText( MENU_TITLE );
 		await expect( page ).toHaveURL( /vkbm_view=detail/ );
@@ -279,9 +297,11 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 	test( '詳細ページを使用しないメニューの詳細表示用URLは、通常の予約画面と案内を一度だけ出す', async ( {
 		page,
 	} ) => {
+		// @step 管理画面で詳細ページを使わないメニューを作り、その詳細表示用URLを開く
 		const off = createDetailMenu( false );
 		await page.goto( `/booking/?menu_id=${ off.menuId }&vkbm_view=detail` );
 
+		// @check 詳細表示は出ず、通常のサービスメニュー一覧と案内が1つだけ表示される
 		await expect( page.locator( '.vkbm-reservation-detail' ) ).toHaveCount(
 			0
 		);
@@ -297,8 +317,10 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		// 空の領域が先に描画され、案内文は後から中身として入る（読み上げられるように）。
 		await expect( notice.locator( 'p.vkbm-alert__warning' ) ).toBeVisible();
 
+		// @step 存在しないメニューの詳細表示用URLを開く
 		// 存在しないIDでも同様に案内する。
 		await page.goto( '/booking/?menu_id=99999999&vkbm_view=detail' );
+		// @check 同じく案内が1つだけ表示される
 		await expect(
 			page.locator( '.vkbm-reservation-content__detail-notice' )
 		).toHaveCount( 1 );
@@ -308,6 +330,7 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		page,
 		request,
 	} ) => {
+		// @step 共通設定でサービスメニュー詳細の表示方法を「WordPressの個別投稿として表示」に戻して、予約ページを開く
 		await configureProviderSettings( {
 			service_menu_detail_display_mode: 'template',
 			reservation_page_url: bookingUrl,
@@ -317,9 +340,11 @@ test.describe( 'issue #635: サービスメニュー詳細を予約ブロック�
 		const detailLink = page.locator(
 			`.vkbm-menu-loop__item[data-menu-id="${ menuId }"] a.vkbm-button__primary`
 		);
+		// @check 「詳細を見る」のリンク先がメニューの個別ページになっている
 		await expect( detailLink ).toBeVisible();
 		expect( await detailLink.getAttribute( 'href' ) ).toBe( permalink );
 
+		// @check メニューの個別ページを開くと、転送されずにそのまま表示される
 		// 個別ページは転送されずにそのまま表示される。
 		const response = await request.get( permalink, { maxRedirects: 0 } );
 		expect( response.status() ).toBe( 200 );

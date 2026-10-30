@@ -47,6 +47,7 @@
 				dialogKit.paragraph( i18n.bodyAttachment || '' ),
 				dialogKit.paragraph( i18n.bodyMyPage || '' ),
 				dialogKit.paragraph( i18n.bodyKept || '' ),
+				dialogKit.paragraph( i18n.bodyFlags || '' ),
 				dialogKit.paragraph( i18n.bodyNotEnded || '' ),
 				dialogKit.iconParagraph(
 					i18n.bodyIrrevers || '',

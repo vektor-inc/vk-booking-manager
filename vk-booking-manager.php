@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.6.0
+ * Version:     3.7.0
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
@@ -57,11 +57,14 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 require_once __DIR__ . '/src/common/trait-rate-limit.php';
 require_once __DIR__ . '/src/post-types/class-booking-post-type.php';
 require_once __DIR__ . '/src/bookings/class-booking-overlap.php';
+require_once __DIR__ . '/src/bookings/class-booking-source.php';
 require_once __DIR__ . '/src/bookings/class-reserver-search.php';
 require_once __DIR__ . '/src/bookings/class-booking-anonymizer.php';
 require_once __DIR__ . '/src/bookings/class-booking-privacy-eraser.php';
 require_once __DIR__ . '/src/bookings/class-booking-anonymize-bulk-action.php';
 require_once __DIR__ . '/src/bookings/class-booking-admin.php';
+require_once __DIR__ . '/src/bookings/class-booking-cancellation-policy.php';
+require_once __DIR__ . '/src/bookings/class-booking-customer-cancellation.php';
 require_once __DIR__ . '/src/bookings/class-booking-draft-controller.php';
 require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
 require_once __DIR__ . '/src/bookings/class-user-favorites-controller.php';
@@ -101,6 +104,8 @@ require_once __DIR__ . '/src/rest/class-auth-form-controller.php';
 require_once __DIR__ . '/src/rest/class-provider-settings-controller.php';
 require_once __DIR__ . '/src/rest/class-current-user-controller.php';
 require_once __DIR__ . '/src/bookings/class-booking-confirmation-controller.php';
+require_once __DIR__ . '/src/bookings/class-guest-booking-controller.php';
+require_once __DIR__ . '/src/bookings/class-guest-cancel-controller.php';
 require_once __DIR__ . '/src/staff/class-staff-editor.php';
 require_once __DIR__ . '/src/post-types/class-resource-post-type.php';
 require_once __DIR__ . '/src/resources/class-resource-tag-taxonomy.php';
@@ -135,6 +140,7 @@ require_once __DIR__ . '/src/customers/class-customer-flag-settings-page.php';
 require_once __DIR__ . '/src/customers/class-customer-flag-meta-box.php';
 require_once __DIR__ . '/src/customers/class-customer-flag-user-profile.php';
 require_once __DIR__ . '/src/customers/class-customer-flag-booking-guard.php';
+require_once __DIR__ . '/src/customers/class-customer-flag-privacy-eraser.php';
 
 use VKBookingManager\Admin\Email_Log_Page;
 use VKBookingManager\Admin\Provider_Settings_Page;
@@ -160,6 +166,9 @@ use VKBookingManager\Bookings\Booking_Anonymizer;
 use VKBookingManager\Bookings\Booking_Privacy_Eraser;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
+use VKBookingManager\Bookings\Booking_Customer_Cancellation;
+use VKBookingManager\Bookings\Guest_Booking_Controller;
+use VKBookingManager\Bookings\Guest_Cancel_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
 use VKBookingManager\Bookings\User_Favorites_Controller;
 use VKBookingManager\Blocks\Block_Asset_Version;
@@ -176,6 +185,7 @@ use VKBookingManager\Capabilities\Roles_Manager;
 use VKBookingManager\Customers\Customer_Flag_Service;
 use VKBookingManager\Customers\Customer_Flag_Settings_Page;
 use VKBookingManager\Customers\Customer_Flag_Meta_Box;
+use VKBookingManager\Customers\Customer_Flag_Privacy_Eraser;
 use VKBookingManager\Customers\Customer_Flag_User_Profile;
 use VKBookingManager\Customers\Customer_Flag_Booking_Guard;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
@@ -372,6 +382,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// 予約一覧の一括操作「個人情報を匿名化」を登録する（無料版・Pro 版とも。issue #870）。
 		// 匿名化の処理本体は共有のディスパッチャーを渡し、Google カレンダーの予定も匿名化した値で上書きさせる。
 		Booking_Anonymizer::register();
+		\VKBookingManager\Bookings\Booking_Source::register();
 		( new Booking_Anonymize_Bulk_Action( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();
 		( new Booking_Privacy_Eraser( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();
 
@@ -415,6 +426,14 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$customer_flag_meta_box->register();
 		$customer_flag_user_profile->register();
 		$customer_flag_booking_guard->register();
+		// ゲストに付けた顧客フラグは、WordPress 本体の個人データ消去で消す（予約の消去より先に動かす）。
+		( new Customer_Flag_Privacy_Eraser( $customer_flag_service ) )->register();
+
+		// ゲスト予約（会員登録なしの予約）の申し込み受付と確認リンクの処理を登録する。受付方法が「会員のみ」（初期値）の間は申し込みを受け付けない。
+		( new Guest_Booking_Controller( $booking_confirmation_controller, $booking_notification_service, $settings_repository ) )->register();
+
+		// ゲスト予約のキャンセル用リンク（メールのリンクを開く→確認画面→ボタンでキャンセル）を登録する。キャンセル後の処理はマイページと共通。
+		( new Guest_Cancel_Controller( $settings_repository, new Booking_Customer_Cancellation( $settings_repository, $booking_notification_service, $booking_event_dispatcher ) ) )->register();
 
 		// 無料版でプロ版への誘導リンク（プラグイン一覧）を登録する。Pro 版では no-op。
 		( new Pro_Upsell() )->register();

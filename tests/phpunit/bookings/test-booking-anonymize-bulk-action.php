@@ -413,7 +413,7 @@ class Booking_Anonymize_Bulk_Action_Test extends WP_UnitTestCase {
 		remove_filter( 'vkbm_booking_anonymize_meta_fields', $add_address );
 
 		$this->assertStringContainsString( '訪問先の住所', $strings['bodyFields'], 'フィルターで足した項目も本文に入る' );
-		foreach ( array( 'title', 'bodyFields', 'bodyAttachment', 'bodyMyPage', 'bodyKept', 'bodyNotEnded', 'bodyIrrevers', 'cancel', 'confirmButton' ) as $key ) {
+		foreach ( array( 'title', 'bodyFields', 'bodyAttachment', 'bodyMyPage', 'bodyKept', 'bodyFlags', 'bodyNotEnded', 'bodyIrrevers', 'cancel', 'confirmButton' ) as $key ) {
 			$this->assertNotSame( '', $strings[ $key ], $key . ' の文言がある' );
 		}
 	}

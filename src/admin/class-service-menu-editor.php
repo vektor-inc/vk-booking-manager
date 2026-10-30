@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -344,6 +345,8 @@ class Service_Menu_Editor {
 					'minCapacityDefaultDescription2'    => __( 'Enter 0 to disable the minimum and accept any number of bookings.', 'vk-booking-manager' ),
 					'minCapacityDefaultDescription3'    => __( 'Values above the time slot capacity are reduced to that capacity.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription1' => $resource_selection_strings['min_capacity_nomination_1'],
+					// #968: 「貸し切り予約」ONで指名を使わないメニューの説明文の1行目（PHP 初期描画と同じ文言）。
+					'minCapacityExclusiveDescription1'  => __( 'Because private booking is turned on, a single booking fills this time slot.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription2' => __( 'If the number of guests is below this value, the reservation cannot be accepted.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription3' => __( 'Enter 0 to remove the minimum and accept bookings from 1 guest.', 'vk-booking-manager' ),
 					'minCapacityNominationDescription4' => __( 'Values above the time slot capacity (the maximum guests per group) are reduced to that capacity.', 'vk-booking-manager' ),
@@ -803,7 +806,13 @@ class Service_Menu_Editor {
 			// 同じ条件（1室1泊あたりは対象外・サイト全体とメニュー単位の両方で指名を使うメニューが対象）で切り替える。
 			// render_basic_meta_box() の $hide_nomination_row（泊単位で客室の指定行を隠す判定）とは別にする。
 			$is_min_guests_applied = ! $is_per_room_night && Staff_Editor::is_nomination_enabled_for_menu( $post->ID );
-			$is_night_plan         = $supports_lodging && $is_night_unit;
+			// #968: 最少人数欄（ラベル・説明文）だけは、指名を使わなくても「貸し切り予約」が有効なら
+			// 受付制限（最低申し込み人数）の表記にする。受付処理（get_menu_nomination_min_guests()）と同じ判定を使う。
+			// 予約枠の定員欄の文言（$is_min_guests_applied）は「1組の最大人数」の意味が指名ありのときだけ
+			// 成り立つため、この変数とは分ける。
+			$is_exclusive_min_guests_applied = ! $is_per_room_night && ( new Availability_Service() )->is_menu_exclusive_when_booked( $post );
+			$is_min_guests_limit_applied     = $is_min_guests_applied || $is_exclusive_min_guests_applied;
+			$is_night_plan                   = $supports_lodging && $is_night_unit;
 			// 予約枠の定員（同一枠で複数人を受け入れる）機能（親スイッチ）が有効かどうかを判定する。
 			$is_slot_capacity_enabled = Staff_Editor::is_slot_capacity_enabled();
 
@@ -915,7 +924,7 @@ class Service_Menu_Editor {
 							// #393: 指名を使うメニューでは「1件の予約＝1組の貸切」を占有できてしまう人数の
 							// 下限を意味するため、ラベルを「最低申し込み人数」に切り替える。指名を使わない
 							// メニューは従来どおり「最少催行人数」（催行状態表示のしきい値）のまま変更しない。
-							if ( $is_min_guests_applied ) {
+							if ( $is_min_guests_limit_applied ) {
 								esc_html_e( 'Minimum guests to accept a booking', 'vk-booking-manager' );
 							} else {
 								esc_html_e( 'Minimum participants to confirm', 'vk-booking-manager' );
@@ -926,9 +935,11 @@ class Service_Menu_Editor {
 					<td>
 						<input type="number" id="vkbm_service_menu_min_capacity" name="vkbm_service_menu[min_capacity]" class="small-text" min="0" step="1" value="<?php echo esc_attr( $min_capacity ); ?>" aria-describedby="vkbm-min-capacity-description" />
 						<p class="description" id="vkbm-min-capacity-description">
-							<?php if ( $is_min_guests_applied ) : ?>
+							<?php if ( $is_min_guests_limit_applied ) : ?>
 								<?php if ( $is_night_plan ) : ?>
 									<?php esc_html_e( 'Each booking is for one group using one room.', 'vk-booking-manager' ); ?><br>
+								<?php elseif ( $is_exclusive_min_guests_applied ) : ?>
+									<?php esc_html_e( 'Because private booking is turned on, a single booking fills this time slot.', 'vk-booking-manager' ); ?><br>
 								<?php else : ?>
 									<?php echo esc_html( $resource_selection_strings['min_capacity_nomination_1'] ); ?><br>
 								<?php endif; ?>

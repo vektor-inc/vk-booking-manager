@@ -195,6 +195,7 @@ async function expectAllRowsVisible( page: Page ) {
 test.describe( '複数人予約系設定の表示制御（管理画面） / issue #320', () => {
 	test.beforeAll( () => {
 		// 指名OFF・予約枠の定員ON が前提。グローバルセットアップは指名ON のため切り替える。
+		// @step BM 設定で指名を使わない設定にして予約枠の定員を有効にし、「複数人一括予約」オン・「予約枠の定員」3・最少催行人数 2・貸し切り予約あり・料金区分「一般 5,000円」「子供 3,000円」のサービスメニューを用意しておく
 		originalStaffEnabled = getStaffEnabled();
 		setStaffEnabled( false );
 		// 予約枠の定員機能（親スイッチ）を明示的に ON にする（#326 で新キー slot_capacity_enabled に改名）。
@@ -220,10 +221,12 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 	test( '複数人予約ON＋最大受付数2以上の初期表示で4項目が表示される（After基準）', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 前提: 複数人予約 ON・最大受付数3 で保存済み → 初期表示で4項目が見える。
+		// @check 「複数人一括予約」にチェックが入り「予約枠の定員」が 3 のまま、4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）がすべて表示されている
 		await expect( page.locator( ALLOW_MULTI ) ).toBeChecked();
 		await expect( page.locator( MAX_CAPACITY ) ).toHaveValue( '3' );
 		await expectAllRowsVisible( page );
@@ -239,14 +242,17 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 	test( '複数人予約OFF → 4項目すべて非表示（最少催行人数含む / Before基準）', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 複数人予約 OFF にする。
+		// @step 「複数人一括予約」のチェックを外す
 		await page.locator( ALLOW_MULTI ).uncheck();
 		await page.waitForTimeout( 200 );
 
 		// 4項目すべて非表示。特に最少催行人数（修正前は OFF でも表示されていた）。
+		// @check 4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）がすべて隠れる（特に最少催行人数も隠れる）
 		await expectAllRowsHidden( page );
 		// 主眼の最少催行人数を個別にも明示確認。
 		await expect( page.locator( MIN_CAPACITY_ROW ) ).toBeHidden();
@@ -260,23 +266,28 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 	} );
 
 	test( '複数人予約ON → 最大受付数欄が表示される', async ( { page } ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 一旦 OFF にして最大受付数欄の有無を見るが、最大受付数欄自体は常時表示の仕様。
 		// ここでは「ON にすると最大受付数欄が見える」ことを確認する。
+		// @step 「複数人一括予約」のチェックを一度外してから、もう一度入れる
 		await page.locator( ALLOW_MULTI ).uncheck();
 		await page.waitForTimeout( 100 );
 		await page.locator( ALLOW_MULTI ).check();
 		await page.waitForTimeout( 100 );
+		// @check 「予約枠の定員」の入力欄が表示されている
 		await expect( page.locator( MAX_CAPACITY ) ).toBeVisible();
 	} );
 
 	test( '最大受付数=1 のままなら4項目は非表示のまま', async ( { page } ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 複数人予約 ON のまま、最大受付数を 1 にする。
+		// @step 「複数人一括予約」にチェックを入れたまま、「予約枠の定員」を 1 にする
 		await page.locator( ALLOW_MULTI ).check();
 		await page.locator( MAX_CAPACITY ).fill( '1' );
 		// input/change の双方を発火させる。
@@ -285,36 +296,44 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 		await page.waitForTimeout( 200 );
 
 		// 複数人予約 ON でも最大受付数=1 なら4項目は非表示。
+		// @check 4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）がすべて隠れる
 		await expectAllRowsHidden( page );
 	} );
 
 	test( '最大受付数を2以上に変更 → 即座に4項目が表示（保存なし）', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 複数人予約 ON・最大受付数を一旦 1 にして非表示にする。
+		// @step 「複数人一括予約」にチェックを入れたまま、「予約枠の定員」を 1 にする
 		await page.locator( ALLOW_MULTI ).check();
 		await page.locator( MAX_CAPACITY ).fill( '1' );
 		await page.locator( MAX_CAPACITY ).dispatchEvent( 'input' );
 		await page.waitForTimeout( 200 );
+		// @check 4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）がすべて隠れる
 		await expectAllRowsHidden( page );
 
 		// 2 に変更 → 保存・再読込なしで即座に表示される。
+		// @step 保存せずに「予約枠の定員」を 2 にする
 		await page.locator( MAX_CAPACITY ).fill( '2' );
 		await page.locator( MAX_CAPACITY ).dispatchEvent( 'input' );
 		await page.waitForTimeout( 200 );
+		// @check 保存や再読み込みをしなくても、4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）がすぐに表示される
 		await expectAllRowsVisible( page );
 	} );
 
 	test( '2→1 に戻すと即座に再非表示・入力値は DOM 上保持される', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 複数人予約 ON・最大受付数2で4項目を表示し、最少催行人数欄に値を入れる。
+		// @step 「複数人一括予約」にチェックを入れたまま「予約枠の定員」を 2 にし、最少催行人数に 2 を入れる
 		await page.locator( ALLOW_MULTI ).check();
 		await page.locator( MAX_CAPACITY ).fill( '2' );
 		await page.locator( MAX_CAPACITY ).dispatchEvent( 'input' );
@@ -325,9 +344,11 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 		await page.locator( '#vkbm_service_menu_min_capacity' ).fill( '2' );
 
 		// 2 → 1 に戻す → 即座に再非表示。
+		// @step 保存せずに「予約枠の定員」を 1 に戻す
 		await page.locator( MAX_CAPACITY ).fill( '1' );
 		await page.locator( MAX_CAPACITY ).dispatchEvent( 'input' );
 		await page.waitForTimeout( 200 );
+		// @check 4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）がすぐに隠れる
 		await expectAllRowsHidden( page );
 
 		// 入力値は DOM 上保持されている（hidden でも value は消えない）。
@@ -336,9 +357,11 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 		).toHaveValue( '2' );
 
 		// 再度 2 に戻すと表示され、値も残っている。
+		// @step もう一度「予約枠の定員」を 2 にする
 		await page.locator( MAX_CAPACITY ).fill( '2' );
 		await page.locator( MAX_CAPACITY ).dispatchEvent( 'input' );
 		await page.waitForTimeout( 200 );
+		// @check 4項目（最少催行人数・料金区分・貸し切り予約・予約者による貸切指定）が再び表示され、最少催行人数に入れた 2 が残っている
 		await expectAllRowsVisible( page );
 		await expect(
 			page.locator( '#vkbm_service_menu_min_capacity' )
@@ -352,10 +375,12 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 	test( '複数人一括予約 OFF→ON（未保存）で料金区分の値（区分名・料金）が残る', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page );
 
 		// 前提: 料金区分は seedMenu() で「一般 5000」「子供 3000」を保存済み。
+		// @check 料金区分に「一般 5000」「子供 3000」が入っている
 		await expectAllRowsVisible( page );
 		const labelInputs = page.locator( '.vkbm-price-tier-label' );
 		const priceInputs = page.locator( '.vkbm-price-tier-price' );
@@ -365,13 +390,17 @@ test.describe( '複数人予約系設定の表示制御（管理画面） / issu
 		await expect( priceInputs.nth( 1 ) ).toHaveValue( '3000' );
 
 		// 複数人一括予約チェックを OFF にする（未保存）→ 料金区分欄は非表示になる。
+		// @step 保存せずに「複数人一括予約」のチェックを外す
 		await page.locator( ALLOW_MULTI ).uncheck();
 		await page.waitForTimeout( 200 );
+		// @check 料金区分の欄が隠れる
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 
 		// 再度 ON にする → 料金区分欄が再表示され、入力値は消えずに残っている。
+		// @step もう一度「複数人一括予約」にチェックを入れる
 		await page.locator( ALLOW_MULTI ).check();
 		await page.waitForTimeout( 200 );
+		// @check 料金区分の欄が再び表示され、「一般 5000」「子供 3000」が消えずに残っている
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 		await expect( labelInputs.nth( 0 ) ).toHaveValue( '一般' );
 		await expect( priceInputs.nth( 0 ) ).toHaveValue( '5000' );
@@ -463,6 +492,7 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 
 	test.beforeAll( () => {
 		// 指名機能（サイト全体）ON・予約枠の定員機能ONが前提。
+		// @step BM 設定で指名を使う設定にして、予約枠の定員を有効にしておく
 		originalStaffEnabledForNomination = getStaffEnabled();
 		setStaffEnabled( true );
 		wpEvalPhp( `
@@ -482,11 +512,13 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 	test( '指名を使うメニューでも複数人一括予約ON＋定員2以上なら料金区分欄が表示される', async ( {
 		page,
 	} ) => {
+		// @step 「複数人一括予約」オン・「予約枠の定員」3・料金区分「一般 5,000円」「子供 3,000円」のサービスメニューを用意し、管理者でログインしてその編集画面を開く
 		nominationMenuId = seedNominationMenuForPriceTiers( true );
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, nominationMenuId );
 
 		// 「このメニューで指名を使う」チェックは既定でONのまま（メタ未設定）。
+		// @check 「このメニューで指名を使う」にチェックが入っていて、料金区分の欄が表示されている
 		await expect(
 			page.locator( '#vkbm_service_menu_use_nomination' )
 		).toBeChecked();
@@ -496,13 +528,17 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 
 		// 複数人一括予約チェックを OFF にすると非表示になる。
+		// @step 「複数人一括予約」のチェックを外す
 		await page.locator( ALLOW_MULTI ).uncheck();
 		await page.waitForTimeout( 200 );
+		// @check 料金区分の欄が隠れる
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 
 		// 再度 ON にすると表示に戻る。
+		// @step もう一度「複数人一括予約」にチェックを入れる
 		await page.locator( ALLOW_MULTI ).check();
 		await page.waitForTimeout( 200 );
+		// @check 料金区分の欄が再び表示される
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 	} );
 
@@ -511,10 +547,12 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 	test( '指名を使うメニューでも複数人一括予約が無効なら料金区分欄が表示されない', async ( {
 		page,
 	} ) => {
+		// @step 「複数人一括予約」オフ・「予約枠の定員」3・料金区分ありのサービスメニューを用意し、管理者でログインしてその編集画面を開く
 		nominationMenuId = seedNominationMenuForPriceTiers( false );
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, nominationMenuId );
 
+		// @check 「このメニューで指名を使う」にチェックが入り「複数人一括予約」はオフで、料金区分の欄は表示されていない
 		await expect(
 			page.locator( '#vkbm_service_menu_use_nomination' )
 		).toBeChecked();
@@ -533,13 +571,16 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 	test( '編集画面で複数人一括予約を OFF にして保存すると、料金区分メタが破棄され再読込後も非表示のまま', async ( {
 		page,
 	} ) => {
+		// @step 「複数人一括予約」オン・「予約枠の定員」3・料金区分ありのサービスメニューを用意し、管理者でログインしてその編集画面を開く
 		nominationMenuId = seedNominationMenuForPriceTiers( true );
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, nominationMenuId );
 
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
+		// @step 「複数人一括予約」のチェックを外す
 		await page.locator( ALLOW_MULTI ).uncheck();
 		await page.waitForTimeout( 200 );
+		// @check 料金区分の欄が隠れる
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 
 		// ブロックエディタの更新ボタン（クラスはロケールに関わらず安定）をクリックすると、
@@ -548,6 +589,7 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 		// meta-box-loader=1…）が順に飛ぶ。料金区分メタを実際に削除するのは (2) の save_post() 側の
 		// ため、(1) だけを待つと (2) が終わる前にメタを読みに行ってしまう競合があった。
 		// 固定の待機時間に頼らず、両方の応答完了を待つ。
+		// @step 「更新」ボタンを押して保存する
 		const saveResponse = page.waitForResponse(
 			( res ) =>
 				new RegExp(
@@ -566,6 +608,7 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 		await metaBoxSaveResponse;
 
 		// 保存済みの料金区分メタは、複数人一括予約OFFでの保存によって削除される。
+		// @check 保存した料金区分が削除されている
 		const savedTiers = wpEvalPhp( `
 			$v = get_post_meta( ${ nominationMenuId }, '_vkbm_price_tiers', true );
 			echo empty( $v ) ? 'empty' : 'not-empty';
@@ -573,7 +616,9 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 		expect( savedTiers ).toBe( 'empty' );
 
 		// 再読込しても複数人一括予約OFF・料金区分欄は非表示のまま。
+		// @step 編集画面を開き直す
 		await gotoMenuEditor( page, nominationMenuId );
+		// @check 「複数人一括予約」はオフのままで、料金区分の欄は隠れたまま
 		await expect( page.locator( ALLOW_MULTI ) ).not.toBeChecked();
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 	} );
@@ -584,10 +629,12 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 	test( '指名を使うメニューでも複数人一括予約ON＋定員2以上なら貸し切り予約・予約者による貸切指定の欄が表示される', async ( {
 		page,
 	} ) => {
+		// @step 「複数人一括予約」オン・「予約枠の定員」3 のサービスメニューを用意し、管理者でログインしてその編集画面を開く
 		nominationMenuId = seedNominationMenuForPriceTiers( true );
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, nominationMenuId );
 
+		// @check 「このメニューで指名を使う」にチェックが入っていて、「貸し切り予約」と「予約者による貸切指定」の欄が表示されている
 		await expect(
 			page.locator( '#vkbm_service_menu_use_nomination' )
 		).toBeChecked();
@@ -598,16 +645,20 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 		).toBeVisible();
 
 		// 複数人一括予約チェックを OFF にすると非表示になる。
+		// @step 「複数人一括予約」のチェックを外す
 		await page.locator( ALLOW_MULTI ).uncheck();
 		await page.waitForTimeout( 200 );
+		// @check 「貸し切り予約」と「予約者による貸切指定」の欄が隠れる
 		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeHidden();
 		await expect(
 			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
 		).toBeHidden();
 
 		// 再度 ON にすると表示に戻る。
+		// @step もう一度「複数人一括予約」にチェックを入れる
 		await page.locator( ALLOW_MULTI ).check();
 		await page.waitForTimeout( 200 );
+		// @check 「貸し切り予約」と「予約者による貸切指定」の欄が再び表示される
 		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
 		await expect(
 			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
@@ -619,10 +670,12 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 	test( '指名を使うメニューでも複数人一括予約が無効なら貸し切り予約・予約者による貸切指定の欄が表示されない', async ( {
 		page,
 	} ) => {
+		// @step 「複数人一括予約」オフ・「予約枠の定員」3 のサービスメニューを用意し、管理者でログインしてその編集画面を開く
 		nominationMenuId = seedNominationMenuForPriceTiers( false );
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, nominationMenuId );
 
+		// @check 「このメニューで指名を使う」にチェックが入り「複数人一括予約」はオフで、「貸し切り予約」と「予約者による貸切指定」の欄は表示されていない
 		await expect(
 			page.locator( '#vkbm_service_menu_use_nomination' )
 		).toBeChecked();
@@ -640,26 +693,32 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 	test( '指名を使うメニューで保存せず「このメニューで指名を使う」を切り替えても貸し切り予約・予約者による貸切指定の表示は変わらない', async ( {
 		page,
 	} ) => {
+		// @step 「複数人一括予約」オン・「予約枠の定員」3 のサービスメニューを用意し、管理者でログインしてその編集画面を開く
 		nominationMenuId = seedNominationMenuForPriceTiers( true );
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, nominationMenuId );
 
+		// @check 「貸し切り予約」と「予約者による貸切指定」の欄が表示されている
 		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
 		await expect(
 			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
 		).toBeVisible();
 
 		// 「このメニューで指名を使う」を保存せずに OFF へ切り替える。
+		// @step 保存せずに、「このメニューで指名を使う」のチェックを外す
 		await page.locator( '#vkbm_service_menu_use_nomination' ).uncheck();
 		await page.waitForTimeout( 200 );
+		// @check 「貸し切り予約」と「予約者による貸切指定」の欄は表示されたまま
 		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
 		await expect(
 			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )
 		).toBeVisible();
 
 		// 再度 ON へ戻しても表示は変わらない。
+		// @step 「このメニューで指名を使う」にもう一度チェックを入れる
 		await page.locator( '#vkbm_service_menu_use_nomination' ).check();
 		await page.waitForTimeout( 200 );
+		// @check 「貸し切り予約」と「予約者による貸切指定」の欄は表示されたまま
 		await expect( page.locator( EXCLUSIVE_WHEN_BOOKED_ROW ) ).toBeVisible();
 		await expect(
 			page.locator( EXCLUSIVE_USER_SELECTABLE_ROW )

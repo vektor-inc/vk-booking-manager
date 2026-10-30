@@ -262,6 +262,7 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 	let menuId = '';
 
 	test.beforeAll( () => {
+		// @step 管理画面でスタッフ指名を OFF、予約枠の定員機能を ON にし、基本料金 9,000円・「複数人一括予約」ON・「予約枠の定員」2 のメニュー「PR517 Position Greyout Menu」を作っておく
 		// 指名OFF・予約枠の定員機能ONが前提。指名の有無はこの表示条件に含まれないため、
 		// ノイズを減らすために他 spec と同じ前提（指名OFF）に揃える。
 		originalStaffEnabled = getStaffEnabled();
@@ -279,12 +280,15 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 	test( '1. 並び順: 基本料金の行が「料金区分」の行の直前にあり、キャッチコピー直後にはない。二重描画もない', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、メニューの編集画面を開いて、下部のメタボックス欄を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, menuId );
 
+		// @check 「料金区分」の行が表示されている
 		// 前提: 料金区分の行が表示される構成（複数人一括予約ON・定員2）。
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 
+		// @check 「基本料金（税込）」の行が「料金区分」の行の直前にあり、キャッチコピーの直後には無い
 		// 本丸1: 基本料金の行の直後の兄弟要素が「料金区分」の行である。
 		const nextIdAfterBasePrice = await page
 			.locator( BASE_PRICE_ROW )
@@ -301,6 +305,7 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 		} );
 		expect( nextIdAfterCatchCopy ).not.toBe( 'vkbm-base-price-field' );
 
+		// @check 基本料金の入力欄と行は、それぞれ1つだけ表示される
 		// #514再レビュー対応（二重描画検出漏れの修正）: 基本料金の入力欄・行はそれぞれ1つだけ。
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveCount( 1 );
 		await expect( page.locator( BASE_PRICE_ROW ) ).toHaveCount( 1 );
@@ -315,19 +320,25 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 	test( '2. グレー表示の切り替え: 区分名の追加・空欄・削除、複数人一括予約、予約枠の定員の変更で即時切替', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、メニューの編集画面を開いて、下部のメタボックス欄を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, menuId );
 
+		// @check 料金区分が無い状態では、基本料金は通常どおり入力できる
 		// 初期状態（料金区分なし）: 通常表示。
 		await expectNotOverridden( page );
 
+		// @step 料金区分の追加ボタンを押す（区分名は空のまま）
 		// 区分行を追加しただけ（区分名は空）ではグレー表示にならない。
 		await page.locator( PRICE_TIER_ADD ).click();
+		// @check 基本料金はグレー表示にならない
 		await expectNotOverridden( page );
 
+		// @step 区分名に「大人」を入れる
 		// 区分名を入力するとグレー表示になる。
 		const labelInput = page.locator( PRICE_TIER_LABEL ).first();
 		await labelInput.fill( '大人' );
+		// @check 基本料金の入力欄がグレー表示で入力できなくなり、「料金区分が設定されているため、基本料金は使われません。」が表示される
 		await expectOverridden( page );
 
 		// スクリーンショット（グレー表示中）。
@@ -337,46 +348,62 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 			fullPage: true,
 		} );
 
+		// @step 区分名を半角スペースだけにする
 		// 区分名を半角スペースだけにすると、trim 後は空扱いになりグレー表示が解除される。
 		await labelInput.fill( '   ' );
+		// @check グレー表示が解除される
 		await expectNotOverridden( page );
 
+		// @step 区分名に「大人」を入れ直す
 		// 区分名を再度入力し直すとグレー表示に戻る。
 		await labelInput.fill( '大人' );
+		// @check 再びグレー表示になる
 		await expectOverridden( page );
 
+		// @step 「複数人一括予約」のチェックを外す
 		// 「複数人一括予約」のチェックを外す→料金区分の行が隠れ、基本料金は通常表示に戻る。
 		await page.locator( ALLOW_MULTI ).uncheck();
+		// @check 「料金区分」の行が隠れ、基本料金は通常表示に戻る
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 		await expectNotOverridden( page );
 
+		// @step 「複数人一括予約」にチェックを入れ直す
 		// 再度チェックを入れる→料金区分の行が復帰し、区分名（大人）が残っているため
 		// グレー表示にも戻る。
 		await page.locator( ALLOW_MULTI ).check();
+		// @check 「料金区分」の行が戻り、区分名「大人」が残っているのでグレー表示に戻る
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 		await expectOverridden( page );
 
+		// @step 「予約枠の定員」を 1 にする
 		// 予約枠の定員を1にする→複数人一括予約系設定が非表示になり、基本料金は通常表示に戻る。
 		await page.locator( MAX_CAPACITY ).fill( '1' );
+		// @check 「料金区分」の行が隠れ、基本料金は通常表示に戻る
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeHidden();
 		await expectNotOverridden( page );
 
+		// @step 「予約枠の定員」を 2 に戻す
 		// 定員を2に戻すと、区分名が残っているためグレー表示に戻る。
 		await page.locator( MAX_CAPACITY ).fill( '2' );
+		// @check 「料金区分」の行が戻り、グレー表示に戻る
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toBeVisible();
 		await expectOverridden( page );
 
+		// @step 料金区分の「削除」を押す
 		// 区分行を削除するとグレー表示が解除される。
 		await page.locator( PRICE_TIER_REMOVE ).first().click();
+		// @check グレー表示が解除される
 		await expectNotOverridden( page );
 	} );
 
 	test( '3. 保存しても基本料金が消えない: グレー表示のまま保存→再読込でも値が残り、区分を全削除して保存すると通常表示に戻る', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、メニューの編集画面を開いて、下部のメタボックス欄を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, menuId );
 
+		// @step 料金区分を追加し、区分名「大人」・金額 5,000円を入れる
 		// 区分名を入力してグレー表示にする。
 		await page.locator( PRICE_TIER_ADD ).click();
 		await page.locator( PRICE_TIER_LABEL ).first().fill( '大人' );
@@ -384,9 +411,11 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 			.locator( '.vkbm-price-tier-price' )
 			.first()
 			.fill( '5000' );
+		// @check 基本料金はグレー表示になり、値は 9,000 のまま
 		await expectOverridden( page );
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveValue( '9000' );
 
+		// @step 「更新」ボタンを押して保存する
 		// 保存する（REST + クラシックメタボックス保存の両方の応答を待つ）。
 		const saveResponse = page.waitForResponse(
 			( res ) =>
@@ -405,17 +434,21 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 		await saveResponse;
 		await metaBoxSaveResponse;
 
+		// @check 保存後も基本料金 9,000円が消えずに残っている
 		// PHP側: 基本料金メタは削除されず、値はそのまま残っている（readonly を使っているため）。
 		const savedBasePrice = wpEvalPhp( `
 			echo get_post_meta( ${ menuId }, '_vkbm_base_price', true );
 		` ).trim();
 		expect( savedBasePrice ).toBe( '9000' );
 
+		// @step 編集画面を開き直す
 		// 再読込しても、グレー表示のまま・値も 9000 のまま。
 		await gotoMenuEditor( page, menuId );
+		// @check グレー表示のまま、基本料金は 9,000 のまま
 		await expectOverridden( page );
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveValue( '9000' );
 
+		// @step 料金区分の「削除」を押して区分をすべて消す
 		// 区分の「削除」を押して区分をすべて削除し、保存する。
 		const saveResponse2 = page.waitForResponse(
 			( res ) =>
@@ -431,11 +464,14 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 			{ timeout: 20000 }
 		);
 		await page.locator( PRICE_TIER_REMOVE ).first().click();
+		// @check グレー表示が解除される
 		await expectNotOverridden( page );
+		// @step 「更新」ボタンを押して保存する
 		await page.locator( '.editor-post-publish-button__button' ).click();
 		await saveResponse2;
 		await metaBoxSaveResponse2;
 
+		// @check 保存後、料金区分は空になり、基本料金 9,000円は残っている
 		// PHP側: 料金区分メタは空になり、基本料金の値は 9000 のまま残っている。
 		const savedTiersAfterDelete = wpEvalPhp( `
 			$v = get_post_meta( ${ menuId }, '_vkbm_price_tiers', true );
@@ -447,8 +483,10 @@ test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（�
 		` ).trim();
 		expect( basePriceAfterDelete ).toBe( '9000' );
 
+		// @step 編集画面を開き直す
 		// 再読込しても通常表示に戻ったまま・値は 9000 のまま。
 		await gotoMenuEditor( page, menuId );
+		// @check 通常表示のまま、基本料金は 9,000 のまま
 		await expectNotOverridden( page );
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveValue( '9000' );
 
@@ -466,6 +504,7 @@ test.describe( 'PR #517: デグレ確認（予約枠の定員機能OFFのサイ�
 	let menuId = '';
 
 	test.beforeAll( () => {
+		// @step 管理画面でスタッフ指名と予約枠の定員機能を OFF にし、基本料金 4,500円のメニュー「PR517 Capacity Off Menu」を作っておく
 		originalStaffEnabled = getStaffEnabled();
 		setStaffEnabled( false );
 		// 予約枠の定員機能を親スイッチごとOFFにする。この構成では「料金区分」の行自体が
@@ -486,20 +525,25 @@ test.describe( 'PR #517: デグレ確認（予約枠の定員機能OFFのサイ�
 	test( '予約枠の定員機能OFFでも基本料金の行が表示され、通常どおり入力・保存できる（料金区分の行はDOMに存在しない）', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、メニューの編集画面を開いて、下部のメタボックス欄を開く
 		await loginAsAdmin( page );
 		await gotoMenuEditor( page, menuId );
 
+		// @check 「基本料金（税込）」の行が通常表示で出て、値は 4,500 になっている
 		// 本丸: 基本料金の行は表示され、通常表示（readonly ではない）。
 		await expect( page.locator( BASE_PRICE_ROW ) ).toBeVisible();
 		await expectNotOverridden( page );
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveValue( '4500' );
 
+		// @check 「料金区分」の行は無い
 		// この構成では料金区分の行自体がDOMに存在しない（hidden ではなく非描画）。
 		await expect( page.locator( PRICE_TIERS_ROW ) ).toHaveCount( 0 );
 
+		// @check 基本料金の入力欄は1つだけ
 		// 二重描画がないことも確認する。
 		await expect( page.locator( BASE_PRICE_INPUT ) ).toHaveCount( 1 );
 
+		// @step 基本料金を 6,000 に変えて、「更新」ボタンを押して保存する
 		// 値を変更して保存できることを確認する（デグレ確認）。
 		await page.locator( BASE_PRICE_INPUT ).fill( '6000' );
 		const saveResponse = page.waitForResponse(
@@ -519,6 +563,7 @@ test.describe( 'PR #517: デグレ確認（予約枠の定員機能OFFのサイ�
 		await saveResponse;
 		await metaBoxSaveResponse;
 
+		// @check 基本料金 6,000円が保存されている
 		const savedBasePrice = wpEvalPhp( `
 			echo get_post_meta( ${ menuId }, '_vkbm_base_price', true );
 		` ).trim();

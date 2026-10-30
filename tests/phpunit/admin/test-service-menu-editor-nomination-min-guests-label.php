@@ -23,6 +23,7 @@ use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
+use function esc_html;
 use function get_post;
 use function vkbm_get_resource_selection_strings;
 use function update_option;
@@ -115,6 +116,39 @@ class Service_Menu_Editor_Nomination_Min_Guests_Label_Test extends WP_UnitTestCa
 				'unexpect_label'        => 'Minimum guests to accept a booking',
 			),
 			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人一括予約ON・定員3 => ラベル「最低申し込み人数」・貸し切り用の説明文・最大人数の説明は変えない（#968）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expect_hidden'         => false,
+				'expect_label'          => 'Minimum guests to accept a booking',
+				'unexpect_label'        => 'Minimum participants to confirm',
+				'expect_intro'          => true,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人一括予約OFF => 非表示かつ「最少催行人数」のまま（#968：貸し切り予約が無効）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => false,
+				'max_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expect_hidden'         => true,
+				'expect_label'          => 'Minimum participants to confirm',
+				'unexpect_label'        => 'Minimum guests to accept a booking',
+				'expect_intro'          => false,
+			),
+			array(
+				'test_condition_name'       => '指名OFF・予約者による貸し切り指定のみON => 「最少催行人数」のまま（#968：既存挙動を変えない）',
+				'nomination_enabled'        => false,
+				'allow_multiple_guests'     => true,
+				'max_capacity'              => 3,
+				'exclusive_user_selectable' => true,
+				'expect_hidden'             => false,
+				'expect_label'              => 'Minimum participants to confirm',
+				'unexpect_label'            => 'Minimum guests to accept a booking',
+				'expect_intro'              => false,
+			),
+			array(
 				'test_condition_name'   => '指名ON・複数人一括予約OFF・定員3 => 非表示（境界値：指名の有無に関わらず複数人一括予約ONが必須）',
 				'nomination_enabled'    => true,
 				'allow_multiple_guests' => false,
@@ -146,6 +180,12 @@ class Service_Menu_Editor_Nomination_Min_Guests_Label_Test extends WP_UnitTestCa
 			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
 			if ( $case['allow_multiple_guests'] ) {
 				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+			if ( ! empty( $case['exclusive_when_booked'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
+			}
+			if ( ! empty( $case['exclusive_user_selectable'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true );
 			}
 
 			$admin_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
@@ -181,6 +221,18 @@ class Service_Menu_Editor_Nomination_Min_Guests_Label_Test extends WP_UnitTestCa
 					$output,
 					$case['test_condition_name'] . ': 出るべきでないラベルが出力に含まれている'
 				);
+			}
+
+			// #968: 貸し切り用の説明文の有無。指名を使わない場合、最大人数の説明は「1組の最大人数」に切り替えない。
+			if ( isset( $case['expect_intro'] ) ) {
+				$intro = 'Because private booking is turned on, a single booking fills this time slot.';
+				if ( $case['expect_intro'] ) {
+					$this->assertStringContainsString( $intro, $output, $case['test_condition_name'] . ': 貸し切り用の説明文が無い' );
+					$strings = vkbm_get_resource_selection_strings();
+					$this->assertStringNotContainsString( esc_html( $strings['max_capacity_nomination_1'] ), $output, $case['test_condition_name'] . ': 最大人数の説明が変わっている' );
+				} else {
+					$this->assertStringNotContainsString( $intro, $output, $case['test_condition_name'] . ': 貸し切り用の説明文が出ている' );
+				}
 			}
 
 			wp_set_current_user( 0 );

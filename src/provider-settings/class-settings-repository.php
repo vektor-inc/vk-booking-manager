@@ -63,6 +63,31 @@ class Settings_Repository {
 	public const BOOKING_STATUS_MODES = array( self::BOOKING_STATUS_MODE_CONFIRMED, self::BOOKING_STATUS_MODE_PENDING );
 
 	/**
+	 * 予約の受付方法（会員のみ・ゲストのみ・どちらでも）の設定キー（#958。仕様は docs/specification-guest-booking.md）。
+	 */
+	public const KEY_BOOKING_CUSTOMER_MODE = 'booking_customer_mode';
+
+	/**
+	 * 予約の受付方法: 会員のみ（ログインしたお客様だけが予約できる）。初期値で、従来の動作。
+	 */
+	public const BOOKING_CUSTOMER_MODE_MEMBER = 'member';
+
+	/**
+	 * 予約の受付方法: ゲストのみ（ユーザー登録なしで予約できる）。
+	 */
+	public const BOOKING_CUSTOMER_MODE_GUEST = 'guest';
+
+	/**
+	 * 予約の受付方法: 会員・ゲストのどちらでも（お客様が予約画面で選ぶ）。
+	 */
+	public const BOOKING_CUSTOMER_MODE_BOTH = 'both';
+
+	/**
+	 * 予約の受付方法として保存してよい値。
+	 */
+	public const BOOKING_CUSTOMER_MODES = array( self::BOOKING_CUSTOMER_MODE_MEMBER, self::BOOKING_CUSTOMER_MODE_GUEST, self::BOOKING_CUSTOMER_MODE_BOTH );
+
+	/**
 	 * Option key used for persistence.
 	 *
 	 * @var string
@@ -122,6 +147,7 @@ class Settings_Repository {
 			'provider_slot_step_minutes'                 => 15,
 			'provider_service_menu_buffer_after_minutes' => 0,
 			'provider_booking_status_mode'               => self::BOOKING_STATUS_MODE_PENDING,
+			'booking_customer_mode'                      => self::BOOKING_CUSTOMER_MODE_MEMBER,
 			// 仮予約の完了画面で見出しの下に表示する案内文。空文字のときは get_default_booking_complete_message_pending() の標準文を表示する。
 			'provider_booking_complete_message_pending'  => '',
 			'provider_booking_cancel_mode'               => 'hours',
@@ -303,6 +329,7 @@ Contact us: Please contact our store.",
 
 		$settings[ self::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE ] = $this->resolve_service_menu_detail_display_mode( $stored, $has_saved_value );
 		$settings[ self::KEY_BOOKING_STATUS_MODE ]              = $this->resolve_booking_status_mode( $stored, $has_saved_value );
+		$settings[ self::KEY_BOOKING_CUSTOMER_MODE ]            = self::normalize_booking_customer_mode( $settings[ self::KEY_BOOKING_CUSTOMER_MODE ] ?? null );
 		$settings = Industry_Presets::apply_effective_values( $settings, $defaults );
 
 		$settings['provider_business_hours_basic'] = $this->normalize_business_hours_basic(
@@ -358,6 +385,20 @@ Contact us: Please contact our store.",
 		$mode = is_string( $stored[ self::KEY_BOOKING_STATUS_MODE ] ) ? $stored[ self::KEY_BOOKING_STATUS_MODE ] : '';
 
 		return in_array( $mode, self::BOOKING_STATUS_MODES, true ) ? $mode : self::BOOKING_STATUS_MODE_PENDING;
+	}
+
+	/**
+	 * 予約の受付方法の値を検査する。許可外の値・文字列以外は、従来の動作の 'member'（会員のみ）にする（#958）。
+	 *
+	 * @param mixed $value 検査する値。
+	 * @return string 'member'・'guest'・'both' のいずれか。
+	 */
+	public static function normalize_booking_customer_mode( $value ): string {
+		if ( ! is_string( $value ) || ! in_array( $value, self::BOOKING_CUSTOMER_MODES, true ) ) {
+			return self::BOOKING_CUSTOMER_MODE_MEMBER;
+		}
+
+		return $value;
 	}
 
 	/**

@@ -187,6 +187,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 
 	// 検証用のリッチなサービスメニューと、各シナリオ用の投稿を用意する。
 	test.beforeAll( () => {
+		// @step 管理画面で、アイキャッチ画像・抜粋・サービスタグ・料金・所要時間を設定したサービス「Card Test Service」を作り、その本文にサービスカードブロック（「対象のサービス」は未選択＝表示中のサービス）を置いて公開しておく
 		richMenuId = createRichServiceMenu();
 
 		// 1. 自動表示: サービス詳細ページ本文に menu-card（自動モード）を埋め込む。
@@ -213,10 +214,12 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 	test( '1. 自動表示: 詳細ページで表示中サービスのカード1枚・詳細ボタンなし・予約ボタンあり', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態で、サービス「Card Test Service」の詳細ページを開く
 		await page.goto( richMenuPath );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// カードが1枚表示されている。
+		// @check サービスカードが1枚だけ表示され、カードのタイトルが「Card Test Service」になっている
 		const card = page.locator( '.vkbm-menu-card .vkbm-menu-loop__item' );
 		await expect( card ).toHaveCount( 1 );
 
@@ -226,6 +229,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		).toContainText( 'Card Test Service' );
 
 		// 予約ボタンが出る。
+		// @check カードに「予約に進む」ボタンがあり、「詳細を見る」ボタンは無い
 		await expect(
 			card.locator( '.vkbm-menu-loop__button--reserve' )
 		).toHaveCount( 1 );
@@ -243,6 +247,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 	test( '2. 手動固定: selectedMenuId 指定でそのサービスのカードが表示される', async ( {
 		page,
 	} ) => {
+		// @step 固定ページ「Card Manual Page」にサービスカードブロックを置き、「対象のサービス」で「Card Test Service」を選んで公開する
 		const content = Buffer.from(
 			menuCardBlock( { selectedMenuId: Number( richMenuId ) } )
 		).toString( 'base64' );
@@ -254,9 +259,11 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const path = getRelativePermalink( pageId );
 
+		// @step 固定ページ「Card Manual Page」を開く
 		await page.goto( path );
 		await page.waitForLoadState( 'domcontentloaded' );
 
+		// @check サービスカードが1枚だけ表示され、カードのタイトルが「Card Test Service」になっている
 		const card = page.locator( '.vkbm-menu-card .vkbm-menu-loop__item' );
 		await expect( card ).toHaveCount( 1 );
 		await expect(
@@ -272,6 +279,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		page,
 	} ) => {
 		// 全 ON（既定）。
+		// @step 固定ページ「Card Toggle On」にサービスカードブロックを置き、「対象のサービス」で「Card Test Service」を選び、「アイキャッチ画像を表示」「抜粋を表示」「所要時間/料金を表示」「サービスタグを表示」をすべてオンにして公開する
 		const onContent = Buffer.from(
 			menuCardBlock( {
 				selectedMenuId: Number( richMenuId ),
@@ -289,10 +297,12 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const onPath = getRelativePermalink( onPageId );
 
+		// @step 固定ページ「Card Toggle On」を開く
 		await page.goto( onPath );
 		await page.waitForLoadState( 'domcontentloaded' );
 		const onCard = page.locator( '.vkbm-menu-card' );
 		// ON 時は各要素が存在する。
+		// @check カードにアイキャッチ画像・抜粋・所要時間と料金・サービスタグがすべて表示される
 		await expect(
 			onCard.locator( '.vkbm-menu-loop__card-media' )
 		).toHaveCount( 1 );
@@ -307,6 +317,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		).toHaveCount( 1 );
 
 		// 全 OFF。
+		// @step 固定ページ「Card Toggle Off」にサービスカードブロックを置き、「対象のサービス」で「Card Test Service」を選び、「アイキャッチ画像を表示」「抜粋を表示」「所要時間/料金を表示」「サービスタグを表示」をすべてオフにして公開する
 		const offContent = Buffer.from(
 			menuCardBlock( {
 				selectedMenuId: Number( richMenuId ),
@@ -324,10 +335,12 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const offPath = getRelativePermalink( offPageId );
 
+		// @step 固定ページ「Card Toggle Off」を開く
 		await page.goto( offPath );
 		await page.waitForLoadState( 'domcontentloaded' );
 		const offCard = page.locator( '.vkbm-menu-card' );
 		// OFF 時は各要素が消える。
+		// @check カードにアイキャッチ画像・抜粋・所要時間と料金・サービスタグがどれも表示されない
 		await expect(
 			offCard.locator( '.vkbm-menu-loop__card-media' )
 		).toHaveCount( 0 );
@@ -355,6 +368,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		page,
 	} ) => {
 		// メタだけ OFF、予約ボタンは既定 ON のまま。
+		// @step 固定ページ「Card Meta Off Reserve On」にサービスカードブロックを置き、「対象のサービス」で「Card Test Service」を選び、「所要時間/料金を表示」だけオフ、「予約ボタンを表示」はオンにして公開する
 		const content = Buffer.from(
 			menuCardBlock( {
 				selectedMenuId: Number( richMenuId ),
@@ -370,15 +384,18 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const path = getRelativePermalink( pageId );
 
+		// @step 固定ページ「Card Meta Off Reserve On」を開く
 		await page.goto( path );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		const card = page.locator( '.vkbm-menu-card' );
 		// メタ情報は消えている。
+		// @check カードに所要時間と料金は表示されない
 		await expect(
 			card.locator( '.vkbm-menu-loop__card-meta' )
 		).toHaveCount( 0 );
 		// 予約ボタンは独立して出続けるべき（ここが現状 FAIL する）。
+		// @check 所要時間と料金を消しても、「予約に進む」ボタンは表示されたままになっている
 		await expect(
 			card.locator( '.vkbm-menu-loop__button--reserve' )
 		).toHaveCount( 1 );
@@ -390,6 +407,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 	test( '4a. フォールバック: 非サービスページ+自動モードはログアウト閲覧者に何も表示しない', async ( {
 		browser,
 	}, testInfo ) => {
+		// @step サービスではない固定ページ「Card Fallback Page」にサービスカードブロック（「対象のサービス」は未選択）を置いて公開する
 		const content = Buffer.from(
 			menuCardBlock( { selectedMenuId: 0 } )
 		).toString( 'base64' );
@@ -406,6 +424,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		// 相対パスの goto が解決できるよう baseURL を明示する。
 		// A manually created context does not inherit use.baseURL from
 		// playwright.config, so pass baseURL explicitly to resolve relative goto.
+		// @step ログアウトした状態で、固定ページ「Card Fallback Page」を開く
 		const context = await browser.newContext( {
 			baseURL: testInfo.project.use.baseURL,
 		} );
@@ -414,6 +433,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// カードも注意文も一切表示されない。
+		// @check サービスカードも注意文も何も表示されない
 		await expect( page.locator( '.vkbm-menu-card' ) ).toHaveCount( 0 );
 		await expect( page.locator( '.vkbm-menu-card--notice' ) ).toHaveCount(
 			0
@@ -428,6 +448,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		page,
 	} ) => {
 		// 4a で作成済みのページを使う（未作成なら作る）。
+		// @step サービスではない固定ページ「Card Fallback Page」にサービスカードブロック（「対象のサービス」は未選択）を置いて公開する
 		const content = Buffer.from(
 			menuCardBlock( { selectedMenuId: 0 } )
 		).toString( 'base64' );
@@ -439,11 +460,13 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const path = getRelativePermalink( pageId );
 
+		// @step 管理者でログインして、固定ページ「Card Fallback Page」を開く
 		await loginAsAdmin( page );
 		await page.goto( path );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 注意文（vkbm-menu-card--notice）が表示される。
+		// @check サービスを選ぶよう促す注意文が1つ表示される
 		await expect( page.locator( '.vkbm-menu-card--notice' ) ).toHaveCount(
 			1
 		);
@@ -461,6 +484,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 	} ) => {
 		// menu-loop は loopId 必須（未設定だと注意文を出すのが従来仕様）。
 		// loopId を指定すればサービスメニュー全件がカードとして並ぶ。
+		// @step 固定ページ「Menu Loop Regression」にメニューループブロックを置き、「メニューループID」に「regression」を入れて公開する
 		const content = Buffer.from(
 			'<!-- wp:vk-booking-manager/menu-loop {"loopId":"regression"} /-->'
 		).toString( 'base64' );
@@ -472,10 +496,12 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const path = getRelativePermalink( pageId );
 
+		// @step 固定ページ「Menu Loop Regression」を開く
 		await page.goto( path );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// メニューループのリスト（注意文ではない通常表示）が存在する。
+		// @check サービスの一覧が表示され、「メニューループID」未設定の注意文は出ていない
 		const loop = page.locator(
 			'.vkbm-menu-loop:not(.vkbm-menu-loop--notice)'
 		);
@@ -485,6 +511,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 			0
 		);
 		// カードが1件以上並ぶ（実 DOM の item 要素）。
+		// @check サービスのカードが1件以上並び、「予約に進む」ボタンが少なくとも1つある
 		const items = loop.locator( '.vkbm-menu-loop__item' );
 		expect( await items.count() ).toBeGreaterThan( 0 );
 		// 予約ボタンが少なくとも1つ存在する（従来挙動）。
@@ -500,6 +527,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 	test( '6b. 回帰: menu-loop はメタOFF時に予約ボタンも消える（従来挙動が維持されている）', async ( {
 		page,
 	} ) => {
+		// @step 固定ページ「Menu Loop Meta Off」にメニューループブロックを置き、「メニューループID」に「regression」を入れ、「所要時間/料金を表示」をオフにして公開する
 		const content = Buffer.from(
 			'<!-- wp:vk-booking-manager/menu-loop {"loopId":"regression","showMeta":false} /-->'
 		).toString( 'base64' );
@@ -511,9 +539,11 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 		);
 		const path = getRelativePermalink( pageId );
 
+		// @step 固定ページ「Menu Loop Meta Off」を開く
 		await page.goto( path );
 		await page.waitForLoadState( 'domcontentloaded' );
 
+		// @check サービスのカードが1件以上並ぶ
 		const loop = page.locator(
 			'.vkbm-menu-loop:not(.vkbm-menu-loop--notice)'
 		);
@@ -522,6 +552,7 @@ test.describe( 'PR #285: サービスカードブロック', () => {
 			await loop.locator( '.vkbm-menu-loop__item' ).count()
 		).toBeGreaterThan( 0 );
 		// メタOFF時は予約ボタンも出ない（menu-loop の従来挙動。menu-card との差分）。
+		// @check メニューループブロックでは従来どおり、「所要時間/料金を表示」をオフにすると「予約に進む」ボタンも表示されない
 		await expect(
 			loop.locator( '.vkbm-menu-loop__button--reserve' )
 		).toHaveCount( 0 );

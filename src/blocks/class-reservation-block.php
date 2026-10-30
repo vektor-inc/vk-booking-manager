@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
+use VKBookingManager\Bookings\Guest_Booking_Controller;
+use VKBookingManager\Bookings\Guest_Cancel_Controller;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Site_Url;
 use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
@@ -369,6 +371,18 @@ class Reservation_Block {
 			// message. The front-end renders it as a real <a> element (not dangerouslySetInnerHTML).
 			'permalinkSettingsUrl' => esc_url_raw( admin_url( 'options-permalink.php' ) ),
 		);
+
+		// 会員登録なしの予約の確認リンクを開いたリクエストでは、結果画面に出す値を渡す（code・message は含めない）。
+		$guest_verify_result = Guest_Booking_Controller::get_public_result();
+		if ( null !== $guest_verify_result ) {
+			$config['guestVerifyResult'] = $guest_verify_result;
+		}
+
+		// 会員登録なしの予約のキャンセル用リンクを開いたリクエストでは、キャンセルの確認画面に出す値を渡す（トークンは含めない）。
+		$guest_cancel_view = Guest_Cancel_Controller::get_public_view();
+		if ( null !== $guest_cancel_view ) {
+			$config['guestCancel'] = $guest_cancel_view;
+		}
 
 		$inline = 'window.vkbmReservationConfig = ' . wp_json_encode( $config ) . ';';
 		wp_add_inline_script( self::RESERVATION_CONFIG_HANDLE, $inline, 'before' );

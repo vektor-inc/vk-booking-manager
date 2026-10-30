@@ -156,12 +156,14 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 
 	test( '指名OFF・複数人予約ON のとき: 最大受付数欄の直下に最小催行人数欄が出る', () => {
 		// --- 準備: 指名OFF・複数人予約ON（最小催行人数が有効になる構成） ---
+		// @step BM 設定で指名を使わない設定にして予約枠の定員を有効にし、サービスメニューの編集画面を開く
 		setProviderGates( false, true );
 		const menuId = getServiceMenuId();
 
 		const html = getConditionsMetaboxHtml( menuId );
 
 		// 最小催行人数の入力欄が出力されていること
+		// @check 「予約枠の定員」欄のすぐ下に「最少催行人数」欄があり、説明文が付いていて、0 以上の数を入れられる
 		expect( html ).toContain( 'id="vkbm_service_menu_min_capacity"' );
 		expect( html ).toContain(
 			'name="vkbm_service_menu[min_capacity]"'
@@ -189,6 +191,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 	} );
 
 	test( '最大5・最小3 を保存すると 3 が保持される', () => {
+		// @step 指名を使わない設定のまま、サービスメニューの「予約枠の定員」を 5、「最少催行人数」を 3 にして保存する
 		setProviderGates( false, true );
 		const menuId = getServiceMenuId();
 
@@ -197,6 +200,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		// 統一するため明示的に指定する。
 		const saved = savePostViaEditor( menuId, 5, 3, true, true );
 		// クランプされず 3 がそのまま保存される
+		// @check 編集画面を開き直すと「最少催行人数」が 3 のまま保存されている
 		expect( saved ).toBe( '3' );
 
 		// 管理UIの value 属性にも 3 が反映される
@@ -207,6 +211,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 	} );
 
 	test( '最大5・最小10（超過）を保存すると 5 にクランプされる', () => {
+		// @step 指名を使わない設定のまま、サービスメニューの「予約枠の定員」を 5、「最少催行人数」を定員を超える 10 にして保存する
 		setProviderGates( false, true );
 		const menuId = getServiceMenuId();
 
@@ -215,6 +220,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		// 統一するため明示的に指定する。
 		const saved = savePostViaEditor( menuId, 5, 10, true, true );
 		// 最大受付数 5 を上限にクランプされる
+		// @check 編集画面を開き直すと「最少催行人数」が定員と同じ 5 に下げて保存されている
 		expect( saved ).toBe( '5' );
 
 		const html = getConditionsMetaboxHtml( menuId );
@@ -229,6 +235,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		// #392時点の「指名ONなら常にhidden」という挙動は変わった。表示条件は指名の有無ではなく
 		// 「複数人一括予約ON かつ 定員2以上」のみになった（class-service-menu-editor.php の
 		// $show_min_capacity_field を参照）。
+		// @step BM 設定で指名を使う設定にして予約枠の定員を有効にし、サービスメニューを「複数人一括予約」オン・「予約枠の定員」3 で保存して、編集画面を開く
 		setProviderGates( true, true );
 		const menuId = getServiceMenuId();
 		// このテストの前提は「指名ON」なので、use_nomination を明示的に送る。
@@ -242,6 +249,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 
 		// #393: 最少催行人数／最低申し込み人数欄は、指名の有無に関わらず
 		// 「複数人一括予約ON かつ 定員2以上」なら表示される（hidden が付かない）。
+		// @check 「最低申し込み人数」欄（指名を使うメニューでの呼び名。「最少催行人数」ではない）と「予約枠の定員」欄が表示され、指名を使うときの古い案内は出ない
 		expect(
 			extractOpeningTagById( html, 'vkbm-min-capacity-field' )
 		).not.toContain( 'hidden' );
@@ -283,6 +291,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 	test( '指名ON・複数人一括予約OFF のとき: 最少催行人数／最低申し込み人数欄は非表示のまま（#393）', () => {
 		// #393: 複数人一括予約OFFのメニューは申込人数が常に1名固定になるため、指名の有無に
 		// 関わらずこの欄は表示しない（表示条件「複数人一括予約ON かつ 定員2以上」が未達のため）。
+		// @step BM 設定で指名を使う設定にし、サービスメニューを「複数人一括予約」オフ・「予約枠の定員」3 で保存して、編集画面を開く
 		setProviderGates( true, true );
 		const menuId = getServiceMenuId();
 		// このテストの前提も「指名ON」なので use_nomination を明示的に送る
@@ -294,6 +303,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 
 		const html = getConditionsMetaboxHtml( menuId );
 
+		// @check 「最少催行人数」（「最低申し込み人数」）欄は表示されない
 		expect(
 			extractOpeningTagById( html, 'vkbm-min-capacity-field' )
 		).toContain( 'hidden' );
@@ -306,12 +316,14 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 		// （render_conditions_meta_box() の外側のif）に入り、フィールド自体が DOM から
 		// 完全に消えるため、他の hidden 属性ベースの検証とは異なり not.toContain のままでよい。
 		// --- 準備: 指名OFF・予約枠の定員機能OFF（最小催行人数が無効になる構成） ---
+		// @step BM 設定で指名を使わない設定にして予約枠の定員を無効にし、サービスメニューの編集画面を開く
 		setProviderGates( false, false );
 		const menuId = getServiceMenuId();
 
 		const html = getConditionsMetaboxHtml( menuId );
 
 		// 最小催行人数欄が出力されないこと
+		// @check 「最少催行人数」欄も「予約枠の定員」の入力欄も出ない
 		expect( html ).not.toContain( 'id="vkbm_service_menu_min_capacity"' );
 		// 最大受付数欄も案内メッセージに置き換わる既存仕様
 		expect( html ).not.toContain( 'id="vkbm_service_menu_max_capacity"' );
@@ -321,9 +333,11 @@ test.describe( 'PR #311: 最小催行人数 - 管理UI（欄表示・保存・�
 test.describe( 'PR #311: 最小催行人数 - 催行状態ロジック（VKBM_Helper / availability）', () => {
 	test( 'get_min_capacity_status: none / pending / fulfilled を正しく返す', () => {
 		// 制約なし（min=0）
+		// @step 最少催行人数 0 で 2 名、最少催行人数 3 で 2 名、最少催行人数 3 で 3 名の予約が入った時間枠を用意する
 		const none = wpEvalPhp(
 			`echo \\VKBookingManager\\Common\\VKBM_Helper::get_min_capacity_status( 0, 2 )['state'];`
 		);
+		// @check 最少催行人数 0 の枠は催行の状態を持たず、3 で 2 名の枠は「あと 1 名」の未達、3 で 3 名の枠は開催決定になる
 		expect( none ).toBe( 'none' );
 
 		// 未達（min=3, booked=2）→ pending, shortfall=1
@@ -618,6 +632,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	let staffId: string;
 
 	test.beforeAll( () => {
+		// @step BM 設定で指名を使わない設定にして予約枠の定員を有効にし、サービスメニューを「複数人一括予約」オン・「予約枠の定員」5・「最少催行人数」3 にして、翌月分のシフトを入れ、予約を空にしておく
 		staffId = getStaffId();
 		menuId = getServiceMenuId();
 		setupGroupSessionMenu( menuId, staffId );
@@ -634,6 +649,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	} ) => {
 		deleteAllBookings();
 		// 09:00 枠に 2 名（1件2名）を投入
+		// @step 翌月 1 日の 9:00 の枠に 2 名の確定予約を入れておく
 		createBooking(
 			menuId,
 			staffId,
@@ -644,12 +660,14 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			'confirmed'
 		);
 
+		// @step 予約ページで、そのメニューの翌月 1 日の空き状況を見る
 		const slot = await fetchSlotByStart(
 			page,
 			menuId,
 			FRONT_TEST_DATE,
 			FRONT_BASE_HOUR_FULFILLED
 		);
+		// @check 9:00 の枠は最少催行人数 3 に対して予約 2 名（あと 1 名で開催）、残り 3 名分が空いている
 		expect( slot ).not.toBeNull();
 		// 催行判定の元データ: min_capacity=3, booked_guests=2 → 不足1（「あと1名で開催」）
 		expect( slot.min_capacity ).toBe( 3 );
@@ -663,6 +681,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	} ) => {
 		deleteAllBookings();
 		// 09:00 枠に 2 名 + 1 名 = 合計3名
+		// @step 翌月 1 日の 9:00 の枠に 2 名と 1 名の確定予約（合計 3 名）を入れておく
 		createBooking(
 			menuId,
 			staffId,
@@ -682,12 +701,14 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			'confirmed'
 		);
 
+		// @step 予約ページで、そのメニューの翌月 1 日の空き状況を見る
 		const slot = await fetchSlotByStart(
 			page,
 			menuId,
 			FRONT_TEST_DATE,
 			FRONT_BASE_HOUR_FULFILLED
 		);
+		// @check 9:00 の枠は最少催行人数 3 に対して予約 3 名（開催決定）、残り 2 名分が空いている
 		expect( slot ).not.toBeNull();
 		// min_capacity=3, booked_guests=3 → 充足（開催決定）。満席（5）ではない。
 		expect( slot.min_capacity ).toBe( 3 );
@@ -700,6 +721,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	} ) => {
 		deleteAllBookings();
 		// 09:00 枠に 3 名、11:00 枠に 1 名を投入
+		// @step 翌月 1 日の 9:00 の枠に 3 名、11:00 の枠に 1 名の確定予約を入れておく
 		createBooking(
 			menuId,
 			staffId,
@@ -719,6 +741,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			'confirmed'
 		);
 
+		// @step 予約ページで、そのメニューの翌月 1 日の空き状況を見る
 		const slot09 = await fetchSlotByStart(
 			page,
 			menuId,
@@ -732,6 +755,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			FRONT_BASE_HOUR_PENDING
 		);
 		// 09:00 は 3 名で充足、11:00 は 1 名のまま（09:00 の人数が混ざらない）
+		// @check 9:00 の枠は 3 名、11:00 の枠は 1 名のままで、別の時刻の人数が合算されない
 		expect( slot09.booked_guests ).toBe( 3 );
 		expect( slot11.booked_guests ).toBe( 1 );
 	} );
@@ -741,6 +765,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	} ) => {
 		deleteAllBookings();
 		// 09:00 枠に confirmed 2名 + cancelled 5名 + no_show 5名
+		// @step 翌月 1 日の 9:00 の枠に、確定 2 名・キャンセル 5 名・無断キャンセル 5 名の予約を入れておく
 		createBooking(
 			menuId,
 			staffId,
@@ -769,6 +794,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			'no_show'
 		);
 
+		// @step 予約ページで、そのメニューの翌月 1 日の空き状況を見る
 		const slot = await fetchSlotByStart(
 			page,
 			menuId,
@@ -776,6 +802,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			FRONT_BASE_HOUR_FULFILLED
 		);
 		// cancelled / no_show は数えないため confirmed の 2 名のみ
+		// @check 9:00 の枠の予約人数は確定の 2 名だけで、キャンセル・無断キャンセルの予約は数えない
 		expect( slot.booked_guests ).toBe( 2 );
 	} );
 
@@ -784,6 +811,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 	} ) => {
 		deleteAllBookings();
 		// 最小催行人数を 0（未設定）に戻す
+		// @step サービスメニューの「最少催行人数」を未設定（0）に戻し、翌月 1 日の 9:00 の枠に 2 名の確定予約を入れておく
 		wpEvalPhp(
 			`delete_post_meta( ${ Number.parseInt( menuId, 10 ) }, '_vkbm_min_capacity' );`
 		);
@@ -797,6 +825,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			'confirmed'
 		);
 
+		// @step 予約ページで、そのメニューの翌月 1 日の空き状況を見る
 		const slot = await fetchSlotByStart(
 			page,
 			menuId,
@@ -804,6 +833,7 @@ test.describe( 'PR #311: 最小催行人数 - フロント空きスロットの�
 			FRONT_BASE_HOUR_FULFILLED
 		);
 		// min_capacity=0 → フロントは催行状態を一切表示しない（showFulfillment=false）
+		// @check 9:00 の枠は最少催行人数 0 のままで、催行の状態は表示されない
 		expect( slot.min_capacity ).toBe( 0 );
 
 		// 後続テストのために最小3へ戻す
@@ -885,6 +915,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 	let staffId: string;
 
 	test.beforeAll( () => {
+		// @step サービスメニューを「複数人一括予約」オン・「予約枠の定員」5・「最少催行人数」3 にして翌月分のシフトを入れ、翌月 1 日の 9:00 の枠に 3 名、11:00 の枠に 1 名の確定予約を入れておく
 		staffId = getStaffId();
 		menuId = getServiceMenuId();
 		setupGroupSessionMenu( menuId, staffId );
@@ -919,9 +950,11 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 		page,
 	} ) => {
 		// 予約ページ（/booking/）を開き、メニューを選んで翌月 1 日（7/1 相当・予約を投入した日）を選ぶ。
+		// @step 予約ページでメニューの「予約する」を押し、カレンダーを翌月へ送って 1 日を選ぶ
 		await selectNextMonthDayOne( page, menuId );
 
 		// 催行状態バッジ（開催決定 or あと N 名）のいずれかが少なくとも1件表示される
+		// @check 時間枠の一覧で、9:00 の枠に「開催決定」、11:00 の枠に「あと 2 名で開催」の表示が出る
 		const fulfillmentBadges = page.locator(
 			'.vkbm-slot-list__fulfillment'
 		);
@@ -963,6 +996,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 	test( 'issue #844: 選択済みの日へ Tab で移動すると、2 色のフォーカス枠が出る', async ( {
 		page,
 	} ) => {
+		// @step 予約ページでメニューの「予約する」を押し、カレンダーを翌月へ送って 1 日を選ぶ
 		await openCalendarWithDayOneSelected( page );
 
 		// 選択済みの日は aria-pressed="true" で選択状態を伝える。
@@ -970,6 +1004,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 		await expect( selectedDay ).toHaveAttribute( 'aria-pressed', 'true' );
 
 		// キーボード操作として扱われるよう、「次の月」ボタンから Tab で選択済みの日まで進める。
+		// @step 「次の月」ボタンから Tab キーで選択済みの 1 日まで移動する
 		await page.locator( '.vkbm-calendar__nav' ).last().focus();
 		await page.keyboard.press( 'Shift+Tab' );
 		await page.keyboard.press( 'Tab' );
@@ -988,6 +1023,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 		await expect( selectedDay ).toBeFocused();
 
 		// 外側の枠は 2px の実線（outline）、内側の白は box-shadow（内側に描く）で表示される。
+		// @check 選択済みの日に、外側の色の枠と内側の帯の 2 色のフォーカス枠が出て、内側の帯は白ではなく選択色になる
 		const ring = await selectedDay.evaluate( ( el ) => {
 			const style = window.getComputedStyle( el );
 			return {
@@ -1008,12 +1044,14 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 		expect( ring.boxShadow ).not.toContain( 'rgb(255, 255, 255)' );
 
 		// 選択していない隣のマスへ Tab で進むと、内側の帯は従来どおり白。選択中のマスと見分けられる。
+		// @step もう一度 Tab キーを押して、選択していない隣の日へ移動する
 		await page.keyboard.press( 'Tab' );
 		const nextDay = page.locator( '.vkbm-calendar__day:focus' );
 		await expect( nextDay ).toBeFocused();
 		await expect( nextDay ).not.toHaveClass(
 			/vkbm-calendar__day--selected/
 		);
+		// @check 選択していない日のフォーカス枠は内側の帯が白で、選択済みの日と見分けられる
 		const nextRing = await nextDay.evaluate(
 			( el ) => window.getComputedStyle( el ).boxShadow
 		);
@@ -1025,9 +1063,11 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 	test( 'issue #844: 時間枠ボタンの背景と文字色はテーマの button の色に左右されない', async ( {
 		page,
 	} ) => {
+		// @step 予約ページでメニューの「予約する」を押し、カレンダーを翌月へ送って 1 日を選ぶ
 		await openCalendarWithDayOneSelected( page );
 
 		// 満席・受付終了の見た目は CSS だけで決まるため、クラスを付けて確かめる。
+		// @step 時間枠の一覧に、通常の枠・満席の枠・受付終了の枠が並んだ状態にする
 		await page.evaluate( () => {
 			const items = document.querySelectorAll( '.vkbm-slot-list__item' );
 			items[ 1 ].classList.add( 'is-full' );
@@ -1090,6 +1130,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 					} );
 			} );
 
+		// @check 通常・満席・受付終了のどの枠でも、時刻と残り枠数の文字が背景に対して十分なコントラスト（4.5:1 以上）で読める
 		for ( const row of await readContrasts() ) {
 			expect( row.time ).toBeGreaterThanOrEqual( 4.5 );
 			expect( row.remaining ).toBeGreaterThanOrEqual( 4.5 );
@@ -1100,10 +1141,12 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 		const before = await first.evaluate(
 			( el ) => window.getComputedStyle( el ).backgroundColor
 		);
+		// @step 先頭の時間枠にマウスを乗せる
 		await first.hover();
 		const after = await first.evaluate(
 			( el ) => window.getComputedStyle( el ).backgroundColor
 		);
+		// @check マウスを乗せても背景は白のまま、テーマのボタンの色に変わらない
 		expect( after ).toBe( before );
 		expect( after ).toBe( 'rgb(255, 255, 255)' );
 
@@ -1115,6 +1158,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 				.evaluate(
 					( el ) => window.getComputedStyle( el ).borderTopColor
 				);
+		// @check マウスを乗せた枠の枠線はアクセント色（青）になり、満席の枠はマウスを乗せても枠線の色が変わらない
 		expect( await borderColor( 0 ) ).toBe( 'rgb(29, 143, 203)' );
 		await page.locator( '.vkbm-slot-list__item' ).nth( 1 ).hover();
 		expect( await borderColor( 1 ) ).toBe( 'rgb(208, 208, 208)' );
@@ -1123,6 +1167,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 	test( 'issue #844: 残枠数の文字色が --vkbm--color--accent-text になる', async ( {
 		page,
 	} ) => {
+		// @step 予約ページでメニューの「予約する」を押し、カレンダーを翌月へ送って 1 日を選ぶ
 		await openCalendarWithDayOneSelected( page );
 
 		// 満席・受付終了ではない通常の残枠数表示を対象にする。
@@ -1134,6 +1179,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 		await expect( remaining ).toBeVisible();
 
 		// CSS 変数の値は rgb 表記で比べるため、変数を color に指定した要素の計算値と突き合わせる。
+		// @check 通常の時間枠の残り枠数の文字が、アクセントの文字色（濃い青）で表示される
 		const colors = await remaining.evaluate( ( el ) => {
 			const probe = document.createElement( 'span' );
 			probe.style.color = 'var(--vkbm--color--accent-text)';
@@ -1155,6 +1201,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理ダッシュボードの未�
 	let staffId: string;
 
 	test.beforeAll( () => {
+		// @step サービスメニューを「複数人一括予約」オン・「予約枠の定員」5・「最少催行人数」3 にして翌月分のシフトを入れ、翌月 1 日の 9:00 の枠に 2 名の仮予約、11:00 の枠に 1 名の確定予約を入れておく
 		staffId = getStaffId();
 		menuId = getServiceMenuId();
 		setupGroupSessionMenu( menuId, staffId );
@@ -1190,6 +1237,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理ダッシュボードの未�
 		page,
 	} ) => {
 		// 管理画面にログインし、対象日のシフトダッシュボード（日表示）を開く
+		// @step 管理者でログインし、シフトダッシュボードで翌月 1 日の日表示を開く
 		await loginAsAdmin( page );
 		await page.goto(
 			`/wp-admin/admin.php?page=vkbm-shift-dashboard&vkbm_date=${ FRONT_TEST_DATE }`
@@ -1203,6 +1251,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理ダッシュボードの未�
 			.waitFor( { state: 'visible', timeout: 15000 } );
 
 		// 未達枠（09:00, status=pending, 2名/最小3）のカードに is-min-capacity-pending が付く
+		// @check 9:00 の予約カードが点線の枠で囲まれ、「最少催行人数に未達」のラベルが付き、仮予約の色分けもそのまま残っている
 		const pendingCard = page.locator(
 			'.vkbm-booking-card.is-min-capacity-pending'
 		);
@@ -1246,6 +1295,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理ダッシュボードの未�
 	test( '別開始時刻の枠は合算されない（CodeRabbit #2・管理ダッシュボード側）', () => {
 		// annotate_min_capacity_state を経由する get_bookings_for_day の結果を検証する。
 		// 09:00 枠(2名)と 11:00 枠(1名)が別セッションとして扱われ、group_guests が混ざらないこと。
+		// @step 管理者でシフトダッシュボードの翌月 1 日の日表示を開く
 		const phpCode = `
 			$page = new \\VKBookingManager\\Admin\\Shift_Dashboard_Page();
 			$ref = new ReflectionMethod( $page, 'get_bookings_for_day' );
@@ -1265,6 +1315,7 @@ test.describe( 'PR #311: 最小催行人数 - 管理ダッシュボードの未�
 		`;
 		const out = wpEvalPhp( phpCode );
 		// 09:00 枠は 2 名（11:00 の 1 名が混ざらない）、11:00 枠は 1 名（09:00 が混ざらない）
+		// @check 9:00 の枠の人数は 2 名、11:00 の枠は 1 名で、別の時刻の人数が合算されない
 		expect( out ).toContain( '9=2' );
 		expect( out ).toContain( '11=1' );
 	} );
@@ -1299,25 +1350,35 @@ function shouldShowMinCapacityNote(
 test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け（CodeRabbit #3 回帰）', () => {
 	test( '未達スロット（既存2名+今回1名=3 ＜ min4）では注記を表示する', () => {
 		// 合計3名で最小4に満たない → 注記あり
+		// @step 最少催行人数 4 で既存 2 名の予約がある時間枠を選び、1 名で予約確認画面へ進む
+		// @check 最少催行人数に満たない旨の注記が表示される
 		expect( shouldShowMinCapacityNote( 4, 2, 1 ) ).toBe( true );
 	} );
 
 	test( '充足スロット（既存2名+今回1名=3 ＝ min3）では注記を表示しない（回帰の核心）', () => {
 		// 今回の予約を加えると充足（3>=3） → 注記なし。
 		// 以前は「常時表示」だったため、ここが false になることが CodeRabbit #3 の回帰確認。
+		// @step 最少催行人数 3 で既存 2 名の予約がある時間枠を選び、1 名で予約確認画面へ進む
+		// @check 今回の予約で最少催行人数に届くため、注記は表示されない
 		expect( shouldShowMinCapacityNote( 3, 2, 1 ) ).toBe( false );
 	} );
 
 	test( '充足済みスロット（既存3名 min3、今回1名）でも注記を表示しない', () => {
 		// 既にスロットが充足済み → 今回予約を足しても当然充足 → 注記なし
+		// @step 最少催行人数 3 で既存 3 名の予約がある時間枠を選び、1 名で予約確認画面へ進む
+		// @check すでに最少催行人数に届いているため、注記は表示されない
 		expect( shouldShowMinCapacityNote( 3, 3, 1 ) ).toBe( false );
 	} );
 
 	test( '今回予約だけでは未達（既存0名+今回1名=1 ＜ min3）では注記を表示する', () => {
+		// @step 最少催行人数 3 で予約がまだ無い時間枠を選び、1 名で予約確認画面へ進む
+		// @check 最少催行人数に満たない旨の注記が表示される
 		expect( shouldShowMinCapacityNote( 3, 0, 1 ) ).toBe( true );
 	} );
 
 	test( '後方互換: 最小0（制約なし）のスロットでは常に注記を表示しない', () => {
+		// @step 最少催行人数 0（制約なし）の時間枠を、既存の予約が無いとき・既存 5 名のときにそれぞれ選び、予約確認画面へ進む
+		// @check どちらの場合も注記は表示されない
 		expect( shouldShowMinCapacityNote( 0, 0, 1 ) ).toBe( false );
 		expect( shouldShowMinCapacityNote( 0, 5, 3 ) ).toBe( false );
 	} );
@@ -1332,6 +1393,7 @@ test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け�
 		let staffId: string;
 
 		test.beforeAll( () => {
+			// @step サービスメニューを「複数人一括予約」オン・「予約枠の定員」5・「最少催行人数」3 にして、翌月分のシフトを入れておく
 			staffId = getStaffId();
 			menuId = getServiceMenuId();
 			setupGroupSessionMenu( menuId, staffId );
@@ -1353,13 +1415,16 @@ test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け�
 		test( '実機: 未達スロットの確定画面に「最少催行人数に満たない場合〜」注記が日本語で表示される', async ( {
 			page,
 		} ) => {
+			// @step 予約を空にしておく
 			deleteAllBookings();
 			// 予約ゼロ＝7/1 09:00 枠は booked_guests=0, min=3。今回1名で合計1<3 → 注記が出るべき。
 
+			// @step 管理者でログインし、予約ページでメニューを選んで翌月 1 日の 9:00 の枠を選び、予約確認画面へ進む
 			await loginAsAdmin( page );
 			await gotoConfirmScreenForFirstSlot( page, menuId );
 
 			// 注記が表示される（CodeRabbit #3 修正後の正しい挙動）
+			// @check 「最少催行人数に満たない場合〜」の注記が日本語で表示され、確定ボタンの説明として読み上げられるよう関連付けられている
 			const note = page.locator( '#vkbm-confirm-min-capacity-note' );
 			await expect( note ).toBeVisible( { timeout: 15000 } );
 			// 文言が日本語であること（i18n 修正の確認）
@@ -1386,6 +1451,7 @@ test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け�
 			deleteAllBookings();
 			// 7/1 09:00 枠に既存3名（最小3を満たす・最大5なので空きあり）。
 			// 今回1名を足しても合計4>=3 で充足 → 注記は出ない。
+			// @step 翌月 1 日の 9:00 の枠に 3 名の確定予約を入れておく
 			createBooking(
 				menuId,
 				staffId,
@@ -1396,10 +1462,12 @@ test.describe( 'PR #311: 最小催行人数 - 確定画面注記の出し分け�
 				'confirmed'
 			);
 
+			// @step 管理者でログインし、予約ページでメニューを選んで翌月 1 日の 9:00 の枠を選び、予約確認画面へ進む
 			await loginAsAdmin( page );
 			await gotoConfirmScreenForFirstSlot( page, menuId );
 
 			// 充足済みスロットなので注記は表示されない（CodeRabbit #3 の「常時表示しない」回帰）
+			// @check 最少催行人数に満たない旨の注記は表示されない
 			await expect(
 				page.locator( '#vkbm-confirm-min-capacity-note' )
 			).toHaveCount( 0 );

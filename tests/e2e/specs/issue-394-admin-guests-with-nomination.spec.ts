@@ -138,9 +138,11 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 	test.beforeAll( () => {
 		originalStaffEnabled = getStaffEnabled();
 		// サイト全体の指名機能をONにする（メニューは既定で指名を使う）。
+		// @step 管理画面でスタッフ指名を使う設定にしておく
 		setStaffEnabled( true );
 
 		staffId = getStaffId();
+		// @step 指名を使い、複数人予約あり・定員 3 名・基本料金 1,000円の「Admin Guests Nomination Menu」を作成しておく
 		menuId = seedNominationMenu();
 	} );
 
@@ -157,9 +159,11 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 	test( '指名を使うメニューの予約の人数を変更して保存できる（人数欄はaria-describedbyで説明文と紐付く）', async ( {
 		page,
 	} ) => {
+		// @step そのメニューで 2999年1月15日 9:00 の人数 1 名の確定済み予約を登録しておく
 		const bookingId = seedBooking( '2999-01-15' );
 
 		try {
+			// @step 管理者でログインし、その予約の編集画面を開く
 			await loginAsAdmin( page );
 			await page.goto(
 				`/wp-admin/post.php?post=${ bookingId }&action=edit`
@@ -172,12 +176,14 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 			await guestsInput.waitFor( { state: 'visible', timeout: 15000 } );
 
 			// #394: 指名を使うメニューでも人数入力欄が表示され、上限（予約枠の定員=3）が反映されている。
+			// @check 人数の入力欄が表示され、上限が定員の 3 になっている
 			await expect( guestsInput ).toHaveAttribute(
 				'max',
 				String( MENU_MAX_CAPACITY )
 			);
 
 			// 人数欄と直下の説明文が aria-describedby で紐付いている（#394）。
+			// @check 人数欄の説明文に「保存時に人数から基本料金を再計算します」と「貸切（1枠1組）になります」が表示される
 			const describedBy =
 				await guestsInput.getAttribute( 'aria-describedby' );
 			expect( describedBy ).toBeTruthy();
@@ -203,11 +209,13 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 			}
 
 			// 定員内（3のうち2）へ変更して保存する。
+			// @step 人数を 2 に変えて「更新」ボタンを押す
 			await guestsInput.fill( '2' );
 			await page.locator( '#publish' ).click();
 			await page.waitForLoadState( 'domcontentloaded' );
 
 			// 保存後、再読み込みされた画面の人数欄に変更後の値（2）が反映されている。
+			// @check 保存後の画面で人数が 2 になっている
 			const guestsInputAfterSave = page.locator(
 				'input[name="vkbm_booking[guests]"]'
 			);
@@ -224,9 +232,11 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 	test( '定員を超える人数を入力して保存しようとすると保存が中断され、既存の人数が保持される', async ( {
 		page,
 	} ) => {
+		// @step そのメニューで 2999年1月16日 9:00 の人数 1 名の確定済み予約を登録しておく
 		const bookingId = seedBooking( '2999-01-16' );
 
 		try {
+			// @step 管理者でログインし、その予約の編集画面を開く
 			await loginAsAdmin( page );
 			await page.goto(
 				`/wp-admin/post.php?post=${ bookingId }&action=edit`
@@ -243,6 +253,7 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 			// フォームの novalidate を有効にしてからサーバー側バリデーションを検証する
 			// （ユーザーはスピナーではなく直接キー入力で max を超える値を入力し得るため、
 			//  この迂回は実利用シナリオの近似として妥当）。
+			// @step 人数に定員を超える 99 を直接入力して「更新」ボタンを押す
 			await guestsInput.evaluate( ( el ) => {
 				const input = el as HTMLInputElement;
 				input.value = '99';
@@ -254,11 +265,13 @@ test.describe( 'issue #394: 管理画面の予約編集で指名あり・複数�
 			await page.waitForLoadState( 'domcontentloaded' );
 
 			// サーバー側バリデーションでエラー通知が表示される（管理者向けの保存中断案内）。
+			// @check エラーの通知が表示される
 			await expect( page.locator( '.notice-error' ).first() ).toBeVisible(
 				{ timeout: 15000 }
 			);
 
 			// 保存済みの人数（既存値1）は変更されず保持されている。
+			// @check 人数は元の 1 のまま変わっていない
 			const guestsInputAfterSave = page.locator(
 				'input[name="vkbm_booking[guests]"]'
 			);

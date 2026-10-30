@@ -217,7 +217,9 @@ test.describe( 'PR #317: 確認画面の料金表示（指名OFFでも基本料�
 	test.beforeAll( () => {
 		originalStaffEnabled = getStaffEnabled();
 		// 共有スタッフの指名料メタを退避してからテスト値を書き込む。
+		// @step 管理画面でスタッフの指名料を 1,500円にしておく
 		seedStaffNominationFee();
+		// @step そのスタッフを担当にした基本料金 5,000円の「Priced Menu 317」を作成しておく
 		pricedMenuId = seedPricedMenu();
 	} );
 
@@ -238,11 +240,14 @@ test.describe( 'PR #317: 確認画面の料金表示（指名OFFでも基本料�
 		page,
 	} ) => {
 		// 指名機能を OFF（自動割り当て）にする。
+		// @step 管理画面でスタッフ指名を使わない設定にしておく
 		setStaffEnabled( false );
 
+		// @step ログインせずに予約ページを開き、「Priced Menu 317」の「予約する」ボタンを押して、空きのある日と最初の時間枠を選び、確認画面へ進む
 		await gotoConfirmScreen( page );
 
 		// 「サービス基本料金」行が表示される（本不具合の本丸）。
+		// @check 確認画面に「サービス基本料金」の行が1行だけ表示され、5,000 と出ている
 		const baseRow = summaryRowByTitle( page, LABEL_BASE );
 		await expect( baseRow ).toHaveCount( 1 );
 		await expect( baseRow ).toBeVisible();
@@ -250,12 +255,14 @@ test.describe( 'PR #317: 確認画面の料金表示（指名OFFでも基本料�
 		await expect( baseRow ).toContainText( '5,000' );
 
 		// 「基本料金合計」行が表示される。
+		// @check 「基本料金合計」の行が1行だけ（二重にならず）表示され、5,000 と出ている
 		const totalRow = summaryRowByTitle( page, LABEL_TOTAL );
 		await expect( totalRow ).toHaveCount( 1 ); // ← 二重表示でないこと（厳密に 1 行）
 		await expect( totalRow ).toBeVisible();
 		await expect( totalRow ).toContainText( '5,000' );
 
 		// 「指名料」行は表示されない（指名OFFのため）。
+		// @check 「指名料」の行は表示されない
 		await expect(
 			summaryRowByTitle( page, LABEL_NOMINATION )
 		).toHaveCount( 0 );
@@ -271,17 +278,21 @@ test.describe( 'PR #317: 確認画面の料金表示（指名OFFでも基本料�
 		page,
 	} ) => {
 		// 指名機能を ON にする。
+		// @step 管理画面でスタッフ指名を使う設定にしておく
 		setStaffEnabled( true );
 
+		// @step ログインせずに予約ページを開き、「Priced Menu 317」の「予約する」ボタンを押して、空きのある日と最初の時間枠を選び、確認画面へ進む
 		await gotoConfirmScreen( page );
 
 		// 「サービス基本料金」行が表示される。
+		// @check 確認画面に「サービス基本料金」の行が1行だけ表示され、5,000 と出ている
 		const baseRow = summaryRowByTitle( page, LABEL_BASE );
 		await expect( baseRow ).toHaveCount( 1 );
 		await expect( baseRow ).toBeVisible();
 		await expect( baseRow ).toContainText( '5,000' );
 
 		// 「指名料」行が表示され、指名料 1,500 が出る（価格計算の回帰確認）。
+		// @check 「指名料」の行が1行だけ表示され、1,500 と出ている
 		const nominationRow = summaryRowByTitle( page, LABEL_NOMINATION );
 		await expect( nominationRow ).toHaveCount( 1 );
 		await expect( nominationRow ).toBeVisible();
@@ -289,6 +300,7 @@ test.describe( 'PR #317: 確認画面の料金表示（指名OFFでも基本料�
 
 		// 「基本料金合計」行が表示される（1 行のみ＝二重表示でない）。
 		// 合計は 基本料金 5,000 ＋ 指名料 1,500 = 6,500（価格計算の回帰確認）。
+		// @check 「基本料金合計」の行が1行だけ表示され、6,500 と出ている
 		const totalRow = summaryRowByTitle( page, LABEL_TOTAL );
 		await expect( totalRow ).toHaveCount( 1 );
 		await expect( totalRow ).toBeVisible();

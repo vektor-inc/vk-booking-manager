@@ -1,6 +1,8 @@
 import domReady from '@wordpress/dom-ready';
 import { render } from '@wordpress/element';
 import { ReservationApp } from './app';
+import { GuestVerifyResultScreen } from './guest-verify-result-screen';
+import { GuestCancelScreen } from './guest-cancel-screen';
 import { registerRestFallbackMiddleware } from '../shared/rest-fallback';
 import { readDetailSource } from './components/service-menu-detail-source';
 
@@ -57,6 +59,29 @@ const bootstrap = () => {
 			initialRegistrationErrorKey,
 			initialDetail,
 		};
+
+		// 会員登録なしの予約のキャンセル用リンクを開いたリクエストでは、予約画面の代わりにキャンセルの確認画面を出す。
+		// サーバーが確かめた内容だけを window.vkbmReservationConfig に載せる（トークンは載せず、画面が URL から読む）。
+		const guestCancel = window.vkbmReservationConfig?.guestCancel;
+		if ( guestCancel && typeof guestCancel.state === 'string' ) {
+			render( <GuestCancelScreen view={ guestCancel } />, node );
+			return;
+		}
+
+		// 会員登録なしの予約の確認リンクを開いたリクエストでは、予約画面の代わりに結果画面を出す。
+		// サーバーが処理した結果だけを window.vkbmReservationConfig に載せる（code・message は載せない）。
+		const guestVerifyResult =
+			window.vkbmReservationConfig?.guestVerifyResult;
+		if (
+			guestVerifyResult &&
+			typeof guestVerifyResult.result === 'string'
+		) {
+			render(
+				<GuestVerifyResultScreen result={ guestVerifyResult } />,
+				node
+			);
+			return;
+		}
 
 		render( <ReservationApp { ...props } />, node );
 	} );

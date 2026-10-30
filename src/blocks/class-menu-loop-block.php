@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Lodging_Price_Display;
@@ -1618,7 +1619,10 @@ class Menu_Loop_Block {
 			);
 		// #392: 最少催行人数は指名を使うメニューでは意味を持たないため、定員・料金区分とは別に
 		// 「指名OFF」を明示的に要求する（残数・催行状態をフロントで表示しない要件と同じ理由）。
-		$min_capacity_available = $slot_capacity_available && ! $is_nomination_menu;
+		// #968: 「貸し切り予約」ONのメニューも最初の1件で枠が閉じ、最少催行人数は受付制限として働く
+		// （催行状態のしきい値ではない）ため、指名を使うメニューと同じく非表示にする。
+		$min_capacity_available = $slot_capacity_available && ! $is_nomination_menu
+			&& ! ( new Availability_Service() )->is_menu_exclusive_when_booked( $post );
 		if ( $slot_capacity_displayable && $max_capacity >= 2 ) {
 			// #392: 指名を使うメニューは「1組の最大人数」、使わないメニューは従来どおり
 			// 「予約枠の定員」とラベルを出し分ける。同じ数値でも「相乗りできる人数」なのか

@@ -206,6 +206,7 @@ test.describe
 		bookingUrl = wpEvalPhp( `echo home_url( '/booking/' );` ).trim();
 
 		// 時間枠のメニュー（詳細ページ ON）。スタッフは global-setup が作った既存メニューのものを使う。
+		// @step 「詳細ページを使う」を有効にした時間枠のサービスメニューを1つ作っておく（スタッフは既存のメニューと同じ）
 		slotMenuId = insertAndGetId(
 			`
 			$base = get_posts( array(
@@ -238,6 +239,7 @@ test.describe
 		).trim();
 
 		// 宿泊用の客室・泊のプラン（詳細ページ ON）。当月＋翌月のシフトを入れる。
+		// @step 客室を1つ作って当月と翌月のシフトを入れ、その客室を担当にした「詳細ページを使う」を有効にした泊のプランを作っておく
 		roomId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -282,6 +284,7 @@ test.describe
 
 	test.describe( '時間枠のサイト', () => {
 		test.beforeAll( async () => {
+			// @step 基本設定で業種を「カスタム」にし、予約ページで絞り込み検索・日付での絞り込み・メニュー一覧を表示し、詳細の表示方法を「ブロック」にしておく
 			await configureProviderSettings( {
 				industry_preset: 'custom',
 				reservation_show_menu_search: 1,
@@ -295,11 +298,13 @@ test.describe
 		test( '日付を選ぶと URL に date が付き、詳細 → 予約に進むで日付が選択済みになる。戻る・一覧に戻るでも日付が残る', async ( {
 			page,
 		} ) => {
+			// @step 予約ページを開き、絞り込み検索の「日付」欄で3日後の日付を選ぶ
 			const iso = tokyoIsoAfter( 3 );
 			await page.goto( '/booking/' );
 			await pickFilterDate( page, iso );
 
 			// 一覧の詳細リンクに日付が付く。
+			// @check 一覧のメニューの「詳細を見る」のリンク先に、選んだ日付と詳細表示の指定が付く
 			const detailLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ slotMenuId }"] a.vkbm-button__primary`
 			);
@@ -317,7 +322,9 @@ test.describe
 			expect( href.searchParams.get( 'vkbm_view' ) ).toBe( 'detail' );
 
 			// 詳細表示へ。URL に date が付いている。
+			// @step 「詳細を見る」を押す
 			await detailLink.click();
+			// @check 詳細表示に切り替わり、アドレスバーの URL に選んだ日付が付いて、メニュー名の見出しが出る
 			await expect( page ).toHaveURL( /vkbm_view=detail/ );
 			await expect( page ).toHaveURL( new RegExp( `date=${ iso }` ) );
 			await expect(
@@ -325,6 +332,7 @@ test.describe
 			).toBeVisible();
 
 			// 「一覧に戻る」は日付が残った一覧へ戻る。
+			// @check ヘッダーの「一覧に戻る」のリンク先にも選んだ日付が付いている
 			const backLink = page
 				.locator( '.vkbm-reservation-header__nav a' )
 				.first();
@@ -335,7 +343,9 @@ test.describe
 			).toBe( iso );
 
 			// 「予約に進む」: 日付が選択済みのカレンダーが開き、時間枠は未選択。案内は出ない。
+			// @step 詳細表示の「予約に進む」を押す
 			await clickReserveInDetail( page );
+			// @check 予約カレンダーが開き、選んだ日付だけが選択済みで、時間枠は選ばれておらず、日付の案内は出ない
 			await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -355,7 +365,9 @@ test.describe
 			).toHaveCount( 0 );
 
 			// ブラウザの戻るを2回で、日付が残った一覧へ戻る（絞り込み欄にも日付が入る）。
+			// @step ブラウザの戻るを2回押す
 			await page.goBack();
+			// @check 詳細表示を経て、日付の付いた一覧へ戻り、絞り込みの「日付」欄に選んだ日付が入っている
 			await expect( page ).toHaveURL( /vkbm_view=detail/ );
 			await page.goBack();
 			await expect( page ).toHaveURL( new RegExp( `date=${ iso }` ) );
@@ -364,12 +376,14 @@ test.describe
 			).toHaveValue( iso );
 
 			// 「詳細を見る」→「一覧に戻る」でも日付の残った一覧が開く。
+			// @step もう一度「詳細を見る」を押し、ヘッダーの「一覧に戻る」を押す
 			await detailLink.click();
 			await expect( page ).toHaveURL( /vkbm_view=detail/ );
 			await page
 				.locator( '.vkbm-reservation-header__nav a' )
 				.first()
 				.click();
+			// @check 日付の付いた一覧へ戻り、絞り込みの「日付」欄に選んだ日付が入っている
 			await expect( page ).not.toHaveURL( /vkbm_view=detail/ );
 			await expect( page ).toHaveURL( new RegExp( `date=${ iso }` ) );
 			await expect(
@@ -380,7 +394,9 @@ test.describe
 		test( '日付を選ばないときは、リンクにも URL にも date が付かず、日付未選択で開く', async ( {
 			page,
 		} ) => {
+			// @step 日付を選ばずに予約ページを開く
 			await page.goto( '/booking/' );
+			// @check 一覧の「詳細を見る」のリンク先に日付が付かない
 			const detailLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ slotMenuId }"] a.vkbm-button__primary`
 			);
@@ -391,8 +407,10 @@ test.describe
 				).searchParams.has( 'date' )
 			).toBe( false );
 
+			// @step 「詳細を見る」を押し、詳細表示の「予約に進む」を押す
 			await detailLink.click();
 			await clickReserveInDetail( page );
+			// @check 予約カレンダーが日付未選択で開き、アドレスバーの URL にも日付が付かない
 			await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -406,11 +424,13 @@ test.describe
 			page,
 		} ) => {
 			// シフトを入れていない遠い日付（予約できない）。
+			// @step シフトの入っていない90日後の日付を付けた、時間枠のメニューの詳細表示の URL を開き、「予約に進む」を押す
 			const farIso = tokyoIsoAfter( 90 );
 			await page.goto(
 				`/booking/?menu_id=${ slotMenuId }&vkbm_view=detail&date=${ farIso }`
 			);
 			await clickReserveInDetail( page );
+			// @check 予約カレンダーが開き、カレンダーの直上に「予約できません」と年を含む案内が1行出て、日付は未選択のまま
 			await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -443,6 +463,7 @@ test.describe
 			// シフトは当月と翌月に入っているため、実行日によらず必ず空きがあるのは翌月。
 			// 戻す回数は、引き継いだ日付の月と翌月の差から決める（描画途中の件数を見て戻す回数を決めると、
 			// 読み込み前に空と判定して翌月を通り過ぎ、空きの無い過去月まで戻ってしまう）。
+			// @step カレンダーの前の月へのボタンで空きのある翌月まで戻し、空いている日を選ぶ
 			const nextMonth = getCurrentAndNextTokyoMonths()[ 1 ];
 			const monthsBack =
 				Number( farIso.slice( 0, 4 ) ) * 12 +
@@ -473,18 +494,21 @@ test.describe
 			// 翌月の空き日が描画されるまで待ってから選ぶ。
 			await expect( available.first() ).toBeVisible( { timeout: 15000 } );
 			await available.first().click();
+			// @check カレンダーの直上の案内が消える
 			await expect( notice.locator( 'p' ) ).toHaveCount( 0 );
 		} );
 
 		test( '過去日を引き継いだときは未選択に戻り、「過ぎています」の案内が出る', async ( {
 			page,
 		} ) => {
+			// @step 3日前の日付を付けた、時間枠のメニューの詳細表示の URL を開き、「予約に進む」を押す
 			await page.goto(
 				`/booking/?menu_id=${ slotMenuId }&vkbm_view=detail&date=${ tokyoIsoAfter(
 					-3
 				) }`
 			);
 			await clickReserveInDetail( page );
+			// @check 予約カレンダーの直上に「過ぎています」の案内が1行出て、日付は未選択のまま
 			await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -503,14 +527,17 @@ test.describe
 		test( '個別投稿として表示する場合: 一覧の詳細リンクはパーマリンクのまま（仕様書どおり date を付けない）。URL に date が付いた個別ページの「予約に進む」は日付を引き継ぐ', async ( {
 			page,
 		} ) => {
+			// @step 基本設定でサービスメニューの詳細の表示方法を「WordPressの個別投稿として表示」にしておく
 			await configureProviderSettings( {
 				service_menu_detail_display_mode: 'template',
 			} );
 			const iso = tokyoIsoAfter( 3 );
 
 			// 一覧の詳細リンクは個別ページ（パーマリンク）を指し、date は付かない（docs/specification-service-menu.md）。
+			// @step 予約ページを開き、絞り込み検索の「日付」欄で3日後の日付を選ぶ
 			await page.goto( '/booking/' );
 			await pickFilterDate( page, iso );
+			// @check 一覧の「詳細を見る」のリンク先は個別ページのパーマリンクのままで、日付は付かない
 			const detailLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ slotMenuId }"] a.vkbm-button__primary`
 			);
@@ -520,7 +547,9 @@ test.describe
 			);
 
 			// URL に date が付いた個別ページ（共有された URL など）の「予約に進む」には menu_id と date が付く。
+			// @step 3日後の日付を付けた個別ページの URL を開く
 			await page.goto( permalinkWith( 'date', iso ) );
+			// @check 「予約に進む」のリンク先に、メニューの指定と同じ日付が付く
 			const reserve = page
 				.locator( 'a[href*="menu_id="][href*="date="]' )
 				.first();
@@ -534,7 +563,9 @@ test.describe
 			expect( reserveUrl.searchParams.get( 'date' ) ).toBe( iso );
 
 			// 不正な値は引き継がない。
+			// @step 存在しない日付（2026-02-31）を付けた個別ページの URL を開く
 			await page.goto( permalinkWith( 'date', '2026-02-31' ) );
+			// @check 「予約に進む」のリンク先に日付が付かない
 			const plain = page.locator( 'a[href*="menu_id="]' ).first();
 			await expect( plain ).toBeVisible();
 			expect(
@@ -544,11 +575,13 @@ test.describe
 			).toBe( false );
 
 			// 押すと、日付が選択済みの予約カレンダーが開く。
+			// @step 3日後の日付を付けた個別ページの URL を開き、「予約に進む」を押す
 			await page.goto( permalinkWith( 'date', iso ) );
 			await page
 				.locator( 'a[href*="menu_id="][href*="date="]' )
 				.first()
 				.click();
+			// @check 予約カレンダーが開き、日付が1つ選択済みになっている
 			await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -560,6 +593,7 @@ test.describe
 
 	test.describe( '宿泊のサイト', () => {
 		test.beforeAll( async () => {
+			// @step 基本設定で業種を「宿泊」にし、予約ページで絞り込み検索・日付での絞り込み・メニュー一覧を表示し、詳細の表示方法を「ブロック」にしておく
 			await configureProviderSettings( {
 				industry_preset: 'lodging',
 				reservation_show_menu_search: 1,
@@ -573,6 +607,7 @@ test.describe
 		test( 'チェックイン日・チェックアウト日が詳細経由で日程選択に入力済みで開き、日程を指定しないときは未入力で開く', async ( {
 			page,
 		} ) => {
+			// @step 予約ページを開き、絞り込み検索でチェックイン日（3日後）とチェックアウト日（その2日後）を入れる
 			const { checkIn, checkOut } = tokyoStayInOneMonth( 3, 2 );
 			await page.goto( '/booking/' );
 			const inputs = page.locator(
@@ -580,12 +615,14 @@ test.describe
 			);
 			await inputs.nth( 0 ).fill( checkIn );
 			await inputs.nth( 1 ).fill( checkOut );
+			// @check アドレスバーの URL にチェックイン日とチェックアウト日が付く
 			await expect( page ).toHaveURL(
 				new RegExp(
 					`date=${ checkIn }.*check_out_date=${ checkOut }|check_out_date=${ checkOut }.*date=${ checkIn }`
 				)
 			);
 
+			// @check 泊のプランの「詳細を見る」のリンク先に、チェックイン日とチェックアウト日が付く
 			const detailLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ nightMenuId }"] a.vkbm-button__primary`
 			);
@@ -603,11 +640,13 @@ test.describe
 				checkOut
 			);
 
+			// @step 「詳細を見る」を押し、詳細表示の「予約に進む」を押す
 			await detailLink.click();
 			await expect( page ).toHaveURL( /vkbm_view=detail/ );
 			await clickReserveInDetail( page );
 
 			// 日程選択（範囲カレンダー）が開き、チェックイン日・チェックアウト日が入力済み。
+			// @check 日程選択が開き、チェックイン日とチェックアウト日が入力済みで、日程の案内は出ない
 			await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -618,6 +657,7 @@ test.describe
 				page.locator( '.vkbm-lodging__carry-notice p' )
 			).toHaveCount( 0 );
 			// 空室一覧が出ていて、客室は未選択。
+			// @check 空室の一覧に客室が1つ出て、客室はまだ選ばれていない
 			await expect( page.locator( '.vkbm-lodging__room' ) ).toHaveCount(
 				1,
 				{ timeout: 15000 }
@@ -627,6 +667,7 @@ test.describe
 			).toHaveCount( 0 );
 
 			// 対照: 日程を指定せずに同じ操作をすると、日程選択は未入力で開く。
+			// @step 日程を入れずに予約ページを開き、泊のプランの「詳細を見る」→「予約に進む」を押す
 			await page.goto( '/booking/' );
 			const plainLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ nightMenuId }"] a.vkbm-button__primary`
@@ -634,6 +675,7 @@ test.describe
 			await expect( plainLink ).toBeVisible( { timeout: 15000 } );
 			await plainLink.click();
 			await clickReserveInDetail( page );
+			// @check 日程選択が開き、日程は未入力のまま
 			await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
 				timeout: 15000,
 			} );
@@ -648,6 +690,7 @@ test.describe
 			// 予約画面がメニュー種別（泊のプランか）を判定する元の REST（/wp/v2/vkbm_service_menu）の応答を、
 			// 「予約に進む」を押すまで保留し、種別が未確定の状態で押せるようにする。
 			// 種別が未確定のあいだは、引き継いだ日程を捨ててはいけない。
+			// @step 通信が遅く、予約画面がメニューの情報をまだ読み込み終えていない状態にする
 			let releaseMenus: () => void = () => {};
 			const menusGate = new Promise< void >( ( resolve ) => {
 				releaseMenus = resolve;
@@ -659,16 +702,19 @@ test.describe
 					await route.continue();
 				}
 			);
+			// @step チェックイン日とチェックアウト日を付けた、泊のプランの詳細表示の URL を開く
 			const { checkIn, checkOut } = tokyoStayInOneMonth( 3, 2 );
 			await page.goto(
 				`/booking/?menu_id=${ nightMenuId }&vkbm_view=detail&date=${ checkIn }&check_out_date=${ checkOut }`
 			);
 			// 詳細表示が出た時点で（メニュー種別の応答が未着のまま）押し、押した直後に応答を返す。
+			// @step メニューの情報の読み込みが終わる前に、詳細表示の「予約に進む」を押す
 			const reserve = page.locator(
 				'.vkbm-reservation-detail__card a.vkbm-menu-loop__button--reserve'
 			);
 			await reserve.click( { timeout: 15000 } );
 			releaseMenus();
+			// @check 読み込みが終わると日程選択が開き、チェックイン日とチェックアウト日が入力済みになっている
 			await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
 				timeout: 20000,
 			} );
@@ -681,12 +727,14 @@ test.describe
 			page,
 		} ) => {
 			// シフトの無い遠い日程。
+			// @step シフトの無い90日後〜92日後の日程を付けた、泊のプランの詳細表示の URL を開き、「予約に進む」を押す
 			const farIn = tokyoIsoAfter( 90 );
 			const farOut = tokyoIsoAfter( 92 );
 			await page.goto(
 				`/booking/?menu_id=${ nightMenuId }&vkbm_view=detail&date=${ farIn }&check_out_date=${ farOut }`
 			);
 			await clickReserveInDetail( page );
+			// @check 日程選択の直上に「予約できません」の案内が1行出て、日程は未入力のまま
 			const notice = page.locator(
 				'.vkbm-lodging__carry-notice[role="status"]'
 			);
@@ -699,12 +747,14 @@ test.describe
 			).toHaveCount( 0 );
 
 			// 過去の日程。
+			// @step 5日前〜3日前の過去の日程を付けた、泊のプランの詳細表示の URL を開き、「予約に進む」を押す
 			await page.goto(
 				`/booking/?menu_id=${ nightMenuId }&vkbm_view=detail&date=${ tokyoIsoAfter(
 					-5
 				) }&check_out_date=${ tokyoIsoAfter( -3 ) }`
 			);
 			await clickReserveInDetail( page );
+			// @check 日程選択の直上に「過ぎています」の案内が1行出る
 			await expect( notice.locator( 'p' ) ).toHaveCount( 1, {
 				timeout: 15000,
 			} );
@@ -714,8 +764,10 @@ test.describe
 		test( 'チェックアウト日が無く date だけの URL は、リンクに日付を付けず、日程にも引き継がない', async ( {
 			page,
 		} ) => {
+			// @step チェックアウト日を付けず、3日後の日付だけを付けた予約ページの URL を開く
 			const iso = tokyoIsoAfter( 3 );
 			await page.goto( `/booking/?date=${ iso }` );
+			// @check 泊のプランの「詳細を見る」のリンク先に日付が付かない
 			const detailLink = page.locator(
 				`.vkbm-menu-loop__item[data-menu-id="${ nightMenuId }"] a.vkbm-button__primary`
 			);
@@ -726,9 +778,11 @@ test.describe
 			expect( href.searchParams.has( 'date' ) ).toBe( false );
 
 			// 予約ブロックに直接 menu_id と date だけを渡しても、宿泊の日程は入らない。
+			// @step 泊のプランの指定と3日後の日付だけを付けた予約ページの URL を開く
 			await page.goto(
 				`/booking/?menu_id=${ nightMenuId }&date=${ iso }`
 			);
+			// @check 日程選択が開き、日程は未入力のまま
 			await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible( {
 				timeout: 15000,
 			} );

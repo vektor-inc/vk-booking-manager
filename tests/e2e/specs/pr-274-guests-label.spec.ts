@@ -110,6 +110,7 @@ test.describe( 'PR #274: 複数人予約の数量の見出し・単位カスタ�
 	// Reset to default before each test so that running a single test via --grep
 	// still starts from a known state (afterEach alone leaves single-run order-dependent).
 	test.beforeEach( () => {
+		// @step 基本設定の複数人予約の数量の見出しと単位を、未設定（初期状態）に戻しておく
 		resetGuestsSettings();
 	} );
 
@@ -124,38 +125,48 @@ test.describe( 'PR #274: 複数人予約の数量の見出し・単位カスタ�
 		// Both keys are reset to unset (null) in beforeEach = state right after upgrade.
 
 		// REST の実効値を確認。日本語ロケール（global setup で ja）なので単位は「名」、見出しは「人数」。
+		// @step 見出しと単位は未設定のまま、予約フォームが読み込む設定の値を確かめる
 		const labels = getRestGuestsLabels();
+		// @check 単位が「名」、見出しが「人数」になっている
 		expect( labels.unit ).toBe( '名' );
 		expect( labels.count ).toBe( '人数' );
 
 		// PHP 整形ヘルパーも「◯名」を返す（通知メール・管理画面の表示と同じ）。
+		// @check 通知メールや管理画面に出る数量の表示が「5名」になる
 		expect( getPhpFormattedGuests( 5 ) ).toBe( '5名' );
 	} );
 
 	test( 'B. 単位を空に: 空文字保存 → 単位なし（数値のみ）', () => {
 		// 準備: 単位を意図的に空文字で保存する。
 		// Setup: intentionally save an empty unit.
+		// @step 基本設定で数量の単位を空にして保存しておく
 		setGuestsSetting( 'guests_unit_label', '' );
 
 		// REST 実効値は空文字（単位なし）。
+		// @check 予約フォームが読み込む設定の単位が空になっている
 		const labels = getRestGuestsLabels();
 		expect( labels.unit ).toBe( '' );
 
 		// PHP 整形ヘルパーは数値のみを返す。
+		// @check 通知メールや管理画面に出る数量の表示が単位なしの「5」になる
 		expect( getPhpFormattedGuests( 5 ) ).toBe( '5' );
 	} );
 
 	test( 'C-1. 単位「台」→「◯台」（全角は詰める）', () => {
+		// @step 基本設定で数量の単位を「台」にして保存しておく
 		setGuestsSetting( 'guests_unit_label', '台' );
 
+		// @check 予約フォームが読み込む設定の単位が「台」になり、数量の表示が「5台」（間を詰める）になる
 		const labels = getRestGuestsLabels();
 		expect( labels.unit ).toBe( '台' );
 		expect( getPhpFormattedGuests( 5 ) ).toBe( '5台' );
 	} );
 
 	test( 'C-2. 単位「seats」→「◯ seats」（半角英字始まりはスペース）', () => {
+		// @step 基本設定で数量の単位を「seats」にして保存しておく
 		setGuestsSetting( 'guests_unit_label', 'seats' );
 
+		// @check 予約フォームが読み込む設定の単位が「seats」になり、数量の表示が「5 seats」（間に空白を入れる）になる
 		const labels = getRestGuestsLabels();
 		expect( labels.unit ).toBe( 'seats' );
 		expect( getPhpFormattedGuests( 5 ) ).toBe( '5 seats' );
@@ -163,41 +174,54 @@ test.describe( 'PR #274: 複数人予約の数量の見出し・単位カスタ�
 
 	test( 'C-3. 空 → 「名」入力で既定の「◯名」に復帰', () => {
 		// 一度空にする。
+		// @step 基本設定で数量の単位を空にして保存しておく
 		setGuestsSetting( 'guests_unit_label', '' );
+		// @check 数量の表示が単位なしの「5」になる
 		expect( getPhpFormattedGuests( 5 ) ).toBe( '5' );
 
 		// 「名」を入力して保存し直す → 既定相当に復帰。
+		// @step 数量の単位に「名」を入れて保存し直す
 		setGuestsSetting( 'guests_unit_label', '名' );
+		// @check 予約フォームが読み込む設定の単位が「名」に戻り、数量の表示が「5名」になる
 		const labels = getRestGuestsLabels();
 		expect( labels.unit ).toBe( '名' );
 		expect( getPhpFormattedGuests( 5 ) ).toBe( '5名' );
 	} );
 
 	test( 'D-1. 見出し未設定（空）→ 既定「人数」', () => {
+		// @step 基本設定で数量の見出しを空にして保存しておく
 		setGuestsSetting( 'guests_count_label', '' );
 
+		// @check 予約フォームが読み込む設定の見出しが既定の「人数」になる
 		const labels = getRestGuestsLabels();
 		expect( labels.count ).toBe( '人数' );
 	} );
 
 	test( 'D-2. 見出し「台数」→ 各所で「台数」', () => {
+		// @step 基本設定で数量の見出しを「台数」にして保存しておく
 		setGuestsSetting( 'guests_count_label', '台数' );
 
+		// @check 予約フォームが読み込む設定の見出しが「台数」になる
 		const labels = getRestGuestsLabels();
 		expect( labels.count ).toBe( '台数' );
 
 		// PHP ヘルパー vkbm_get_guests_count_label() も「台数」を返す（通知メール・管理画面の見出し）。
+		// @check 通知メールや管理画面に出る数量の見出しも「台数」になる
 		const phpHeading = wpEvalPhp( `echo vkbm_get_guests_count_label();` );
 		expect( phpHeading ).toBe( '台数' );
 	} );
 
 	test( '後方互換: 単位の null と空文字の出し分け（サニタイザ）', () => {
 		// 未設定（null）→ 実効値は「名」（ロケール既定）。
+		// @step 基本設定の数量の単位を未設定（初期状態）にしておく
 		setGuestsSetting( 'guests_unit_label', null );
+		// @check 予約フォームが読み込む設定の単位が既定の「名」になる
 		expect( getRestGuestsLabels().unit ).toBe( '名' );
 
 		// 空文字保存 → 単位なし。null へ潰されていないことを確認。
+		// @step 数量の単位を空にして保存する
 		setGuestsSetting( 'guests_unit_label', '' );
+		// @check 単位が「名」に戻されず、空のまま（単位なし）になる
 		expect( getRestGuestsLabels().unit ).toBe( '' );
 	} );
 } );

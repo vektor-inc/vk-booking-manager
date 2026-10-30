@@ -155,12 +155,32 @@ class Service_Menu_Nomination_Min_Guests_Rest_Field_Test extends WP_UnitTestCase
 				'expected'              => 0,
 			),
 			array(
-				'test_condition_name'   => '指名OFF => 0（受付制限は指名を使うメニューのみ）',
+				'test_condition_name'   => '指名OFF・貸し切り予約OFF => 0（受付制限は指名を使うメニューか貸し切り予約ONのメニューのみ）',
 				'nomination_enabled'    => false,
 				'slot_capacity_enabled' => true,
 				'allow_multiple_guests' => true,
 				'max_capacity'          => 5,
 				'min_capacity'          => 3,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・予約枠の定員機能ON・定員5・最低3 => 3（#968：フロントが人数の下限として使う値）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expected'              => 3,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・予約枠の定員機能OFF（サイト全体）・定員5・最低3 => 0（#968：定員機能OFFで実効0）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
 				'expected'              => 0,
 			),
 			array(
@@ -194,6 +214,9 @@ class Service_Menu_Nomination_Min_Guests_Rest_Field_Test extends WP_UnitTestCase
 			}
 			if ( $case['allow_multiple_guests'] ) {
 				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+			if ( ! empty( $case['exclusive_when_booked'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
 			}
 
 			$post_id = ! empty( $case['use_invalid_post_id'] ) ? 0 : $menu_id;

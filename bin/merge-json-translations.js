@@ -116,6 +116,12 @@ if (
 		'src/blocks/reservation/booking-confirm-error.js',
 		// リソースタグ絞り込み0件時の文言を扱うヘルパー（app.js から import され同じバンドルに入る）。
 		'src/blocks/reservation/resource-tag-empty-message.js',
+		// ゲスト予約のお客様情報の入力チェック文言（app.js から import され同じバンドルに入る）。
+		// reservation/ 直下のファイルは自動で拾われないため、ここに含めないと英語のまま表示される。
+		'src/blocks/reservation/guest-booking.js',
+		// ゲスト予約の確認リンクを開いた後の結果画面の文言（app.js から import され同じバンドルに入る）。
+		// 上と同じ理由で、ここに含める必要がある。
+		'src/blocks/reservation/guest-verify-result-screen.js',
 	];
 
 	const sourcesToMerge = [

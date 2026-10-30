@@ -189,8 +189,11 @@ function isAuthFormRequestWithError(
 
 test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止', () => {
 	test.beforeAll( () => {
+		// @step 予約ブロックだけを置いた固定ページを用意しておく
 		ensureReservationPage();
+		// @step 購読者のテスト用ユーザーを作成しておく
 		ensureTestUser();
+		// @step 管理画面でログイン・新規登録の試行回数制限を無効にしておく
 		disableRateLimitSetting();
 		flushRateLimitTransients();
 	} );
@@ -211,6 +214,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		page,
 		context,
 	} ) => {
+		// @step ブラウザの Cookie を消し、テスト用ページをログインフォームの状態で開く
 		await context.clearCookies();
 
 		// 通常どおり JS を読み込ませ、予約ブロックが REST 経由でログインフォームを描画する。
@@ -220,6 +224,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		const usernameInput = page.locator( '#vkbm-login-username' );
 		await expect( usernameInput ).toBeVisible( { timeout: 15000 } );
 
+		// @step ユーザー名にテスト用ユーザー、パスワードに誤った値を入れてログインボタンを押す
 		await usernameInput.fill( TEST_USER_LOGIN );
 		await page.locator( '#vkbm-login-password' ).fill( 'WrongPassword!!' );
 
@@ -241,6 +246,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		// クライアントが初回の auth-form 取得で error=auth_failed を渡していること。
 		// （サーバー側フォールバックが同じ .vkbm-alert__danger を出すため、これを
 		// 怠っても下の文言チェックだけでは見落としてしまう。CodeRabbit 指摘対応）
+		// @check 再読み込み後のログインフォームの取得で、ログイン失敗のエラーが一緒に要求される
 		await Promise.all( [
 			initialAuthFormRequestPromise,
 			page.waitForLoadState( 'networkidle' ),
@@ -249,6 +255,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 
 		// ログイン失敗後、統一文言（#194）がどこかに表示される
 		// （通常フローでは REST が返した authFormHtml 内のエラー欄に出る）。
+		// @check 「ユーザー名またはパスワードが正しくありません。」のエラーが表示される
 		const errorAlert = page.locator( '.vkbm-alert__danger' ).first();
 		await expect( errorAlert ).toBeVisible( { timeout: 15000 } );
 		const text = ( ( await errorAlert.textContent() ) || '' ).replace(
@@ -260,6 +267,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		);
 
 		// issue #512: 廃止した一時 Cookie が発行されていないこと。
+		// @check ブラウザに「vkbm_login_error」の Cookie が保存されていない
 		const cookies = await context.cookies();
 		expect(
 			cookies.some( ( cookie ) => cookie.name === 'vkbm_login_error' )
@@ -298,9 +306,11 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 
 		// 「戻る」→ guest バリアントのトップに戻る（この遷移は auth-form の
 		// 再取得を伴わないため、待ち受けは不要）。
+		// @step 上部の「戻る」ボタンを押し、「新規登録」ボタンを押す
 		await returnButton.click();
 
 		// 「新規登録」を押す（GET に error クエリが付かないこと）。
+		// @check 新規登録フォームの取得でエラーが要求されない
 		const registerAuthFormRequestPromise = page.waitForRequest(
 			( request ) =>
 				'GET' === request.method() &&
@@ -315,12 +325,14 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		] );
 
 		// 再び「戻る」→ guest バリアントのトップに戻る。
+		// @step もう一度「戻る」ボタンを押し、「ログイン」ボタンを押す
 		await returnButton.click();
 
 		// 「ログイン」を押す（同一マウントを保ったままの2回目の login モードへの
 		// 切り替え。initialLoginErrorSentRef は初回取得で既に true になっている
 		// ため、この GET にも error クエリが付かないはず＝ガードが効いている
 		// ことの直接的な検証）。
+		// @check ログインフォームの取得でエラーが要求されない
 		const loginAuthFormRequestPromise = page.waitForRequest(
 			( request ) =>
 				'GET' === request.method() &&
@@ -341,6 +353,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		// 検出できない。再取得されたログインフォームであることが確実な要素
 		// （#vkbm-login-username。register フォームには存在しない）が表示され、
 		// 描画が完了してから確認する。
+		// @check ログインフォームが表示され、さきほどのエラー文は残っていない
 		await expect( page.locator( '#vkbm-login-username' ) ).toBeVisible( {
 			timeout: 15000,
 		} );
@@ -355,6 +368,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		page,
 		context,
 	} ) => {
+		// @step ブラウザの Cookie を消し、テスト用ページをログインフォームの状態で開く
 		await context.clearCookies();
 
 		// 1回目は通常どおり読み込ませ、React が REST からログインフォームを取得して
@@ -368,10 +382,12 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		// ここから先（フォーム送信によるページ再読み込み）で view.js を止める。
 		// これにより、送信結果のページでは React が一切マウントできない
 		// （＝ JS 未実行時のフォールバック確認になる）。
+		// @step 予約画面のスクリプトが読み込めない状態にする
 		await page.route( '**/blocks/reservation/view.js*', ( route ) =>
 			route.abort()
 		);
 
+		// @step ユーザー名にテスト用ユーザー、パスワードに誤った値を入れてログインボタンを押す
 		await usernameInput.fill( TEST_USER_LOGIN );
 		await page.locator( '#vkbm-login-password' ).fill( 'WrongPassword!!' );
 
@@ -382,6 +398,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 
 		// render_block フィルタが同一リクエスト内で埋め込んだエラー文は、
 		// REST 応答を待たず最初から見えている（tabindex="-1" 付きの role="alert"）。
+		// @check 送信後のページに、最初から「ユーザー名またはパスワードが正しくありません。」のエラーと「読み込み中」の表示が出ている
 		const wrapper = page.locator(
 			'.wp-block-vk-booking-manager-reservation'
 		);
@@ -411,12 +428,14 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		).toBeVisible();
 
 		// 案内リンクは最初は隠れている。
+		// @check 別のログイン画面への案内リンクは最初は隠れている
 		const fallbackHint = wrapper.locator(
 			'a[href*="vkbm_native_login=1"]'
 		);
 		await expect( fallbackHint ).toBeHidden();
 
 		// 約3秒後、ブロックHTML内のインラインスクリプトが hidden を外す。
+		// @check 約3秒後に、ログイン画面（wp-login.php）への案内リンクが表示される
 		await expect( fallbackHint ).toBeVisible( { timeout: 4000 } );
 		const href = await fallbackHint.getAttribute( 'href' );
 		expect( href ).toContain( 'wp-login.php' );

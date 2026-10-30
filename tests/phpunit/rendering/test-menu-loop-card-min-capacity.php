@@ -137,11 +137,23 @@ class Menu_Loop_Card_Min_Capacity_Test extends WP_UnitTestCase {
 				'expect_label'        => false,
 				'expect_contains'     => array(),
 			),
+			array(
+				'test_condition_name' => '最大受付数=5 かつ 最少催行人数=3 かつ 貸し切り予約ON の場合 => 受付制限になるため催行用の最少催行人数項目は出力されない（#968）',
+				'max_capacity'        => 5,
+				'min_capacity'        => 3,
+				'exclusive'           => true,
+				'expect_label'        => false,
+				'expect_contains'     => array(),
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
 			// 条件に従ってサービスメニューを作成する。
 			$menu_id = $this->create_menu_with_capacities( $case['max_capacity'], $case['min_capacity'] );
+			if ( ! empty( $case['exclusive'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
+			}
 
 			// 公開境界（render_menu_card）経由でカードHTMLを生成する。
 			$output = $this->block->render_menu_card( $menu_id );

@@ -28,6 +28,7 @@ import {
  * - playwright.config の baseURL（テスト用 wp-env）に対して実行する。
  *   絶対URLはハードコードせず page.goto には相対パスを渡す。
  */
+// @title Issue #435: サービスメニュー一覧を表示しているときは「メニューを選択してください。」の警告を出さない
 test.describe( 'Issue #435: hide "Please select a menu" alert when the menu list is shown', () => {
 	let originalMenuListDisplayEnabled = false;
 	let originalMenuSearchDisplayEnabled = false;
@@ -46,14 +47,17 @@ test.describe( 'Issue #435: hide "Please select a menu" alert when the menu list
 	test( '「サービスメニュー一覧」ON＋「絞り込み検索」ON のとき、メニュー未選択でアラートが出ない', async ( {
 		page,
 	} ) => {
+		// @step 管理画面の「予約ページの表示要素」で「サービスメニュー一覧」と「絞り込み検索」を表示する設定にしておく
 		setMenuListDisplayEnabled( true );
 		setMenuSearchDisplayEnabled( true );
 
+		// @step 予約ページを開く
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
 		// 絞り込み検索（SelectedPlanSummary）自体は表示されていることを先に確認する
 		// （表示条件を満たせていないまま「アラートが無い」と誤判定しないため）。
+		// @check 絞り込み検索の欄が表示されている
 		await expect(
 			page.locator( '.vkbm-plan-summary__selectors' )
 		).toBeVisible( { timeout: 10000 } );
@@ -62,12 +66,14 @@ test.describe( 'Issue #435: hide "Please select a menu" alert when the menu list
 		// （.vkbm-reservation-content__menu-list は読み込み中・0件でも描画される枠のため、
 		// カード本体 .vkbm-menu-loop__item の件数で確認する。
 		// global-setup が最低1件の vkbm_service_menu を作成済み）。
+		// @check サービスメニュー一覧のカードが1件以上表示されている
 		await expect( page.locator( '.vkbm-menu-loop__item' ) ).not.toHaveCount(
 			0,
 			{ timeout: 10000 }
 		);
 
 		// 「メニューを選択してください。」のアラートが出ていないこと。
+		// @check 「メニューを選択してください。」の警告が出ていない
 		await expect(
 			page.locator( '.vkbm-plan-summary__pricing--alert' )
 		).toHaveCount( 0 );
@@ -76,19 +82,23 @@ test.describe( 'Issue #435: hide "Please select a menu" alert when the menu list
 	test( '「サービスメニュー一覧」OFF のとき、メニュー未選択でアラートが出る', async ( {
 		page,
 	} ) => {
+		// @step 管理画面の「予約ページの表示要素」で「サービスメニュー一覧」を表示しない設定にしておく
 		setMenuListDisplayEnabled( false );
 
+		// @step 予約ページを開く
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
 		// 「サービスメニュー一覧」が OFF のときは shouldShowMenuSearch が自動的に true になり
 		// （app.js: providerSettings.showMenuSearch || ! providerSettings.showMenuList）、
 		// 絞り込み検索（SelectedPlanSummary）自体は表示される。
+		// @check 絞り込み検索の欄が表示されている
 		await expect(
 			page.locator( '.vkbm-plan-summary__selectors' )
 		).toBeVisible( { timeout: 10000 } );
 
 		// 「メニューを選択してください。」のアラートが従来どおり出ていること。
+		// @check 「メニューを選択してください。」の警告が表示される
 		await expect(
 			page.locator( '.vkbm-plan-summary__pricing--alert' )
 		).toBeVisible( { timeout: 10000 } );

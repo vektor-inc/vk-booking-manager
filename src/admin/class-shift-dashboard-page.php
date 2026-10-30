@@ -2756,6 +2756,8 @@ class Shift_Dashboard_Page {
 	/**
 	 * 予約カードに出す顧客フラグ（予約者に割り当てられた種別名とブロック有無）を返す。
 	 *
+	 * 会員に紐付かないゲスト予約は、予約の連絡先で照合したゲストのフラグを返す。
+	 *
 	 * @param int $booking_id 予約投稿 ID。
 	 * @return array{label: string, blocks_booking: bool}|null フラグが無い場合は null。
 	 */
@@ -2764,7 +2766,23 @@ class Shift_Dashboard_Page {
 			return null;
 		}
 
-		$flag = $this->customer_flag_service->get_flag( (int) get_post_field( 'post_author', $booking_id ) );
+		$author_id = (int) get_post_field( 'post_author', $booking_id );
+		$flag      = $this->customer_flag_service->get_flag( $author_id );
+
+		// 会員に紐付かないゲスト予約は、予約の連絡先（メールアドレス・電話番号）で、ゲストに付けたフラグと照合する。
+		// ブロック対象のフラグがあればそれを優先して印にする。
+		if ( null === $flag && ! $this->customer_flag_service->can_have_flag( $author_id ) ) {
+			$guest_flags = $this->customer_flag_service->find_guest_flags(
+				(string) get_post_meta( $booking_id, '_vkbm_booking_customer_email', true ),
+				(string) get_post_meta( $booking_id, '_vkbm_booking_customer_tel', true )
+			);
+			foreach ( $guest_flags as $guest_flag ) {
+				if ( null === $flag || ! empty( $guest_flag['blocks_booking'] ) ) {
+					$flag = $guest_flag;
+				}
+			}
+		}
+
 		if ( null === $flag ) {
 			return null;
 		}

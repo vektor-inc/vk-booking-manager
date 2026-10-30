@@ -170,36 +170,46 @@ class Booking_Anonymizer {
 	 */
 	public static function get_meta_fields(): array {
 		$fields = array(
-			'_vkbm_booking_customer_name'   => array(
+			'_vkbm_booking_customer_name'           => array(
 				'label' => __( 'customer name', 'vk-booking-manager' ),
 				'value' => self::get_deleted_label(),
 			),
-			'_vkbm_booking_attendee_name'   => array(
+			'_vkbm_booking_attendee_name'           => array(
 				'label' => __( 'name of the person receiving the service', 'vk-booking-manager' ),
 				'value' => '',
 			),
-			'_vkbm_booking_attendee_id'     => array(
+			'_vkbm_booking_attendee_id'             => array(
 				'label' => __( 'ID of the person receiving the service', 'vk-booking-manager' ),
 				'value' => '',
 			),
-			'_vkbm_booking_attendee_number' => array(
+			'_vkbm_booking_attendee_number'         => array(
 				'label' => __( 'number of the person receiving the service', 'vk-booking-manager' ),
 				'value' => '',
 			),
-			'_vkbm_booking_customer_tel'    => array(
+			'_vkbm_booking_customer_tel'            => array(
 				'label' => __( 'telephone number', 'vk-booking-manager' ),
 				'value' => '',
 			),
-			'_vkbm_booking_customer_email'  => array(
+			'_vkbm_booking_customer_email'          => array(
 				'label' => __( 'email address', 'vk-booking-manager' ),
 				'value' => '',
 			),
-			'_vkbm_booking_note'            => array(
+			'_vkbm_booking_note'                    => array(
 				'label' => __( 'memo', 'vk-booking-manager' ),
 				'value' => '',
 			),
-			'_vkbm_booking_internal_note'   => array(
+			'_vkbm_booking_internal_note'           => array(
 				'label' => __( 'Management memo', 'vk-booking-manager' ),
+				'value' => '',
+			),
+			// ゲスト予約で、メールの持ち主が確認リンクを開いた日時。確認した本人の行動の記録のため匿名化の対象に含める。
+			'_vkbm_booking_guest_verified_at'       => array(
+				'label' => __( 'email confirmation date and time', 'vk-booking-manager' ),
+				'value' => '',
+			),
+			// ゲスト予約のキャンセル用リンクのトークンのハッシュ。匿名化した予約は、リンクからキャンセルできないようにする。
+			'_vkbm_booking_guest_cancel_token_hash' => array(
+				'label' => __( 'cancellation link token', 'vk-booking-manager' ),
 				'value' => '',
 			),
 		);
@@ -358,6 +368,11 @@ class Booking_Anonymizer {
 		// 個人情報のメタを置き換える。空にする項目も、メタ自体は残して空文字にする。
 		$meta_fields = self::get_meta_fields();
 		foreach ( $meta_fields as $meta_key => $field ) {
+			// キャンセル用リンクのトークンのハッシュは、空の行を残さず行ごと削除する（会員の予約に空の行を増やさない）。
+			if ( Booking_Source::META_GUEST_CANCEL_TOKEN_HASH === $meta_key ) {
+				Guest_Cancel_Controller::clear_tokens( $booking_id );
+				continue;
+			}
 			update_post_meta( $booking_id, $meta_key, $field['value'] );
 		}
 

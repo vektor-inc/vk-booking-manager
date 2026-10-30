@@ -98,6 +98,7 @@ const maskPostData = ( postData: string | null, contentType: string = '' ) => {
 };
 
 // 新規ユーザー登録を含む予約フローのテスト（メール認証なし）
+// @title 新規ユーザー登録を含む予約の流れ（メール認証なし）
 test.describe( 'Booking Flow with New User Registration (No Email Verification)', () => {
 	// 各テスト実行前にWordPressのトランジェントを削除してレート制限を回避
 	// Delete WordPress transients before each test to avoid rate limits
@@ -158,6 +159,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 	const password = 'TestPassword123!';
 
+	// @title 新規ユーザーが会員登録して予約を完了できる
 	test( 'should allow a new user to register and complete a booking', async ( {
 		page,
 	} ) => {
@@ -206,6 +208,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		// 1. 予約ページに移動
 		// goto は load まで待つ。以降は「次に操作する要素が出るまで」を待つ（固定待ち・networkidle は使わない #897）。
 		console.log( 'Initial Page URL:', `${ WP_BASE_URL }/booking/` );
+		// @step ログインせずに予約ページを開く
 		await page.goto( `${ WP_BASE_URL }/booking/` );
 
 		// 2. サービスメニューを選択
@@ -213,6 +216,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Waiting for service menu button...' );
 
 		// 適切なタイムアウトでサービスメニューボタンを探す
+		// @step 「Service Menu 1」の「予約する」ボタンを押す
 		try {
 			// まず新しいボタンスタイルを試す
 			const reserveSelector = `.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`;
@@ -271,6 +275,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 4. 利用可能な日付を選択（無効化されていない最初の日付）
 		console.log( 'Selecting an available date...' );
+		// @step カレンダーで選べる最初の日を選ぶ
 		const enabledCalendarDays = page.locator(
 			'.vkbm-calendar__day:not(:disabled):not([aria-disabled="true"]):not(.vkbm-calendar__day--disabled)'
 		);
@@ -305,6 +310,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 5. ランダムな時間枠を選択
 		// 日付クリック後にスロット一覧が描画されるまで待つ（固定待ちの代わり）。
+		// @step 表示された時間枠から1つ選ぶ
 		const slots = page.locator( '.vkbm-slot-list__item' );
 		await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
 		const count = await slots.count();
@@ -323,6 +329,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		// 6. 「予約内容を確認」ボタンをクリック
 		// クリック後は /vkbm/v1/drafts の応答を受けて ?draft=<token> 付き URL へ遷移する。
 		// 固定待ちの代わりに、その URL への遷移完了を待つ。
+		// @step 「予約内容を確認」ボタンを押して確認画面へ進む
 		const confirmButton = page
 			.locator( '.vkbm-plan-summary__action' )
 			.first();
@@ -348,6 +355,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Auth select visible:', authSelectVisible );
 
 		// 登録ボタンをクリック
+		// @step 「新規登録」ボタンを押す
 		const registerButton = page
 			.getByRole( 'button', { name: '新規登録', exact: false } )
 			.or( page.getByRole( 'button', { name: 'Sign up', exact: false } ) )
@@ -403,6 +411,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Username input visible:', usernameVisible );
 
 		if ( usernameVisible ) {
+			// @step 登録フォームにユーザー名・メールアドレス・パスワード・姓名を入れ、表示されていればパスワード（確認）・フリガナ・電話番号・利用規約の同意・性別・生年月日・プライバシーポリシーの同意も入れる
 			console.log( 'Filling in registration form...' );
 			console.log( 'About to enter try block...' );
 
@@ -602,6 +611,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 			// 登録を送信
 			// タブボタン「新規登録」と一致しないように特定のセレクタを使用
+			// @step 登録ボタンを押す
 			const submitButton = page
 				.locator( '#vkbm-provider-register-form button[type="submit"]' )
 				.or( page.locator( '.vkbm-auth-button[type="submit"]' ) );
@@ -718,6 +728,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			// 新規作成したユーザーでログイン
 			// 登録成功後はすでにログインフォームが表示されている。
 			// 表示されていない場合だけ、確認ページを開き直してログインボタンから開く。
+			// @step 表示されたログインフォームに登録したユーザー名とパスワードを入れてログインする
 			const loginUsernameInput = page
 				.locator( 'input[name="log"]' )
 				.or( page.locator( 'input[name="username"]' ) )
@@ -831,6 +842,7 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Checking for agreement checkboxes...' );
 
 		// 確認画面のまとめが描画されるのを待ってから同意欄を処理する（reload 後の固定待ちの代わり）。
+		// @step 確認画面で、表示されている同意のチェックボックスにすべてチェックを入れる
 		await page
 			.locator( '.vkbm-confirm__summary' )
 			.waitFor( { state: 'visible', timeout: 15000 } );
@@ -844,12 +856,15 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 		console.log( 'Button disabled attribute:', isDisabled );
 
 		// 10. 予約を確定
+		// @check 「予約を確定する」ボタンが押せる状態になる
 		await expect( finalConfirmButton ).toBeEnabled( { timeout: 10000 } );
+		// @step 「予約を確定する」ボタンを押す
 		await finalConfirmButton.click();
 
 		// 11. 完了を確認
 		// 「予約が完了しました」メッセージ
 		// 予約作成は REST（/vkbm/v1/bookings）の応答後に表示されるため、既定の 5 秒では足りない環境がある。
+		// @check 「予約が完了しました」と表示される
 		await expect(
 			page
 				.getByText( '予約が完了しました', { exact: false } )

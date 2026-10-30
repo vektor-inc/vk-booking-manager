@@ -219,6 +219,157 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 下書きと予約者を直接渡して予約を作る（現在のログイン状態に依存しない）。
+	 */
+	public function test_create_booking_from_draft(): void {
+		$this->disable_nomination();
+		$test_cases = array(
+			array(
+				'test_condition_name' => '会員を操作者に渡し、トークンも渡す場合 => 予約が作られ、下書きが削除される',
+				'booker'              => 'member',
+				'pass_token'          => true,
+				'expected_error'      => '',
+				'expected_draft_kept' => false,
+			),
+			array(
+				'test_condition_name' => '会員を操作者に渡し、トークンが空文字の場合 => 予約が作られ、下書きは残る',
+				'booker'              => 'member',
+				'pass_token'          => false,
+				'expected_error'      => '',
+				'expected_draft_kept' => true,
+			),
+			array(
+				'test_condition_name' => '存在しないユーザー ID を渡した場合 => 401 で拒否し、下書きは残る',
+				'booker'              => 'missing',
+				'pass_token'          => true,
+				'expected_error'      => 'not_logged_in',
+				'expected_draft_kept' => true,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$menu_id  = $this->create_menu();
+			$staff_id = $this->create_staff();
+			$start    = '2026-08-03T10:00:00+09:00';
+			$end      = '2026-08-03T10:30:00+09:00';
+			$token    = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+			$draft    = get_transient( self::TRANSIENT_PREFIX . $token );
+			$user_id  = 'member' === $case['booker'] ? $this->factory()->user->create() : 99999999;
+
+			// 現在のログイン状態とは別のユーザーを操作者として渡す。
+			wp_set_current_user( 0 );
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'agree_terms', true );
+			$result = $this->build_controller( $staff_id, $start, $end )->create_booking_from_draft(
+				$draft,
+				$case['pass_token'] ? $token : '',
+				$user_id,
+				false,
+				$request
+			);
+
+			if ( '' === $case['expected_error'] ) {
+				$this->assertIsArray( $result, $case['test_condition_name'] );
+				$this->assertContains( $result['status'], array( 'pending', 'confirmed' ), $case['test_condition_name'] );
+				$this->assertSame( $user_id, (int) get_post( $result['booking_id'] )->post_author, $case['test_condition_name'] );
+			} else {
+				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_error'], $result->get_error_code(), $case['test_condition_name'] );
+				$this->assertSame( 401, $result->get_error_data()['status'], $case['test_condition_name'] );
+			}
+			$this->assertSame( $case['expected_draft_kept'], false !== get_transient( self::TRANSIENT_PREFIX . $token ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 顧客フラグによる予約ブロックの判定には、引数の操作者 ID を渡す（代理予約の場合は判定しない）。
+	 */
+	public function test_create_booking_from_draft_block_check(): void {
+		$this->disable_nomination();
+		$test_cases = array(
+			array(
+				'test_condition_name' => '本人予約でブロック判定が WP_Error を返す場合 => 操作者 ID で判定し、そのエラーで拒否する',
+				'can_override'        => false,
+				'expected_calls'      => 1,
+				'expected_error'      => 'blocked_for_test',
+			),
+			array(
+				'test_condition_name' => '代理予約の場合 => ブロック判定を呼ばず、予約が作られる',
+				'can_override'        => true,
+				'expected_calls'      => 0,
+				'expected_error'      => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$menu_id  = $this->create_menu();
+			$staff_id = $this->create_staff();
+			$start    = '2026-08-04T10:00:00+09:00';
+			$end      = '2026-08-04T10:30:00+09:00';
+			$token    = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+			$draft    = get_transient( self::TRANSIENT_PREFIX . $token );
+			$user_id  = $this->factory()->user->create();
+
+			$received_ids = array();
+			$block_check  = static function ( $result, $checked_user_id ) use ( &$received_ids ) {
+				$received_ids[] = $checked_user_id;
+				return new WP_Error( 'blocked_for_test', 'blocked' );
+			};
+			add_filter( 'vkbm_booking_block_check', $block_check, 10, 2 );
+
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'agree_terms', true );
+			$request->set_param( 'customer_name', '代理のお客様' );
+			$result = $this->build_controller( $staff_id, $start, $end )->create_booking_from_draft( $draft, $token, $user_id, $case['can_override'], $request );
+			remove_filter( 'vkbm_booking_block_check', $block_check, 10 );
+
+			$this->assertCount( $case['expected_calls'], $received_ids, $case['test_condition_name'] );
+			if ( '' === $case['expected_error'] ) {
+				$this->assertIsArray( $result, $case['test_condition_name'] );
+			} else {
+				$this->assertSame( array( $user_id ), $received_ids, $case['test_condition_name'] );
+				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_error'], $result->get_error_code(), $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
+	 * REST の create_booking() 経由で、権限の無い会員は customer_name を送っても上書きできず、ブロック判定が呼ばれる。
+	 */
+	public function test_create_booking_block_check_for_member_via_rest(): void {
+		$this->disable_nomination();
+		$_COOKIE[ self::OWNER_COOKIE ] = 'owner_test';
+		$user_id                       = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$start    = '2026-08-05T10:00:00+09:00';
+		$end      = '2026-08-05T10:30:00+09:00';
+		$token    = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+
+		$received_ids = array();
+		$block_check  = static function ( $result, $checked_user_id ) use ( &$received_ids ) {
+			$received_ids[] = $checked_user_id;
+			return $result;
+		};
+		add_filter( 'vkbm_booking_block_check', $block_check, 10, 2 );
+
+		$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+		$request->set_param( 'token', $token );
+		$request->set_param( 'agree_terms', true );
+		$request->set_param( 'customer_name', '別のお客様' );
+		$response = $this->build_controller( $staff_id, $start, $end )->create_booking( $request );
+		remove_filter( 'vkbm_booking_block_check', $block_check, 10 );
+
+		$this->assertInstanceOf( WP_REST_Response::class, $response );
+		$this->assertSame( array( $user_id ), $received_ids, 'ブロック判定が操作者本人の ID で 1 回呼ばれる' );
+		$booking_id = (int) $response->get_data()['booking_id'];
+		$this->assertNotSame( '別のお客様', get_post_meta( $booking_id, '_vkbm_booking_customer_name', true ), '会員は予約者名を上書きできない' );
+		$this->assertSame( $user_id, (int) get_post( $booking_id )->post_author );
+	}
+
+	/**
 	 * 代理予約で電話番号が一致する会員の重複予約を拒否する。
 	 */
 	public function test_admin_booking_conflict_when_phone_matches_user(): void {
@@ -1761,6 +1912,36 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				'requested_guests'      => 1,
 				'expect_error'          => null,
 			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人予約ON・定員3・最低2・申込1名 => nomination_min_guests（#968：異常系）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'exclusive_when_booked' => true,
+				'requested_guests'      => 1,
+				'expect_error'          => 'nomination_min_guests',
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人予約ON・定員3・最低2・申込2名 => 確定できる（#968：ちょうど）',
+				'nomination_enabled'    => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'exclusive_when_booked' => true,
+				'requested_guests'      => 2,
+				'expect_error'          => null,
+			),
+			array(
+				'test_condition_name'   => '指名ON・貸し切り予約ON・複数人予約ON・定員3・最低2・申込1名 => nomination_min_guests（#968：指名ありでも拒否）',
+				'nomination_enabled'    => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 2,
+				'exclusive_when_booked' => true,
+				'requested_guests'      => 1,
+				'expect_error'          => 'nomination_min_guests',
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -1777,6 +1958,9 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			update_post_meta( $menu_id, '_vkbm_min_capacity', $case['min_capacity'] );
 			if ( $case['allow_multiple_guests'] ) {
 				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+			if ( ! empty( $case['exclusive_when_booked'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
 			}
 			// 複数人一括予約はスタッフ割当が前提のため、メニューにスタッフを割り当てる。
 			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );

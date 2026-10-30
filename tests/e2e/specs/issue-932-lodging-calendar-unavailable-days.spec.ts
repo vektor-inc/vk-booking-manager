@@ -105,6 +105,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		} catch {
 			originalSettingsJson = null;
 		}
+		// @step 客室「E2E932 Room」を作成し、1〜4 日後を含む月のシフトを登録しておく
 		roomId = insertAndGetId(
 			`
 			$id = wp_insert_post( array( 'post_type' => 'vkbm_resource', 'post_status' => 'publish', 'post_title' => '${ PREFIX } Room' ) );
@@ -116,6 +117,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			const { year, month } = dateAfter( offset );
 			createShiftForMonth( roomId, year, month );
 		}
+		// @step 予約の単位が「泊」・基本料金 10,000円のプラン「E2E932 Plan」を作成し、その客室を割り当てておく
 		menuId = insertAndGetId(
 			`
 			$id = wp_insert_post( array( 'post_type' => 'vkbm_service_menu', 'post_status' => 'publish', 'post_title' => '${ PREFIX } Plan' ) );
@@ -126,6 +128,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		`,
 			'menu'
 		);
+		// @step 2 日後チェックイン・3 日後チェックアウトの確定済み予約と、3 日後チェックイン・4 日後チェックアウトの確定済み予約を登録しておく
 		const booked = dateAfter( 2 );
 		insertAndGetId(
 			`
@@ -166,6 +169,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			`,
 			'later booking'
 		);
+		// @step 管理画面で業種を宿泊にしておく
 		await configureProviderSettings( { industry_preset: 'lodging' } );
 		wpCliArgs( [ 'transient', 'delete', '--all' ] );
 	} );
@@ -181,9 +185,11 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 	test( '満室日は × と読み上げ状態が出て選べず、最初の満室日はチェックアウトに選べる', async ( {
 		page,
 	} ) => {
+		// @step プランの予約ページを開く
 		await page.goto( `/booking/?menu_id=${ menuId }` );
 		await expect( page.locator( '.vkbm-stay-calendar' ) ).toBeVisible();
 
+		// @check 2 日後（満室）の日に × が付き、「選べません（満室）」と読み上げられる押せない状態になっている
 		const fullDay = await dayButton( page, 2 );
 		await expect(
 			fullDay.locator( '.vkbm-calendar__day-unavailable-mark' )
@@ -194,7 +200,9 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			/選べません（満室）/
 		);
 		// aria-disabled の要素は Playwright が通常クリックを止めるため、実際のポインターイベントを強制して防御処理を確かめる。
+		// @step 2 日後の日をクリックする
 		await fullDay.click( { force: true } );
+		// @check 2 日後は選ばれず、「予約できません」の案内が出る
 		await expect( await dayButton( page, 2 ) ).toHaveAttribute(
 			'aria-pressed',
 			'false'
@@ -203,6 +211,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			'予約できません'
 		);
 
+		// @step 1 日後をチェックイン日に選ぶ
 		const checkIn = await dayButton( page, 1 );
 		const checkoutMetaResponse = page.waitForResponse(
 			( response ) =>
@@ -212,10 +221,12 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		);
 		await checkIn.click();
 		await checkoutMetaResponse;
+		// @check 1 日後が選択中になる
 		await expect( await dayButton( page, 1 ) ).toHaveAttribute(
 			'aria-pressed',
 			'true'
 		);
+		// @check 2 日後は × のまま「チェックアウト日に選べます」と読み上げられる押せる状態になる
 		const checkoutBoundary = await dayButton( page, 2 );
 		await expect( checkoutBoundary ).toHaveAttribute(
 			'aria-disabled',
@@ -229,6 +240,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			checkoutBoundary.locator( '.vkbm-calendar__day-unavailable-mark' )
 		).toHaveText( '×' );
 
+		// @check 3 日後は「途中に予約できない日があります」と読み上げられる押せない状態で、× は付かない
 		const blocked = await dayButton( page, 3 );
 		await expect( blocked ).toHaveAttribute( 'aria-disabled', 'true' );
 		await expect( blocked ).toHaveAttribute(
@@ -240,6 +252,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		).toHaveText( '' );
 
 		// 日程を選び直して満室日より後をチェックインにしても、前の満室日の × と選択不可状態は残る。
+		// @step 「日程を選び直す」ボタンを押し、4 日後をチェックイン日に選ぶ
 		await page.getByRole( 'button', { name: '日程を選び直す' } ).click();
 		const laterCheckIn = await dayButton( page, 4 );
 		const laterCheckoutMetaResponse = page.waitForResponse(
@@ -250,6 +263,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		);
 		await laterCheckIn.click();
 		await laterCheckoutMetaResponse;
+		// @check 2 日後の × と押せない状態はそのまま残る
 		const fullDayAfterReselect = await dayButton( page, 2 );
 		await expect(
 			fullDayAfterReselect.locator(
@@ -262,6 +276,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		);
 
 		// 最大30泊を超えるチェックアウト日は、月をまたいでも選べない。
+		// @check 35 日後は「泊数の上限を超えています」と読み上げられる押せない状態で、× は付かない
 		const beyondMaximum = await dayButton( page, 35 );
 		await expect( beyondMaximum ).toHaveAttribute(
 			'aria-disabled',
@@ -281,19 +296,23 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 	} ) => {
 		try {
 			// 翌日までをチェックイン可能にし、翌々日を受付上限外の × にする。
+			// @step 管理画面でプランの予約受付期限を「1 日先まで」にしておく
 			wpEvalPhp( `
 				update_post_meta( ${ Number( menuId ) }, '_vkbm_max_advance_booking_days', 1 );
 			` );
 			wpCliArgs( [ 'transient', 'delete', '--all' ] );
 
+			// @step プランの予約ページを開く
 			await page.goto( `/booking/?menu_id=${ menuId }` );
 			await expect( page.locator( '.vkbm-stay-calendar' ) ).toBeVisible();
+			// @check 2 日後は受付期限外として × が付き、押せない状態になっている
 			const checkout = await dayButton( page, 2 );
 			await expect(
 				checkout.locator( '.vkbm-calendar__day-unavailable-mark' )
 			).toHaveText( '×' );
 			await expect( checkout ).toHaveAttribute( 'aria-disabled', 'true' );
 
+			// @step 1 日後をチェックイン日に選ぶ
 			const checkoutMetaResponse = page.waitForResponse(
 				( response ) =>
 					response.url().includes( '/lodging-calendar-meta' ) &&
@@ -302,6 +321,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			);
 			await ( await dayButton( page, 1 ) ).click();
 			await checkoutMetaResponse;
+			// @check 2 日後が × のまま「チェックアウト日に選べます」と読み上げられる押せる状態になる
 			const selectableCheckout = await dayButton( page, 2 );
 			await expect( selectableCheckout ).toHaveAttribute(
 				'aria-disabled',
@@ -316,7 +336,9 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 					'.vkbm-calendar__day-unavailable-mark'
 				)
 			).toHaveText( '×' );
+			// @step 2 日後をチェックアウト日に選ぶ
 			await selectableCheckout.click();
+			// @check 2 日後が選択中になる
 			await expect( await dayButton( page, 2 ) ).toHaveAttribute(
 				'aria-pressed',
 				'true'

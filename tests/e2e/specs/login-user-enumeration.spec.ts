@@ -210,6 +210,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 		// 元の言語を保存しておき afterAll で復元する（後続スペックへの副作用回避）
 		// Save the current locale so we can restore it in afterAll to avoid
 		// leaking the `ja` switch into subsequent specs.
+		// @step サイトの言語を日本語にし、ログインブロックを置いた固定ページ「enum-test-login」と、テスト用ユーザー「enum_test_user」を用意し、BM 設定でログイン試行回数の制限を無効にしておく
 		try {
 			const currentLocale = wpCliArgs( [ 'option', 'get', 'WPLANG' ] );
 			// 空文字は en_US 相当（WPLANG 未設定）
@@ -231,6 +232,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 	test.beforeEach( () => {
 		// 各テスト前に試行回数カウンタ（transient）を毎回クリア
 		// Clear the attempt counter transients before each test
+		// @step ログイン試行回数の記録を消しておく
 		flushRateLimitTransients();
 	} );
 
@@ -253,6 +255,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 	test( '存在しないユーザー名 + 任意のパスワード → 統一メッセージが表示される', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態でログインページを開き、存在しないユーザー名「nonexistent_user_xyz」と任意のパスワードを入れて送信する
 		const msg = await submitLoginAndGetError(
 			page,
 			'nonexistent_user_xyz',
@@ -260,6 +263,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 		);
 
 		// 統一メッセージのいずれか（日本語 or 英語）が含まれる
+		// @check 「ユーザー名またはパスワードが正しくありません。」のエラーが出て、「存在しないユーザー」の文言も、入力したユーザー名も表示されない
 		expect( msg ).toMatch(
 			new RegExp( `${ UNIFIED_MESSAGE_JA }|${ UNIFIED_MESSAGE_EN }` )
 		);
@@ -273,12 +277,14 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 	test( '存在するユーザー名 + 誤ったパスワード → 同じ統一メッセージが表示される', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態でログインページを開き、存在するユーザー名「enum_test_user」と誤ったパスワードを入れて送信する
 		const msg = await submitLoginAndGetError(
 			page,
 			TEST_USER_LOGIN,
 			'wrong_password_xxx'
 		);
 
+		// @check 「ユーザー名またはパスワードが正しくありません。」のエラーが出て、「存在しないユーザー」の文言は表示されない
 		expect( msg ).toMatch(
 			new RegExp( `${ UNIFIED_MESSAGE_JA }|${ UNIFIED_MESSAGE_EN }` )
 		);
@@ -289,12 +295,14 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 	test( '存在しないメールアドレス + 任意のパスワード → 同じ統一メッセージ（invalid_email も統一）', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態でログインページを開き、存在しないメールアドレス「never_existed_xyz@example.com」と任意のパスワードを入れて送信する
 		const msg = await submitLoginAndGetError(
 			page,
 			'never_existed_xyz@example.com',
 			'whatever_pass_123'
 		);
 
+		// @check 「ユーザー名またはパスワードが正しくありません。」のエラーが出て、「存在しないユーザー」の文言も、入力したメールアドレスも表示されない
 		expect( msg ).toMatch(
 			new RegExp( `${ UNIFIED_MESSAGE_JA }|${ UNIFIED_MESSAGE_EN }` )
 		);
@@ -307,6 +315,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 	test( '3 パターンのエラーメッセージが完全一致する（差分なし＝列挙不可）', async ( {
 		page,
 	} ) => {
+		// @step ログインページで、存在しないユーザー名・存在するユーザー名と誤ったパスワード・存在しないメールアドレスの3通りをそれぞれ送信する
 		const invalidUsernameMsg = await submitLoginAndGetError(
 			page,
 			'nonexistent_user_xyz',
@@ -325,6 +334,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 
 		// 3 つの応答メッセージが完全一致することで、攻撃者が応答差分から
 		// ユーザー存在有無を推測できない（=列挙不可）
+		// @check 3通りとも、表示されるエラーの文言がまったく同じになる
 		expect( wrongPasswordMsg ).toBe( invalidUsernameMsg );
 		expect( invalidEmailMsg ).toBe( invalidUsernameMsg );
 	} );
@@ -332,6 +342,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 	test( '日本語環境では翻訳された日本語メッセージが表示される', async ( {
 		page,
 	} ) => {
+		// @step 日本語のサイトでログインページを開き、存在しないユーザー名「nonexistent_user_xyz」と任意のパスワードを入れて送信する
 		const msg = await submitLoginAndGetError(
 			page,
 			'nonexistent_user_xyz',
@@ -339,12 +350,14 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 		);
 
 		// 日本語 PO に翻訳が追加されているはず
+		// @check エラーが日本語の「ユーザー名またはパスワードが正しくありません。」で表示される
 		expect( msg ).toContain( UNIFIED_MESSAGE_JA );
 	} );
 
 	test( '正しい認証情報ではログイン成功する（デグレなし）', async ( {
 		page,
 	} ) => {
+		// @step ログアウトした状態でログインページを開き、ユーザー名「enum_test_user」と正しいパスワードを入れて送信する
 		await page.goto( `/${ LOGIN_PAGE_SLUG }/` );
 		await page.waitForSelector( '.vkbm-auth-card--login', {
 			timeout: 15000,
@@ -363,6 +376,7 @@ test.describe( 'PR #206 ログイン失敗メッセージ統一（ユーザー�
 		// On success, no error alert should appear.
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 
+		// @check エラーは出ず、ログインした状態になる
 		const errorAlert = page.locator(
 			'.vkbm-auth-card--login .vkbm-alert__danger'
 		);

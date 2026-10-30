@@ -30,6 +30,7 @@ const NEW_DESCRIPTION =
  * - 手順3: 保存済みで予約ステータスのキーが無いサイトは「即時確定」のまま。別項目だけ保存しても変わらない。
  * - 手順4: 基本設定が未保存でも、管理者の代理予約は「確定」になる。
  */
+// @title Issue #924: 基本設定が未保存のサイトでは予約ステータスの初期値を「仮予約にする」にする
 test.describe( 'Issue #924: default booking status is pending', () => {
 	// 基本設定の option を共有して書き換えるため、1本ずつ順に動かす。
 	test.describe.configure( { mode: 'serial' } );
@@ -114,6 +115,7 @@ test.describe( 'Issue #924: default booking status is pending', () => {
 		);
 
 		// 一般会員として予約するためのユーザーを作成する。
+		// @step 管理画面で一般会員（購読者）のユーザーを作っておく
 		userId = Number(
 			wpCliArgs( [
 				'user',

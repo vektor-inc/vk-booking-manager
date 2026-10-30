@@ -75,7 +75,9 @@ test.describe( '#304: 貸し切り予約', () => {
 	test.beforeAll( () => {
 		// 「貸し切り予約」は指名OFF＋複数人予約ON で表示・有効になる。
 		originalStaffEnabled = getStaffEnabled();
+		// @step 管理画面でスタッフ指名を使わない設定にしておく
 		setStaffEnabled( false );
+		// @step 複数人予約あり・最大 3 名・所要 60 分で、スタッフを割り当てた「Exclusive Menu」を作成しておく
 		exclusiveMenuId = seedExclusiveMenu();
 	} );
 
@@ -126,6 +128,7 @@ test.describe( '#304: 貸し切り予約', () => {
 	test( '編集画面で貸し切り予約チェックボックスが表示・保存される', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、「Exclusive Menu」の編集画面を開く
 		await loginAsAdmin( page );
 
 		// サービスメニュー編集画面を開く。
@@ -137,6 +140,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		// 「複数人予約を許可」を ON にし、change イベントを発火して JS の表示連動を起こす。
 		// （WP 管理画面のメタボックス内要素は Playwright の可視判定が安定しないため、
 		//   DOM 経由で状態を設定し change を dispatch する。B案：貸し切り予約は複数人予約ON時のみ表示。）
+		// @step 「複数人予約を許可」にチェックを入れる
 		const multiGuests = page.locator(
 			'#vkbm_service_menu_allow_multiple_guests'
 		);
@@ -150,6 +154,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		} );
 
 		// 複数人予約ON のとき、貸し切り予約行の hidden 属性が外れる（B案の表示連動）。
+		// @check 「貸し切り予約」の行が表示される
 		const exclusiveRow = page.locator(
 			'#vkbm-exclusive-when-booked-field'
 		);
@@ -159,6 +164,7 @@ test.describe( '#304: 貸し切り予約', () => {
 			)
 			.toBe( false );
 
+		// @check 「貸し切り予約」のチェックボックスに説明文が結び付いている
 		const checkbox = page.locator(
 			'#vkbm_service_menu_exclusive_when_booked'
 		);
@@ -169,15 +175,18 @@ test.describe( '#304: 貸し切り予約', () => {
 		);
 
 		// 貸し切り予約のチェックを入れられる（無効化されていない）ことを確認する。
+		// @step 「貸し切り予約」にチェックを入れる
 		await checkbox.evaluate( ( el ) => {
 			( el as HTMLInputElement ).checked = true;
 		} );
+		// @check 「貸し切り予約」にチェックが入る
 		await expect( checkbox ).toBeChecked();
 
 		// 保存経路（save_post → メタ保存）は phpunit で検証済みのため、
 		// ここでは REST 経由でメタを ON 保存し、編集画面の再読込でチェックが復元されることを確認する。
 		// （ブロックエディタのメタボックス保存ボタンは管理画面チロームに依存し e2e が不安定なため、
 		//   保存状態の復元という観点に絞る。）
+		// @step 「貸し切り予約」をオンにした状態で保存しておき、編集画面を再読み込みする
 		wpEvalPhp(
 			`update_post_meta( ${ Number.parseInt(
 				exclusiveMenuId,
@@ -188,6 +197,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 複数人予約を再度ONにして貸し切り行を表示させ、チェックが復元されていることを確認する。
+		// @step 「複数人予約を許可」にチェックを入れる
 		await page
 			.locator( '#vkbm_service_menu_allow_multiple_guests' )
 			.evaluate( ( el ) => {
@@ -199,6 +209,7 @@ test.describe( '#304: 貸し切り予約', () => {
 					);
 				}
 			} );
+		// @check 「貸し切り予約」にチェックが入ったまま表示される
 		await expect
 			.poll( async () =>
 				page
@@ -211,11 +222,13 @@ test.describe( '#304: 貸し切り予約', () => {
 	test( '複数人予約OFF時は貸し切り予約チェックボックスが隠れる（B案）', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインする
 		await loginAsAdmin( page );
 
 		// いったん複数人予約OFFのメニューを作る。
 		// 下書き（draft）で作る：管理者は下書きの編集画面を開けるため検証は成立し、
 		// 万一削除されずに残っても公開メニュー一覧・予約ページには出ない（#566）。
+		// @step 複数人予約なしの下書きメニュー「Exclusive Off Menu」を作成しておく
 		const offMenuId = wpEvalPhp(
 			`
 			$id = wp_insert_post( array(
@@ -234,6 +247,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		}
 
 		try {
+			// @step 「Exclusive Off Menu」の編集画面を開く
 			await page.goto(
 				`/wp-admin/post.php?post=${ Number.parseInt(
 					offMenuId,
@@ -243,6 +257,7 @@ test.describe( '#304: 貸し切り予約', () => {
 			await page.waitForLoadState( 'domcontentloaded' );
 
 			// 複数人予約OFF なので貸し切り予約行は hidden 属性が付いている（B案・初期非表示）。
+			// @check 「貸し切り予約」の行が隠れている
 			const exclusiveRow = page.locator(
 				'#vkbm-exclusive-when-booked-field'
 			);
@@ -287,6 +302,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		// 対象日は 15 日固定（同じくゼロパディング）。
 		const day = '15';
 		// createShiftForMonth には数値の year/month を渡す。
+		// @step 翌月のシフトを登録しておく
 		createShiftForMonth(
 			staffId,
 			nextTokyoMonth.year,
@@ -295,6 +311,7 @@ test.describe( '#304: 貸し切り予約', () => {
 
 		// このテスト自身でメニューの貸し切り設定を明示的に ON にする（前テストの副作用に依存しない）。
 		// 単体実行・retry でも exclusive_closed を再現できるようにするため。
+		// @step 「Exclusive Menu」の「貸し切り予約」をオンにしておく
 		wpEvalPhp(
 			`update_post_meta( ${ Number.parseInt(
 				exclusiveMenuId,
@@ -303,6 +320,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		);
 
 		// 対象日の 09:00-10:00 に「貸し切り」予約を1件投入する（残席はあるが受付停止になるはず）。
+		// @step 翌月 15 日 9:00〜10:00 に、1 名の貸し切りの確定済み予約を登録しておく
 		const slotDay = `${ year }-${ month }-${ day }`;
 		wpEvalPhp(
 			`
@@ -330,6 +348,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		);
 
 		// 別ユーザー（未ログイン）視点で予約フォームを開く。
+		// @step ログインしていない状態で予約ページを開き、「Exclusive Menu」を選ぶ
 		await page.context().clearCookies();
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
@@ -356,6 +375,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		}
 
 		// カレンダー表示を待つ。
+		// @step カレンダーで「次の月」へ進み、15 日を選ぶ
 		await page.waitForSelector( '.vkbm-calendar', {
 			state: 'visible',
 			timeout: 15000,
@@ -374,6 +394,7 @@ test.describe( '#304: 貸し切り予約', () => {
 		await page.waitForTimeout( 1000 );
 
 		// 09:00 のスロットが「予約受付終了」状態（is-exclusive-closed・選択不可）であることを確認する。
+		// @check 9:00 の時間枠が「予約受付終了」と表示され、選べない
 		const closedSlot = page
 			.locator( '.vkbm-slot-list__item.is-exclusive-closed' )
 			.first();

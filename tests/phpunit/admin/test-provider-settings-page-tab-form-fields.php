@@ -682,6 +682,39 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 「ご利用になる方」タブの見出し入力欄が、WordPress 標準の入力欄の見た目になるよう type="text" を持つことを検証する（issue #956）。
+	 *
+	 * type 属性が無いと input[type="text"] 向けの標準スタイルが当たらず、他の入力欄より低く表示される。
+	 */
+	public function test_render_page_attendee_label_inputs_have_text_type(): void {
+		$html = $this->render_tab( $this->create_page(), 'store' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '名簿の呼び方の入力欄 => type="text"',
+				'id'                  => 'vkbm-attendee-roster-label',
+			),
+			array(
+				'test_condition_name' => 'ふりがな欄の見出しの入力欄 => type="text"',
+				'id'                  => 'vkbm-attendee-roster-kana-label',
+			),
+			array(
+				'test_condition_name' => '番号欄の見出しの入力欄 => type="text"',
+				'id'                  => 'vkbm-attendee-number-label',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame(
+				1,
+				preg_match( '/<input\s[^>]*\bid="' . preg_quote( $case['id'], '/' ) . '"[^>]*>/', $html, $matches ),
+				$case['test_condition_name'] . '（前提: 入力欄が描画される）'
+			);
+			$this->assertMatchesRegularExpression( '/\stype="text"/', $matches[0], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * 指定タブで設定画面を描画し、HTML を返す。
 	 *
 	 * @param Provider_Settings_Page $page 設定画面。

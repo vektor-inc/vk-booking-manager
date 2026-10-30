@@ -833,6 +833,7 @@ class Capacity_Test extends WP_UnitTestCase {
 	 * - 未設定・最大受付数1（1対1）では 0（制約なし）。
 	 * - 設定値は最大受付数を上限にクランプされる。
 	 * - 複数人予約OFF／指名ONでは最大受付数が1に固定されるため 0 を返す。
+	 * - 「貸し切り予約」ONのメニューは最初の1件で枠が閉じるため 0 を返す（#968。最低人数は受付制限で扱う）。
 	 */
 	public function test_get_menu_min_capacity(): void {
 		// 複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
@@ -884,6 +885,15 @@ class Capacity_Test extends WP_UnitTestCase {
 				'min_capacity'        => 3,
 				'expected'            => 0,
 			),
+			array(
+				'test_condition_name'   => '複数人予約ON・指名OFF・貸し切り予約ON・最大5・最小3 => 0（#968：最初の1件で枠が閉じ催行判定の概念が無いため、最低人数は受付制限側で扱う）',
+				'multiple_guests'       => true,
+				'nomination_enabled'    => false,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expected'              => 0,
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -904,6 +914,10 @@ class Capacity_Test extends WP_UnitTestCase {
 			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['max_capacity'] );
 			if ( null !== $case['min_capacity'] ) {
 				update_post_meta( $menu_id, '_vkbm_min_capacity', $case['min_capacity'] );
+			}
+			if ( ! empty( $case['exclusive_when_booked'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
 			}
 
 			$menu_post = get_post( $menu_id );
@@ -926,6 +940,7 @@ class Capacity_Test extends WP_UnitTestCase {
 	 * get_menu_min_capacity()（催行状態の表示専用）とは別の取得経路であり、
 	 * 「指名を使う かつ 複数人一括予約ON かつ 予約枠の定員2以上」のときだけ値を返し、
 	 * それ以外は実効0（制限なし）を返す。
+	 * #968: 指名を使わなくても「貸し切り予約」ONのメニューは最初の1件で枠が閉じるため、同じ受付制限になる。
 	 */
 	public function test_get_menu_nomination_min_guests(): void {
 		// 複数人予約（予約枠の定員）は Pro 版限定機能のため、無料版ビルドでは Pro 判定ゲートにより検証対象の挙動が無効になる。
@@ -1000,6 +1015,66 @@ class Capacity_Test extends WP_UnitTestCase {
 				'min_capacity'          => 3,
 				'expected'              => 0,
 			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人予約ON・定員5・最低3 => 3（#968：最初の1件で枠が閉じるため最低人数は受付制限）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expected'              => 3,
+			),
+			array(
+				'test_condition_name'   => '指名ON・貸し切り予約ON・複数人予約ON・定員5・最低3 => 3（#968：指名ありでも同じ）',
+				'nomination_enabled'    => true,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expected'              => 3,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人予約ON・定員3・最低5（定員超過） => 3にクランプ（#968：境界値）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 3,
+				'min_capacity'          => 5,
+				'exclusive_when_booked' => true,
+				'expected'              => 3,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・複数人一括予約OFF・定員5・最低3 => 0（#968：申込人数が1名固定のため実効0）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => true,
+				'allow_multiple_guests' => false,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'   => '指名OFF・貸し切り予約ON・予約枠の定員機能OFF（サイト全体）・定員5・最低3 => 0（#968：定員機能OFFで実効定員1固定）',
+				'nomination_enabled'    => false,
+				'slot_capacity_enabled' => false,
+				'allow_multiple_guests' => true,
+				'max_capacity'          => 5,
+				'min_capacity'          => 3,
+				'exclusive_when_booked' => true,
+				'expected'              => 0,
+			),
+			array(
+				'test_condition_name'       => '指名OFF・予約者による貸し切り指定のみON・定員5・最低3 => 0（#968：予約者指定側の既存挙動は変えない）',
+				'nomination_enabled'        => false,
+				'slot_capacity_enabled'     => true,
+				'allow_multiple_guests'     => true,
+				'max_capacity'              => 5,
+				'min_capacity'              => 3,
+				'exclusive_user_selectable' => true,
+				'expected'                  => 0,
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -1023,6 +1098,12 @@ class Capacity_Test extends WP_UnitTestCase {
 			}
 			if ( $case['allow_multiple_guests'] ) {
 				update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+			}
+			if ( ! empty( $case['exclusive_when_booked'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true );
+			}
+			if ( ! empty( $case['exclusive_user_selectable'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_exclusive_user_selectable', true );
 			}
 
 			$menu_post = get_post( $menu_id );

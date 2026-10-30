@@ -424,6 +424,171 @@
 			"Website": [
 				"ウェブサイト"
 			],
+			"TEL: %s": [
+				"TEL: %s"
+			],
+			"Cancel this reservation?": [
+				"この予約をキャンセルしますか？"
+			],
+			"You are about to cancel the reservation below. Pressing the button cannot be undone.": [
+				"下記の予約をキャンセルします。ボタンを押すと取り消せません。"
+			],
+			"If you do not want to cancel, close this page without pressing anything.": [
+				"キャンセルしない場合は、何も押さずにこのページを閉じてください。"
+			],
+			"Your reservation has been cancelled": [
+				"ご予約をキャンセルしました"
+			],
+			"We will email you to confirm the cancellation. You can close this page.": [
+				"キャンセルの確認メールをお送りします。このページは閉じて構いません。"
+			],
+			"This reservation has already been cancelled": [
+				"このご予約はすでにキャンセルされています"
+			],
+			"This reservation cannot be cancelled on this page": [
+				"このご予約は、このページからはキャンセルできません"
+			],
+			"Please call us.": [
+				"お電話でご連絡ください。"
+			],
+			"Please contact us directly.": [
+				"店舗へ直接ご連絡ください。"
+			],
+			"This cancellation link cannot be used": [
+				"このキャンセル用リンクは使えません"
+			],
+			"A link for a reservation that has already been cancelled can no longer be used.": [
+				"すでにキャンセルした予約のリンクは、使えなくなります。"
+			],
+			"Otherwise, please open the link in the email exactly as it is written, without cutting it off.": [
+				"そうでない場合は、メールに書かれたリンクを、途中で切れないようにそのまま開いてください。"
+			],
+			"If you cannot open it, please call us.": [
+				"うまく開けない場合はお電話でご連絡ください。"
+			],
+			"We could not cancel the reservation. Please wait a moment and try again.": [
+				"キャンセルできませんでした。しばらくしてから、もう一度お試しください。"
+			],
+			"Cancelling…": [
+				"キャンセルしています…"
+			],
+			"Cancel this reservation": [
+				"この予約をキャンセルする"
+			],
+			"Go to the reservation page": [
+				"予約ページへ"
+			],
+			"Sign up": [
+				"新規登録"
+			],
+			"Registered members can skip entering these details by <login>logging in</login>.": [
+				"会員登録済みの方は<login>ログイン</login>すると入力を省けます。"
+			],
+			"Make a reservation without registering": [
+				"会員登録せずに予約する"
+			],
+			"Customer information": [
+				"お客様情報"
+			],
+			"Name of the person making the reservation (required)": [
+				"予約者のお名前（必須）"
+			],
+			"Email address (required)": [
+				"メールアドレス（必須）"
+			],
+			"We will send the confirmation email and the cancellation link to this address.": [
+				"確認メールとキャンセル用のリンクをこのアドレスにお送りします。"
+			],
+			"Phone number (required)": [
+				"電話番号（必須）"
+			],
+			"We have sent you a confirmation email": [
+				"確認メールをお送りしました"
+			],
+			"Sent to: %s": [
+				"宛先: %s"
+			],
+			"Valid until: %s": [
+				"有効期限: %s"
+			],
+			"Your reservation is not confirmed until you open the link.": [
+				"リンクを開くまで予約は確定していません。"
+			],
+			"If the email does not arrive": [
+				"メールが届かない場合"
+			],
+			"Please check your spam folder.": [
+				"迷惑メールフォルダをご確認ください。"
+			],
+			"Correct the email address and send again": [
+				"メールアドレスを修正して送り直す"
+			],
+			"Reservation date and time": [
+				"予約日時"
+			],
+			"We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.": [
+				"ご予約内容を確認のうえ、予約確定のご連絡をメールでお送りします。確定のメールが届くまで、しばらくお待ちください。この画面は閉じていただいて構いません。"
+			],
+			"Your tentative reservation has been received": [
+				"仮予約を受け付けました"
+			],
+			"This link has already been confirmed.": [
+				"このリンクは、すでに確認済みです。"
+			],
+			"Your reservation is confirmed": [
+				"ご予約が確定しました"
+			],
+			"The confirmation link has expired": [
+				"確認リンクの有効期限が切れています"
+			],
+			"Sorry for the trouble, but please start the reservation again from the beginning.": [
+				"お手数ですが、もう一度最初からご予約ください。"
+			],
+			"Start the reservation again": [
+				"予約をやり直す"
+			],
+			"Another reservation was made for this date and time first": [
+				"この日時は先に別のご予約が入りました"
+			],
+			"Sorry for the trouble, but please choose another date and time and make the reservation again.": [
+				"お手数ですが、別の日時を選んでご予約ください。"
+			],
+			"Make a reservation for another date and time": [
+				"別の日時で予約する"
+			],
+			"Your reservation is being processed": [
+				"ご予約を処理しています"
+			],
+			"Please wait a moment, then open the link in the email again.": [
+				"しばらくしてから、メールのリンクをもう一度開いてください。"
+			],
+			"Reservations without registration are not accepted right now": [
+				"現在、会員登録なしのご予約は受け付けていません"
+			],
+			"Please log in or sign up on the reservation page to make a reservation.": [
+				"予約ページでログインまたは新規登録のうえ、ご予約ください。"
+			],
+			"This reservation is not active": [
+				"このご予約は有効ではありません"
+			],
+			"It has already been cancelled or otherwise closed.": [
+				"キャンセル済みなど、すでに受け付けを終えたご予約です。"
+			],
+			"We could not accept your reservation": [
+				"予約を受け付けられませんでした"
+			],
+			"This reservation cannot be accepted online.": [
+				"このご予約はオンラインでは受け付けられません。"
+			],
+			"Please contact the store directly.": [
+				"店舗へ直接お問い合わせください。"
+			],
+			"This confirmation link is not valid": [
+				"この確認リンクは正しくありません"
+			],
+			"Please open the link in the email exactly as it is written.": [
+				"メールに書かれたリンクを、そのまま開いてください。"
+			],
 			"Close": [
 				"閉じる"
 			],
@@ -444,9 +609,6 @@
 			],
 			"Log out": [
 				"ログアウト"
-			],
-			"Sign up": [
-				"新規登録"
 			],
 			"Confirm reservation": [
 				"予約内容確認"
@@ -580,11 +742,11 @@
 			"Special date": [
 				"特定日"
 			],
-			"Special date (%s)": [
-				"特定日（%s）"
-			],
 			"%1$s (%2$s)": [
 				"%1$s（%2$s）"
+			],
+			"Special date (%s)": [
+				"特定日（%s）"
 			],
 			"%2$s %1$d night": [
 				"%2$s %1$d泊"
@@ -619,9 +781,6 @@
 			"Management memo": [
 				"運営側メモ"
 			],
-			"Reservation date and time": [
-				"予約日時"
-			],
 			"Please enter the customer name.": [
 				"お客様のお名前を入力してください。"
 			],
@@ -630,9 +789,6 @@
 			],
 			"A reservation for the same date and time already exists. Please change the date and time.": [
 				"同じ日時の予約が既に存在します。日時を変更してください。"
-			],
-			"We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.": [
-				"ご予約内容を確認のうえ、予約確定のご連絡をメールでお送りします。確定のメールが届くまで、しばらくお待ちください。この画面は閉じていただいて構いません。"
 			],
 			"The URL does not include a temporary reservation data parameter. Please try again from the reservation page.": [
 				"URLに一時予約データパラメータが含まれていません。予約ページからもう一度お試しください。"
@@ -643,6 +799,9 @@
 			"Could not add to favorites.": [
 				"お気に入りに登録できませんでした。"
 			],
+			"The confirmation email could not be sent.": [
+				"確認メールを送信できませんでした。"
+			],
 			"An error occurred during payment processing.": [
 				"決済処理中にエラーが発生しました。"
 			],
@@ -651,9 +810,6 @@
 			],
 			"Loading temporary reservation data…": [
 				"一時予約データを読み込み中…"
-			],
-			"Your tentative reservation has been received.": [
-				"仮予約を受け付けました"
 			],
 			"No entry": [
 				"記入なし"
@@ -676,6 +832,9 @@
 			"Private (exclusive use of this slot)": [
 				"貸切（この枠を専有）"
 			],
+			"Members can log in to make a reservation.": [
+				"会員の方はログインしてご予約いただけます。"
+			],
 			"You must log in to confirm your reservation.": [
 				"予約を確認するにはログインする必要があります。"
 			],
@@ -696,6 +855,12 @@
 			],
 			"If the minimum number of participants is not reached, the session may not take place.": [
 				"最少催行人数に満たない場合、開催されない可能性があります。"
+			],
+			"We will send you a confirmation email after you submit. Your reservation will be completed when you open the link in the email.": [
+				"送信後に確認メールをお送りします。メールのリンクを開くと予約が完了します。"
+			],
+			"Send confirmation email": [
+				"確認メールを送信する"
 			],
 			"Reserve with this content": [
 				"この内容で予約する"
@@ -726,6 +891,18 @@
 			],
 			"There are no %s matching the selected conditions.": [
 				"条件に該当する%sがいません。"
+			],
+			"Please enter your phone number.": [
+				"電話番号を入力してください。"
+			],
+			"Please enter a valid email address.": [
+				"有効なメールアドレスを入力してください。"
+			],
+			"Please enter your name.": [
+				"お名前を入力してください。"
+			],
+			"Please enter your email address.": [
+				"メールアドレスを入力してください。"
 			]
 		}
 	}

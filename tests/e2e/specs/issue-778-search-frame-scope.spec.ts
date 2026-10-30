@@ -237,6 +237,7 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 	test( '枠 ON・メニュー未選択: プルダウンは枠の中、アラートは枠の外', async ( {
 		page,
 	} ) => {
+		// @step 共通設定で絞り込み検索のデザインを「枠で囲う」にし、予約ページの表示要素をサービスメニュー一覧 OFF・絞り込み検索 ON にして、予約ページを開く
 		configure( true );
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
@@ -244,11 +245,13 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 		const frame = page.locator( FRAME );
 		await expect( frame ).toHaveCount( 1, { timeout: 10000 } );
 
+		// @check メニューのプルダウンが枠の中に表示される
 		// メニューのプルダウンが枠の中にある。
 		await expect(
 			frame.locator( '.vkbm-plan-summary__selectors select' ).first()
 		).toBeVisible();
 
+		// @check 「メニューを選択してください」の案内は表示されるが、枠の外にある
 		// アラートは画面にあるが、枠の中には無い。
 		await expect(
 			page.locator( '.vkbm-plan-summary__pricing--alert' )
@@ -261,10 +264,12 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 	test( '枠 ON・メニュー選択後: プレビューと料金欄は枠の外、プルダウンは枠の中', async ( {
 		page,
 	} ) => {
+		// @step 共通設定で絞り込み検索のデザインを「枠で囲う」にし、サービスメニュー一覧 OFF・絞り込み検索 ON にして、予約ページを開く
 		configure( true );
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @step メニューのプルダウンで先頭のメニューを選ぶ
 		// メニューのプルダウンで先頭のメニューを選ぶ。
 		const menuSelect = page
 			.locator( '.vkbm-plan-summary__selectors select' )
@@ -272,6 +277,7 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 		await expect( menuSelect ).toBeVisible( { timeout: 10000 } );
 		await menuSelect.selectOption( { index: 1 } );
 
+		// @check 選んだメニューのカードと料金欄が表示される
 		// 選択後は、メニューのプレビューと料金欄が画面に出る。
 		await expect(
 			page.locator( '.vkbm-plan-summary__menu-preview' )
@@ -283,6 +289,7 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 		const frame = page.locator( FRAME );
 		await expect( frame ).toHaveCount( 1 );
 
+		// @check プルダウンは枠の中にあり、メニューのカードと料金欄は枠の外にある
 		// プルダウンは枠の中にある。
 		await expect(
 			frame.locator( '.vkbm-plan-summary__selectors select' ).first()
@@ -298,10 +305,12 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 	} );
 
 	test( '枠 OFF: 枠のクラスがどこにも付かない', async ( { page } ) => {
+		// @step 共通設定で絞り込み検索のデザインを「プレーン」にし、サービスメニュー一覧 OFF・絞り込み検索 ON にして、予約ページを開く
 		configure( false );
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check 絞り込み検索の欄は表示されるが、どこにも枠が付いていない
 		await expect(
 			page.locator( '.vkbm-plan-summary__selectors' )
 		).toBeVisible( { timeout: 10000 } );
@@ -311,10 +320,12 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 	test( '枠 ON・日付で絞り込む ON・メニュー未選択: 日付欄も枠の中に入る', async ( {
 		page,
 	} ) => {
+		// @step 共通設定で「枠で囲う」と「日付で絞り込む」を ON にし、サービスメニュー一覧 OFF・絞り込み検索 ON にして、予約ページを開く
 		configure( true, true );
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check 日付の入力欄も枠の中に入っている
 		const frame = page.locator( FRAME );
 		await expect( frame ).toHaveCount( 1, { timeout: 10000 } );
 		await expect(
@@ -332,6 +343,7 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 			}): 枠内の欄どうしの間隔 ≦ 枠の内側の余白（上下左右） ＜ 枠の下端から次の要素`, async ( {
 				page,
 			} ) => {
+				// @step 画面幅を PC（1280px）またはスマホ（375px）にし、「枠で囲う」を ON（日付欄ありのときは「日付で絞り込む」も ON）にして予約ページを開く
 				await page.setViewportSize( {
 					width: viewport.width,
 					height: viewport.height,
@@ -383,9 +395,11 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 					);
 				};
 
+				// @check メニュー未選択のとき、見えている端どうしで「枠内の欄どうしの間隔 ≦ 枠の内側の余白（上下左右） ＜ 枠の下端から次の案内まで」になっている
 				// メニュー未選択（次の要素は案内）。
 				await check( 'メニュー未選択' );
 
+				// @step メニューのプルダウンでメニューを選ぶ
 				// メニュー選択後（次の要素はメニューのカード）。
 				const menuSelect = page
 					.locator( '.vkbm-plan-summary__selectors select' )
@@ -394,6 +408,7 @@ test.describe( 'issue #778: 絞り込み検索の枠の範囲', () => {
 				await expect(
 					page.locator( '.vkbm-plan-summary__menu-preview' )
 				).toBeVisible( { timeout: 10000 } );
+				// @check メニュー選択後も、枠の下端から次のメニューのカードまでを含めて同じ余白の大小関係になっている
 				await check( 'メニュー選択後' );
 			} );
 		}

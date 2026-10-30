@@ -22,6 +22,7 @@ const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
  *   予約フォーム（カレンダー表示）が開く。
  * - 予約フォーム編集中には登録ボタン（旧仕様）が表示されない。
  */
+// @title Issue #90: お気に入り（いつもの）と「同じ内容で予約する」
 test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 	const password = 'TestPassword123!';
 	// グローバルセットアップの user_* クリーンアップ対象に合わせた接頭辞を使う。
@@ -71,6 +72,7 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 
 	// テスト用の一般ユーザー（subscriber）を作成する。お気に入りはログイン必須のため。
 	test.beforeAll( async () => {
+		// @step 管理画面で一般ユーザー（購読者）のアカウントを作っておく
 		bookingIdsBefore = listBookingIds();
 		wpCliArgs( [
 			'user',
@@ -167,23 +169,30 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		return { savedMenuId, savedStaffId };
 	};
 
+	// @title 予約確認画面でお気に入り登録して予約すると、「いつもの」と「同じ内容で予約する」から同じ内容で予約フォームを開ける
 	test( 'confirm-screen favorite opt-in saves a favorite and enables rebook', async ( {
 		page,
 	} ) => {
+		// @step 作っておいた一般ユーザーでログインする
 		await login( page );
 		// 予約時に選択したメニュー／指名スタッフの値を控える（復元検証で厳密照合する）。
+		// @step 予約ページで「Service Menu 1」の「予約する」を押し、空きのある日と時間枠を選んで「予約内容を確認」を押す
 		const { savedMenuId, savedStaffId } = await proceedToConfirm( page );
 		expect( Number( savedMenuId ) ).toBeGreaterThan( 0 );
 
 		// 同意チェック（キャンセルポリシー・利用規約）。文面の描画を待ってからチェックする。
+		// @step キャンセルポリシーと利用規約の同意にチェックを入れる
 		await checkConfirmConsents( page );
 
 		// お気に入り登録のチェックボックス（本機能）が表示され、ON にできること。
+		// @check 予約確認画面に「この予約内容で次回もすぐ予約できるようにする（お気に入り登録）」のチェックボックスが表示される
 		const favoriteOptIn = page.locator( '#vkbm-confirm-favorite-optin' );
 		await expect( favoriteOptIn ).toBeVisible();
+		// @step お気に入り登録のチェックを入れる
 		await favoriteOptIn.check();
 
 		// 予約を確定。
+		// @step 予約を確定するボタンを押す
 		const confirmButton = page.locator( '.vkbm-confirm__button' );
 		await expect( confirmButton ).toBeEnabled( { timeout: 10000 } );
 		await confirmButton.click();
@@ -192,6 +201,7 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		// 本確定（「予約が完了しました。」）と仮予約（見出し「仮予約を受け付けました」）の
 		// 双方に一致させる。英語ロケールでは "reservation has been completed." /
 		// "tentative reservation has been received." で確定・仮予約のどちらも拾えるようにする。
+		// @check 「予約が完了しました」（仮予約のときは「仮予約を受け付けました」）と「お気に入りに登録しました」が表示される
 		await expect(
 			page
 				.getByText( '予約が完了しました', { exact: false } )
@@ -214,18 +224,22 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		).toBeVisible( { timeout: 10000 } );
 
 		// 予約フォームを開き直すと「いつもの」クイック選択が表示されること。
+		// @step 予約ページを開き直す
 		await page.goto( `${ WP_BASE_URL }/booking/` );
 		await page.waitForLoadState( 'networkidle' );
 		// テストユーザーは毎回新規作成で隔離されるため、お気に入りはこのテストで保存した
 		// 1件だけになる。件数を厳密に確認することで .first() の順序依存を排除する。
+		// @check フォーム上部の「いつもの」に、登録したお気に入りが1件だけ表示される
 		const favoriteChips = page.locator( '.vkbm-favorites__apply' );
 		await expect( favoriteChips ).toHaveCount( 1, { timeout: 10000 } );
 		const favoriteApply = favoriteChips.first();
 		await expect( favoriteApply ).toBeVisible();
 
 		// クリックするとメニュー・指名スタッフがフォームに反映されること（本機能の中核）。
+		// @step 「いつもの」のお気に入りを押す
 		await favoriteApply.click();
 		// メニュー選択済みビュー（プランサマリー＋カレンダー）に切り替わること。
+		// @check 料金の概要とカレンダーが表示され、予約したときと同じメニュー・指名スタッフが選ばれた状態になる
 		await expect(
 			page.locator( '.vkbm-plan-summary' ).first()
 		).toBeVisible( { timeout: 10000 } );
@@ -251,8 +265,10 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		}
 
 		// マイページ（予約一覧）に「同じ内容で予約する」ボタンが表示されること。
+		// @step マイページの予約一覧を開く
 		await page.goto( `${ WP_BASE_URL }/booking/?vkbm_auth=bookings` );
 		await page.waitForLoadState( 'networkidle' );
+		// @check 予約に「同じ内容で予約する」ボタンが表示される
 		const rebookButton = page
 			.locator( '.vkbm-confirm__rebook-button' )
 			.first();
@@ -264,8 +280,10 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 			.searchParams;
 
 		// クリックすると予約フォーム（カレンダー＋プランサマリー）が開くこと。
+		// @step 「同じ内容で予約する」ボタンを押す
 		await rebookButton.click();
 		await page.waitForLoadState( 'networkidle' );
+		// @check メニュー一覧に戻らず、予約と同じメニュー・指名が選ばれた状態でカレンダーと料金の概要が表示される
 		await expect( page.locator( '.vkbm-calendar' ) ).toBeVisible( {
 			timeout: 10000,
 		} );
@@ -285,9 +303,11 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 		);
 	} );
 
+	// @title 予約フォームの編集中は、旧仕様の「お気に入りに登録」ボタンが出ない
 	test( 'no favorite-register button is shown while editing the form', async ( {
 		page,
 	} ) => {
+		// @step 作っておいた一般ユーザーでログインし、予約ページで「Service Menu 1」の「予約する」を押す
 		await login( page );
 		await page.goto( `${ WP_BASE_URL }/booking/` );
 		await page.waitForLoadState( 'networkidle' );
@@ -308,6 +328,7 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
 			timeout: 10000,
 		} );
 
+		// @check カレンダーが表示されたフォームに「お気に入りに登録」ボタンが無い
 		// 旧仕様のフォーム内「お気に入りに登録」ボタンが存在しないこと。
 		await expect(
 			page.locator( '.vkbm-favorites__add-button' )
@@ -332,6 +353,7 @@ test.describe( 'Issue #90: favorites (いつもの) and rebook flow', () => {
  * どちらも「複数の対応スタッフを持つメニュー」で初めて再現するため、
  * この describe 専用に 2 人目のスタッフと複数スタッフメニューを用意する。
  */
+// @title Issue #90: 指名なしのお気に入り・再予約リンクがフォームのスタッフ選択に反映される
 test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 	const password = 'TestPassword123!';
 	// グローバルセットアップの user_* クリーンアップ対象に合わせた接頭辞を使う。
@@ -351,6 +373,7 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 	test.use( { storageState: { cookies: [], origins: [] } } );
 
 	test.beforeAll( async () => {
+		// @step 管理画面で2人目のスタッフを追加して当月のシフトを登録し、2人とも対応できるメニューを作っておく
 		// 既存（グローバルセットアップ由来）のスタッフ 1 名を再利用する。
 		staff1Id = getStaffId();
 
@@ -392,6 +415,7 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 			`update_post_meta(${ multiStaffMenuId }, '_vkbm_staff_ids', array((int)${ staff1Id }, (int)${ staff2Id }));`
 		);
 
+		// @step スタッフ1を初期スタッフに指定した予約ブロックを置いた専用の予約ページを作っておく
 		// 不具合2 用: ブロックのデフォルトスタッフ（data-default-resource-id）に
 		// staff1 を指定した専用の予約ページを作る。共有の /booking/ を汚さないよう別ページにする。
 		const blockMarkup = `<!-- wp:vk-booking-manager/reservation {"defaultResourceId":"${ staff1Id }"} --><div class="wp-block-vk-booking-manager-reservation vkbm-reservation-block" data-default-menu-id="" data-default-resource-id="${ staff1Id }" data-allow-menu-selection="1" data-allow-staff-selection="1"></div><!-- /wp:vk-booking-manager/reservation -->`;
@@ -421,6 +445,7 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 		// パーマリンクをフラッシュして専用ページにアクセス可能にする。
 		wpCliArgs( [ 'rewrite', 'flush', '--hard' ] );
 
+		// @step 一般ユーザーを作り、そのユーザーのお気に入りに「NONOM-STAFF1」（スタッフ1を指名）と「NONOM-FREE」（指名なし）を登録しておく
 		// テスト用の一般ユーザー（subscriber）を作成する。お気に入りはログイン必須のため。
 		wpCliArgs( [
 			'user',
@@ -504,12 +529,14 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 	test( '不具合1: 指名なしのお気に入りを適用するとフォームのスタッフ選択が「指名なし」になる', async ( {
 		page,
 	} ) => {
+		// @step 作っておいた一般ユーザーでログインし、予約ページを開く
 		await login( page );
 
 		// 予約フォームを開く（この共有ページはデフォルトスタッフ未指定＝指名なし始点）。
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check 「いつもの」にお気に入りが2件表示される
 		// シード済みの 2 件のお気に入りチップが表示されることを確認する。
 		await expect( page.locator( '.vkbm-favorites__apply' ) ).toHaveCount(
 			2,
@@ -521,6 +548,7 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 			.locator( '.vkbm-plan-summary__selectors select' )
 			.nth( 1 );
 
+		// @step 「NONOM-STAFF1」のお気に入りを押す
 		// まず「指名あり（staff1）」のお気に入りを適用し、スタッフが staff1 になることを確認する。
 		await page
 			.locator( '.vkbm-favorites__apply', { hasText: 'NONOM-STAFF1' } )
@@ -528,15 +556,18 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 		await expect(
 			page.locator( '.vkbm-plan-summary' ).first()
 		).toBeVisible( { timeout: 10000 } );
+		// @check スタッフ選択がスタッフ1になる
 		await expect
 			.poll( async () => staffSelect.inputValue(), { timeout: 10000 } )
 			.toBe( staff1Id );
 
+		// @step 続けて「NONOM-FREE」のお気に入りを押す
 		// 続いて「指名なし」のお気に入りを適用する。staff1 は新メニューでも対応可能なため、
 		// 修正前は staff1 が残ってしまう。修正後はスタッフ選択が「指名なし」(値="")になる。
 		await page
 			.locator( '.vkbm-favorites__apply', { hasText: 'NONOM-FREE' } )
 			.click();
+		// @check スタッフ選択が「指名なし」に切り替わる
 		await expect
 			.poll( async () => staffSelect.inputValue(), { timeout: 10000 } )
 			.toBe( '' );
@@ -545,6 +576,7 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 	test( '不具合2: menu_id 付きリンク（指名なし）で開くとデフォルトスタッフにフォールバックしない', async ( {
 		page,
 	} ) => {
+		// @step スタッフ1を初期スタッフに指定した専用の予約ページを、メニューだけを指定したリンク（指名なしの予約の「同じ内容で予約する」と同じ形）で開く
 		// デフォルトスタッフ（staff1）が設定された専用ページを、menu_id のみ（resource_id なし）で開く。
 		// これは「同じ内容で予約する」リンク（指名なし予約）で開くのと同じ状況。
 		await page.goto(
@@ -552,11 +584,13 @@ test.describe( 'Issue #90: no-nomination is reflected on the form', () => {
 		);
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check 選んだメニューの料金の概要が表示される
 		// メニュー選択済みビュー（プランサマリー）が表示されること。
 		await expect(
 			page.locator( '.vkbm-plan-summary' ).first()
 		).toBeVisible( { timeout: 10000 } );
 
+		// @check スタッフ選択が初期スタッフ（スタッフ1）ではなく「指名なし」になっている
 		// スタッフ選択が「指名なし」(値="")であること。
 		// 修正前は data-default-resource-id（staff1）にフォールバックして staff1 が選ばれていた。
 		const staffSelect = page

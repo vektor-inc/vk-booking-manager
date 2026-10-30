@@ -12,6 +12,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		// グローバルセットアップでテストデータは作成済み
 		// Test data already created by global setup
 		// デフォルトで指名機能を有効にしておく
+		// @step 基本設定の「指名機能の使用」を「有効」にしておく
 		setStaffEnabled( true );
 	} );
 
@@ -24,6 +25,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		page,
 	} ) => {
 		// 管理画面にログイン
+		// @step 管理者でログインし、基本設定画面の「システム」タブを開く
 		await loginAsAdmin( page );
 
 		// 基本設定画面のシステムタブに遷移
@@ -33,15 +35,18 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 「Nomination feature」または日本語翻訳のラベルが表示されていることを確認
+		// @check 「指名機能の使用」のプルダウンが表示される
 		const staffEnabledSelect = page.locator( '#vkbm-staff-enabled' );
 		await expect( staffEnabledSelect ).toBeVisible();
 
 		// プルダウンに「Enabled」と「Disabled」の選択肢があることを確認
+		// @check プルダウンの選択肢が「有効」「無効」の2つである
 		const options = staffEnabledSelect.locator( 'option' );
 		const optionCount = await options.count();
 		expect( optionCount ).toBe( 2 );
 
 		// デフォルトで「Enabled」（値=1）が選択されていることを確認
+		// @check 初期状態で「有効」が選ばれている
 		const selectedValue = await staffEnabledSelect.inputValue();
 		expect( selectedValue ).toBe( '1' );
 	} );
@@ -49,6 +54,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 	test( '2. 指名機能を無効にして保存→設定が保持される', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、基本設定画面の「システム」タブを開く
 		await loginAsAdmin( page );
 
 		// 基本設定画面のシステムタブに遷移
@@ -58,10 +64,12 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// プルダウンを「Disabled」に変更
+		// @step 「指名機能の使用」を「無効」に変える
 		const staffEnabledSelect = page.locator( '#vkbm-staff-enabled' );
 		await staffEnabledSelect.selectOption( '0' );
 
 		// 設定を保存（フォームのsubmitボタンをクリック）
+		// @step 「変更を保存」ボタンを押す
 		const submitButton = page.locator( 'input[type="submit"]#submit' );
 		// submitボタンが見つからない場合は別のセレクタを試す
 		const submitBtn =
@@ -72,6 +80,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// リロード後も「Disabled」が選択されていることを確認
+		// @check 保存後の画面でも「指名機能の使用」が「無効」のまま選ばれている
 		const reloadedSelect = page.locator( '#vkbm-staff-enabled' );
 		const savedValue = await reloadedSelect.inputValue();
 		expect( savedValue ).toBe( '0' );
@@ -81,8 +90,10 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		page,
 	} ) => {
 		// 指名機能を無効に設定
+		// @step 基本設定の「指名機能の使用」を「無効」にしておく
 		setStaffEnabled( false );
 
+		// @step 管理者でログインし、基本設定画面の「システム」タブを開く
 		await loginAsAdmin( page );
 
 		// 基本設定画面のシステムタブに遷移
@@ -92,6 +103,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 「Nomination feature」プルダウン自体は表示される
+		// @check 「指名機能の使用」のプルダウンは表示され、「無効」が選ばれている
 		const staffEnabledSelect = page.locator( '#vkbm-staff-enabled' );
 		await expect( staffEnabledSelect ).toBeVisible();
 
@@ -100,6 +112,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		expect( selectedValue ).toBe( '0' );
 
 		// リソース名称（singular）は指名無効でも表示される（リソース機能は常に有効）
+		// @check リソースの名称（単数形）とメニュー表示用の名称の欄は表示される
 		const resourceLabelSingular = page.locator(
 			'#vkbm-resource-label-singular'
 		);
@@ -110,6 +123,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await expect( resourceLabelMenu ).toBeVisible();
 
 		// 指名関連の設定は非表示（is_nomination_enabled() === false）
+		// @check 「指名なし」の表示名と指名料の表示名の欄は表示されない
 		const noNominationLabel = page.locator( '#vkbm-no-nomination-label' );
 		await expect( noNominationLabel ).not.toBeVisible();
 
@@ -120,6 +134,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 	test( '4. 指名機能を再有効化すると設定が「Enabled」に戻る', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、基本設定画面の「システム」タブを開く
 		await loginAsAdmin( page );
 
 		// 基本設定画面のシステムタブに遷移
@@ -129,10 +144,12 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// プルダウンを「Enabled」に変更
+		// @step 「指名機能の使用」を「有効」に変える
 		const staffEnabledSelect = page.locator( '#vkbm-staff-enabled' );
 		await staffEnabledSelect.selectOption( '1' );
 
 		// 保存
+		// @step 「変更を保存」ボタンを押す
 		const submitBtn = page
 			.locator( '.submit input[type="submit"]' )
 			.first();
@@ -140,6 +157,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 設定が「Enabled」で保存されたことを確認
+		// @check 保存後の画面で「指名機能の使用」が「有効」になっている
 		const reloadedSelect = page.locator( '#vkbm-staff-enabled' );
 		const savedValue = await reloadedSelect.inputValue();
 		expect( savedValue ).toBe( '1' );
@@ -149,8 +167,10 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		page,
 	} ) => {
 		// 指名機能を無効に設定
+		// @step 基本設定の「指名機能の使用」を「無効」にしておく
 		setStaffEnabled( false );
 
+		// @step 管理者でログインし、公開中のサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 
 		// サービスメニュー一覧から最初のメニューの編集画面を開く
@@ -169,10 +189,12 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// スタッフ連携メタボックスは指名無効でも表示される（リソース機能は常に有効）
+		// @check スタッフを選ぶ欄（スタッフ連携のボックス）は表示される
 		const staffMetaBox = page.locator( '#vkbm_service_menu_staff' );
 		await expect( staffMetaBox ).toBeVisible();
 
 		// 「このメニューは指名料を無効にする」チェックボックスが非表示であることを確認
+		// @check 「このメニューは指名料を無効にする」のチェックボックスは表示されない
 		const disableNominationCheckbox = page.locator(
 			'input[name="_vkbm_disable_nomination_fee"]'
 		);
@@ -189,8 +211,10 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		page,
 	} ) => {
 		// 指名機能を有効に設定
+		// @step 基本設定の「指名機能の使用」を「有効」にしておく
 		setStaffEnabled( true );
 
+		// @step 管理者でログインし、公開中のサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 
 		// サービスメニュー一覧から最初のメニューの編集画面を開く
@@ -209,6 +233,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// 「このメニューは指名料を無効にする」チェックボックスが表示されていることを確認
+		// @check 「このメニューは指名料を無効にする」のチェックボックスがあれば、表示されている
 		const disableNominationCheckbox = page.locator(
 			'input[name="_vkbm_disable_nomination_fee"]'
 		);
@@ -226,14 +251,17 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		page,
 	} ) => {
 		// 指名機能を無効に設定
+		// @step 基本設定の「指名機能の使用」を「無効」にしておく
 		setStaffEnabled( false );
 
 		// 予約ページにアクセス
+		// @step 予約ページを開く
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// メニューカード内に「Staff available」またはスタッフ名が表示されていないことを確認。
 		// ページにメニューカードが存在する場合のみチェック。
+		// @check メニューカードがあれば、最初のカードに「Staff available」（担当可能スタッフ）の項目が出ない
 		const menuCards = page.locator( '.vkbm-menu-loop__card' );
 		const cardCount = await menuCards.count();
 		if ( cardCount > 0 ) {
@@ -260,13 +288,16 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		page,
 	} ) => {
 		// 指名機能を有効に設定
+		// @step 基本設定の「指名機能の使用」を「有効」にしておく
 		setStaffEnabled( true );
 
 		// 予約ページにアクセス
+		// @step 予約ページを開く
 		await page.goto( '/booking/' );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// メニューカードが存在する場合、スタッフ情報が表示されていることを確認
+		// @check メニューカードがあれば、最初のカードに所要時間やスタッフ名などの項目が1つ以上出る
 		const menuCards = page.locator( '.vkbm-menu-loop__card' );
 		const cardCount = await menuCards.count();
 		if ( cardCount > 0 ) {
@@ -288,6 +319,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		mkdirSync( screenshotDir, { recursive: true } );
 
 		// 指名機能有効時のスクリーンショット
+		// @step 「指名機能の使用」を「有効」にして、管理者で基本設定画面の「システム」タブを開き、画面全体を撮影する
 		setStaffEnabled( true );
 		await loginAsAdmin( page );
 		await page.goto(
@@ -300,9 +332,11 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		} );
 
 		// 指名機能無効時のスクリーンショット
+		// @step 「指名機能の使用」を「無効」にして、画面を再読み込みし、画面全体を撮影する
 		setStaffEnabled( false );
 		await page.reload();
 		await page.waitForLoadState( 'domcontentloaded' );
+		// @check 有効時と無効時の設定画面がそれぞれ撮影される
 		await page.screenshot( {
 			path: `${ screenshotDir }/after-settings-disabled.png`,
 			fullPage: true,
@@ -314,6 +348,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 
 	test( '10. WP-CLI で staff_enabled の切り替えが正しく反映される', async () => {
 		// 指名機能を無効に設定
+		// @step 基本設定の「指名機能の使用」を「無効」にしておく
 		setStaffEnabled( false );
 
 		// WP-CLI で設定値を確認
@@ -322,6 +357,7 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		// Pass PHP code via wpEvalPhp since shell-quoted `eval "..."` no longer works
 		// after the execFileSync migration. The `$` escape is unnecessary because the
 		// code is base64-encoded before being handed to WP-CLI.
+		// @check 保存された設定で、指名機能の使用が無効の値になっている
 		const disabledResult = wpEvalPhp(
 			`
 				$s = get_option( 'vkbm_provider_settings', array() );
@@ -332,10 +368,12 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		expect( [ '0', 'false', "''", '' ] ).toContain( disabledResult );
 
 		// 指名機能を有効に設定
+		// @step 基本設定の「指名機能の使用」を「有効」に戻す
 		setStaffEnabled( true );
 
 		// WP-CLI で設定値を確認（同様に wpEvalPhp 経由に変更）
 		// Verify via wpEvalPhp (same conversion as the disabled case above).
+		// @check 保存された設定で、指名機能の使用が有効の値になっている
 		const enabledResult = wpEvalPhp(
 			`
 				$s = get_option( 'vkbm_provider_settings', array() );

@@ -148,6 +148,7 @@ test.describe
 		}
 
 		// 宿泊のサイトで、指名（客室の指定）と予約枠の定員の機能を有効にする（他の設定は残す）。
+		// @step 管理画面で業種を宿泊にし、スタッフ（客室）の指名と予約枠の定員を有効にしておく
 		wpEvalPhp( `
 			$settings = get_option( '${ OPTION_NAME }', array() );
 			$settings = is_array( $settings ) ? $settings : array();
@@ -168,6 +169,7 @@ test.describe
 			.split( ',' );
 		[ checkInIso, checkOutIso ] = dates;
 
+		// @step 客室「E2E935 Room」を作成し、今月と来月のシフトを登録しておく
 		roomId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -186,6 +188,7 @@ test.describe
 		}
 
 		// 人数の下限（_vkbm_min_capacity）は未設定のまま作り、画面から 2 を入れて保存する。
+		// @step 料金の単位「1名1泊あたり」・基本料金 10,000円・最大 3 名・最低申し込み人数は空のプラン「E2E935 Per Guest Plan」を作成しておく
 		menuId = insertAndGetId(
 			`
 			$id = wp_insert_post( array(
@@ -219,6 +222,7 @@ test.describe
 		page,
 	} ) => {
 		prepareBlockEditorPreferences();
+		// @step 管理者でログインし、プランの編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 
@@ -229,6 +233,7 @@ test.describe
 		await minRow.waitFor( { state: 'attached', timeout: 15000 } );
 
 		// 1名1泊あたり: 人数の下限の欄は「最低申し込み人数」。「最少催行人数」にはならない。
+		// @check 人数の下限の欄の名前が「最低申し込み人数」で、説明文に「1件の予約は、1組が1室を使う予約です。」が出て、「催行」「時間枠」の語は出ない
 		await expect( minRow ).toBeVisible();
 		await expect( minLabel ).toHaveText( '最低申し込み人数' );
 		await expect( minDescription ).toContainText(
@@ -241,23 +246,28 @@ test.describe
 		await expect( minDescription ).not.toContainText( '時間枠' );
 
 		// 予約枠の定員の欄の説明文も、時間枠を共有する前提の文言にならない。
+		// @check 予約枠の定員の欄の説明文が「1件の予約で、一度に申し込める最大人数です。」になる
 		await expect( maxDescription ).toContainText(
 			'1件の予約で、一度に申し込める最大人数です。'
 		);
 		await expect( maxDescription ).not.toContainText( '時間枠' );
 
 		// 1室1泊あたりへ切り替えると人数の下限の欄は隠れ、1名1泊あたりへ戻すと同じ文言で再表示される。
+		// @step 料金の単位を「1室1泊あたり」に切り替える
 		await page
 			.locator(
 				'input[name="vkbm_service_menu[night_price_unit]"][value="per_room"]'
 			)
 			.check();
+		// @check 人数の下限の欄が隠れる
 		await expect( minRow ).toBeHidden();
+		// @step 料金の単位を「1名1泊あたり」に戻す
 		await page
 			.locator(
 				'input[name="vkbm_service_menu[night_price_unit]"][value="per_guest"]'
 			)
 			.check();
+		// @check 人数の下限の欄が同じ名前・同じ説明文で再び表示される
 		await expect( minRow ).toBeVisible();
 		await expect( minLabel ).toHaveText( '最低申し込み人数' );
 		await expect( minDescription ).toContainText(
@@ -268,11 +278,13 @@ test.describe
 		);
 
 		// 予約の単位を時間枠へ戻すと、1組1室の説明文は消え、予約枠の定員の欄は指名向けの文言に戻る。
+		// @step 予約の単位を時間枠に切り替える
 		await page
 			.locator(
 				'input[name="vkbm_service_menu[booking_unit]"][value="slot"]'
 			)
 			.check();
+		// @check 1組1室の説明文が消え、予約枠の定員の欄は指名した予約向けの説明文に戻る
 		await expect( minDescription ).not.toContainText(
 			'1件の予約は、1組が1室を使う予約です。'
 		);
@@ -307,10 +319,13 @@ test.describe
 		};
 
 		// 下限を入れる前は、1 名でも受け付けられる（比較の基準）。
+		// @step 3 日後チェックイン・1 泊・1 名で予約を仮登録する
 		const before = await postDraft( 1 );
+		// @check 1 名の予約が受け付けられる
 		expect( before.status, JSON.stringify( before.body ) ).toBe( 200 );
 
 		// 画面から下限に 2 を入れて保存する。
+		// @step 管理者でログインし、プランの編集画面で「最低申し込み人数」に 2 を入れて保存する
 		prepareBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
@@ -319,6 +334,7 @@ test.describe
 		await minInput.fill( '2' );
 		// ブロックエディターの保存ボタンで、メタボックスの内容もあわせて保存される。
 		await page.locator( '.editor-post-publish-button' ).click();
+		// @check 最低申し込み人数が 2 で保存される
 		await expect
 			.poll(
 				() =>
@@ -331,7 +347,9 @@ test.describe
 			.toBe( '2' );
 
 		// 1 名は断られ、2 名は受け付けられる。
+		// @step 同じ日程で 1 名と 2 名の予約をそれぞれ仮登録する
 		const oneGuest = await postDraft( 1 );
+		// @check 1 名の予約は最低人数に満たないとして断られ、2 名の予約は受け付けられる
 		expect( oneGuest.status ).toBe( 400 );
 		expect( oneGuest.body.code ).toBe( 'nomination_min_guests' );
 

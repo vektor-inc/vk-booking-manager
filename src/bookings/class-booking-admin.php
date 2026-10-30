@@ -179,6 +179,7 @@ class Booking_Admin {
 	 */
 	public function register(): void {
 		( new Booking_List_Search() )->register();
+		( new Guest_Booking_Admin() )->register();
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
 		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_post' ), 10, 2 );
 		add_action( 'save_post_' . Booking_Post_Type::POST_TYPE, array( $this, 'save_quick_edit' ), 10, 3 );
@@ -1393,11 +1394,17 @@ class Booking_Admin {
 		if ( ! $is_anonymized && $author_id > 0 && (int) $post->post_author !== $author_id && current_user_can( 'list_users' ) ) {
 			// Update booking author when a valid user is selected.
 			// 有効なユーザーが選択された場合に予約投稿者を更新する.
-			wp_update_post(
-				array(
-					'ID'          => $post_id,
-					'post_author' => $author_id,
-				)
+			// 投稿者 0 の予約（ゲスト予約など）でも付け替えられるよう、許可の印を立てて保存する。
+			Booking_Source::allow_author_change(
+				$post_id,
+				static function () use ( $post_id, $author_id ) {
+					return wp_update_post(
+						array(
+							'ID'          => $post_id,
+							'post_author' => $author_id,
+						)
+					);
+				}
 			);
 			// 付け替え先の会員の名簿とは無関係になるため、ID は手入力扱いへ置き換える。名前・番号の写しは残す。
 			update_post_meta( $post_id, Booking_Attendee_Resolver::META_ID, Booking_Attendee_Resolver::ID_MANUAL );
@@ -1534,6 +1541,11 @@ class Booking_Admin {
 		}
 		if ( array() !== $attendee_rows ) {
 			$rows = array_merge( array( 'name' => $rows['name'] ), $attendee_rows, array_diff_key( $rows, array( 'name' => true ) ) );
+		}
+
+		// ゲスト予約（会員登録なしの予約）は、会員の「予約アカウント」が出る位置に「ゲスト予約」と出す。
+		if ( Guest_Booking_Admin::is_guest_booking( $post_id ) ) {
+			$rows['guest'] = __( 'Guest booking', 'vk-booking-manager' );
 		}
 
 		/**
@@ -2882,6 +2894,13 @@ class Booking_Admin {
 			$author_label = sprintf( __( 'Unknown user (ID: %d)', 'vk-booking-manager' ), $author_id );
 		}
 
+		// ゲスト予約は、会員に紐付いていないあいだ予約者欄に「ゲスト予約」と出す。
+		// 後から会員に紐付けても印は残るため、その場合は会員名の下に注記を足す。
+		$is_guest_booking = Guest_Booking_Admin::is_guest_booking( $post->ID );
+		if ( $is_guest_booking && $author_id <= 0 ) {
+			$author_label = __( 'Guest booking (not linked to a member)', 'vk-booking-manager' );
+		}
+
 		$change_label = $author_id > 0 ? __( 'Change reserver', 'vk-booking-manager' ) : __( 'Select reserver', 'vk-booking-manager' );
 		$can_search   = current_user_can( 'list_users' );
 		?>
@@ -2896,6 +2915,9 @@ class Booking_Admin {
 			<div class="vkbm-reserver__current">
 				<p class="vkbm-reserver__name" data-vkbm-reserver-name><?php echo esc_html( $author_label ); ?></p>
 				<p class="vkbm-reserver__email" data-vkbm-reserver-email <?php echo '' === $author_email ? 'hidden' : ''; ?>><?php echo esc_html( $author_email ); ?></p>
+				<?php if ( $is_guest_booking && $author_id > 0 ) : ?>
+					<p class="description vkbm-reserver__guest-note"><?php esc_html_e( 'This booking was made as a guest booking.', 'vk-booking-manager' ); ?></p>
+				<?php endif; ?>
 			</div>
 			<div class="vkbm-reserver__actions">
 				<?php if ( $can_search ) : ?>

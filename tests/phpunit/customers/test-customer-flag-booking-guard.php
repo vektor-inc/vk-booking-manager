@@ -149,6 +149,160 @@ class Customer_Flag_Booking_Guard_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * ゲストに付けたフラグによる判定を検証する（ゲスト予約と、会員の予約の両方）。
+	 */
+	public function test_block_flagged_customer_by_guest_flag(): void {
+		$this->service->set_guest_flag( 'guest-blocked@example.com', '09011112222', 'blacklist', '無断キャンセル' );
+		$this->service->set_guest_flag( 'guest-noted@example.com', '09033334444', 'caution', '遅刻' );
+
+		// 会員の連絡先がゲストのフラグと一致する会員を作る。
+		$member_by_email = self::factory()->user->create(
+			array(
+				'role'       => 'subscriber',
+				'user_email' => 'guest-blocked@example.com',
+			)
+		);
+		$member_by_phone = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		update_user_meta( $member_by_phone, 'phone_number', '09011112222' );
+		$member_noted = self::factory()->user->create(
+			array(
+				'role'       => 'subscriber',
+				'user_email' => 'guest-noted@example.com',
+			)
+		);
+		$existing     = new WP_Error( 'existing', '既存エラー' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'ゲスト予約: メールだけ一致で止める（正常系）',
+				'conditions'          => array(
+					'user_id' => 0,
+					'contact' => array(
+						'email' => 'guest-blocked@example.com',
+						'phone' => '09000000000',
+					),
+				),
+				'expected'            => 'wp_error',
+			),
+			array(
+				'test_condition_name' => 'ゲスト予約: 電話だけ一致で止める（正常系）',
+				'conditions'          => array(
+					'user_id' => 0,
+					'contact' => array(
+						'email' => 'other@example.com',
+						'phone' => '09011112222',
+					),
+				),
+				'expected'            => 'wp_error',
+			),
+			array(
+				'test_condition_name' => 'ゲスト予約: どちらも一致しなければ通す（正常系）',
+				'conditions'          => array(
+					'user_id' => 0,
+					'contact' => array(
+						'email' => 'other@example.com',
+						'phone' => '09000000000',
+					),
+				),
+				'expected'            => 'null',
+			),
+			array(
+				'test_condition_name' => 'ゲスト予約: 止めない種別のフラグは通す（正常系）',
+				'conditions'          => array(
+					'user_id' => 0,
+					'contact' => array(
+						'email' => 'guest-noted@example.com',
+						'phone' => '09033334444',
+					),
+				),
+				'expected'            => 'null',
+			),
+			array(
+				'test_condition_name' => '会員の予約: 会員のメールがゲストのフラグと一致すれば止める（正常系）',
+				'conditions'          => array(
+					'user_id' => $member_by_email,
+					'contact' => array(),
+				),
+				'expected'            => 'wp_error',
+			),
+			array(
+				'test_condition_name' => '会員の予約: 会員の電話がゲストのフラグと一致すれば止める（正常系）',
+				'conditions'          => array(
+					'user_id' => $member_by_phone,
+					'contact' => array(),
+				),
+				'expected'            => 'wp_error',
+			),
+			array(
+				'test_condition_name' => '会員の予約: 止めない種別のゲストのフラグなら通す（正常系）',
+				'conditions'          => array(
+					'user_id' => $member_noted,
+					'contact' => array(),
+				),
+				'expected'            => 'null',
+			),
+			array(
+				'test_condition_name' => '会員の予約: 一致するゲストのフラグが無い会員は通す（正常系）',
+				'conditions'          => array(
+					'user_id' => $this->user_ids['free'],
+					'contact' => array(),
+				),
+				'expected'            => 'null',
+			),
+			array(
+				'test_condition_name' => '先に返ったエラーを尊重する（境界値）',
+				'conditions'          => array(
+					'user_id'  => 0,
+					'incoming' => $existing,
+					'contact'  => array(
+						'email' => 'guest-blocked@example.com',
+						'phone' => '',
+					),
+				),
+				'expected'            => 'same_error',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$incoming = $case['conditions']['incoming'] ?? null;
+			$actual   = $this->guard->block_flagged_customer( $incoming, $case['conditions']['user_id'], $case['conditions']['contact'] );
+
+			if ( 'wp_error' === $case['expected'] ) {
+				$this->assertInstanceOf( WP_Error::class, $actual, $case['test_condition_name'] );
+				// ゲスト予約は汎用のコードと既定の文言、会員の予約は従来のコード。
+				$expected_code = 0 === $case['conditions']['user_id'] ? 'vkbm_booking_not_accepted' : 'vkbm_customer_flag_blocked';
+				$this->assertSame( $expected_code, $actual->get_error_code(), $case['test_condition_name'] );
+				if ( 0 === $case['conditions']['user_id'] ) {
+					$this->assertSame( $this->service->get_default_block_message(), $actual->get_error_message(), $case['test_condition_name'] . ' / 種別のメッセージを返さない' );
+				}
+			} elseif ( 'same_error' === $case['expected'] ) {
+				$this->assertSame( $existing, $actual, $case['test_condition_name'] );
+			} else {
+				$this->assertNull( $actual, $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
+	 * ゲストの記録が空のサイトでは、会員・ゲストとも従来の判定結果から変わらないことを検証する。
+	 */
+	public function test_block_flagged_customer_without_guest_records(): void {
+		$this->assertInstanceOf( WP_Error::class, $this->guard->block_flagged_customer( null, $this->user_ids['blocked'] ), '会員のフラグでの停止は従来どおり' );
+		$this->assertNull( $this->guard->block_flagged_customer( null, $this->user_ids['free'] ), 'フラグの無い会員は従来どおり通す' );
+		$this->assertNull(
+			$this->guard->block_flagged_customer(
+				null,
+				0,
+				array(
+					'email' => 'anyone@example.com',
+					'phone' => '09012345678',
+				)
+			),
+			'ゲストの記録が空ならゲスト予約も通す'
+		);
+	}
+
+	/**
 	 * register() で登録しても、顧客フラグの種別名・メモがどの通知メールにも入らないことを検証する。
 	 *
 	 * メールは転送・引用などで顧客や第三者の目に触れうるため、フラグは管理画面の表示だけに留める。

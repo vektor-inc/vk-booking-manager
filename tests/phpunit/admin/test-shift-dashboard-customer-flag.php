@@ -125,6 +125,97 @@ class Shift_Dashboard_Customer_Flag_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 会員に紐付かないゲスト予約のカードに、予約の連絡先で照合したゲストのフラグが入ることを検証する。
+	 */
+	public function test_map_booking_to_card_for_guest_booking(): void {
+		$service = new Customer_Flag_Service();
+		$method  = new ReflectionMethod( Shift_Dashboard_Page::class, 'map_booking_to_card' );
+		$method->setAccessible( true );
+		$page = new Shift_Dashboard_Page( 'manage_options', null, null, $service );
+
+		$service->set_guest_flag( 'blocked@example.com', '', 'blacklist' );
+		$service->set_guest_flag( '', '09011112222', 'caution' );
+		$member_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$service->set_flag( $member_id, 'caution', '' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'メールがブロック種別に一致するゲスト予約 => 種別名とブロックあり（正常系）',
+				'conditions'          => array(
+					'author_id' => 0,
+					'email'     => 'Blocked@Example.com',
+					'phone'     => '',
+				),
+				'expected'            => array(
+					'label'          => 'ブラックリスト',
+					'blocks_booking' => true,
+				),
+			),
+			array(
+				'test_condition_name' => '電話が一致するゲスト予約 => 種別名とブロックなし（正常系）',
+				'conditions'          => array(
+					'author_id' => 0,
+					'email'     => 'none@example.com',
+					'phone'     => '090-1111-2222',
+				),
+				'expected'            => array(
+					'label'          => '要注意',
+					'blocks_booking' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールがブロック種別、電話が非ブロック種別に一致 => ブロック種別を優先する（境界値）',
+				'conditions'          => array(
+					'author_id' => 0,
+					'email'     => 'blocked@example.com',
+					'phone'     => '09011112222',
+				),
+				'expected'            => array(
+					'label'          => 'ブラックリスト',
+					'blocks_booking' => true,
+				),
+			),
+			array(
+				'test_condition_name' => 'どちらも一致しないゲスト予約 => null（異常系）',
+				'conditions'          => array(
+					'author_id' => 0,
+					'email'     => 'none@example.com',
+					'phone'     => '09000000000',
+				),
+				'expected'            => null,
+			),
+			array(
+				'test_condition_name' => '会員の予約は連絡先で照合せず、会員のフラグで決まる（境界値）',
+				'conditions'          => array(
+					'author_id' => $member_id,
+					'email'     => 'blocked@example.com',
+					'phone'     => '',
+				),
+				'expected'            => array(
+					'label'          => '要注意',
+					'blocks_booking' => false,
+				),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$booking_id = (int) self::factory()->post->create(
+				array(
+					'post_type'   => Booking_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+					'post_author' => $case['conditions']['author_id'],
+				)
+			);
+			update_post_meta( $booking_id, '_vkbm_booking_customer_email', $case['conditions']['email'] );
+			update_post_meta( $booking_id, '_vkbm_booking_customer_tel', $case['conditions']['phone'] );
+
+			$card = $method->invoke( $page, array( 'post_id' => $booking_id ) );
+
+			$this->assertSame( $case['expected'], $card['customer_flag'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * 月表示の予約カードのデータに、予約者の顧客フラグが入ることを検証する。
 	 */
 	public function test_format_month_cell_bookings(): void {

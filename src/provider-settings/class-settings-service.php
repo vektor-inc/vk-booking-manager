@@ -84,6 +84,11 @@ class Settings_Service {
 		if ( ! array_key_exists( $status_mode_key, $raw_settings ) && isset( $current[ $status_mode_key ] ) ) {
 			$raw_settings[ $status_mode_key ] = $current[ $status_mode_key ];
 		}
+		// #958: 予約の受付方法が送られなかった場合（REST 経由の一部項目の更新など）も、現在の保存値を引き継ぐ。
+		$customer_mode_key = Settings_Repository::KEY_BOOKING_CUSTOMER_MODE;
+		if ( ! array_key_exists( $customer_mode_key, $raw_settings ) && isset( $current[ $customer_mode_key ] ) ) {
+			$raw_settings[ $customer_mode_key ] = $current[ $customer_mode_key ];
+		}
 		// 削除時の片付けが送られなかった場合は、既定値（残す）ではなく現在の保存値を引き継ぎ、
 		// 「すべて削除する」が黙って「残す」に戻らないようにする。
 		if ( ! array_key_exists( 'uninstall_cleanup', $raw_settings ) && isset( $current['uninstall_cleanup'] ) ) {

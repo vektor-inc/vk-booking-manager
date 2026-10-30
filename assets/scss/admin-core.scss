@@ -531,11 +531,13 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 .vkbm-reserver__name,
-.vkbm-reserver__email {
+.vkbm-reserver__email,
+.vkbm-reserver__guest-note {
 	margin: 0;
 }
 
-.vkbm-reserver__email {
+.vkbm-reserver__email,
+.vkbm-reserver__guest-note {
 	margin-top: 2px;
 	color: var(--vkbm--admin--color--text-tertiary);
 	font-size: 13px;

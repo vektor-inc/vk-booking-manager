@@ -252,13 +252,16 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 	test.beforeAll( () => {
 		// サイト全体の指名機能を ON にする（終了時に元へ戻す）。
 		originalStaffEnabled = getStaffEnabled();
+		// @step 管理画面でスタッフ指名を使う設定にしておく
 		setStaffEnabled( true );
 
+		// @step 指名料 6,000円のスタッフ「E2E503 Staff X」を作成し、今月と来月のシフトを登録しておく
 		staffId = seedStaff();
 		// 当月＋翌月のシフト（月境界でも空き枠が残るように両方）。
 		for ( const { year, month } of getCurrentAndNextTokyoMonths() ) {
 			createShiftForMonth( staffId, year, month );
 		}
+		// @step そのスタッフだけを担当にした基本料金 15,000円のメニューを3つ作成しておく（A: 複数人予約あり・料金区分なし、B: 複数人予約あり・大人 5,000円／子供 3,000円の区分あり、C: 複数人予約なし）
 		menuA = seedMenu( `${ PREFIX } Menu A`, true, false );
 		menuB = seedMenu( `${ PREFIX } Menu B`, true, true );
 		menuC = seedMenu( `${ PREFIX } Menu C`, false, false );
@@ -276,11 +279,13 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 	test( '料金区分なし・2名・指名料あり: 予約画面の小計・合計が人数でその場で変わり、確認画面と一致する', async ( {
 		page,
 	} ) => {
+		// @step ログインせずにメニュー A の予約ページを開き、空きのある日と最初の時間枠を選ぶ
 		await openMenuAndPickSlot( page, menuA );
 
 		const rowSelector = '.vkbm-plan-summary__pricing-row';
 
 		// 1名: 見出しに「× 1名」が付き、合計は 15,000 + 6,000。
+		// @check 1 名のとき、料金欄の見出しが「サービス基本料金（¥15,000 × 1名）」で、合計が ¥21,000 になっている
 		await expect( page.locator( rowSelector ).first() ).toContainText(
 			'サービス基本料金（¥15,000 × 1名）'
 		);
@@ -289,7 +294,9 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 		);
 
 		// 2名にする → 見出し・小計・合計がその場で変わる。
+		// @step 人数を 2 にする
 		await page.locator( '#vkbm-reservation-guests' ).fill( '2' );
+		// @check その場で見出しが「サービス基本料金（¥15,000 × 2名）」・小計 ¥30,000・合計 ¥36,000 に変わる
 		await expect( page.locator( rowSelector ).first() ).toContainText(
 			'サービス基本料金（¥15,000 × 2名）'
 		);
@@ -302,11 +309,13 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 
 		// 合計の行（最後の行）に読み上げ用の属性が付く。
 		const totalRow = page.locator( rowSelector ).last();
+		// @check 最後の行が「基本料金合計」で、金額の変化が読み上げられる設定になっている
 		await expect( totalRow ).toContainText( '基本料金合計' );
 		await expect( totalRow ).toHaveAttribute( 'aria-live', 'polite' );
 		await expect( totalRow ).toHaveAttribute( 'aria-atomic', 'true' );
 
 		const reservationRows = await readRows( page, rowSelector );
+		// @check 料金欄は「サービス基本料金（¥15,000 × 2名） ¥30,000」「指名料 ¥6,000」「基本料金合計 ¥36,000」の3行になっている
 		expect( reservationRows ).toEqual( [
 			{ label: 'サービス基本料金（¥15,000 × 2名）', amount: 30000 },
 			{ label: '指名料', amount: NOMINATION_FEE },
@@ -314,8 +323,10 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 		] );
 
 		// 確認画面: 予約画面と同じ行・金額になり、内訳を足すと合計になる。
+		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await proceedToConfirm( page );
 		const confirmRows = await readConfirmPriceRows( page );
+		// @check 確認画面の料金の行と金額が予約画面と同じで、内訳を足すと合計になる
 		expect( confirmRows ).toEqual( reservationRows );
 		const total = confirmRows[ confirmRows.length - 1 ];
 		const sum = confirmRows
@@ -327,13 +338,16 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 	test( '料金区分あり（大人・子供）＋指名: 区分ごとの行と合計が確認画面と一致し、区分入力欄の下の合計は出ない', async ( {
 		page,
 	} ) => {
+		// @step ログインせずにメニュー B の予約ページを開き、空きのある日と最初の時間枠を選ぶ
 		await openMenuAndPickSlot( page, menuB );
 
 		// 大人2・子供1。
+		// @step 大人を 2、子供を 1 にする
 		await page.locator( '#vkbm-reservation-tier-0' ).fill( '2' );
 		await page.locator( '#vkbm-reservation-tier-1' ).fill( '1' );
 
 		const rowSelector = '.vkbm-plan-summary__pricing-row';
+		// @check 料金欄が「大人（¥5,000 × 2名） ¥10,000」「子供（¥3,000 × 1名） ¥3,000」「指名料 ¥6,000」「基本料金合計 ¥19,000」になる
 		await expect( page.locator( rowSelector ).last() ).toContainText(
 			'¥19,000'
 		);
@@ -347,23 +361,28 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 		] );
 
 		// 指名を使うメニューでは、区分入力欄の下の合計（指名料を含まない金額）は出ない。
+		// @check 区分の入力欄の下に合計欄は出ない
 		await expect(
 			page.locator( '.vkbm-plan-summary__guest-tiers-total' )
 		).toHaveCount( 0 );
 
 		// 確認画面の区分の行・合計が予約画面と一致する。
+		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await proceedToConfirm( page );
 		const confirmRows = await readConfirmPriceRows( page );
+		// @check 確認画面の料金の行と金額が予約画面と同じになっている
 		expect( confirmRows ).toEqual( reservationRows );
 	} );
 
 	test( '複数人一括予約を使わないメニュー: 見出しに「× 1名」が付かず、金額も従来どおり', async ( {
 		page,
 	} ) => {
+		// @step ログインせずにメニュー C の予約ページを開き、空きのある日と最初の時間枠を選ぶ
 		await openMenuAndPickSlot( page, menuC );
 
 		const rowSelector = '.vkbm-plan-summary__pricing-row';
 		// 人数欄は出ない。
+		// @check 人数の入力欄は出ない
 		await expect( page.locator( '#vkbm-reservation-guests' ) ).toHaveCount(
 			0
 		);
@@ -374,13 +393,16 @@ test.describe( 'issue #503: 複数人一括予約の予約画面と確認画面�
 			{ label: '基本料金合計', amount: BASE_PRICE + NOMINATION_FEE },
 		];
 		const reservationRows = await readRows( page, rowSelector );
+		// @check 料金欄が「サービス基本料金 ¥15,000」「指名料 ¥6,000」「基本料金合計 ¥21,000」で、見出しに「×」が付かない
 		expect( reservationRows ).toEqual( expected );
 		await expect( page.locator( rowSelector ).first() ).not.toContainText(
 			'×'
 		);
 
+		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await proceedToConfirm( page );
 		const confirmRows = await readConfirmPriceRows( page );
+		// @check 確認画面の料金の行と金額が予約画面と同じになっている
 		expect( confirmRows ).toEqual( expected );
 	} );
 } );

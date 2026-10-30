@@ -37,15 +37,12 @@ use function register_rest_route;
 use function rest_ensure_response;
 use function sanitize_text_field;
 use function sanitize_textarea_field;
-use function update_post_meta;
 
 /**
  * Provides current user's booking list.
  */
 class My_Bookings_Controller {
 	private const REST_NAMESPACE = 'vkbm/v1';
-
-	private const STATUS_CANCELLED = 'cancelled';
 
 	private const META_SERVICE_ID         = '_vkbm_booking_service_id';
 	private const META_RESOURCE_ID        = '_vkbm_booking_resource_id';
@@ -68,34 +65,28 @@ class My_Bookings_Controller {
 	private Settings_Repository $settings_repository;
 
 	/**
-	 * Notification service.
+	 * キャンセルの可否の判定と実行（ゲスト予約のキャンセル用リンクと共通）。
 	 *
-	 * @var Booking_Notification_Service|null
+	 * @var Booking_Customer_Cancellation
 	 */
-	private ?Booking_Notification_Service $notification_service;
-
-	/**
-	 * 予約の状態変化を外部連携へ橋渡しするディスパッチャー（#474）。
-	 *
-	 * @var Booking_Event_Dispatcher
-	 */
-	private Booking_Event_Dispatcher $event_dispatcher;
+	private Booking_Customer_Cancellation $customer_cancellation;
 
 	/**
 	 * Constructor.
 	 *
-	 * @param Settings_Repository|null          $settings_repository Provider settings repository.
-	 * @param Booking_Notification_Service|null $notification_service Notification handler.
-	 * @param Booking_Event_Dispatcher|null     $event_dispatcher 予約の状態変化を外部連携へ橋渡しするディスパッチャー。
+	 * @param Settings_Repository|null           $settings_repository Provider settings repository.
+	 * @param Booking_Notification_Service|null  $notification_service Notification handler.
+	 * @param Booking_Event_Dispatcher|null      $event_dispatcher 予約の状態変化を外部連携へ橋渡しするディスパッチャー。
+	 * @param Booking_Customer_Cancellation|null $customer_cancellation キャンセルの可否の判定と実行。省略時は、上の 3 つから作る。
 	 */
 	public function __construct(
 		?Settings_Repository $settings_repository = null,
 		?Booking_Notification_Service $notification_service = null,
-		?Booking_Event_Dispatcher $event_dispatcher = null
+		?Booking_Event_Dispatcher $event_dispatcher = null,
+		?Booking_Customer_Cancellation $customer_cancellation = null
 	) {
-		$this->settings_repository  = $settings_repository ?? new Settings_Repository();
-		$this->notification_service = $notification_service;
-		$this->event_dispatcher     = $event_dispatcher ?? new Booking_Event_Dispatcher();
+		$this->settings_repository   = $settings_repository ?? new Settings_Repository();
+		$this->customer_cancellation = $customer_cancellation ?? new Booking_Customer_Cancellation( $this->settings_repository, $notification_service, $event_dispatcher );
 	}
 
 	/**
@@ -254,7 +245,7 @@ class My_Bookings_Controller {
 			}
 			$status = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_STATUS, true ) );
 
-			$can_cancel = $this->can_cancel_booking( $start_timestamp, $now, $status, $cancel_mode, $cancel_hours );
+			$can_cancel = Booking_Cancellation_Policy::can_cancel( $start_timestamp, $now, $status, $cancel_mode, $cancel_hours );
 
 			$items[] = array(
 				'id'                  => $booking_id,
@@ -326,70 +317,13 @@ class My_Bookings_Controller {
 			return new WP_Error( 'forbidden', __( 'You do not have permission to cancel this reservation.', 'vk-booking-manager' ), array( 'status' => 403 ) );
 		}
 
-		$start_at = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_SERVICE_START, true ) );
-		$start_ts = $start_at ? strtotime( $start_at ) : false;
-		if ( false === $start_ts ) {
-			return new WP_Error( 'invalid_booking', __( 'The reservation date and time is invalid.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+		// 可否の判定とキャンセル後の処理（ステータス変更・通知メール・外部連携への通知）は、
+		// ゲスト予約のキャンセル用リンクと共通の部品に任せる。
+		$result = $this->customer_cancellation->cancel( $booking_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
 		}
-
-		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Intentional site-local timestamp used consistently for comparisons.
-		$now    = (int) current_time( 'timestamp' );
-		$status = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_STATUS, true ) );
-
-		if ( self::STATUS_CANCELLED === $status ) {
-			return new WP_REST_Response( array( 'cancelled' => true ) );
-		}
-
-		$settings     = $this->settings_repository->get_settings();
-		$cancel_mode  = isset( $settings['provider_booking_cancel_mode'] ) ? (string) $settings['provider_booking_cancel_mode'] : 'hours';
-		$cancel_hours = isset( $settings['provider_booking_cancel_deadline_hours'] ) ? (int) $settings['provider_booking_cancel_deadline_hours'] : 24;
-
-		if ( ! $this->can_cancel_booking( (int) $start_ts, $now, $status, $cancel_mode, $cancel_hours ) ) {
-			if ( 'none' === $cancel_mode ) {
-				return new WP_Error( 'cancel_disabled', __( 'This reservation cannot be canceled online.', 'vk-booking-manager' ), array( 'status' => 403 ) );
-			}
-			return new WP_Error( 'cancel_deadline_passed', __( 'The cancellation deadline has passed.', 'vk-booking-manager' ), array( 'status' => 403 ) );
-		}
-
-		// #474: このメソッド自身のメタ書き込みより前にスナップショットを確保する（外部連携用の
-		// ディスパッチャーへ「変更前の内容」として渡す）。
-		$event_before = $this->event_dispatcher->capture_snapshot( $booking_id );
-
-		update_post_meta( $booking_id, self::META_STATUS, self::STATUS_CANCELLED );
-		if ( $this->notification_service ) {
-			$this->notification_service->handle_customer_cancellation( $booking_id );
-		}
-
-		$this->event_dispatcher->dispatch_change( $booking_id, $event_before );
 
 		return new WP_REST_Response( array( 'cancelled' => true ) );
-	}
-
-	/**
-	 * Determine if a booking can be cancelled.
-	 *
-	 * @param int    $start_timestamp Booking start timestamp.
-	 * @param int    $now             Current timestamp.
-	 * @param string $status          Current booking status.
-	 * @param string $cancel_mode     Cancel mode ('hours'|'none').
-	 * @param int    $cancel_hours    Cancel deadline hours.
-	 * @return bool
-	 */
-	private function can_cancel_booking( int $start_timestamp, int $now, string $status, string $cancel_mode, int $cancel_hours ): bool {
-		if ( self::STATUS_CANCELLED === $status ) {
-			return false;
-		}
-
-		if ( $start_timestamp <= $now ) {
-			return false;
-		}
-
-		if ( 'none' === $cancel_mode ) {
-			return false;
-		}
-
-		$cancel_hours = max( 0, $cancel_hours );
-
-		return ( $start_timestamp - $now ) >= ( $cancel_hours * 3600 );
 	}
 }

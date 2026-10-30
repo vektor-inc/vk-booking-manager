@@ -114,12 +114,14 @@ test.describe( 'issue #623: サブ画像', () => {
 	let imageIds: number[];
 
 	test.beforeEach( () => {
+		// @step 管理画面でサブ画像を3枚（2枚目はキャプション付き）登録したサービスメニューを作っておく
 		( { menuId, imageIds } = createMenuWithSubImages() );
 	} );
 
 	test( '編集画面: 並び替え・削除・すべて削除と元に戻す・保存ができる', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、そのメニューの編集画面を開く
 		prepareBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
@@ -127,9 +129,11 @@ test.describe( 'issue #623: サブ画像', () => {
 		const gallery = page.locator( '[data-vkbm-gallery]' );
 		const items = gallery.locator( '.vkbm-gallery__item' );
 		const hidden = gallery.locator( '.vkbm-gallery__input' );
+		// @check サブ画像欄に画像が3枚、登録順に並んでいる
 		await expect( items ).toHaveCount( 3 );
 		await expect( hidden ).toHaveValue( imageIds.join( ',' ) );
 
+		// @check 先頭の画像の「前へ移動」と、末尾の画像の「後ろへ移動」は押せない
 		// 先頭の画像は「前へ移動」が押せず、末尾の画像は「後ろへ移動」が押せない。
 		await expect(
 			items.nth( 0 ).locator( '.vkbm-gallery__move-earlier' )
@@ -138,8 +142,10 @@ test.describe( 'issue #623: サブ画像', () => {
 			items.nth( 2 ).locator( '.vkbm-gallery__move-later' )
 		).toBeDisabled();
 
+		// @step 先頭の画像の「後ろへ移動」を押す
 		// 先頭の画像を「後ろへ移動」すると2番目になり、フォーカスは移動先の同じボタンに残る。
 		await items.nth( 0 ).locator( '.vkbm-gallery__move-later' ).click();
+		// @check 画像が2番目に移り、フォーカスは移動先の「後ろへ移動」ボタンに残る
 		await expect( hidden ).toHaveValue(
 			[ imageIds[ 1 ], imageIds[ 0 ], imageIds[ 2 ] ].join( ',' )
 		);
@@ -147,34 +153,43 @@ test.describe( 'issue #623: サブ画像', () => {
 			items.nth( 1 ).locator( '.vkbm-gallery__move-later' )
 		).toBeFocused();
 
+		// @check 件数の表示に 3 が出ている
 		// 件数表示が出ている。
 		await expect( gallery.locator( '.vkbm-gallery__count' ) ).toContainText(
 			'3'
 		);
 
+		// @step 先頭の画像の×を押す
 		// 先頭の画像（元の2枚目）を×で外す。
 		await items.nth( 0 ).locator( '.vkbm-gallery__remove' ).click();
+		// @check 画像が2枚になる
 		await expect( items ).toHaveCount( 2 );
 		await expect( hidden ).toHaveValue(
 			[ imageIds[ 0 ], imageIds[ 2 ] ].join( ',' )
 		);
 
+		// @step 「すべて削除」を押す
 		// 「すべて削除」は確認ダイアログなしで外れ、「元に戻す」で戻せる。
 		page.on( 'dialog', () => {
 			throw new Error( 'confirm ダイアログが表示された' );
 		} );
 		await gallery.locator( '.vkbm-gallery__clear' ).click();
+		// @check 確認ダイアログは出ずに、画像がすべて外れる
 		await expect( items ).toHaveCount( 0 );
 		await expect( hidden ).toHaveValue( '' );
+		// @step 「元に戻す」を押す
 		await gallery.locator( '.vkbm-gallery__undo' ).click();
+		// @check 外した2枚の画像が戻る
 		await expect( items ).toHaveCount( 2 );
 		await expect( hidden ).toHaveValue(
 			[ imageIds[ 0 ], imageIds[ 2 ] ].join( ',' )
 		);
 
+		// @step 「更新」ボタンを押して保存する
 		// 保存すると、並び順どおりに保存される。
 		// （ブロックエディターの保存ボタン。メタボックスの内容もあわせて保存される）
 		await page.locator( '.editor-post-publish-button' ).click();
+		// @check 画面の並び順どおりに2枚の画像が保存される
 		await expect
 			.poll( () => getStoredGalleryIds( menuId ), { timeout: 20000 } )
 			.toEqual( [ imageIds[ 0 ], imageIds[ 2 ] ] );
@@ -183,6 +198,7 @@ test.describe( 'issue #623: サブ画像', () => {
 	test( '編集画面: 追加→×で外す→もう一度追加しても、外した画像が戻らず重複の通知も出ない', async ( {
 		page,
 	} ) => {
+		// @step メディアライブラリに、まだメニューに登録していない画像を2枚追加しておく
 		// メディア選択画面から選べる、まだ登録していない画像を2枚用意する。
 		const extra = JSON.parse(
 			wpEvalPhp( `
@@ -204,6 +220,7 @@ test.describe( 'issue #623: サブ画像', () => {
 		) as number[];
 		expect( extra ).toHaveLength( 2 );
 
+		// @step 管理者でログインし、メニューの編集画面を開く
 		prepareBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
@@ -212,6 +229,7 @@ test.describe( 'issue #623: サブ画像', () => {
 		const items = gallery.locator( '.vkbm-gallery__item' );
 		const hidden = gallery.locator( '.vkbm-gallery__input' );
 		const status = gallery.locator( '.vkbm-gallery__status' );
+		// @check サブ画像欄に画像が3枚ある
 		await expect( items ).toHaveCount( 3 );
 
 		const modal = page.locator( '.media-modal' );
@@ -243,6 +261,7 @@ test.describe( 'issue #623: サブ画像', () => {
 			await expect( modal ).toBeHidden();
 		};
 
+		// @step 画像の追加ボタンでメディア選択画面を開き、ライブラリで追加用の1枚目の画像を選んだだけで Esc キーで閉じる
 		// 画像を選んだだけで追加せずに閉じる（Esc）。選択は次に開いたとき残ってはならない。
 		await openLibrary();
 		await pick( extra[ 0 ] );
@@ -251,21 +270,28 @@ test.describe( 'issue #623: サブ画像', () => {
 		);
 		await page.keyboard.press( 'Escape' );
 		await expect( modal ).toBeHidden();
+		// @check 画像は追加されず3枚のまま
 		await expect( items ).toHaveCount( 3 );
 
+		// @step もう一度メディア選択画面を開き、前回の選択が残っていないことを見てから、追加用の2枚目の画像を選んで追加する
 		// 別の1枚だけを追加する。直前に選んで閉じた画像は一緒に追加されない。
 		await addFromLibrary( extra[ 1 ] );
+		// @check 選んだ1枚だけが追加されて4枚になる
 		await expect( items ).toHaveCount( 4 );
 		await expect( hidden ).toHaveValue(
 			[ ...imageIds, extra[ 1 ] ].join( ',' )
 		);
 
+		// @step 追加した画像の×を押して外す
 		// 一覧の×で外す。
 		await items.nth( 3 ).locator( '.vkbm-gallery__remove' ).click();
+		// @check 3枚に戻る
 		await expect( items ).toHaveCount( 3 );
 
+		// @step もう一度メディア選択画面を開き、追加用の1枚目の画像を選んで追加する
 		// もう一度、別の1枚を追加する。外した画像は戻らず、重複の通知も出ない。
 		await addFromLibrary( extra[ 0 ] );
+		// @check 選んだ画像だけが追加されて4枚になり、外した画像は戻らず、重複の通知も出ない
 		await expect( items ).toHaveCount( 4 );
 		await expect( hidden ).toHaveValue(
 			[ ...imageIds, extra[ 0 ] ].join( ',' )
@@ -276,8 +302,10 @@ test.describe( 'issue #623: サブ画像', () => {
 	test( 'カード: サブ画像が全件出て、拡大表示を開閉・前後送りできる', async ( {
 		page,
 	} ) => {
+		// @step メニューの個別ページを開く
 		await page.goto( `/?p=${ menuId }` );
 
+		// @check カードにサブ画像のサムネイルが3枚、正方形で表示される
 		const thumbs = page.locator( '.vkbm-menu-loop__gallery-button' );
 		await expect( thumbs ).toHaveCount( 3 );
 
@@ -291,8 +319,10 @@ test.describe( 'issue #623: サブ画像', () => {
 		const dialog = page.locator( 'dialog.vkbm-gallery-dialog' );
 		await expect( dialog ).toHaveCount( 0 );
 
+		// @step 1枚目のサムネイルを押す
 		// 1枚目を開く: 位置表示は 1 / 3、前へは押せない、フォーカスは閉じるボタン。
 		await thumbs.nth( 0 ).click();
+		// @check 拡大表示が開き、位置表示が「1 / 3」で、前へのボタンは押せず、フォーカスは閉じるボタンにある
 		await expect( dialog ).toBeVisible();
 		await expect(
 			dialog.locator( '.vkbm-gallery-dialog__position' )
@@ -304,47 +334,60 @@ test.describe( 'issue #623: サブ画像', () => {
 			dialog.locator( '.vkbm-gallery-dialog__close' )
 		).toBeFocused();
 
+		// @step 右矢印キーを押す
 		// 矢印キーとボタンで前後に送れる。2枚目にはキャプションが出る。
 		await page.keyboard.press( 'ArrowRight' );
+		// @check 位置表示が「2 / 3」になり、キャプション「キャプション2」が出る
 		await expect(
 			dialog.locator( '.vkbm-gallery-dialog__position' )
 		).toHaveText( '2 / 3' );
 		await expect(
 			dialog.locator( '.vkbm-gallery-dialog__caption' )
 		).toHaveText( 'キャプション2' );
+		// @step 次へのボタンを押す
 		await dialog.locator( '.vkbm-gallery-dialog__next' ).click();
+		// @check 位置表示が「3 / 3」になり、次へのボタンは押せない
 		await expect(
 			dialog.locator( '.vkbm-gallery-dialog__position' )
 		).toHaveText( '3 / 3' );
 		await expect(
 			dialog.locator( '.vkbm-gallery-dialog__next' )
 		).toBeDisabled();
+		// @step 左矢印キーを押す
 		await page.keyboard.press( 'ArrowLeft' );
+		// @check 位置表示が「2 / 3」に戻る
 		await expect(
 			dialog.locator( '.vkbm-gallery-dialog__position' )
 		).toHaveText( '2 / 3' );
 
+		// @step Esc キーを押す
 		// Esc で閉じると、押したサムネイル（1枚目）へフォーカスが戻る。
 		await page.keyboard.press( 'Escape' );
+		// @check 拡大表示が閉じ、1枚目のサムネイルにフォーカスが戻る
 		await expect( dialog ).toBeHidden();
 		await expect( thumbs.nth( 0 ) ).toBeFocused();
 
+		// @step 3枚目のサムネイルを押して拡大表示を開き、背景（画面の左上の隅）を押す
 		// 3枚目を開いて、背景クリックで閉じる。
 		await thumbs.nth( 2 ).click();
 		await expect( dialog ).toBeVisible();
 		await page.mouse.click( 5, 5 );
+		// @check 拡大表示が閉じ、3枚目のサムネイルにフォーカスが戻る
 		await expect( dialog ).toBeHidden();
 		await expect( thumbs.nth( 2 ) ).toBeFocused();
 
+		// @step 2枚目のサムネイルを押して拡大表示を開き、×ボタンを押す
 		// ×ボタンで閉じる。
 		await thumbs.nth( 1 ).click();
 		await dialog.locator( '.vkbm-gallery-dialog__close' ).click();
+		// @check 拡大表示が閉じる
 		await expect( dialog ).toBeHidden();
 	} );
 
 	test( 'カード: 低い画面でも拡大表示の前後ボタンと位置表示が画面内に収まる', async ( {
 		page,
 	} ) => {
+		// @step 画面を縦持ちのスマホ（375×667px）と横持ち（667×375px）の大きさにして、それぞれメニューの個別ページで、大きな写真を想定して1枚目（キャプション無し）と2枚目（キャプション付き）のサムネイルを押す
 		// 縦持ちのスマホ（高さ 667px）と横持ち（高さ 375px）を確認する。
 		const viewports = [
 			{ width: 375, height: 667 },
@@ -370,6 +413,7 @@ test.describe( 'issue #623: サブ画像', () => {
 				const dialog = page.locator( 'dialog.vkbm-gallery-dialog' );
 				await expect( dialog ).toBeVisible();
 
+				// @check 拡大表示の次へのボタン・位置表示・閉じるボタンが、画面の縦の範囲内に完全に収まっている
 				// 前後ボタン・位置表示・閉じるボタンが、画面の範囲内に完全に入っている。
 				for ( const selector of [
 					'.vkbm-gallery-dialog__next',

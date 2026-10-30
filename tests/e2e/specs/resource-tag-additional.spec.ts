@@ -33,6 +33,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		// The plugin slug equals the wp-env mounted directory name, which differs
 		// between CI (vk-booking-manager-pro) and worktrees (agent-xxxx).
 		// Resolve it dynamically so both environments work correctly.
+		// @step プラグインを有効にし、BM 設定で指名機能を有効にして、スタッフが1名以上登録されている状態にしておく
 		const pluginSlug = resolvePluginSlug();
 		try {
 			wpCliArgs( [ 'plugin', 'is-active', pluginSlug ] );
@@ -67,6 +68,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		page,
 	} ) => {
 		// 管理画面にログイン
+		// @step 管理者でログインし、BM 設定の「システム」タブを開く
 		await loginAsAdmin( page );
 
 		// プロバイダー設定画面のSystemタブへ直接遷移（URLパラメータで tab=system を指定）
@@ -77,6 +79,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// ロケール非依存: チェックボックスの ID セレクタでリソースタグ表示設定が存在することを確認
 		// Locale-independent: verify by checkbox ID that the resource tag display setting exists
+		// @check リソースタグ表示の設定欄（チェックボックス）が表示されている
 		const resourceTagCheckbox = page.locator(
 			'#vkbm-resource-tag-display-enabled'
 		);
@@ -84,6 +87,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// 「Resource tag display」または日本語翻訳「リソースタグ表示」ラベルが表示されていることを確認
 		// （CI環境では wp site switch-language ja により日本語ロケールで動作するため両方を許容する）
+		// @check 設定欄のラベルが「リソースタグ表示」（英語表示では「Resource tag display」）になっていて、旧ラベル「Resource pulldown」はどこにも無い
 		const pageContent = await page.textContent( 'body' );
 		const hasEnglishLabel = pageContent?.includes( 'Resource tag display' );
 		const hasJapaneseLabel = pageContent?.includes( 'リソースタグ表示' );
@@ -96,6 +100,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 	test( '9. プロバイダー設定画面に表示例（Example）が表示される', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、BM 設定の「システム」タブを開く
 		await loginAsAdmin( page );
 
 		// Systemタブへ直接遷移
@@ -106,6 +111,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// リソースタグ表示設定のチェックボックスが読み込まれていることを確認
 		// Wait for the resource tag checkbox to ensure the section is loaded
+		// @check リソースタグ表示の設定欄（チェックボックス）が表示されている
 		await expect(
 			page.locator( '#vkbm-resource-tag-display-enabled' )
 		).toBeVisible( { timeout: 10000 } );
@@ -113,6 +119,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		// 説明文にプレビュー例が表示されていることを確認
 		// 英語: "Hanako Yamada ( Female, Veteran )" / 日本語: "山田花子 ( 女性, ベテラン )"
 		// CI環境では日本語ロケールで動作するため両方を許容する
+		// @check 設定欄の説明に「山田花子 ( 女性, ベテラン )」（英語表示では「Hanako Yamada ( Female, Veteran )」）という表示例がある
 		const exampleCodeEn = page
 			.locator( 'code' )
 			.filter( { hasText: /Hanako Yamada/ } );
@@ -127,6 +134,7 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 	test( '10. 複数タグが設定されたスタッフの表示名にカンマ区切りで表示される', async () => {
 		// ベテランタームがなければ作成（既に存在する場合はスキップ）
 		// Create "Veteran" term if it doesn't exist
+		// @step 管理画面でリソースタグ「Veteran」を用意し、スタッフにタグ「Female」と「Veteran」を付け、BM 設定で「リソースタグ表示」を有効にしておく
 		try {
 			wpCli( 'term create vkbm_resource_tag Veteran --slug=veteran' );
 		} catch {
@@ -140,11 +148,13 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 
 		// execFileSync 化後は shell の引用符展開が効かないため wpEvalPhp 経由で PHP コードを渡す。
 		// Pass PHP code via wpEvalPhp because shell-quoted `eval "..."` no longer works after the execFileSync migration.
+		// @step スタッフの表示名（予約画面などでスタッフ名として出る文字列）を確かめる
 		const displayName = wpEvalPhp(
 			`echo vkbm_get_resource_display_name( ${ staffId } );`
 		);
 
 		// スタッフ名が含まれる
+		// @check 表示名にスタッフ名と括弧があり、括弧の中に「Female」と「Veteran」がカンマ区切りで並ぶ
 		expect( displayName ).toContain( staffName );
 		// 括弧がある
 		expect( displayName ).toContain( '(' );
@@ -161,13 +171,16 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		request,
 	} ) => {
 		// タグを設定しておく
+		// @step スタッフにタグ「Male」を付け、BM 設定で「リソースタグ表示」を無効にしておく
 		setResourceTags( staffId, [ 'male' ] );
 		// 表示をOFFにする
 		setTagDisplayEnabled( false );
 
+		// @step ログアウトした状態で、スタッフの公開データ（REST API のスタッフ情報）を開く
 		const response = await request.get(
 			`/wp-json/wp/v2/vkbm_resource/${ staffId }`
 		);
+		// @check スタッフ情報が取得でき、リソースタグは空で返る（タグ名が外に出ない）
 		expect( response.ok() ).toBeTruthy();
 		const data = await response.json();
 		// 表示OFFの場合、resource_tags は空配列であるべき
@@ -177,12 +190,14 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 	test( '12. スタッフ一覧画面に「リソースタグ」列が表示される', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、管理画面のスタッフ一覧を開く
 		await loginAsAdmin( page );
 		await page.goto( '/wp-admin/edit.php?post_type=vkbm_resource' );
 		await page.waitForLoadState( 'domcontentloaded' );
 
 		// タクソノミーカラムは taxonomy-vkbm_resource_tag というIDで追加される
 		// The taxonomy column has ID taxonomy-vkbm_resource_tag
+		// @check スタッフ一覧に「リソースタグ」の列がある
 		const tagColumn = page.locator(
 			'th#taxonomy-vkbm_resource_tag, td.taxonomy-vkbm_resource_tag'
 		);
@@ -322,6 +337,7 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 	}
 
 	test.beforeAll( () => {
+		// @step プラグインを有効にし、BM 設定で指名機能を無効にしておく
 		const pluginSlug = resolvePluginSlug();
 		try {
 			wpCliArgs( [ 'plugin', 'is-active', pluginSlug ] );
@@ -334,17 +350,20 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 		// （issue #431 完了条件: タグ検索は指名機能の ON/OFF に関係なく機能する）。
 		setStaffEnabled( false );
 
+		// @step 管理画面でスタッフ「Resource Tag Filter E2E Staff Tagged」と「Resource Tag Filter E2E Staff Untagged」を作り、前者だけにリソースタグ「E2E 431 Female」を付けておく
 		staffTaggedId = seedStaff( STAFF_TAGGED_TITLE );
 		staffUntaggedId = seedStaff( STAFF_UNTAGGED_TITLE );
 		tagId = getOrCreateResourceTagId( 'e2e-431-female', 'E2E 431 Female' );
 		setResourceTags( staffTaggedId, [ 'e2e-431-female' ] );
 		clearResourceTags( staffUntaggedId );
 
+		// @step 両スタッフを担当にしたサービス「Resource Tag Filter E2E Menu」を作り、BM 設定で「絞り込み検索」と「リソースタグ検索」を有効にしておく
 		menuId = seedMenu();
 		setResourceTagSearchEnabled( true );
 
 		// 来月分のシフトを両スタッフぶん作成しておく（今月分だと実行日によっては
 		// 予約締切・シフト日数の関係で確認できる日が無くなるため、既存 spec と同じ方針で来月を使う）。
+		// @step 両スタッフに来月分のシフトを登録しておく
 		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
 		createShiftForMonth(
 			staffTaggedId,
@@ -384,6 +403,7 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 	test( 'REST: 指名なし予約の空き枠は、リソースタグで絞り込むとタグを持たないリソースが割当候補から外れる', async ( {
 		request,
 	} ) => {
+		// @step ログアウトした状態で、サービス「Resource Tag Filter E2E Menu」の来月15日の空き枠を、タグで絞り込まずに確かめる
 		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
 		const year = String( nextTokyoMonth.year );
 		const month = String( nextTokyoMonth.month ).padStart( 2, '0' );
@@ -395,6 +415,7 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 			dateStr,
 			[]
 		);
+		// @check 9:00 の枠があり、割り当て候補の担当に両スタッフが入っている
 		const nineOClockWithoutTag = slotsWithoutTag.find( ( slot ) =>
 			String( slot.start_at ).includes( 'T09:00:00' )
 		);
@@ -410,11 +431,13 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 
 		// タグを指定 => 「タグを持たないリソースは絶対に割り当てられない」ことの検証。
 		// 完了条件どおり、割当候補（assignable_staff_ids）からタグ非保持スタッフが除外される。
+		// @step 同じ日の空き枠を、リソースタグ「E2E 431 Female」で絞り込んで確かめる
 		const slotsWithTag = await getDailySlotsFilteredByTag(
 			request,
 			dateStr,
 			[ tagId ]
 		);
+		// @check 9:00 の枠があり、割り当て候補の担当はタグを持つスタッフだけで、タグを持たないスタッフは入っていない
 		const nineOClockWithTag = slotsWithTag.find( ( slot ) =>
 			String( slot.start_at ).includes( 'T09:00:00' )
 		);
@@ -428,6 +451,7 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 	test( 'REST: 存在しない条件でタグ絞り込みすると、その日の空き枠が0件になる（該当リソース0件・境界値）', async ( {
 		request,
 	} ) => {
+		// @step ログアウトした状態で、サービス「Resource Tag Filter E2E Menu」の来月16日の空き枠を、どのスタッフにも付いていない（存在しない）リソースタグで絞り込んで確かめる
 		const nextTokyoMonth = getCurrentAndNextTokyoMonths()[ 1 ];
 		const year = String( nextTokyoMonth.year );
 		const month = String( nextTokyoMonth.month ).padStart( 2, '0' );
@@ -442,6 +466,7 @@ test.describe( 'issue #431: リソースタグでの絞り込み（指名なし�
 
 		// resolve_staff_ids() が resource_tag_no_match エラーを返すため、
 		// 空き枠APIは（一般訪問者向けにマスクされた）エラー応答になる。
+		// @check 空き枠は返らず、エラーの応答になる
 		expect( response.status() ).toBeGreaterThanOrEqual( 400 );
 	} );
 } );

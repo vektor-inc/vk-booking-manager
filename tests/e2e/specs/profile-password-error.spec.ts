@@ -2,10 +2,12 @@ import { test, expect, Page } from '@playwright/test';
 import { wpCliArgs, wpEvalPhp } from '../utils/helpers';
 
 // プロフィール画面でパスワード変更エラー表示のテスト（issue #74）
+// @title プロフィール画面のパスワード変更エラー表示 (#74)
 test.describe( 'Profile password change error display (#74)', () => {
 	// テスト環境のセットアップ（グローバルセットアップでテストデータは作成済み）
 	// Setup test environment (test data already created by global setup)
 	test.beforeAll( async () => {
+		// @step 管理画面で購読者のテスト用ユーザー（パスワード OldPassword123）を作成し、フリガナ・電話番号・生年月日・性別を入れておく
 		// テスト用ユーザーを作成（既存の場合は削除して再作成）
 		try {
 			wpCliArgs( [ 'user', 'delete', 'profile_e2e_user', '--yes' ], {
@@ -122,6 +124,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		page,
 	} ) => {
 		// テストユーザーとしてログイン
+		// @step テスト用ユーザーでログインし、予約ページのプロフィール画面を開く
 		await loginAsTestUser( page );
 
 		// 予約ページ（プロフィール画面）に移動
@@ -133,6 +136,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		} );
 
 		// 「新しいパスワード」に値を入力
+		// @step 「新しいパスワード」に NewPassword123、「新しいパスワード（確認）」に DifferentPassword456 を入れる
 		await page.locator( '#vkbm-profile-password' ).fill( 'NewPassword123' );
 
 		// 「新しいパスワード（確認）」に異なる値を入力
@@ -141,6 +145,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 			.fill( 'DifferentPassword456' );
 
 		// 保存ボタンをクリック
+		// @step 「保存」ボタンを押す
 		await page
 			.locator( '.vkbm-auth-card--profile' )
 			.getByRole( 'button', { name: /保存|Save/ } )
@@ -150,6 +155,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		// 下の通知の表示待ち（リダイレクト後にだけ出る）がそのまま保存完了の待ちになる。
 
 		// エラーメッセージが表示されることを確認
+		// @check 「新しいパスワードが一致しません」のエラーが表示される
 		const errorAlert = page.locator(
 			'.vkbm-auth-card--profile .vkbm-alert__danger'
 		);
@@ -167,6 +173,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		page,
 	} ) => {
 		// テストユーザーとしてログイン
+		// @step テスト用ユーザーでログインし、予約ページのプロフィール画面を開く
 		await loginAsTestUser( page );
 
 		// 予約ページ（プロフィール画面）に移動
@@ -178,12 +185,14 @@ test.describe( 'Profile password change error display (#74)', () => {
 		} );
 
 		// 「新しいパスワード」に短いパスワードを入力
+		// @step 「新しいパスワード」と「新しいパスワード（確認）」の両方に short を入れる
 		await page.locator( '#vkbm-profile-password' ).fill( 'short' );
 
 		// 「新しいパスワード（確認）」に同じ短いパスワードを入力
 		await page.locator( '#vkbm-profile-password-confirm' ).fill( 'short' );
 
 		// 保存ボタンをクリック
+		// @step 「保存」ボタンを押す
 		await page
 			.locator( '.vkbm-auth-card--profile' )
 			.getByRole( 'button', { name: /保存|Save/ } )
@@ -193,6 +202,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		// 下の通知の表示待ち（リダイレクト後にだけ出る）がそのまま保存完了の待ちになる。
 
 		// エラーメッセージが表示されることを確認
+		// @check 「8文字以上」のパスワードを求めるエラーが表示される
 		const errorAlert = page.locator(
 			'.vkbm-auth-card--profile .vkbm-alert__danger'
 		);
@@ -212,6 +222,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		page,
 	} ) => {
 		// テストユーザーとしてログイン
+		// @step テスト用ユーザーでログインし、予約ページのプロフィール画面を開く
 		await loginAsTestUser( page );
 
 		// 予約ページ（プロフィール画面）に移動
@@ -224,6 +235,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 
 		// パスワード欄は空のまま、他のフィールドを確認（変更しない）
 		// 保存ボタンをクリック
+		// @step パスワード欄は空のまま「保存」ボタンを押す
 		await page
 			.locator( '.vkbm-auth-card--profile' )
 			.getByRole( 'button', { name: /保存|Save/ } )
@@ -233,6 +245,7 @@ test.describe( 'Profile password change error display (#74)', () => {
 		// 下の通知の表示待ち（リダイレクト後にだけ出る）がそのまま保存完了の待ちになる。
 
 		// 成功メッセージが表示されることを確認
+		// @check 保存成功のメッセージが表示され、エラーは表示されない
 		const successAlert = page.locator(
 			'.vkbm-auth-card--profile .vkbm-alert__success'
 		);

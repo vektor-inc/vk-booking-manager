@@ -68,6 +68,7 @@ class Provider_Settings_Page {
 		'resource_tag_display_enabled',
 		'provider_slot_step_minutes',
 		'provider_allow_staff_overlap_admin',
+		'booking_customer_mode',
 		'booking_attendee_name_mode',
 		'booking_attendee_name_label',
 		'attendee_roster_enabled',
@@ -314,6 +315,9 @@ class Provider_Settings_Page {
 			);
 			delete_transient( $this->get_field_errors_transient_key() );
 			delete_transient( $this->get_old_input_transient_key() );
+
+			// #958: 予約の受付方法が「会員のみ」以外で送信元メールアドレスが未設定なら、メール設定タブへのリンク付きで注意を出す。
+			$this->maybe_notify_booking_customer_mode_mail_from();
 
 			// 設定の保存が成功した場合にのみ、シフトの自動登録をその場で実行する（安藤レビュー指摘T1）。
 			$this->maybe_run_shift_auto_register();
@@ -584,6 +588,69 @@ class Provider_Settings_Page {
 	}
 
 	/**
+	 * 予約の受付方法が「会員のみ」以外で、送信元メールアドレスが未設定なら、保存後の画面に注意を出す（#958）。
+	 *
+	 * 保存済みの設定で判定する。vkbm_mail_from_email フィルターに処理が登録されているときは、フィルターで送信元を設定済みとみなして注意を出さない。注意は add_settings_error() で積み、設定保存の結果と一緒に表示される。
+	 */
+	private function maybe_notify_booking_customer_mode_mail_from(): void {
+		$saved_settings  = $this->settings_service->get_settings();
+		$customer_mode   = Settings_Repository::normalize_booking_customer_mode( $saved_settings['booking_customer_mode'] ?? null );
+		$saved_mail_from = isset( $saved_settings['mail_from_email'] ) && is_string( $saved_settings['mail_from_email'] ) ? trim( $saved_settings['mail_from_email'] ) : '';
+
+		if ( Settings_Repository::BOOKING_CUSTOMER_MODE_MEMBER === $customer_mode || '' !== $saved_mail_from || has_filter( 'vkbm_mail_from_email' ) ) {
+			return;
+		}
+
+		add_settings_error(
+			self::MENU_SLUG,
+			'vkbm_provider_settings_booking_customer_mode_mail_from',
+			self::get_booking_customer_mode_mail_from_notice_html( add_query_arg( 'tab', 'email', admin_url( 'admin.php?page=' . self::MENU_SLUG ) ) ),
+			'warning'
+		);
+	}
+
+	/**
+	 * 予約の受付方法が「会員のみ」以外のときに、「ユーザー登録設定」タブの先頭へ出す注意文を返す（#958）。
+	 *
+	 * @param string $mode 予約の受付方法（'guest' または 'both'）。
+	 * @return string 注意文（エスケープ前のプレーンテキスト）。
+	 */
+	private static function get_booking_customer_mode_registration_notice( string $mode ): string {
+		if ( Settings_Repository::BOOKING_CUSTOMER_MODE_GUEST === $mode ) {
+			return sprintf(
+				'%1$s %2$s',
+				__( 'Currently, the reservation acceptance method is "Guests only".', 'vk-booking-manager' ),
+				__( 'The login and user registration fields are not shown on the reservation screen.', 'vk-booking-manager' )
+			);
+		}
+
+		return sprintf(
+			'%1$s %2$s',
+			__( 'Currently, the reservation acceptance method is "Members or guests".', 'vk-booking-manager' ),
+			__( 'The settings on this tab apply only to customers who make reservations as members.', 'vk-booking-manager' )
+		);
+	}
+
+	/**
+	 * 予約の受付方法が「会員のみ」以外で、送信元メールアドレスが未設定のときに、保存後に出す注意の HTML を返す（#958）。
+	 *
+	 * ゲスト予約は確認メールが届くことが前提のため、メール設定タブへのリンクを付けて設定を促す。
+	 *
+	 * @param string $email_tab_url メール設定タブの URL（アンカーなし）。
+	 * @return string エスケープ済みの HTML。
+	 */
+	private static function get_booking_customer_mode_mail_from_notice_html( string $email_tab_url ): string {
+		return sprintf(
+			'%1$s %2$s %3$s <a href="%4$s">%5$s</a>',
+			esc_html__( 'The sender email address is not set.', 'vk-booking-manager' ),
+			esc_html__( 'Confirmation emails for guest reservations may be treated as spam and not reach customers.', 'vk-booking-manager' ),
+			esc_html__( 'Please set a sender email address on your own domain.', 'vk-booking-manager' ),
+			esc_url( $email_tab_url . '#vkbm-mail-from-email' ),
+			esc_html__( 'Open the email settings', 'vk-booking-manager' )
+		);
+	}
+
+	/**
 	 * 「角丸の基本サイズ」（design_radius_md）の表示値を上限でクランプする。
 	 *
 	 * 上限追加（issue #420）以前に保存された超過値（例: 50）を持つサイトでも、
@@ -790,6 +857,7 @@ class Provider_Settings_Page {
 		$slot_step_minutes                 = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : 15;
 		$service_menu_buffer_after_minutes = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
 		$booking_status_mode               = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : Settings_Repository::BOOKING_STATUS_MODE_PENDING;
+		$booking_customer_mode             = Settings_Repository::normalize_booking_customer_mode( $settings['booking_customer_mode'] ?? null );
 		$booking_attendee_name_mode        = isset( $settings['booking_attendee_name_mode'] ) ? (string) $settings['booking_attendee_name_mode'] : 'disabled';
 		$booking_attendee_name_label       = isset( $settings['booking_attendee_name_label'] ) ? (string) $settings['booking_attendee_name_label'] : '';
 		$attendee_roster_label             = isset( $settings['attendee_roster_label'] ) ? (string) $settings['attendee_roster_label'] : '';
@@ -1824,6 +1892,38 @@ class Provider_Settings_Page {
 
 							<tr class="vkbm-provider-settings__tab-system">
 								<th scope="row">
+									<label for="vkbm-provider-booking-customer-mode"><?php esc_html_e( 'Reservation acceptance method', 'vk-booking-manager' ); ?></label>
+								</th>
+							<td>
+								<select
+									id="vkbm-provider-booking-customer-mode"
+									name="vkbm_provider_settings[booking_customer_mode]"
+								>
+									<option value="<?php echo esc_attr( Settings_Repository::BOOKING_CUSTOMER_MODE_MEMBER ); ?>" <?php selected( $booking_customer_mode, Settings_Repository::BOOKING_CUSTOMER_MODE_MEMBER ); ?>>
+										<?php esc_html_e( 'Members only (only logged-in customers can make reservations)', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="<?php echo esc_attr( Settings_Repository::BOOKING_CUSTOMER_MODE_GUEST ); ?>" <?php selected( $booking_customer_mode, Settings_Repository::BOOKING_CUSTOMER_MODE_GUEST ); ?>>
+										<?php esc_html_e( 'Guests only (customers can make reservations without registering as a user)', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="<?php echo esc_attr( Settings_Repository::BOOKING_CUSTOMER_MODE_BOTH ); ?>" <?php selected( $booking_customer_mode, Settings_Repository::BOOKING_CUSTOMER_MODE_BOTH ); ?>>
+										<?php esc_html_e( 'Members or guests (customers choose on the reservation screen)', 'vk-booking-manager' ); ?>
+									</option>
+								</select>
+								<p class="description">
+									<?php esc_html_e( 'Choose whether customers can make reservations without registering as a user.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'A guest reservation is accepted when the customer opens the link in the confirmation email.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'If "Reservation status" is set to "Make a tentative reservation", it is received as a tentative reservation.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'The cancellation deadline follows the "Reservation cancellation" setting.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+							<tr class="vkbm-provider-settings__tab-system">
+								<th scope="row">
 									<label for="vkbm-provider-booking-status-mode"><?php esc_html_e( 'Reservation status', 'vk-booking-manager' ); ?></label>
 								</th>
 							<td>
@@ -1958,11 +2058,11 @@ class Provider_Settings_Page {
 										?>
 										<p class="notice notice-warning inline"><?php echo wp_kses_post( __( 'The name field is not shown on the booking screen, so the saved list cannot be selected. Change <a href="#vkbm-booking-attendee-name-mode">Name field</a> to “Use (optional)” or “Use (required)”.', 'vk-booking-manager' ) ); ?></p><?php endif; ?>
 									<fieldset>
-									<p><label for="vkbm-attendee-roster-label"><?php esc_html_e( 'Name of the list', 'vk-booking-manager' ); ?></label><br><input class="regular-text" id="vkbm-attendee-roster-label" name="vkbm_provider_settings[attendee_roster_label]" value="<?php echo esc_attr( $attendee_roster_label ); ?>" placeholder="<?php esc_attr_e( 'People receiving the service', 'vk-booking-manager' ); ?>"></p>
+									<p><label for="vkbm-attendee-roster-label"><?php esc_html_e( 'Name of the list', 'vk-booking-manager' ); ?></label><br><input type="text" class="regular-text" id="vkbm-attendee-roster-label" name="vkbm_provider_settings[attendee_roster_label]" value="<?php echo esc_attr( $attendee_roster_label ); ?>" placeholder="<?php esc_attr_e( 'People receiving the service', 'vk-booking-manager' ); ?>"></p>
 									<p class="description"><?php esc_html_e( 'Used for the My Page heading and booking screen choices.', 'vk-booking-manager' ); ?></p>
 									<input type="hidden" name="vkbm_provider_settings[attendee_roster_show_self]" value="0"><label><input type="checkbox" name="vkbm_provider_settings[attendee_roster_show_self]" value="1" <?php checked( ! empty( $settings['attendee_roster_show_self'] ) ); ?>> <?php esc_html_e( 'Show “Yourself” as a choice on the booking screen', 'vk-booking-manager' ); ?></label>
 									<p><input type="hidden" name="vkbm_provider_settings[attendee_roster_kana_enabled]" value="0"><label><input type="checkbox" name="vkbm_provider_settings[attendee_roster_kana_enabled]" value="1" <?php checked( ! empty( $settings['attendee_roster_kana_enabled'] ) ); ?>> <?php esc_html_e( 'Use a furigana field', 'vk-booking-manager' ); ?></label></p>
-									<p><label for="vkbm-attendee-roster-kana-label"><?php esc_html_e( 'Furigana field heading', 'vk-booking-manager' ); ?></label><br><input class="regular-text" id="vkbm-attendee-roster-kana-label" name="vkbm_provider_settings[attendee_roster_kana_label]" value="<?php echo esc_attr( $attendee_roster_kana_label ); ?>" placeholder="<?php esc_attr_e( 'Furigana', 'vk-booking-manager' ); ?>"></p>
+									<p><label for="vkbm-attendee-roster-kana-label"><?php esc_html_e( 'Furigana field heading', 'vk-booking-manager' ); ?></label><br><input type="text" class="regular-text" id="vkbm-attendee-roster-kana-label" name="vkbm_provider_settings[attendee_roster_kana_label]" value="<?php echo esc_attr( $attendee_roster_kana_label ); ?>" placeholder="<?php esc_attr_e( 'Furigana', 'vk-booking-manager' ); ?>"></p>
 									</fieldset>
 									<p class="description"><?php esc_html_e( 'Saved lists and the settings below are retained while this feature is off.', 'vk-booking-manager' ); ?></p>
 								</td>
@@ -1970,11 +2070,25 @@ class Provider_Settings_Page {
 
 							<tr class="vkbm-provider-settings__tab-attendees">
 								<th scope="row"><?php esc_html_e( 'Customer number', 'vk-booking-manager' ); ?></th>
-								<td><fieldset><input type="hidden" name="vkbm_provider_settings[attendee_number_enabled]" value="0"><label><input type="checkbox" name="vkbm_provider_settings[attendee_number_enabled]" value="1" <?php checked( ! empty( $settings['attendee_number_enabled'] ) ); ?>> <?php esc_html_e( 'Use customer numbers', 'vk-booking-manager' ); ?></label><p><label for="vkbm-attendee-number-label"><?php esc_html_e( 'Number field heading', 'vk-booking-manager' ); ?></label><br><input class="regular-text" id="vkbm-attendee-number-label" name="vkbm_provider_settings[attendee_number_label]" value="<?php echo esc_attr( $attendee_number_label ); ?>" placeholder="<?php esc_attr_e( 'Customer number', 'vk-booking-manager' ); ?>"></p><p class="description"><?php esc_html_e( 'Members can view numbers, while staff manage them from the user profile screen.', 'vk-booking-manager' ); ?></p></fieldset></td>
+								<td><fieldset><input type="hidden" name="vkbm_provider_settings[attendee_number_enabled]" value="0"><label><input type="checkbox" name="vkbm_provider_settings[attendee_number_enabled]" value="1" <?php checked( ! empty( $settings['attendee_number_enabled'] ) ); ?>> <?php esc_html_e( 'Use customer numbers', 'vk-booking-manager' ); ?></label><p><label for="vkbm-attendee-number-label"><?php esc_html_e( 'Number field heading', 'vk-booking-manager' ); ?></label><br><input type="text" class="regular-text" id="vkbm-attendee-number-label" name="vkbm_provider_settings[attendee_number_label]" value="<?php echo esc_attr( $attendee_number_label ); ?>" placeholder="<?php esc_attr_e( 'Customer number', 'vk-booking-manager' ); ?>"></p><p class="description"><?php esc_html_e( 'Members can view numbers, while staff manage them from the user profile screen.', 'vk-booking-manager' ); ?></p></fieldset></td>
 							</tr>
 
 
 
+
+						<?php if ( Settings_Repository::BOOKING_CUSTOMER_MODE_MEMBER !== $booking_customer_mode ) : ?>
+							<?php // #958: 予約の受付方法が「会員のみ」以外のときだけ、この設定の影響を受けることをタブの先頭で知らせる。WordPress の通知が画面上部へ移動しないよう inline を付ける。 ?>
+						<tr class="vkbm-provider-settings__tab-registration">
+							<td colspan="2" class="vkbm-provider-settings__booking-customer-mode-notice-cell">
+								<div class="notice notice-info inline vkbm-booking-customer-mode-notice" data-booking-customer-mode="<?php echo esc_attr( $booking_customer_mode ); ?>">
+									<p>
+										<?php echo esc_html( self::get_booking_customer_mode_registration_notice( $booking_customer_mode ) ); ?>
+										<a href="<?php echo esc_url( add_query_arg( 'tab', 'system', $base_url ) . '#vkbm-provider-booking-customer-mode' ); ?>"><?php esc_html_e( 'Change the reservation acceptance method', 'vk-booking-manager' ); ?></a>
+									</p>
+								</div>
+							</td>
+						</tr>
+						<?php endif; ?>
 
 						<tr class="vkbm-provider-settings__tab-registration">
 							<th scope="row"><?php esc_html_e( 'membership', 'vk-booking-manager' ); ?></th>

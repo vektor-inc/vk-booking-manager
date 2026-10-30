@@ -257,11 +257,13 @@ const prepareEditorCanvas = async ( page: Page ) => {
 	}
 };
 
+// @title 予約画面のヘッダーナビの出し分け
 test.describe( 'Reservation header nav variants', () => {
 	let bookingPageId = '';
 	test.use( { storageState: { cookies: [], origins: [] } } );
 
 	test.beforeEach( async ( { page } ) => {
+		// @step ログアウトした状態から始める
 		await resetAuthState( page );
 	} );
 
@@ -269,6 +271,7 @@ test.describe( 'Reservation header nav variants', () => {
 	// Prepare users needed for tests (test data already created by global setup)
 	test.beforeAll( async () => {
 		// 管理者ログイン用のパスワードを明示的に固定して、環境差分で失敗しないようにする。
+		// @step 管理者と一般会員（購読者）のログインユーザーを用意しておく
 		wpCliArgs( [
 			'user',
 			'update',
@@ -301,6 +304,7 @@ test.describe( 'Reservation header nav variants', () => {
 
 		// ブロックエディタ検証で使う予約ページIDを取得。
 		// wpCliArgs は内部で trim 済みのため末尾の .trim() は不要。
+		// @step 予約ブロックを置いた予約ページを用意しておく
 		bookingPageId = wpCliArgs( [
 			'post',
 			'list',
@@ -316,83 +320,100 @@ test.describe( 'Reservation header nav variants', () => {
 		}
 	} );
 
+	// @title 管理者でログインすると、予約画面にスタッフ用のナビが出る
 	test( 'shows staff nav for logged-in staff/admin on frontend', async ( {
 		page,
 	} ) => {
 		// 管理者でログイン後、予約画面で staff ナビになることを確認。
+		// @step 管理者でログインして予約ページを開く
 		await ensureLoggedInOnBookingPage( page, {
 			username: ADMIN_USER,
 			password: ADMIN_PASSWORD,
 			label: 'staff-frontend',
 		} );
 
+		// @check ヘッダーナビがスタッフ用（「シフト・予約表」「BM 設定」「ログアウト」）になる
 		await expectNavVariant( page, {
 			screen: 'reservation',
 			variant: 'staff',
 		} );
 	} );
 
+	// @title 一般会員でログインすると、予約画面に会員用のナビが出る
 	test( 'shows member nav for logged-in member on frontend', async ( {
 		page,
 	} ) => {
 		// subscriber でログイン後、予約画面で member ナビになることを確認。
+		// @step 一般会員（購読者）でログインして予約ページを開く
 		await ensureLoggedInOnBookingPage( page, {
 			username: MEMBER_USER,
 			password: MEMBER_PASSWORD,
 			label: 'member-frontend',
 		} );
 
+		// @check ヘッダーナビが会員用（「予約内容確認」「ユーザー情報編集」「ログアウト」）になる
 		await expectNavVariant( page, {
 			screen: 'reservation',
 			variant: 'member',
 		} );
 	} );
 
+	// @title 未ログインの予約画面には、ゲスト用のナビが出る
 	test( 'shows guest nav for logged-out visitor on frontend', async ( {
 		page,
 	} ) => {
 		// 未ログイン時は guest ナビが表示されることを確認。
+		// @step ログインせずに予約ページを開く
 		await page.goto( buildBookingUrl() );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check ヘッダーナビがゲスト用（「ログイン」「新規登録」）になる
 		await expectNavVariant( page, {
 			screen: 'reservation',
 			variant: 'guest',
 		} );
 	} );
 
+	// @title 未ログインでログイン画面を開くと、「戻る」ナビに切り替わる
 	test( 'shows return nav on login screen for logged-out visitor', async ( {
 		page,
 	} ) => {
 		// ログインフォーム表示中は return ナビに切り替わることを確認。
+		// @step ログインせずに予約ページのログイン画面を開く
 		await page.goto( buildBookingUrl( 'login' ) );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check ヘッダーナビが「戻る」だけのナビになる
 		await expectNavVariant( page, {
 			screen: 'reservation',
 			variant: 'return',
 		} );
 	} );
 
+	// @title 未ログインで新規登録画面を開くと、「戻る」ナビに切り替わる
 	test( 'shows return nav on register screen for logged-out visitor', async ( {
 		page,
 	} ) => {
 		// 新規登録フォーム表示中も return ナビになることを確認。
+		// @step ログインせずに予約ページの新規登録画面を開く
 		await page.goto( buildBookingUrl( 'register' ) );
 		await page.waitForLoadState( 'networkidle' );
 
+		// @check ヘッダーナビが「戻る」だけのナビになる
 		await expectNavVariant( page, {
 			screen: 'reservation',
 			variant: 'return',
 		} );
 	} );
 
+	// @title 管理者がブロックエディターで予約ページを開くと、予約ブロックにスタッフ用のナビが出る
 	test( 'shows staff nav in block editor when admin opens reservation block', async ( {
 		page,
 	} ) => {
 		test.setTimeout( 30000 );
 
 		// エディタ表示時は管理者として staff ナビになることを確認。
+		// @step 管理者でログインし、予約ページをブロックエディターで開く
 		await ensureLoggedInOnBookingPage( page, {
 			username: ADMIN_USER,
 			password: ADMIN_PASSWORD,
@@ -407,8 +428,10 @@ test.describe( 'Reservation header nav variants', () => {
 		await expect(
 			page.locator( 'iframe[name="editor-canvas"]' )
 		).toBeVisible( { timeout: 15000 } );
+		// @step 「エディターへようこそ」の案内が出たら閉じ、予約ブロックに「復旧を試みる」が出たら押す
 		await prepareEditorCanvas( page );
 
+		// @check 予約ブロックのヘッダーナビがスタッフ用（「シフト・予約表」「ログアウト」など）になる
 		await expectEditorNavVariant( page, {
 			screen: 'reservation',
 			variant: 'staff',

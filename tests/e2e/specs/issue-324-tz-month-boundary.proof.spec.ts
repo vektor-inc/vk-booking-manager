@@ -283,7 +283,9 @@ test.describe( 'issue #324 月境界: ブラウザTZとサイト日付', () => {
 
 	test.beforeAll( () => {
 		const staffId = Number.parseInt( getStaffId(), 10 );
+		// @step 管理画面で既存のシフトをすべて削除し、2か月後の月だけに毎日 9:00〜18:00 のシフトを登録しておく
 		seedOnlyTargetMonth( staffId, fixture.targetYear, fixture.targetMonth );
+		// @step 基本料金 3,000円の「Issue324 Proof Menu」を作成し、スタッフを割り当てておく
 		seedProofMenu( staffId );
 	} );
 
@@ -323,11 +325,13 @@ test.describe( 'issue #324 月境界: ブラウザTZとサイト日付', () => {
 		test( `ブラウザTZ=${ timezoneId } でもサイト日付の対象月と空き日を表示する`, async ( {
 			browser,
 		} ) => {
+			// @step パソコンの時計を「2か月後の月の1日 0:30（日本時間）」に合わせ、タイムゾーンを UTC または日本にしてブラウザで予約ページを開き、「Issue324 Proof Menu」の「予約する」ボタンを押す
 			const { monthLabel, availableDayCount } = await openCalendar(
 				browser,
 				timezoneId
 			);
 			// ブラウザの月が前月でも、サイト日付の対象月を表示する。
+			// @check カレンダーにはブラウザの月ではなくサイトの日付の月（2か月後の月）が表示され、空きのある日が1日以上ある
 			expect( monthLabel ).toBe(
 				`${ fixture.targetYear }/${ fixture.targetMonth }`
 			);
