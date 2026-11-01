@@ -20,6 +20,7 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
+use VKBookingManager\Common\Service_Period;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
@@ -205,6 +206,12 @@ class Service_Menu_Post_Type {
 		add_action( 'init', array( $this, 'register_post_type' ) );
 		add_action( 'init', array( $this, 'register_taxonomy' ) );
 		add_action( 'init', array( $this, 'register_meta' ) );
+		// REST 経由で開始日が終了日より後の提供期間が保存されたときに、前回の値へ戻す。
+		// リビジョン復元でも、逆転した提供期間は戻さない（復元前の値を保つ）。メタの復元（優先度10）の前後で挟む。
+		add_action( 'wp_restore_post_revision', array( $this, 'remember_service_period_before_revision_restore' ), 5, 2 );
+		add_action( 'wp_restore_post_revision', array( $this, 'restore_reversed_service_period_after_revision_restore' ), 20, 2 );
+		add_filter( 'rest_pre_insert_' . self::POST_TYPE, array( $this, 'remember_service_period_before_rest_save' ), 10, 2 );
+		add_action( 'rest_after_insert_' . self::POST_TYPE, array( $this, 'restore_reversed_service_period_after_rest_save' ), 10, 2 );
 		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
 		// カスタムメタもリビジョンに保存・復元できるよう、対象メタキーを登録する。
 		add_filter( 'wp_post_revision_meta_keys', array( $this, 'filter_revision_meta_keys' ), 10, 2 );
@@ -340,8 +347,11 @@ class Service_Menu_Post_Type {
 			// Use the configurable other conditions label from provider settings.
 			// 基本設定のその他条件ラベルを使用する。
 			// vkbm_duration と同じく、このラベルも同じ sink だが今回（#485）のスコープ外のため未エスケープのまま据え置く。
-			$reordered['vkbm_other_conditions']     = vkbm_get_other_conditions_label();
-			$reordered['vkbm_reservation_day_type'] = __( 'Reservation date', 'vk-booking-manager' );
+			$reordered['vkbm_other_conditions'] = vkbm_get_other_conditions_label();
+			// 「提供期間」と「予約可能日」は1つの列にまとめる（列キーは、表示オプションで隠した設定を引き継ぐため従来のまま）。
+			// 列見出しは WordPress 本体が未エスケープで出力するため、翻訳文言を個別にエスケープして <br> でつなぐ。
+			// 表示オプションのチェックボックスのラベルは WordPress 本体がタグを除去するため、<br> の前に空白を置いて「提供期間 予約可能日」と読めるようにする（見出しでは行末の空白は見えない）。
+			$reordered['vkbm_reservation_day_type'] = esc_html__( 'Service period', 'vk-booking-manager' ) . ' <br>' . esc_html__( 'Reservation date', 'vk-booking-manager' );
 		}
 
 		return $reordered;
@@ -537,13 +547,49 @@ class Service_Menu_Post_Type {
 				$this->render_quick_edit_data_span( $quick_edit_data );
 				break;
 			case 'vkbm_reservation_day_type':
-				if ( '' === $reservation_day_type ) {
+				// 上段に提供期間、下段に予約可能日を出す。指定のない側は出さず、両方なければダッシュにする。
+				$service_period       = Service_Period::get_period( $post_id );
+				$service_period_label = Service_Period::format_label_html( $service_period['start'], $service_period['end'] );
+				$day_type_label       = '' === $reservation_day_type ? '' : Reservation_Day::label( $reservation_day_type );
+
+				if ( '' === $service_period_label && '' === $day_type_label ) {
 					echo esc_html( '—' );
 					break;
 				}
 
-				// 種別→ラベルの写像は共有ヘルパーに集約している（曜日指定・日付指定にも対応）。
-				echo esc_html( Reservation_Day::label( $reservation_day_type ) );
+				if ( '' !== $service_period_label ) {
+					// 開始日と終了日の両方があるときだけ、終了日の直前（区切りの後）で改行して2行に分ける。
+					// 片側だけのときは強制改行を入れず、折り返しはブラウザに任せる（「から」「まで」と日付の境目でだけ折れる）。
+					// 日付以外の文言（区切り・「から」など）の span や翻訳文言の有無に左右されないよう、最後の日付の要素を目印にする。
+					if ( '' !== $service_period['start'] && '' !== $service_period['end'] ) {
+						$service_period_label = (string) preg_replace( '#^(.*)(<span class="vkbm-service-period__date">)#us', '$1<br>$2', $service_period_label, 1 );
+					}
+					// format_label_html() はエスケープ済み。日付の要素（span）と改行だけを許可して出力する。
+					// 日付は日本語だと途中で割れないよう1行に収めるが、英語などは空白の位置で折り返せないと列からはみ出す。
+					// html の lang ではなく、日付の文言を作る言語（determine_locale()）で判断する（利用者の言語設定とサイトの言語が違っても合う）。
+					$period_wrapper_class = 0 === strpos( determine_locale(), 'ja' ) ? 'vkbm-service-period-list vkbm-service-period-list--nowrap' : 'vkbm-service-period-list';
+					echo '<span class="' . esc_attr( $period_wrapper_class ) . '">';
+					echo wp_kses(
+						$service_period_label,
+						array(
+							'span' => array( 'class' => array() ),
+							'br'   => array(),
+						)
+					);
+					echo '</span>';
+					// 終了済みは、色だけに頼らず文言でも分かるようにする。
+					if ( Service_Period::is_ended( $service_period['end'], Service_Period::get_today() ) ) {
+						echo '<br>' . esc_html__( 'Ended', 'vk-booking-manager' );
+					}
+				}
+
+				if ( '' !== $day_type_label ) {
+					if ( '' !== $service_period_label ) {
+						echo '<br>';
+					}
+					// 種別→ラベルの写像は共有ヘルパーに集約している（曜日指定・日付指定にも対応）。
+					echo esc_html( $day_type_label );
+				}
 				break;
 		}
 	}
@@ -1451,9 +1497,140 @@ class Service_Menu_Post_Type {
 	}
 
 	/**
+	 * REST での保存前の提供期間を、投稿 ID ごとに覚えておく。
+	 *
+	 * @var array<int, array{start: string, end: string}>
+	 */
+	private array $service_period_before_rest_save = array();
+
+	/**
+	 * リビジョン復元の前の提供期間（投稿 ID => 開始日・終了日）。復元後に逆転していたら戻すために使う。
+	 *
+	 * @var array<int, array{start: string, end: string}>
+	 */
+	private array $service_period_before_revision_restore = array();
+
+	/**
+	 * REST での保存より前に、保存済みの提供期間を覚える（`rest_pre_insert_vkbm_service_menu` フィルター）。
+	 *
+	 * @param \stdClass|\WP_Error $prepared_post 保存される投稿データ。
+	 * @param \WP_REST_Request    $request       リクエスト。
+	 * @return \stdClass|\WP_Error 渡された投稿データ（変更しない）。
+	 */
+	public function remember_service_period_before_rest_save( $prepared_post, $request ) {
+		if ( $prepared_post instanceof \stdClass && ! empty( $prepared_post->ID ) ) {
+			$this->service_period_before_rest_save[ (int) $prepared_post->ID ] = Service_Period::get_period( (int) $prepared_post->ID );
+		}
+
+		return $prepared_post;
+	}
+
+	/**
+	 * REST での保存後に、開始日が終了日より後の提供期間なら前回の値へ戻す（`rest_after_insert_vkbm_service_menu` アクション）。
+	 *
+	 * 管理画面の保存と同じく、逆転した入力は保存しない。新規作成で前回の値が無いときは、両方とも無期限（メタ削除）に戻す。
+	 *
+	 * @param \WP_Post         $post    保存された投稿。
+	 * @param \WP_REST_Request $request リクエスト。
+	 */
+	public function restore_reversed_service_period_after_rest_save( $post, $request ): void {
+		$saved = Service_Period::get_period( (int) $post->ID );
+		if ( ! Service_Period::is_reversed( $saved['start'], $saved['end'] ) ) {
+			unset( $this->service_period_before_rest_save[ (int) $post->ID ] );
+			return;
+		}
+
+		$previous = $this->service_period_before_rest_save[ (int) $post->ID ] ?? array(
+			'start' => '',
+			'end'   => '',
+		);
+		unset( $this->service_period_before_rest_save[ (int) $post->ID ] );
+
+		foreach ( array(
+			Service_Period::META_START => $previous['start'],
+			Service_Period::META_END   => $previous['end'],
+		) as $meta_key => $value ) {
+			if ( '' === $value ) {
+				delete_post_meta( $post->ID, $meta_key );
+			} else {
+				update_post_meta( $post->ID, $meta_key, $value );
+			}
+		}
+	}
+
+	/**
+	 * リビジョン復元の前に、現在の提供期間を覚えておく（`wp_restore_post_revision` アクション。メタの復元より先に動かす）。
+	 *
+	 * 公開済みメニューの自動保存は REST の保存後の検証を通らずにリビジョンへ期間を保存するため、
+	 * 逆転した期間を含むリビジョンが存在しうる。復元後に戻せるよう、復元前の値をここで保持する。
+	 *
+	 * @param int $post_id     復元先の投稿 ID。
+	 * @param int $revision_id 復元するリビジョンの ID。
+	 */
+	public function remember_service_period_before_revision_restore( $post_id, $revision_id ): void {
+		if ( self::POST_TYPE !== get_post_type( (int) $post_id ) ) {
+			return;
+		}
+
+		$this->service_period_before_revision_restore[ (int) $post_id ] = Service_Period::get_period( (int) $post_id );
+	}
+
+	/**
+	 * リビジョン復元の後に、開始日が終了日より後の提供期間なら復元前の値へ戻す（`wp_restore_post_revision` アクション）。
+	 *
+	 * 管理画面・REST の保存と同じく、逆転した期間は保存しない。逆転していない期間はそのまま復元される。
+	 *
+	 * @param int $post_id     復元先の投稿 ID。
+	 * @param int $revision_id 復元したリビジョンの ID。
+	 */
+	public function restore_reversed_service_period_after_revision_restore( $post_id, $revision_id ): void {
+		$post_id = (int) $post_id;
+		if ( ! isset( $this->service_period_before_revision_restore[ $post_id ] ) ) {
+			return;
+		}
+
+		$previous = $this->service_period_before_revision_restore[ $post_id ];
+		unset( $this->service_period_before_revision_restore[ $post_id ] );
+
+		$restored = Service_Period::get_period( $post_id );
+		if ( ! Service_Period::is_reversed( $restored['start'], $restored['end'] ) ) {
+			return;
+		}
+
+		foreach ( array(
+			Service_Period::META_START => $previous['start'],
+			Service_Period::META_END   => $previous['end'],
+		) as $meta_key => $value ) {
+			if ( '' === $value ) {
+				delete_post_meta( $post_id, $meta_key );
+			} else {
+				update_post_meta( $post_id, $meta_key, $value );
+			}
+		}
+	}
+
+	/**
 	 * Register REST-exposed post meta.
 	 */
 	public function register_meta(): void {
+		// 提供期間（開始日・終了日）。予約画面が REST のメニュー一覧から読み、終了済みの除外と初期表示月に使う。
+		foreach ( array( Service_Period::META_START, Service_Period::META_END ) as $service_period_meta_key ) {
+			register_post_meta(
+				self::POST_TYPE,
+				$service_period_meta_key,
+				array(
+					'type'              => 'string',
+					'single'            => true,
+					'default'           => '',
+					'show_in_rest'      => true,
+					'sanitize_callback' => array( Service_Period::class, 'sanitize_date' ),
+					'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+						return current_user_can( 'edit_post', $post_id );
+					},
+				)
+			);
+		}
+
 		register_post_meta(
 			self::POST_TYPE,
 			'_vkbm_base_price',
@@ -2156,6 +2333,8 @@ class Service_Menu_Post_Type {
 			'_vkbm_reservation_deadline_hours',
 			'_vkbm_max_advance_booking_days',
 			self::META_RESERVATION_DAY_TYPE,
+			Service_Period::META_START,
+			Service_Period::META_END,
 			'_vkbm_online_unavailable',
 			'_vkbm_is_archived',
 			'_vkbm_use_detail_page',

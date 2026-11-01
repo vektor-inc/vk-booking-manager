@@ -414,6 +414,70 @@ class Booking_Confirmation_Slot_Times_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
+				'test_condition_name' => '提供期間の終了日が予約日の前日 => 400 service_period_out_of_range（空き枠の再検証より前に断る）',
+				'conditions'          => array(
+					'service_period_end' => '2026-10-04',
+					'server_slot'        => self::MONDAY_SLOT,
+					'draft_slot'         => self::MONDAY_SLOT,
+				),
+				'expected'            => array(
+					'error_code'        => 'service_period_out_of_range',
+					'status'            => 400,
+					'revalidates_slots' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '提供期間の開始日が予約日の翌日 => 400 service_period_out_of_range',
+				'conditions'          => array(
+					'service_period_start' => '2026-10-06',
+					'server_slot'          => self::MONDAY_SLOT,
+					'draft_slot'           => self::MONDAY_SLOT,
+				),
+				'expected'            => array(
+					'error_code'        => 'service_period_out_of_range',
+					'status'            => 400,
+					'revalidates_slots' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '提供期間の終了日が予約日の当日（両端を含む） => 確定する',
+				'conditions'          => array(
+					'service_period_start' => '2026-10-05',
+					'service_period_end'   => '2026-10-05',
+					'server_slot'          => self::MONDAY_SLOT,
+					'draft_slot'           => self::MONDAY_SLOT,
+				),
+				'expected'            => array(
+					'revalidates_slots' => true,
+					'error_code'        => '',
+					'start'             => '2026-10-05 10:00:00',
+					'service_end'       => '2026-10-05 11:00:00',
+					'total_end'         => '2026-10-05 11:30:00',
+					'title_suffix'      => ' / 2026.10.5 10:00',
+					'response_keys'     => array( 'booking_id', 'status' ),
+				),
+			),
+			array(
+				'test_condition_name' => '月曜の空き枠の ID のまま開始だけ期間外の日にした下書き => 400 service_period_out_of_range（下書きの改ざんも提供期間で断る）',
+				'conditions'          => array(
+					'service_period_start' => '2026-10-05',
+					'service_period_end'   => '2026-10-05',
+					'server_slot'          => self::MONDAY_SLOT,
+					'draft_slot'           => array_merge(
+						self::MONDAY_SLOT,
+						array(
+							'start_at' => '2026-10-06T10:00:00+09:00',
+							'end_at'   => '2026-10-06T11:30:00+09:00',
+						)
+					),
+				),
+				'expected'            => array(
+					'error_code'        => 'service_period_out_of_range',
+					'status'            => 400,
+					'revalidates_slots' => false,
+				),
+			),
+			array(
 				'test_condition_name' => '平日のみのメニューで、月曜の空き枠の ID のまま開始だけ土曜にした下書き => 400 invalid_reservation_day（従来どおり予約できる日の判定で断る）',
 				'conditions'          => array(
 					'reservation_day_type' => 'weekday',
@@ -440,6 +504,15 @@ class Booking_Confirmation_Slot_Times_Test extends WP_UnitTestCase {
 			$staff_id = $this->create_staff();
 			if ( isset( $case['conditions']['reservation_day_type'] ) ) {
 				update_post_meta( $menu_id, '_vkbm_reservation_day_type', $case['conditions']['reservation_day_type'] );
+			}
+			// 提供期間（開始日・終了日）。
+			foreach ( array(
+				'service_period_start' => '_vkbm_service_period_start',
+				'service_period_end'   => '_vkbm_service_period_end',
+			) as $condition_key => $meta_key ) {
+				if ( isset( $case['conditions'][ $condition_key ] ) ) {
+					update_post_meta( $menu_id, $meta_key, $case['conditions'][ $condition_key ] );
+				}
 			}
 
 			$user_id = $this->factory()->user->create();

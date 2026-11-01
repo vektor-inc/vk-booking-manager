@@ -194,6 +194,13 @@ class Guest_Booking_Controller {
 	public const RESULT_REJECTED = 'rejected';
 
 	/**
+	 * 確認リンクを開いた結果: お客様1人あたりの予約数の上限に達していて予約できなかった。
+	 *
+	 * 同じメールアドレスの持ち主だけが見る画面のため、他の拒否理由（rejected）と違い、理由と上限の件数を伝える。
+	 */
+	public const RESULT_BOOKING_LIMIT_REACHED = 'booking_limit_reached';
+
+	/**
 	 * 確認リンクを開いた結果: 受付方法が「会員のみ」に戻っていて、ゲスト予約を受け付けられない。
 	 */
 	public const RESULT_UNAVAILABLE = 'unavailable';
@@ -286,7 +293,7 @@ class Guest_Booking_Controller {
 	 * このリクエストで処理した確認リンクの結果を返す。
 	 *
 	 * 予約ブロックが結果画面を出すために読む。キー: result（RESULT_* のいずれか）、booking_id、
-	 * booking_status（予約の今のステータス）、repeat（同じリンクを開き直したか）、code・message（受け付けなかった理由）。
+	 * booking_status（予約の今のステータス）、repeat（同じリンクを開き直したか）、code・message（受け付けなかった理由）、limit（予約数の上限に達した結果のときの上限の件数）。
 	 *
 	 * @return array<string,mixed>|null 処理していなければ null。
 	 */
@@ -299,6 +306,7 @@ class Guest_Booking_Controller {
 	 *
 	 * get_current_result() の code・message は渡さない。顧客フラグ・重複予約など、予約を受け付けなかった理由を画面に出すと、
 	 * 他人のメールアドレス・電話番号を入れて、フラグの有無や予約の有無を探れてしまうため。
+	 * 予約数の上限に達した結果だけは、確認リンクを開けるのがメールアドレスの持ち主に限られるため理由を伝え、上限の件数（bookingLimit）を渡す。
 	 * 予約が確定・仮予約になった結果にだけ、画面に出す予約内容（booking）を付ける。
 	 *
 	 * @return array<string,mixed>|null 処理していなければ null。キー: result、bookingStatus、repeat、booking（予約内容。無ければ null）。
@@ -318,12 +326,19 @@ class Guest_Booking_Controller {
 			$booking = self::build_booking_summary( $booking_id );
 		}
 
-		return array(
+		$public = array(
 			'result'        => $result,
 			'bookingStatus' => (string) ( $current['booking_status'] ?? '' ),
 			'repeat'        => ! empty( $current['repeat'] ),
 			'booking'       => $booking,
 		);
+
+		// 上限に達した結果にだけ、画面の文言に入れる上限の件数を付ける。
+		if ( self::RESULT_BOOKING_LIMIT_REACHED === $result ) {
+			$public['bookingLimit'] = (int) ( $current['limit'] ?? 0 );
+		}
+
+		return $public;
 	}
 
 	/**
@@ -733,7 +748,7 @@ class Guest_Booking_Controller {
 	 * 確認待ちデータから予約を作り、結果の記録を返す。
 	 *
 	 * @param array<string,mixed> $pending 確認待ちデータ。
-	 * @return array<string,mixed> 結果の記録。outcome は created / slot_unavailable / rejected / retry のいずれか。retry は一時的な失敗で、保存しない。
+	 * @return array<string,mixed> 結果の記録。outcome は created / slot_unavailable / booking_limit_reached / rejected / retry のいずれか。retry は一時的な失敗で、保存しない。
 	 */
 	private function create_booking_from_pending( array $pending ): array {
 		$draft = is_array( $pending['draft'] ) ? $pending['draft'] : array();
@@ -769,6 +784,16 @@ class Guest_Booking_Controller {
 					'outcome' => self::OUTCOME_RETRY,
 					'code'    => (string) $result->get_error_code(),
 					'message' => $result->get_error_message(),
+				);
+			}
+
+			// 予約数の上限に達したときは、理由を伝えるため専用の結果にする（上限の件数も残す）。
+			if ( Customer_Booking_Limit::ERROR_CODE === $result->get_error_code() ) {
+				return array(
+					'outcome' => self::RESULT_BOOKING_LIMIT_REACHED,
+					'code'    => (string) $result->get_error_code(),
+					'message' => $result->get_error_message(),
+					'limit'   => is_array( $data ) ? (int) ( $data['limit'] ?? 0 ) : 0,
 				);
 			}
 
@@ -833,11 +858,14 @@ class Guest_Booking_Controller {
 		$outcome = (string) $record['outcome'];
 
 		if ( 'created' !== $outcome ) {
+			$known_outcomes = array( self::RESULT_SLOT_UNAVAILABLE, self::RESULT_BOOKING_LIMIT_REACHED );
+
 			return $this->build_result(
-				self::RESULT_SLOT_UNAVAILABLE === $outcome ? self::RESULT_SLOT_UNAVAILABLE : self::RESULT_REJECTED,
+				in_array( $outcome, $known_outcomes, true ) ? $outcome : self::RESULT_REJECTED,
 				array(
 					'code'    => (string) ( $record['code'] ?? '' ),
 					'message' => (string) ( $record['message'] ?? '' ),
+					'limit'   => (int) ( $record['limit'] ?? 0 ),
 					'repeat'  => $repeat,
 				)
 			);
@@ -870,7 +898,7 @@ class Guest_Booking_Controller {
 	 * 結果の配列を組み立てる。
 	 *
 	 * @param string              $result 結果（RESULT_*）。
-	 * @param array<string,mixed> $extra  追加の値（booking_id・booking_status・repeat・code・message）。
+	 * @param array<string,mixed> $extra  追加の値（booking_id・booking_status・repeat・code・message・limit）。
 	 * @return array<string,mixed>
 	 */
 	private function build_result( string $result, array $extra = array() ): array {
@@ -882,6 +910,7 @@ class Guest_Booking_Controller {
 				'repeat'         => false,
 				'code'           => '',
 				'message'        => '',
+				'limit'          => 0,
 			),
 			$extra
 		);

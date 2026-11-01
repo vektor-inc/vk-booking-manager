@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { formatBookingDateTimeParts } from '../format-wp-date';
 import { formatGuestsCount } from '../../shared/guests';
 
@@ -10,6 +10,7 @@ export const GUEST_VERIFY_RESULT = {
 	EXPIRED: 'expired',
 	SLOT_UNAVAILABLE: 'slot_unavailable',
 	REJECTED: 'rejected',
+	BOOKING_LIMIT_REACHED: 'booking_limit_reached',
 	UNAVAILABLE: 'unavailable',
 	PROCESSING: 'processing',
 	INVALID: 'invalid',
@@ -187,6 +188,37 @@ export const getGuestVerifyResultView = (
 						'Please contact the store directly.',
 						'vk-booking-manager'
 					) }`,
+				],
+				buttonLabel: toPageLabel,
+				showSummary: false,
+			};
+
+		case GUEST_VERIFY_RESULT.BOOKING_LIMIT_REACHED:
+			// 確認リンクを開けるのはメールアドレスの持ち主だけのため、rejected と違って理由を伝える。
+			return {
+				tone: TONE.DANGER,
+				title: __(
+					'We could not accept your reservation',
+					'vk-booking-manager'
+				),
+				messages: [
+					`${ sprintf(
+						/* translators: %d: Maximum number of upcoming reservations per customer. */
+						_n(
+							'You can have up to %d reservation at the same time.',
+							'You can have up to %d reservations at the same time.',
+							Number( result?.bookingLimit ) || 0,
+							'vk-booking-manager'
+						),
+						Number( result?.bookingLimit ) || 0
+					) } ${ __(
+						'Please apply again after your current reservations have ended or been cancelled.',
+						'vk-booking-manager'
+					) }`,
+					__(
+						'You can cancel from the cancellation link in your reservation confirmation email.',
+						'vk-booking-manager'
+					),
 				],
 				buttonLabel: toPageLabel,
 				showSummary: false,

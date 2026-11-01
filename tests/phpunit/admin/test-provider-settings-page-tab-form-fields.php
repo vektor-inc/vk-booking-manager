@@ -44,6 +44,71 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	 */
 	private const SYSTEM_TAB_ONLY_KEYS = array( 'reservation_menu_list_display_mode', 'currency_symbol', 'tax_label_text' );
 
+	/** どのタブから保存してもカード背景を保持し、デザインタブで変更できる。 */
+	public function test_menu_card_background_across_tabs(): void {
+		$page       = $this->create_page();
+		$test_cases = array();
+		foreach ( self::FORM_TABS as $tab ) {
+			$test_cases[] = array(
+				'test_condition_name' => $tab . ' タブでも未送信の背景を保持',
+				'conditions'          => array(
+					'tab'        => $tab,
+					'background' => 'white',
+				),
+				'expected'            => 'white',
+			);
+		}
+		foreach ( $test_cases as $case ) {
+			update_option( Settings_Repository::OPTION_KEY, array( 'design_menu_card_background' => $case['conditions']['background'] ) );
+			$html = $this->render_tab( $page, $case['conditions']['tab'] );
+			$this->assertContains( 'design_menu_card_background', $this->get_form_keys( $html ), $case['test_condition_name'] );
+			$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$this->assertTrue( $service->save_settings( array( 'provider_name' => '背景保持テスト' ) ), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $service->get_settings()['design_menu_card_background'], $case['test_condition_name'] );
+		}
+		$html = $this->render_tab( $page, 'design' );
+		$this->assertMatchesRegularExpression( '/<option value="white"[^>]*selected/', $html, '保存済みの白を選択表示する' );
+		$this->assertLessThan( strpos( $html, 'for="vkbm-design-menu-card-catch-color"' ), strpos( $html, 'for="vkbm-design-menu-card-background"' ), '背景はキャッチコピー色の前に表示する' );
+	}
+
+
+	/** 未送信だけ現在値を保持し、明示的な不正値は初期値へ戻す。 */
+	public function test_save_menu_card_background(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '未送信なら保存済みの白を保持',
+				'conditions'          => array(),
+				'expected'            => 'white',
+			),
+			array(
+				'test_condition_name' => '不正文字列なら透明へ戻す',
+				'conditions'          => array( 'design_menu_card_background' => 'invalid' ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '配列なら透明へ戻す',
+				'conditions'          => array( 'design_menu_card_background' => array( 'white' ) ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '透明の明示指定を保存',
+				'conditions'          => array( 'design_menu_card_background' => 'transparent' ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '白の明示指定を保存',
+				'conditions'          => array( 'design_menu_card_background' => 'white' ),
+				'expected'            => 'white',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			update_option( Settings_Repository::OPTION_KEY, array( 'design_menu_card_background' => 'white' ) );
+			$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$this->assertTrue( $service->save_settings( $case['conditions'] ), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $service->get_settings()['design_menu_card_background'], $case['test_condition_name'] );
+		}
+	}
+
 	/**
 	 * 管理者でログインし、設定画面を描画できる状態にする。
 	 */

@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Bookings\Customer_Booking_Limit;
 use VKBookingManager\Common\Lodging_Rate;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Uninstall\Uninstaller;
@@ -74,6 +75,11 @@ class Settings_Sanitizer {
 	public const DESIGN_MENU_SEARCH_STYLE_DEFAULT = 'plain';
 
 	/**
+	 * サービスメニューカードの背景の初期値。
+	 */
+	public const DESIGN_MENU_CARD_BACKGROUND_DEFAULT = 'transparent';
+
+	/**
 	 * 絞り込み検索のデザインとして選べる値と、管理画面に表示するラベルの一覧を返す。
 	 *
 	 * デザインを追加するときは、ここに 1 行足す。サニタイズの許可リストと
@@ -86,6 +92,41 @@ class Settings_Sanitizer {
 			self::DESIGN_MENU_SEARCH_STYLE_DEFAULT => __( 'Plain', 'vk-booking-manager' ),
 			'framed'                               => __( 'Surround with a frame', 'vk-booking-manager' ),
 		);
+	}
+
+	/**
+	 * サービスメニューカードの背景の選択肢を返す。
+	 *
+	 * @return array<string,string> 値 => ラベル。
+	 */
+	public static function get_design_menu_card_background_choices(): array {
+		return array(
+			self::DESIGN_MENU_CARD_BACKGROUND_DEFAULT => __( 'Transparent (match the page background)', 'vk-booking-manager' ),
+			'white'                                   => __( 'White', 'vk-booking-manager' ),
+		);
+	}
+
+	/**
+	 * 保存済みのカード背景を正規化する。
+	 *
+	 * @param array<string,mixed> $settings 設定値。
+	 * @return string 許可された背景の値。
+	 */
+	public static function resolve_menu_card_background( array $settings ): string {
+		$value = $settings['design_menu_card_background'] ?? self::DESIGN_MENU_CARD_BACKGROUND_DEFAULT;
+		return is_string( $value ) && array_key_exists( $value, self::get_design_menu_card_background_choices() )
+			? $value
+			: self::DESIGN_MENU_CARD_BACKGROUND_DEFAULT;
+	}
+
+	/**
+	 * カードが透明以外の背景を持つか判定する。
+	 *
+	 * @param array<string,mixed> $settings 設定値。
+	 * @return bool 背景を持つ場合は true。
+	 */
+	public static function has_menu_card_surface( array $settings ): bool {
+		return 'transparent' !== self::resolve_menu_card_background( $settings );
 	}
 
 	/**
@@ -214,6 +255,10 @@ class Settings_Sanitizer {
 		$data['provider_booking_cancel_deadline_hours'] = $this->sanitize_non_negative_int(
 			$input['provider_booking_cancel_deadline_hours'] ?? ( $data['provider_booking_cancel_deadline_hours'] ?? 24 )
 		);
+		// お客様1人あたりの予約数の上限。空欄は 0（上限なし）。送られなかった場合は保存済みの値（なければ既定値）を使う。
+		$data[ Customer_Booking_Limit::SETTINGS_KEY ] = $this->sanitize_non_negative_int(
+			$input[ Customer_Booking_Limit::SETTINGS_KEY ] ?? ( $data[ Customer_Booking_Limit::SETTINGS_KEY ] ?? Customer_Booking_Limit::DEFAULT_LIMIT )
+		);
 		// 仮予約の完了画面の案内文。改行は保持し、前後の空白を除いて1000文字までに制限する（空欄なら標準文が使われる）。
 		$data['provider_booking_complete_message_pending'] = self::sanitize_booking_complete_message(
 			$input['provider_booking_complete_message_pending'] ?? ( $data['provider_booking_complete_message_pending'] ?? '' )
@@ -293,11 +338,15 @@ class Settings_Sanitizer {
 			$this->field_errors['booking_auto_anonymize_months'] = __( 'Please select a valid period.', 'vk-booking-manager' );
 			$auto_anonymize                                      = (int) ( $defaults['booking_auto_anonymize_months'] ?? 0 );
 		}
-		$data['booking_auto_anonymize_months']   = \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ? 0 : $auto_anonymize;
-		$data['booking_reminder_hours']          = $this->sanitize_reminder_hours(
+		$data['booking_auto_anonymize_months'] = \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ? 0 : $auto_anonymize;
+		$data['booking_reminder_hours']        = $this->sanitize_reminder_hours(
 			$input['booking_reminder_hours'] ?? ( $data['booking_reminder_hours'] ?? array() )
 		);
-		$data['design_primary_color']            = $this->sanitize_color( $input['design_primary_color'] ?? ( $data['design_primary_color'] ?? '' ) );
+		$data['design_primary_color']          = $this->sanitize_color( $input['design_primary_color'] ?? ( $data['design_primary_color'] ?? '' ) );
+		// カード背景は許可された選択肢へ正規化する。
+		$data['design_menu_card_background']     = self::resolve_menu_card_background(
+			array( 'design_menu_card_background' => $input['design_menu_card_background'] ?? $data['design_menu_card_background'] ?? self::DESIGN_MENU_CARD_BACKGROUND_DEFAULT )
+		);
 		$data['design_menu_card_catch_color']    = $this->sanitize_color( $input['design_menu_card_catch_color'] ?? ( $data['design_menu_card_catch_color'] ?? '' ) );
 		$data['design_reservation_button_color'] = $this->sanitize_color(
 			$input['design_reservation_button_color'] ?? ( $data['design_reservation_button_color'] ?? '' )

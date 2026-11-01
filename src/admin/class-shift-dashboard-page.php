@@ -767,7 +767,7 @@ class Shift_Dashboard_Page {
 	/**
 	 * Determine the currently selected view (day/month).
 	 *
-	 * @return string
+	 * @return string 選択する表示（day または month）。
 	 */
 	private function get_selected_view(): string {
 		if ( isset( $_GET['vkbm_view'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only.
@@ -778,7 +778,8 @@ class Shift_Dashboard_Page {
 			}
 		}
 
-		return 'day';
+		// 表示指定が無い、または不正な場合は、宿泊の運用に適した月表示を既定にする。
+		return Industry_Presets::supports( 'lodging' ) ? 'month' : 'day';
 	}
 
 	/**

@@ -19,25 +19,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * 料金の計算結果（Lodging_Price::calculate）を、予約画面とメニュー一覧の表示に使える形に整えるクラス。
  *
- * 金額の計算は Lodging_Price が行い、ここでは計算し直さない。
- * - 予約画面: 泊ごとの区分・内訳を出すか（休前日・特定日の料金を設定したプランだけ）と、特定日の名称を足す。
+ * 金額の計算には Lodging_Price を使う。
+ * - 予約画面: 泊ごとの区分・内訳を出すか（予約者区分または休前日・特定日の料金を設定したプラン）と、特定日の名称を足す。
  * - メニュー一覧: 休前日・特定日のどちらかが平日と違う金額のプランを、最安＋「〜」で表記する。
  */
 class Lodging_Price_Display {
 	/**
 	 * 予約画面に出す、泊ごとの区分の表示用データを作る。
 	 *
-	 * 休前日・特定日の料金を設定していないプランは enabled が false・night_rates が空配列になり、画面は区分も内訳も出さない。
-	 * enabled のときの night_rates は、泊ごとの日付・料金区分・特定日の名称（special_label）。
-	 * 金額は計算結果の night_breakdown のまま使い、ここでは計算し直さない（night_breakdown に名称は足さない。予約に保存する内訳と同じ形を保つため）。
+	 * 予約者区分も休前日・特定日の料金設定もないプランは enabled が false・night_rates が空配列になり、画面は区分も内訳も出さない。
+	 * enabled のときの night_rates は、泊ごとの日付・料金区分・特定日の名称・プラン料金と予約者区分の単価・人数・小計。
+	 * 泊小計は計算結果の night_breakdown を使い、区分別単価は同じ計算から取得する（保存用の night_breakdown の形は変更しない）。
 	 *
 	 * @param array<string, mixed>                                                                            $plan_inputs     Lodging_Price::get_plan_inputs() の結果。
 	 * @param array<int, array<mixed>>                                                                        $guest_tiers     料金区分の内訳（無ければ空配列）。
 	 * @param array<int, array{date: string, rate: string, plan_price: int, room_surcharge: int, price: int}> $night_breakdown Lodging_Price::calculate() の night_breakdown。
-	 * @return array{enabled: bool, night_rates: array<int, array{date: string, rate: string, special_label: string}>} 表示用データ。
+	 * @return array{enabled: bool, night_rates: array<int, array{date: string, rate: string, special_label: string, plan_price: int, guest_tiers: array}>} 表示用データ。
 	 */
 	public static function build_stay_display( array $plan_inputs, array $guest_tiers, array $night_breakdown ): array {
-		$enabled = Lodging_Price::has_rate_tiers( array_merge( $plan_inputs, array( 'guest_tiers' => $guest_tiers ) ) );
+		$has_guest_tiers = Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM !== ( $plan_inputs['price_unit'] ?? '' ) && array() !== $guest_tiers;
+		$enabled         = $has_guest_tiers || Lodging_Price::has_rate_tiers( array_merge( $plan_inputs, array( 'guest_tiers' => $guest_tiers ) ) );
 		if ( ! $enabled ) {
 			return array(
 				'enabled'     => false,
@@ -46,7 +47,35 @@ class Lodging_Price_Display {
 		}
 
 		$special_periods = isset( $plan_inputs['special_periods'] ) && is_array( $plan_inputs['special_periods'] ) ? $plan_inputs['special_periods'] : array();
-		$night_rates     = array();
+		// 単価も本体と同じ計算に通す。区分ごとに空欄の休前日・特定日料金へフォールバックするため、泊全体の区分から単価を推測しない。
+		$tier_nights = array();
+		if ( $has_guest_tiers ) {
+			foreach ( $guest_tiers as $tier ) {
+				$count = max( 0, (int) ( $tier['count'] ?? 0 ) );
+				if ( 0 === $count ) {
+					continue;
+				}
+				$prices = Lodging_Price::calculate(
+					array_merge(
+						$plan_inputs,
+						array(
+							'night_dates' => array_column( $night_breakdown, 'date' ),
+							'guest_tiers' => array( array_merge( $tier, array( 'count' => 1 ) ) ),
+						)
+					)
+				);
+				foreach ( $prices['night_breakdown'] as $night ) {
+					$tier_nights[ $night['date'] ][] = array(
+						'label'    => (string) ( $tier['label'] ?? '' ),
+						'price'    => $night['plan_price'],
+						'count'    => $count,
+						'subtotal' => $night['plan_price'] * $count,
+					);
+				}
+			}
+		}
+
+		$night_rates = array();
 		foreach ( $night_breakdown as $night ) {
 			$date = (string) ( $night['date'] ?? '' );
 			$rate = (string) ( $night['rate'] ?? Lodging_Rate::RATE_WEEKDAY );
@@ -56,6 +85,9 @@ class Lodging_Price_Display {
 				'date'          => $date,
 				'rate'          => $rate,
 				'special_label' => Lodging_Rate::RATE_SPECIAL === $rate ? Lodging_Rate::find_special_label( $date, $special_periods ) : '',
+				// その泊のプラン料金（部屋全体・税込）。予約者区分の行を出さないプラン（1室単位など）でも、客室を選ぶ前に泊ごとの金額を出すために使う。
+				'plan_price'    => (int) ( $night['plan_price'] ?? 0 ),
+				'guest_tiers'   => $tier_nights[ $date ] ?? array(),
 			);
 		}
 

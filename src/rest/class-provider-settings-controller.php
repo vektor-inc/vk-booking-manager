@@ -170,6 +170,8 @@ class Provider_Settings_Controller {
 			'provider_logo_url'                  => $provider_logo_url,
 			// ヘッダーのロゴ画像の横幅（px）。未指定は 0（現状の表示幅のまま）。
 			'provider_logo_width'                => $provider_logo_width,
+			// サービスメニューカードの背景（transparent / white）。
+			'reservation_menu_card_background'   => Settings_Sanitizer::resolve_menu_card_background( $settings ),
 			// 絞り込み検索のデザイン（plain / framed）。
 			'reservation_menu_search_style'      => self::resolve_menu_search_style( $settings ),
 			'reservation_page_url'               => $reservation,

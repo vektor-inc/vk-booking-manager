@@ -73,6 +73,10 @@ class Settings_Service {
 	public function save_settings( array $raw_settings ) {
 		$defaults = $this->repository->get_default_settings();
 		$current  = $this->repository->get_settings();
+		// 別タブや部分更新で背景が未送信なら、現在の保存値を引き継ぐ。
+		if ( ! array_key_exists( 'design_menu_card_background', $raw_settings ) && isset( $current['design_menu_card_background'] ) ) {
+			$raw_settings['design_menu_card_background'] = $current['design_menu_card_background'];
+		}
 		// #635: 詳細ページの表示方法が送られなかった場合（REST 経由の一部項目の更新など）は、
 		// 既定値ではなく現在の実効値を引き継ぎ、既存サイトの設定が意図せず変わらないようにする。
 		$detail_mode_key = Settings_Repository::KEY_SERVICE_MENU_DETAIL_DISPLAY_MODE;

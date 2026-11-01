@@ -237,6 +237,13 @@ $vkbm-provider-settings-tabs: store, system, attendees, email, registration, con
 		}
 	}
 
+	// 日本語表示のとき、ラベルの最後の 1 文字だけが次行に落ちるのを防ぐ（例: 「お客様1人あたりの予約数の上限」の「限」）。
+	// 日本語以外はラベルが長く、nowrap にすると見出し列が広がって他の行のずれの元になるため :lang(ja) に限る。
+	// 見出し列は表の全行で共通なので、列が広がっても入力欄の左端は他の行と揃ったまま。
+	&:lang(ja) .vkbm-provider-settings__label-nowrap {
+		white-space: nowrap;
+	}
+
 	.vkbm-provider-settings__checkbox-stack {
 		display: flex;
 		flex-direction: column;
@@ -459,4 +466,14 @@ $vkbm-provider-settings-tabs: store, system, attendees, email, registration, con
 			margin: var(--vkbm--spacing--sm) 0 0;
 		}
 	}
+}
+
+// フォームラベル
+// -----------------------------------------------------------------------------
+
+// 長いラベルの末尾だけが次行に落ちることを防ぐ。
+.vkbm-provider-settings__balanced-label {
+	display: block;
+	line-break: strict;
+	text-wrap: balance;
 }

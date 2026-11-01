@@ -1,5 +1,5 @@
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { NightBreakdownItems } from './night-rates';
+import { NightBreakdown } from './night-rates';
 import './lodging.scss';
 
 /**
@@ -57,7 +57,7 @@ const DateTimeValue = ( { dateTime } ) => (
  * @param {string}  props.pricePerNightText  1 泊あたりの料金（部屋全体）。空文字なら行を出さない。泊ごとの内訳を出すときは使わない。
  * @param {Array}   props.nightBreakdown     泊ごとの内訳（date / rate / plan_price / room_surcharge / price）。
  * @param {Array}   props.nightRates         泊ごとの区分（date / rate / special_label）。特定日の名称を添えるために使う。
- * @param {boolean} props.isRateTiersEnabled 休前日・特定日の料金を設定したプランか。true のとき「1 泊あたりの料金」の行を泊ごとの内訳（常に開いた状態）に置き換える。
+ * @param {boolean} props.isRateTiersEnabled 予約者区分または休前日・特定日の料金を設定したプランか。true のとき「1 泊あたりの料金」の行を泊ごとの内訳（常に開いた状態）に置き換える。
  * @param {string}  props.locale             WordPress のロケール（泊の日付の曜日表記に使う）。
  * @param {?string} props.currencySymbol     通貨記号。
  * @param {string}  props.totalText          合計金額。
@@ -106,16 +106,12 @@ const LodgingConfirmSummary = ( {
 		{ isRateTiersEnabled &&
 		Array.isArray( nightBreakdown ) &&
 		nightBreakdown.length > 0 ? (
-			<SummaryRow
+			<NightBreakdown
 				label={ __( 'Rate by night', 'vk-booking-manager' ) }
-				value={
-					<NightBreakdownItems
-						nights={ nightBreakdown }
-						nightRates={ nightRates }
-						locale={ locale }
-						currencySymbol={ currencySymbol }
-					/>
-				}
+				nights={ nightBreakdown }
+				nightRates={ nightRates }
+				locale={ locale }
+				currencySymbol={ currencySymbol }
 			/>
 		) : (
 			pricePerNightText && (
@@ -126,7 +122,16 @@ const LodgingConfirmSummary = ( {
 			)
 		) }
 		<SummaryRow
-			label={ __( 'Total amount', 'vk-booking-manager' ) }
+			label={ sprintf(
+				/* translators: %d: 泊数。 */
+				_n(
+					'Total for %d night',
+					'Total for %d nights',
+					nights,
+					'vk-booking-manager'
+				),
+				nights
+			) }
 			value={ totalText }
 			valueClassName="vkbm-confirm__summary-item-value--price"
 		/>

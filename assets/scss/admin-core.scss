@@ -196,6 +196,87 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /**
+ * サービスメニュー編集：提供期間（開始日〜終了日）。
+ * 広い幅では「開始日 〜 終了日」を横に並べる。
+ * 幅が足りないときは、折り返して終了日だけ「〜」の分だけ右にずれるのを避けるため、
+ * 「〜」を隠して開始日と終了日を左端をそろえて縦に積む.
+ */
+.vkbm-service-period-inputs-wrap {
+	container-type: inline-size;
+}
+
+.vkbm-service-period-inputs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+// 「〜」と終了日は改行させず1セットにする.
+.vkbm-service-period-end-group {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+@container (max-width: 25rem) {
+
+	.vkbm-service-period-inputs {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.vkbm-service-period-delimiter {
+		display: none;
+	}
+}
+
+// サービスメニュー一覧の「提供期間／予約可能日」列：日付の途中（年だけが次の行に落ちるなど）で改行せず、
+// 日付と日付の境目で折り返す（前面の menu-loop/style.scss と同じ指定。管理画面は別の CSS を読むためここにも置く）.
+.vkbm-service-period__date {
+	white-space: nowrap;
+}
+
+// 一覧表は table-layout: fixed で列幅が均等になるため、この列を広げた分だけほかの列が縮み、「サービスタグ」などの見出しが割れる.
+// そこで列は PR 前の「予約可能日」列とほぼ同じ約106px にとどめ、その中に日付（日本語の「2026年12月30日」）が収まるよう、
+// この列だけ左右の余白（padding）と日付の文字サイズを少し小さくする（内側 94px、日付は約93px）.
+.wp-list-table th.column-vkbm_reservation_day_type {
+	width: 94px;
+}
+
+.wp-list-table th.column-vkbm_reservation_day_type,
+.wp-list-table td.column-vkbm_reservation_day_type {
+	padding-right: 6px;
+	padding-left: 6px;
+}
+
+// 日付は、日本語のとき（--nowrap）だけ途中で割れないよう1行に収める.
+// 英語などは「December 30, 2026」が内側 94px を超えて隣の列に重なるため、空白の位置（「December 30,」「2026」）で折り返す.
+.wp-list-table td.column-vkbm_reservation_day_type .vkbm-service-period__date {
+	font-size: 0.92em;
+	white-space: normal;
+}
+
+.wp-list-table td.column-vkbm_reservation_day_type .vkbm-service-period-list--nowrap .vkbm-service-period__date {
+	white-space: nowrap;
+}
+
+// 日本語のとき、日付の外側の「から」「まで」も語の途中（「か／ら」「ま／で」）で改行しない.
+// 改行できるのは日付と「から」「まで」の境目だけになる.
+.wp-list-table td.column-vkbm_reservation_day_type .vkbm-service-period-list--nowrap .vkbm-service-period__text {
+	white-space: nowrap;
+}
+
+.vkbm-service-period-error {
+	margin: var(--vkbm--spacing--xs) 0 0;
+	color: var(--vkbm--admin--color--danger);
+
+	&[hidden] {
+		display: none;
+	}
+}
+
+/**
  * サービスメニュー編集：料金区分（大人料金・子供料金など）リピーター。
  */
 .vkbm-price-tiers-list {

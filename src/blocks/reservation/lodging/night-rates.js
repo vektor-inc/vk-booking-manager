@@ -118,17 +118,22 @@ export const summarizeRates = ( nights ) => {
  *
  * @param {Array} breakdown  泊ごとの内訳（date / rate / plan_price / room_surcharge / price）。
  * @param {Array} nightRates 泊ごとの区分（date / rate / special_label）。
- * @return {Array} 特定日の名称（special_label）を足した内訳。
+ * @return {Array} 特定日の名称（special_label）と区分別の実単価・人数・小計（guest_tiers）を足した内訳。
  */
-export const attachSpecialLabels = ( breakdown, nightRates ) => {
-	const labels = {};
+export const attachNightRateDetails = ( breakdown, nightRates ) => {
+	const rateDetailsByDate = {};
 	( Array.isArray( nightRates ) ? nightRates : [] ).forEach( ( night ) => {
-		labels[ night.date ] = night.special_label || '';
+		rateDetailsByDate[ night.date ] = night;
 	} );
 
 	return ( Array.isArray( breakdown ) ? breakdown : [] ).map( ( night ) => ( {
 		...night,
-		special_label: labels[ night.date ] || '',
+		special_label: rateDetailsByDate[ night.date ]?.special_label || '',
+		guest_tiers: Array.isArray(
+			rateDetailsByDate[ night.date ]?.guest_tiers
+		)
+			? rateDetailsByDate[ night.date ].guest_tiers
+			: [],
 	} ) );
 };
 
@@ -168,7 +173,7 @@ export const RateLabel = ( { rate, specialLabel } ) => {
 };
 
 /**
- * 泊ごとの区分の一覧（日付と区分）。
+ * 泊ごとの区分の一覧（日付と区分）。金額が無いとき（サーバーが単価を返さないとき）の表示。
  *
  * @param {Object}           props
  * @param {Array}            props.nights 泊の一覧（date / rate / special_label）。
@@ -198,21 +203,65 @@ const NightRateItems = ( { nights, locale } ) => (
 );
 
 /**
- * 日程を選んだ直後に、客室一覧の上へ出す泊ごとの区分。
+ * その泊の金額（部屋全体の 1 泊分）。予約者区分の行があれば小計の合計、無ければプラン料金。
  *
- * 8 泊以上は「平日 5泊・休前日 2泊・特定日 1泊」の要約にして、日ごとの一覧は開閉式にする。
+ * @param {Object} night 泊（guest_tiers / plan_price）。
+ * @return {number|null} 金額。求められなければ null。
+ */
+export const getNightPrice = ( night ) => {
+	const tiers = Array.isArray( night.guest_tiers ) ? night.guest_tiers : [];
+	if ( tiers.length > 0 ) {
+		return tiers.reduce(
+			( sum, tier ) => sum + Number( tier.subtotal || 0 ),
+			0
+		);
+	}
+
+	const price = Number( night.plan_price );
+	return night.plan_price === undefined ||
+		night.plan_price === null ||
+		! Number.isFinite( price )
+		? null
+		: price;
+};
+
+/**
+ * 日程を選んだ直後に、客室一覧の上へ出す泊ごとの料金区分と内訳。
+ *
+ * 単価は「プラン・日付・人数」だけで決まり、客室によらない（客室の追加料金は宿泊のサイトでは 0 円）ため、
+ * 客室を選ぶ前に出せる。8 泊以上は「平日 5泊・休前日 2泊・特定日 1泊」の要約にして、日ごとの内訳は開閉式にする。
+ * 金額が無いときは、日付と区分だけの一覧にする。
  *
  * @param {Object}           props
- * @param {Array}            props.nights 泊の一覧（date / rate / special_label）。
- * @param {string|undefined} props.locale WordPress のロケール。
+ * @param {Array}            props.nights         泊の一覧（date / rate / special_label / plan_price / guest_tiers）。
+ * @param {string|undefined} props.locale         WordPress のロケール。
+ * @param {?string}          props.currencySymbol 通貨記号。
  * @return {JSX.Element|null} 泊ごとの区分。泊が無ければ null。
  */
-export const NightRates = ( { nights, locale } ) => {
+export const NightRates = ( { nights, locale, currencySymbol } ) => {
 	if ( ! Array.isArray( nights ) || nights.length === 0 ) {
 		return null;
 	}
 
 	const isSummarized = nights.length >= NIGHT_SUMMARY_THRESHOLD;
+	const prices = nights.map( getNightPrice );
+	const hasPrices = prices.every( ( price ) => price !== null );
+	const list = hasPrices ? (
+		<NightBreakdownItems
+			nights={ nights.map( ( night, index ) => ( {
+				date: night.date,
+				rate: night.rate,
+				plan_price: prices[ index ],
+				room_surcharge: 0,
+				price: prices[ index ],
+			} ) ) }
+			nightRates={ nights }
+			locale={ locale }
+			currencySymbol={ currencySymbol }
+		/>
+	) : (
+		<NightRateItems nights={ nights } locale={ locale } />
+	);
 
 	return (
 		<section className="vkbm-lodging__night-rates">
@@ -228,21 +277,44 @@ export const NightRates = ( { nights, locale } ) => {
 						<summary>
 							{ __( 'See each night', 'vk-booking-manager' ) }
 						</summary>
-						<NightRateItems nights={ nights } locale={ locale } />
+						{ list }
 					</details>
 				</>
 			) : (
-				<NightRateItems nights={ nights } locale={ locale } />
+				list
+			) }
+			{ hasPrices && (
+				<p className="vkbm-lodging__night-total">
+					<span>
+						{ sprintf(
+							/* translators: %d: 泊数。 */
+							_n(
+								'Total for %d night',
+								'Total for %d nights',
+								nights.length,
+								'vk-booking-manager'
+							),
+							nights.length
+						) }
+					</span>
+					<span className="vkbm-lodging__night-price">
+						{ formatCurrency(
+							prices.reduce( ( sum, price ) => sum + price, 0 ),
+							currencySymbol
+						) }
+					</span>
+				</p>
 			) }
 		</section>
 	);
 };
 
 /**
- * 泊ごとの内訳（日付・区分・単価）。
+ * 泊ごとの内訳（日付・料金区分のバッジ、予約者区分ごとの単価・人数・小計、泊小計）。
  *
  * 単価は部屋全体の 1 泊分（プラン料金＋客室の追加料金）。客室の追加料金があるときは内訳も添える。
  * 宿泊のサイトでは客室の追加料金は常に 0 円（#736）のため、通常は内訳に追加料金は出ない。
+ * 区分の行は、列を泊どうしでそろえる（lodging.scss の .vkbm-lodging__nights--priced）。
  *
  * @param {Object}           props
  * @param {Array}            props.nights         泊の内訳（date / rate / plan_price / room_surcharge / price）。
@@ -257,7 +329,8 @@ export const NightBreakdownItems = ( {
 	locale,
 	currencySymbol,
 } ) => {
-	const nights = attachSpecialLabels( breakdown, nightRates );
+	const headingId = useId();
+	const nights = attachNightRateDetails( breakdown, nightRates );
 	if ( nights.length === 0 ) {
 		return null;
 	}
@@ -272,19 +345,70 @@ export const NightBreakdownItems = ( {
 					key={ night.date }
 					className="vkbm-lodging__night"
 					role="listitem"
+					aria-labelledby={ `${ headingId }-${ night.date }` }
 				>
-					<span className="vkbm-lodging__night-date">
-						{ formatNightDate( night.date, locale ) }
-					</span>
-					<span className="vkbm-lodging__night-rate">
-						<RateLabel
-							rate={ night.rate }
-							specialLabel={ night.special_label }
-						/>
-					</span>
-					<span className="vkbm-lodging__night-price">
-						{ formatCurrency( night.price, currencySymbol ) }
-					</span>
+					<h4
+						id={ `${ headingId }-${ night.date }` }
+						className="vkbm-lodging__night-heading"
+					>
+						<span className="vkbm-lodging__night-date">
+							{ formatNightDate( night.date, locale ) }
+						</span>{ ' ' }
+						<span
+							className={ `vkbm-lodging__night-rate vkbm-lodging__rate-badge vkbm-lodging__rate-badge--${ night.rate }` }
+						>
+							<RateLabel
+								rate={ night.rate }
+								specialLabel={ night.special_label }
+							/>
+						</span>
+					</h4>
+					{ night.guest_tiers
+						.filter( ( tier ) => Number( tier.count ) > 0 )
+						.map( ( tier, index ) => (
+							<div
+								className="vkbm-lodging__night-guest"
+								key={ index }
+							>
+								<span className="vkbm-lodging__night-guest-label">
+									{ tier.label }
+								</span>
+								<span className="vkbm-lodging__night-calc">
+									<span className="text-nowrap">
+										{ sprintf(
+											/* translators: %s: 1名あたりの税込単価。 */
+											__(
+												'%s / person',
+												'vk-booking-manager'
+											),
+											formatCurrency(
+												tier.price,
+												currencySymbol
+											)
+										) }
+									</span>
+									<span className="text-nowrap">
+										{ sprintf(
+											/* translators: %d: この区分の人数。 */
+											__( '× %d', 'vk-booking-manager' ),
+											tier.count
+										) }
+									</span>
+								</span>
+								<span className="vkbm-lodging__night-price">
+									<span className="vkbm-lodging__sr-only">
+										{ __(
+											'Subtotal',
+											'vk-booking-manager'
+										) }
+									</span>
+									{ formatCurrency(
+										tier.subtotal,
+										currencySymbol
+									) }
+								</span>
+							</div>
+						) ) }
 					{ Number( night.room_surcharge ) > 0 && (
 						<span className="vkbm-lodging__night-note">
 							{ sprintf(
@@ -304,6 +428,17 @@ export const NightBreakdownItems = ( {
 							) }
 						</span>
 					) }
+					<div className="vkbm-lodging__night-subtotal">
+						<span>
+							{ __(
+								'Subtotal for this night',
+								'vk-booking-manager'
+							) }
+						</span>
+						<span className="vkbm-lodging__night-price">
+							{ formatCurrency( night.price, currencySymbol ) }
+						</span>
+					</div>
 				</li>
 			) ) }
 		</ul>
@@ -318,6 +453,7 @@ export const NightBreakdownItems = ( {
  * @param {Array}            props.nightRates     泊ごとの区分（特定日の名称を添えるために使う）。
  * @param {string|undefined} props.locale         WordPress のロケール。
  * @param {?string}          props.currencySymbol 通貨記号。
+ * @param {string}           props.label          内訳全体の見出し。
  * @return {JSX.Element|null} 内訳。泊が無ければ null。
  */
 export const NightBreakdown = ( {
@@ -325,6 +461,7 @@ export const NightBreakdown = ( {
 	nightRates,
 	locale,
 	currencySymbol,
+	label = __( 'Breakdown by night', 'vk-booking-manager' ),
 } ) => {
 	// 1 ページに予約ブロックが複数あっても id が重ならないようにする。
 	const labelId = useId();
@@ -338,9 +475,9 @@ export const NightBreakdown = ( {
 			role="group"
 			aria-labelledby={ labelId }
 		>
-			<p id={ labelId } className="vkbm-lodging__breakdown-label">
-				{ __( 'Breakdown by night', 'vk-booking-manager' ) }
-			</p>
+			<h3 id={ labelId } className="vkbm-lodging__breakdown-label">
+				{ label }
+			</h3>
 			<NightBreakdownItems
 				nights={ nights }
 				nightRates={ nightRates }

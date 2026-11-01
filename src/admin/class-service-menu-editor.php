@@ -16,8 +16,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
+use VKBookingManager\Common\Service_Period;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Weekday_Rule;
 use VKBookingManager\PostTypes\Resource_Post_Type;
@@ -328,7 +330,7 @@ class Service_Menu_Editor {
 			'vkbm-service-menu-editor',
 			'vkbmServiceMenuEditor',
 			array(
-				'i18n'      => array(
+				'i18n'               => array(
 					// Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
 					'delete'                            => __( 'Delete', 'vk-booking-manager' ),
 					// Translators: Placeholder for the price category name input. / 料金区分名の入力プレースホルダー.
@@ -389,8 +391,10 @@ class Service_Menu_Editor {
 					'maxCapacityPerRoomDescription2'    => __( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ),
 					'maxCapacityPerRoomDescription3'    => __( 'The price does not change with the number of people.', 'vk-booking-manager' ),
 				),
+				// 提供期間の終了済みの案内を、入力に合わせて出し分けるための今日の日付（サイトのタイムゾーン）。
+				'servicePeriodToday' => Service_Period::get_today(),
 				// 料金区分の料金欄に表示する単位（通貨記号＋税込ラベル）。税込ラベルが空でも通貨記号は常時表示する。
-				'priceUnit' => '' !== VKBM_Helper::get_tax_included_label()
+				'priceUnit'          => '' !== VKBM_Helper::get_tax_included_label()
 					? VKBM_Helper::get_currency_symbol() . VKBM_Helper::get_tax_included_label()
 					: VKBM_Helper::get_currency_symbol(),
 			)
@@ -785,6 +789,7 @@ class Service_Menu_Editor {
 				</p>
 			</td>
 		</tr>
+		<?php $this->render_service_period_field( $post, $is_night_unit ); ?>
 		<?php $this->render_reservation_day_field( $post ); ?>
 		<tr>
 			<th scope="row">
@@ -1030,6 +1035,66 @@ class Service_Menu_Editor {
 			?>
 		<?php endif; ?>
 		<?php $this->render_fixed_start_times_field( $post, $slot_only_hidden ); ?>
+		<?php
+	}
+
+	/**
+	 * 提供期間（開始日〜終了日）の入力欄を出力する。
+	 *
+	 * 開始日・終了日のどちらも空欄にでき、空欄の側は無期限になる。「予約可能日」の外側にかかる枠として、その直上に置く。
+	 * 開始日が終了日より後の入力は、終了日の最小値の連動とエラー文を service-menu-editor.js が出す。
+	 * 泊のプランだけに関わる説明文は、予約の単位の切り替えに合わせて service-menu-editor.js が出し分ける。
+	 *
+	 * @param WP_Post $post          Current post object.
+	 * @param bool    $is_night_unit 予約の単位が「泊」か。
+	 */
+	private function render_service_period_field( WP_Post $post, bool $is_night_unit ): void {
+		$period     = Service_Period::get_period( $post->ID );
+		$is_ended   = Service_Period::is_ended( $period['end'], Service_Period::get_today() );
+		$label_id   = 'vkbm-service-period-label';
+		$error_id   = 'vkbm-service-period-error';
+		$end_id     = 'vkbm-service-period-ended';
+		$start_name = 'vkbm_service_menu[service_period_start]';
+		$end_name   = 'vkbm_service_menu[service_period_end]';
+		?>
+		<tr id="vkbm-service-period-field">
+			<th scope="row">
+				<label id="<?php echo esc_attr( $label_id ); ?>" for="vkbm_service_menu_service_period_start"><?php esc_html_e( 'Service period', 'vk-booking-manager' ); ?></label>
+			</th>
+			<td>
+				<div class="vkbm-service-period-inputs-wrap">
+					<div class="vkbm-service-period-inputs" role="group" aria-labelledby="<?php echo esc_attr( $label_id ); ?>">
+						<input type="date" id="vkbm_service_menu_service_period_start" name="<?php echo esc_attr( $start_name ); ?>" value="<?php echo esc_attr( $period['start'] ); ?>" aria-label="<?php esc_attr_e( 'Start date', 'vk-booking-manager' ); ?>" />
+						<span class="vkbm-service-period-end-group">
+							<span class="vkbm-service-period-delimiter" aria-hidden="true"><?php echo esc_html_x( '~', 'separator between the start date and the end date of the service period', 'vk-booking-manager' ); ?></span>
+							<input type="date" id="vkbm_service_menu_service_period_end" name="<?php echo esc_attr( $end_name ); ?>" value="<?php echo esc_attr( $period['end'] ); ?>" <?php echo '' !== $period['start'] ? 'min="' . esc_attr( $period['start'] ) . '"' : ''; ?> aria-label="<?php esc_attr_e( 'End date', 'vk-booking-manager' ); ?>" />
+						</span>
+					</div>
+				</div>
+				<p id="<?php echo esc_attr( $error_id ); ?>" class="vkbm-service-period-error" role="alert" hidden><?php esc_html_e( 'Choose an end date that is the same as or later than the start date.', 'vk-booking-manager' ); ?></p>
+				<p id="<?php echo esc_attr( $end_id ); ?>" class="description vkbm-service-period-ended" <?php echo $is_ended ? '' : 'hidden'; ?>>
+					<?php
+					echo esc_html(
+						Nomination_Min_Guests_Message::join_sentences(
+							__( 'This period has ended.', 'vk-booking-manager' ),
+							__( 'The menu is not shown in the menu list on the reservation page.', 'vk-booking-manager' )
+						)
+					);
+					?>
+				</p>
+				<p class="description">
+					<?php
+					echo esc_html(
+						Nomination_Min_Guests_Message::join_sentences(
+							__( 'Only dates within this period can be booked.', 'vk-booking-manager' ),
+							__( 'If a date is left blank, that side of the period is not limited.', 'vk-booking-manager' )
+						)
+					);
+					?>
+				</p>
+				<p class="description vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>><?php esc_html_e( 'For a plan billed per night, a reservation can be made when the check-in date is within this range.', 'vk-booking-manager' ); ?></p>
+			</td>
+		</tr>
 		<?php
 	}
 
@@ -1298,6 +1363,39 @@ class Service_Menu_Editor {
 				);
 			}
 		}
+	}
+
+	/**
+	 * 提供期間（開始日・終了日）を保存する。
+	 *
+	 * フォームに欄が含まれているときだけ保存し、それ以外の送信では既存の値に触れない。
+	 * 日付として読めない値は無期限（空欄）として扱い、空の側はメタを削除する。
+	 * 過去の終了日も保存できる（終了済みのメニューとして残すため）。
+	 * 開始日が終了日より後のときは、無期限への黙った変更を避けるため前回の値を保ち、画面上部のお知らせで知らせる。
+	 *
+	 * @param int                  $post_id 投稿ID。
+	 * @param array<string, mixed> $data    送信された vkbm_service_menu 配列。
+	 */
+	private function save_service_period_meta( int $post_id, array $data ): void {
+		if ( ! array_key_exists( 'service_period_start', $data ) || ! array_key_exists( 'service_period_end', $data ) ) {
+			return;
+		}
+
+		$start = Service_Period::sanitize_date( $data['service_period_start'] );
+		$end   = Service_Period::sanitize_date( $data['service_period_end'] );
+
+		if ( Service_Period::is_reversed( $start, $end ) ) {
+			$this->add_admin_notice(
+				Nomination_Min_Guests_Message::join_sentences(
+					__( 'The start of the service period was later than its end, so the service period was saved with its previous values.', 'vk-booking-manager' ),
+					__( 'Check the dates and save again.', 'vk-booking-manager' )
+				)
+			);
+			return;
+		}
+
+		$this->update_meta_value( $post_id, Service_Period::META_START, $start );
+		$this->update_meta_value( $post_id, Service_Period::META_END, $end );
 	}
 
 	/**
@@ -2338,6 +2436,7 @@ class Service_Menu_Editor {
 		$this->update_meta_value( $post_id, '_vkbm_reservation_deadline_hours', $deadline );
 		$this->update_meta_value( $post_id, '_vkbm_max_advance_booking_days', $max_advance_days );
 		$this->update_meta_value( $post_id, self::META_RESERVATION_DAY_TYPE, $reservation_day_type );
+		$this->save_service_period_meta( $post_id, $data );
 		// 曜日指定・日付指定の詳細は種別に関わらず常に保存する（切替時の非表示側の入力を保持するため）。
 		// 空配列のときはメタを削除する（update_meta_value は $allow_array=true で空を delete する）。
 		$this->update_meta_value( $post_id, self::META_RESERVATION_CUSTOM_WEEKDAYS, $custom_weekdays, true );

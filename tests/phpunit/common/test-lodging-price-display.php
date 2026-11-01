@@ -270,6 +270,11 @@ class Lodging_Price_Display_Test extends WP_UnitTestCase {
 			'区分と特定日の名称（金額は計算結果の night_breakdown を使う）'
 		);
 		$this->assertSame(
+			array_column( $calculated['night_breakdown'], 'plan_price' ),
+			array_column( $display['night_rates'], 'plan_price' ),
+			'泊ごとのプラン料金（客室を選ぶ前に泊ごとの金額を出すための表示用。客室の追加料金は含めない）'
+		);
+		$this->assertSame(
 			array( 21000, 14000, 11000 ),
 			array_column( $calculated['night_breakdown'], 'price' ),
 			'単価は プラン料金＋客室の追加料金'
@@ -307,6 +312,109 @@ class Lodging_Price_Display_Test extends WP_UnitTestCase {
 		$display      = Lodging_Price_Display::build_stay_display( $plain_inputs, array(), $calculated['night_breakdown'] );
 		$this->assertFalse( $display['enabled'], '休前日・特定日が空欄のプランは無効' );
 		$this->assertSame( array(), $display['night_rates'], '無効なときは区分を返さない' );
+	}
+
+	/**
+	 * build_stay_display: 区分別の実単価・人数・小計を返し、0名と1室単位を除外する（#969）。
+	 */
+	public function test_build_stay_display_guest_tiers(): void {
+		$dates      = array( '2026-10-09', '2026-10-10' );
+		$tiers      = array(
+			array(
+				'label'             => '大人',
+				'price'             => 10000,
+				'pre_holiday_price' => 15000,
+				'special_price'     => 20000,
+				'count'             => 2,
+			),
+			array(
+				'label' => '子供',
+				'price' => 5000,
+				'count' => 1,
+			),
+			array(
+				'label' => '乳児',
+				'price' => 0,
+				'count' => 0,
+			),
+		);
+		$test_cases = array(
+			array( '通常と休前日で子供の空欄は基本料金へ戻る', 'per_guest', $tiers, array(), array( array( 10000, 5000 ), array( 15000, 5000 ) ) ),
+			array(
+				'特定日の設定も区分ごとに反映する',
+				'per_guest',
+				$tiers,
+				array(
+					array(
+						'start' => $dates[0],
+						'end'   => $dates[0],
+						'label' => '連休',
+					),
+				),
+				array( array( 20000, 5000 ), array( 15000, 5000 ) ),
+			),
+			array(
+				'0円でも1名なら内訳を出す',
+				'per_guest',
+				array(
+					array(
+						'label' => '乳児',
+						'price' => 0,
+						'count' => 1,
+					),
+				),
+				array(),
+				array( array( 0 ), array( 0 ) ),
+			),
+			array( '1室単位では人数単価の内訳を出さない', 'per_room', $tiers, array(), array( array(), array() ) ),
+			array( '予約者区分がなければ従来の内訳のみ', 'per_guest', array(), array(), array( array(), array() ) ),
+			array(
+				'料金が年中同一でも予約者区分の内訳を出す',
+				'per_guest',
+				array(
+					array(
+						'label' => '大人',
+						'price' => 10000,
+						'count' => 2,
+					),
+				),
+				array(),
+				array( array( 10000 ), array( 10000 ) ),
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$inputs     = array(
+				'price_unit'             => $case[1],
+				'base_price'             => 10000,
+				'base_price_pre_holiday' => 15000,
+				'pre_holiday_weekdays'   => array( 'sat' ),
+				'special_periods'        => $case[3],
+			);
+			$calculated = Lodging_Price::calculate(
+				array_merge(
+					$inputs,
+					array(
+						'night_dates' => $dates,
+						'guests'      => 3,
+						'guest_tiers' => $case[2],
+					)
+				)
+			);
+			$before     = $calculated['night_breakdown'];
+			$display    = Lodging_Price_Display::build_stay_display( $inputs, $case[2], $before );
+			$this->assertTrue( $display['enabled'], $case[0] );
+			foreach ( $display['night_rates'] as $index => $night ) {
+				$this->assertSame( $case[4][ $index ], array_column( $night['guest_tiers'], 'price' ), $case[0] );
+				foreach ( $night['guest_tiers'] as $tier ) {
+					$this->assertGreaterThan( 0, $tier['count'], $case[0] );
+					$this->assertSame( $tier['price'] * $tier['count'], $tier['subtotal'], $case[0] );
+				}
+				if ( array() !== $night['guest_tiers'] ) {
+					$this->assertSame( $before[ $index ]['plan_price'], array_sum( array_column( $night['guest_tiers'], 'subtotal' ) ), $case[0] );
+				}
+			}
+			$this->assertSame( $before, $calculated['night_breakdown'], '保存用のデータ契約を変更しない' );
+		}
 	}
 
 	/**

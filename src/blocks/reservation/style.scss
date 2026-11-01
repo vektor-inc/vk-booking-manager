@@ -2293,3 +2293,11 @@ body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(foot
 	line-height: 1.7;
 	overscroll-behavior: contain;
 }
+
+// 検索枠の背景
+// -----------------------------------------------------------------------------
+
+.vkbm-plan-summary__search--has-surface {
+	background: var(--vkbm--color--menu-card-bg, #fff);
+	color: var(--vkbm--color--menu-card-text, var(--vkbm--color--surface-text, #333));
+}

@@ -73,6 +73,9 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		// ISO8601(+09:00) と保存形式（サイトTZのY-m-d H:i:s）を一致させるため Asia/Tokyo に固定する（#406）。
 		$this->original_timezone_string = (string) get_option( 'timezone_string', '' );
 		update_option( 'timezone_string', 'Asia/Tokyo' );
+		// 初期値 3 のお客様1人あたりの予約数の上限（#971）が、同じ利用者で何件も予約するこのクラスのテストを止めないよう、上限なしにする。
+		// 上限そのものは tests/phpunit/bookings/test-customer-booking-limit.php で確かめる。
+		add_filter( 'vkbm_customer_booking_limit', '__return_zero' );
 	}
 
 	protected function tearDown(): void {

@@ -19,10 +19,12 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
+use VKBookingManager\Common\Service_Period;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Block;
@@ -522,6 +524,8 @@ class Menu_Loop_Block {
 					'compare' => '!=',
 				),
 			),
+			// 提供期間が終了したメニューは一覧に出さない。
+			Service_Period::build_not_ended_meta_query( Service_Period::get_today() ),
 		);
 
 		if ( $filters['staff'] > 0 ) {
@@ -666,9 +670,12 @@ class Menu_Loop_Block {
 		$parts[] = sprintf( '<div class="vkbm-menu-loop__card-body">%s</div>', $body_markup );
 
 		return sprintf(
-			'<article class="vkbm-menu-loop__item vkbm-menu-loop__card-item" data-menu-id="%1$d">%2$s</article>',
+			'<article class="vkbm-menu-loop__item vkbm-menu-loop__card-item%3$s" data-menu-id="%1$d">%2$s</article>',
 			(int) $post->ID,
-			implode( '', $parts )
+			implode( '', $parts ),
+			Settings_Sanitizer::has_menu_card_surface( $this->get_provider_settings() )
+				? ' vkbm-menu-loop__card-item--has-surface'
+				: ''
 		);
 	}
 
@@ -935,6 +942,8 @@ class Menu_Loop_Block {
 							'compare' => '!=',
 						),
 					),
+					// 提供期間が終了したメニューは予約ページの一覧に出さない。
+					Service_Period::build_not_ended_meta_query( Service_Period::get_today() ),
 				),
 			)
 		);
@@ -1551,6 +1560,18 @@ class Menu_Loop_Block {
 					);
 				}
 			}
+		}
+
+		// 提供期間が設定されていれば、予約可能日の前に表示する。
+		$service_period = Service_Period::get_period( $post->ID );
+		// 日付ごとに折り返さない塊にした HTML（エスケープ済み）で出す（幅が狭いときに日付の途中で改行しないため）。
+		$service_period_label = Service_Period::format_label_html( $service_period['start'], $service_period['end'] );
+		if ( '' !== $service_period_label ) {
+			$items[] = sprintf(
+				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
+				esc_html__( 'Service period', 'vk-booking-manager' ),
+				$service_period_label
+			);
 		}
 
 		if ( '' !== $reservation_day_type ) {

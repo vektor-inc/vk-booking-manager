@@ -14,6 +14,7 @@ namespace VKBookingManager\Tests\Availability;
 
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Availability\Availability_Service;
+use VKBookingManager\Common\Service_Period;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -108,6 +109,26 @@ class Get_Unavailability_Reason_Test extends WP_UnitTestCase {
 				'test_condition_name' => '予約受付上限日数が短く表示月が範囲外の場合 => max_advance_days_exceeded（P6）',
 				'setup'               => 'max_advance_exceeded',
 				'expected_code'       => 'max_advance_days_exceeded',
+			),
+			array(
+				'test_condition_name' => '提供期間が表示月より前に終わっている場合 => service_period_out_of_range',
+				'setup'               => 'service_period_ended',
+				'expected_code'       => 'service_period_out_of_range',
+			),
+			array(
+				'test_condition_name' => '提供期間が表示月より後に始まる場合 => service_period_out_of_range',
+				'setup'               => 'service_period_not_started',
+				'expected_code'       => 'service_period_out_of_range',
+			),
+			array(
+				'test_condition_name' => '提供期間は表示月に重なるが、予約受付上限日数の範囲とは重ならない場合 => service_period_out_of_range',
+				'setup'               => 'service_period_outside_advance',
+				'expected_code'       => 'service_period_out_of_range',
+			),
+			array(
+				'test_condition_name' => '提供期間が表示月全体を含む場合 => 診断理由なし（null。正常系）',
+				'setup'               => 'service_period_covers',
+				'expected_code'       => null,
 			),
 			array(
 				'test_condition_name' => '定休日設定で表示月が全休の場合 => all_days_closed（P7）',
@@ -460,6 +481,48 @@ class Get_Unavailability_Reason_Test extends WP_UnitTestCase {
 				update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 				// 3日先までしか予約を受け付けない設定にする。判定対象月は+2ヶ月後のため必ず範囲外になる。
 				update_post_meta( $menu_id, '_vkbm_max_advance_booking_days', 3 );
+				$this->create_full_month_shift(
+					$staff_id,
+					$year,
+					$month,
+					'open',
+					array(
+						array(
+							'start' => '09:00',
+							'end'   => '18:00',
+						),
+					)
+				);
+				return array( $menu_id, 0 );
+
+			case 'service_period_ended':
+			case 'service_period_not_started':
+			case 'service_period_outside_advance':
+			case 'service_period_covers':
+				$staff_id = $this->create_staff();
+				$menu_id  = $this->create_menu();
+				update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+				update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+				$month_first = sprintf( '%04d-%02d-01', $year, $month );
+				$month_last  = ( new \DateTimeImmutable( $month_first ) )->format( 'Y-m-t' );
+				if ( 'service_period_ended' === $setup ) {
+					// 表示月の前日で終了している。
+					update_post_meta( $menu_id, Service_Period::META_END, ( new \DateTimeImmutable( $month_first ) )->modify( '-1 day' )->format( 'Y-m-d' ) );
+				} elseif ( 'service_period_not_started' === $setup ) {
+					// 表示月の翌日から始まる。
+					update_post_meta( $menu_id, Service_Period::META_START, ( new \DateTimeImmutable( $month_last ) )->modify( '+1 day' )->format( 'Y-m-d' ) );
+				} elseif ( 'service_period_outside_advance' === $setup ) {
+					// 受付は表示月の10日まで、提供期間は表示月の16日からなので、どちらも表示月に掛かるが重ならない。
+					$today_date   = new \DateTimeImmutable( current_datetime()->format( 'Y-m-d' ) );
+					$advance_days = (int) $today_date->diff( new \DateTimeImmutable( $month_first ) )->days + 9;
+					update_post_meta( $menu_id, Service_Period::META_START, ( new \DateTimeImmutable( $month_first ) )->modify( '+15 days' )->format( 'Y-m-d' ) );
+					update_post_meta( $menu_id, Service_Period::META_END, $month_last );
+					update_post_meta( $menu_id, '_vkbm_max_advance_booking_days', $advance_days );
+				} else {
+					// 表示月の初日から末日まで（両端を含む）。
+					update_post_meta( $menu_id, Service_Period::META_START, $month_first );
+					update_post_meta( $menu_id, Service_Period::META_END, $month_last );
+				}
 				$this->create_full_month_shift(
 					$staff_id,
 					$year,

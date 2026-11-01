@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Availability\Availability_Service;
+use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Common\Exclusive_Fee;
 use VKBookingManager\Common\Lodging_Price;
@@ -36,6 +37,7 @@ use Throwable;
 use function __;
 use function add_option;
 use function apply_filters;
+use function current_user_can;
 use function array_slice;
 use function delete_option;
 use function delete_transient;
@@ -242,6 +244,13 @@ class Booking_Draft_Controller {
 
 		if ( $menu_id <= 0 ) {
 			return new WP_Error( 'invalid_menu_id', __( 'Menu ID is invalid.', 'vk-booking-manager' ) );
+		}
+
+		// #971: ログイン中の会員が予約数の上限に達していれば、日時や備考の入力を終えてから断られないよう、下書きの段階で知らせる。
+		// 最終判定は予約の確定（Booking_Confirmation_Controller::create_booking_from_draft()）で必ず行う。
+		$limit_error = $this->check_member_booking_limit();
+		if ( null !== $limit_error ) {
+			return $limit_error;
 		}
 
 		// チェックイン日・チェックアウト日を含むリクエストは泊の経路。時間枠の経路には影響しない。
@@ -672,6 +681,28 @@ class Booking_Draft_Controller {
 	}
 
 	/**
+	 * ログイン中の会員が、お客様1人あたりの予約数の上限に達していればエラーを返す。
+	 *
+	 * 予約管理権限を持つ人（代理予約）と、未ログイン（ゲスト予約）は判定しない。ゲストは申し込み時点では判定しない
+	 * （他人のメールアドレスで予約の有無を探れないようにするため。確認リンクを開いた時点で判定する）。
+	 *
+	 * @return WP_Error|null 上限に達していれば WP_Error。それ以外は null。
+	 */
+	private function check_member_booking_limit(): ?WP_Error {
+		$user_id = (int) get_current_user_id();
+		if ( $user_id <= 0 || current_user_can( Capabilities::MANAGE_RESERVATIONS ) ) {
+			return null;
+		}
+
+		$limit = Customer_Booking_Limit::resolve_limit( $this->settings_repository->get_settings(), $user_id );
+		if ( ! Customer_Booking_Limit::is_reached( $limit, Customer_Booking_Limit::count_upcoming_for_member( $user_id ) ) ) {
+			return null;
+		}
+
+		return Customer_Booking_Limit::create_error( $limit );
+	}
+
+	/**
 	 * Retrieve existing draft data.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -839,7 +870,7 @@ class Booking_Draft_Controller {
 				$plan_inputs
 			);
 
-			// 休前日・特定日の料金を設定したプランだけ、確認画面に泊ごとの内訳を出す（night_rates は区分と特定日の名称）。
+			// 休前日・特定日の料金がある、または1名あたりで予約者区分があるプランで、確認画面に泊ごとの内訳を出す（night_rates は泊ごとの日付・区分・特定日の名称・プラン料金と、予約者区分ごとの単価・人数・小計）。
 			$stay_display = Lodging_Price_Display::build_stay_display(
 				$plan_inputs,
 				$has_price_tiers ? $guest_tiers : array(),
@@ -851,13 +882,14 @@ class Booking_Draft_Controller {
 			$payload['lodging']['room_surcharge_per_night'] = $lodging_price['room_surcharge_per_night'];
 			$payload['lodging']['price_per_night']          = $lodging_price['price_per_night'];
 			$payload['lodging']['night_breakdown']          = $lodging_price['night_breakdown'];
-			$payload['lodging']['rate_tiers_enabled']       = $stay_display['enabled'];
-			$payload['lodging']['night_rates']              = $stay_display['night_rates'];
-			$total_price                                    = $lodging_price['total'];
-			$payload['nomination_fee']                      = 0;
-			$payload['nomination_fee_formatted']            = $this->format_currency_label( 0, $tax_enabled );
-			$payload['exclusive_fee']                       = 0;
-			$payload['exclusive_fee_formatted']             = $this->format_currency_label( 0, $tax_enabled );
+			// rate_tiers_enabled は、休前日・特定日の料金がある場合に加え、1名あたりで予約者区分がある場合も true（キー名は #738 当時のまま）。
+			$payload['lodging']['rate_tiers_enabled'] = $stay_display['enabled'];
+			$payload['lodging']['night_rates']        = $stay_display['night_rates'];
+			$total_price                              = $lodging_price['total'];
+			$payload['nomination_fee']                = 0;
+			$payload['nomination_fee_formatted']      = $this->format_currency_label( 0, $tax_enabled );
+			$payload['exclusive_fee']                 = 0;
+			$payload['exclusive_fee_formatted']       = $this->format_currency_label( 0, $tax_enabled );
 		}
 
 		$payload['total_price']           = $total_price;

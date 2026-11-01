@@ -27,6 +27,7 @@ use VKBookingManager\Common\Lodging_Price;
 use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Reservation_Day;
+use VKBookingManager\Common\Service_Period;
 use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\Common\Staff_Load_Calculator;
 use VKBookingManager\ProviderSettings\Industry_Presets;
@@ -525,7 +526,7 @@ class Availability_Service {
 	 * スタッフ指定」という稀な組み合わせに限られるため、この順序のまま許容している
 	 * （司・植草さん確認済み）。
 	 * P1 担当スタッフ0件 → P4 指名スタッフとメニューの担当設定が不一致 → P3 メニューが非公開等 →
-	 * P5 予約可能日設定に表示中の月が一致しない → P6 予約受付上限日数が短い →
+	 * P5 予約可能日設定に表示中の月が一致しない → P6 予約受付上限日数が短い → 提供期間に表示中の月の日が無い →
 	 * P7 定休日・臨時休業で全休 → P2 勤務はあるが所要時間に足りない → P8 予約受付締切が長すぎる →
 	 * P9 貸切予約で全枠閉鎖。
 	 *
@@ -627,6 +628,8 @@ class Availability_Service {
 
 		$any_date_allowed                 = false;
 		$any_within_advance               = false;
+		$any_within_period                = false;
+		$any_within_advance_and_period    = false;
 		$any_day_open                     = false;
 		$any_slots_ignoring_deadline      = false;
 		$any_slots_after_deadline         = false;
@@ -649,8 +652,17 @@ class Availability_Service {
 				$any_within_advance = true;
 			}
 
-			if ( ! $date_allowed || ! $within_advance ) {
-				// P5 / P6 のいずれかで既に予約不可な日は、シフト側の分析をしても無意味なためスキップする。
+			$within_period = $this->is_within_service_period( $menu_settings, $date );
+			if ( $within_period ) {
+				$any_within_period = true;
+			}
+
+			if ( $within_advance && $within_period ) {
+				$any_within_advance_and_period = true;
+			}
+
+			if ( ! $date_allowed || ! $within_advance || ! $within_period ) {
+				// P5 / P6 / 提供期間のいずれかで既に予約不可な日は、シフト側の分析をしても無意味なためスキップする。
 				continue;
 			}
 
@@ -715,6 +727,26 @@ class Availability_Service {
 			);
 
 			return $this->build_diagnostic_reason( 'max_advance_days_exceeded', $message );
+		}
+
+		if ( ! $any_within_period ) {
+			// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。結合は join_sentences() を使う。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'There are no days in the displayed month that fall within this menu\'s service period.', 'vk-booking-manager' ),
+				__( 'Check the "Service period" setting on the service menu edit screen.', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'service_period_out_of_range', $message );
+		}
+
+		if ( ! $any_within_advance_and_period ) {
+			// 提供期間の日と、予約を受け付ける日数の範囲が重なっていない場合。
+			$message = Nomination_Min_Guests_Message::join_sentences(
+				__( 'The days in the displayed month that fall within this menu\'s service period are outside the range where reservations are accepted.', 'vk-booking-manager' ),
+				__( 'Check the "Service period" setting on the service menu edit screen and the "Maximum advance booking days" setting.', 'vk-booking-manager' )
+			);
+
+			return $this->build_diagnostic_reason( 'service_period_out_of_range', $message );
 		}
 
 		if ( ! $any_day_open ) {
@@ -843,6 +875,25 @@ class Availability_Service {
 		}
 
 		return $target->format( 'Y-m-d' ) <= $max_date->format( 'Y-m-d' );
+	}
+
+	/**
+	 * 指定日がメニューの提供期間（開始日〜終了日。両端を含む）の範囲内かどうかを判定する。
+	 *
+	 * 期間の指定がない側は無期限として扱う。宿泊の泊のプランはチェックイン日を渡す。
+	 *
+	 * @internal 時間枠戦略（Time_Slot_Strategy）から呼ばれるため public。外部からは使わない。
+	 *
+	 * @param array<string, mixed> $menu_settings get_menu_settings() の戻り値。
+	 * @param string               $date          日付（Y-m-d）。
+	 * @return bool 範囲内（または期間の指定なし）の場合 true。
+	 */
+	public function is_within_service_period( array $menu_settings, string $date ): bool {
+		return Service_Period::is_date_within(
+			$date,
+			(string) ( $menu_settings['service_period_start'] ?? '' ),
+			(string) ( $menu_settings['service_period_end'] ?? '' )
+		);
 	}
 
 	/**
@@ -1011,6 +1062,17 @@ class Availability_Service {
 
 		if ( '1' === get_post_meta( $post->ID, self::MENU_META_ONLINE_DISABLED, true ) ) {
 			return new WP_Error( 'menu_offline_only', __( 'This menu is not available for online reservation.', 'vk-booking-manager' ) );
+		}
+
+		// 提供期間が終了したメニューは選べない（直リンクで開かれたときの案内に使う）。
+		if ( Service_Period::is_ended( Service_Period::get_period( $post->ID )['end'], Service_Period::get_today() ) ) {
+			return new WP_Error(
+				'menu_service_period_ended',
+				Nomination_Min_Guests_Message::join_sentences(
+					__( 'The service period of this menu has ended.', 'vk-booking-manager' ),
+					__( 'Please choose another menu.', 'vk-booking-manager' )
+				)
+			);
 		}
 
 		return $post;
@@ -2409,6 +2471,9 @@ class Availability_Service {
 		$reservation_custom_dates    = get_post_meta( $menu_post->ID, self::MENU_META_RESERVATION_CUSTOM_DATES, true );
 		$reservation_custom_dates    = is_array( $reservation_custom_dates ) ? $reservation_custom_dates : array();
 
+		// 提供期間（開始日・終了日。空文字はその側が無期限）。is_within_service_period() で参照される。
+		$service_period = Service_Period::get_period( $menu_post->ID );
+
 		$fixed_start_times_raw = get_post_meta( $menu_post->ID, self::MENU_META_FIXED_START_TIMES, true );
 		$fixed_start_times     = is_array( $fixed_start_times_raw ) ? $fixed_start_times_raw : array();
 		// Normalize: filter to valid HH:MM with allowed minutes (10-minute intervals), deduplicate, and sort.
@@ -2434,6 +2499,8 @@ class Availability_Service {
 			'reservation_day_type'        => $reservation_day_type,
 			'reservation_custom_weekdays' => $reservation_custom_weekdays,
 			'reservation_custom_dates'    => $reservation_custom_dates,
+			'service_period_start'        => $service_period['start'],
+			'service_period_end'          => $service_period['end'],
 			'fixed_start_times'           => $fixed_start_times,
 		);
 	}
@@ -2628,7 +2695,7 @@ class Availability_Service {
 			'check_in_time'      => $check_in_time,
 			'check_out_time'     => $check_out_time,
 			'rooms'              => $rooms,
-			// 休前日・特定日の料金を設定したプランだけ true。false のときは画面に区分も内訳も出さない。
+			// 休前日・特定日の料金がある、または1名あたりで予約者区分があるプランで true（キー名は #738 当時のまま）。false のときは画面に区分も内訳も出さない。
 			'rate_tiers_enabled' => $stay_rates['enabled'],
 			'night_rates'        => $stay_rates['night_rates'],
 			'meta'               => array(
@@ -2707,7 +2774,7 @@ class Availability_Service {
 		foreach ( $raw_days as $date => $state ) {
 			$reason = (string) $state['reason'];
 			if ( '' === $check_in_date ) {
-				if ( $date < $today || ! $this->is_date_allowed_for_menu( $settings, $date, $timezone ) || ! $this->is_within_max_advance_days( $settings, $date, $timezone ) || null !== $this->validate_lodging_deadline( $menu, $date, $timezone ) ) {
+				if ( $date < $today || ! $this->is_date_allowed_for_menu( $settings, $date, $timezone ) || ! $this->is_within_max_advance_days( $settings, $date, $timezone ) || ! $this->is_within_service_period( $settings, $date ) || null !== $this->validate_lodging_deadline( $menu, $date, $timezone ) ) {
 					$state['available'] = false;
 					$reason             = 'unavailable_date';
 				}
@@ -2881,7 +2948,7 @@ class Availability_Service {
 	 * 泊単位の問い合わせの日付を検証する。
 	 *
 	 * 次をすべて確認する: 実在する日付（checkdate）、チェックアウトがチェックインより後、泊数が上限以内、
-	 * チェックインが今日以降（サイトのタイムゾーン）、チェックインがメニューの受付上限日数の範囲内。
+	 * チェックインが今日以降（サイトのタイムゾーン）、チェックインがメニューの受付上限日数の範囲内、チェックインがメニューの提供期間の範囲内。
 	 *
 	 * @param WP_Post        $menu           メニュー投稿。
 	 * @param string         $check_in_date  チェックイン日（Y-m-d）。
@@ -2922,6 +2989,15 @@ class Availability_Service {
 					'status'           => 400,
 					'max_advance_days' => $menu_settings['max_advance_days'],
 				)
+			);
+		}
+
+		// チェックイン日が提供期間の中なら予約できる（連泊でチェックアウトが終了日より後になってもよい）。
+		if ( ! $this->is_within_service_period( $menu_settings, $check_in_date ) ) {
+			return new WP_Error(
+				'service_period_out_of_range',
+				__( 'The check-in date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
 			);
 		}
 

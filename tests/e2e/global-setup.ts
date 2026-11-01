@@ -270,6 +270,9 @@ async function globalSetup() {
 		staff_enabled: 1,
 		provider_terms_of_service: '利用規約に同意してください。',
 		provider_cancellation_policy: 'キャンセルポリシーに同意してください。',
+		// お客様1人あたりの予約数の上限（#971。初期値 3）が、同じ会員で何件も予約する他の spec を止めないよう、上限なしにする。
+		// 上限そのものは issue-971-customer-booking-limit.spec.ts が自分で 3 にして確かめる。
+		provider_customer_booking_limit: 0,
 	} );
 	console.log( 'Provider settings configured' );
 

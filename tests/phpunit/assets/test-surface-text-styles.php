@@ -24,6 +24,12 @@ use PHPUnit\Framework\TestCase;
  */
 class Surface_Text_Styles_Test extends TestCase {
 
+	/** 白いカード内の抜粋リンクは共通のリンク色で読める。 */
+	public function test_menu_card_excerpt_link_color(): void {
+		$content = $this->read_local_file( 'src/blocks/menu-loop/style.scss' );
+		$this->assertMatchesRegularExpression( '/\.vkbm-menu-loop__card-item--has-surface \.vkbm-menu-loop__card-excerpt a\s*\{\s*color: var\(--vkbm--color--link\);/s', $content );
+	}
+
 	/**
 	 * surface-text が :root で定義され、濃い色であることを検証する。
 	 */
@@ -70,8 +76,8 @@ class Surface_Text_Styles_Test extends TestCase {
 			$selector . ' のルールが見つかりません。'
 		);
 		// 見出し（#864）は、オン時だけ出力する --vkbm--color--menu-heading-* の代替値として背景色・surface-text を持つ。
-		$this->assertMatchesRegularExpression( '/background(-color)?:\s*(#|var\(--vkbm--color--bg-|var\(--vkbm--color--menu-heading-bg,\s*#)/', $matches[1], $selector . ' に背景色の指定がありません。' );
-		$this->assertMatchesRegularExpression( '/(?<![\w-])color:\s*var\((--vkbm--color--menu-heading-text,\s*var\()?--vkbm--color--surface-text/', $matches[1], $selector . ' に surface-text の文字色が対で指定されていません。' );
+		$this->assertMatchesRegularExpression( '/background(-color)?:\s*(#|var\(--vkbm--color--bg-|var\(--vkbm--color--menu-(?:heading|card)-bg,\s*#)/', $matches[1], $selector . ' に背景色の指定がありません。' );
+		$this->assertMatchesRegularExpression( '/(?<![\w-])color:\s*var\((--vkbm--color--menu-(?:heading|card)-text,\s*var\()?--vkbm--color--surface-text/', $matches[1], $selector . ' に surface-text の文字色が対で指定されていません。' );
 		$this->assertStringNotContainsString( 'color: var(--vkbm--color--text-primary', $matches[1], $selector . ' で text-primary を使わないでください。' );
 	}
 
@@ -84,6 +90,8 @@ class Surface_Text_Styles_Test extends TestCase {
 		$reservation = 'src/blocks/reservation/style.scss';
 
 		return array(
+			'menu card surface'     => array( 'src/blocks/menu-loop/style.scss', '.vkbm-menu-loop__card-item--has-surface' ),
+			'search surface'        => array( $reservation, '.vkbm-plan-summary__search--has-surface' ),
 			'time slot button'      => array( $reservation, '.vkbm-slot-list__item' ),
 			'confirm summary'       => array( $reservation, '.vkbm-confirm__summary' ),
 			'favorites'             => array( $reservation, '.vkbm-favorites' ),
@@ -244,6 +252,7 @@ class Surface_Text_Styles_Test extends TestCase {
 	 */
 	public function provide_surface_heading_selectors(): array {
 		return array(
+			'menu card title'    => array( 'src/blocks/menu-loop/style.scss', '.vkbm-menu-loop__card-item--has-surface .vkbm-menu-loop__card-title' ),
 			'favorites title'    => array( 'src/blocks/reservation/style.scss', '.vkbm-favorites__title' ),
 			'footer modal title' => array( 'src/blocks/reservation/style.scss', '.vkbm-footer-modal__title' ),
 			'auth card title'    => array( 'assets/scss/auth-forms.scss', '.vkbm-auth-card__title' ),

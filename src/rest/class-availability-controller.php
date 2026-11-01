@@ -44,6 +44,7 @@ class Availability_Controller {
 		'too_many_nights',
 		'date_in_past',
 		'date_beyond_max_advance',
+		'service_period_out_of_range',
 		'reservation_deadline_passed',
 		'guests_exceeded',
 		'guests_required',
@@ -286,6 +287,18 @@ class Availability_Controller {
 		if ( 'resource_tag_no_match' === $error->get_error_code() ) {
 			return new WP_Error(
 				'resource_tag_no_match',
+				$error->get_error_message(),
+				array( 'status' => 400 )
+			);
+		}
+
+		// #972: menu_service_period_ended（メニューの提供期間が終了している）も、内部設定ではなく
+		// メニュー自体の公開情報（提供期間はメニューカードにも表示される）に起因するため、
+		// 専用の案内をそのまま返す。アーカイブ済みなど他のメニュー状態は従来どおり汎用文言にする。
+		// resource_tag_no_match と同じく新しいインスタンスで返す（同一性判定の理由は上記参照）。
+		if ( 'menu_service_period_ended' === $error->get_error_code() ) {
+			return new WP_Error(
+				'menu_service_period_ended',
 				$error->get_error_message(),
 				array( 'status' => 400 )
 			);

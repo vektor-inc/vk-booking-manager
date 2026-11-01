@@ -66,6 +66,11 @@ class Time_Slot_Strategy implements Slot_Strategy {
 			return array();
 		}
 
+		// 提供期間の外の日付はスロットを返さない。
+		if ( ! $this->service->is_within_service_period( $menu_settings, $date ) ) {
+			return array();
+		}
+
 		$slot_step_minutes = $this->service->get_slot_step_minutes();
 		$total_block_min   = max( $slot_step_minutes, $menu_settings['total_duration'] );
 		$service_minutes   = $menu_settings['duration'];

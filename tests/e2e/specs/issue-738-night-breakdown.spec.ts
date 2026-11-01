@@ -4,7 +4,8 @@
  * 検証内容:
  * 1. 休前日の料金を設定したプランで、金曜から 2 泊（金曜 = 平日、土曜 = 休前日）の予約を確認画面まで進める。
  *    - 日程を選んだ直後、客室一覧の上に泊ごとの区分（平日・休前日）が出る。
- *    - 客室を選ぶと、まとめ欄に「泊ごとの内訳」が畳まずに出て、日付・区分・単価が泊の数だけ並ぶ（#797 で開閉欄から常時表示に変更）。
+ *    - 同じ欄に泊ごとの単価と泊の合計も出る（#969 で内訳を日程選択直後の欄へ移した。単価は客室によらないため、客室を選ぶ前に出せる）。
+ *    - 客室を選んでも、まとめ欄には泊ごとの内訳を重ねて出さない（泊数と合計金額だけ）。
  *    - 確認画面は「1泊あたりの料金」の行の代わりに、泊ごとの内訳（常に開いた状態）が出る。
  *    - 合計金額が、泊ごとの単価の合計（10,000 + 15,000 = 25,000円）になっている。
  * 2. 休前日・特定日の料金を設定していないプランは、区分も内訳も出さず、「1泊あたりの料金」の行のまま。
@@ -316,7 +317,13 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		const rateRows = nightRates.locator( '.vkbm-lodging__night' );
 		await expect( rateRows ).toHaveCount( NIGHTS );
 		await expect( rateRows.nth( 0 ) ).toContainText( '平日' );
+		await expect( rateRows.nth( 0 ) ).toContainText( '¥10,000' );
 		await expect( rateRows.nth( 1 ) ).toContainText( '休前日' );
+		await expect( rateRows.nth( 1 ) ).toContainText( '¥15,000' );
+		// @check 同じ欄に、泊の合計（10,000 + 15,000 = 25,000円）が出る
+		await expect(
+			nightRates.locator( '.vkbm-lodging__night-total' )
+		).toHaveText( '2泊合計¥25,000' );
 		// 区分の表示は客室一覧より上にある。
 		const rateBox = await nightRates.boundingBox();
 		const roomListBox = await page
@@ -325,28 +332,18 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		expect( rateBox && roomListBox ).toBeTruthy();
 		expect( rateBox!.y ).toBeLessThan( roomListBox!.y );
 
-		// 客室を選ぶと、まとめ欄に「泊ごとの内訳」が畳まずに出る（#797 で開閉欄から常時表示に変更）。
+		// 客室を選んでも、まとめ欄に同じ内訳を重ねて出さない（泊数と合計金額だけ）。
 		// @step 客室を選ぶ
 		await page.locator( '.vkbm-lodging__room' ).first().click();
-		// @check まとめ欄に「泊ごとの内訳」が畳まずに出て、「平日 ¥10,000」「休前日 ¥15,000」が泊の数だけ並ぶ
-		const breakdown = page.locator(
-			'.vkbm-lodging__summary .vkbm-lodging__breakdown'
-		);
-		await expect( breakdown ).toBeVisible();
-		await expect( breakdown.locator( 'details, summary' ) ).toHaveCount(
-			0
-		);
+		// @check まとめ欄には泊ごとの内訳が出ず、合計金額（¥25,000）だけが出る
+		const summaryBox = page.locator( '.vkbm-lodging__summary' );
 		await expect(
-			breakdown.locator( '.vkbm-lodging__breakdown-label' )
-		).toHaveText( '泊ごとの内訳' );
-
-		// 日付・区分・単価が泊の数だけ出る。
-		const breakdownRows = breakdown.locator( '.vkbm-lodging__night' );
-		await expect( breakdownRows ).toHaveCount( NIGHTS );
-		await expect( breakdownRows.nth( 0 ) ).toContainText( '平日' );
-		await expect( breakdownRows.nth( 0 ) ).toContainText( '¥10,000' );
-		await expect( breakdownRows.nth( 1 ) ).toContainText( '休前日' );
-		await expect( breakdownRows.nth( 1 ) ).toContainText( '¥15,000' );
+			summaryBox.locator( '.vkbm-lodging__breakdown' )
+		).toHaveCount( 0 );
+		await expect(
+			summaryBox.locator( '.vkbm-lodging__night' )
+		).toHaveCount( 0 );
+		await expect( summaryBox ).toContainText( '¥25,000' );
 
 		// 「予約に進む」で確認画面へ。
 		// @step 「予約に進む」ボタンを押して確認画面へ進む
@@ -423,5 +420,272 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		await expect( confirm ).toContainText(
 			`¥${ ( WEEKDAY_PRICE * NIGHTS ).toLocaleString( 'en-US' ) }`
 		);
+	} );
+	/* eslint-disable jsdoc/check-tag-names -- テスト一覧用の @title を使用する。 */
+	/**
+	 * @title 宿泊の区分別料金内訳と人数変更（#969）
+	 */
+	/* eslint-enable jsdoc/check-tag-names */
+	test( '#969: 予約者区分を縦積みで表示し、人数変更で泊小計・連泊合計を更新する', async ( {
+		page,
+	} ) => {
+		// @step 既存データと区別したプランを作り、大人・子供・乳児の料金区分を設定する
+		const menuId = seedNightMenu(
+			`${ PREFIX } Tier Plan`,
+			roomId,
+			PRE_HOLIDAY_PRICE
+		);
+		wpEvalPhp( `
+			update_post_meta( ${ menuId }, '_vkbm_allow_multiple_guests', '1' );
+			update_post_meta( ${ menuId }, '_vkbm_max_capacity', 8 );
+			update_post_meta( ${ menuId }, '_vkbm_price_tiers', array(
+				array( 'label' => '一般大人宿泊者区分', 'price' => 1234567, 'pre_holiday_price' => 12345678 ),
+				array( 'label' => '食事と布団付きのお子様', 'price' => 1234567 ),
+				array( 'label' => '乳児', 'price' => 0 )
+			) );
+		` );
+		// @step 初期描画時から常設される料金通知が空であることを確認する
+		await selectFridayStay( page, menuId );
+		const priceStatus = page.locator( '.vkbm-lodging__price-status' );
+		await expect( priceStatus ).toHaveText( '' );
+		await page.locator( '.vkbm-lodging__room' ).first().click();
+		const inputs = page.locator( '.vkbm-plan-summary__guest-tier input' );
+		const summary = page.locator( '.vkbm-lodging__summary' );
+		const rates = page.locator( '.vkbm-lodging__night-rates' );
+		const nights = rates.locator(
+			'.vkbm-lodging__nights--priced > .vkbm-lodging__night'
+		);
+
+		// @check 客室を選ぶ前から日程選択直後の欄に出ていて、まとめ欄には内訳を重ねて出さない
+		await expect( summary.locator( '.vkbm-lodging__night' ) ).toHaveCount(
+			0
+		);
+		// @check 親h3の直下に各泊のh4があり、泊のリスト項目と見出しが関連付く
+		await expect( rates.getByRole( 'heading', { level: 3 } ) ).toHaveText(
+			'泊ごとの料金区分'
+		);
+		await expect( rates.getByRole( 'heading', { level: 4 } ) ).toHaveCount(
+			2
+		);
+		const headingId = await nights
+			.first()
+			.getByRole( 'heading', { level: 4 } )
+			.getAttribute( 'id' );
+		await expect( nights.first() ).toHaveAttribute(
+			'aria-labelledby',
+			headingId!
+		);
+		await expect( priceStatus ).toHaveAttribute( 'role', 'status' );
+		await expect( priceStatus ).toHaveAttribute( 'aria-atomic', 'true' );
+		await expect( priceStatus ).toHaveText( '' );
+
+		// @check 人数欄横に最低単価を出さず、0名の子供・乳児は内訳に表示しない
+		await expect(
+			page.locator( '.vkbm-plan-summary__guest-tier-price' )
+		).toHaveCount( 0 );
+		await expect( nights ).toHaveCount( 2 );
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-guest' )
+		).toHaveCount( 1 );
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-heading' )
+		).toContainText( '平日' );
+		await expect(
+			nights.nth( 1 ).locator( '.vkbm-lodging__night-heading' )
+		).toContainText( '休前日' );
+
+		// 表の要素に目印を付け、人数の変更による再取得の間に外れて作り直されないことを後で確かめる。
+		await rates
+			.locator( '.vkbm-lodging__nights--priced' )
+			.evaluate( ( element ) => {
+				element.setAttribute( 'data-e2e-mounted', 'yes' );
+			} );
+
+		// @step 大人2名・子供1名に変更する（子供の休前日料金は未設定）
+		await inputs.nth( 0 ).fill( '2' );
+		await inputs.nth( 1 ).fill( '1' );
+		// @check 単価・人数・小計と泊小計・2泊合計がその場で更新される
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-guest' )
+		).toHaveCount( 2 );
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-guest' ).nth( 0 )
+		).toContainText( '× 2' );
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-guest' ).nth( 0 )
+		).toContainText( '¥2,469,134' );
+		await expect(
+			nights.nth( 1 ).locator( '.vkbm-lodging__night-guest' ).nth( 1 )
+		).toContainText( '¥1,234,567' );
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-subtotal' )
+		).toHaveText( 'この泊の小計¥3,703,701' );
+		await expect(
+			nights.nth( 1 ).locator( '.vkbm-lodging__night-subtotal' )
+		).toHaveText( 'この泊の小計¥25,925,923' );
+		await expect(
+			rates.locator( '.vkbm-lodging__night-total' )
+		).toHaveText( '2泊合計¥29,629,624' );
+		await expect(
+			summary.locator( '.vkbm-lodging__summary-list--total' )
+		).toContainText( '¥29,629,624' );
+		// @check 再取得を挟んでも、泊ごとの表は作り直されない（外れると高さが跳ね、開いた欄が閉じる）
+		await expect(
+			rates.locator(
+				'.vkbm-lodging__nights--priced[data-e2e-mounted="yes"]'
+			)
+		).toHaveCount( 1 );
+		await expect( rates ).not.toContainText( '乳児' );
+
+		// @check 全内訳を読み直さず、更新後の泊数と合計だけを通知する
+		await expect( priceStatus ).toHaveText(
+			'料金を更新しました：2泊、合計¥29,629,624。'
+		);
+		await expect(
+			rates.locator( '[aria-live], [role="status"]' )
+		).toHaveCount( 0 );
+
+		// @step 内訳の箱の幅を、1行に並べる境目（32em）の前後と、375px・280pxの幅に変える
+		// 切替は画面幅ではなく箱の幅（コンテナクエリ）で決まるため、箱の幅を直接変えて確かめる。
+		for ( const em of [ 17.5, 20, 31.5, 32.5, 50 ] ) {
+			const layout = await rates.evaluate( ( element, widthEm ) => {
+				const fontSize = parseFloat(
+					window.getComputedStyle( element ).fontSize
+				);
+				( element as HTMLElement ).style.width = `${
+					widthEm * fontSize
+				}px`;
+				( element as HTMLElement ).style.maxWidth = 'none';
+				const list = element.querySelector(
+					'.vkbm-lodging__nights--priced'
+				)!;
+				const listRect = list.getBoundingClientRect();
+				const rectsOf = ( node: Element ) => {
+					// 読み上げ専用の「小計」（.vkbm-lodging__sr-only）は見える文字ではないので、字面の計測から除く。
+					const walker = document.createTreeWalker(
+						node,
+						NodeFilter.SHOW_TEXT
+					);
+					const rects: DOMRect[] = [];
+					while ( walker.nextNode() ) {
+						const text = walker.currentNode;
+						if (
+							text.parentElement?.closest(
+								'.vkbm-lodging__sr-only'
+							)
+						) {
+							continue;
+						}
+						const range = document.createRange();
+						range.selectNodeContents( text );
+						rects.push( ...Array.from( range.getClientRects() ) );
+					}
+					return rects;
+				};
+				return {
+					overflow: element.scrollWidth > element.clientWidth,
+					rows: Array.from(
+						list.querySelectorAll( '.vkbm-lodging__night-guest' )
+					).map( ( row ) => {
+						const parts = [
+							row.querySelector(
+								'.vkbm-lodging__night-guest-label'
+							)!,
+							...Array.from(
+								row.querySelectorAll(
+									'.vkbm-lodging__night-calc > span'
+								)
+							),
+							row.querySelector( '.vkbm-lodging__night-price' )!,
+						];
+						const textRects = parts.map( rectsOf );
+						const boxes = parts.map( ( part ) =>
+							part.getBoundingClientRect()
+						);
+						const overlaps = textRects.some( ( group, index ) =>
+							textRects
+								.slice( index + 1 )
+								.some( ( other ) =>
+									group.some( ( left ) =>
+										other.some(
+											( right ) =>
+												left.left < right.right - 0.5 &&
+												left.right > right.left + 0.5 &&
+												left.top < right.bottom - 0.5 &&
+												left.bottom > right.top + 0.5
+										)
+									)
+								)
+						);
+						return {
+							// 人数の右端から小計の左端までの間隔（広い箱では単価 ↔ 人数より広げる）。
+							gapCountToSubtotal:
+								Math.min(
+									...textRects[ 3 ].map( ( r ) => r.left )
+								) -
+								Math.max(
+									...textRects[ 2 ].map( ( r ) => r.right )
+								),
+							gapUnitToCount:
+								Math.min(
+									...textRects[ 2 ].map( ( r ) => r.left )
+								) -
+								Math.max(
+									...textRects[ 1 ].map( ( r ) => r.right )
+								),
+							overlaps,
+							numericUnbroken: textRects
+								.slice( 1 )
+								.every( ( group ) => group.length === 1 ),
+							contained: textRects
+								.flat()
+								.every(
+									( rect ) =>
+										rect.left >= listRect.left - 1 &&
+										rect.right <= listRect.right + 1
+								),
+							// 区分名が単価の上の段にあるか（狭い幅の構造）。
+							labelAbove: boxes[ 0 ].bottom <= boxes[ 1 ].top + 1,
+							// 単価と小計が同じ段にあるか（広い幅の構造）。
+							oneLine:
+								Math.abs( boxes[ 1 ].top - boxes[ 3 ].top ) < 4,
+						};
+					} ),
+				};
+			}, em );
+			// @check 長い区分名と7〜8桁金額が重ならず、箱からはみ出さない
+			expect( layout.overflow ).toBe( false );
+			for ( const row of layout.rows ) {
+				expect( row.contained ).toBe( true );
+				expect( row.overlaps ).toBe( false );
+				expect( row.numericUnbroken ).toBe( true );
+				// @check 箱が32em以下なら区分名を上の段に、広ければ1行に並べる
+				if ( em <= 32 ) {
+					expect( row.labelAbove ).toBe( true );
+				} else {
+					expect( row.oneLine ).toBe( true );
+					// @check 広い箱では、人数 ↔ 小計の間隔が 24px 以上で、単価 ↔ 人数の間隔より広い
+					expect( row.gapCountToSubtotal ).toBeGreaterThanOrEqual(
+						23
+					);
+					expect( row.gapCountToSubtotal ).toBeGreaterThan(
+						row.gapUnitToCount
+					);
+				}
+			}
+		}
+
+		// @step 子供を0名に戻す
+		await inputs.nth( 1 ).fill( '0' );
+		// @check 子供の行が消え、合計も大人2名分に戻る
+		await expect(
+			nights.nth( 0 ).locator( '.vkbm-lodging__night-guest' )
+		).toHaveCount( 1 );
+		await expect(
+			rates.locator( '.vkbm-lodging__night-total' )
+		).toHaveText( '2泊合計¥27,160,490' );
+		await expect(
+			summary.locator( '.vkbm-lodging__summary-list--total' )
+		).toContainText( '¥27,160,490' );
 	} );
 } );

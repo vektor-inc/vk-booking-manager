@@ -1113,4 +1113,51 @@
 		syncNightPriceUnitFields
 	);
 	$( syncBookingUnitFields );
+
+	// 提供期間: 終了日の最小値を開始日に連動させ、開始日が終了日より後のときはエラー文を出す。
+	// 終了日が今日より前のときは、終了済みの案内を出す。
+	function syncServicePeriod() {
+		const $start = $( '#vkbm_service_menu_service_period_start' );
+		const $end = $( '#vkbm_service_menu_service_period_end' );
+		if ( $start.length === 0 || $end.length === 0 ) {
+			return;
+		}
+
+		const start = String( $start.val() || '' );
+		const end = String( $end.val() || '' );
+		const today =
+			window.vkbmServiceMenuEditor &&
+			window.vkbmServiceMenuEditor.servicePeriodToday
+				? String( window.vkbmServiceMenuEditor.servicePeriodToday )
+				: '';
+		const isReversed = start !== '' && end !== '' && start > end;
+
+		if ( start !== '' ) {
+			$end.attr( 'min', start );
+		} else {
+			$end.removeAttr( 'min' );
+		}
+
+		$( '#vkbm-service-period-error' ).prop( 'hidden', ! isReversed );
+		if ( isReversed ) {
+			$start.add( $end ).attr( {
+				'aria-invalid': 'true',
+				'aria-describedby': 'vkbm-service-period-error',
+			} );
+		} else {
+			$start.add( $end ).removeAttr( 'aria-invalid aria-describedby' );
+		}
+
+		$( '#vkbm-service-period-ended' ).prop(
+			'hidden',
+			! ( end !== '' && today !== '' && end < today )
+		);
+	}
+
+	$( document ).on(
+		'input change',
+		'#vkbm_service_menu_service_period_start, #vkbm_service_menu_service_period_end',
+		syncServicePeriod
+	);
+	$( syncServicePeriod );
 } )( jQuery );

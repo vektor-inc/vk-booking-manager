@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'kurudrive/vk-booking-manager',
-        'pretty_version' => '3.7.0',
-        'version' => '3.7.0.0',
-        'reference' => '80e31074a30c4eac616ffea071580f42c1591e48',
+        'pretty_version' => '3.8.0',
+        'version' => '3.8.0.0',
+        'reference' => '19342c02b4e6a7a04976b00fe019450a92e4e44a',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -11,9 +11,9 @@
     ),
     'versions' => array(
         'kurudrive/vk-booking-manager' => array(
-            'pretty_version' => '3.7.0',
-            'version' => '3.7.0.0',
-            'reference' => '80e31074a30c4eac616ffea071580f42c1591e48',
+            'pretty_version' => '3.8.0',
+            'version' => '3.8.0.0',
+            'reference' => '19342c02b4e6a7a04976b00fe019450a92e4e44a',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

@@ -8,6 +8,7 @@ use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Bookings\Booking_Anonymizer;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\Booking_Source;
+use VKBookingManager\Bookings\Customer_Booking_Limit;
 use VKBookingManager\Bookings\Guest_Booking_Controller;
 use VKBookingManager\Customers\Customer_Flag_Booking_Guard;
 use VKBookingManager\Customers\Customer_Flag_Service;
@@ -249,6 +250,29 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 1, preg_match( '/vkbm_guest_verify=([A-Za-z0-9]{32})$/', (string) $last['verify_url'], $matches ), '確認リンクに 32 文字のトークンが入る' );
 
 		return $matches[1];
+	}
+
+	/**
+	 * 指定のメールアドレスで、これから先の確定の予約を指定件数つくる（予約者は作成者なしのゲスト予約）。
+	 *
+	 * @param string $email 予約者のメールアドレス。
+	 * @param int    $count 件数。
+	 */
+	private function create_upcoming_bookings( string $email, int $count ): void {
+		for ( $i = 0; $i < $count; $i++ ) {
+			$booking_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Booking_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			);
+			$start      = strtotime( sprintf( '+%d days 12:00:00 Asia/Tokyo', 2 + $i ) );
+			update_post_meta( $booking_id, '_vkbm_booking_service_start', wp_date( 'Y-m-d H:i:s', $start ) );
+			update_post_meta( $booking_id, '_vkbm_booking_service_end', wp_date( 'Y-m-d H:i:s', $start + HOUR_IN_SECONDS ) );
+			update_post_meta( $booking_id, '_vkbm_booking_total_end', wp_date( 'Y-m-d H:i:s', $start + HOUR_IN_SECONDS ) );
+			update_post_meta( $booking_id, '_vkbm_booking_customer_email', $email );
+			update_post_meta( $booking_id, '_vkbm_booking_status', 'confirmed' );
+		}
 	}
 
 	private function count_bookings(): int {
@@ -1226,6 +1250,96 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * お客様1人あたりの予約数の上限（#971）に達していたら予約を作らず、理由と上限の件数を伝える専用の結果にする。
+	 * 開き直しても同じ結果になる。上限の手前・上限なし・別のメールアドレスの予約だけの場合は予約を作る。
+	 */
+	public function test_process_verification_booking_limit_reached(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '同じメールアドレスの先の予約が上限（3件）ちょうど => 予約を作らず booking_limit_reached。上限の件数を持つ',
+				'limit'               => 3,
+				'existing_same'       => 3,
+				'existing_other'      => 0,
+				'expected_result'     => 'booking_limit_reached',
+				'expected_bookings'   => 0,
+			),
+			array(
+				'test_condition_name' => '上限を 2 に設定し、2件持っている => booking_limit_reached。上限は設定の値',
+				'limit'               => 2,
+				'existing_same'       => 2,
+				'existing_other'      => 0,
+				'expected_result'     => 'booking_limit_reached',
+				'expected_bookings'   => 0,
+			),
+			array(
+				'test_condition_name' => '上限の1つ手前（2件） => 予約が作られる',
+				'limit'               => 3,
+				'existing_same'       => 2,
+				'existing_other'      => 0,
+				'expected_result'     => 'pending',
+				'expected_bookings'   => 1,
+			),
+			array(
+				'test_condition_name' => '上限 0（上限なし）で5件 => 予約が作られる',
+				'limit'               => 0,
+				'existing_same'       => 5,
+				'existing_other'      => 0,
+				'expected_result'     => 'pending',
+				'expected_bookings'   => 1,
+			),
+			array(
+				'test_condition_name' => '別のメールアドレスの予約が3件だけ => 予約が作られる',
+				'limit'               => 3,
+				'existing_same'       => 0,
+				'existing_other'      => 3,
+				'expected_result'     => 'pending',
+				'expected_bookings'   => 1,
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			$this->save_settings(
+				array(
+					'booking_customer_mode'              => 'guest',
+					'provider_booking_status_mode'       => 'pending',
+					Customer_Booking_Limit::SETTINGS_KEY => $case['limit'],
+				)
+			);
+			$email = 'limit' . $index . '@example.com';
+			$this->create_upcoming_bookings( $email, $case['existing_same'] );
+			$this->create_upcoming_bookings( 'other' . $index . '@example.com', $case['existing_other'] );
+			$before                            = $this->count_bookings();
+			list( $controller, $notification ) = $this->build_controller( $staff_id );
+			$raw_token                         = $this->request_and_get_token( $controller, $notification, $this->build_request( $this->store_draft( $menu_id, $staff_id ), array( 'customer_email' => $email ) ) );
+			$this->assertSame( $before, $this->count_bookings(), $case['test_condition_name'] . '（申し込み時点では判定せず、予約も作らない）' );
+
+			$result = $controller->process_verification( $raw_token );
+
+			$this->assertSame( $case['expected_result'], $result['result'], $case['test_condition_name'] . ' code=' . $result['code'] );
+			$this->assertSame( $case['expected_bookings'], $this->count_bookings() - $before, $case['test_condition_name'] );
+
+			if ( 'booking_limit_reached' === $case['expected_result'] ) {
+				$this->assertSame( Customer_Booking_Limit::ERROR_CODE, $result['code'], $case['test_condition_name'] );
+				$this->assertSame( $case['limit'], $result['limit'], $case['test_condition_name'] );
+				$this->assertFalse( get_transient( Guest_Booking_Controller::PENDING_PREFIX . hash( 'sha256', $raw_token ) ), $case['test_condition_name'] . '（恒久の拒否なので確認待ちデータを消す）' );
+
+				$again = $controller->process_verification( $raw_token );
+				$this->assertSame( 'booking_limit_reached', $again['result'], $case['test_condition_name'] . '（開き直しても同じ結果）' );
+				$this->assertSame( $case['limit'], $again['limit'], $case['test_condition_name'] . '（開き直しても上限の件数を持つ）' );
+				$this->assertTrue( $again['repeat'], $case['test_condition_name'] );
+			}
+			$this->reset_email_limit( $email );
+			// 次のケースが同じ枠で満席にならないよう、作った予約を片付ける。
+			if ( $result['booking_id'] > 0 ) {
+				wp_delete_post( $result['booking_id'], true );
+			}
+		}
+	}
+
+	/**
 	 * 予約を作れなかった理由が一時的なら、確認待ちデータを残し結果も保存せず、開き直せばやり直す。やり直しても変わらない理由なら、結果を保存する。
 	 */
 	public function test_process_verification_temporary_failure(): void {
@@ -1527,6 +1641,19 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 				'expected_result'     => 'rejected',
 			),
 			array(
+				'test_condition_name' => 'booking_limit_reached => 理由（上限の件数）だけ渡し、予約内容は付けない',
+				'current'             => array(
+					'result'         => Guest_Booking_Controller::RESULT_BOOKING_LIMIT_REACHED,
+					'booking_id'     => 0,
+					'booking_status' => '',
+					'repeat'         => false,
+					'code'           => 'vkbm_booking_limit_reached',
+					'message'        => '内部の理由',
+					'limit'          => 3,
+				),
+				'expected_result'     => 'booking_limit_reached',
+			),
+			array(
 				'test_condition_name' => 'booking_closed => 予約があっても内容を付けない',
 				'current'             => array(
 					'result'         => Guest_Booking_Controller::RESULT_BOOKING_CLOSED,
@@ -1549,6 +1676,12 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 			$this->assertStringNotContainsString( '内部の理由', (string) wp_json_encode( $public ), $case['test_condition_name'] );
 			$this->assertStringNotContainsString( 'customer_flag_blocked', (string) wp_json_encode( $public ), $case['test_condition_name'] );
 		}
+
+		// 予約数の上限に達した結果だけは、画面の文言に入れる上限の件数を渡す（ほかの結果には付けない）。
+		$property->setValue( null, $test_cases[1]['current'] );
+		$this->assertSame( 3, Guest_Booking_Controller::get_public_result()['bookingLimit'] );
+		$property->setValue( null, $test_cases[0]['current'] );
+		$this->assertArrayNotHasKey( 'bookingLimit', Guest_Booking_Controller::get_public_result() );
 	}
 
 	/**

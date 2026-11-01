@@ -66,6 +66,11 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 
 		$test_cases = array(
 			array(
+				'test_condition_name' => '白いカード背景の送信値を復元する',
+				'input' => array( 'design_menu_card_background' => 'white' ),
+				'expected' => array( 'design_menu_card_background' => 'white' ),
+			),
+			array(
 				'test_condition_name' => '絞り込み検索 ON でリソースタグ検索 ON・自動登録 2ヶ月先まで => 送信値が復元される（無料版ではリソースタグ検索は OFF）',
 				'input'               => array(
 					'reservation_show_menu_search' => '1',

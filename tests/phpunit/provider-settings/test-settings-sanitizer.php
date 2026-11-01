@@ -21,6 +21,84 @@ use WP_UnitTestCase;
  * @group provider-settings
  */
 class Settings_Sanitizer_Test extends WP_UnitTestCase {
+	/** カード背景の許可値・不正値・未送信時の初期値を検証する。 */
+	public function test_design_menu_card_background(): void {
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+		$this->assertSame( 'transparent', $defaults['design_menu_card_background'], 'カード背景の初期値は透明' );
+		$this->assertSame( array( 'transparent', 'white' ), array_keys( Settings_Sanitizer::get_design_menu_card_background_choices() ), '透明・白を選択できる' );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '透明を指定すると透明',
+				'conditions'          => array( 'design_menu_card_background' => 'transparent' ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '白を指定すると白',
+				'conditions'          => array( 'design_menu_card_background' => 'white' ),
+				'expected'            => 'white',
+			),
+			array(
+				'test_condition_name' => '空文字は透明',
+				'conditions'          => array( 'design_menu_card_background' => '' ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '不正文字列は透明',
+				'conditions'          => array( 'design_menu_card_background' => 'invalid' ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '配列は透明',
+				'conditions'          => array( 'design_menu_card_background' => array( 'white' ) ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '数値は透明',
+				'conditions'          => array( 'design_menu_card_background' => 1 ),
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '未送信は透明',
+				'conditions'          => array(),
+				'expected'            => 'transparent',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$result = ( new Settings_Sanitizer() )->sanitize( $case['conditions'], $defaults );
+			$this->assertSame( $case['expected'], $result['design_menu_card_background'], $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], Settings_Sanitizer::resolve_menu_card_background( $case['conditions'] ), $case['test_condition_name'] );
+		}
+	}
+
+	/** 透明・不正値には背景を付けず、白には背景を付ける。 */
+	public function test_has_menu_card_surface(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '白は背景あり',
+				'conditions'          => array( 'design_menu_card_background' => 'white' ),
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '透明は背景なし',
+				'conditions'          => array( 'design_menu_card_background' => 'transparent' ),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '不正値は背景なし',
+				'conditions'          => array( 'design_menu_card_background' => 'invalid' ),
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '未設定は背景なし',
+				'conditions'          => array(),
+				'expected'            => false,
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$this->assertSame( $case['expected'], Settings_Sanitizer::has_menu_card_surface( $case['conditions'] ), $case['test_condition_name'] );
+		}
+	}
+
 	/** 名簿設定のチェックを外した送信値を false として保存できる。 */
 	public function test_sanitize_attendee_roster_checkboxes_off(): void {
 		$defaults = ( new Settings_Repository() )->get_default_settings();

@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Assets\Common_Styles;
+use VKBookingManager\Bookings\Customer_Booking_Limit;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Lodging_Rate;
@@ -67,6 +68,7 @@ class Provider_Settings_Page {
 		'reservation_date_search_enabled',
 		'resource_tag_display_enabled',
 		'provider_slot_step_minutes',
+		'provider_customer_booking_limit',
 		'provider_allow_staff_overlap_admin',
 		'booking_customer_mode',
 		'booking_attendee_name_mode',
@@ -99,6 +101,7 @@ class Provider_Settings_Page {
 		'design_menu_heading_use_footer_color',
 		'design_header_logo_width',
 		'design_menu_search_style',
+		'design_menu_card_background',
 		'design_radius_md',
 	);
 
@@ -854,6 +857,7 @@ class Provider_Settings_Page {
 		}
 		$reservation_deadline_hours        = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
 		$max_advance_booking_days          = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
+		$customer_booking_limit            = isset( $settings[ Customer_Booking_Limit::SETTINGS_KEY ] ) ? (int) $settings[ Customer_Booking_Limit::SETTINGS_KEY ] : Customer_Booking_Limit::DEFAULT_LIMIT;
 		$slot_step_minutes                 = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : 15;
 		$service_menu_buffer_after_minutes = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
 		$booking_status_mode               = isset( $settings['provider_booking_status_mode'] ) ? (string) $settings['provider_booking_status_mode'] : Settings_Repository::BOOKING_STATUS_MODE_PENDING;
@@ -909,22 +913,24 @@ class Provider_Settings_Page {
 			$booking_reminder_rows       = array( '' );
 			$booking_reminder_next_index = 1;
 		}
-		$design_primary_color             = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
-		$design_menu_card_catch_color     = isset( $settings['design_menu_card_catch_color'] ) ? (string) $settings['design_menu_card_catch_color'] : '';
-		$design_reservation_button_color  = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
-		$design_menu_card_price_color     = isset( $settings['design_menu_card_price_color'] ) ? (string) $settings['design_menu_card_price_color'] : '';
-		$design_footer_background_color   = isset( $settings['design_footer_background_color'] ) ? (string) $settings['design_footer_background_color'] : '';
-		$design_footer_text_color         = isset( $settings['design_footer_text_color'] ) ? (string) $settings['design_footer_text_color'] : '';
-		$design_header_logo_width         = isset( $settings['design_header_logo_width'] ) ? (string) $settings['design_header_logo_width'] : '';
-		$design_menu_search_style         = isset( $settings['design_menu_search_style'] ) ? (string) $settings['design_menu_search_style'] : Settings_Sanitizer::DESIGN_MENU_SEARCH_STYLE_DEFAULT;
-		$design_menu_search_style_choices = Settings_Sanitizer::get_design_menu_search_style_choices();
-		$design_radius_md                 = self::clamp_design_radius_md_for_display( $settings );
-		$currency_symbol                  = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
-		$tax_label_text                   = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
-		$currency_placeholder             = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
-		$has_saved_license_key            = '' !== (string) get_option( 'vk-booking-manager-pro-license-key', '' );
-		$is_pro_edition                   = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
-		$show_license_tab                 = $is_pro_edition && current_user_can( 'manage_options' );
+		$design_primary_color                = isset( $settings['design_primary_color'] ) ? (string) $settings['design_primary_color'] : '';
+		$design_menu_card_catch_color        = isset( $settings['design_menu_card_catch_color'] ) ? (string) $settings['design_menu_card_catch_color'] : '';
+		$design_reservation_button_color     = isset( $settings['design_reservation_button_color'] ) ? (string) $settings['design_reservation_button_color'] : '';
+		$design_menu_card_price_color        = isset( $settings['design_menu_card_price_color'] ) ? (string) $settings['design_menu_card_price_color'] : '';
+		$design_footer_background_color      = isset( $settings['design_footer_background_color'] ) ? (string) $settings['design_footer_background_color'] : '';
+		$design_footer_text_color            = isset( $settings['design_footer_text_color'] ) ? (string) $settings['design_footer_text_color'] : '';
+		$design_header_logo_width            = isset( $settings['design_header_logo_width'] ) ? (string) $settings['design_header_logo_width'] : '';
+		$design_menu_card_background         = Settings_Sanitizer::resolve_menu_card_background( $settings );
+		$design_menu_card_background_choices = Settings_Sanitizer::get_design_menu_card_background_choices();
+		$design_menu_search_style            = isset( $settings['design_menu_search_style'] ) ? (string) $settings['design_menu_search_style'] : Settings_Sanitizer::DESIGN_MENU_SEARCH_STYLE_DEFAULT;
+		$design_menu_search_style_choices    = Settings_Sanitizer::get_design_menu_search_style_choices();
+		$design_radius_md                    = self::clamp_design_radius_md_for_display( $settings );
+		$currency_symbol                     = isset( $settings['currency_symbol'] ) ? (string) $settings['currency_symbol'] : '';
+		$tax_label_text                      = isset( $settings['tax_label_text'] ) ? (string) $settings['tax_label_text'] : '';
+		$currency_placeholder                = ( '' !== $locale && 0 === strpos( $locale, 'ja' ) ) ? '¥' : '$';
+		$has_saved_license_key               = '' !== (string) get_option( 'vk-booking-manager-pro-license-key', '' );
+		$is_pro_edition                      = class_exists( 'Free_Version_Deactivator' ) && \Free_Version_Deactivator::is_pro_edition( VKBM_PLUGIN_FILE );
+		$show_license_tab                    = $is_pro_edition && current_user_can( 'manage_options' );
 		// 「連携」タブ（Google カレンダー連携）は Pro 版限定（issue #475）。
 		$show_integration_tab = $this->show_integration_tab();
 		if ( ! in_array( $reservation_menu_list_display_mode, array( 'card', 'text' ), true ) ) {
@@ -1890,6 +1896,36 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 
+						<tr class="vkbm-provider-settings__tab-system">
+							<th scope="row" class="vkbm-provider-settings__label-nowrap">
+								<label for="vkbm-provider-customer-booking-limit"><?php esc_html_e( 'Maximum upcoming reservations per customer', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="number"
+									class="small-text"
+									id="vkbm-provider-customer-booking-limit"
+									name="vkbm_provider_settings[<?php echo esc_attr( Customer_Booking_Limit::SETTINGS_KEY ); ?>]"
+									min="0"
+									step="1"
+									value="<?php echo esc_attr( (string) $customer_booking_limit ); ?>"
+								/> <?php echo esc_html_x( 'reservations', 'unit of reservation count', 'vk-booking-manager' ); ?>
+								<p class="description">
+									<?php esc_html_e( 'The number of upcoming reservations a single customer can hold at the same time.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'A customer who has reached the limit cannot make a new reservation until one of their reservations ends or is cancelled.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'Set to 0 for no limit.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'Reservations whose date and time have passed, cancelled reservations, and no-show reservations are not counted.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'A reservation for multiple people or multiple nights counts as one.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description">
+									<?php esc_html_e( 'Pending reservations are also counted.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'Reservations that the store makes on behalf of customers are not stopped by this limit.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
 							<tr class="vkbm-provider-settings__tab-system">
 								<th scope="row">
 									<label for="vkbm-provider-booking-customer-mode"><?php esc_html_e( 'Reservation acceptance method', 'vk-booking-manager' ); ?></label>
@@ -2818,6 +2854,24 @@ class Provider_Settings_Page {
 									<?php esc_html_e( 'Use as the UI primary color (--vkbm--color--primary).', 'vk-booking-manager' ); ?>
 									<br />
 									<?php esc_html_e( "If not specified, the theme's primary color will be used if the theme's primary color (--wp--preset--color--primary) exists.", 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-design">
+							<th scope="row">
+								<label class="vkbm-provider-settings__balanced-label" for="vkbm-design-menu-card-background"><?php esc_html_e( 'Service menu card background', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<select id="vkbm-design-menu-card-background" name="vkbm_provider_settings[design_menu_card_background]" aria-describedby="vkbm-design-menu-card-background-description">
+									<?php foreach ( $design_menu_card_background_choices as $value => $label ) : ?>
+										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $design_menu_card_background, $value ); ?>><?php echo esc_html( $label ); ?></option>
+									<?php endforeach; ?>
+								</select>
+								<p class="description" id="vkbm-design-menu-card-background-description">
+									<?php esc_html_e( 'Choose White to give cards a white background and dark text so they stand out from a colored page background.', 'vk-booking-manager' ); ?><br />
+									<?php esc_html_e( 'Applies to menu cards on reservation pages, Menu Loop and Menu Card blocks, and framed search panels.', 'vk-booking-manager' ); ?><br />
+									<?php esc_html_e( 'Light catchphrase or price colors may be hard to read on white.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'Choose darker colors when using a white background.', 'vk-booking-manager' ); ?>
 								</p>
 							</td>
 						</tr>

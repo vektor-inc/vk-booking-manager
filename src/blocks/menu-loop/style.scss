@@ -390,6 +390,17 @@
 	}
 }
 
+// 提供期間の日付は、幅が狭いときに日付の途中（年だけが次の行に落ちるなど）で改行せず、
+// 日付と日付の境目で折り返す。
+.vkbm-service-period__date {
+	white-space: nowrap;
+}
+
+// 日付の外側の「から」「まで」も、語の途中（「か／ら」）で改行しない（改行できるのは日付との境目だけ）.
+.vkbm-service-period__text {
+	white-space: nowrap;
+}
+
 .vkbm-menu-loop__card-price {
 	color: var(--vkbm--color--menu-card-price, #d11c1c);
 	font-size: 1.2rem;
@@ -557,4 +568,20 @@
 .vkbm-menu-loop__button.is-disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
+}
+
+// カードの背景
+// -----------------------------------------------------------------------------
+
+.vkbm-menu-loop__card-item--has-surface {
+	background: var(--vkbm--color--menu-card-bg, #fff);
+	color: var(--vkbm--color--menu-card-text, var(--vkbm--color--surface-text, #333));
+}
+
+.vkbm-menu-loop__card-item--has-surface .vkbm-menu-loop__card-title {
+	color: inherit;
+}
+
+.vkbm-menu-loop__card-item--has-surface .vkbm-menu-loop__card-excerpt a {
+	color: var(--vkbm--color--link);
 }

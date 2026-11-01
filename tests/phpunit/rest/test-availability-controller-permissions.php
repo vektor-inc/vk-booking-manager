@@ -60,6 +60,55 @@ class Availability_Controller_Permissions_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 提供期間が終了したメニューの /calendar-meta 応答は、権限のない訪問者にも専用の案内（メニューの公開情報に
+	 * 起因するため）を返し、汎用文言に差し替えない。アーカイブ済みメニューは従来どおり汎用文言になる。
+	 */
+	public function test_handle_calendar_meta_keeps_service_period_ended_message_for_visitors(): void {
+		$yesterday = wp_date( 'Y-m-d', time() - DAY_IN_SECONDS, wp_timezone() );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '提供期間が終了済み => 専用の案内がそのまま返る',
+				'meta'                => array( '_vkbm_service_period_end' => $yesterday ),
+				'expected_code'       => 'menu_service_period_ended',
+				'expected_message'    => 'The service period of this menu has ended. Please choose another menu.',
+			),
+			array(
+				'test_condition_name' => 'アーカイブ済み => 従来どおり汎用文言',
+				'meta'                => array( '_vkbm_is_archived' => '1' ),
+				'expected_code'       => 'reservation_unavailable',
+				'expected_message'    => 'We are not currently accepting reservations for this content. Please choose a different menu, or contact the site administrator for assistance.',
+			),
+		);
+
+		wp_set_current_user( 0 );
+		$controller = new Availability_Controller( new Availability_Service() );
+
+		foreach ( $test_cases as $case ) {
+			$menu_id = (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+					'meta_input'  => $case['meta'],
+				)
+			);
+
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/calendar-meta' );
+			$request->set_param( 'menu_id', $menu_id );
+			$request->set_param( 'year', 2030 );
+			$request->set_param( 'month', 1 );
+			$request->set_param( 'timezone', 'Asia/Tokyo' );
+
+			$response = $controller->handle_calendar_meta( $request );
+
+			$this->assertInstanceOf( \WP_Error::class, $response, $case['test_condition_name'] );
+			$this->assertSame( $case['expected_code'], $response->get_error_code(), $case['test_condition_name'] );
+			$this->assertSame( $case['expected_message'], $response->get_error_message(), $case['test_condition_name'] );
+			$this->assertSame( array( 'status' => 400 ), $response->get_error_data(), $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * 担当スタッフ未設定（staff_not_configured）のメニューに対する /calendar-meta 応答を、
 	 * 匿名訪問者・購読者（権限なし）・管理者（権限あり）でそれぞれ検証する。
 	 *

@@ -30,6 +30,37 @@ use WP_UnitTestCase;
  * @group provider-settings
  */
 class Provider_Settings_Controller_Menu_Display_Test extends WP_UnitTestCase {
+	/** REST には正規化済みのカード背景だけを渡す。 */
+	public function test_menu_card_background(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '白を公開',
+				'conditions'          => 'white',
+				'expected'            => 'white',
+			),
+			array(
+				'test_condition_name' => '透明を公開',
+				'conditions'          => 'transparent',
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '不正文字列は透明',
+				'conditions'          => 'invalid',
+				'expected'            => 'transparent',
+			),
+			array(
+				'test_condition_name' => '配列は透明',
+				'conditions'          => array( 'white' ),
+				'expected'            => 'transparent',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			update_option( Settings_Repository::OPTION_KEY, array( 'design_menu_card_background' => $case['conditions'] ) );
+			$data = ( new Provider_Settings_Controller( new Settings_Repository() ) )->get_settings()->get_data();
+			$this->assertSame( $case['expected'], $data['reservation_menu_card_background'], $case['test_condition_name'] );
+		}
+	}
+
 	/**
 	 * 公開設定には利用者名のモードと見出しだけを返す。
 	 */

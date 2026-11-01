@@ -13,11 +13,14 @@ import { joinSentences } from '../booking-ui/join-sentences';
 import { GuestCountInput } from '../booking-ui/guest-count-input';
 import { formatCurrency } from '../../shared/pricing';
 import { formatGuestsCount } from '../../shared/guests';
-import { resolveApiErrorMessage } from '../../shared/rest-error-message';
+import {
+	buildBookingsViewUrl,
+	resolveApiErrorMessage,
+} from '../../shared/rest-error-message';
 import { formatReservationDate } from '../date-format';
 import { LodgingRangeCalendar } from './lodging-range-calendar';
 import { LodgingRoomList } from './lodging-room-list';
-import { NightBreakdown, NightRates } from './night-rates';
+import { NightRates, getNightPrice } from './night-rates';
 import {
 	addDays,
 	applyDateClick,
@@ -26,6 +29,10 @@ import {
 	parseIsoDate,
 	shiftMonth,
 } from './stay-dates';
+import {
+	LODGING_CALENDAR_MAX_YEARS_AHEAD,
+	getFetchableStartMonth,
+} from '../booking-ui/service-period';
 import './lodging.scss';
 
 // 空き状況の窓口が受け付ける年の上限（今年 + 2 年）。PHP の get_lodging_calendar_meta() と同じ値を持つ。
@@ -79,26 +86,28 @@ const DateTimeValue = ( date, time ) => (
  * 選択中の表示 → 予約へ進む」。料金は人数で変わるため人数を先に入力する。
  * 空室と料金はサーバー（/vkbm/v1/lodging-availabilities）が計算した値をそのまま表示する。
  *
- * @param {Object}   props
- * @param {number}   props.menuId                選択中のメニュー（泊単位のプラン）の ID。
- * @param {string}   props.menuTitle             メニュー名。
- * @param {Object}   props.lodging               メニューの REST フィールド vkbm_lodging（人数の上限・料金区分・料金の単位・時刻）。
- * @param {string}   props.locale                WordPress のロケール。
- * @param {string}   props.guestsCountLabel      人数の見出し（業種プリセットの呼び方）。
- * @param {string}   props.guestsUnitLabel       人数の単位。
- * @param {?string}  props.currencySymbol        通貨記号。
- * @param {string}   props.resourceLabelSingular 客室の呼び方。
- * @param {boolean}  props.isEditor              ブロックエディターの中か。
- * @param {string}   props.initialCheckIn        最初から選んでおくチェックイン日（YYYY-MM-DD。絞り込み検索で選んだ日程の引き継ぎ。空文字は引き継ぎなし）。
- * @param {string}   props.initialCheckOut       最初から選んでおくチェックアウト日（YYYY-MM-DD。空文字は引き継ぎなし）。
- * @param {boolean}  props.isCarriedDatePast     URL で受け取った日程が過ぎていて引き継げなかったか（日程選択の直上で案内する）。
- * @param {Function} props.onSubmitDraft         下書きの内容を渡して保存・確認画面へ移動する関数（Promise を返す）。
+ * @param {Object}                         props
+ * @param {number}                         props.menuId                  選択中のメニュー（泊単位のプラン）の ID。
+ * @param {string}                         props.menuTitle               メニュー名。
+ * @param {Object}                         props.lodging                 メニューの REST フィールド vkbm_lodging（人数の上限・料金区分・料金の単位・時刻）。
+ * @param {?{year: number, month: number}} props.servicePeriodStartMonth 提供期間の開始日が今日より先のときの開始日の年月（カレンダーの初期表示月に使う。なければ null）。
+ * @param {string}                         props.locale                  WordPress のロケール。
+ * @param {string}                         props.guestsCountLabel        人数の見出し（業種プリセットの呼び方）。
+ * @param {string}                         props.guestsUnitLabel         人数の単位。
+ * @param {?string}                        props.currencySymbol          通貨記号。
+ * @param {string}                         props.resourceLabelSingular   客室の呼び方。
+ * @param {boolean}                        props.isEditor                ブロックエディターの中か。
+ * @param {string}                         props.initialCheckIn          最初から選んでおくチェックイン日（YYYY-MM-DD。絞り込み検索で選んだ日程の引き継ぎ。空文字は引き継ぎなし）。
+ * @param {string}                         props.initialCheckOut         最初から選んでおくチェックアウト日（YYYY-MM-DD。空文字は引き継ぎなし）。
+ * @param {boolean}                        props.isCarriedDatePast       URL で受け取った日程が過ぎていて引き継げなかったか（日程選択の直上で案内する）。
+ * @param {Function}                       props.onSubmitDraft           下書きの内容を渡して保存・確認画面へ移動する関数（Promise を返す）。
  * @return {JSX.Element} 宿泊用の予約画面。
  */
 const LodgingBookingPanel = ( {
 	menuId,
 	menuTitle,
 	lodging,
+	servicePeriodStartMonth = null,
 	locale,
 	guestsCountLabel,
 	guestsUnitLabel,
@@ -136,8 +145,23 @@ const LodgingBookingPanel = ( {
 	const hasInitialRange = Boolean(
 		parseIsoDate( initialCheckIn ) && parseIsoDate( initialCheckOut )
 	);
+	// 提供期間の開始月（effect の依存に使うため、数値に分けておく。なければ 0）。
+	// 宿泊カレンダー API が取得できる範囲より先の開始月は、そこへ移動すると取得エラーになり次の月へも進めないため、開始月として使わない（範囲内の今月などを維持する）。
+	const fetchableStartMonth = getFetchableStartMonth(
+		servicePeriodStartMonth,
+		Number( todayIso.slice( 0, 4 ) ) + LODGING_CALENDAR_MAX_YEARS_AHEAD
+	);
+	const servicePeriodStartYear = fetchableStartMonth?.year ?? 0;
+	const servicePeriodStartMonthNumber = fetchableStartMonth?.month ?? 0;
 	// 引き継いだ日程の月から表示する（引き継ぎが無ければ今月）。
+	// 引き継ぎが無く、提供期間の開始日が先の日付のときは、開始日の月から表示する。
 	const [ monthCursor, setMonthCursor ] = useState( () => {
+		if ( ! hasInitialRange && fetchableStartMonth ) {
+			return {
+				year: fetchableStartMonth.year,
+				month: fetchableStartMonth.month,
+			};
+		}
 		const start = parseIsoDate(
 			hasInitialRange ? initialCheckIn : getTodayIso()
 		);
@@ -185,6 +209,19 @@ const LodgingBookingPanel = ( {
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
 	const [ submitError, setSubmitError ] = useState( '' );
 	const requestIdRef = useRef( 0 );
+	const previousPriceAvailabilityRef = useRef( null );
+	// 客室を選ぶ前の通知で、同じ日程の再取得（人数の変更）か、日程を選んだ直後の初回かを見分ける。
+	const lastDoneStayKeyRef = useRef( null );
+	const [ priceStatusText, setPriceStatusText ] = useState( '' );
+	const [ pendingPriceAnnouncement, setPendingPriceAnnouncement ] =
+		useState( null );
+	const priceAnnouncementTimerRef = useRef( null );
+	const cancelPriceAnnouncement = useCallback( () => {
+		clearTimeout( priceAnnouncementTimerRef.current );
+		priceAnnouncementTimerRef.current = null;
+		setPendingPriceAnnouncement( null );
+		setPriceStatusText( '' );
+	}, [] );
 
 	const guestCount = hasTiers
 		? tierCounts.reduce( ( total, count ) => total + count, 0 )
@@ -275,17 +312,28 @@ const LodgingBookingPanel = ( {
 		};
 	}, [ menuId, range.checkIn, range.checkOut ] );
 
-	// 日程・人数が変わったら、空いている客室を問い合わせ直す。
+	// 日程・人数が変わったら、前の通知予約を取り消して空室を問い合わせ直す。
 	useEffect( () => {
+		cancelPriceAnnouncement();
 		if ( ! isRangeComplete || ! isGuestCountValid ) {
 			requestIdRef.current += 1;
+			// 日程を空にした／人数が範囲外になったら、次に同じ日程を選び直したときは初回として扱う。
+			lastDoneStayKeyRef.current = null;
 			setAvailability( { status: 'idle', data: null, error: '' } );
 			return;
 		}
 
 		requestIdRef.current += 1;
 		const requestId = requestIdRef.current;
-		setAvailability( { status: 'loading', data: null, error: '' } );
+		// 同じ日程の再取得（人数の変更）の間は、直前の結果を残して泊ごとの料金の表を出したままにする
+		// （表が外れて再マウントされると、画面の高さが跳ね、開いた <details> も閉じる）。日程が変わったときは捨てる。
+		const stayKey = `${ range.checkIn }|${ range.checkOut }`;
+		setAvailability( ( current ) => ( {
+			status: 'loading',
+			data: current.stayKey === stayKey ? current.data : null,
+			error: '',
+			stayKey,
+		} ) );
 
 		apiFetch( {
 			path: addQueryArgs( '/vkbm/v1/lodging-availabilities', {
@@ -305,6 +353,7 @@ const LodgingBookingPanel = ( {
 					status: 'done',
 					data: response,
 					error: '',
+					stayKey,
 				} );
 			} )
 			.catch( ( error ) => {
@@ -324,9 +373,13 @@ const LodgingBookingPanel = ( {
 					),
 				} );
 			} );
+		return () => {
+			requestIdRef.current += 1;
+		};
 		// tierCounts は内容が同じ間は再取得しないよう、文字列化した tierCountsKey で見る。
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
+		cancelPriceAnnouncement,
 		menuId,
 		range.checkIn,
 		range.checkOut,
@@ -346,17 +399,91 @@ const LodgingBookingPanel = ( {
 		[ availability ]
 	);
 	const selectedRoom = rooms.find( ( room ) => room.id === selectedRoomId );
-	// 休前日・特定日の料金を設定したプランだけ、泊ごとの区分と内訳を出す（サーバーが判定する）。
+	// 予約者区分または休前日・特定日の料金があるプランで、泊ごとの内訳を出す（サーバーが判定する）。
+	// 同じ日程の再取得中（status が loading で直前の結果が残っている間）も、表は出したままにする。
 	const isRateTiersEnabled =
-		availability.status === 'done' &&
+		( availability.status === 'done' ||
+			( availability.status === 'loading' &&
+				availability.data !== null ) ) &&
 		availability.data?.rate_tiers_enabled === true;
-	const nightRates = isRateTiersEnabled
-		? availability.data?.night_rates ?? []
-		: [];
+	// 通知の effect の依存に入れるため、同じ取得結果の間は同じ配列を返す。
+	const nightRates = useMemo(
+		() =>
+			isRateTiersEnabled ? availability.data?.night_rates ?? [] : [],
+		[ isRateTiersEnabled, availability ]
+	);
 	const checkInTime =
 		availability.data?.check_in_time || lodging?.check_in_time || '';
 	const checkOutTime =
 		availability.data?.check_out_time || lodging?.check_out_time || '';
+
+	// 即時応答ではloadingの描画が省略されるため、描画状態の遷移ではなく新しい取得結果を判定する。
+	// 初回取得・客室選択では通知せず、再取得成功時（客室選択済みならその客室、未選択なら泊ごとの料金）だけ短い合計を知らせる。
+	useEffect( () => {
+		const isNewResult =
+			previousPriceAvailabilityRef.current !== availability;
+		previousPriceAvailabilityRef.current = availability;
+		cancelPriceAnnouncement();
+		if ( availability.status === 'done' && isNewResult ) {
+			// 客室を選んでいるときはその客室の合計、選ぶ前は泊ごとの料金（nightRates）の合計を知らせる。
+			// 客室を選ぶ前は、同じ日程で取得し直したとき（人数の変更）だけ知らせ、日程を選んだ直後の初回は知らせない。
+			const stayKey = `${ range.checkIn }|${ range.checkOut }`;
+			const isRefetchForSameStay = lastDoneStayKeyRef.current === stayKey;
+			lastDoneStayKeyRef.current = stayKey;
+			const nightPrices = nightRates.map( getNightPrice );
+			let total = null;
+			if ( selectedRoom ) {
+				total = selectedRoom.total_price;
+			} else if (
+				isRefetchForSameStay &&
+				nightPrices.length > 0 &&
+				nightPrices.every( ( price ) => price !== null )
+			) {
+				total = nightPrices.reduce( ( sum, price ) => sum + price, 0 );
+			}
+			if ( total !== null ) {
+				setPendingPriceAnnouncement( {
+					requestId: requestIdRef.current,
+					text: sprintf(
+						/* translators: 1: 更新後の泊数、2: 更新後の宿泊合計金額。 */
+						_n(
+							'Price updated: %1$d night, total %2$s.',
+							'Price updated: %1$d nights, total %2$s.',
+							nights,
+							'vk-booking-manager'
+						),
+						nights,
+						formatCurrency( total, currencySymbol )
+					),
+				} );
+			}
+		}
+	}, [
+		availability,
+		selectedRoom,
+		nightRates,
+		range.checkIn,
+		range.checkOut,
+		nights,
+		currencySymbol,
+		cancelPriceAnnouncement,
+	] );
+
+	// 空の通知領域がコミットされた後のeffectで予約し、同額の即時応答でもDOMを更新する。
+	useEffect( () => {
+		if ( ! pendingPriceAnnouncement ) {
+			return;
+		}
+		priceAnnouncementTimerRef.current = setTimeout( () => {
+			if ( pendingPriceAnnouncement.requestId === requestIdRef.current ) {
+				setPriceStatusText( pendingPriceAnnouncement.text );
+			}
+			priceAnnouncementTimerRef.current = null;
+		}, 100 );
+		return () => {
+			clearTimeout( priceAnnouncementTimerRef.current );
+		};
+	}, [ pendingPriceAnnouncement ] );
 
 	// 引き継いだ日程がこのプランで選べないとき（受付期間・締切の外、または空室なし）は、別の日へ差し替えず空に戻す。
 	// 空室が届いて選べると分かったら、引き継ぎの確認は終わり。
@@ -383,10 +510,28 @@ const LodgingBookingPanel = ( {
 			setIsRoomLost( false );
 			setRange( { checkIn: '', checkOut: '' } );
 			setCarryNotice( { kind: 'unavailable', range: carried } );
+			// 提供期間の開始日が先のとき、表示月が開始月より前に残らないよう開始月へ移す（開始月以降の表示月は維持する）。
+			if ( servicePeriodStartYear && servicePeriodStartMonthNumber ) {
+				setMonthCursor( ( current ) =>
+					current.year * 12 + current.month <
+					servicePeriodStartYear * 12 + servicePeriodStartMonthNumber
+						? {
+								year: servicePeriodStartYear,
+								month: servicePeriodStartMonthNumber,
+						  }
+						: current
+				);
+			}
 		} else if ( availability.status === 'done' ) {
 			carriedRangeRef.current = null;
 		}
-	}, [ availability.status, rooms, range ] );
+	}, [
+		availability.status,
+		rooms,
+		range,
+		servicePeriodStartYear,
+		servicePeriodStartMonthNumber,
+	] );
 
 	// 結果が届いたとき、選んでいた客室が無ければ選択を外して知らせる（読み込み中は外さない）。
 	useEffect( () => {
@@ -606,7 +751,8 @@ const LodgingBookingPanel = ( {
 						'Failed to save reservation details. Please try again later.',
 						'vk-booking-manager'
 					),
-					false
+					false,
+					buildBookingsViewUrl()
 				)
 			);
 			setIsSubmitting( false );
@@ -747,13 +893,15 @@ const LodgingBookingPanel = ( {
 								<span className="text-nowrap">
 									{ tier.label }
 								</span>
-								<span className="vkbm-plan-summary__guest-tier-price">
-									{ isExtraGuestFee ? '+' : '' }
-									{ formatCurrency(
-										tier.price,
-										currencySymbol
-									) }
-								</span>
+								{ isExtraGuestFee && (
+									<span className="vkbm-plan-summary__guest-tier-price">
+										+
+										{ formatCurrency(
+											tier.price,
+											currencySymbol
+										) }
+									</span>
+								) }
 							</label>
 							<GuestCountInput
 								id={ `${ idPrefix }-tier-${ index }` }
@@ -966,13 +1114,6 @@ const LodgingBookingPanel = ( {
 		);
 	};
 
-	// 泊ごとの内訳を出すか。出すときだけ、内訳と合計金額の間に区切り線を挟む。
-	const hasBreakdown =
-		!! selectedRoom &&
-		isRateTiersEnabled &&
-		Array.isArray( selectedRoom.night_breakdown ) &&
-		selectedRoom.night_breakdown.length > 0;
-
 	return (
 		<div className="vkbm-lodging">
 			{ renderGuestsInput() }
@@ -1045,8 +1186,20 @@ const LodgingBookingPanel = ( {
 				) }
 			</div>
 
+			<div
+				role="status"
+				aria-atomic="true"
+				className="vkbm-lodging__sr-only vkbm-lodging__price-status"
+			>
+				{ priceStatusText }
+			</div>
+
 			{ isRangeComplete && isRateTiersEnabled && (
-				<NightRates nights={ nightRates } locale={ locale } />
+				<NightRates
+					nights={ nightRates }
+					locale={ locale }
+					currencySymbol={ currencySymbol }
+				/>
 			) }
 
 			{ isRangeComplete && (
@@ -1148,25 +1301,17 @@ const LodgingBookingPanel = ( {
 						</div>
 						{ selectedRoom && (
 							<div className="vkbm-lodging__summary-column vkbm-lodging__summary-column--price">
-								{ isRateTiersEnabled && (
-									<NightBreakdown
-										nights={ selectedRoom.night_breakdown }
-										nightRates={ nightRates }
-										locale={ locale }
-										currencySymbol={ currencySymbol }
-									/>
-								) }
-								{ hasBreakdown && (
-									<div
-										className="vkbm-lodging__summary-rule"
-										aria-hidden="true"
-									/>
-								) }
 								<dl className="vkbm-lodging__summary-list vkbm-lodging__summary-list--total">
 									<SummaryLine
-										label={ __(
-											'Total amount',
-											'vk-booking-manager'
+										label={ sprintf(
+											/* translators: %d: 泊数。 */
+											_n(
+												'Total for %d night',
+												'Total for %d nights',
+												nights,
+												'vk-booking-manager'
+											),
+											nights
 										) }
 										value={ formatCurrency(
 											selectedRoom.total_price,

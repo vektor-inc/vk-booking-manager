@@ -526,6 +526,12 @@
 			"Reservation date and time": [
 				"予約日時"
 			],
+			"You can have up to %d reservation at the same time.": [
+				"同時にお取りいただける予約は%d件までです。"
+			],
+			"Please apply again after your current reservations have ended or been cancelled.": [
+				"現在お持ちの予約が終わるか、キャンセルしてからお申し込みください。"
+			],
 			"We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page.": [
 				"ご予約内容を確認のうえ、予約確定のご連絡をメールでお送りします。確定のメールが届くまで、しばらくお待ちください。この画面は閉じていただいて構いません。"
 			],
@@ -583,6 +589,9 @@
 			"Please contact the store directly.": [
 				"店舗へ直接お問い合わせください。"
 			],
+			"You can cancel from the cancellation link in your reservation confirmation email.": [
+				"お手元の予約確認メールのキャンセル用リンクからキャンセルできます。"
+			],
 			"This confirmation link is not valid": [
 				"この確認リンクは正しくありません"
 			],
@@ -615,6 +624,9 @@
 			],
 			"%s~": [
 				"%s〜"
+			],
+			"Price updated: %1$d night, total %2$s.": [
+				"料金を更新しました：%1$d泊、合計%2$s。"
 			],
 			"%s cannot be selected as the check-out date because it exceeds the maximum number of nights.": [
 				"%s はチェックアウト日に選べません（泊数の上限を超えています）。"
@@ -694,8 +706,8 @@
 			"The room you selected is no longer available. Please select again.": [
 				"選んでいた客室は選べなくなりました。もう一度お選びください。"
 			],
-			"Total amount": [
-				"合計金額"
+			"Total for %d night": [
+				"%d泊合計"
 			],
 			"Select a %s to proceed to reservation.": [
 				"%sを選ぶと、予約に進めます。"
@@ -760,8 +772,20 @@
 			"See each night": [
 				"泊ごとに見る"
 			],
+			"%s / person": [
+				"%s / 1名"
+			],
+			"× %d": [
+				"× %d名"
+			],
+			"Subtotal": [
+				"小計"
+			],
 			"Plan price %1$s + room surcharge %2$s": [
 				"プラン料金 %1$s + 客室の追加料金 %2$s"
+			],
+			"Subtotal for this night": [
+				"この泊の小計"
 			],
 			"Breakdown by night": [
 				"泊ごとの内訳"

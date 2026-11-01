@@ -514,6 +514,7 @@ const ReadOnlyField = ( { label, value, placeholder } ) => (
 export const SelectedPlanSummary = ( {
 	// 絞り込み検索のデザイン（plain / framed など）。plain 以外は修飾クラスを付ける。
 	searchStyle = 'plain',
+	menuCardBackground = 'transparent',
 	menuId,
 	staffId,
 	menus,
@@ -682,9 +683,13 @@ export const SelectedPlanSummary = ( {
 			    plain 以外は --{searchStyle} の修飾クラスを付ける（#779）。 */ }
 			<div
 				className={
-					'plain' === searchStyle
+					( 'plain' === searchStyle
 						? 'vkbm-plan-summary__search'
-						: `vkbm-plan-summary__search vkbm-plan-summary__search--${ searchStyle }`
+						: `vkbm-plan-summary__search vkbm-plan-summary__search--${ searchStyle }` ) +
+					( searchStyle === 'framed' &&
+					'transparent' !== menuCardBackground
+						? ' vkbm-plan-summary__search--has-surface'
+						: '' )
 				}
 			>
 				{ /* 宿泊のサイトは、チェックイン日・チェックアウト日・泊数を、メニュー・客室のプルダウンより上の独立した 1 行に置く。 */ }

@@ -31,6 +31,13 @@ import {
 	filterLodgingStaffOptions,
 } from './booking-ui/staff-options';
 import { getTodayIso } from './lodging/stay-dates';
+import {
+	TIME_SLOT_CALENDAR_MAX_YEAR,
+	createLatestRequestGuard,
+	filterSelectableMenus,
+	getFetchableStartMonth,
+	getUpcomingStartMonth,
+} from './booking-ui/service-period';
 import { formatReservationDate } from './date-format';
 import {
 	extractMenuBasePrice,
@@ -38,7 +45,10 @@ import {
 	normalizePriceValue,
 } from '../shared/pricing';
 import { resolveLoginState } from '../shared/auth';
-import { resolveApiErrorMessage } from '../shared/rest-error-message';
+import {
+	buildBookingsViewUrl,
+	resolveApiErrorMessage,
+} from '../shared/rest-error-message';
 import { BookingConfirmApp } from './booking-confirm-app';
 import { isLodgingReservation } from '../shared/reservation-config';
 import {
@@ -551,6 +561,7 @@ export const ReservationApp = ( {
 		providerLogoWidth: 0,
 		// 絞り込み検索のデザイン（plain / framed）。REST の reservation_menu_search_style を受ける。
 		menuSearchStyle: 'plain',
+		menuCardBackground: 'transparent',
 		closedDayLabel: '',
 		otherConditionsLabel: __( 'Other conditions', 'vk-booking-manager' ),
 		// 数量の見出し（複数人一括予約）。REST が実効値を返す。
@@ -664,16 +675,25 @@ export const ReservationApp = ( {
 	//   対応スタッフの中にタグを持つリソースが1人でも含まれるメニューだけ残す（AND条件）。
 	//   いずれもサーバー側 Menu_Loop_Block::is_menu_visible_for_tag_filter() と同じ判定に揃える。
 	const staffActive = staffFilterAllowed && staffFilterId > 0;
+	// 提供期間が終了したメニューは、選択肢から外す。
+	// ただしメニュー選択済み（メニュー ID 付きのリンクなど）のときは、選択中のメニューだけは終了済みでも残す
+	// （選択中のメニューが消えないように。ほかの終了済みメニューは外し、選択後に選択肢へ再び出ないようにする）。
+	const siteTodayForServicePeriod =
+		providerSettings.siteToday || getTodayIso();
+	const selectableMenus = useMemo(
+		() => filterSelectableMenus( menus, menuId, siteTodayForServicePeriod ),
+		[ menus, menuId, siteTodayForServicePeriod ]
+	);
 	const staffTagFilteredMenus = useMemo( () => {
 		if (
 			menuId ||
 			! shouldShowMenuSearch ||
 			( ! staffActive && ! tagFilterActive )
 		) {
-			return menus;
+			return selectableMenus;
 		}
 
-		return menus.filter( ( menu ) => {
+		return selectableMenus.filter( ( menu ) => {
 			if ( staffActive && menu?.meta?._vkbm_disable_nomination ) {
 				return false;
 			}
@@ -710,7 +730,7 @@ export const ReservationApp = ( {
 			return true;
 		} );
 	}, [
-		menus,
+		selectableMenus,
 		menuId,
 		shouldShowMenuSearch,
 		staffActive,
@@ -1051,6 +1071,9 @@ export const ReservationApp = ( {
 						Number( settings?.provider_logo_width ) > 0
 							? Number( settings.provider_logo_width )
 							: 0,
+					menuCardBackground:
+						settings?.reservation_menu_card_background ||
+						'transparent',
 					menuSearchStyle:
 						typeof settings?.reservation_menu_search_style ===
 						'string'
@@ -2377,7 +2400,13 @@ export const ReservationApp = ( {
 		? slotError
 		: calendarError || slotError;
 
+	// カレンダー取得の要求ごとに進める識別子。古い要求の応答で、新しい要求の表示を上書きしないために使う。
+	const calendarRequestGuardRef = useRef( createLatestRequestGuard() );
+
 	const fetchCalendar = useCallback( () => {
+		// 要求ごとに識別子を進める（早期 return の場合も進め、待っている古い応答を無効にする）。
+		const isLatestRequest = calendarRequestGuardRef.current.begin();
+
 		// 泊単位のプランは宿泊用の画面が自分で空室を取得するため、時間枠のカレンダーは取得しない。
 		if (
 			! menuId ||
@@ -2387,6 +2416,8 @@ export const ReservationApp = ( {
 		) {
 			setCalendarData( null );
 			setCalendarUnavailabilityReason( null );
+			// 待っていた古い要求は無効にしたため、その finally では読み込み中を解除されない。ここで解除する。
+			setCalendarLoading( false );
 			return;
 		}
 
@@ -2410,6 +2441,9 @@ export const ReservationApp = ( {
 
 		apiFetch( { path } )
 			.then( ( response ) => {
+				if ( ! isLatestRequest() ) {
+					return;
+				}
 				setCalendarData( response );
 				// 成功応答でも、has_bookable_day() が false のときだけサーバー側で
 				// unavailability_reason が付与される（無ければ null）。
@@ -2418,6 +2452,9 @@ export const ReservationApp = ( {
 				);
 			} )
 			.catch( ( error ) => {
+				if ( ! isLatestRequest() ) {
+					return;
+				}
 				setCalendarError(
 					resolveApiErrorMessage(
 						error,
@@ -2433,6 +2470,9 @@ export const ReservationApp = ( {
 				);
 			} )
 			.finally( () => {
+				if ( ! isLatestRequest() ) {
+					return;
+				}
 				setCalendarLoading( false );
 			} );
 	}, [
@@ -2582,6 +2622,37 @@ export const ReservationApp = ( {
 				: current
 		);
 	}, [ currentMenu, isLodgingMenu ] );
+
+	// 提供期間の開始日が先の日付のメニューを選んだときは、カレンダーを開始日の月から表示する。
+	// すでに開始日の月以降を表示しているとき（URL の日付など）は動かさない。
+	// 宿泊のプランは、宿泊用の画面が自分の初期表示月を決める。
+	// カレンダー API が取得できる範囲より先の開始月へは移動しない（取得エラーになり次の月へも進めなくなるため）。
+	const servicePeriodStartMonth =
+		currentMenu && ! isLodgingMenu
+			? getFetchableStartMonth(
+					getUpcomingStartMonth(
+						currentMenu,
+						siteTodayForServicePeriod
+					),
+					TIME_SLOT_CALENDAR_MAX_YEAR
+			  )
+			: null;
+	const servicePeriodStartKey = servicePeriodStartMonth
+		? `${ menuId }-${ servicePeriodStartMonth.year }-${ servicePeriodStartMonth.month }`
+		: '';
+	useEffect( () => {
+		if ( ! servicePeriodStartKey ) {
+			return;
+		}
+		setMonthCursor( ( current ) =>
+			current.year * 12 + current.month <
+			servicePeriodStartMonth.year * 12 + servicePeriodStartMonth.month
+				? servicePeriodStartMonth
+				: current
+		);
+		// 開始日の月が変わったとき（別のメニューを選んだときを含む）だけ動かす。利用者が月を戻した操作は上書きしない.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ servicePeriodStartKey ] );
 
 	const handleMonthChange = ( delta ) => {
 		setMonthCursor( ( current ) => {
@@ -3223,7 +3294,8 @@ export const ReservationApp = ( {
 							'Failed to save reservation details. Please try again later.',
 							'vk-booking-manager'
 						),
-						canManageReservations
+						canManageReservations,
+						buildBookingsViewUrl()
 					)
 				);
 			} )
@@ -3715,6 +3787,9 @@ export const ReservationApp = ( {
 								<SelectedPlanSummary
 									// デザイン設定のデザイン（枠で囲うなど）は、「絞り込み検索」の ON/OFF に関係なく、
 									// この検索欄が表示されているすべての画面（メニュー選択後を含む）へ同じように当てる（#787）。
+									menuCardBackground={
+										providerSettings.menuCardBackground
+									}
 									searchStyle={
 										providerSettings.menuSearchStyle
 									}
@@ -3886,6 +3961,10 @@ export const ReservationApp = ( {
 									''
 								}
 								lodging={ currentMenu.vkbm_lodging }
+								servicePeriodStartMonth={ getUpcomingStartMonth(
+									currentMenu,
+									siteTodayForServicePeriod
+								) }
 								locale={ userBootstrap?.locale }
 								guestsCountLabel={
 									providerSettings.guestsCountLabel

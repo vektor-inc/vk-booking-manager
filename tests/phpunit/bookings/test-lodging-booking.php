@@ -616,6 +616,52 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 泊の確定: チェックイン日が提供期間の外なら service_period_out_of_range（400）で断り、期間内なら終了日をまたぐ連泊も確定できる。
+	 */
+	public function test_create_booking_checks_service_period(): void {
+		$room = $this->create_room();
+		wp_set_current_user( $this->factory()->user->create() );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '下書きの保存後に提供期間が終わり、チェックイン日が終了日の翌日になった => service_period_out_of_range:400',
+				'in_days'             => 10,
+				'nights'              => 2,
+				'period_end_days'     => 9,
+				'expected'            => 'service_period_out_of_range:400',
+			),
+			array(
+				'test_condition_name' => '下書きの保存後に提供期間の開始日が先になり、チェックイン日が開始日の前日になった => service_period_out_of_range:400',
+				'in_days'             => 10,
+				'nights'              => 1,
+				'period_start_days'   => 11,
+				'expected'            => 'service_period_out_of_range:400',
+			),
+			array(
+				'test_condition_name' => 'チェックイン日が終了日の当日で、チェックアウトが終了日より後 => 確定できる',
+				'in_days'             => 10,
+				'nights'              => 2,
+				'period_end_days'     => 10,
+				'expected'            => 'ok',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$menu_id = $this->create_menu( array( $room ) );
+			$token   = $this->save_draft_token( $this->lodging_payload( $menu_id, $room, $case['in_days'], $case['nights'] ) );
+			if ( isset( $case['period_end_days'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_service_period_end', $this->date_after( $case['period_end_days'] ) );
+			}
+			if ( isset( $case['period_start_days'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_service_period_start', $this->date_after( $case['period_start_days'] ) );
+			}
+
+			$this->assertSame( $case['expected'], $this->code_of( $this->confirm( $token ) ), $case['test_condition_name'] );
+			$this->assertSame( 0, $this->count_slot_lock_rows(), $case['test_condition_name'] . '（ロックが残らない）' );
+		}
+	}
+
+	/**
 	 * 休前日の料金がある泊のプラン（#737）: 金曜から 2 泊で、金曜は平日・土曜は休前日の単価になり、
 	 * 空室一覧・下書き・確定が同じ合計になる。泊ごとの内訳は予約に固定で保存され、単価が違うため 1泊あたりの合計は保存しない。
 	 */

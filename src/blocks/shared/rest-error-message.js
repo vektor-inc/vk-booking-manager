@@ -18,6 +18,32 @@
 import { __ } from '@wordpress/i18n';
 
 /**
+ * お客様1人あたりの予約数の上限に達したときの REST のエラーコード。
+ *
+ * サーバー（Customer_Booking_Limit::ERROR_CODE）が、下書きの保存と予約の確定で返す。
+ */
+export const BOOKING_LIMIT_REACHED_CODE = 'vkbm_booking_limit_reached';
+
+/**
+ * 今開いている予約ページで、持っている予約を確認する画面（予約内容確認）を開く URL を返す。
+ *
+ * 予約数の上限に達したことを伝える文言に添えるリンクのリンク先として使う。
+ *
+ * @return {string} URL。ブラウザ以外（テストなど）では空文字列。
+ */
+export const buildBookingsViewUrl = () => {
+	if ( typeof window === 'undefined' ) {
+		return '';
+	}
+
+	const url = new URL( window.location.href );
+	url.searchParams.set( 'vkbm_auth', 'bookings' );
+	url.searchParams.delete( 'draft' );
+
+	return url.toString();
+};
+
+/**
  * `window.vkbmReservationConfig.permalinkSettingsUrl` を読み取る。
  *
  * PHP 側（Reservation_Block::maybe_enqueue_reservation_config()）が
@@ -42,13 +68,31 @@ const getPermalinkSettingsUrl = () => {
  * @param {Object}  error                 apiFetch が reject したエラーオブジェクト。
  * @param {string}  fallbackMessage       invalid_json 以外のときに使う、呼び出し側の通常のフォールバック文言。
  * @param {boolean} canManageReservations 現在のユーザーが予約管理権限を持つか（管理者向け文言の出し分けに使う）。
- * @return {string|JSX.Element} 画面に表示するエラーメッセージ（文字列、または管理者向けリンクを含む React ノード）。
+ * @param {string}  bookingsUrl           予約数の上限に達したときに、持っている予約を確認できる画面（予約内容確認）へ案内するリンク先。空なら文言だけを返す。
+ * @return {string|JSX.Element} 画面に表示するエラーメッセージ（文字列、または管理者向け・予約数の上限のリンクを含む React ノード）。
  */
 export const resolveApiErrorMessage = (
 	error,
 	fallbackMessage,
-	canManageReservations = false
+	canManageReservations = false,
+	bookingsUrl = ''
 ) => {
+	// 予約数の上限に達したときは、持っている予約を確認してキャンセルできる画面へのリンクを添える。
+	if ( error?.code === BOOKING_LIMIT_REACHED_CODE && error?.message ) {
+		if ( ! bookingsUrl ) {
+			return error.message;
+		}
+
+		return (
+			<>
+				{ error.message }{ ' ' }
+				<a href={ bookingsUrl }>
+					{ __( 'Confirm reservation', 'vk-booking-manager' ) }
+				</a>
+			</>
+		);
+	}
+
 	if ( error?.code !== 'invalid_json' ) {
 		return error?.message || fallbackMessage;
 	}

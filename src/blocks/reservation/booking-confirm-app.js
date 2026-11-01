@@ -1500,7 +1500,8 @@ export const BookingConfirmApp = ( {
 							'Confirmation of reservation failed. Please try again later.',
 							'vk-booking-manager'
 						),
-						canManageReservations
+						canManageReservations,
+						buildReservationModeUrl( 'bookings' )
 					)
 				);
 			} )

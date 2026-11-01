@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Bookings\Customer_Booking_Limit;
 use VKBookingManager\Uninstall\Uninstaller;
 use function __;
 
@@ -144,6 +145,8 @@ class Settings_Repository {
 			'provider_business_hours'                    => '',
 			'provider_reservation_deadline_hours'        => 3,
 			'provider_max_advance_booking_days'          => 0,
+			// お客様1人あたりの、これから先の予約数の上限。0 は上限なし。保存済みの値が無いサイトにも 3 が効く。
+			Customer_Booking_Limit::SETTINGS_KEY         => Customer_Booking_Limit::DEFAULT_LIMIT,
 			'provider_slot_step_minutes'                 => 15,
 			'provider_service_menu_buffer_after_minutes' => 0,
 			'provider_booking_status_mode'               => self::BOOKING_STATUS_MODE_PENDING,
@@ -186,6 +189,7 @@ class Settings_Repository {
 			'design_menu_heading_use_footer_color'       => false,
 			// ヘッダーに表示する店舗ロゴ画像の横幅（px）。空は未指定（現状の表示幅のまま）。
 			'design_header_logo_width'                   => '',
+			'design_menu_card_background'                => Settings_Sanitizer::DESIGN_MENU_CARD_BACKGROUND_DEFAULT,
 			// 絞り込み検索のデザイン（plain / framed）。選択肢は Settings_Sanitizer::get_design_menu_search_style_choices() で定義する。
 			'design_menu_search_style'                   => 'plain',
 			'design_radius_md'                           => 8,
