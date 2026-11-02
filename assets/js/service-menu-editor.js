@@ -229,6 +229,8 @@
 		'vkbm-base-price-overridden-description';
 	// 基本料金の後ろに出す泊単位の単位表記の id（PHP側の render_base_price_field() と一致させる）。
 	const BASE_PRICE_UNIT_ID = 'vkbm-base-price-unit';
+	// 基本料金の後ろに出す時間枠のメニューの単位表記（/ 1名・/ 1ツアー）の id（PHP側の render_base_price_field() と一致させる）。
+	const BASE_PRICE_SLOT_UNIT_ID = 'vkbm-base-price-slot-unit';
 
 	// 予約の単位が「泊」を選択中か（宿泊のサイトで、予約の単位ラジオがあるときだけ true）。
 	function isNightUnitSelected() {
@@ -254,14 +256,38 @@
 		);
 	}
 
+	// アクティビティのサイトで、料金の単位が「1ツアーあたり」を選択中か（#1002）。
+	// 「1ツアーあたり」は貸し切り予約と複数人一括予約を常に有効として扱い、料金区分と予約者による貸切指定を使わない。
+	function isPerBookingSelected() {
+		return (
+			Boolean( i18n.supportsPerBookingPrice ) &&
+			$( 'input[name="vkbm_service_menu[price_unit]"]:checked' ).val() ===
+				'per_booking'
+		);
+	}
+
 	// 1室1泊あたりで、規定人数を超えた分の追加料金のチェックが入っているか（#934）。
-	function isExtraGuestFeeSelected() {
+	function isNightExtraGuestFeeSelected() {
 		return (
 			isPerRoomNightSelected() &&
 			$( '#vkbm_service_menu_night_extra_guest_enabled' ).prop(
 				'checked'
 			)
 		);
+	}
+
+	// 1ツアーあたりで、規定人数を超えた人数分の追加料金のチェックが入っているか（#1003）。
+	function isTourExtraGuestFeeSelected() {
+		return (
+			isPerBookingSelected() &&
+			$( '#vkbm_service_menu_extra_guest_enabled' ).prop( 'checked' )
+		);
+	}
+
+	// 規定人数を超えた分の追加料金（1室1泊あたり・1ツアーあたり）のチェックが入っているか。
+	// 入っているときは、料金区分を超過1名あたりの追加料金として使い、基本料金は区分で上書きされない。
+	function isExtraGuestFeeSelected() {
+		return isNightExtraGuestFeeSelected() || isTourExtraGuestFeeSelected();
 	}
 
 	/**
@@ -324,8 +350,12 @@
 		}
 
 		// 1室1泊あたりのプランは料金区分を使わないため、基本料金は常に有効（#572）。
+		// 1ツアーあたりも区分は超過分の追加料金で、基本料金は常に有効（#1003）。
 		const overridden =
-			tiersFieldVisible && hasActiveTier && ! isPerRoomNightSelected();
+			tiersFieldVisible &&
+			hasActiveTier &&
+			! isPerRoomNightSelected() &&
+			! isPerBookingSelected();
 		$input.prop( 'readonly', overridden );
 		$input.toggleClass( 'vkbm-base-price-overridden', overridden );
 		// 休前日・特定日の基本料金も、料金区分があるときは使われないため同じ見た目にする（#737）。
@@ -342,6 +372,9 @@
 			$( '#' + BASE_PRICE_UNIT_ID ).length > 0
 		) {
 			describedBy.push( BASE_PRICE_UNIT_ID );
+		}
+		if ( $( '#' + BASE_PRICE_SLOT_UNIT_ID ).length > 0 ) {
+			describedBy.push( BASE_PRICE_SLOT_UNIT_ID );
 		}
 		if ( overridden ) {
 			describedBy.push( BASE_PRICE_OVERRIDDEN_DESCRIPTION_ID );
@@ -381,7 +414,9 @@
 			maxCapacity = isNaN( parsed ) ? 1 : parsed;
 		}
 		return (
-			( $checkbox.prop( 'checked' ) || isPerRoomNightSelected() ) &&
+			( $checkbox.prop( 'checked' ) ||
+				isPerRoomNightSelected() ||
+				isPerBookingSelected() ) &&
 			maxCapacity >= 2
 		);
 	}
@@ -391,6 +426,10 @@
 	function isExclusiveMinGuestsApplied() {
 		if ( isPerRoomNightSelected() ) {
 			return false;
+		}
+		// 1ツアーあたりは貸し切り予約が自動で有効になる（#1002）。
+		if ( isPerBookingSelected() ) {
+			return isMultiGuestDependentShown();
 		}
 		const $exclusiveWhenBooked = $(
 			'#vkbm_service_menu_exclusive_when_booked'
@@ -530,10 +569,16 @@
 			maxCapacity = isNaN( parsed ) ? 1 : parsed;
 		}
 		// 1室1泊あたりのプランは複数人一括予約を常に ON として扱い、チェックボックスの行は隠す（#831）。
+		// 1ツアーあたりのメニューも同じく、複数人一括予約を常に ON として扱い、行を隠す（#1002）。
 		const isPerRoom = isPerRoomNightSelected();
-		const allowMultipleGuests = $checkbox.prop( 'checked' ) || isPerRoom;
+		const isPerBooking = isPerBookingSelected();
+		const allowMultipleGuests =
+			$checkbox.prop( 'checked' ) || isPerRoom || isPerBooking;
 		const meetsCapacity = maxCapacity >= 2;
-		$( '#vkbm-allow-multiple-guests-field' ).prop( 'hidden', isPerRoom );
+		$( '#vkbm-allow-multiple-guests-field' ).prop(
+			'hidden',
+			isPerRoom || isPerBooking
+		);
 		syncMaxCapacityCopy( isPerRoom );
 
 		// #393・#440: 最少催行人数／最低申し込み人数欄・料金区分欄・貸し切り予約・予約者による
@@ -545,9 +590,11 @@
 			allowMultipleGuests && meetsCapacity;
 		const hiddenMultiGuestDependentFields = ! showMultiGuestDependentFields;
 		// 1室1泊あたりのプランは、規定人数を超えた分の追加料金を使うときだけ料金区分を使う（#572、#934）。
+		// 1ツアーあたりも、規定人数を超えた分の追加料金を使うときだけ料金区分を使う（#1002、#1003）。
 		const hiddenPriceTiers =
 			hiddenMultiGuestDependentFields ||
-			( isPerRoomNightSelected() && ! isExtraGuestFeeSelected() );
+			( ( isPerBooking || isPerRoomNightSelected() ) &&
+				! isExtraGuestFeeSelected() );
 		$( '#vkbm-min-capacity-field' ).prop(
 			'hidden',
 			hiddenMultiGuestDependentFields || isPerRoomNightSelected()
@@ -563,9 +610,10 @@
 		);
 		if ( $exclusiveWhenBookedField.length > 0 ) {
 			// 1室1泊あたりのプランは部屋ごとに1組だけが泊まるため、欄を出さない（#831）。
+			// 1ツアーあたりのメニューは貸し切り予約が自動で有効になるため、同じく欄を出さない（#1002）。
 			$exclusiveWhenBookedField.prop(
 				'hidden',
-				hiddenMultiGuestDependentFields || isPerRoom
+				hiddenMultiGuestDependentFields || isPerRoom || isPerBooking
 			);
 		}
 		// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
@@ -575,7 +623,9 @@
 		if ( $exclusiveUserSelectableField.length > 0 ) {
 			$exclusiveUserSelectableField.prop(
 				'hidden',
-				hiddenMultiGuestDependentFields || isNightUnitSelected()
+				hiddenMultiGuestDependentFields ||
+					isNightUnitSelected() ||
+					isPerBooking
 			);
 		}
 
@@ -1009,7 +1059,17 @@
 			i18n.maxCapacityDefaultDescription1,
 			i18n.maxCapacityDefaultDescription2,
 		];
-		if ( isPerRoom ) {
+		if ( isPerBookingSelected() ) {
+			// 1ツアーあたりは「1ツアーの最大人数」の表記にする（#1002）。
+			labelText = i18n.maxCapacityPerTourLabel;
+			lines = [
+				i18n.maxCapacityPerTourDescription1,
+				i18n.maxCapacityPerTourDescription2,
+				isExtraGuestFeeSelected()
+					? i18n.maxCapacityPerTourExtraGuestNote
+					: i18n.maxCapacityPerTourDescription3,
+			];
+		} else if ( isPerRoom ) {
 			labelText = i18n.maxCapacityPerRoomLabel;
 			lines = [
 				i18n.maxCapacityPerRoomDescription1,
@@ -1059,19 +1119,34 @@
 		}
 
 		// 1室1泊あたりで追加料金を使うときだけ、追加料金のチェックと基本料金に含まれる人数の欄を出す（#934）。
-		const isExtraGuestFee = isExtraGuestFeeSelected();
+		const isNightExtraGuestFee = isNightExtraGuestFeeSelected();
 		$( '#vkbm-night-extra-guest-fields' ).prop( 'hidden', ! isPerRoom );
 		$( '#vkbm-night-included-guests-field' ).prop(
 			'hidden',
-			! isExtraGuestFee
+			! isNightExtraGuestFee
 		);
+		// 1ツアーあたりも同じく、追加料金を使うときだけ基本料金に含まれる人数の欄を出す（#1003）。
+		const isTourExtraGuestFee = isTourExtraGuestFeeSelected();
+		$( '#vkbm-extra-guest-fields' ).prop(
+			'hidden',
+			! isPerBookingSelected()
+		);
+		$( '#vkbm-included-guests-field' ).prop(
+			'hidden',
+			! isTourExtraGuestFee
+		);
+		// 料金区分の説明文は、追加料金を使わない・1室1泊あたりの追加料金・1ツアーあたりの追加料金の3通りで切り替える。
 		$( '.vkbm-price-tiers-description-default' ).prop(
 			'hidden',
-			isExtraGuestFee
+			isNightExtraGuestFee || isTourExtraGuestFee
 		);
 		$( '.vkbm-price-tiers-description-extra-guest' ).prop(
 			'hidden',
-			! isExtraGuestFee
+			! isNightExtraGuestFee
+		);
+		$( '.vkbm-price-tiers-description-extra-guest-tour' ).prop(
+			'hidden',
+			! isTourExtraGuestFee
 		);
 
 		const $head = $( '.vkbm-price-tier-head-price' );
@@ -1079,8 +1154,11 @@
 			let headText = isNight
 				? i18n.priceHeadNight
 				: i18n.priceHeadDefault;
-			if ( isExtraGuestFee && i18n.priceHeadExtraGuest ) {
+			if ( isNightExtraGuestFee && i18n.priceHeadExtraGuest ) {
 				headText = i18n.priceHeadExtraGuest;
+			}
+			if ( isTourExtraGuestFee && i18n.priceHeadExtraGuestPerTour ) {
+				headText = i18n.priceHeadExtraGuestPerTour;
 			}
 			$head.text( headText );
 		}
@@ -1088,13 +1166,28 @@
 		const $note = $( '#vkbm-multiple-guests-price-note' );
 		if ( $note.length > 0 && i18n.multipleGuestsPriceNoteDefault ) {
 			$note.text(
-				isPerRoom
+				isPerRoom || isPerBookingSelected()
 					? i18n.multipleGuestsPriceNotePerRoom
 					: i18n.multipleGuestsPriceNoteDefault
 			);
 		}
 
 		syncMultipleGuestsDependentFields();
+	}
+
+	// 料金の単位（1名あたり／1ツアーあたり）に合わせて、基本料金の後ろの単位表記を切り替え、連動する欄の表示も再評価する（#1002）。
+	function syncPriceUnitFields() {
+		const $suffix = $( '#' + BASE_PRICE_SLOT_UNIT_ID );
+		if ( $suffix.length > 0 && i18n.priceUnitSuffixPerGuest ) {
+			$suffix.text(
+				isPerBookingSelected()
+					? i18n.priceUnitSuffixPerBooking
+					: i18n.priceUnitSuffixPerGuest
+			);
+		}
+
+		// 複数人一括予約の説明文・最大人数のラベル・貸し切り関連の欄・料金区分・基本料金のグレーアウトをまとめて更新する。
+		syncNightPriceUnitFields();
 	}
 
 	$( document ).on(
@@ -1109,10 +1202,16 @@
 	);
 	$( document ).on(
 		'change',
-		'input[name="vkbm_service_menu[night_price_unit]"], #vkbm_service_menu_night_extra_guest_enabled',
+		'input[name="vkbm_service_menu[night_price_unit]"], #vkbm_service_menu_night_extra_guest_enabled, #vkbm_service_menu_extra_guest_enabled',
 		syncNightPriceUnitFields
 	);
+	$( document ).on(
+		'change',
+		'input[name="vkbm_service_menu[price_unit]"]',
+		syncPriceUnitFields
+	);
 	$( syncBookingUnitFields );
+	$( syncPriceUnitFields );
 
 	// 提供期間: 終了日の最小値を開始日に連動させ、開始日が終了日より後のときはエラー文を出す。
 	// 終了日が今日より前のときは、終了済みの案内を出す。

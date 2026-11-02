@@ -19,6 +19,8 @@ use VKBookingManager\Attendees\Booking_Attendee_Display;
 use VKBookingManager\Attendees\Booking_Attendee_Resolver;
 use VKBookingManager\Auth\Email_Verification;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Booking_Price;
+use VKBookingManager\Common\Booking_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Staff_Conflict_Detector;
 use VKBookingManager\Common\VKBM_Helper;
@@ -601,12 +603,23 @@ class Booking_Admin {
 		$guests = max( 1, (int) get_post_meta( $post->ID, self::META_GUESTS, true ) );
 		// 料金区分の人数内訳スナップショット。区分定義予約は人数編集UIの代わりに内訳を表示する。
 		$guest_tiers = $this->get_saved_guest_tiers( $post->ID );
+		// 1ツアーあたりで規定人数を超えた分の追加料金の内訳スナップショット（超過した人がいない予約は空配列。#1003）。
+		$extra_guests = Booking_Price::normalize_extra_guests( get_post_meta( $post->ID, Booking_Price::META_BOOKING_EXTRA_GUESTS, true ) );
 		// 保存済みの合計（META_BASE_TOTAL_PRICE）はそのまま表示し、指名機能の現在状態で上書きしない。
 		// 合計未保存の旧データのみ「単価 × 人数（＋指名料）」で再計算する（指名料は上で機能状態を反映済み）。
-		$has_base_total_price   = metadata_exists( 'post', $post->ID, self::META_BASE_TOTAL_PRICE );
+		$has_base_total_price = metadata_exists( 'post', $post->ID, self::META_BASE_TOTAL_PRICE );
+		// 予約時点の料金の単位（1ツアーあたりの予約だけ保存されている）。合計未保存の旧データの再計算と、金額の隣の単位表記に使う。
+		$booking_price_unit     = Booking_Price::normalize_unit( get_post_meta( $post->ID, Booking_Price::META_BOOKING_PRICE_UNIT, true ) );
 		$base_total_price       = $has_base_total_price
 			? (int) get_post_meta( $post->ID, self::META_BASE_TOTAL_PRICE, true )
-			: max( 0, ( (int) $service_base_price * $guests ) ) + max( 0, (int) $nomination_fee );
+			: Booking_Price::calculate_total(
+				array(
+					'price_unit'     => $booking_price_unit,
+					'base_price'     => $service_base_price,
+					'guests'         => $guests,
+					'nomination_fee' => $nomination_fee,
+				)
+			);
 		$has_billed_total_price = metadata_exists( 'post', $post->ID, self::META_BILLED_TOTAL_PRICE );
 		$billed_total_price     = $has_billed_total_price ? (int) get_post_meta( $post->ID, self::META_BILLED_TOTAL_PRICE, true ) : '';
 		$is_preferred           = '1' === (string) get_post_meta( $post->ID, self::META_IS_PREFERRED, true );
@@ -1018,12 +1031,21 @@ class Booking_Admin {
 							</p>
 						</td>
 					</tr>
-					<?php if ( empty( $guest_tiers ) ) : ?>
-						<?php // 料金区分メニューでは区分ごとの小計が別途表示され、この「サービス基本料金」行は常に0円で冗長になるため非表示にする（区分なしの単一料金メニューのときのみ出力する / #338）。 ?>
+					<?php if ( empty( $guest_tiers ) || Booking_Price::is_per_booking( $booking_price_unit ) ) : ?>
+						<?php // 料金区分メニューでは区分ごとの小計が別途表示され、この「サービス基本料金」行は常に0円で冗長になるため非表示にする（区分なしの単一料金メニューのときのみ出力する / #338）。1ツアーあたりは区分が追加料金の単価でツアー料金は基本料金のため、区分があっても出力する（#1003）。 ?>
 						<tr>
 							<th scope="row"><?php esc_html_e( 'Service basic fee', 'vk-booking-manager' ); ?></th>
 							<td>
-								<span class="vkbm-booking-meta__value"><?php echo esc_html( $base_price_label ); ?></span>
+								<?php // 1ツアーあたりの予約は、基本料金が人数を掛けない金額だと分かるよう単位を添え、金額と単位を折り返さない塊にする。 ?>
+								<span class="vkbm-booking-meta__value">
+									<?php
+									if ( Booking_Price::is_per_booking( $booking_price_unit ) && ( $has_base_price_snapshot || $service_id > 0 ) ) {
+										echo wp_kses_post( Booking_Price_Display::format_price_with_unit_html( (int) $service_base_price ) );
+									} else {
+										echo esc_html( $base_price_label );
+									}
+									?>
+								</span>
 								<?php
 								if ( '' !== $tax_label ) {
 									echo ' ' . esc_html( $tax_label );
@@ -1031,6 +1053,34 @@ class Booking_Admin {
 								?>
 								<p class="description">
 									<?php esc_html_e( 'This is the basic service charge at the time of reservation. (Cannot be edited)', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+					<?php endif; ?>
+					<?php if ( array() !== $extra_guests ) : ?>
+						<?php // 1ツアーあたりで基本料金に含まれる人数を超えた分の追加料金は、ツアー料金とは別に、区分ごとの超過人数と合わせて出す（#1003）。 ?>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Extra guest fee', 'vk-booking-manager' ); ?></th>
+							<td>
+								<ul class="vkbm-booking-extra-guests">
+									<?php foreach ( $extra_guests['tiers'] as $extra_tier ) : ?>
+										<li><?php echo esc_html( Booking_Price_Display::format_extra_guest_tier_text( $extra_tier ) ); ?></li>
+									<?php endforeach; ?>
+								</ul>
+								<span class="vkbm-booking-meta__value"><?php echo esc_html( VKBM_Helper::format_currency( Price_Tiers::total_price( $extra_guests['tiers'] ) ) ); ?></span>
+								<?php
+								if ( '' !== $tax_label ) {
+									echo ' ' . esc_html( $tax_label );
+								}
+								?>
+								<p class="description">
+									<?php
+									printf(
+										/* translators: %d: number of guests included in the basic price. */
+										esc_html__( 'This is the fee for the guests over the %d included in the basic price. (Cannot be edited)', 'vk-booking-manager' ),
+										(int) $extra_guests['included_guests']
+									);
+									?>
 								</p>
 							</td>
 						</tr>
@@ -1417,6 +1467,10 @@ class Booking_Admin {
 		$this->update_meta_value( $post_id, self::META_SERVICE_ID, $service_id );
 		if ( $should_fill_base_price_snapshot ) {
 			$this->update_meta_value_allow_zero( $post_id, self::META_SERVICE_BASE_PRICE, $service_base_price );
+			// 料金の単位も同じタイミングで予約に固定する（1ツアーあたりのときだけ保存）。保存しないと、管理画面で新規に作った予約の合計が人数倍になる。
+			if ( $service_id > 0 && Service_Menu_Post_Type::is_price_per_booking( $service_id ) ) {
+				update_post_meta( $post_id, Booking_Price::META_BOOKING_PRICE_UNIT, Booking_Price::UNIT_PER_BOOKING );
+			}
 		}
 
 		// 予約人数を保存する。
@@ -1440,14 +1494,25 @@ class Booking_Admin {
 		// 料金区分が定義されている予約は、人数編集UIが無く内訳が確定しているため、
 		// 保存済みの区分内訳（Σ 区分料金 × 区分人数）＋指名料で合計を再計算する。
 		// 区分未定義は従来どおり 基本料金スナップショット × 人数 ＋指名料。
-		$saved_guest_tiers = $this->get_saved_guest_tiers( $post_id );
+		$saved_guest_tiers       = $this->get_saved_guest_tiers( $post_id );
+		$saved_extra_guests      = Booking_Price::normalize_extra_guests( get_post_meta( $post_id, Booking_Price::META_BOOKING_EXTRA_GUESTS, true ) );
+		$saved_extra_guest_tiers = $saved_extra_guests['tiers'] ?? array();
 		if ( $is_stay_booking && metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE ) ) {
 			// 泊の予約の合計は予約確定時に「（プラン料金＋客室の追加料金）× 泊数」で保存済み。ここでは作り直さず保持する。
 			$base_total_price = max( 0, (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true ) );
-		} elseif ( ! empty( $saved_guest_tiers ) ) {
-			$base_total_price = max( 0, Price_Tiers::total_price( $saved_guest_tiers ) + $nomination_fee_for_total );
 		} else {
-			$base_total_price = max( 0, ( $base_price_for_total * $guests ) + $nomination_fee_for_total );
+			// 計算は Booking_Price に集約している。1ツアーあたりの予約は、人数を編集しても合計が変わらない。
+			$base_total_price = Booking_Price::calculate_total(
+				array(
+					'price_unit'        => get_post_meta( $post_id, Booking_Price::META_BOOKING_PRICE_UNIT, true ),
+					'base_price'        => $base_price_for_total,
+					'guests'            => $guests,
+					'guest_tiers'       => $saved_guest_tiers,
+					// 1ツアーあたりは、予約時点に保存した追加料金の内訳を使う（人数編集UIが無く、内訳は確定している。#1003）。
+					'extra_guest_tiers' => $saved_extra_guest_tiers,
+					'nomination_fee'    => $nomination_fee_for_total,
+				)
+			);
 		}
 		$this->update_meta_value_allow_zero( $post_id, self::META_BASE_TOTAL_PRICE, $base_total_price );
 		$this->update_meta_value_allow_zero( $post_id, self::META_BILLED_TOTAL_PRICE, $billed_total_price );
@@ -1687,13 +1752,28 @@ class Booking_Admin {
 					$service_base_price = $service_menu_id > 0 ? max( 0, (int) get_post_meta( $service_menu_id, '_vkbm_base_price', true ) ) : 0;
 				}
 				$has_base_total = metadata_exists( 'post', $post_id, self::META_BASE_TOTAL_PRICE );
-				$base_total     = $has_base_total
+				// 合計未保存の旧データの再計算は Booking_Price に集約している（予約時点の料金の単位を使う）。
+				$column_price_unit = get_post_meta( $post_id, Booking_Price::META_BOOKING_PRICE_UNIT, true );
+				$base_total        = $has_base_total
 					? (int) get_post_meta( $post_id, self::META_BASE_TOTAL_PRICE, true )
-					: ( ( $service_base_price * $guests ) + (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ) );
+					: Booking_Price::calculate_total(
+						array(
+							'price_unit'     => $column_price_unit,
+							'base_price'     => $service_base_price,
+							'guests'         => $guests,
+							'nomination_fee' => (int) get_post_meta( $post_id, self::META_NOMINATION_FEE, true ),
+						)
+					);
 				// 保存済みの合計（META_BASE_TOTAL_PRICE）は予約確定時の金額なので上書きしない。
 				// 合計未保存の旧データのみ、（このメニューで）指名OFF時に指名料を除いて再計算する（#391）。
 				if ( ! $has_base_total && ! Staff_Editor::is_nomination_enabled_for_menu( $service_menu_id ) ) {
-					$base_total = $service_base_price * $guests;
+					$base_total = Booking_Price::calculate_service_total(
+						array(
+							'price_unit' => $column_price_unit,
+							'base_price' => $service_base_price,
+							'guests'     => $guests,
+						)
+					);
 				}
 
 				$has_billed_total = metadata_exists( 'post', $post_id, self::META_BILLED_TOTAL_PRICE );

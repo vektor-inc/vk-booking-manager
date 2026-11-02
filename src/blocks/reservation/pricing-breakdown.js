@@ -1,6 +1,7 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { formatCurrency } from '../shared/pricing';
 import { formatGuestsCount } from '../shared/guests';
+import { joinSentences } from './booking-ui/join-sentences';
 
 /**
  * 料金計算に使う人数を正規化する。
@@ -23,12 +24,16 @@ const normalizeGuestCount = ( guests ) =>
  * ここで求めるのは表示用の概算で、実際に保存される金額はサーバー側で再計算される。
  *
  * @param {Object}      args
- * @param {number|null} args.basePrice     1名あたりのサービス基本料金。
- * @param {number}      args.guests        申込人数。
- * @param {number|null} args.nominationFee 指名料。未確定（null）は0円として扱う。
- * @param {number}      args.exclusiveFee  貸し切り料金。
- * @param {number|null} args.tiersSubtotal 料金区分ありのメニューの区分小計の合計。
- *                                         数値を渡すと「基本料金 × 人数」の代わりに使う（サーバーの下書き計算と同じ）。
+ * @param {number|null} args.basePrice          1名あたりのサービス基本料金。
+ * @param {number}      args.guests             申込人数。
+ * @param {number|null} args.nominationFee      指名料。未確定（null）は0円として扱う。
+ * @param {number}      args.exclusiveFee       貸し切り料金。
+ * @param {number|null} args.tiersSubtotal      料金区分ありのメニューの区分小計の合計。
+ *                                              数値を渡すと「基本料金 × 人数」の代わりに使う（サーバーの下書き計算と同じ）。
+ * @param {boolean}     args.isPerBooking       料金の単位が「1ツアーあたり」か（#1002）。true のときは人数も料金区分も使わず、
+ *                                              基本料金そのままを基本部分にする（サーバーの Booking_Price と同じ）。
+ * @param {number}      args.extraGuestSubtotal 1ツアーあたりで、基本料金に含まれる人数を超えた人数分の追加料金の合計（#1003）。
+ *                                              isPerBooking のときだけ基本部分に足す。
  * @return {number|null} 基本料金合計。基本料金（区分ありは区分小計）が不明なら null。
  */
 export const calculateBaseFeeTotal = ( {
@@ -37,10 +42,24 @@ export const calculateBaseFeeTotal = ( {
 	nominationFee = 0,
 	exclusiveFee = 0,
 	tiersSubtotal = null,
+	isPerBooking = false,
+	extraGuestSubtotal = 0,
 } ) => {
 	// 指名料・貸し切り料金は未確定や不正な値を0円として足す。
 	const nomination = Math.max( 0, Number( nominationFee ) || 0 );
 	const exclusive = Math.max( 0, Number( exclusiveFee ) || 0 );
+
+	// 1ツアーあたりは基本料金そのまま（人数も料金区分も掛けない）に、超過人数分の追加料金だけを足す。
+	// 基本料金が分からないときは合計も出さない。
+	if ( isPerBooking ) {
+		if ( basePrice === null || basePrice === undefined ) {
+			return null;
+		}
+
+		const extraGuests = Math.max( 0, Number( extraGuestSubtotal ) || 0 );
+
+		return Math.max( 0, basePrice ) + extraGuests + nomination + exclusive;
+	}
 
 	// 料金区分ありのメニューは、メニューの基本料金を使わず区分小計の合計を基本部分にする。
 	if (
@@ -171,6 +190,8 @@ export const buildLabelWithDetail = (
  * @param {number|null} args.unitPrice       1名あたりのサービス基本料金。
  * @param {number}      args.guests          申込人数。
  * @param {boolean}     args.isMultiGuest    複数人一括予約を使うメニュー（料金区分なし）か。
+ * @param {boolean}     args.isPerBooking    料金の単位が「1ツアーあたり」か（#1002）。true のときは人数掛けの表記を出さず、
+ *                                           見出しを「ツアー料金（1ツアーあたり）」にして金額は基本料金そのままにする。
  * @param {string|null} args.currencySymbol  通貨記号。
  * @param {string}      args.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
  * @return {{label: string, labelParts: {main: string, detail: string, suffix: string}, amount: number|null}}
@@ -180,9 +201,30 @@ export const buildServiceBasicFeeRow = ( {
 	unitPrice,
 	guests = 1,
 	isMultiGuest = false,
+	isPerBooking = false,
 	currencySymbol = null,
 	guestsUnitLabel = '',
 } ) => {
+	// 1ツアーあたりは「× ◯名」を出さず、1ツアーの料金であることを見出しで示す。括弧部分は折り返さない塊として持たせる。
+	if ( isPerBooking ) {
+		const perBookingLabel = __(
+			'Tour fee (per tour)',
+			'vk-booking-manager'
+		);
+		// 訳文の括弧部分（半角・全角）を分けて持たせ、表示側で括弧の途中で改行させない。
+		const parts = perBookingLabel.match( /^(.*?)([（(][^）)]*[）)])(.*)$/ );
+		return {
+			label: perBookingLabel,
+			labelParts: parts
+				? { main: parts[ 1 ], detail: parts[ 2 ], suffix: parts[ 3 ] }
+				: { main: perBookingLabel, detail: '', suffix: '' },
+			amount:
+				unitPrice === null || unitPrice === undefined
+					? null
+					: unitPrice,
+		};
+	}
+
 	const defaultLabel = __( 'Service basic fee', 'vk-booking-manager' );
 	// 括弧部分が無い見出しは、全体を本体として持たせる。
 	const defaultLabelParts = { main: defaultLabel, detail: '', suffix: '' };
@@ -232,13 +274,20 @@ export const buildServiceBasicFeeRow = ( {
  * @param {boolean} args.allowMultipleGuests メニューが複数人一括予約を使う設定か。
  * @param {boolean} args.hasPriceTiers       メニュー（予約）に料金区分があるか。
  * @param {number}  args.guests              申込人数。
+ * @param {boolean} args.isPerBooking        料金の単位が「1ツアーあたり」か（#1002）。人数掛けの形では出さない。
  * @return {boolean} 複数人一括予約（料金区分なし）の形で出すなら true。
  */
 export const isMultiGuestFlatPricing = ( {
 	allowMultipleGuests = false,
 	hasPriceTiers = false,
 	guests = 1,
+	isPerBooking = false,
 } ) => {
+	// 1ツアーあたりは人数にかかわらず基本料金そのままのため、人数掛けの形では出さない。
+	if ( isPerBooking ) {
+		return false;
+	}
+
 	// 料金区分ありは区分ごとの行で出す。
 	if ( hasPriceTiers ) {
 		return false;
@@ -278,6 +327,204 @@ export const sumPriceTierSubtotals = ( tiers ) => {
 	return tiers
 		.map( normalizePriceTier )
 		.reduce( ( sum, tier ) => sum + tier.price * tier.count, 0 );
+};
+
+/**
+ * 1ツアーあたりで、基本料金に含まれる人数を超えた人数の内訳を求める（#1003）。
+ *
+ * サーバー側の Booking_Price::resolve_extra_guest_tiers()（Lodging_Price::distribute_excess_guests()）と同じ決め方で、
+ * 単価の高い区分の人から順に基本料金に含め、残りの人を超過扱いにする。同額の区分は並びの先の区分から含める。
+ * 表示用の概算で、実際に保存される金額はサーバー側で再計算される。
+ *
+ * @param {Array<Object>} tiers          料金区分の配列（[ { label, price, count }, ... ]）。price は超過1名あたりの追加料金。
+ * @param {number}        includedGuests 基本料金に含まれる人数。
+ * @return {Array<{label: string, price: number, count: number}>} 超過した人がいる区分と超過人数（元の並び順）。
+ */
+export const resolveExtraGuestTiers = ( tiers, includedGuests ) => {
+	if ( ! Array.isArray( tiers ) ) {
+		return [];
+	}
+
+	const normalized = tiers.map( normalizePriceTier );
+	// 単価の高い順。同額は元の並びの順を保つ。
+	const order = normalized
+		.map( ( _, index ) => index )
+		.sort( ( a, b ) =>
+			normalized[ a ].price === normalized[ b ].price
+				? a - b
+				: normalized[ b ].price - normalized[ a ].price
+		);
+
+	let remainingIncluded = Math.max(
+		0,
+		Math.floor( Number( includedGuests ) || 0 )
+	);
+	const excessCounts = [];
+	order.forEach( ( index ) => {
+		const includedCount = Math.min(
+			normalized[ index ].count,
+			remainingIncluded
+		);
+		remainingIncluded -= includedCount;
+		excessCounts[ index ] = normalized[ index ].count - includedCount;
+	} );
+
+	return normalized
+		.map( ( tier, index ) => ( { ...tier, count: excessCounts[ index ] } ) )
+		.filter( ( tier ) => tier.count > 0 );
+};
+
+/**
+ * 料金欄に出す追加料金の行（見出し「追加料金（区分名 単価 × 超過人数）」と小計）を組み立てる（#1003）。
+ *
+ * 超過人数が0名の区分は行を出さない。見出しの括弧部分は、狭い画面で途中で改行されないよう分けて返す。
+ *
+ * @param {Object}        args
+ * @param {Array<Object>} args.extraTiers      超過した人がいる区分と超過人数（resolveExtraGuestTiers の戻り値）。
+ * @param {string|null}   args.currencySymbol  通貨記号。
+ * @param {string}        args.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
+ * @return {Array<{label: string, labelParts: {main: string, detail: string, suffix: string}, amount: number}>}
+ *         区分ごとの見出し・見出しを括弧部分で分けたもの（buildLabelWithDetail 参照）・小計。
+ */
+export const buildExtraGuestFeeRows = ( {
+	extraTiers,
+	currencySymbol = null,
+	guestsUnitLabel = '',
+} ) => {
+	if ( ! Array.isArray( extraTiers ) ) {
+		return [];
+	}
+
+	return extraTiers
+		.map( normalizePriceTier )
+		.filter( ( tier ) => tier.count > 0 )
+		.map( ( tier ) => ( {
+			...buildLabelWithDetail(
+				/* translators: 1: price category name (e.g. Child), 2: extra fee per guest, 3: number of extra guests with unit (e.g. 1 guest) */
+				__(
+					'Extra guest fee (%1$s %2$s × %3$s)',
+					'vk-booking-manager'
+				),
+				[
+					tier.label,
+					formatCurrency( tier.price, currencySymbol ),
+					formatGuestsCount( tier.count, guestsUnitLabel ),
+				],
+				0
+			),
+			amount: tier.price * tier.count,
+		} ) );
+};
+
+/**
+ * 区分ごとの人数欄に添える、追加料金の金額表記（「+¥3,000」）と読み上げ用の文言を組み立てる（#1003）。
+ *
+ * 「+」と金額を1つの文字列で返し、表示側で折り返さない塊に入れて、狭い幅で「+」だけが次の行に落ちないようにする。
+ * 画面には記号つきの表記だけを見せ、読み上げには「追加料金 ¥3,000」を使う。
+ *
+ * @param {Object}      args
+ * @param {number}      args.price          超過1名あたりの追加料金。
+ * @param {string|null} args.currencySymbol 通貨記号。
+ * @return {{visible: string, spoken: string}} 画面に出す表記と、読み上げ用の文言。
+ */
+export const buildExtraGuestTierPriceText = ( {
+	price,
+	currencySymbol = null,
+} ) => {
+	const amount = formatCurrency( price, currencySymbol );
+
+	return {
+		visible: `+${ amount }`,
+		spoken: sprintf(
+			/* translators: %s: extra fee per guest (e.g. ¥3,000). */
+			__( 'Extra fee %s', 'vk-booking-manager' ),
+			amount
+		),
+	};
+};
+
+/**
+ * 追加料金があるときに、合計の上に添える1行を、折り返さない2つの塊に分けて組み立てる（#1003）。
+ *
+ * 「ツアー料金 ¥30,000」と「＋ 追加料金 ¥1,500」を別々の塊として返す。表示側で塊ごとに折り返さない要素に入れ、
+ * 狭い画面でも折り返しが塊の境界だけで起こるようにする（金額や「＋」だけが次の行に落ちない）。
+ *
+ * @param {Object}      args
+ * @param {number}      args.tourFee        ツアー料金（1ツアーあたりの基本料金）。
+ * @param {number}      args.extraGuestFee  追加料金の合計。
+ * @param {string|null} args.currencySymbol 通貨記号。
+ * @return {{tourFee: string, extraGuestFee: string}} ツアー料金の塊と、追加料金の塊。
+ */
+export const buildTourFeeSummaryParts = ( {
+	tourFee,
+	extraGuestFee,
+	currencySymbol = null,
+} ) => ( {
+	tourFee: sprintf(
+		/* translators: %s: tour fee (e.g. ¥30,000). */
+		__( 'Tour fee %s', 'vk-booking-manager' ),
+		formatCurrency( tourFee, currencySymbol )
+	),
+	extraGuestFee: sprintf(
+		/* translators: %s: extra guest fee (e.g. ¥1,500). */
+		__( '+ Extra guest fee %s', 'vk-booking-manager' ),
+		formatCurrency( extraGuestFee, currencySymbol )
+	),
+} );
+
+/**
+ * 人数の合計に区分ごとの構成を添えた表記（「5名（大人4名・子供1名）」）を組み立てる（#1003）。
+ *
+ * 1ツアーあたりでは区分の単価が追加料金のため、区分ごとの小計の行を出さない。人数の構成は人数の行で伝える。
+ * 人数が0名の区分は構成に含めず、構成にする区分が無いときは人数の合計だけを返す。
+ * サーバー側の Booking_Price_Display::format_guest_composition() と同じ形。
+ *
+ * @param {Object}        args
+ * @param {number}        args.guests          人数の合計。
+ * @param {Array<Object>} args.tiers           区分ごとの人数内訳（[ { label, count }, ... ]）。
+ * @param {string}        args.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
+ * @return {string} 表記。
+ */
+export const buildGuestCompositionText = ( {
+	guests,
+	tiers,
+	guestsUnitLabel = '',
+} ) => {
+	const total = formatGuestsCount(
+		Math.max( 0, Number( guests ) || 0 ),
+		guestsUnitLabel
+	);
+	const parts = ( Array.isArray( tiers ) ? tiers : [] )
+		.map( normalizePriceTier )
+		.filter( ( tier ) => tier.count > 0 )
+		.map( ( tier ) =>
+			sprintf(
+				/* translators: 1: price category name (e.g. Adult), 2: number of guests with unit (e.g. 4 guests). */
+				__( '%1$s %2$s', 'vk-booking-manager' ),
+				tier.label,
+				formatGuestsCount( tier.count, guestsUnitLabel )
+			)
+		);
+
+	if ( parts.length === 0 ) {
+		return total;
+	}
+
+	const composition = parts.reduce( ( list, part ) =>
+		sprintf(
+			/* translators: 1: price categories listed so far, 2: next price category. */
+			__( '%1$s, %2$s', 'vk-booking-manager' ),
+			list,
+			part
+		)
+	);
+
+	return sprintf(
+		/* translators: 1: total number of guests with unit (e.g. 5 guests), 2: breakdown by price category (e.g. Adult 4 guests, Child 1 guest). */
+		__( '%1$s (%2$s)', 'vk-booking-manager' ),
+		total,
+		composition
+	);
 };
 
 /**
@@ -333,3 +580,62 @@ export const buildPriceTierRows = ( {
  */
 export const resolvePlanPricingRows = ( rows, isLodgingMenu ) =>
 	isLodgingMenu ? [] : rows;
+
+/**
+ * 料金の単位が「1ツアーあたり」のメニューで、人数欄の下に出す補足文を組み立てる（#1002）。
+ *
+ * 人数を入力しても料金が変わらないことを、1ツアーの料金と合わせて伝える。
+ * 例: 「料金は 1ツアーあたり ¥30,000 です。人数を入力しても料金は変わりません。」
+ *
+ * @param {Object}      args
+ * @param {number}      args.price          1ツアーあたりの基本料金。
+ * @param {string|null} args.currencySymbol 通貨記号。
+ * @return {string} 補足文。
+ */
+export const buildPerBookingPriceNote = ( { price, currencySymbol = null } ) =>
+	joinSentences(
+		sprintf(
+			/* translators: %s: price per tour (e.g. ¥30,000). */
+			__( 'The price is %s per tour.', 'vk-booking-manager' ),
+			formatCurrency( price, currencySymbol )
+		),
+		__(
+			'The price does not change even if the number of guests is entered.',
+			'vk-booking-manager'
+		)
+	);
+
+/**
+ * 「1ツアーあたり」で規定人数を超えた分の追加料金を使うメニューの、人数欄の下に出す補足文を組み立てる（#1003）。
+ *
+ * 1ツアーの料金に何名までの参加が含まれるかと、超えた人数に区分ごとの追加料金が加算されることを伝える。
+ * 例: 「料金は 1ツアーあたり ¥30,000 で、4名までの参加を含みます。これを超える人数には、区分ごとに表示した追加料金が、超えた1名あたりで加算されます。」
+ *
+ * @param {Object}      args
+ * @param {number}      args.price           1ツアーあたりの基本料金。
+ * @param {number}      args.includedGuests  基本料金に含まれる人数。
+ * @param {string|null} args.currencySymbol  通貨記号。
+ * @param {string}      args.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
+ * @return {string} 補足文。
+ */
+export const buildPerBookingExtraGuestPriceNote = ( {
+	price,
+	includedGuests,
+	currencySymbol = null,
+	guestsUnitLabel = '',
+} ) =>
+	joinSentences(
+		sprintf(
+			/* translators: 1: price per tour (e.g. ¥30,000), 2: number of guests included in the basic price with unit (e.g. 4 guests). */
+			__(
+				'The price is %1$s per tour and includes up to %2$s.',
+				'vk-booking-manager'
+			),
+			formatCurrency( price, currencySymbol ),
+			formatGuestsCount( includedGuests, guestsUnitLabel )
+		),
+		__(
+			'For guests over this number, the extra fee shown for each category is added per extra guest.',
+			'vk-booking-manager'
+		)
+	);

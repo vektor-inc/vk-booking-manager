@@ -19,6 +19,7 @@ use Exception;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Attendees\Booking_Attendee_Resolver;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Booking_Price;
 use VKBookingManager\Common\Exclusive_Fee;
 use VKBookingManager\Common\Lodging_Price;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
@@ -101,8 +102,6 @@ class Booking_Confirmation_Controller {
 	private const MENU_META_RESERVATION_CUSTOM_DATES    = Reservation_Day::META_CUSTOM_DATES;
 	private const MENU_META_MAX_CAPACITY                = '_vkbm_max_capacity';
 	private const MENU_META_MIN_CAPACITY                = '_vkbm_min_capacity';
-	private const MENU_META_ALLOW_GUESTS                = '_vkbm_allow_multiple_guests';
-	private const MENU_META_EXCLUSIVE_WHEN_BOOKED       = '_vkbm_exclusive_when_booked';
 	private const MENU_META_EXCLUSIVE_USER_SELECTABLE   = '_vkbm_exclusive_user_selectable';
 	private const MENU_META_EXCLUSIVE_FEE_PER_PERSON    = '_vkbm_exclusive_fee_per_person';
 	private const MENU_META_EXCLUSIVE_FEE_EXEMPT        = '_vkbm_exclusive_fee_exempt_guests';
@@ -894,11 +893,25 @@ class Booking_Confirmation_Controller {
 				// 料金区分が定義されている場合は Σ(区分料金 × 区分人数) + 指名料 + 貸し切り料金。
 				// 区分未定義は従来どおり サービス基本料金 × 人数 + 指名料 + 貸し切り料金（完全後方互換）。
 				// 料金はクライアントから送られた金額を信用せず、サーバ保存メタを正として再計算する。
-				if ( ! empty( $guest_tiers ) ) {
-					$base_total_price = max( 0, Price_Tiers::total_price( $guest_tiers ) + max( 0, $nomination_fee ) + max( 0, $exclusive_fee ) );
-				} else {
-					$base_total_price = max( 0, ( $service_base_price * $guests ) + max( 0, $nomination_fee ) + max( 0, $exclusive_fee ) );
+				// 1ツアーあたりのメニューは人数を掛けず基本料金そのまま（#1002）。計算は Booking_Price に集約している。
+				$price_unit = Service_Menu_Post_Type::get_price_unit( $menu_id );
+				// 1ツアーあたりで規定人数を超えた分の追加料金を使う予約は、基本料金に含まれる人数を超えた人数の内訳を求める（#1003）。
+				$extra_guest_tiers = array();
+				$included_guests   = Service_Menu_Post_Type::get_included_guests( $menu_id );
+				if ( Booking_Price::is_per_booking( $price_unit ) && array() !== $guest_tiers ) {
+					$extra_guest_tiers = Booking_Price::resolve_extra_guest_tiers( $guest_tiers, $included_guests );
 				}
+				$base_total_price = Booking_Price::calculate_total(
+					array(
+						'price_unit'        => $price_unit,
+						'base_price'        => $service_base_price,
+						'guests'            => $guests,
+						'guest_tiers'       => $guest_tiers,
+						'extra_guest_tiers' => $extra_guest_tiers,
+						'nomination_fee'    => $nomination_fee,
+						'exclusive_fee'     => $exclusive_fee,
+					)
+				);
 				if ( null !== $lodging_stay ) {
 					// 泊の予約は、サーバーの設定から計算した合計（（プランの料金＋客室の追加料金）× 泊数）を使う。
 					// 客室の追加料金は合計に含めるため、指名料としては保存しない。
@@ -1031,6 +1044,25 @@ class Booking_Confirmation_Controller {
 					delete_post_meta( $booking_id, self::META_GUEST_TIERS );
 				}
 				update_post_meta( $booking_id, self::META_SERVICE_BASE_PRICE, $service_base_price );
+				// 予約時点の料金の単位を保存する（1ツアーあたりのときだけ。後からメニューの設定を変えても予約時点の表示が崩れないようにする）。
+				if ( Booking_Price::is_per_booking( $price_unit ) ) {
+					update_post_meta( $booking_id, Booking_Price::META_BOOKING_PRICE_UNIT, Booking_Price::UNIT_PER_BOOKING );
+				} else {
+					delete_post_meta( $booking_id, Booking_Price::META_BOOKING_PRICE_UNIT );
+				}
+				// 規定人数を超えた分の追加料金の内訳を保存する（超過した人がいるときだけ。後からメニューの設定を変えても予約時点の表示が崩れないようにする）。
+				if ( array() !== $extra_guest_tiers ) {
+					update_post_meta(
+						$booking_id,
+						Booking_Price::META_BOOKING_EXTRA_GUESTS,
+						array(
+							'included_guests' => $included_guests,
+							'tiers'           => $extra_guest_tiers,
+						)
+					);
+				} else {
+					delete_post_meta( $booking_id, Booking_Price::META_BOOKING_EXTRA_GUESTS );
+				}
 				update_post_meta( $booking_id, self::META_CUSTOMER, $customer_name_value );
 				if ( '' !== $attendee['id'] ) {
 					update_post_meta( $booking_id, Booking_Attendee_Resolver::META_ID, $attendee['id'] );
@@ -2427,7 +2459,8 @@ class Booking_Confirmation_Controller {
 		// ユーザーによる貸し切り指定は受け付けない（#388）。両方ONで保存されると、指定した予約者だけ
 		// 貸し切り料金を負担する不整合（払った人が損をする）が起きるため排他にする。
 		// 下書きコントローラ（Booking_Draft_Controller::is_user_exclusive_selectable）と同型の判定。
-		if ( get_post_meta( $menu_id, self::MENU_META_EXCLUSIVE_WHEN_BOOKED, true ) ) {
+		// 1ツアーあたりのメニューは貸し切り予約が自動で有効になるため、同じ扱いにする（#1002）。
+		if ( Service_Menu_Post_Type::is_exclusive_when_booked_setting_on( $menu_id ) ) {
 			return false;
 		}
 
@@ -2446,8 +2479,8 @@ class Booking_Confirmation_Controller {
 			return false;
 		}
 
-		// メニュー単位の複数人一括予約許可（_vkbm_allow_multiple_guests）も必須。
-		if ( ! get_post_meta( $menu_id, self::MENU_META_ALLOW_GUESTS, true ) ) {
+		// メニュー単位の複数人一括予約許可（_vkbm_allow_multiple_guests）も必須（1ツアーあたりのメニューは常に許可として扱う。#1002）。
+		if ( ! Service_Menu_Post_Type::is_allow_multiple_guests_setting_on( $menu_id ) ) {
 			return false;
 		}
 
@@ -2740,6 +2773,11 @@ class Booking_Confirmation_Controller {
 
 		// 1室1泊あたりのプランは許可フラグが未保存・OFF でも ON として扱う（#831）。
 		if ( ! Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id ) || $this->count_menu_staff( $menu_id ) < 1 ) {
+			return array();
+		}
+
+		// 1ツアーあたりのメニューは、規定人数を超えた分の追加料金を使うときだけ料金区分を使う（#1002、#1003）。
+		if ( ! Service_Menu_Post_Type::allows_guest_tier_input( $menu_id ) ) {
 			return array();
 		}
 

@@ -66,6 +66,8 @@ return array(
     'VKBookingManager\\Capabilities\\Roles_Manager' => $baseDir . '/src/capabilities/class-roles-manager.php',
     'VKBookingManager\\Common\\Attendee_Name' => $baseDir . '/src/common/class-attendee-name.php',
     'VKBookingManager\\Common\\Booking_Datetime' => $baseDir . '/src/common/class-booking-datetime.php',
+    'VKBookingManager\\Common\\Booking_Price' => $baseDir . '/src/common/class-booking-price.php',
+    'VKBookingManager\\Common\\Booking_Price_Display' => $baseDir . '/src/common/class-booking-price-display.php',
     'VKBookingManager\\Common\\Exclusive_Fee' => $baseDir . '/src/common/class-exclusive-fee.php',
     'VKBookingManager\\Common\\Holiday_Calendar' => $baseDir . '/src/common/class-holiday-calendar.php',
     'VKBookingManager\\Common\\Lodging_Price' => $baseDir . '/src/common/class-lodging-price.php',

@@ -49,6 +49,7 @@ import {
 	setStaffEnabled,
 	getStaffEnabled,
 } from '../utils/helpers';
+import { configureProviderSettings } from '../utils/setup';
 
 // 基本料金・料金区分まわりの要素ロケーター。
 const BASE_PRICE_ROW = '#vkbm-base-price-field';
@@ -61,6 +62,11 @@ const PRICE_TIER_LABEL = '.vkbm-price-tier-label';
 const ALLOW_MULTI = '#vkbm_service_menu_allow_multiple_guests';
 const MAX_CAPACITY = '#vkbm_service_menu_max_capacity';
 const OVERRIDDEN_CLASS = 'vkbm-base-price-overridden';
+// aria-describedby に上書き中の説明の id が（他の id と並んでいても）含まれることを表す正規表現。
+const OVERRIDDEN_DESCRIBEDBY_PATTERN =
+	/(^|\s)vkbm-base-price-overridden-description(\s|$)/;
+
+const PROVIDER_OPTION_NAME = 'vkbm_provider_settings';
 
 // グレー表示中に表示される説明文（ja ロケール、po 定義済み）。
 const OVERRIDDEN_DESCRIPTION_TEXT =
@@ -234,9 +240,10 @@ async function expectOverridden( page: Page ) {
 	const input = page.locator( BASE_PRICE_INPUT );
 	await expect( input ).toHaveAttribute( 'readonly', '' );
 	await expect( input ).toHaveClass( new RegExp( OVERRIDDEN_CLASS ) );
+	// アクティビティのサイトでは単位表記の id も並ぶため、完全一致ではなく「id が含まれること」を確かめる（#1002）。
 	await expect( input ).toHaveAttribute(
 		'aria-describedby',
-		'vkbm-base-price-overridden-description'
+		OVERRIDDEN_DESCRIBEDBY_PATTERN
 	);
 	const description = page.locator( BASE_PRICE_DESCRIPTION );
 	await expect( description ).toBeVisible();
@@ -244,15 +251,68 @@ async function expectOverridden( page: Page ) {
 }
 
 // 基本料金入力欄が通常表示（readonly なし・クラスなし・説明文非表示）であることを検証する。
+// aria-describedby は、料金区分で上書き中の説明の id を含まないことだけを確かめる。
 async function expectNotOverridden( page: Page ) {
 	const input = page.locator( BASE_PRICE_INPUT );
 	await expect( input ).not.toHaveAttribute( 'readonly', '' );
 	await expect( input ).not.toHaveClass( new RegExp( OVERRIDDEN_CLASS ) );
-	await expect( input ).not.toHaveAttribute( 'aria-describedby' );
+	// アクティビティのサイトでは、料金の単位表記（vkbm-base-price-slot-unit）が常に関連付くため、
+	// 「属性が無いこと」ではなく「上書き中の説明の id が含まれないこと」を確かめる（#1002）。
+	// 属性そのものが無い場合も通る。自動リトライが効くよう expect の形で書く。
+	await expect( input ).not.toHaveAttribute(
+		'aria-describedby',
+		OVERRIDDEN_DESCRIBEDBY_PATTERN
+	);
 	await expect( page.locator( BASE_PRICE_DESCRIPTION ) ).toBeHidden();
 }
 
 let originalStaffEnabled = true;
+
+// 業種プリセット（industry_preset）を既定の 'custom' に固定する。
+// アクティビティなどのプリセットが e2e 環境に残っていると、基本料金欄の単位表記や
+// aria-describedby の中身が変わり、この spec の結果がプリセットに左右されるため。
+// BM 設定は beforeAll で控えて afterAll で必ず戻す（控えが無ければ option ごと削除）。
+// ファイル直下に置くので、下の2つの describe の両方に適用される。
+let originalProviderSettingsJson: string | null = null;
+
+function restoreProviderSettings(): void {
+	if ( originalProviderSettingsJson ) {
+		wpCliArgs(
+			[
+				'option',
+				'update',
+				PROVIDER_OPTION_NAME,
+				originalProviderSettingsJson,
+				'--format=json',
+			],
+			{ stdio: 'pipe' }
+		);
+		return;
+	}
+	try {
+		wpCliArgs( [ 'option', 'delete', PROVIDER_OPTION_NAME ], {
+			stdio: 'pipe',
+		} );
+	} catch {
+		// 元から無いなら何もしない。
+	}
+}
+
+test.beforeAll( async () => {
+	try {
+		originalProviderSettingsJson = wpCliArgs(
+			[ 'option', 'get', PROVIDER_OPTION_NAME, '--format=json' ],
+			{ stdio: 'pipe' }
+		);
+	} catch {
+		originalProviderSettingsJson = null;
+	}
+	await configureProviderSettings( { industry_preset: 'custom' } );
+} );
+
+test.afterAll( () => {
+	restoreProviderSettings();
+} );
 
 test.describe( 'PR #517: 基本料金の行の位置移動とグレー表示（予約枠の定員機能ON）', () => {
 	// ブロックエディタの起動が重く、3 つ目のテストは保存を挟んで 3 回開く。

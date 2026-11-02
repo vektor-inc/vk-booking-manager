@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.3
-Stable tag: 3.8.0
+Stable tag: 3.9.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,12 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.9.0 =
+* [ 機能追加 ][ 予約ブロック ] アクティビティ・ツアーのサイトで、サービスメニューの料金を「1名あたり」か「1ツアーあたり」から選べる設定を追加
+* [ 機能追加 ][ 予約ブロック ] アクティビティ・ツアーの「1ツアーあたり」の料金で、規定人数を超えた人数分だけ追加料金を取れる設定を追加
+* [ 不具合修正 ][ 予約ブロック ] 宿泊プランの予約カレンダーで、サイトの時刻とブラウザの時刻で年が違う日（年末年始など）に、サーバーが受け付けない先の月へ進もうとして空き状況の取得エラーになる不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] 提供期間の開始日が先の月にあるメニューを、同じメニューの「いつもの」から選び直すと、カレンダーが開始月ではなく今月のまま表示される不具合を修正
 
 = 3.8.0 =
 * [ 機能追加 ] 基本設定の「システム設定」タブに、お客様1人あたりの予約数の上限を設定する項目を追加し、これから先の予約が上限に達したお客様（会員登録なしの予約を含む）は新しい予約ができないように変更（初期値は3件で、既存のサイトもアップデート直後から上限3件が効きます。0 にすると上限なしに戻せます）

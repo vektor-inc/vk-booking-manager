@@ -733,6 +733,24 @@ $vkbm-plan-summary-control-height: 44px;
 	white-space: nowrap;
 }
 
+// 追加料金の金額（「+¥3,000」）に添える読み上げ用の文言。画面には出さず、視覚的にのみ隠す.
+.vkbm-plan-summary__visually-hidden {
+
+	@include vkbm-visually-hidden;
+}
+
+// 追加料金ありの概算合計の上に添える、ツアー料金と追加料金の内訳の1行.
+.vkbm-plan-summary__guest-tiers-breakdown {
+	margin: 0;
+	font-size: 0.875rem;
+	text-align: right;
+}
+
+// 折り返さない塊。狭い幅でも、折り返しは塊と塊の境界だけで起こる.
+.vkbm-plan-summary__nowrap {
+	white-space: nowrap;
+}
+
 // 概算合計は合計として視覚的に強調する（区分行との境界に区切り線）.
 .vkbm-plan-summary__guest-tiers-total {
 	margin-top: 0.25rem;

@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Booking_Price_Display;
 use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -758,9 +759,13 @@ class Menu_Loop_Block {
 				wp_kses_post( $this->render_lodging_price_rows( $post->ID, $lodging_rows ) )
 			);
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
+			// 1ツアーあたりのメニューだけ「¥30,000 / 1ツアー」と単位を付ける（1名あたりは金額だけの表示のまま）。
+			$price_text   = Service_Menu_Post_Type::is_price_per_booking( $post->ID )
+				? $this->append_tax_label( Booking_Price_Display::format_price_with_unit_html( (int) $price ) )
+				: $this->format_price_display( (int) $price );
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__text-price">%s</div>',
-				wp_kses_post( $this->format_price_display( (int) $price ) )
+				wp_kses_post( $price_text )
 			);
 		}
 
@@ -1636,6 +1641,8 @@ class Menu_Loop_Block {
 		$slot_capacity_displayable = $slot_capacity_available
 			&& (
 				! $is_nomination_menu
+				// 1ツアーあたりのメニューは複数人一括予約を常に許可として扱う（#1002）。
+				|| Service_Menu_Post_Type::is_price_per_booking( $post->ID )
 				|| (bool) get_post_meta( $post->ID, '_vkbm_allow_multiple_guests', true )
 			);
 		// #392: 最少催行人数は指名を使うメニューでは意味を持たないため、定員・料金区分とは別に
@@ -1653,7 +1660,9 @@ class Menu_Loop_Block {
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
 				$is_nomination_menu
 					? esc_html__( 'Maximum group size', 'vk-booking-manager' )
-					: esc_html__( 'Time slot capacity', 'vk-booking-manager' ),
+					: ( Service_Menu_Post_Type::is_price_per_booking( $post->ID )
+						? esc_html__( 'Maximum guests per tour', 'vk-booking-manager' )
+						: esc_html__( 'Time slot capacity', 'vk-booking-manager' ) ),
 				esc_html( vkbm_format_guests_count( $max_capacity ) )
 			);
 		}
@@ -1686,9 +1695,14 @@ class Menu_Loop_Block {
 			$price_markup = $this->render_price_tiers( Price_Tiers::normalize_tiers( $price_tiers_raw ) );
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			// #858: 税込みラベルは金額の横ではなく、金額の下に右寄せで別行表示する（料金区分一覧と同じ見た目）。
+			// 1ツアーあたりのメニューだけ「¥30,000 / 1ツアー」と単位を付ける（1名あたりは金額だけの表示のまま）。
+			// 「◯名まで」は自動で出さない。
+			$price_html   = Service_Menu_Post_Type::is_price_per_booking( $post->ID )
+				? Booking_Price_Display::format_price_with_unit_html( (int) $price )
+				: esc_html( VKBM_Helper::format_currency( (int) $price ) );
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__card-price">%s</div>%s',
-				esc_html( VKBM_Helper::format_currency( (int) $price ) ),
+				wp_kses_post( $price_html ),
 				$this->render_card_tax_note()
 			);
 		}

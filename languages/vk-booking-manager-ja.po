@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: vk-booking-manager 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-"
 "manager\n"
-"POT-Creation-Date: 2026-11-01T08:27:01+00:00\n"
+"POT-Creation-Date: 2026-11-02T06:22:26+00:00\n"
 "PO-Revision-Date: 2026-02-23 23:58+0900\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -267,8 +267,8 @@ msgstr "%sを消し、予約者との紐付けを外します。この操作は�
 #: src/bookings/class-booking-anonymize-bulk-action.php:338
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:465
 #: src/resources/class-resource-delete-guard.php:668
-#: src/blocks/reservation/app.js:3508
-#: src/blocks/reservation/booking-confirm-app.js:2238
+#: src/blocks/reservation/app.js:3578
+#: src/blocks/reservation/booking-confirm-app.js:2286
 msgid "Cancel"
 msgstr "キャンセル"
 
@@ -459,19 +459,19 @@ msgstr ""
 #: src/blocks/class-menu-search-block.php:504
 #: src/blocks/class-menu-search-block.php:537
 #: src/integrations/google-calendar/class-google-calendar-event-builder.php:143
-#: src/provider-settings/class-industry-presets.php:289
+#: src/provider-settings/class-industry-presets.php:291
 #: src/provider-settings/class-settings-repository.php:132
 #: src/provider-settings/class-settings-repository.php:133
 #: src/resources/resource-labels.php:48 src/resources/resource-labels.php:62
 #: src/resources/resource-labels.php:89 src/resources/resource-labels.php:106
 #: src/rest/class-provider-settings-controller.php:94
 #: src/rest/class-provider-settings-controller.php:95
-#: src/blocks/reservation/app.js:546 src/blocks/reservation/app.js:547
-#: src/blocks/reservation/app.js:1040 src/blocks/reservation/app.js:1049
-#: src/blocks/reservation/booking-confirm-app.js:220
-#: src/blocks/reservation/booking-confirm-app.js:519
+#: src/blocks/reservation/app.js:552 src/blocks/reservation/app.js:553
+#: src/blocks/reservation/app.js:1061 src/blocks/reservation/app.js:1070
+#: src/blocks/reservation/booking-confirm-app.js:222
+#: src/blocks/reservation/booking-confirm-app.js:565
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:530
-#: src/blocks/reservation/components/booking-summary-items.js:22
+#: src/blocks/reservation/components/booking-summary-items.js:28
 #: src/blocks/reservation/components/guest-result-frame.js:141
 #: src/blocks/reservation/resource-tag-empty-message.js:22
 msgid "Staff"
@@ -481,7 +481,7 @@ msgstr "スタッフ"
 #: src/admin/class-provider-settings-page.php:2627
 #: src/admin/class-provider-settings-page.php:3806
 #: src/admin/class-provider-settings-page.php:3912
-#: src/provider-settings/class-industry-presets.php:290
+#: src/provider-settings/class-industry-presets.php:292
 #: src/provider-settings/class-settings-repository.php:134
 #: src/resources/resource-labels.php:76 src/resources/resource-labels.php:250
 msgid "Staff available"
@@ -489,9 +489,9 @@ msgstr "担当可能スタッフ"
 
 #: src/admin/class-provider-settings-page.php:833
 #: src/provider-settings/class-settings-repository.php:136
-#: src/resources/resource-labels.php:322 src/blocks/reservation/app.js:549
-#: src/blocks/reservation/app.js:1056
-#: src/blocks/reservation/booking-confirm-app.js:223
+#: src/resources/resource-labels.php:322 src/blocks/reservation/app.js:555
+#: src/blocks/reservation/app.js:1077
+#: src/blocks/reservation/booking-confirm-app.js:225
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:152
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:741
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:757
@@ -502,9 +502,9 @@ msgstr "指名なし"
 #: src/provider-settings/class-settings-repository.php:137
 #: src/resources/resource-labels.php:335
 #: src/staff/class-staff-editor-pro.php:336
-#: src/staff/class-staff-editor.php:347 src/blocks/reservation/app.js:550
-#: src/blocks/reservation/app.js:1061
-#: src/blocks/reservation/booking-confirm-app.js:226
+#: src/staff/class-staff-editor.php:347 src/blocks/reservation/app.js:556
+#: src/blocks/reservation/app.js:1082
+#: src/blocks/reservation/booking-confirm-app.js:228
 msgid "Nomination fee"
 msgstr "指名料"
 
@@ -518,10 +518,10 @@ msgstr "時間"
 #: src/admin/class-provider-settings-page.php:836
 #: src/admin/class-provider-settings-page.php:3917
 #: src/provider-settings/class-settings-repository.php:139
-#: src/resources/resource-labels.php:363 src/blocks/reservation/app.js:566
-#: src/blocks/reservation/app.js:1090
-#: src/blocks/reservation/booking-confirm-app.js:229
-#: src/blocks/reservation/components/booking-summary-items.js:146
+#: src/resources/resource-labels.php:363 src/blocks/reservation/app.js:572
+#: src/blocks/reservation/app.js:1111
+#: src/blocks/reservation/booking-confirm-app.js:231
+#: src/blocks/reservation/components/booking-summary-items.js:210
 msgid "Other conditions"
 msgstr "その他条件"
 
@@ -716,17 +716,17 @@ msgid "No regular holidays"
 msgstr "定休日なし"
 
 #: src/admin/class-provider-settings-page.php:1229
-#: src/admin/class-service-menu-editor.php:1151
+#: src/admin/class-service-menu-editor.php:1180
 msgid "period"
 msgstr "周期"
 
 #: src/admin/class-provider-settings-page.php:1230
-#: src/admin/class-service-menu-editor.php:1152
+#: src/admin/class-service-menu-editor.php:1181
 msgid "day of week"
 msgstr "曜日"
 
 #: src/admin/class-provider-settings-page.php:1231
-#: src/admin/class-service-menu-editor.php:1153
+#: src/admin/class-service-menu-editor.php:1182
 msgid "operation"
 msgstr "操作"
 
@@ -956,15 +956,15 @@ msgid "Service menu display mode"
 msgstr "サービスメニュー表示モード"
 
 #: src/admin/class-provider-settings-page.php:1648
-#: src/post-types/class-service-menu-post-type.php:1430
 #: src/post-types/class-service-menu-post-type.php:1458
+#: src/post-types/class-service-menu-post-type.php:1486
 #: src/blocks/menu-loop/edit.js:31
 msgid "card"
 msgstr "カード"
 
 #: src/admin/class-provider-settings-page.php:1651
-#: src/post-types/class-service-menu-post-type.php:1429
 #: src/post-types/class-service-menu-post-type.php:1457
+#: src/post-types/class-service-menu-post-type.php:1485
 #: src/blocks/menu-loop/edit.js:32
 msgid "text"
 msgstr "テキスト"
@@ -1138,19 +1138,19 @@ msgid " It is not used for lodging plans."
 msgstr "泊のプランには使いません。"
 
 #: src/admin/class-provider-settings-page.php:1836
-#: src/post-types/class-service-menu-post-type.php:341
-#: src/post-types/class-service-menu-post-type.php:803
+#: src/post-types/class-service-menu-post-type.php:366
+#: src/post-types/class-service-menu-post-type.php:831
 msgid "Post-service buffer"
 msgstr "サービス後バッファ"
 
 #: src/admin/class-provider-settings-page.php:1847
-#: src/post-types/class-service-menu-post-type.php:793
-#: src/post-types/class-service-menu-post-type.php:805
+#: src/post-types/class-service-menu-post-type.php:821
+#: src/post-types/class-service-menu-post-type.php:833
 msgid "minutes"
 msgstr "分"
 
 #: src/admin/class-provider-settings-page.php:1848
-#: src/admin/class-service-menu-editor.php:776
+#: src/admin/class-service-menu-editor.php:793
 msgid ""
 "During the service time plus the buffer time, new reservations will not be "
 "accepted."
@@ -1163,31 +1163,31 @@ msgid "If there is an input for each service menu, that will take priority."
 msgstr "各サービスメニューで入力がある場合はそちらが優先されます。"
 
 #: src/admin/class-provider-settings-page.php:1858
-#: src/admin/class-service-menu-editor.php:536
-#: src/post-types/class-service-menu-post-type.php:340
-#: src/post-types/class-service-menu-post-type.php:797
+#: src/admin/class-service-menu-editor.php:548
+#: src/post-types/class-service-menu-post-type.php:365
+#: src/post-types/class-service-menu-post-type.php:825
 msgid "Reservation deadline"
 msgstr "予約締切"
 
 #: src/admin/class-provider-settings-page.php:1869
-#: src/admin/class-service-menu-editor.php:539
-#: src/post-types/class-service-menu-post-type.php:799
+#: src/admin/class-service-menu-editor.php:551
+#: src/post-types/class-service-menu-post-type.php:827
 msgid "hours ago"
 msgstr "時間前"
 
 #: src/admin/class-provider-settings-page.php:1878
-#: src/admin/class-service-menu-editor.php:558
+#: src/admin/class-service-menu-editor.php:570
 msgid "Max advance booking period"
 msgstr "予約可能な最大日数"
 
 #: src/admin/class-provider-settings-page.php:1889
 #: src/admin/class-provider-settings-page.php:3363
-#: src/admin/class-service-menu-editor.php:561
+#: src/admin/class-service-menu-editor.php:573
 msgid "days"
 msgstr "日"
 
 #: src/admin/class-provider-settings-page.php:1891
-#: src/admin/class-service-menu-editor.php:563
+#: src/admin/class-service-menu-editor.php:575
 msgid ""
 "The maximum number of days in advance that reservations can be made. Set to "
 "0 for no limit."
@@ -1283,9 +1283,9 @@ msgid ""
 msgstr "キャンセルの期限は「予約キャンセル」の設定に従います。"
 
 #: src/admin/class-provider-settings-page.php:1963
-#: src/bookings/class-booking-admin.php:656
-#: src/bookings/class-booking-admin.php:1497
-#: src/bookings/class-booking-admin.php:1773
+#: src/bookings/class-booking-admin.php:669
+#: src/bookings/class-booking-admin.php:1562
+#: src/bookings/class-booking-admin.php:1853
 msgid "Reservation status"
 msgstr "予約ステータス"
 
@@ -1436,7 +1436,7 @@ msgstr "入力欄の見出し"
 
 #: src/admin/class-provider-settings-page.php:2080
 #: src/common/class-attendee-name.php:42
-#: src/blocks/reservation/booking-confirm-app.js:168
+#: src/blocks/reservation/booking-confirm-app.js:170
 msgid "Name of the person receiving the service"
 msgstr "ご利用になる方のお名前"
 
@@ -1587,7 +1587,7 @@ msgstr "回 / 30分"
 #: src/admin/class-provider-settings-page.php:2197
 #: src/auth/class-auth-shortcodes.php:633
 #: src/auth/class-auth-shortcodes.php:635
-#: src/blocks/reservation/booking-confirm-app.js:2561
+#: src/blocks/reservation/booking-confirm-app.js:2640
 #: src/blocks/reservation/components/reservation-header-nav.js:94
 msgid "Log in"
 msgstr "ログイン"
@@ -1645,8 +1645,8 @@ msgstr ""
 "wp-login.php にアクセスした場合は予約ページのログイン画面へ誘導します。"
 
 #: src/admin/class-provider-settings-page.php:2260
-#: src/blocks/reservation/app.js:3343
-#: src/blocks/reservation/booking-confirm-app.js:2025
+#: src/blocks/reservation/app.js:3413
+#: src/blocks/reservation/booking-confirm-app.js:2073
 #: src/blocks/reservation/components/guest-result-frame.js:109
 msgid "Logo image"
 msgstr "ロゴ画像"
@@ -1664,7 +1664,7 @@ msgid "Select a logo image from your Media Library (optional)."
 msgstr "Media Library からロゴ画像を選択します（任意）。"
 
 #: src/admin/class-provider-settings-page.php:2292
-#: src/blocks/reservation/booking-confirm-app.js:1788
+#: src/blocks/reservation/booking-confirm-app.js:1834
 #: src/blocks/reservation/components/footer-model.js:103
 msgid "Cancellation policy"
 msgstr "キャンセルポリシー"
@@ -1677,7 +1677,7 @@ msgstr "予約ページや通知メール等で表示するキャンセル規定
 
 #: src/admin/class-provider-settings-page.php:2307
 #: src/auth/class-auth-shortcodes.php:1157
-#: src/blocks/reservation/booking-confirm-app.js:1820
+#: src/blocks/reservation/booking-confirm-app.js:1866
 #: src/blocks/reservation/components/footer-model.js:112
 msgid "System Terms of Use"
 msgstr "システム利用規約"
@@ -2808,9 +2808,9 @@ msgstr "基本営業時間の終了時刻（分）"
 
 #: src/admin/class-provider-settings-page.php:4286
 #: src/admin/class-provider-settings-page.php:4465
-#: src/admin/class-service-menu-editor.php:1241
-#: src/bookings/class-booking-admin.php:1145
-#: src/bookings/class-booking-admin.php:1160
+#: src/admin/class-service-menu-editor.php:1270
+#: src/bookings/class-booking-admin.php:1195
+#: src/bookings/class-booking-admin.php:1210
 #: src/common/class-weekday-rule.php:180
 #: src/resources/class-resource-schedule-meta-box.php:298
 #: src/shifts/class-shift-editor.php:280
@@ -2843,14 +2843,14 @@ msgid "Remove time slot for %s"
 msgstr "%s の時間帯を削除"
 
 #: src/admin/class-provider-settings-page.php:4634
-#: src/admin/class-service-menu-editor.php:1067
-#: src/admin/class-service-menu-editor.php:1237
+#: src/admin/class-service-menu-editor.php:1096
+#: src/admin/class-service-menu-editor.php:1266
 msgid "Start date"
 msgstr "開始日"
 
 #: src/admin/class-provider-settings-page.php:4643
-#: src/admin/class-service-menu-editor.php:1070
-#: src/admin/class-service-menu-editor.php:1239
+#: src/admin/class-service-menu-editor.php:1099
+#: src/admin/class-service-menu-editor.php:1268
 msgid "End date"
 msgstr "終了日"
 
@@ -2864,9 +2864,9 @@ msgstr "例: 年末年始"
 
 #. Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
 #: src/admin/class-provider-settings-page.php:4663
-#: src/admin/class-service-menu-editor.php:335
-#: src/admin/class-service-menu-editor.php:1683
-#: src/admin/class-service-menu-editor.php:2093
+#: src/admin/class-service-menu-editor.php:336
+#: src/admin/class-service-menu-editor.php:1913
+#: src/admin/class-service-menu-editor.php:2341
 #: src/attendees/class-attendee-roster-user-profile.php:109
 #: src/attendees/class-attendee-roster-user-profile.php:133
 #: src/attendees/class-attendee-roster-user-profile.php:141
@@ -2876,327 +2876,353 @@ msgstr "例: 年末年始"
 msgid "Delete"
 msgstr "削除"
 
-#: src/admin/class-service-menu-editor.php:174
+#: src/admin/class-service-menu-editor.php:175
 msgid "Sub images"
 msgstr "サブ画像"
 
-#: src/admin/class-service-menu-editor.php:175
+#: src/admin/class-service-menu-editor.php:176
 msgid "+ Add images"
 msgstr "+ 画像を追加"
 
-#: src/admin/class-service-menu-editor.php:176
+#: src/admin/class-service-menu-editor.php:177
 msgid "Select sub images"
 msgstr "サブ画像を選択"
 
-#: src/admin/class-service-menu-editor.php:177
+#: src/admin/class-service-menu-editor.php:178
 msgid "Add to sub images"
 msgstr "サブ画像に追加"
 
 #. translators: %d: number of images.
-#: src/admin/class-service-menu-editor.php:179
+#: src/admin/class-service-menu-editor.php:180
 msgid "%d image"
 msgstr "%d枚"
 
 #. translators: %d: number of images.
-#: src/admin/class-service-menu-editor.php:181
+#: src/admin/class-service-menu-editor.php:182
 msgid "%d images"
 msgstr "%d枚"
 
 #. translators: %d: position of the image in the list (starting from 1).
-#: src/admin/class-service-menu-editor.php:183
+#: src/admin/class-service-menu-editor.php:184
 msgid "Remove image %d from sub images"
 msgstr "サブ画像の%d枚目を外す"
 
 #. translators: %d: position of the image in the list (starting from 1).
-#: src/admin/class-service-menu-editor.php:185
+#: src/admin/class-service-menu-editor.php:186
 msgid "Move image %d earlier"
 msgstr "%d枚目の画像を前へ移動"
 
 #. translators: %d: position of the image in the list (starting from 1).
-#: src/admin/class-service-menu-editor.php:187
+#: src/admin/class-service-menu-editor.php:188
 msgid "Move image %d later"
 msgstr "%d枚目の画像を後ろへ移動"
 
-#: src/admin/class-service-menu-editor.php:188
+#: src/admin/class-service-menu-editor.php:189
 msgid "Move earlier"
 msgstr "前へ移動"
 
-#: src/admin/class-service-menu-editor.php:189
+#: src/admin/class-service-menu-editor.php:190
 msgid "Move later"
 msgstr "後ろへ移動"
 
 #. translators: 1: new position of the image, 2: total number of images.
-#: src/admin/class-service-menu-editor.php:191
+#: src/admin/class-service-menu-editor.php:192
 msgid "Moved to position %1$d of %2$d."
 msgstr "%2$d枚中%1$d番目に移動しました。"
 
-#: src/admin/class-service-menu-editor.php:192
+#: src/admin/class-service-menu-editor.php:193
 msgid "Image removed."
 msgstr "画像を外しました。"
 
-#: src/admin/class-service-menu-editor.php:193
+#: src/admin/class-service-menu-editor.php:194
 msgid "Remove all"
 msgstr "すべて外す"
 
-#: src/admin/class-service-menu-editor.php:194
+#: src/admin/class-service-menu-editor.php:195
 msgid "All images removed."
 msgstr "すべての画像を外しました。"
 
-#: src/admin/class-service-menu-editor.php:195
+#: src/admin/class-service-menu-editor.php:196
 msgid "Undo"
 msgstr "元に戻す"
 
-#: src/admin/class-service-menu-editor.php:196
+#: src/admin/class-service-menu-editor.php:197
 msgid "All images restored."
 msgstr "すべての画像を元に戻しました。"
 
 #. translators: %d: number of images.
-#: src/admin/class-service-menu-editor.php:198
+#: src/admin/class-service-menu-editor.php:199
 msgid "%d image that was already added was not added again."
 msgstr "登録済みの画像%d枚は追加しませんでした。"
 
 #. translators: %d: number of images.
-#: src/admin/class-service-menu-editor.php:200
+#: src/admin/class-service-menu-editor.php:201
 msgid "%d images that were already added were not added again."
 msgstr "登録済みの画像%d枚は追加しませんでした。"
 
-#: src/admin/class-service-menu-editor.php:201
+#: src/admin/class-service-menu-editor.php:202
 msgid ""
 "Shown as small images below the duration, capacity, and other details on the "
 "menu card. Clicking an image enlarges it."
 msgstr ""
 "カードの時間・定員などの下に小さく表示され、クリックすると拡大表示されます。"
 
-#: src/admin/class-service-menu-editor.php:202
+#: src/admin/class-service-menu-editor.php:203
 msgid "To change the order, drag an image or use the move buttons."
 msgstr "並び順は、画像をドラッグするか矢印ボタンで変更できます。"
 
-#: src/admin/class-service-menu-editor.php:203
+#: src/admin/class-service-menu-editor.php:204
 msgid "Removing an image here does not delete it from the media library."
 msgstr "画像を外しても、メディアライブラリからは削除されません。"
 
 #. Translators: Placeholder for the price category name input. / 料金区分名の入力プレースホルダー.
-#: src/admin/class-service-menu-editor.php:337
-#: src/admin/class-service-menu-editor.php:2048
+#: src/admin/class-service-menu-editor.php:338
+#: src/admin/class-service-menu-editor.php:2296
 msgid "Category name (e.g. Adult)"
 msgstr "区分名（例：大人）"
 
 #. Translators: aria-label for the price category name input. / 料金区分名入力の aria-label.
-#: src/admin/class-service-menu-editor.php:339
-#: src/admin/class-service-menu-editor.php:2015
+#: src/admin/class-service-menu-editor.php:340
+#: src/admin/class-service-menu-editor.php:2259
 msgid "Price category name"
 msgstr "料金区分名"
 
 #. Translators: aria-label for the price input. / 料金入力の aria-label.
-#: src/admin/class-service-menu-editor.php:341
-#: src/admin/class-service-menu-editor.php:371
-#: src/admin/class-service-menu-editor.php:2018
+#: src/admin/class-service-menu-editor.php:342
+#: src/admin/class-service-menu-editor.php:372
+#: src/admin/class-service-menu-editor.php:2262
 msgid "Price"
 msgstr "価格"
 
-#: src/admin/class-service-menu-editor.php:344
-#: src/admin/class-service-menu-editor.php:935
-#: src/blocks/class-menu-loop-block.php:1670
+#: src/admin/class-service-menu-editor.php:345
+#: src/admin/class-service-menu-editor.php:959
+#: src/blocks/class-menu-loop-block.php:1679
 msgid "Minimum participants to confirm"
 msgstr "最少催行人数"
 
-#: src/admin/class-service-menu-editor.php:345
-#: src/admin/class-service-menu-editor.php:933
+#: src/admin/class-service-menu-editor.php:346
+#: src/admin/class-service-menu-editor.php:957
 msgid "Minimum guests to accept a booking"
 msgstr "最低申し込み人数"
 
-#: src/admin/class-service-menu-editor.php:346
-#: src/admin/class-service-menu-editor.php:959
+#: src/admin/class-service-menu-editor.php:347
+#: src/admin/class-service-menu-editor.php:983
 msgid ""
 "When bookings sharing the same time slot reach this number, the session is "
 "treated as confirmed."
 msgstr ""
 "同じ時間枠の予約人数の合計がこの人数に達すると、開催決定とみなされます。"
 
-#: src/admin/class-service-menu-editor.php:347
-#: src/admin/class-service-menu-editor.php:960
+#: src/admin/class-service-menu-editor.php:348
+#: src/admin/class-service-menu-editor.php:984
 msgid "Enter 0 to disable the minimum and accept any number of bookings."
 msgstr "0 を入力すると最少催行人数を無効にし、何件でも予約を受け付けます。"
 
-#: src/admin/class-service-menu-editor.php:348
-#: src/admin/class-service-menu-editor.php:954
-#: src/admin/class-service-menu-editor.php:961
+#: src/admin/class-service-menu-editor.php:349
+#: src/admin/class-service-menu-editor.php:978
+#: src/admin/class-service-menu-editor.php:985
 msgid "Values above the time slot capacity are reduced to that capacity."
 msgstr "予約枠の定員を超える値は、その定員に切り詰められます。"
 
-#: src/admin/class-service-menu-editor.php:351
-#: src/admin/class-service-menu-editor.php:947
+#: src/admin/class-service-menu-editor.php:352
+#: src/admin/class-service-menu-editor.php:971
 msgid ""
 "Because private booking is turned on, a single booking fills this time slot."
 msgstr "貸し切り予約がオンのため、1件の予約でこの時間枠が埋まります。"
 
-#: src/admin/class-service-menu-editor.php:352
-#: src/admin/class-service-menu-editor.php:951
+#: src/admin/class-service-menu-editor.php:353
+#: src/admin/class-service-menu-editor.php:975
 msgid ""
 "If the number of guests is below this value, the reservation cannot be "
 "accepted."
 msgstr "申込人数がこの人数に満たない場合、その予約は受け付けられません。"
 
-#: src/admin/class-service-menu-editor.php:353
-#: src/admin/class-service-menu-editor.php:952
+#: src/admin/class-service-menu-editor.php:354
+#: src/admin/class-service-menu-editor.php:976
 msgid "Enter 0 to remove the minimum and accept bookings from 1 guest."
 msgstr "0 を入力すると人数の下限を設けず、1名からでも予約を受け付けます。"
 
-#: src/admin/class-service-menu-editor.php:354
-#: src/admin/class-service-menu-editor.php:956
+#: src/admin/class-service-menu-editor.php:355
+#: src/admin/class-service-menu-editor.php:980
 msgid ""
 "Values above the time slot capacity (the maximum guests per group) are "
 "reduced to that capacity."
 msgstr ""
 "予約枠の定員（1組の最大人数）を超える値は、その定員に切り詰められます。"
 
-#: src/admin/class-service-menu-editor.php:356
-#: src/admin/class-service-menu-editor.php:945
+#: src/admin/class-service-menu-editor.php:357
+#: src/admin/class-service-menu-editor.php:969
 msgid "Each booking is for one group using one room."
 msgstr "1件の予約は、1組が1室を使う予約です。"
 
-#: src/admin/class-service-menu-editor.php:357
-#: src/admin/class-service-menu-editor.php:913
+#: src/admin/class-service-menu-editor.php:358
+#: src/admin/class-service-menu-editor.php:937
 msgid ""
 "Maximum number of guests that can be booked together in a single reservation."
 msgstr "1件の予約で、一度に申し込める最大人数です。"
 
-#: src/admin/class-service-menu-editor.php:366
-#: src/admin/class-service-menu-editor.php:1922
-#: src/admin/class-service-menu-editor.php:2054
+#: src/admin/class-service-menu-editor.php:367
+#: src/admin/class-service-menu-editor.php:2158
+#: src/admin/class-service-menu-editor.php:2302
 #: src/blocks/reservation/lodging/night-rates.js:42
 msgid "Regular"
 msgstr "平日"
 
-#: src/admin/class-service-menu-editor.php:367
-#: src/admin/class-service-menu-editor.php:1894
-#: src/admin/class-service-menu-editor.php:2119
+#: src/admin/class-service-menu-editor.php:368
+#: src/admin/class-service-menu-editor.php:2130
+#: src/admin/class-service-menu-editor.php:2370
 #: src/blocks/reservation/lodging/night-rates.js:39
 msgid "Pre-holiday"
 msgstr "休前日"
 
-#: src/admin/class-service-menu-editor.php:368
-#: src/admin/class-service-menu-editor.php:1900
-#: src/admin/class-service-menu-editor.php:2123
+#: src/admin/class-service-menu-editor.php:369
+#: src/admin/class-service-menu-editor.php:2136
+#: src/admin/class-service-menu-editor.php:2374
 #: src/blocks/reservation/lodging/night-rates.js:35
 msgid "Special date"
 msgstr "特定日"
 
-#: src/admin/class-service-menu-editor.php:369
-#: src/admin/class-service-menu-editor.php:2120
+#: src/admin/class-service-menu-editor.php:370
+#: src/admin/class-service-menu-editor.php:2371
 msgid "Price (pre-holiday)"
 msgstr "料金（休前日）"
 
-#: src/admin/class-service-menu-editor.php:370
-#: src/admin/class-service-menu-editor.php:2124
+#: src/admin/class-service-menu-editor.php:371
+#: src/admin/class-service-menu-editor.php:2375
 msgid "Price (special date)"
 msgstr "料金（特定日）"
 
-#: src/admin/class-service-menu-editor.php:372
-#: src/admin/class-service-menu-editor.php:2026
+#: src/admin/class-service-menu-editor.php:373
+#: src/admin/class-service-menu-editor.php:2274
 msgid "Price (per guest, per night)"
 msgstr "料金（1名・1泊）"
 
-#: src/admin/class-service-menu-editor.php:374
-#: src/admin/class-service-menu-editor.php:2024
+#: src/admin/class-service-menu-editor.php:375
+#: src/admin/class-service-menu-editor.php:2270
 msgid "Additional fee per extra guest, per night"
 msgstr "超過1名・1泊あたりの追加料金"
 
-#: src/admin/class-service-menu-editor.php:375
-#: src/admin/class-service-menu-editor.php:911
+#: src/admin/class-service-menu-editor.php:376
+#: src/admin/class-service-menu-editor.php:387
+#: src/admin/class-service-menu-editor.php:931
+#: src/admin/class-service-menu-editor.php:935
 msgid ""
 "The price does not change with the number of people up to the number "
 "included in the basic price."
 msgstr "基本料金に含まれる人数までは、人数を入力しても料金は変わりません。"
 
-#: src/admin/class-service-menu-editor.php:376
-#: src/admin/class-service-menu-editor.php:983
-msgid "The price is multiplied by the number of people."
-msgstr "料金は人数分が掛けられます。"
+#: src/admin/class-service-menu-editor.php:381
+#: src/admin/class-service-menu-editor.php:918
+#: src/blocks/class-menu-loop-block.php:1664
+msgid "Maximum guests per tour"
+msgstr "1ツアーの最大人数"
 
-#: src/admin/class-service-menu-editor.php:377
-#: src/admin/class-service-menu-editor.php:392
-#: src/admin/class-service-menu-editor.php:911
-#: src/admin/class-service-menu-editor.php:981
-msgid "The price does not change with the number of people."
-msgstr "人数を入力しても料金は変わりません。"
+#: src/admin/class-service-menu-editor.php:382
+#: src/admin/class-service-menu-editor.php:933
+msgid "Enter the maximum number of guests who can join one tour."
+msgstr "1ツアーに参加できる最大人数を入力します。"
 
-#: src/admin/class-service-menu-editor.php:379
-#: src/admin/class-service-menu-editor.php:832
-#: src/admin/class-service-menu-editor.php:900
-#: src/admin/class-service-menu-editor.php:1021
-#: src/blocks/class-menu-loop-block.php:1656
-msgid "Time slot capacity"
-msgstr "予約枠の定員"
-
-#: src/admin/class-service-menu-editor.php:384
-#: src/admin/class-service-menu-editor.php:921
-msgid "Default is 1."
-msgstr "未設定の場合は1です。"
-
-#: src/admin/class-service-menu-editor.php:389
-#: src/admin/class-service-menu-editor.php:898
-msgid "Maximum guests per room"
-msgstr "1室の最大人数"
-
-#: src/admin/class-service-menu-editor.php:390
-#: src/admin/class-service-menu-editor.php:909
-msgid "Enter the maximum number of guests who can stay in this room."
-msgstr "この部屋に泊まれる最大人数を入力してください。"
-
-#: src/admin/class-service-menu-editor.php:391
-#: src/admin/class-service-menu-editor.php:910
+#: src/admin/class-service-menu-editor.php:383
+#: src/admin/class-service-menu-editor.php:403
+#: src/admin/class-service-menu-editor.php:930
+#: src/admin/class-service-menu-editor.php:934
 msgid ""
 "Guests can choose up to this number in the number of guests field on the "
 "reservation screen."
 msgstr "予約画面の人数欄では、この人数まで選べます。"
 
-#: src/admin/class-service-menu-editor.php:416
+#: src/admin/class-service-menu-editor.php:384
+#: src/admin/class-service-menu-editor.php:935
+#: src/blocks/reservation/pricing-breakdown.js:602
+msgid "The price does not change even if the number of guests is entered."
+msgstr "人数を入力しても料金は変わりません。"
+
+#: src/admin/class-service-menu-editor.php:386
+#: src/admin/class-service-menu-editor.php:2272
+msgid "Additional fee per extra guest"
+msgstr "超過1名あたりの追加料金"
+
+#: src/admin/class-service-menu-editor.php:388
+#: src/admin/class-service-menu-editor.php:1007
+msgid "The price is multiplied by the number of people."
+msgstr "料金は人数分が掛けられます。"
+
+#: src/admin/class-service-menu-editor.php:389
+#: src/admin/class-service-menu-editor.php:404
+#: src/admin/class-service-menu-editor.php:931
+#: src/admin/class-service-menu-editor.php:1005
+msgid "The price does not change with the number of people."
+msgstr "人数を入力しても料金は変わりません。"
+
+#: src/admin/class-service-menu-editor.php:391
+#: src/admin/class-service-menu-editor.php:849
+#: src/admin/class-service-menu-editor.php:920
+#: src/admin/class-service-menu-editor.php:1050
+#: src/blocks/class-menu-loop-block.php:1665
+msgid "Time slot capacity"
+msgstr "予約枠の定員"
+
+#: src/admin/class-service-menu-editor.php:396
+#: src/admin/class-service-menu-editor.php:945
+msgid "Default is 1."
+msgstr "未設定の場合は1です。"
+
+#: src/admin/class-service-menu-editor.php:401
+#: src/admin/class-service-menu-editor.php:916
+msgid "Maximum guests per room"
+msgstr "1室の最大人数"
+
+#: src/admin/class-service-menu-editor.php:402
+#: src/admin/class-service-menu-editor.php:929
+msgid "Enter the maximum number of guests who can stay in this room."
+msgstr "この部屋に泊まれる最大人数を入力してください。"
+
+#: src/admin/class-service-menu-editor.php:428
 #: src/blocks/class-block-category.php:45
 msgid "VK Booking Manager"
 msgstr "VK Booking Manager"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:430
+#: src/admin/class-service-menu-editor.php:442
 msgid "%s collaboration"
 msgstr "%s連携"
 
-#: src/admin/class-service-menu-editor.php:443
+#: src/admin/class-service-menu-editor.php:455
 msgid "Public settings"
 msgstr "公開設定"
 
 #. translators: %s: link to the reservation deadline setting on the provider settings page.
 #. translators: %s: link to the max advance booking period setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:545
-#: src/admin/class-service-menu-editor.php:568
+#: src/admin/class-service-menu-editor.php:557
+#: src/admin/class-service-menu-editor.php:580
 msgid "If not filled in, the information entered on %s will be reflected."
 msgstr "未記入の場合は%sでの入力内容が反映されます。"
 
-#: src/admin/class-service-menu-editor.php:549
+#: src/admin/class-service-menu-editor.php:561
 msgid "Reservation deadline on the General Settings page"
 msgstr "基本設定画面の予約締切"
 
-#: src/admin/class-service-menu-editor.php:572
+#: src/admin/class-service-menu-editor.php:584
 msgid "Max advance booking period on the General Settings page"
 msgstr "基本設定画面の予約可能な最大日数"
 
-#: src/admin/class-service-menu-editor.php:592
+#: src/admin/class-service-menu-editor.php:604
 msgid "Internal memo (customer hidden)"
 msgstr "内部メモ（顧客非表示）"
 
-#: src/admin/class-service-menu-editor.php:611
+#: src/admin/class-service-menu-editor.php:623
 msgid "Details page"
 msgstr "詳細ページ"
 
-#: src/admin/class-service-menu-editor.php:615
+#: src/admin/class-service-menu-editor.php:627
 msgid "Use"
 msgstr "使用する"
 
-#: src/admin/class-service-menu-editor.php:639
+#: src/admin/class-service-menu-editor.php:651
 msgid "Catchphrase"
 msgstr "キャッチコピー"
 
-#: src/admin/class-service-menu-editor.php:688
+#: src/admin/class-service-menu-editor.php:700
 msgid ""
 "The time slot capacity and multi-guest booking settings below are shown "
 "regardless of this checkbox."
@@ -3204,17 +3230,17 @@ msgstr ""
 "以下の予約枠の定員・複数人一括予約の設定は、このチェックボックスの状態に関わ"
 "らず表示されます。"
 
-#: src/admin/class-service-menu-editor.php:717
-#: src/post-types/class-service-menu-post-type.php:779
+#: src/admin/class-service-menu-editor.php:729
+#: src/post-types/class-service-menu-post-type.php:807
 msgid "Disable for this service menu"
 msgstr "このサービスメニューでは無効にする"
 
 #. translators: %s: resource label (singular)
-#: src/admin/class-service-menu-editor.php:723
+#: src/admin/class-service-menu-editor.php:735
 msgid "This is the fee you enter on each %s's edit screen."
 msgstr "各%sの編集画面で入力した料金です。"
 
-#: src/admin/class-service-menu-editor.php:727
+#: src/admin/class-service-menu-editor.php:739
 msgid ""
 "When checked, it is not added to this service menu's price even if the "
 "customer nominates one."
@@ -3222,26 +3248,26 @@ msgstr ""
 "チェックを入れると、お客様が指名しても、このサービスメニューの料金には加算し"
 "ません。"
 
-#: src/admin/class-service-menu-editor.php:763
+#: src/admin/class-service-menu-editor.php:780
 msgid "Time required (minutes)"
 msgstr "所要時間（分）"
 
-#: src/admin/class-service-menu-editor.php:771
+#: src/admin/class-service-menu-editor.php:788
 msgid "Post-service buffer (min)"
 msgstr "サービス後バッファ（分）"
 
 #. translators: %s: link to the post-service buffer setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:781
-#: src/post-types/class-service-menu-post-type.php:821
+#: src/admin/class-service-menu-editor.php:798
+#: src/post-types/class-service-menu-post-type.php:849
 msgid "If it is left blank, the information entered on %s will be reflected."
 msgstr "未記入の場合は%sでの入力内容が反映されます。"
 
-#: src/admin/class-service-menu-editor.php:785
-#: src/post-types/class-service-menu-post-type.php:825
+#: src/admin/class-service-menu-editor.php:802
+#: src/post-types/class-service-menu-post-type.php:853
 msgid "Post-service buffer on the General Settings page"
 msgstr "基本設定画面のサービス後バッファ"
 
-#: src/admin/class-service-menu-editor.php:801
+#: src/admin/class-service-menu-editor.php:818
 msgid ""
 "If there is anything customers should know in advance, such as additional "
 "fees that may apply under certain conditions, enter it here."
@@ -3249,7 +3275,7 @@ msgstr ""
 "条件によって追加料金が発生する場合など、お客様に事前に知らせておくべき内容が"
 "あれば記載してください。"
 
-#: src/admin/class-service-menu-editor.php:836
+#: src/admin/class-service-menu-editor.php:853
 msgid ""
 "To set the time slot capacity to 2 or more, enable the time slot capacity "
 "option in the basic settings."
@@ -3258,122 +3284,122 @@ msgstr ""
 "さい。"
 
 #. translators: %1$s: opening anchor tag, %2$s: closing anchor tag (基本設定画面へのリンク).
-#: src/admin/class-service-menu-editor.php:840
+#: src/admin/class-service-menu-editor.php:857
 msgid ""
 "The time slot capacity can be enabled from the %1$sbasic settings page%2$s."
 msgstr "「予約枠の定員」は%1$s基本設定画面%2$sから有効にできます。"
 
-#: src/admin/class-service-menu-editor.php:968
+#: src/admin/class-service-menu-editor.php:992
 msgid "Booking multiple people at once"
 msgstr "複数人一括予約"
 
-#: src/admin/class-service-menu-editor.php:973
+#: src/admin/class-service-menu-editor.php:997
 msgid "Allow the same user to book for multiple people at once"
 msgstr "同じ利用者がまとめて複数人分を予約できるようにする"
 
-#: src/admin/class-service-menu-editor.php:976
+#: src/admin/class-service-menu-editor.php:1000
 msgid ""
 "A single booking can reserve for multiple people by entering the number of "
 "people."
 msgstr "人数を入力すると、1件の予約でまとめて複数人分を予約できます。"
 
-#: src/admin/class-service-menu-editor.php:1026
+#: src/admin/class-service-menu-editor.php:1055
 msgid ""
 "Setting the time slot capacity and staff auto-assignment are available in "
 "the Pro edition."
 msgstr "予約枠の定員の設定とスタッフ自動アサインはPro版で利用できます。"
 
-#: src/admin/class-service-menu-editor.php:1062
-#: src/blocks/class-menu-loop-block.php:1572
-#: src/post-types/class-service-menu-post-type.php:354
+#: src/admin/class-service-menu-editor.php:1091
+#: src/blocks/class-menu-loop-block.php:1577
+#: src/post-types/class-service-menu-post-type.php:379
 msgid "Service period"
 msgstr "提供期間"
 
-#: src/admin/class-service-menu-editor.php:1069
+#: src/admin/class-service-menu-editor.php:1098
 msgctxt ""
 "separator between the start date and the end date of the service period"
 msgid "~"
 msgstr "〜"
 
-#: src/admin/class-service-menu-editor.php:1074
+#: src/admin/class-service-menu-editor.php:1103
 msgid "Choose an end date that is the same as or later than the start date."
 msgstr "終了日は開始日と同じか、それより後の日を選んでください。"
 
-#: src/admin/class-service-menu-editor.php:1079
+#: src/admin/class-service-menu-editor.php:1108
 msgid "This period has ended."
 msgstr "この期間は終了しています。"
 
-#: src/admin/class-service-menu-editor.php:1080
+#: src/admin/class-service-menu-editor.php:1109
 msgid "The menu is not shown in the menu list on the reservation page."
 msgstr "予約ページのメニュー一覧には表示されません。"
 
-#: src/admin/class-service-menu-editor.php:1089
+#: src/admin/class-service-menu-editor.php:1118
 msgid "Only dates within this period can be booked."
 msgstr "この期間内の日だけ予約できます。"
 
-#: src/admin/class-service-menu-editor.php:1090
+#: src/admin/class-service-menu-editor.php:1119
 msgid "If a date is left blank, that side of the period is not limited."
 msgstr "空欄にした側は期間を限定しません。"
 
-#: src/admin/class-service-menu-editor.php:1095
+#: src/admin/class-service-menu-editor.php:1124
 msgid ""
 "For a plan billed per night, a reservation can be made when the check-in "
 "date is within this range."
 msgstr "泊のプランでは、チェックイン日がこの範囲に入っていれば予約できます。"
 
-#: src/admin/class-service-menu-editor.php:1133
-#: src/blocks/class-menu-loop-block.php:1584
-#: src/bookings/class-booking-admin.php:677
-#: src/post-types/class-service-menu-post-type.php:354
-#: src/post-types/class-service-menu-post-type.php:878
+#: src/admin/class-service-menu-editor.php:1162
+#: src/blocks/class-menu-loop-block.php:1589
+#: src/bookings/class-booking-admin.php:690
+#: src/post-types/class-service-menu-post-type.php:379
+#: src/post-types/class-service-menu-post-type.php:906
 msgid "Reservation date"
 msgstr "予約可能日"
 
-#: src/admin/class-service-menu-editor.php:1137
-#: src/post-types/class-service-menu-post-type.php:881
+#: src/admin/class-service-menu-editor.php:1166
+#: src/post-types/class-service-menu-post-type.php:909
 msgid "Not specified"
 msgstr "指定なし"
 
-#: src/admin/class-service-menu-editor.php:1138
+#: src/admin/class-service-menu-editor.php:1167
 #: src/common/class-reservation-day.php:321
-#: src/post-types/class-service-menu-post-type.php:882
+#: src/post-types/class-service-menu-post-type.php:910
 msgid "Saturdays and Sundays only"
 msgstr "土日限定"
 
-#: src/admin/class-service-menu-editor.php:1139
+#: src/admin/class-service-menu-editor.php:1168
 #: src/common/class-reservation-day.php:325
-#: src/post-types/class-service-menu-post-type.php:883
+#: src/post-types/class-service-menu-post-type.php:911
 msgid "Weekdays only"
 msgstr "平日限定"
 
-#: src/admin/class-service-menu-editor.php:1140
+#: src/admin/class-service-menu-editor.php:1169
 #: src/common/class-reservation-day.php:329
-#: src/post-types/class-service-menu-post-type.php:891
+#: src/post-types/class-service-menu-post-type.php:919
 msgid "Specified days of the week"
 msgstr "曜日指定"
 
-#: src/admin/class-service-menu-editor.php:1141
+#: src/admin/class-service-menu-editor.php:1170
 #: src/common/class-reservation-day.php:333
-#: src/post-types/class-service-menu-post-type.php:892
+#: src/post-types/class-service-menu-post-type.php:920
 msgid "Specified dates"
 msgstr "日付指定"
 
-#: src/admin/class-service-menu-editor.php:1143
+#: src/admin/class-service-menu-editor.php:1172
 msgid ""
 "If not specified, reservations are accepted on all days of the week (within "
 "the range where shifts exist)."
 msgstr ""
 "指定なしの場合は、すべての曜日で予約を受け付けます（シフトがある範囲内）。"
 
-#: src/admin/class-service-menu-editor.php:1147
+#: src/admin/class-service-menu-editor.php:1176
 msgid "Specify the days of the week when reservations are accepted."
 msgstr "予約を受け付ける曜日を指定します。"
 
-#: src/admin/class-service-menu-editor.php:1165
+#: src/admin/class-service-menu-editor.php:1194
 msgid "+ Add day of the week"
 msgstr "＋ 曜日を追加"
 
-#: src/admin/class-service-menu-editor.php:1166
+#: src/admin/class-service-menu-editor.php:1195
 msgid ""
 "Combine \"every week\" or \"1st to 5th\" with a day of the week. "
 "Reservations are accepted only on the specified days of the week (within the "
@@ -3382,15 +3408,15 @@ msgstr ""
 "「毎週」または「第1〜第5」と曜日を組み合わせます。指定した曜日（シフトがある"
 "範囲内）のみ予約を受け付けます。"
 
-#: src/admin/class-service-menu-editor.php:1178
+#: src/admin/class-service-menu-editor.php:1207
 msgid "Specify the dates when reservations are accepted."
 msgstr "予約を受け付ける日付を指定します。"
 
-#: src/admin/class-service-menu-editor.php:1187
+#: src/admin/class-service-menu-editor.php:1216
 msgid "+ Add date"
 msgstr "＋ 日付を追加"
 
-#: src/admin/class-service-menu-editor.php:1188
+#: src/admin/class-service-menu-editor.php:1217
 msgid ""
 "Choose \"Single day\" or a \"Range\" (start to end) per row. Reservations "
 "are accepted only on the specified dates (within the range where shifts "
@@ -3399,33 +3425,35 @@ msgstr ""
 "行ごとに「単日」または「期間（開始〜終了）」を選びます。指定した日付（シフト"
 "がある範囲内）のみ予約を受け付けます。"
 
-#: src/admin/class-service-menu-editor.php:1229
+#: src/admin/class-service-menu-editor.php:1258
 msgid "Date specification type"
 msgstr "日付指定の種別"
 
-#: src/admin/class-service-menu-editor.php:1230
+#: src/admin/class-service-menu-editor.php:1259
 msgid "Single day"
 msgstr "単日"
 
-#: src/admin/class-service-menu-editor.php:1231
+#: src/admin/class-service-menu-editor.php:1260
 msgid "Range"
 msgstr "期間"
 
-#: src/admin/class-service-menu-editor.php:1234
+#: src/admin/class-service-menu-editor.php:1263
 #: src/shifts/class-shift-lodging-editor.php:228
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:93
 msgid "Date"
 msgstr "日付"
 
-#. translators: %d: maximum number of guests per room (the number of guests included in the basic price was reduced to this value).
-#: src/admin/class-service-menu-editor.php:1348
+#. translators: %d: maximum number of guests per tour (the number of guests included in the basic price was reduced to this value).
+#: src/admin/class-service-menu-editor.php:1397
 msgid ""
 "The number of guests included in the basic price exceeded the maximum guests "
-"per room, so it was reduced to %d."
+"per tour, so it was reduced to %d."
 msgstr ""
-"基本料金に含まれる人数が1室の最大人数を超えていたため、%d人に変更しました。"
+"基本料金に含まれる人数が1ツアーの最大人数を超えていたため、%d人に変更しまし"
+"た。"
 
-#: src/admin/class-service-menu-editor.php:1362
+#: src/admin/class-service-menu-editor.php:1411
+#: src/admin/class-service-menu-editor.php:1506
 msgid ""
 "No price category is entered, so the extra guest fee is not added to the "
 "price. Enter at least one price category to charge the extra guest fee."
@@ -3433,7 +3461,19 @@ msgstr ""
 "料金区分が入力されていないため、追加料金は加算されません。追加料金を加算する"
 "には、料金区分を1件以上入力してください。"
 
-#: src/admin/class-service-menu-editor.php:1390
+#: src/admin/class-service-menu-editor.php:1445
+msgid "The price unit is \"Per tour\", so the price categories were deleted."
+msgstr "料金の単位が「1ツアーあたり」のため、料金区分を削除しました。"
+
+#. translators: %d: maximum number of guests per room (the number of guests included in the basic price was reduced to this value).
+#: src/admin/class-service-menu-editor.php:1492
+msgid ""
+"The number of guests included in the basic price exceeded the maximum guests "
+"per room, so it was reduced to %d."
+msgstr ""
+"基本料金に含まれる人数が1室の最大人数を超えていたため、%d人に変更しました。"
+
+#: src/admin/class-service-menu-editor.php:1534
 msgid ""
 "The start of the service period was later than its end, so the service "
 "period was saved with its previous values."
@@ -3441,37 +3481,37 @@ msgstr ""
 "提供期間の開始日が終了日より後だったため、提供期間は前回の内容のまま保存しま"
 "した。"
 
-#: src/admin/class-service-menu-editor.php:1391
+#: src/admin/class-service-menu-editor.php:1535
 msgid "Check the dates and save again."
 msgstr "日付を確認して、もう一度保存してください。"
 
-#: src/admin/class-service-menu-editor.php:1478
-#: src/admin/class-service-menu-editor.php:1481
-#: src/admin/class-service-menu-editor.php:1605
+#: src/admin/class-service-menu-editor.php:1622
+#: src/admin/class-service-menu-editor.php:1625
+#: src/admin/class-service-menu-editor.php:1835
 msgid "Booking unit"
 msgstr "予約の単位"
 
-#: src/admin/class-service-menu-editor.php:1484
+#: src/admin/class-service-menu-editor.php:1628
 msgid "Time slot"
 msgstr "時間枠"
 
-#: src/admin/class-service-menu-editor.php:1489
+#: src/admin/class-service-menu-editor.php:1633
 msgid "Nights"
 msgstr "泊"
 
-#: src/admin/class-service-menu-editor.php:1493
+#: src/admin/class-service-menu-editor.php:1637
 msgid ""
 "If you choose \"Nights\", bookings are accepted by check-in date and check-"
 "out date."
 msgstr "「泊」を選ぶと、チェックイン日とチェックアウト日で予約を受け付けます。"
 
-#: src/admin/class-service-menu-editor.php:1494
+#: src/admin/class-service-menu-editor.php:1638
 msgid ""
 "If you choose \"Nights\" and save, the private booking by customer settings "
 "are deleted."
 msgstr "「泊」を選んで保存すると、予約者が選ぶ貸切の設定は削除されます。"
 
-#: src/admin/class-service-menu-editor.php:1495
+#: src/admin/class-service-menu-editor.php:1639
 msgid ""
 "If you choose \"Nights\", the time required, post-service buffer, and fixed "
 "start times fields are not used, so they are hidden."
@@ -3479,45 +3519,127 @@ msgstr ""
 "「泊」を選ぶと、所要時間・サービス後バッファ・固定開始時刻の欄は使わないため"
 "非表示になります。"
 
-#: src/admin/class-service-menu-editor.php:1500
-#: src/admin/class-service-menu-editor.php:1502
+#: src/admin/class-service-menu-editor.php:1644
+#: src/admin/class-service-menu-editor.php:1646
 msgid "Check-in time"
 msgstr "チェックイン時刻"
 
-#: src/admin/class-service-menu-editor.php:1506
+#: src/admin/class-service-menu-editor.php:1650
 msgid "Check-out time (departure day)"
 msgstr "チェックアウト時刻（出発日）"
 
-#: src/admin/class-service-menu-editor.php:1508
+#: src/admin/class-service-menu-editor.php:1652
 msgid "Check-out time"
 msgstr "チェックアウト時刻"
 
-#: src/admin/class-service-menu-editor.php:1510
+#: src/admin/class-service-menu-editor.php:1654
 msgid "This is the time on the day after the last night of the stay."
 msgstr "最終宿泊日の翌日の時刻です。"
 
-#: src/admin/class-service-menu-editor.php:1527
-msgid "/ per room, per night"
-msgstr "/ 1室・1泊"
+#: src/admin/class-service-menu-editor.php:1671
+msgid "/ 1 tour"
+msgstr "/ 1ツアー"
 
-#: src/admin/class-service-menu-editor.php:1530
-msgid "/ per guest, per night"
-msgstr "/ 1名・1泊"
+#: src/admin/class-service-menu-editor.php:1674
+msgid "/ 1 guest"
+msgstr "/ 1名"
 
-#: src/admin/class-service-menu-editor.php:1554
-#: src/admin/class-service-menu-editor.php:1557
+#: src/admin/class-service-menu-editor.php:1698
+#: src/admin/class-service-menu-editor.php:1701
+#: src/admin/class-service-menu-editor.php:1784
+#: src/admin/class-service-menu-editor.php:1787
 msgid "Price unit"
 msgstr "料金の単位"
 
-#: src/admin/class-service-menu-editor.php:1560
+#: src/admin/class-service-menu-editor.php:1704
+msgid "Per guest"
+msgstr "1名あたり"
+
+#: src/admin/class-service-menu-editor.php:1709
+msgid "Per tour"
+msgstr "1ツアーあたり"
+
+#: src/admin/class-service-menu-editor.php:1713
+msgid ""
+"If you choose \"Per tour\", the basic price is the price of one tour "
+"regardless of the number of guests."
+msgstr ""
+"「1ツアーあたり」を選ぶと、人数にかかわらず基本料金が1ツアーの料金になりま"
+"す。"
+
+#: src/admin/class-service-menu-editor.php:1714
+msgid ""
+"If you choose \"Per tour\" and save, private booking is turned on "
+"automatically, and the private booking by customer settings are deleted."
+msgstr ""
+"「1ツアーあたり」を選んで保存すると、貸し切り予約が自動で有効になり、予約者が"
+"選ぶ貸切の設定は削除されます。"
+
+#: src/admin/class-service-menu-editor.php:1719
+msgid ""
+"Price categories can be used with \"Per tour\" only when the additional fee "
+"for exceeding the specified number is enabled."
+msgstr ""
+"「1ツアーあたり」で料金区分を使えるのは、規定人数を超える場合の追加料金を有効"
+"にしたときだけです。"
+
+#: src/admin/class-service-menu-editor.php:1720
+#: src/admin/class-service-menu-editor.php:1801
+msgid ""
+"If it is not enabled, price categories you have already set are deleted when "
+"you save."
+msgstr "追加料金を使わない場合、すでに設定した料金区分は保存時に削除されます。"
+
+#: src/admin/class-service-menu-editor.php:1729
+#: src/admin/class-service-menu-editor.php:1807
+msgid ""
+"An additional fee applies, depending on the number of guests, when the "
+"specified number is exceeded"
+msgstr "規定人数を超える場合は人数に応じて追加料金あり"
+
+#: src/admin/class-service-menu-editor.php:1732
+#: src/admin/class-service-menu-editor.php:1810
+msgid "Guests included in the basic price"
+msgstr "基本料金に含まれる人数"
+
+#: src/admin/class-service-menu-editor.php:1735
+#: src/admin/class-service-menu-editor.php:1813
+msgid "guests or fewer"
+msgstr "人まで"
+
+#: src/admin/class-service-menu-editor.php:1738
+#: src/admin/class-service-menu-editor.php:1816
+msgid ""
+"Enter the specified number of guests (the number included in the basic "
+"price) as 1 or more."
+msgstr "規定人数（基本料金に含める人数）を 1 以上で入力してください。"
+
+#: src/admin/class-service-menu-editor.php:1739
+#: src/admin/class-service-menu-editor.php:1817
+msgid "Set the basic price in the \"Basic price\" field below."
+msgstr "基本料金は下の「基本料金」欄で設定します。"
+
+#: src/admin/class-service-menu-editor.php:1740
+msgid "Values above the maximum guests per tour are reduced to that maximum."
+msgstr "1ツアーの最大人数を超える値は、最大人数に変更されます。"
+
+#: src/admin/class-service-menu-editor.php:1757
+msgid "/ per room, per night"
+msgstr "/ 1室・1泊"
+
+#: src/admin/class-service-menu-editor.php:1760
+msgid "/ per guest, per night"
+msgstr "/ 1名・1泊"
+
+#: src/admin/class-service-menu-editor.php:1790
 msgid "Per guest, per night"
 msgstr "1名1泊あたり"
 
-#: src/admin/class-service-menu-editor.php:1565
+#: src/admin/class-service-menu-editor.php:1795
 msgid "Per room, per night"
 msgstr "1室1泊あたり"
 
-#: src/admin/class-service-menu-editor.php:1569
+#: src/admin/class-service-menu-editor.php:1799
 msgid ""
 "If you choose \"Per room, per night\", enter the price of one room per night "
 "as the basic price. It is not multiplied by the number of guests."
@@ -3525,7 +3647,7 @@ msgstr ""
 "「1室1泊あたり」を選ぶと、基本料金に1室1泊の料金を入力します。人数は掛かりま"
 "せん。"
 
-#: src/admin/class-service-menu-editor.php:1570
+#: src/admin/class-service-menu-editor.php:1800
 msgid ""
 "Price categories can be used with \"Per room, per night\" only when the "
 "additional fee for exceeding the specified number is enabled."
@@ -3533,13 +3655,7 @@ msgstr ""
 "「1室1泊あたり」では、規定人数を超える場合の追加料金を使うときだけ、料金区分"
 "を使えます。"
 
-#: src/admin/class-service-menu-editor.php:1571
-msgid ""
-"If it is not enabled, price categories you have already set are deleted when "
-"you save."
-msgstr "追加料金を使わない場合、すでに設定した料金区分は保存時に削除されます。"
-
-#: src/admin/class-service-menu-editor.php:1572
+#: src/admin/class-service-menu-editor.php:1802
 msgid ""
 "When you switch between \"Per room, per night\" with the additional fee and "
 "\"Per guest, per night\", review the amounts in the price categories."
@@ -3547,35 +3663,11 @@ msgstr ""
 "「1室1泊あたり（追加料金あり）」と「1名1泊あたり」を切り替えたときは、料金区"
 "分の金額を見直してください。"
 
-#: src/admin/class-service-menu-editor.php:1577
-msgid ""
-"An additional fee applies, depending on the number of guests, when the "
-"specified number is exceeded"
-msgstr "規定人数を超える場合は人数に応じて追加料金あり"
-
-#: src/admin/class-service-menu-editor.php:1580
-msgid "Guests included in the basic price"
-msgstr "基本料金に含まれる人数"
-
-#: src/admin/class-service-menu-editor.php:1583
-msgid "guests or fewer"
-msgstr "人まで"
-
-#: src/admin/class-service-menu-editor.php:1586
-msgid ""
-"Enter the specified number of guests (the number included in the basic "
-"price) as 1 or more."
-msgstr "規定人数（基本料金に含める人数）を 1 以上で入力してください。"
-
-#: src/admin/class-service-menu-editor.php:1587
-msgid "Set the basic price in the \"Basic price\" field below."
-msgstr "基本料金は下の「基本料金」欄で設定します。"
-
-#: src/admin/class-service-menu-editor.php:1588
+#: src/admin/class-service-menu-editor.php:1818
 msgid "Values above the maximum guests per room are reduced to that maximum."
 msgstr "1室の最大人数より大きい値は、最大人数に合わせて保存されます。"
 
-#: src/admin/class-service-menu-editor.php:1608
+#: src/admin/class-service-menu-editor.php:1838
 msgid ""
 "This menu is saved with the \"Nights\" booking unit. Because the industry "
 "preset is not \"Lodging\", it is currently handled as a time-slot menu."
@@ -3583,60 +3675,60 @@ msgstr ""
 "このメニューは「泊」単位で保存されています。業種プリセットが「宿泊」以外のた"
 "め、今は時間枠のメニューとして扱われます。"
 
-#: src/admin/class-service-menu-editor.php:1609
+#: src/admin/class-service-menu-editor.php:1839
 msgid ""
 "To switch back to \"Lodging\", change the industry preset to \"Lodging\" at "
 "the link below."
 msgstr ""
 "宿泊に戻すには、次のリンク先で業種プリセットを「宿泊」に変更してください。"
 
-#: src/admin/class-service-menu-editor.php:1610
+#: src/admin/class-service-menu-editor.php:1840
 msgid "Industry preset on the General Settings page"
 msgstr "基本設定ページの業種プリセット"
 
 #. translators: %s: field name such as "Check-in time".
-#: src/admin/class-service-menu-editor.php:1634
+#: src/admin/class-service-menu-editor.php:1864
 msgid "%s (hour)"
 msgstr "%s（時）"
 
 #. translators: %s: field name such as "Check-in time".
-#: src/admin/class-service-menu-editor.php:1636
+#: src/admin/class-service-menu-editor.php:1866
 msgid "%s (minute)"
 msgstr "%s（分）"
 
-#: src/admin/class-service-menu-editor.php:1663
+#: src/admin/class-service-menu-editor.php:1893
 msgid "Fixed start times"
 msgstr "固定開始時刻"
 
-#: src/admin/class-service-menu-editor.php:1687
+#: src/admin/class-service-menu-editor.php:1917
 msgid "+ Add time"
 msgstr "+ 時刻を追加"
 
 #. translators: %s: link to the reservation slot time setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:1693
+#: src/admin/class-service-menu-editor.php:1923
 msgid ""
 "If not set, reservation slots are based on the interval specified in %s."
 msgstr ""
 "未設定の場合は %s で指定した時間のスロット刻みを基準にした予約になります。"
 
-#: src/admin/class-service-menu-editor.php:1697
+#: src/admin/class-service-menu-editor.php:1927
 msgid "Reservation slot time on the General Settings page"
 msgstr "基本設定画面の予約スロットの時間"
 
-#: src/admin/class-service-menu-editor.php:1704
+#: src/admin/class-service-menu-editor.php:1934
 msgid "If set, only the specified times are available for booking."
 msgstr "設定すると、指定した時刻のみ予約可能になります。"
 
-#: src/admin/class-service-menu-editor.php:1733
-#: src/blocks/reservation/booking-confirm-app.js:2479
+#: src/admin/class-service-menu-editor.php:1963
+#: src/blocks/reservation/booking-confirm-app.js:2558
 msgid "Private booking"
 msgstr "貸し切り予約"
 
-#: src/admin/class-service-menu-editor.php:1737
+#: src/admin/class-service-menu-editor.php:1967
 msgid "Make the slot private once a booking is placed"
 msgstr "予約が入ったらその時間帯を貸し切りにする"
 
-#: src/admin/class-service-menu-editor.php:1740
+#: src/admin/class-service-menu-editor.php:1970
 msgid ""
 "When enabled, once even a single booking is placed in a time slot, other "
 "users can no longer book that slot even if seats remain."
@@ -3644,86 +3736,86 @@ msgstr ""
 "ONにすると、1件でも予約が入った時間帯は残り枠があっても他のユーザーは予約でき"
 "なくなります。"
 
-#: src/admin/class-service-menu-editor.php:1747
+#: src/admin/class-service-menu-editor.php:1977
 msgid ""
 "This is intended for tours where strangers should not share the same slot "
 "(e.g. SUP, diving)."
 msgstr "知らない人同士が同席しないツアー（SUP・ダイビング等）向けの設定です。"
 
-#: src/admin/class-service-menu-editor.php:1779
+#: src/admin/class-service-menu-editor.php:2009
 msgid "Private booking by customer"
 msgstr "予約者による貸切指定"
 
-#: src/admin/class-service-menu-editor.php:1783
+#: src/admin/class-service-menu-editor.php:2013
 msgid "Accept private booking requests from customers"
 msgstr "予約者による貸切指定を受け付ける"
 
-#: src/admin/class-service-menu-editor.php:1786
+#: src/admin/class-service-menu-editor.php:2016
 msgid "Only the first person to book the same date and time can choose this."
 msgstr "※同じ日時で最初の予約者のみ指定できます"
 
-#: src/admin/class-service-menu-editor.php:1803
+#: src/admin/class-service-menu-editor.php:2033
 msgid ""
 "This setting cannot be used together with \"Private booking\" for this menu."
 msgstr "このメニューの「貸し切り予約」と同時には使えません。"
 
-#: src/admin/class-service-menu-editor.php:1804
+#: src/admin/class-service-menu-editor.php:2034
 msgid "While \"Private booking\" is on, this setting is ignored."
 msgstr "「貸し切り予約」がONの間、この設定は無視されます。"
 
-#: src/admin/class-service-menu-editor.php:1809
-#: src/blocks/reservation/app.js:2202 src/blocks/reservation/app.js:4489
-#: src/blocks/reservation/booking-confirm-app.js:2456
+#: src/admin/class-service-menu-editor.php:2039
+#: src/blocks/reservation/app.js:2266 src/blocks/reservation/app.js:4634
+#: src/blocks/reservation/booking-confirm-app.js:2535
 msgid "Private booking fee"
 msgstr "貸切料金"
 
 #. translators: per one guest unit suffix shown after the private booking fee input.
-#: src/admin/class-service-menu-editor.php:1813
+#: src/admin/class-service-menu-editor.php:2043
 msgid "/ per guest"
 msgstr "/ 人"
 
-#: src/admin/class-service-menu-editor.php:1818
+#: src/admin/class-service-menu-editor.php:2048
 msgid "The private booking fee is added per guest."
 msgstr "貸切料金は人数分加算されます"
 
-#: src/admin/class-service-menu-editor.php:1821
+#: src/admin/class-service-menu-editor.php:2051
 msgid "Number of guests that exempts the private booking fee"
 msgstr "貸切料金が無料になる申込人数"
 
-#: src/admin/class-service-menu-editor.php:1826
+#: src/admin/class-service-menu-editor.php:2056
 msgid ""
 "The private booking fee is not added when the number of guests is this value "
 "or more."
 msgstr "ここで指定した人数以上の申し込みには、貸切料金を加算しません。"
 
 #. translators: the numbers are an example threshold. Keep the second number one less than the first.
-#: src/admin/class-service-menu-editor.php:1829
+#: src/admin/class-service-menu-editor.php:2059
 msgid ""
 "Example: if you enter 5, the fee is added for up to 4 guests and not added "
 "for 5 or more."
 msgstr "例：5 と入力した場合、4人までは加算、5人以上は加算なし。"
 
-#: src/admin/class-service-menu-editor.php:1832
+#: src/admin/class-service-menu-editor.php:2062
 msgid ""
 "If left blank or set to 0, the private booking fee is always added "
 "regardless of the number of guests."
 msgstr "空欄または 0 の場合は、人数に関わらず常に貸切料金を加算します。"
 
-#: src/admin/class-service-menu-editor.php:1895
+#: src/admin/class-service-menu-editor.php:2131
 msgid "Basic price (pre-holiday)"
 msgstr "基本料金（休前日）"
 
-#: src/admin/class-service-menu-editor.php:1901
+#: src/admin/class-service-menu-editor.php:2137
 msgid "Basic price (special date)"
 msgstr "基本料金（特定日）"
 
-#: src/admin/class-service-menu-editor.php:1910
-#: src/post-types/class-service-menu-post-type.php:719
+#: src/admin/class-service-menu-editor.php:2146
+#: src/post-types/class-service-menu-post-type.php:747
 msgid "Basic price"
 msgstr "基本料金"
 
 #. translators: %s: link to the pre-holiday and special date settings on the provider settings page.
-#: src/admin/class-service-menu-editor.php:1976
+#: src/admin/class-service-menu-editor.php:2220
 msgid ""
 "If the pre-holiday price is empty, the regular price is used. If the special "
 "date price is empty, the night is priced as a pre-holiday or regular night. "
@@ -3732,49 +3824,49 @@ msgstr ""
 "休前日が空欄の泊は平日の料金で計算します。特定日が空欄の泊は、休前日または平"
 "日の料金で計算します。休前日とする曜日と特定日の日付は%sで設定します。"
 
-#: src/admin/class-service-menu-editor.php:1980
+#: src/admin/class-service-menu-editor.php:2224
 msgid "Pre-holidays and special dates on the General Settings page"
 msgstr "基本設定画面の「休前日・特定日」"
 
-#: src/admin/class-service-menu-editor.php:1990
+#: src/admin/class-service-menu-editor.php:2234
 msgid "Price categories are set, so the basic price is not used."
 msgstr "料金区分が設定されているため、基本料金は使われません。"
 
-#: src/admin/class-service-menu-editor.php:2016
+#: src/admin/class-service-menu-editor.php:2260
 msgid "Price (regular)"
 msgstr "料金（平日）"
 
-#: src/admin/class-service-menu-editor.php:2017
+#: src/admin/class-service-menu-editor.php:2261
 msgid "Category name"
 msgstr "区分名"
 
-#: src/admin/class-service-menu-editor.php:2032
-#: src/post-types/class-service-menu-post-type.php:442
+#: src/admin/class-service-menu-editor.php:2280
+#: src/post-types/class-service-menu-post-type.php:467
 msgid "Price categories"
 msgstr "料金区分"
 
-#: src/admin/class-service-menu-editor.php:2097
+#: src/admin/class-service-menu-editor.php:2345
 msgid "+ Add price category"
 msgstr "＋ 料金区分を追加"
 
-#: src/admin/class-service-menu-editor.php:2098
+#: src/admin/class-service-menu-editor.php:2346
 msgid ""
 "Define categories such as \"Adult\" and \"Child\", each with its own price."
 msgstr "「大人」「子供」などの区分を、それぞれの料金とともに定義します。"
 
-#: src/admin/class-service-menu-editor.php:2100
+#: src/admin/class-service-menu-editor.php:2348
 msgid ""
 "When one or more categories are defined, the basic price is ignored and the "
 "price is calculated from the categories."
 msgstr "区分を1つ以上定義すると、基本料金は無視されて区分料金で計算されます。"
 
-#: src/admin/class-service-menu-editor.php:2101
+#: src/admin/class-service-menu-editor.php:2349
 msgid ""
 "If no category is defined, the basic price multiplied by the number of "
 "guests is used."
 msgstr "区分を定義しない場合は、基本料金×人数で計算されます。"
 
-#: src/admin/class-service-menu-editor.php:2102
+#: src/admin/class-service-menu-editor.php:2350
 msgid ""
 "Enter the fee added for each guest over the number included in the basic "
 "price, per night."
@@ -3782,72 +3874,79 @@ msgstr ""
 "基本料金に含まれる人数を超えた1名ごとに、1泊あたりで加算する金額を入力してく"
 "ださい。"
 
-#: src/admin/class-service-menu-editor.php:2103
+#: src/admin/class-service-menu-editor.php:2351
+#: src/admin/class-service-menu-editor.php:2354
 msgid ""
 "Guests in the highest-priced categories are included in the basic price "
 "first, and the remaining guests are charged."
 msgstr ""
 "金額の高い区分の人から順に基本料金に含め、残りの人に追加料金がかかります。"
 
+#: src/admin/class-service-menu-editor.php:2353
+msgid ""
+"Enter the fee added for each guest over the number included in the basic "
+"price."
+msgstr "基本料金に含まれる人数を超えた1名ごとに加算する金額を入力します。"
+
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2183
+#: src/admin/class-service-menu-editor.php:2434
 msgid "%s added later will also be able to handle this menu automatically."
 msgstr "今後追加する%sも、自動的にこのメニューを担当できます。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2206
+#: src/admin/class-service-menu-editor.php:2457
 msgid "After adding %s, check them here so they can be in charge."
 msgstr "%sを追加したら、ここでチェックを入れると担当できるようになります。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2222
+#: src/admin/class-service-menu-editor.php:2473
 msgid "No %s are registered."
 msgstr "%sが登録されていません。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
 #. translators: %s: resource label (singular), e.g. "room".
 #. translators: %s: Resource label (singular).
-#: src/admin/class-service-menu-editor.php:2230
+#: src/admin/class-service-menu-editor.php:2481
 #: src/admin/class-setup-notices.php:444
 #: src/post-types/class-resource-post-type.php:52
 msgid "Add %s"
 msgstr "%sを追加"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2280
+#: src/admin/class-service-menu-editor.php:2531
 msgid "No %s have been selected to be in charge."
 msgstr "担当できる%sが選ばれていません。"
 
 #. translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option.
-#: src/admin/class-service-menu-editor.php:2284
+#: src/admin/class-service-menu-editor.php:2535
 msgid "Check the %1$s, or select \"%2$s\"."
 msgstr "%1$sにチェックを入れるか、「%2$s」を選んでください。"
 
-#: src/admin/class-service-menu-editor.php:2311
+#: src/admin/class-service-menu-editor.php:2562
 msgid "Disable online reservations"
 msgstr "オンライン予約を無効にする"
 
-#: src/admin/class-service-menu-editor.php:2317
+#: src/admin/class-service-menu-editor.php:2568
 msgid "Mark as archived"
 msgstr "アーカイブ済みにする"
 
-#: src/admin/class-service-menu-editor.php:2376
+#: src/admin/class-service-menu-editor.php:2630
 msgid ""
 "No valid day-of-week rows were found, so the reservation date was reset to "
 "\"Not specified\"."
 msgstr "有効な曜日の行が無いため、予約可能日を「指定なし」に戻しました。"
 
-#: src/admin/class-service-menu-editor.php:2379
+#: src/admin/class-service-menu-editor.php:2633
 msgid ""
 "No valid date rows were found, so the reservation date was reset to \"Not "
 "specified\"."
 msgstr "有効な日付の行が無いため、予約可能日を「指定なし」に戻しました。"
 
-#: src/admin/class-service-menu-editor.php:2383
+#: src/admin/class-service-menu-editor.php:2637
 msgid "Some invalid day-of-week rows were not saved."
 msgstr "一部の無効な曜日の行は保存されませんでした。"
 
-#: src/admin/class-service-menu-editor.php:2387
+#: src/admin/class-service-menu-editor.php:2641
 msgid "Some invalid dates (past dates, or start after end) were not saved."
 msgstr ""
 "一部の無効な日付（過去日、または開始が終了より後）は保存されませんでした。"
@@ -3895,7 +3994,7 @@ msgstr ""
 "サービスがまだ登録されていません。まず、サービスメニューを追加してください。"
 
 #: src/admin/class-setup-notices.php:458
-#: src/post-types/class-service-menu-post-type.php:244
+#: src/post-types/class-service-menu-post-type.php:269
 msgid "Add service"
 msgstr "サービスを追加"
 
@@ -3986,7 +4085,7 @@ msgid "Days on Sale not registered"
 msgstr "販売日未登録"
 
 #: src/admin/class-setup-notices.php:1130
-#: src/availability/class-availability-service.php:2611
+#: src/availability/class-availability-service.php:2610
 msgid "Shift not registered"
 msgstr "シフト未登録"
 
@@ -4088,8 +4187,8 @@ msgstr "BM シフト・予約"
 #: src/admin/class-shift-dashboard-page.php:220
 #: src/admin/class-shift-dashboard-page.php:2081
 #: src/admin/class-shift-dashboard-page.php:2832
-#: src/bookings/class-booking-admin.php:2744
-#: src/notifications/class-booking-notification-service.php:1231
+#: src/bookings/class-booking-admin.php:2824
+#: src/notifications/class-booking-notification-service.php:1264
 msgid "Confirmed"
 msgstr "確定"
 
@@ -4158,8 +4257,8 @@ msgid "Sun"
 msgstr "日"
 
 #: src/admin/class-shift-dashboard-page.php:327
-#: src/bookings/class-booking-admin.php:221
-#: src/bookings/class-booking-admin.php:222
+#: src/bookings/class-booking-admin.php:223
+#: src/bookings/class-booking-admin.php:224
 msgid "Reservation Page"
 msgstr "予約ページ"
 
@@ -4188,7 +4287,7 @@ msgid "Schedule table (scrollable horizontally)"
 msgstr "予約表（横にスクロールできます）"
 
 #: src/admin/class-shift-dashboard-page.php:385
-#: src/bookings/class-booking-admin.php:683
+#: src/bookings/class-booking-admin.php:696
 #: src/shifts/class-shift-editor.php:213
 msgid "time"
 msgstr "時間"
@@ -4200,25 +4299,27 @@ msgstr "時間"
 #. translators: 1: Resource label, 2: Staff name.
 #. translators: 1: Quantity label heading, 2: Quantity value (with unit).
 #. translators: 1: Duration label heading, 2: Duration value.
+#. translators: 1: nomination fee label, 2: nomination fee amount.
 #: src/admin/class-shift-dashboard-page.php:497
 #: src/admin/class-shift-dashboard-page.php:1984
 #: src/admin/class-shift-dashboard-page.php:2043
-#: src/bookings/class-booking-admin.php:887
-#: src/bookings/class-booking-admin.php:1529
-#: src/bookings/class-booking-admin.php:1537
+#: src/bookings/class-booking-admin.php:900
+#: src/bookings/class-booking-admin.php:1594
+#: src/bookings/class-booking-admin.php:1602
 #: src/integrations/google-calendar/class-google-calendar-event-builder.php:146
-#: src/notifications/class-booking-notification-service.php:1291
-#: src/notifications/class-booking-notification-service.php:1306
-#: src/notifications/class-booking-notification-service.php:1316
-#: src/notifications/class-booking-notification-service.php:1333
-#: src/notifications/class-booking-notification-service.php:1344
+#: src/notifications/class-booking-notification-service.php:1324
+#: src/notifications/class-booking-notification-service.php:1339
+#: src/notifications/class-booking-notification-service.php:1351
+#: src/notifications/class-booking-notification-service.php:1368
+#: src/notifications/class-booking-notification-service.php:1379
+#: src/notifications/class-booking-notification-service.php:1752
 msgid "%1$s: %2$s"
 msgstr "%1$s: %2$s"
 
 #. translators: 1: booked guests for this reservation, 2: per-slot reception capacity. リソースが人とは限らないため単位語は付けない（空き枠リストの残数表示と揃える）。
 #. translators: 1: current photo number, 2: total number of photos.
 #: src/admin/class-shift-dashboard-page.php:514
-#: src/blocks/class-menu-loop-block.php:1285
+#: src/blocks/class-menu-loop-block.php:1290
 msgid "%1$d / %2$d"
 msgstr "%1$d / %2$d"
 
@@ -4238,8 +4339,8 @@ msgid "Bookings — %s"
 msgstr "予約 — %s"
 
 #: src/admin/class-shift-dashboard-page.php:602
-#: src/blocks/class-menu-loop-block.php:1281
-#: src/bookings/class-booking-admin.php:2958
+#: src/blocks/class-menu-loop-block.php:1286
+#: src/bookings/class-booking-admin.php:3038
 #: src/resources/class-resource-delete-guard.php:679
 #: src/blocks/reservation/components/policy-modal.js:107
 msgid "Close"
@@ -4258,7 +4359,7 @@ msgid "next month"
 msgstr "次の月"
 
 #: src/admin/class-shift-dashboard-page.php:1138
-#: src/bookings/class-booking-confirmation-controller.php:1586
+#: src/bookings/class-booking-confirmation-controller.php:1618
 #: src/integrations/google-calendar/class-google-calendar-event-builder.php:114
 #: src/post-types/class-booking-post-type.php:43
 #: src/post-types/class-booking-post-type.php:44
@@ -4279,7 +4380,7 @@ msgstr "担当未定"
 #: src/admin/class-shift-dashboard-page.php:1583
 #: src/admin/class-shift-dashboard-page.php:1684
 #: src/admin/class-shift-dashboard-page.php:1827
-#: src/bookings/class-booking-admin.php:1579
+#: src/bookings/class-booking-admin.php:1644
 msgid "Name not entered"
 msgstr "お名前未入力"
 
@@ -4343,11 +4444,11 @@ msgstr "内容を確認し、担当の%sを見直してください。"
 #. translators: %1$s: Provider name, %2$s: Booking status label.
 #: src/admin/class-shift-dashboard-page.php:1972
 #: src/admin/class-shift-dashboard-page.php:2833
-#: src/bookings/class-booking-admin.php:2745
-#: src/notifications/class-booking-notification-service.php:1223
-#: src/notifications/class-booking-notification-service.php:1224
-#: src/notifications/class-booking-notification-service.php:1259
-#: src/blocks/reservation/app.js:3463
+#: src/bookings/class-booking-admin.php:2825
+#: src/notifications/class-booking-notification-service.php:1256
+#: src/notifications/class-booking-notification-service.php:1257
+#: src/notifications/class-booking-notification-service.php:1292
+#: src/blocks/reservation/app.js:3533
 msgid "Pending"
 msgstr "仮予約"
 
@@ -4434,7 +4535,7 @@ msgid "You don't have permission."
 msgstr "このページにアクセスする権限がありません。"
 
 #: src/admin/class-shift-dashboard-page.php:2361
-#: src/bookings/class-my-bookings-controller.php:313
+#: src/bookings/class-my-bookings-controller.php:335
 #: src/post-types/class-booking-post-type.php:53
 msgid "No reservations found."
 msgstr "予約が見つかりません。"
@@ -4528,16 +4629,16 @@ msgid "Customer flag: %s"
 msgstr "顧客フラグ: %s"
 
 #: src/admin/class-shift-dashboard-page.php:2834
-#: src/bookings/class-booking-admin.php:2746
-#: src/notifications/class-booking-notification-service.php:1252
-#: src/notifications/class-booking-notification-service.php:1448
-#: src/blocks/reservation/app.js:3468
-#: src/blocks/reservation/booking-confirm-app.js:2184
+#: src/bookings/class-booking-admin.php:2826
+#: src/notifications/class-booking-notification-service.php:1285
+#: src/notifications/class-booking-notification-service.php:1489
+#: src/blocks/reservation/app.js:3538
+#: src/blocks/reservation/booking-confirm-app.js:2232
 msgid "Cancelled"
 msgstr "キャンセル済み"
 
 #: src/admin/class-shift-dashboard-page.php:2835
-#: src/bookings/class-booking-admin.php:2747
+#: src/bookings/class-booking-admin.php:2827
 msgid "No-show"
 msgstr "無断キャンセル"
 
@@ -4567,8 +4668,8 @@ msgstr "予約システム情報"
 
 #: src/admin/class-user-profile-fields.php:100
 #: src/auth/class-auth-shortcodes.php:1374
-#: src/bookings/class-booking-admin.php:1119
-#: src/bookings/class-booking-admin.php:1129
+#: src/bookings/class-booking-admin.php:1169
+#: src/bookings/class-booking-admin.php:1179
 #: src/bookings/class-booking-anonymizer.php:190
 msgid "telephone number"
 msgstr "電話番号"
@@ -4686,7 +4787,7 @@ msgstr "名前"
 
 #. translators: %s: Customer name.
 #: src/attendees/class-attendee-roster-user-profile.php:113
-#: src/notifications/class-booking-notification-service.php:1463
+#: src/notifications/class-booking-notification-service.php:1504
 msgid "Name: %s"
 msgstr "氏名: %s"
 
@@ -4772,7 +4873,7 @@ msgstr "この会員の名簿に保存する権限がありません。"
 
 #. translators: %s: Attendee name field label.
 #: src/attendees/class-booking-attendee-resolver.php:294
-#: src/blocks/reservation/booking-confirm-app.js:1262
+#: src/blocks/reservation/booking-confirm-app.js:1308
 #: src/blocks/reservation/components/attendee-selector.js:303
 msgid "Please enter %s."
 msgstr "%sを入力してください。"
@@ -4984,11 +5085,11 @@ msgstr "パスワード（確認）"
 
 #: src/auth/class-auth-shortcodes.php:1133
 #: src/customers/class-customer-flag-meta-box.php:429
-#: src/blocks/reservation/booking-confirm-app.js:2695
+#: src/blocks/reservation/booking-confirm-app.js:2774
 msgid "Telephone number"
 msgstr "電話番号"
 
-#: src/auth/class-auth-shortcodes.php:1171 src/blocks/reservation/app.js:3391
+#: src/auth/class-auth-shortcodes.php:1171 src/blocks/reservation/app.js:3461
 msgid "I agree to the terms of use"
 msgstr "利用規約に同意します"
 
@@ -5029,8 +5130,8 @@ msgid "Edit user information"
 msgstr "ユーザー情報編集"
 
 #: src/auth/class-auth-shortcodes.php:1352
-#: src/bookings/class-booking-admin.php:1120
-#: src/bookings/class-booking-admin.php:1135
+#: src/bookings/class-booking-admin.php:1170
+#: src/bookings/class-booking-admin.php:1185
 #: src/bookings/class-booking-anonymizer.php:194
 msgid "email address"
 msgstr "メールアドレス"
@@ -5044,10 +5145,10 @@ msgid "New password (confirm)"
 msgstr "新しいパスワード（確認）"
 
 #: src/auth/class-auth-shortcodes.php:1449
-#: src/bookings/class-booking-confirmation-controller.php:272
-#: src/bookings/class-booking-confirmation-controller.php:336
-#: src/bookings/class-booking-confirmation-controller.php:402
-#: src/bookings/class-my-bookings-controller.php:303
+#: src/bookings/class-booking-confirmation-controller.php:271
+#: src/bookings/class-booking-confirmation-controller.php:335
+#: src/bookings/class-booking-confirmation-controller.php:401
+#: src/bookings/class-my-bookings-controller.php:325
 #: src/bookings/class-user-favorites-controller.php:123
 #: src/bookings/class-user-favorites-controller.php:161
 #: src/bookings/class-user-favorites-controller.php:220
@@ -5077,7 +5178,7 @@ msgstr "電話: %s"
 #. translators: %s: provider email address.
 #. translators: %s: Customer email address.
 #: src/auth/class-auth-shortcodes.php:1803
-#: src/notifications/class-booking-notification-service.php:1467
+#: src/notifications/class-booking-notification-service.php:1508
 msgid "Email: %s"
 msgstr "メール: %s"
 
@@ -5122,9 +5223,9 @@ msgid "Please enter your password."
 msgstr "パスワードを入力してください。"
 
 #: src/auth/class-auth-shortcodes.php:2028
-#: src/bookings/class-booking-confirmation-controller.php:759
+#: src/bookings/class-booking-confirmation-controller.php:758
 #: src/bookings/class-guest-booking-controller.php:542
-#: src/blocks/reservation/booking-confirm-app.js:1287
+#: src/blocks/reservation/booking-confirm-app.js:1333
 msgid "You must agree to the terms of use."
 msgstr "利用規約への同意が必要です。"
 
@@ -5265,46 +5366,46 @@ msgid "Please enter your username (or email address)."
 msgstr "ユーザー名（もしくはメールアドレス）を入力してください。"
 
 #: src/auth/class-email-verification.php:367
-#: src/bookings/class-booking-admin.php:541
+#: src/bookings/class-booking-admin.php:543
 msgid "Email unconfirmed"
 msgstr "メール未確認"
 
-#: src/availability/class-availability-service.php:196
+#: src/availability/class-availability-service.php:194
 msgid "The year specification is invalid."
 msgstr "年の指定が不正です。"
 
-#: src/availability/class-availability-service.php:199
+#: src/availability/class-availability-service.php:197
 msgid "The month specification is invalid."
 msgstr "月の指定が不正です。"
 
-#: src/availability/class-availability-service.php:421
+#: src/availability/class-availability-service.php:419
 msgid "Date format is incorrect."
 msgstr "日付の形式が正しくありません。"
 
-#: src/availability/class-availability-service.php:561
+#: src/availability/class-availability-service.php:559
 msgid "This menu does not have any staff members assigned to it."
 msgstr "このメニューを担当できるスタッフが設定されていません。"
 
-#: src/availability/class-availability-service.php:562
+#: src/availability/class-availability-service.php:560
 msgid ""
 "Assign at least one staff member in the \"In-charge staff\" field on the "
 "service menu edit screen."
 msgstr ""
 "サービスメニューの編集画面で「担当スタッフ」を1名以上割り当ててください。"
 
-#: src/availability/class-availability-service.php:572
+#: src/availability/class-availability-service.php:570
 msgid "The specified staff member is not set as in charge of this menu."
 msgstr "指定したスタッフはこのメニューの担当に設定されていません。"
 
-#: src/availability/class-availability-service.php:573
+#: src/availability/class-availability-service.php:571
 msgid "Check the \"In-charge staff\" setting on the service menu edit screen."
 msgstr "サービスメニュー編集画面の「担当スタッフ」設定をご確認ください。"
 
-#: src/availability/class-availability-service.php:585
+#: src/availability/class-availability-service.php:583
 msgid "No one in charge matches all of the selected resource tags."
 msgstr "選択したすべてのリソースタグに一致する担当者がいません。"
 
-#: src/availability/class-availability-service.php:586
+#: src/availability/class-availability-service.php:584
 msgid ""
 "Assign the resource tag to at least one staff member, or change the selected "
 "tags."
@@ -5312,7 +5413,7 @@ msgstr ""
 "リソースタグを1人以上のスタッフに割り当てるか、選択したタグを変更してくださ"
 "い。"
 
-#: src/availability/class-availability-service.php:606
+#: src/availability/class-availability-service.php:604
 msgid ""
 "This menu is currently not eligible for online reservations (not published / "
 "archived / hidden from online listing)."
@@ -5320,11 +5421,11 @@ msgstr ""
 "このメニューは現在オンライン予約の対象外（非公開／アーカイブ／オンライン掲載"
 "オフ）に設定されています。"
 
-#: src/availability/class-availability-service.php:607
+#: src/availability/class-availability-service.php:605
 msgid "Check the publication settings on the service menu edit screen."
 msgstr "サービスメニュー編集画面の公開設定をご確認ください。"
 
-#: src/availability/class-availability-service.php:714
+#: src/availability/class-availability-service.php:712
 msgid ""
 "There are no days in the displayed month that match this menu's \"reservable "
 "days\" setting (day of week / specific dates)."
@@ -5332,11 +5433,11 @@ msgstr ""
 "このメニューの「予約可能日」設定（曜日・日付指定）に、表示中の月が一致する日"
 "がありません。"
 
-#: src/availability/class-availability-service.php:715
+#: src/availability/class-availability-service.php:713
 msgid "Check the setting on the service menu edit screen."
 msgstr "サービスメニュー編集画面で設定をご確認ください。"
 
-#: src/availability/class-availability-service.php:725
+#: src/availability/class-availability-service.php:723
 msgid ""
 "Reservations are only accepted up to a certain number of days from today, "
 "and the displayed month is outside that range."
@@ -5344,7 +5445,7 @@ msgstr ""
 "予約受付は本日から一定日数先までに制限されています。表示中の月はその範囲外で"
 "す。"
 
-#: src/availability/class-availability-service.php:726
+#: src/availability/class-availability-service.php:724
 msgid ""
 "Check the \"Maximum advance booking days\" setting in the general settings "
 "(or this menu's individual setting)."
@@ -5352,17 +5453,17 @@ msgstr ""
 "基本設定（またはこのメニューの個別設定）の「予約受付上限日数」をご確認くださ"
 "い。"
 
-#: src/availability/class-availability-service.php:735
+#: src/availability/class-availability-service.php:733
 msgid ""
 "There are no days in the displayed month that fall within this menu's "
 "service period."
 msgstr "表示中の月に、このメニューの提供期間に入っている日がありません。"
 
-#: src/availability/class-availability-service.php:736
+#: src/availability/class-availability-service.php:734
 msgid "Check the \"Service period\" setting on the service menu edit screen."
 msgstr "サービスメニューの編集画面で「提供期間」の設定を確認してください。"
 
-#: src/availability/class-availability-service.php:745
+#: src/availability/class-availability-service.php:743
 msgid ""
 "The days in the displayed month that fall within this menu's service period "
 "are outside the range where reservations are accepted."
@@ -5370,7 +5471,7 @@ msgstr ""
 "表示中の月のうち、このメニューの提供期間に入っている日は、予約を受け付けてい"
 "る範囲の外です。"
 
-#: src/availability/class-availability-service.php:746
+#: src/availability/class-availability-service.php:744
 msgid ""
 "Check the \"Service period\" setting on the service menu edit screen and the "
 "\"Maximum advance booking days\" setting."
@@ -5379,7 +5480,7 @@ msgstr ""
 "てください。"
 
 #. translators: %s: resource label (singular), e.g. "staff" or "room".
-#: src/availability/class-availability-service.php:760
+#: src/availability/class-availability-service.php:758
 msgid ""
 "There are no business days in the displayed month for the assigned %s, due "
 "to their closed-day settings (regular holidays / temporary closures)."
@@ -5387,11 +5488,11 @@ msgstr ""
 "担当する%sの定休日・臨時休業の設定により、表示中の月に営業日がありません。"
 
 #. translators: %s: resource label (singular), e.g. "staff" or "room".
-#: src/availability/class-availability-service.php:765
+#: src/availability/class-availability-service.php:763
 msgid "Check the days on sale for each %s."
 msgstr "各%sの販売日をご確認ください。"
 
-#: src/availability/class-availability-service.php:771
+#: src/availability/class-availability-service.php:769
 msgid ""
 "There are no business days in the displayed month for the in-charge staff "
 "members, due to their closed-day settings (regular holidays / temporary "
@@ -5400,11 +5501,11 @@ msgstr ""
 "対象スタッフの休業設定（定休日・臨時休業）により、表示中の月に営業日がありま"
 "せん。"
 
-#: src/availability/class-availability-service.php:772
+#: src/availability/class-availability-service.php:770
 msgid "Check the shift settings in staff management."
 msgstr "スタッフ管理のシフト設定をご確認ください。"
 
-#: src/availability/class-availability-service.php:785
+#: src/availability/class-availability-service.php:783
 msgid ""
 "The required working hours for this menu's duration (including the buffer "
 "before/after the service) have not been secured for the in-charge staff "
@@ -5413,7 +5514,7 @@ msgstr ""
 "担当スタッフについて、このメニューの所要時間（前後の作業時間を含む）に見合う"
 "長さの稼働時間が確保されていません。"
 
-#: src/availability/class-availability-service.php:786
+#: src/availability/class-availability-service.php:784
 msgid ""
 "Register or extend the working hours for the target month in the staff shift "
 "settings, or review the required time setting on the menu edit screen."
@@ -5421,88 +5522,88 @@ msgstr ""
 "スタッフ管理のシフト設定で対象月の稼働時間を登録・延長するか、メニュー編集で"
 "所要時間の設定を見直してください。"
 
-#: src/availability/class-availability-service.php:802
+#: src/availability/class-availability-service.php:800
 msgid ""
 "Because of the reservation deadline setting, all time slots for nearby dates "
 "have already closed for booking."
 msgstr "予約受付の締切設定により、近い日程の枠がすべて受付終了しています。"
 
-#: src/availability/class-availability-service.php:803
+#: src/availability/class-availability-service.php:801
 msgid ""
 "Check the \"Reservation deadline\" setting in the general settings (or this "
 "menu's individual setting)."
 msgstr ""
 "基本設定（またはこのメニューの個別設定）の「予約受付締切」をご確認ください。"
 
-#: src/availability/class-availability-service.php:813
+#: src/availability/class-availability-service.php:811
 msgid ""
 "All time slots on the remaining days are closed because of another "
 "reservation (an exclusive booking)."
 msgstr "他のご予約（貸切扱い）により、この日の枠はすべて埋まっています。"
 
-#: src/availability/class-availability-service.php:814
+#: src/availability/class-availability-service.php:812
 msgid ""
 "This is not a configuration issue -- check the reservation status for those "
 "days in the reservations screen."
 msgstr "設定不備ではなく、予約管理画面で該当日の予約状況をご確認ください。"
 
-#: src/availability/class-availability-service.php:1052
+#: src/availability/class-availability-service.php:1050
 #: src/rest/class-menu-preview-controller.php:172
 msgid "The specified menu was not found."
 msgstr "指定されたメニューが見つかりません。"
 
-#: src/availability/class-availability-service.php:1056
+#: src/availability/class-availability-service.php:1054
 msgid "Menu has not been published."
 msgstr "メニューが公開されていません。"
 
-#: src/availability/class-availability-service.php:1060
+#: src/availability/class-availability-service.php:1058
 msgid "Archived menus cannot be reserved."
 msgstr "アーカイブ済みのメニューは予約できません。"
 
-#: src/availability/class-availability-service.php:1064
+#: src/availability/class-availability-service.php:1062
 msgid "This menu is not available for online reservation."
 msgstr "オンライン予約が無効なメニューです。"
 
-#: src/availability/class-availability-service.php:1072
+#: src/availability/class-availability-service.php:1070
 msgid "The service period of this menu has ended."
 msgstr "このメニューの提供期間は終了しています。"
 
-#: src/availability/class-availability-service.php:1073
+#: src/availability/class-availability-service.php:1071
 msgid "Please choose another menu."
 msgstr "別のメニューを選んでください。"
 
-#: src/availability/class-availability-service.php:1138
-#: src/availability/class-availability-service.php:1150
+#: src/availability/class-availability-service.php:1136
+#: src/availability/class-availability-service.php:1148
 msgid "The specified staff member cannot be in charge of this menu."
 msgstr "指定されたスタッフはこのメニューを担当できません。"
 
-#: src/availability/class-availability-service.php:1155
+#: src/availability/class-availability-service.php:1153
 msgid "No staff members have been set up to be in charge."
 msgstr "担当可能なスタッフが設定されていません。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
 #. translators: %s: リソースの複数名（例: スタッフ、ガイド、講師）。
 #. translators: %s: resource label (plural), customizable via basic settings.
-#: src/availability/class-availability-service.php:1168
+#: src/availability/class-availability-service.php:1166
 #: src/resources/resource-labels.php:156
 #: src/blocks/reservation/resource-tag-empty-message.js:26
 msgid "There are no %s matching the selected conditions."
 msgstr "条件に該当する%sがいません。"
 
-#: src/availability/class-availability-service.php:2720
-#: src/availability/class-availability-service.php:2899
+#: src/availability/class-availability-service.php:2719
+#: src/availability/class-availability-service.php:2898
 msgid "No route was found matching the URL and request method."
 msgstr "URL とリクエストメソッドに一致するルートが見つかりませんでした。"
 
-#: src/availability/class-availability-service.php:2727
-#: src/availability/class-availability-service.php:2909
+#: src/availability/class-availability-service.php:2726
+#: src/availability/class-availability-service.php:2908
 msgid "This menu is not a plan billed per night."
 msgstr "このメニューは泊単位の料金のプランではありません。"
 
-#: src/availability/class-availability-service.php:2734
-#: src/availability/class-availability-service.php:2744
-#: src/availability/class-availability-service.php:2750
-#: src/availability/class-availability-service.php:2963
+#: src/availability/class-availability-service.php:2733
+#: src/availability/class-availability-service.php:2743
+#: src/availability/class-availability-service.php:2749
+#: src/availability/class-availability-service.php:2962
 msgid ""
 "The selected date is not valid. Please choose the check-in and check-out "
 "dates again."
@@ -5510,25 +5611,25 @@ msgstr ""
 "選択した日付が正しくありません。チェックイン日とチェックアウト日を選択し直し"
 "てください。"
 
-#: src/availability/class-availability-service.php:2976
+#: src/availability/class-availability-service.php:2975
 msgid ""
 "The check-in date has already passed. Please choose today or a later date."
 msgstr "チェックイン日がすでに過ぎています。今日以降の日付を選択してください。"
 
 #. translators: %d: number of days ahead that reservations are accepted.
-#: src/availability/class-availability-service.php:2985
+#: src/availability/class-availability-service.php:2984
 msgid ""
 "Reservations are accepted up to %d days ahead. Please choose an earlier date."
 msgstr "予約は%d日先まで受け付けています。より前の日付を選択してください。"
 
-#: src/availability/class-availability-service.php:2999
+#: src/availability/class-availability-service.php:2998
 msgid ""
 "The check-in date is outside the service period of this menu. Please choose "
 "another date."
 msgstr ""
 "チェックイン日がこのメニューの提供期間の外です。別の日付を選んでください。"
 
-#: src/availability/class-availability-service.php:3030
+#: src/availability/class-availability-service.php:3029
 msgid ""
 "The reservation deadline for this check-in date has passed. Please choose a "
 "later date."
@@ -5537,17 +5638,17 @@ msgstr ""
 "選んでください。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/availability/class-availability-service.php:3090
+#: src/availability/class-availability-service.php:3089
 msgid "The specified %s cannot be in charge of this menu."
 msgstr "指定された%sは、このメニューの担当にできません。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/availability/class-availability-service.php:3107
+#: src/availability/class-availability-service.php:3106
 msgid "The specified %s was not found."
 msgstr "指定された%sが見つかりませんでした。"
 
 #. translators: %s: resource label (plural), e.g. "Rooms".
-#: src/availability/class-availability-service.php:3119
+#: src/availability/class-availability-service.php:3118
 msgid "No %s have been set up to be in charge."
 msgstr "担当する%sが設定されていません。"
 
@@ -5573,87 +5674,87 @@ msgstr ""
 msgid "The service to display could not be found."
 msgstr "表示するサービスが見つかりませんでした。"
 
-#: src/blocks/class-menu-loop-block.php:198
+#: src/blocks/class-menu-loop-block.php:199
 msgid "Menu loop ID has not been set. Please check your ID."
 msgstr "メニューループIDが未設定です。IDを確認してください。"
 
-#: src/blocks/class-menu-loop-block.php:206
+#: src/blocks/class-menu-loop-block.php:207
 msgid "No service menus matching the criteria were found."
 msgstr "条件に合致するサービスメニューが見つかりませんでした。"
 
-#: src/blocks/class-menu-loop-block.php:381
+#: src/blocks/class-menu-loop-block.php:382
 msgid "Others"
 msgstr "その他"
 
-#: src/blocks/class-menu-loop-block.php:1280
+#: src/blocks/class-menu-loop-block.php:1285
 msgid "Photo viewer"
 msgstr "写真の拡大表示"
 
-#: src/blocks/class-menu-loop-block.php:1282
+#: src/blocks/class-menu-loop-block.php:1287
 msgid "Previous photo"
 msgstr "前の写真"
 
-#: src/blocks/class-menu-loop-block.php:1283
+#: src/blocks/class-menu-loop-block.php:1288
 msgid "Next photo"
 msgstr "次の写真"
 
 #. translators: 1: photo number, 2: total number of photos, 3: menu name.
-#: src/blocks/class-menu-loop-block.php:1348
+#: src/blocks/class-menu-loop-block.php:1353
 msgid "Photo of %3$s %1$d/%2$d"
 msgstr "%3$sの写真 %1$d/%2$d"
 
 #. translators: 1: photo number, 2: total number of photos.
-#: src/blocks/class-menu-loop-block.php:1374
+#: src/blocks/class-menu-loop-block.php:1379
 msgid "Enlarge photo %1$d (%2$d in total)"
 msgstr "写真%1$dを拡大（全%2$d枚）"
 
 #. translators: %s: menu name.
-#: src/blocks/class-menu-loop-block.php:1398
+#: src/blocks/class-menu-loop-block.php:1403
 msgid "Photos of %s"
 msgstr "%sの写真"
 
-#: src/blocks/class-menu-loop-block.php:1442
+#: src/blocks/class-menu-loop-block.php:1447
 #: src/blocks/reservation/components/booking-stay-datetime.js:21
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1226
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1230
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:85
 msgid "Check-in"
 msgstr "チェックイン"
 
-#: src/blocks/class-menu-loop-block.php:1447
+#: src/blocks/class-menu-loop-block.php:1452
 #: src/blocks/reservation/components/booking-stay-datetime.js:24
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1239
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1243
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:89
 msgid "Check-out"
 msgstr "チェックアウト"
 
 #. translators: %s: check-out time (the day after the last night).
-#: src/blocks/class-menu-loop-block.php:1451
+#: src/blocks/class-menu-loop-block.php:1456
 msgid "Next day %s"
 msgstr "翌%s"
 
 #. translators: %d: duration in minutes
-#: src/blocks/class-menu-loop-block.php:1459
-#: src/notifications/class-booking-notification-service.php:1661
+#: src/blocks/class-menu-loop-block.php:1464
+#: src/notifications/class-booking-notification-service.php:1702
 msgid "%d minutes"
 msgstr "%d分"
 
-#: src/blocks/class-menu-loop-block.php:1505
+#: src/blocks/class-menu-loop-block.php:1510
 msgid "Start time"
 msgstr "開始時間"
 
-#: src/blocks/class-menu-loop-block.php:1655
+#: src/blocks/class-menu-loop-block.php:1662
 msgid "Maximum group size"
 msgstr "1組の最大人数"
 
-#: src/blocks/class-menu-loop-block.php:1765
+#: src/blocks/class-menu-loop-block.php:1779
 msgid "View details"
 msgstr "詳細を見る"
 
-#: src/blocks/class-menu-loop-block.php:1970
+#: src/blocks/class-menu-loop-block.php:1984
 msgid "Prices"
 msgstr "料金"
 
-#: src/blocks/class-menu-loop-block.php:2029
+#: src/blocks/class-menu-loop-block.php:2043
 msgid "Edit"
 msgstr "編集"
 
@@ -5688,9 +5789,9 @@ msgid "all"
 msgstr "すべて"
 
 #: src/blocks/class-reservation-block.php:744
-#: src/blocks/reservation/app.js:3648
-#: src/blocks/reservation/booking-confirm-app.js:2075
-#: src/blocks/reservation/booking-confirm-app.js:2598
+#: src/blocks/reservation/app.js:3718
+#: src/blocks/reservation/booking-confirm-app.js:2123
+#: src/blocks/reservation/booking-confirm-app.js:2677
 msgid "Loading form…"
 msgstr "フォームを読み込み中…"
 
@@ -5709,8 +5810,8 @@ msgid "%s (select a plan on the reservation page)"
 msgstr "%s（予約ページでプランを選択）"
 
 #: src/blocks/shared/class-reservation-button-renderer.php:150
-#: src/blocks/reservation-button/edit.js:127 src/blocks/reservation/app.js:4538
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1352
+#: src/blocks/reservation-button/edit.js:127 src/blocks/reservation/app.js:4683
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1356
 msgid "Proceed to Reservation"
 msgstr "予約に進む"
 
@@ -5722,23 +5823,23 @@ msgstr "ウェブ予約不可"
 msgid "This menu does not accept online reservations."
 msgstr "このメニューはウェブ予約を受け付けていません。"
 
-#: src/bookings/class-booking-admin.php:321
+#: src/bookings/class-booking-admin.php:323
 msgid "Current reserver"
 msgstr "現在の予約者"
 
-#: src/bookings/class-booking-admin.php:322
+#: src/bookings/class-booking-admin.php:324
 msgid "Searching…"
 msgstr "検索中…"
 
 #. translators: %d: number of users found
-#: src/bookings/class-booking-admin.php:324
 #: src/bookings/class-booking-admin.php:326
+#: src/bookings/class-booking-admin.php:328
 msgid "%d user found."
 msgid_plural "%d users found."
 msgstr[0] "%d 件のユーザーが見つかりました。"
 
 #. translators: %d: maximum number of users shown
-#: src/bookings/class-booking-admin.php:328
+#: src/bookings/class-booking-admin.php:330
 msgid ""
 "Showing the first %d users. Enter more of the name or email address to "
 "narrow the results."
@@ -5746,40 +5847,40 @@ msgstr ""
 "先頭の %d 件を表示しています。名前やメールアドレスをもう少し詳しく入力して、"
 "絞り込んでください。"
 
-#: src/bookings/class-booking-admin.php:329
+#: src/bookings/class-booking-admin.php:331
 msgid "No users found. Try a different name or email address."
 msgstr ""
 "該当するユーザーが見つかりません。別の名前やメールアドレスで検索してくださ"
 "い。"
 
-#: src/bookings/class-booking-admin.php:330
+#: src/bookings/class-booking-admin.php:332
 msgid "Could not search users. Check your connection and search again."
 msgstr ""
 "ユーザーを検索できませんでした。通信状況を確認して、もう一度検索してくださ"
 "い。"
 
-#: src/bookings/class-booking-admin.php:331
+#: src/bookings/class-booking-admin.php:333
 msgid "Your session may have expired. Reload the page and try again."
 msgstr ""
 "ログインの有効期限が切れた可能性があります。ページを再読み込みして、もう一度"
 "お試しください。"
 
 #. translators: 1: current reserver name, 2: newly selected reserver name
-#: src/bookings/class-booking-admin.php:333
+#: src/bookings/class-booking-admin.php:335
 msgid "Reserver will change from %1$s to %2$s when you save this reservation."
 msgstr "この予約を保存すると、予約者が「%1$s」から「%2$s」に変わります。"
 
 #. translators: %s: newly selected reserver name
-#: src/bookings/class-booking-admin.php:335
+#: src/bookings/class-booking-admin.php:337
 msgid "Reserver will be set to %s when you save this reservation."
 msgstr "この予約を保存すると、予約者が「%s」に設定されます。"
 
-#: src/bookings/class-booking-admin.php:336
+#: src/bookings/class-booking-admin.php:338
 msgid "Reserver change cancelled."
 msgstr "予約者の変更を取り消しました。"
 
 #. translators: %s: resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:466
+#: src/bookings/class-booking-admin.php:468
 msgid ""
 "You can keep the current status, but assigning %s is required to select a "
 "different status here."
@@ -5788,15 +5889,15 @@ msgstr ""
 "指定が必要です。"
 
 #. translators: %s: resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:473
+#: src/bookings/class-booking-admin.php:475
 msgid "Assign %s from the edit screen"
 msgstr "編集画面で%sを指定してください"
 
-#: src/bookings/class-booking-admin.php:484
+#: src/bookings/class-booking-admin.php:486
 msgid "Reservation details"
 msgstr "予約詳細"
 
-#: src/bookings/class-booking-admin.php:510
+#: src/bookings/class-booking-admin.php:512
 msgid ""
 "This reservation customer has not confirmed their email address, so booking "
 "confirmations and change notices may not have reached them. Please contact "
@@ -5806,19 +5907,19 @@ msgstr ""
 "ていない可能性があります。予約内容の連絡は、電話など別の方法で行ってくださ"
 "い。"
 
-#: src/bookings/class-booking-admin.php:514
+#: src/bookings/class-booking-admin.php:516
 msgid "View user information"
 msgstr "ユーザー情報を確認"
 
-#: src/bookings/class-booking-admin.php:650
+#: src/bookings/class-booking-admin.php:663
 msgid "Reserver"
 msgstr "予約者"
 
-#: src/bookings/class-booking-admin.php:669
+#: src/bookings/class-booking-admin.php:682
 msgid "Stay"
 msgstr "宿泊"
 
-#: src/bookings/class-booking-admin.php:672
+#: src/bookings/class-booking-admin.php:685
 msgid ""
 "The check-in and check-out date and time of a stay reservation cannot be "
 "changed on this screen. To change the dates, cancel this reservation and "
@@ -5828,21 +5929,21 @@ msgstr ""
 "日時を変える場合は、この予約をキャンセルして、新しく予約を受け付けてくださ"
 "い。"
 
-#: src/bookings/class-booking-admin.php:686
+#: src/bookings/class-booking-admin.php:699
 msgid "start"
 msgstr "開始"
 
-#: src/bookings/class-booking-admin.php:691
+#: src/bookings/class-booking-admin.php:704
 msgid "end"
 msgstr "終了"
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:710
+#: src/bookings/class-booking-admin.php:723
 msgid "Person in charge%s and number of guests"
 msgstr "担当%sと人数"
 
 #. translators: %1$s: Resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:743
+#: src/bookings/class-booking-admin.php:756
 msgid ""
 "The selected %1$s cannot take this booking at this date and time (not enough "
 "remaining capacity, or another booking at the same time). You can still save "
@@ -5852,7 +5953,7 @@ msgstr ""
 "約）。重複予約を許可する設定のため、このまま保存できます。"
 
 #. translators: %1$s: Resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:749
+#: src/bookings/class-booking-admin.php:762
 msgid ""
 "The selected %1$s cannot take this booking at this date and time (not enough "
 "remaining capacity, or another booking at the same time). You cannot save as "
@@ -5864,13 +5965,13 @@ msgstr ""
 
 #. translators: %s: Resource label (singular).
 #. translators: %s: label of the resource (e.g. room).
-#: src/bookings/class-booking-admin.php:798
+#: src/bookings/class-booking-admin.php:811
 #: src/shifts/class-shift-editor.php:158
 msgid "Select %s"
 msgstr "%sを選択"
 
 #. translators: %s: Resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:831
+#: src/bookings/class-booking-admin.php:844
 msgid ""
 "Any %s who cannot take this booking (not enough remaining capacity for this "
 "menu, or already booked for another menu at this time) are excluded from the "
@@ -5880,23 +5981,23 @@ msgstr ""
 "刻の予約がある場合）は選択項目から除外されています。"
 
 #. translators: %s: Comma-separated resource tag names requested by the customer.
-#: src/bookings/class-booking-admin.php:842
-#: src/notifications/class-booking-notification-service.php:1299
+#: src/bookings/class-booking-admin.php:855
+#: src/notifications/class-booking-notification-service.php:1332
 msgid "Requested tag: %s"
 msgstr "希望タグ: %s"
 
 #. translators: %s: Resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:852
+#: src/bookings/class-booking-admin.php:865
 msgid "The selected %s does not have the requested resource tag."
 msgstr "選択した%sは希望のリソースタグを持っていません。"
 
-#: src/bookings/class-booking-admin.php:896
+#: src/bookings/class-booking-admin.php:909
 msgid ""
 "This booking uses price categories. The breakdown is fixed at the time of "
 "reservation."
 msgstr "この予約は料金区分を使用しています。内訳は予約時点で確定します。"
 
-#: src/bookings/class-booking-admin.php:908
+#: src/bookings/class-booking-admin.php:921
 msgid ""
 "This booking's number of guests cannot be edited because the slot capacity "
 "feature is currently disabled."
@@ -5904,7 +6005,7 @@ msgstr ""
 "予約枠の定員機能が無効になっているため、この予約の人数は編集できません。"
 
 #. translators: %d: Maximum number of guests per booking.
-#: src/bookings/class-booking-admin.php:926
+#: src/bookings/class-booking-admin.php:939
 msgid ""
 "Up to %d guests can be reserved per booking. The base fee is recalculated "
 "from the number of guests on save."
@@ -5913,7 +6014,7 @@ msgstr ""
 "す。"
 
 #. translators: %1$s: Resource label (singular), e.g. "room".
-#: src/bookings/class-booking-admin.php:936
+#: src/bookings/class-booking-admin.php:949
 msgid ""
 "Because this menu allows %1$s selection, the selected %1$s will be assigned "
 "to this entire group, making the time slot exclusive to this booking."
@@ -5922,7 +6023,7 @@ msgstr ""
 "間枠は貸切（1枠1組）になります。"
 
 #. translators: %s: Resource label (singular), e.g. "staff".
-#: src/bookings/class-booking-admin.php:938
+#: src/bookings/class-booking-admin.php:951
 msgid ""
 "Because this menu uses nomination, the nominated %s will take charge of this "
 "entire group, making the time slot exclusive to this booking."
@@ -5930,36 +6031,36 @@ msgstr ""
 "このメニューは指名機能を使用するため、指名した%sがこの人数の組を丸ごと担当"
 "し、その時間枠は貸切（1枠1組）になります。"
 
-#: src/bookings/class-booking-admin.php:949
+#: src/bookings/class-booking-admin.php:962
 msgid "Selection category"
 msgstr "指定区分"
 
-#: src/bookings/class-booking-admin.php:949
+#: src/bookings/class-booking-admin.php:962
 msgid "Nomination category"
 msgstr "指名区分"
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:957
+#: src/bookings/class-booking-admin.php:970
 msgid "Reservation with %s selected by customer"
 msgstr "顧客による%s指定の予約"
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:957
+#: src/bookings/class-booking-admin.php:970
 msgid "Reservation of %s nomination by customer"
 msgstr "顧客による%s指名の予約"
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:967
+#: src/bookings/class-booking-admin.php:980
 msgid "Checked when a customer makes a reservation by selecting %s."
 msgstr "顧客が%sを指定して予約した場合にチェックされます。"
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-admin.php:967
+#: src/bookings/class-booking-admin.php:980
 msgid "Checked when a customer makes a reservation by naming %s."
 msgstr "顧客が%sを指名して予約した場合にチェックされます。"
 
 #. translators: %s: nomination fee label
-#: src/bookings/class-booking-admin.php:975
+#: src/bookings/class-booking-admin.php:988
 msgid ""
 "Prices are based on the \"basic service fee\", \"%s\", and \"total basic "
 "fee\" saved at the time of reservation. Please enter the \"total billing "
@@ -5968,27 +6069,27 @@ msgstr ""
 "予約時点の「サービス基本料金」「%s」「基本料金合計」をもとに算出されていま"
 "す。必要に応じて「請求金額合計」を入力してください。"
 
-#: src/bookings/class-booking-admin.php:1001
-#: src/bookings/class-booking-admin.php:1495
-#: src/blocks/reservation/booking-confirm-app.js:2370
+#: src/bookings/class-booking-admin.php:1014
+#: src/bookings/class-booking-admin.php:1560
+#: src/blocks/reservation/booking-confirm-app.js:2418
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:600
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:717
-#: src/blocks/reservation/components/booking-summary-items.js:43
+#: src/blocks/reservation/components/booking-summary-items.js:71
 #: src/blocks/reservation/components/guest-verify-result.js:273
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:93
 msgid "Menu"
 msgstr "メニュー"
 
-#: src/bookings/class-booking-admin.php:1006
+#: src/bookings/class-booking-admin.php:1019
 msgid "Change menu (exception)"
 msgstr "メニューを変更する（例外）"
 
-#: src/bookings/class-booking-admin.php:1009
+#: src/bookings/class-booking-admin.php:1022
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:723
 msgid "Select menu"
 msgstr "メニューを選択"
 
-#: src/bookings/class-booking-admin.php:1017
+#: src/bookings/class-booking-admin.php:1030
 msgid ""
 "In principle, the menu selected at the time of reservation will not be "
 "changed. Please check and select only if you need to make changes (the price "
@@ -5997,41 +6098,52 @@ msgstr ""
 "原則、予約時に選択されたメニューは変更しません。変更が必要な場合のみチェック"
 "して選択してください（予約時点で保存された料金は変更しません）。"
 
-#: src/bookings/class-booking-admin.php:1024
-#: src/blocks/reservation/pricing-breakdown.js:186
+#: src/bookings/class-booking-admin.php:1037
+#: src/blocks/reservation/pricing-breakdown.js:228
 msgid "Service basic fee"
 msgstr "サービス基本料金"
 
-#: src/bookings/class-booking-admin.php:1033
+#: src/bookings/class-booking-admin.php:1055
 msgid ""
 "This is the basic service charge at the time of reservation. (Cannot be "
 "edited)"
 msgstr "予約時点のサービス基本料金です。（編集不可）"
 
-#: src/bookings/class-booking-admin.php:1039 src/blocks/reservation/app.js:2214
-#: src/blocks/reservation/booking-confirm-app.js:2491
-#: src/blocks/reservation/components/booking-summary-items.js:130
+#: src/bookings/class-booking-admin.php:1063
+msgid "Extra guest fee"
+msgstr "追加料金"
+
+#. translators: %d: number of guests included in the basic price.
+#: src/bookings/class-booking-admin.php:1080
+msgid ""
+"This is the fee for the guests over the %d included in the basic price. "
+"(Cannot be edited)"
+msgstr "基本料金に含まれる%d名を超えた分の追加料金です。（編集できません）"
+
+#: src/bookings/class-booking-admin.php:1089 src/blocks/reservation/app.js:2278
+#: src/blocks/reservation/booking-confirm-app.js:2570
+#: src/blocks/reservation/components/booking-summary-items.js:194
 msgid "Total basic fee"
 msgstr "基本料金合計"
 
 #. translators: %s: nomination fee label
-#: src/bookings/class-booking-admin.php:1052
+#: src/bookings/class-booking-admin.php:1102
 msgid ""
 "This is the total of the basic service fee + %s at the time of reservation. "
 "(Cannot be edited)"
 msgstr "予約時点のサービス基本料金＋%sの合計です。（編集不可）"
 
-#: src/bookings/class-booking-admin.php:1056
+#: src/bookings/class-booking-admin.php:1106
 msgid "This is the total fee at the time of reservation. (Cannot be edited)"
 msgstr "予約時点の料金の合計です。（編集不可）"
 
-#: src/bookings/class-booking-admin.php:1063
-#: src/bookings/class-booking-admin.php:1498
+#: src/bookings/class-booking-admin.php:1113
+#: src/bookings/class-booking-admin.php:1563
 msgid "Total billing amount"
 msgstr "請求金額合計"
 
 #. translators: %s: nomination fee label
-#: src/bookings/class-booking-admin.php:1085
+#: src/bookings/class-booking-admin.php:1135
 msgid ""
 "If there are any service changes or additional charges, please enter the "
 "final amount charged, including the %s. If not entered, the total basic fee "
@@ -6040,7 +6152,7 @@ msgstr ""
 "サービス変更や追加料金がある場合は、%sを含めた最終請求金額を入力してくださ"
 "い。未入力の場合は基本料金合計が適用されます。"
 
-#: src/bookings/class-booking-admin.php:1089
+#: src/bookings/class-booking-admin.php:1139
 msgid ""
 "If there are any service changes or additional charges, please enter the "
 "final amount charged. If not entered, the total basic fee will be applied."
@@ -6049,233 +6161,233 @@ msgstr ""
 "場合は基本料金合計が適用されます。"
 
 #. translators: %s: price amount
-#: src/bookings/class-booking-admin.php:1097
+#: src/bookings/class-booking-admin.php:1147
 msgid "Current applicable amount (reference): %s"
 msgstr "現在の適用額（参考）: %s"
 
-#: src/bookings/class-booking-admin.php:1118
-#: src/bookings/class-booking-admin.php:1123
+#: src/bookings/class-booking-admin.php:1168
+#: src/bookings/class-booking-admin.php:1173
 #: src/bookings/class-booking-anonymizer.php:174
 msgid "customer name"
 msgstr "顧客名"
 
-#: src/bookings/class-booking-admin.php:1142
+#: src/bookings/class-booking-admin.php:1192
 msgid "History image"
 msgstr "履歴画像"
 
-#: src/bookings/class-booking-admin.php:1167
+#: src/bookings/class-booking-admin.php:1217
 msgid "enlarge image"
 msgstr "画像拡大表示"
 
-#: src/bookings/class-booking-admin.php:1171
+#: src/bookings/class-booking-admin.php:1221
 msgid "Previous"
 msgstr "前へ"
 
-#: src/bookings/class-booking-admin.php:1174
+#: src/bookings/class-booking-admin.php:1224
 msgid "to the next"
 msgstr "次へ"
 
-#: src/bookings/class-booking-admin.php:1177
+#: src/bookings/class-booking-admin.php:1227
 msgid "close"
 msgstr "閉じる"
 
-#: src/bookings/class-booking-admin.php:1184
+#: src/bookings/class-booking-admin.php:1234
 msgid "addition"
 msgstr "追加"
 
-#: src/bookings/class-booking-admin.php:1186
+#: src/bookings/class-booking-admin.php:1236
 msgid "You can register multiple images."
 msgstr "複数の画像を登録する事ができます。"
 
-#: src/bookings/class-booking-admin.php:1186
+#: src/bookings/class-booking-admin.php:1236
 msgid ""
 "Images uploaded from here will be automatically converted and resized to jpg "
 "format."
 msgstr ""
 "ここからアップロードされた画像は自動的にjpg形式に変換・リサイズされます。"
 
-#: src/bookings/class-booking-admin.php:1191
-#: src/bookings/class-booking-admin.php:1195
+#: src/bookings/class-booking-admin.php:1241
+#: src/bookings/class-booking-admin.php:1245
 #: src/bookings/class-booking-anonymizer.php:198
 msgid "memo"
 msgstr "メモ"
 
-#: src/bookings/class-booking-admin.php:1192
-#: src/bookings/class-booking-admin.php:1201
+#: src/bookings/class-booking-admin.php:1242
+#: src/bookings/class-booking-admin.php:1251
 #: src/bookings/class-booking-anonymizer.php:202
-#: src/blocks/reservation/booking-confirm-app.js:2777
+#: src/blocks/reservation/booking-confirm-app.js:2856
 msgid "Management memo"
 msgstr "運営側メモ"
 
-#: src/bookings/class-booking-admin.php:1492
+#: src/bookings/class-booking-admin.php:1557
 msgid "Reservation title"
 msgstr "予約タイトル"
 
-#: src/bookings/class-booking-admin.php:1493
+#: src/bookings/class-booking-admin.php:1558
 msgid "Reserved name"
 msgstr "予約者名"
 
-#: src/bookings/class-booking-admin.php:1494
-#: src/blocks/reservation/booking-confirm-app.js:2177
-#: src/blocks/reservation/booking-confirm-app.js:2348
+#: src/bookings/class-booking-admin.php:1559
+#: src/blocks/reservation/booking-confirm-app.js:2225
+#: src/blocks/reservation/booking-confirm-app.js:2396
 #: src/blocks/reservation/components/guest-verify-result.js:293
 msgid "Reservation date and time"
 msgstr "予約日時"
 
-#: src/bookings/class-booking-admin.php:1496
+#: src/bookings/class-booking-admin.php:1561
 msgid "In charge"
 msgstr "担当"
 
-#: src/bookings/class-booking-admin.php:1548
+#: src/bookings/class-booking-admin.php:1613
 msgid "Guest booking"
 msgstr "ゲスト予約"
 
-#: src/bookings/class-booking-admin.php:1574
-#: src/bookings/class-booking-admin.php:2876
+#: src/bookings/class-booking-admin.php:1639
+#: src/bookings/class-booking-admin.php:2956
 #: src/bookings/class-booking-anonymize-bulk-action.php:265
 msgid "Anonymized"
 msgstr "匿名化済み"
 
 #. translators: %s: 予約を所有する会員の現在の名前。
-#: src/bookings/class-booking-admin.php:1593
+#: src/bookings/class-booking-admin.php:1658
 msgid "Booking account: %s"
 msgstr "予約アカウント: %s"
 
-#: src/bookings/class-booking-admin.php:1624
-#: src/bookings/class-booking-admin.php:1634
-#: src/bookings/class-booking-admin.php:1655
-#: src/bookings/class-booking-admin.php:2887
+#: src/bookings/class-booking-admin.php:1689
+#: src/bookings/class-booking-admin.php:1699
+#: src/bookings/class-booking-admin.php:1720
+#: src/bookings/class-booking-admin.php:2967
 #: src/integrations/ical-import/class-external-calendar-status.php:203
-#: src/notifications/class-booking-notification-service.php:247
-#: src/notifications/class-booking-notification-service.php:270
-#: src/notifications/class-booking-notification-service.php:1154
-#: src/notifications/class-booking-notification-service.php:1494
-#: src/notifications/class-booking-notification-service.php:1525
-#: src/notifications/class-booking-notification-service.php:1595
-#: src/notifications/class-booking-notification-service.php:1616
+#: src/notifications/class-booking-notification-service.php:250
+#: src/notifications/class-booking-notification-service.php:293
+#: src/notifications/class-booking-notification-service.php:1185
+#: src/notifications/class-booking-notification-service.php:1535
+#: src/notifications/class-booking-notification-service.php:1566
+#: src/notifications/class-booking-notification-service.php:1636
+#: src/notifications/class-booking-notification-service.php:1657
 msgid "Not set"
 msgstr "未設定"
 
-#: src/bookings/class-booking-admin.php:1632
-#: src/bookings/class-booking-admin.php:1653
-#: src/bookings/class-booking-admin.php:1662
+#: src/bookings/class-booking-admin.php:1697
+#: src/bookings/class-booking-admin.php:1718
+#: src/bookings/class-booking-admin.php:1727
 #: src/integrations/ical-import/class-external-booking-display.php:133
 msgid "Not clear"
 msgstr "不明"
 
-#: src/bookings/class-booking-admin.php:1644
+#: src/bookings/class-booking-admin.php:1709
 msgid "Requested tag"
 msgstr "希望タグ"
 
 #. translators: 1: resource label, 2: resource name
-#: src/bookings/class-booking-admin.php:2383
+#: src/bookings/class-booking-admin.php:2463
 msgid "This %1$s (%2$s) has another reservation for the same time slot."
 msgstr "この%1$s（%2$s）は同じ時間帯に他の予約が入っています。"
 
 #. translators: %s: resource label
-#: src/bookings/class-booking-admin.php:2390
+#: src/bookings/class-booking-admin.php:2470
 msgid "This %1$s has other reservations for the same time slot."
 msgstr "この%1$sは同じ時間帯に他の予約が入っています。"
 
 #. translators: 1: resource label, 2: maximum number of guests per resource.
-#: src/bookings/class-booking-admin.php:2407
+#: src/bookings/class-booking-admin.php:2487
 msgid ""
 "The number of guests per %1$s exceeds the maximum (%2$d), so the reservation "
 "was not saved."
 msgstr ""
 "%1$sあたりの人数が上限（%2$d名）を超えているため、予約を保存しませんでした。"
 
-#: src/bookings/class-booking-admin.php:2412
+#: src/bookings/class-booking-admin.php:2492
 msgid "Please reduce the number of guests and save again."
 msgstr "人数を減らして保存し直してください。"
 
 #. translators: 1: Check-in date and time, 2: Check-out date and time, 3: Number of nights (e.g. 1 night).
 #. translators: 1: Check-in date, 2: Check-out date, 3: Number of nights (e.g. 1 night).
-#: src/bookings/class-booking-admin.php:2601
+#: src/bookings/class-booking-admin.php:2681
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:473
 msgid "Check-in %1$s - Check-out %2$s (%3$s)"
 msgstr "チェックイン %1$s ～ チェックアウト %2$s（%3$s）"
 
 #. translators: %s: Date and time when the personal data was anonymized.
-#: src/bookings/class-booking-admin.php:2816
+#: src/bookings/class-booking-admin.php:2896
 msgid ""
 "The personal data of this reservation was anonymized on %s by the bulk "
 "action on the reservation list."
 msgstr "この予約の個人情報は%sに匿名化しました（予約一覧の一括操作による）。"
 
 #. translators: %s: Date and time when the personal data was anonymized.
-#: src/bookings/class-booking-admin.php:2819
+#: src/bookings/class-booking-admin.php:2899
 msgid ""
 "The personal data of this reservation was anonymized on %s by a personal "
 "data erasure request."
 msgstr "この予約の個人情報は%sに匿名化しました（個人データの消去依頼による）。"
 
 #. translators: %s: Date and time when the personal data was anonymized.
-#: src/bookings/class-booking-admin.php:2822
+#: src/bookings/class-booking-admin.php:2902
 msgid ""
 "The personal data of this reservation was anonymized on %s by the automatic "
 "anonymization setting."
 msgstr "この予約の個人情報は%sに匿名化しました（自動匿名化の設定による）。"
 
 #. translators: %s: Date and time when the personal data was anonymized.
-#: src/bookings/class-booking-admin.php:2825
+#: src/bookings/class-booking-admin.php:2905
 msgid "The personal data of this reservation was anonymized on %s."
 msgstr "この予約の個人情報は%sに匿名化しました。"
 
 #. translators: %s: Names of the fields that were cleared, e.g. "customer name, telephone number".
-#: src/bookings/class-booking-admin.php:2836
+#: src/bookings/class-booking-admin.php:2916
 msgid "%s have been cleared and cannot be restored."
 msgstr "%sは消去済みで、元に戻せません。"
 
 #. translators: %d: user ID
-#: src/bookings/class-booking-admin.php:2894
+#: src/bookings/class-booking-admin.php:2974
 msgid "Unknown user (ID: %d)"
 msgstr "不明なユーザー（ID: %d）"
 
-#: src/bookings/class-booking-admin.php:2901
+#: src/bookings/class-booking-admin.php:2981
 msgid "Guest booking (not linked to a member)"
 msgstr "ゲスト予約（会員とは紐付いていません）"
 
-#: src/bookings/class-booking-admin.php:2904
-#: src/bookings/class-booking-admin.php:2924
+#: src/bookings/class-booking-admin.php:2984
+#: src/bookings/class-booking-admin.php:3004
 msgid "Change reserver"
 msgstr "予約者を変更"
 
-#: src/bookings/class-booking-admin.php:2904
-#: src/bookings/class-booking-admin.php:2924
+#: src/bookings/class-booking-admin.php:2984
+#: src/bookings/class-booking-admin.php:3004
 msgid "Select reserver"
 msgstr "予約者を選択"
 
-#: src/bookings/class-booking-admin.php:2919
+#: src/bookings/class-booking-admin.php:2999
 msgid "This booking was made as a guest booking."
 msgstr "この予約はゲスト予約として作られました。"
 
-#: src/bookings/class-booking-admin.php:2937
+#: src/bookings/class-booking-admin.php:3017
 msgid "List of reservations made by this person"
 msgstr "この予約者の予約一覧"
 
-#: src/bookings/class-booking-admin.php:2941
+#: src/bookings/class-booking-admin.php:3021
 msgid "Reserver information"
 msgstr "予約者情報"
 
-#: src/bookings/class-booking-admin.php:2945
+#: src/bookings/class-booking-admin.php:3025
 msgid "Restore original reserver"
 msgstr "元の予約者に戻す"
 
-#: src/bookings/class-booking-admin.php:2950
+#: src/bookings/class-booking-admin.php:3030
 msgid "Search users"
 msgstr "ユーザーを検索"
 
-#: src/bookings/class-booking-admin.php:2951
+#: src/bookings/class-booking-admin.php:3031
 msgid "Enter part of a name, furigana, or email address."
 msgstr "名前・ふりがな・メールアドレスの一部を入力してください。"
 
-#: src/bookings/class-booking-admin.php:2954
+#: src/bookings/class-booking-admin.php:3034
 #: src/bookings/class-booking-posts-list-table.php:84
 msgid "Search"
 msgstr "検索"
 
-#: src/bookings/class-booking-admin.php:2957
+#: src/bookings/class-booking-admin.php:3037
 msgid "Matching users"
 msgstr "該当するユーザー"
 
@@ -6418,98 +6530,98 @@ msgstr "キャンセル用リンクのトークン"
 msgid "(Deleted)"
 msgstr "（削除済み）"
 
-#: src/bookings/class-booking-confirmation-controller.php:294
+#: src/bookings/class-booking-confirmation-controller.php:293
 msgid "Temporary reservation data token not found."
 msgstr "予約一時データトークンが見つかりません。"
 
-#: src/bookings/class-booking-confirmation-controller.php:301
-#: src/bookings/class-booking-draft-controller.php:729
-#: src/bookings/class-booking-draft-controller.php:925
+#: src/bookings/class-booking-confirmation-controller.php:300
+#: src/bookings/class-booking-draft-controller.php:731
+#: src/bookings/class-booking-draft-controller.php:956
 msgid "Temporary reservation data not found."
 msgstr "予約一時データが見つかりません。"
 
-#: src/bookings/class-booking-confirmation-controller.php:307
-#: src/bookings/class-booking-confirmation-controller.php:432
+#: src/bookings/class-booking-confirmation-controller.php:306
+#: src/bookings/class-booking-confirmation-controller.php:431
 msgid "Temporary reservation data contents are incomplete."
 msgstr "予約一時データ内容が不完全です。"
 
-#: src/bookings/class-booking-confirmation-controller.php:316
-#: src/bookings/class-booking-draft-controller.php:450
-#: src/bookings/class-booking-draft-controller.php:737
-#: src/bookings/class-booking-draft-controller.php:933
+#: src/bookings/class-booking-confirmation-controller.php:315
+#: src/bookings/class-booking-draft-controller.php:451
+#: src/bookings/class-booking-draft-controller.php:739
+#: src/bookings/class-booking-draft-controller.php:964
 msgid "You do not have permission to access this temporary reservation data."
 msgstr "この予約一時データにアクセスする権限がありません。"
 
-#: src/bookings/class-booking-confirmation-controller.php:395
+#: src/bookings/class-booking-confirmation-controller.php:394
 #: src/bookings/class-guest-booking-controller.php:508
 msgid "Please enter your name, email address and phone number."
 msgstr "お名前、メールアドレス、電話番号を入力してください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:486
-#: src/bookings/class-booking-draft-controller.php:515
-#: src/bookings/class-booking-draft-controller.php:828
+#: src/bookings/class-booking-confirmation-controller.php:485
+#: src/bookings/class-booking-draft-controller.php:517
+#: src/bookings/class-booking-draft-controller.php:838
 #: src/bookings/class-lodging-booking.php:288
-#: src/blocks/reservation/app.js:3151
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:944
+#: src/blocks/reservation/app.js:3221
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:948
 msgid "Please select at least one guest."
 msgstr "1名以上を選択してください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:498
+#: src/bookings/class-booking-confirmation-controller.php:497
 msgid "The number of guests exceeds the maximum that can be booked."
 msgstr "予約人数が予約可能な上限を超えています。"
 
-#: src/bookings/class-booking-confirmation-controller.php:531
+#: src/bookings/class-booking-confirmation-controller.php:530
 msgid ""
 "This slot can no longer be reserved exclusively. Please review your "
 "selection."
 msgstr "この枠は貸切での予約ができなくなりました。選択内容をご確認ください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:541
-#: src/bookings/class-booking-draft-controller.php:568
+#: src/bookings/class-booking-confirmation-controller.php:540
+#: src/bookings/class-booking-draft-controller.php:570
 msgid ""
 "The number of guests does not reach the minimum required for a private "
 "booking."
 msgstr "貸切に必要な最少人数に達していません。"
 
-#: src/bookings/class-booking-confirmation-controller.php:558
+#: src/bookings/class-booking-confirmation-controller.php:557
 msgid "The selected date cannot be reserved. Please choose another date."
 msgstr "選択した日付は予約できません。別の日付を選択してください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:567
+#: src/bookings/class-booking-confirmation-controller.php:566
 msgid ""
 "The selected date is outside the service period of this menu. Please choose "
 "another date."
 msgstr ""
 "選択した日付はこのメニューの提供期間の外です。別の日付を選んでください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:655
-#: src/bookings/class-booking-confirmation-controller.php:1835
-#: src/bookings/class-booking-confirmation-controller.php:2077
+#: src/bookings/class-booking-confirmation-controller.php:654
+#: src/bookings/class-booking-confirmation-controller.php:1867
+#: src/bookings/class-booking-confirmation-controller.php:2109
 msgid "The selected staff member is no longer available."
 msgstr "指定されたスタッフはこのメニューを担当できません。"
 
 #. translators: %s: Resource label (singular).
-#: src/bookings/class-booking-confirmation-controller.php:668
-#: src/bookings/class-booking-confirmation-controller.php:860
+#: src/bookings/class-booking-confirmation-controller.php:667
+#: src/bookings/class-booking-confirmation-controller.php:859
 msgid "Could not assign person %s. Please try a different frame."
 msgstr "担当%sを割り当てできませんでした。別の枠でお試しください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:692
-#: src/blocks/reservation/booking-confirm-app.js:1313
+#: src/bookings/class-booking-confirmation-controller.php:691
+#: src/blocks/reservation/booking-confirm-app.js:1359
 msgid "Please enter the customer name."
 msgstr "お客様のお名前を入力してください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:751
+#: src/bookings/class-booking-confirmation-controller.php:750
 #: src/bookings/class-guest-booking-controller.php:535
-#: src/blocks/reservation/booking-confirm-app.js:1277
+#: src/blocks/reservation/booking-confirm-app.js:1323
 msgid "You must agree to the cancellation policy."
 msgstr "キャンセルポリシーへの同意が必要です。"
 
-#: src/bookings/class-booking-confirmation-controller.php:965
+#: src/bookings/class-booking-confirmation-controller.php:978
 msgid "Failed to create the booking. Please try again."
 msgstr "予約の作成に失敗しました。もう一度お試しください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:1276
+#: src/bookings/class-booking-confirmation-controller.php:1308
 msgid ""
 "You already have a reservation at the same date and time with this email "
 "address. Please change the date and time."
@@ -6517,50 +6629,50 @@ msgstr ""
 "このメールアドレスで、同じ日時のご予約がすでにあります。日時を変更してくださ"
 "い。"
 
-#: src/bookings/class-booking-confirmation-controller.php:1277
-#: src/blocks/reservation/booking-confirm-app.js:1475
+#: src/bookings/class-booking-confirmation-controller.php:1309
+#: src/blocks/reservation/booking-confirm-app.js:1521
 msgid ""
 "A reservation for the same date and time already exists. Please change the "
 "date and time."
 msgstr "同じ日時の予約が既に存在します。日時を変更してください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:1758
-#: src/bookings/class-booking-confirmation-controller.php:1773
-#: src/bookings/class-booking-draft-controller.php:399
+#: src/bookings/class-booking-confirmation-controller.php:1790
+#: src/bookings/class-booking-confirmation-controller.php:1805
+#: src/bookings/class-booking-draft-controller.php:400
 msgid "Reservation slot information is incorrect."
 msgstr "予約枠情報が不正です。"
 
-#: src/bookings/class-booking-confirmation-controller.php:1805
-#: src/bookings/class-booking-confirmation-controller.php:1815
-#: src/bookings/class-booking-confirmation-controller.php:1825
+#: src/bookings/class-booking-confirmation-controller.php:1837
+#: src/bookings/class-booking-confirmation-controller.php:1847
+#: src/bookings/class-booking-confirmation-controller.php:1857
 msgid "The selected slot is no longer available. Please choose another slot."
 msgstr "選択した枠は予約できません。別の枠を選択してください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:2051
-#: src/bookings/class-booking-draft-controller.php:423
+#: src/bookings/class-booking-confirmation-controller.php:2083
+#: src/bookings/class-booking-draft-controller.php:424
 msgid ""
 "Reservations are closed for this time slot because it has been reserved "
 "exclusively."
 msgstr "この時間帯は貸し切り予約が入っているため、予約を受け付けていません。"
 
-#: src/bookings/class-booking-confirmation-controller.php:2065
-#: src/bookings/class-booking-draft-controller.php:582
+#: src/bookings/class-booking-confirmation-controller.php:2097
+#: src/bookings/class-booking-draft-controller.php:584
 msgid ""
 "This slot cannot be reserved exclusively because it already has a booking."
 msgstr "この枠は既に予約があるため貸切にできません。"
 
-#: src/bookings/class-booking-confirmation-controller.php:2120
+#: src/bookings/class-booking-confirmation-controller.php:2152
 msgid "This time slot is fully booked. Please choose another time."
 msgstr "この時間帯は満枠です。別の時間をお選びください。"
 
-#: src/bookings/class-booking-confirmation-controller.php:2200
+#: src/bookings/class-booking-confirmation-controller.php:2232
 msgid ""
 "The system is currently processing another booking. Please try again in a "
 "few seconds."
 msgstr "現在、別の予約を処理中です。数秒後にもう一度お試しください。"
 
 #. translators: %1$s: resource label (singular), e.g. "Room". %2$s: the same label.
-#: src/bookings/class-booking-confirmation-controller.php:2236
+#: src/bookings/class-booking-confirmation-controller.php:2268
 msgid ""
 "The selected %1$s is no longer available for these dates. Please choose "
 "different dates or another %2$s."
@@ -6580,26 +6692,26 @@ msgstr "キャンセル可能期限を過ぎています。"
 msgid "The reservation date and time is invalid."
 msgstr "予約日時が不正です。"
 
-#: src/bookings/class-booking-draft-controller.php:228
-#: src/bookings/class-booking-draft-controller.php:717
-#: src/bookings/class-booking-draft-controller.php:913
+#: src/bookings/class-booking-draft-controller.php:229
+#: src/bookings/class-booking-draft-controller.php:719
+#: src/bookings/class-booking-draft-controller.php:944
 #: src/bookings/class-guest-booking-controller.php:1297
 msgid "Too many requests. Please try again later."
 msgstr "リクエストが多すぎます。しばらく経ってから再度お試しください。"
 
-#: src/bookings/class-booking-draft-controller.php:246
+#: src/bookings/class-booking-draft-controller.php:247
 #: src/rest/class-menu-preview-controller.php:157
 msgid "Menu ID is invalid."
 msgstr "メニューIDが不正です。"
 
 #. translators: %d: maximum number of guests that can be booked.
-#: src/bookings/class-booking-draft-controller.php:504
+#: src/bookings/class-booking-draft-controller.php:506
 #: src/bookings/class-lodging-booking.php:299
 msgid "The number of guests exceeds the maximum that can be booked (%d)."
 msgstr "予約人数が予約可能な上限（%d名）を超えています。"
 
-#: src/bookings/class-booking-draft-controller.php:724
-#: src/bookings/class-booking-draft-controller.php:920
+#: src/bookings/class-booking-draft-controller.php:726
+#: src/bookings/class-booking-draft-controller.php:951
 msgid "Token is invalid."
 msgstr "トークンが不正です。"
 
@@ -6836,9 +6948,9 @@ msgstr "このキャンセル用リンクは正しくありません。"
 #: src/bookings/class-lodging-booking.php:108
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:409
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:481
-#: src/blocks/reservation/components/booking-summary-items.js:90
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1097
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1258
+#: src/blocks/reservation/components/booking-summary-items.js:119
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1101
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1262
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:102
 msgid "%d night"
 msgid_plural "%d nights"
@@ -6875,11 +6987,11 @@ msgstr "他のメニューをお試しいただくか、サイト運営者まで
 msgid "Please select a %s."
 msgstr "%sを選択してください。"
 
-#: src/bookings/class-my-bookings-controller.php:308
+#: src/bookings/class-my-bookings-controller.php:330
 msgid "The reservation ID is invalid."
 msgstr "予約IDが不正です。"
 
-#: src/bookings/class-my-bookings-controller.php:317
+#: src/bookings/class-my-bookings-controller.php:339
 msgid "You do not have permission to cancel this reservation."
 msgstr "この予約をキャンセルする権限がありません。"
 
@@ -6916,6 +7028,41 @@ msgstr "事業者"
 msgid "Default Staff"
 msgstr "基本スタッフ"
 
+#: src/common/class-booking-price-display.php:28
+msgid "1 tour"
+msgstr "1ツアー"
+
+#. translators: 1: price category name (e.g. Child), 2: extra fee per guest, 3: number of extra guests with unit (e.g. 1 guest).
+#: src/common/class-booking-price-display.php:42
+msgid "%1$s %2$s × %3$s"
+msgstr "%1$s %2$s × %3$s"
+
+#. translators: 1: price category name (e.g. Adult), 2: number of guests with unit (e.g. 4 guests).
+#: src/common/class-booking-price-display.php:71
+#: src/blocks/reservation/pricing-breakdown.js:503
+msgid "%1$s %2$s"
+msgstr "%1$s%2$s"
+
+#. translators: 1: price categories listed so far, 2: next price category.
+#. translators: 1: date (e.g. October 10, 2026 (Sat)), 2: state of the date (e.g. Closed days).
+#. translators: 1: date (e.g. October 10, 2026 (Sat)), 2: state of the date (e.g. Check-in date).
+#: src/common/class-booking-price-display.php:80
+#: src/blocks/reservation/booking-ui/calendar-grid.js:200
+#: src/blocks/reservation/lodging/lodging-range-calendar.js:348
+#: src/blocks/reservation/pricing-breakdown.js:516
+msgid "%1$s, %2$s"
+msgstr "%1$s、%2$s"
+
+#. translators: 1: total number of guests with unit (e.g. 5 guests), 2: breakdown by price category (e.g. Adult 4 guests, Child 1 guest).
+#. translators: 1: Status label, 2: Date and time of the last successful fetch.
+#. translators: 1: month and day (e.g. 10/10), 2: weekday (e.g. Sat).
+#: src/common/class-booking-price-display.php:92
+#: src/integrations/ical-import/class-external-calendar-admin.php:536
+#: src/blocks/reservation/lodging/night-rates.js:75
+#: src/blocks/reservation/pricing-breakdown.js:524
+msgid "%1$s (%2$s)"
+msgstr "%1$s（%2$s）"
+
 #: src/common/class-lodging-price-display.php:198
 msgid "1 room, 1 night"
 msgstr "1室・1泊"
@@ -6927,7 +7074,7 @@ msgstr "%s・1泊"
 
 #. translators: %s: the lowest price (e.g. ¥7,000). The price differs by day, so it is shown as "from".
 #: src/common/class-lodging-price-display.php:223
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1007
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1011
 msgid "%s~"
 msgstr "%s〜"
 
@@ -6938,13 +7085,13 @@ msgstr "不明なエラー"
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:47
-#: src/blocks/reservation/app.js:303
+#: src/blocks/reservation/app.js:309
 msgid "This menu accepts bookings from %d guests."
 msgstr "このメニューは %d 名からお申し込みいただけます。"
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:52
-#: src/blocks/reservation/app.js:311
+#: src/blocks/reservation/app.js:317
 msgid "Please set the number of guests to %d or more."
 msgstr "人数を %d 名以上にしてください。"
 
@@ -7574,7 +7721,7 @@ msgstr "お客様名: %s"
 #. translators: %s: お客様の電話番号。
 #. translators: %s: Customer phone number.
 #: src/integrations/google-calendar/class-google-calendar-event-builder.php:161
-#: src/notifications/class-booking-notification-service.php:1469
+#: src/notifications/class-booking-notification-service.php:1510
 msgid "Phone number: %s"
 msgstr "電話番号: %s"
 
@@ -7743,10 +7890,10 @@ msgid "Remove the connection"
 msgstr "連携を解除"
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:390
-#: src/resources/resource-labels.php:378 src/blocks/reservation/app.js:568
-#: src/blocks/reservation/app.js:1096
-#: src/blocks/reservation/booking-confirm-app.js:233
-#: src/blocks/reservation/components/booking-summary-items.js:107
+#: src/resources/resource-labels.php:378 src/blocks/reservation/app.js:574
+#: src/blocks/reservation/app.js:1117
+#: src/blocks/reservation/booking-confirm-app.js:235
+#: src/blocks/reservation/components/booking-summary-items.js:136
 #: src/blocks/reservation/components/guest-result-frame.js:146
 msgid "Number of guests"
 msgstr "人数"
@@ -7993,13 +8140,6 @@ msgstr ""
 "カレンダーを取得しました。追加 %1$d 件・更新 %2$d 件・キャンセル %3$d 件を反"
 "映しました。"
 
-#. translators: 1: Status label, 2: Date and time of the last successful fetch.
-#. translators: 1: month and day (e.g. 10/10), 2: weekday (e.g. Sat).
-#: src/integrations/ical-import/class-external-calendar-admin.php:536
-#: src/blocks/reservation/lodging/night-rates.js:75
-msgid "%1$s (%2$s)"
-msgstr "%1$s（%2$s）"
-
 #: src/integrations/ical-import/class-external-calendar-admin.php:590
 msgid ""
 "The external calendar could not be fetched several times in a row (about 90 "
@@ -8100,17 +8240,17 @@ msgid "External calendar / %1$s / %2$s - %3$s"
 msgstr "外部カレンダー / %1$s / %2$s〜%3$s"
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:147
+#: src/notifications/class-booking-notification-service.php:150
 msgid "[ %s ] Please complete your reservation (confirmation email)"
 msgstr "[ %s ] ご予約を完了してください（確認メール）"
 
 #. translators: %s: Customer name.
-#: src/notifications/class-booking-notification-service.php:154
-#: src/notifications/class-booking-notification-service.php:1369
+#: src/notifications/class-booking-notification-service.php:157
+#: src/notifications/class-booking-notification-service.php:1410
 msgid "Dear %s"
 msgstr "%s 様"
 
-#: src/notifications/class-booking-notification-service.php:156
+#: src/notifications/class-booking-notification-service.php:159
 msgid ""
 "Your reservation is not complete yet. Please open the following link to "
 "complete your reservation."
@@ -8118,18 +8258,18 @@ msgstr ""
 "ご予約はまだ完了していません。次のリンクを開いて、ご予約を完了してください。"
 
 #. translators: %s: Expiration date and time of the confirmation link.
-#: src/notifications/class-booking-notification-service.php:163
+#: src/notifications/class-booking-notification-service.php:166
 msgid "This link is valid until %s."
 msgstr "このリンクの有効期限は %s までです。"
 
-#: src/notifications/class-booking-notification-service.php:166
+#: src/notifications/class-booking-notification-service.php:169
 msgid ""
 "If the link has expired, please make the reservation again from the "
 "reservation page."
 msgstr ""
 "期限を過ぎた場合は、お手数ですが予約ページから、もう一度お申し込みください。"
 
-#: src/notifications/class-booking-notification-service.php:168
+#: src/notifications/class-booking-notification-service.php:171
 msgid ""
 "We check availability again when you open the link. If the date and time "
 "have been taken by another reservation in the meantime, the reservation "
@@ -8138,20 +8278,20 @@ msgstr ""
 "リンクを開いたときに、空き状況をもう一度確認します。その間に別のご予約が入っ"
 "た日時は、ご予約いただけません。"
 
-#: src/notifications/class-booking-notification-service.php:170
+#: src/notifications/class-booking-notification-service.php:173
 msgid ""
 "After you open the link, your reservation will be a provisional reservation. "
 "The administrator will review and confirm it."
 msgstr ""
 "リンクを開いた後は仮予約となります。管理者が内容を確認のうえ、確定します。"
 
-#: src/notifications/class-booking-notification-service.php:176
+#: src/notifications/class-booking-notification-service.php:179
 msgid ""
 "The price shown is a guide. The amount in the email sent after confirmation "
 "is the final amount."
 msgstr "料金は目安です。確定後にお送りするメールの金額が正となります。"
 
-#: src/notifications/class-booking-notification-service.php:179
+#: src/notifications/class-booking-notification-service.php:182
 msgid ""
 "If you do not recognize this email, please discard it without opening the "
 "link. No reservation will be created."
@@ -8160,42 +8300,42 @@ msgstr ""
 "成されません。"
 
 #. translators: %s: Provider phone number.
-#: src/notifications/class-booking-notification-service.php:185
-#: src/notifications/class-booking-notification-service.php:1412
-#: src/notifications/class-booking-notification-service.php:1424
+#: src/notifications/class-booking-notification-service.php:188
+#: src/notifications/class-booking-notification-service.php:1453
+#: src/notifications/class-booking-notification-service.php:1465
 #: src/blocks/reservation/components/guest-cancel.js:267
 msgid "TEL: %s"
 msgstr "TEL: %s"
 
 #. translators: 1: Check-in date and time, 2: Check-out date and time.
-#: src/notifications/class-booking-notification-service.php:235
-#: src/notifications/class-booking-notification-service.php:1600
+#: src/notifications/class-booking-notification-service.php:238
+#: src/notifications/class-booking-notification-service.php:1641
 msgid "Check-in %1$s / Check-out %2$s"
 msgstr "チェックイン %1$s ／ チェックアウト %2$s"
 
-#: src/notifications/class-booking-notification-service.php:253
-#: src/notifications/class-booking-notification-service.php:1125
+#: src/notifications/class-booking-notification-service.php:256
+#: src/notifications/class-booking-notification-service.php:1156
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:380
-#: src/blocks/reservation/components/booking-summary-items.js:85
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1252
+#: src/blocks/reservation/components/booking-summary-items.js:114
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1256
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:99
 msgid "Number of nights"
 msgstr "泊数"
 
-#: src/notifications/class-booking-notification-service.php:271
-#: src/notifications/class-booking-notification-service.php:1155
+#: src/notifications/class-booking-notification-service.php:294
+#: src/notifications/class-booking-notification-service.php:1186
 msgid "TBD"
 msgstr "未定"
 
-#: src/notifications/class-booking-notification-service.php:459
+#: src/notifications/class-booking-notification-service.php:484
 msgid "Every 15 Minutes"
 msgstr "15分ごと"
 
-#: src/notifications/class-booking-notification-service.php:653
+#: src/notifications/class-booking-notification-service.php:678
 msgid "This booking has no customer email address, so the email was not sent."
 msgstr "この予約に利用者のメールアドレスが無いため、送信しませんでした。"
 
-#: src/notifications/class-booking-notification-service.php:672
+#: src/notifications/class-booking-notification-service.php:697
 msgid ""
 "Not sent because neither the representative email address nor the WordPress "
 "administration email address is a valid email address."
@@ -8203,153 +8343,153 @@ msgstr ""
 "代表メールアドレスと WordPress の管理者メールアドレスのどちらにも有効なメール"
 "アドレスが無いため、送信しませんでした。"
 
-#: src/notifications/class-booking-notification-service.php:674
+#: src/notifications/class-booking-notification-service.php:699
 msgid "Set the representative email address"
 msgstr "代表メールアドレスを設定する"
 
 #. translators: %1$s: Provider name, %2$d: Hours before reservation.
-#: src/notifications/class-booking-notification-service.php:827
+#: src/notifications/class-booking-notification-service.php:852
 msgid "[%1$s] Reservation reminder (%2$d hours before)"
 msgstr "[%1$s] 予約リマインダー（%2$d時間前）"
 
 #. translators: %d: Hours before reservation.
-#: src/notifications/class-booking-notification-service.php:833
+#: src/notifications/class-booking-notification-service.php:858
 msgid "This is a reminder for your reservation in %d hours."
 msgstr "%d時間後のご予約のリマインダーです。"
 
-#: src/notifications/class-booking-notification-service.php:929
+#: src/notifications/class-booking-notification-service.php:954
 msgid "It will be retried automatically."
 msgstr "自動で再送します。"
 
-#: src/notifications/class-booking-notification-service.php:930
+#: src/notifications/class-booking-notification-service.php:955
 msgid "It will not be retried further."
 msgstr "これ以上再送しません。"
 
-#: src/notifications/class-booking-notification-service.php:1164
+#: src/notifications/class-booking-notification-service.php:1197
 msgid "Customer"
 msgstr "お客様"
 
-#: src/notifications/class-booking-notification-service.php:1168
+#: src/notifications/class-booking-notification-service.php:1201
 msgid "(none)"
 msgstr "（なし）"
 
 #. translators: %1$s: Provider name, %2$s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:1223
+#: src/notifications/class-booking-notification-service.php:1256
 msgid "[ %1$s ][ %2$s ] A new reservation has been made."
 msgstr "[ %1$s ][ %2$s ] 新しい予約が入りました。"
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:1230
+#: src/notifications/class-booking-notification-service.php:1263
 msgid "[ %s ] Reservation confirmed"
 msgstr "[ %s ] 予約が確定しました"
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:1237
+#: src/notifications/class-booking-notification-service.php:1270
 msgid "[ %s ] Your reservation has been confirmed"
 msgstr "[ %s ] ご予約が確定しました"
 
-#: src/notifications/class-booking-notification-service.php:1238
+#: src/notifications/class-booking-notification-service.php:1271
 msgid "Your reservation has been confirmed."
 msgstr "ご予約が確定しました。"
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:1244
+#: src/notifications/class-booking-notification-service.php:1277
 msgid "[ %s ] Your reservation has been canceled"
 msgstr "[ %s ] ご予約がキャンセルされました"
 
-#: src/notifications/class-booking-notification-service.php:1245
-#: src/notifications/class-booking-notification-service.php:1451
+#: src/notifications/class-booking-notification-service.php:1278
+#: src/notifications/class-booking-notification-service.php:1492
 msgid "Your reservation has been cancelled."
 msgstr "予約がキャンセルされました。"
 
 #. translators: %s: Provider name.
-#: src/notifications/class-booking-notification-service.php:1251
+#: src/notifications/class-booking-notification-service.php:1284
 msgid "[ %s ] Reservation canceled"
 msgstr "[ %s ] 予約がキャンセルされました"
 
 #. translators: %1$s: Provider name, %2$s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:1259
+#: src/notifications/class-booking-notification-service.php:1292
 msgid "[ %1$s ][ %2$s ] Your reservation has been accepted."
 msgstr "[ %1$s ][ %2$s ] ご予約を受け付けました。"
 
-#: src/notifications/class-booking-notification-service.php:1260
+#: src/notifications/class-booking-notification-service.php:1293
 msgid "We have tentatively accepted your reservation."
 msgstr "ご予約を仮受付いたしました。"
 
-#: src/notifications/class-booking-notification-service.php:1276
+#: src/notifications/class-booking-notification-service.php:1309
 msgid "--- Reservation information ---"
 msgstr "--- 予約情報 ---"
 
 #. translators: %d: Booking ID.
-#: src/notifications/class-booking-notification-service.php:1280
+#: src/notifications/class-booking-notification-service.php:1313
 msgid "Reservation number: #%d"
 msgstr "予約番号: #%d"
 
 #. translators: %s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:1284
+#: src/notifications/class-booking-notification-service.php:1317
 msgid "Status: %s"
 msgstr "ステータス: %s"
 
 #. translators: %s: Menu title.
-#: src/notifications/class-booking-notification-service.php:1287
+#: src/notifications/class-booking-notification-service.php:1320
 msgid "Menu: %s"
 msgstr "メニュー: %s"
 
 #. translators: %s: Reservation datetime range.
-#: src/notifications/class-booking-notification-service.php:1302
+#: src/notifications/class-booking-notification-service.php:1335
 msgid "Reservation date and time: %s"
 msgstr "予約日時: %s"
 
 #. translators: %s: Price label.
-#: src/notifications/class-booking-notification-service.php:1351
+#: src/notifications/class-booking-notification-service.php:1386
 msgid "Price: %s"
 msgstr "料金: %s"
 
-#: src/notifications/class-booking-notification-service.php:1373
+#: src/notifications/class-booking-notification-service.php:1414
 msgid ""
 "This reservation is a provisional reservation. The administrator will review "
 "and confirm it."
 msgstr "この予約は仮予約です。管理者が確認の上確定されます。"
 
-#: src/notifications/class-booking-notification-service.php:1375
+#: src/notifications/class-booking-notification-service.php:1416
 msgid "Please check the following information."
 msgstr "以下の情報をご確認ください。"
 
-#: src/notifications/class-booking-notification-service.php:1378
-#: src/notifications/class-booking-notification-service.php:1464
-#: src/notifications/class-booking-notification-service.php:1465
+#: src/notifications/class-booking-notification-service.php:1419
+#: src/notifications/class-booking-notification-service.php:1505
+#: src/notifications/class-booking-notification-service.php:1506
 msgid "Not provided"
 msgstr "未入力"
 
 #. translators: %s: Customer contact value.
-#: src/notifications/class-booking-notification-service.php:1380
+#: src/notifications/class-booking-notification-service.php:1421
 msgid "Contact: %s"
 msgstr "連絡先: %s"
 
-#: src/notifications/class-booking-notification-service.php:1381
+#: src/notifications/class-booking-notification-service.php:1422
 msgid "Request contents/memo:"
 msgstr "ご要望・メモ:"
 
-#: src/notifications/class-booking-notification-service.php:1386
-#: src/notifications/class-booking-notification-service.php:1474
+#: src/notifications/class-booking-notification-service.php:1427
+#: src/notifications/class-booking-notification-service.php:1515
 msgid "--- Cancellation Policy ---"
 msgstr "--- キャンセルポリシー ---"
 
-#: src/notifications/class-booking-notification-service.php:1393
-#: src/notifications/class-booking-notification-service.php:1405
+#: src/notifications/class-booking-notification-service.php:1434
+#: src/notifications/class-booking-notification-service.php:1446
 msgid "--- About cancellation ---"
 msgstr "--- キャンセルについて ---"
 
-#: src/notifications/class-booking-notification-service.php:1394
+#: src/notifications/class-booking-notification-service.php:1435
 msgid "You can cancel this reservation from the link below."
 msgstr "下記のリンクからご予約をキャンセルできます。"
 
 #. translators: %d: Hours before the reservation starts.
-#: src/notifications/class-booking-notification-service.php:1397
+#: src/notifications/class-booking-notification-service.php:1438
 msgid "You can cancel up to %d hours before your reservation starts."
 msgstr "ご予約の開始 %d 時間前までキャンセルできます。"
 
-#: src/notifications/class-booking-notification-service.php:1399
+#: src/notifications/class-booking-notification-service.php:1440
 msgid ""
 "Opening the link does not cancel your reservation. Please press the cancel "
 "button on the page."
@@ -8357,11 +8497,11 @@ msgstr ""
 "リンクを開いただけではキャンセルされません。開いたページの「この予約をキャン"
 "セルする」ボタンを押してください。"
 
-#: src/notifications/class-booking-notification-service.php:1401
+#: src/notifications/class-booking-notification-service.php:1442
 msgid "This link is for you only. Please do not share it with others."
 msgstr "このリンクはお客様専用です。他の方に共有しないでください。"
 
-#: src/notifications/class-booking-notification-service.php:1409
+#: src/notifications/class-booking-notification-service.php:1450
 msgid ""
 "The deadline for cancellation requests has passed, so you cannot cancel this "
 "reservation on the web. Please call us."
@@ -8369,11 +8509,11 @@ msgstr ""
 "キャンセルのご連絡の期限を過ぎているため、ウェブからはキャンセルできません。"
 "お電話でご連絡ください。"
 
-#: src/notifications/class-booking-notification-service.php:1410
+#: src/notifications/class-booking-notification-service.php:1451
 msgid "You cannot cancel this reservation on the web. Please call us."
 msgstr "ウェブからのキャンセルはできません。お電話でご連絡ください。"
 
-#: src/notifications/class-booking-notification-service.php:1415
+#: src/notifications/class-booking-notification-service.php:1456
 msgid ""
 "The deadline for cancellation requests has passed, so you cannot cancel this "
 "reservation on the web. Please contact us directly."
@@ -8381,39 +8521,49 @@ msgstr ""
 "キャンセルのご連絡の期限を過ぎているため、ウェブからはキャンセルできません。"
 "店舗へ直接ご連絡ください。"
 
-#: src/notifications/class-booking-notification-service.php:1416
+#: src/notifications/class-booking-notification-service.php:1457
 msgid ""
 "You cannot cancel this reservation on the web. Please contact us directly."
 msgstr "ウェブからのキャンセルはできません。店舗へ直接ご連絡ください。"
 
-#: src/notifications/class-booking-notification-service.php:1432
+#: src/notifications/class-booking-notification-service.php:1473
 msgid "If you do not recognize this email, please discard it."
 msgstr "このメールに心当たりがない場合は破棄してください。"
 
 #. translators: %s: Booking status label.
-#: src/notifications/class-booking-notification-service.php:1454
+#: src/notifications/class-booking-notification-service.php:1495
 msgid "A new %s has been registered."
 msgstr "新しい%sが登録されました。"
 
-#: src/notifications/class-booking-notification-service.php:1461
+#: src/notifications/class-booking-notification-service.php:1502
 msgid "--- Customer information ---"
 msgstr "--- お客様情報 ---"
 
-#: src/notifications/class-booking-notification-service.php:1470
+#: src/notifications/class-booking-notification-service.php:1511
 msgid "Note:"
 msgstr "備考:"
 
-#: src/notifications/class-booking-notification-service.php:1479
+#: src/notifications/class-booking-notification-service.php:1520
 msgid "Manage this reservation"
 msgstr "この予約を管理"
 
 #. translators: 1: Date text, 2: Day of week, 3: Time text.
-#: src/notifications/class-booking-notification-service.php:1551
+#: src/notifications/class-booking-notification-service.php:1592
 msgid "%1$s (%2$s) %3$s"
 msgstr "%1$s (%2$s) %3$s"
 
+#. translators: %s: tour fee (the basic price of one tour).
+#: src/notifications/class-booking-notification-service.php:1739
+msgid "Tour fee: %s"
+msgstr "ツアー料金: %s"
+
+#. translators: 1: total extra guest fee, 2: breakdown by price category (e.g. Child ¥1,500 × 1 guest).
+#: src/notifications/class-booking-notification-service.php:1742
+msgid "Extra guest fee: %1$s (%2$s)"
+msgstr "追加料金: %1$s（%2$s）"
+
 #. translators: 1: nomination fee label, 2: nomination fee amount.
-#: src/notifications/class-booking-notification-service.php:1700
+#: src/notifications/class-booking-notification-service.php:1789
 msgid "+ %1$s %2$s"
 msgstr ""
 
@@ -8474,7 +8624,7 @@ msgstr "BM 予約"
 
 #: src/post-types/class-booking-post-type.php:47
 #: src/post-types/class-resource-post-type.php:50
-#: src/post-types/class-service-menu-post-type.php:243
+#: src/post-types/class-service-menu-post-type.php:268
 msgid "New addition"
 msgstr "新規追加"
 
@@ -8551,7 +8701,7 @@ msgstr "ゴミ箱に%sはありません。"
 #. translators: %s: Resource label (plural).
 #. translators: %s: resource label (plural), e.g. "Staff".
 #: src/post-types/class-resource-post-type.php:66
-#: src/post-types/class-service-menu-post-type.php:1259
+#: src/post-types/class-service-menu-post-type.php:1287
 msgid "All %s"
 msgstr "すべての%s"
 
@@ -8575,96 +8725,96 @@ msgstr "%sに挿入"
 msgid "Upload to this %s"
 msgstr "この%sへのアップロード"
 
-#: src/post-types/class-service-menu-post-type.php:239
-#: src/post-types/class-service-menu-post-type.php:240
-#: src/post-types/class-service-menu-post-type.php:242
+#: src/post-types/class-service-menu-post-type.php:264
+#: src/post-types/class-service-menu-post-type.php:265
+#: src/post-types/class-service-menu-post-type.php:267
 msgid "Service Menu"
 msgstr "サービスメニュー"
 
-#: src/post-types/class-service-menu-post-type.php:241
+#: src/post-types/class-service-menu-post-type.php:266
 msgid "BM Service"
 msgstr "BM サービス"
 
-#: src/post-types/class-service-menu-post-type.php:245
+#: src/post-types/class-service-menu-post-type.php:270
 msgid "Edit service menu"
 msgstr "サービスメニューを編集"
 
-#: src/post-types/class-service-menu-post-type.php:246
+#: src/post-types/class-service-menu-post-type.php:271
 msgid "New service menu"
 msgstr "新しいサービスメニュー"
 
-#: src/post-types/class-service-menu-post-type.php:247
+#: src/post-types/class-service-menu-post-type.php:272
 msgid "Display service menu"
 msgstr "サービスメニューを表示"
 
-#: src/post-types/class-service-menu-post-type.php:248
+#: src/post-types/class-service-menu-post-type.php:273
 msgid "Search service menu"
 msgstr "サービスメニューを検索"
 
-#: src/post-types/class-service-menu-post-type.php:249
+#: src/post-types/class-service-menu-post-type.php:274
 msgid "Service menu not found."
 msgstr "サービスメニューが見つかりません。"
 
-#: src/post-types/class-service-menu-post-type.php:250
+#: src/post-types/class-service-menu-post-type.php:275
 msgid "There is no service menu in the trash can."
 msgstr "ゴミ箱にサービスメニューはありません。"
 
-#: src/post-types/class-service-menu-post-type.php:251
+#: src/post-types/class-service-menu-post-type.php:276
 msgid "All services"
 msgstr "すべてのサービス"
 
-#: src/post-types/class-service-menu-post-type.php:252
+#: src/post-types/class-service-menu-post-type.php:277
 msgid "Service menu archive"
 msgstr "サービスメニューアーカイブ"
 
-#: src/post-types/class-service-menu-post-type.php:253
+#: src/post-types/class-service-menu-post-type.php:278
 msgid "Service menu attributes"
 msgstr "サービスメニュー属性"
 
-#: src/post-types/class-service-menu-post-type.php:254
+#: src/post-types/class-service-menu-post-type.php:279
 msgid "Insert into service menu"
 msgstr "サービスメニューに挿入"
 
-#: src/post-types/class-service-menu-post-type.php:255
+#: src/post-types/class-service-menu-post-type.php:280
 msgid "Upload to this service menu"
 msgstr "このサービスメニューへのアップロード"
 
-#: src/post-types/class-service-menu-post-type.php:334
+#: src/post-types/class-service-menu-post-type.php:359
 msgid "Fee"
 msgstr "料金"
 
 #. translators: %s: minutes.
 #. translators: %s: buffer minutes.
-#: src/post-types/class-service-menu-post-type.php:455
-#: src/post-types/class-service-menu-post-type.php:482
+#: src/post-types/class-service-menu-post-type.php:483
+#: src/post-types/class-service-menu-post-type.php:510
 msgid "%s minutes"
 msgstr "%s 分"
 
 #. translators: %s: hours.
-#: src/post-types/class-service-menu-post-type.php:470
+#: src/post-types/class-service-menu-post-type.php:498
 msgid "%s hours ago"
 msgstr "%s 時間前"
 
-#: src/post-types/class-service-menu-post-type.php:582
+#: src/post-types/class-service-menu-post-type.php:610
 msgid "Ended"
 msgstr "終了済み"
 
-#: src/post-types/class-service-menu-post-type.php:763
+#: src/post-types/class-service-menu-post-type.php:791
 msgid ""
 "This menu uses price categories, so the basic price is not used for bookings."
 msgstr ""
 "このメニューは料金区分を設定しているため、予約の料金に基本料金は使われませ"
 "ん。"
 
-#: src/post-types/class-service-menu-post-type.php:764
+#: src/post-types/class-service-menu-post-type.php:792
 msgid "Edit price categories"
 msgstr "料金区分を編集"
 
-#: src/post-types/class-service-menu-post-type.php:786
+#: src/post-types/class-service-menu-post-type.php:814
 msgid "Ignored if this service menu does not use staff nomination."
 msgstr "このサービスメニューでスタッフ指名を使わない場合は無視されます。"
 
-#: src/post-types/class-service-menu-post-type.php:889
+#: src/post-types/class-service-menu-post-type.php:917
 msgid ""
 "This option requires detailed settings. Edit it in the full service menu "
 "editor."
@@ -8673,132 +8823,148 @@ msgstr ""
 "い。"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/post-types/class-service-menu-post-type.php:1274
+#: src/post-types/class-service-menu-post-type.php:1302
 msgid "Available %s"
 msgstr "担当できる%s"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/post-types/class-service-menu-post-type.php:1289
+#: src/post-types/class-service-menu-post-type.php:1317
 msgid "All %s can be in charge"
 msgstr "すべての%sが担当できる"
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/post-types/class-service-menu-post-type.php:1304
+#: src/post-types/class-service-menu-post-type.php:1332
 msgid "Choose which %s can be in charge"
 msgstr "担当できる%sを選ぶ"
 
-#: src/post-types/class-service-menu-post-type.php:1346
-#: src/post-types/class-service-menu-post-type.php:1347
-#: src/post-types/class-service-menu-post-type.php:1356
+#: src/post-types/class-service-menu-post-type.php:1374
+#: src/post-types/class-service-menu-post-type.php:1375
+#: src/post-types/class-service-menu-post-type.php:1384
 msgid "Service Tag"
 msgstr "サービスタグ"
 
-#: src/post-types/class-service-menu-post-type.php:1348
+#: src/post-types/class-service-menu-post-type.php:1376
 msgid "Find your service tag"
 msgstr "サービスタグを検索"
 
-#: src/post-types/class-service-menu-post-type.php:1349
+#: src/post-types/class-service-menu-post-type.php:1377
 msgid "All service tags"
 msgstr "すべてのサービスタグ"
 
-#: src/post-types/class-service-menu-post-type.php:1350
+#: src/post-types/class-service-menu-post-type.php:1378
 msgid "Parent service tag"
 msgstr "親サービスタグ"
 
-#: src/post-types/class-service-menu-post-type.php:1351
+#: src/post-types/class-service-menu-post-type.php:1379
 msgid "Parent service tag:"
 msgstr "親サービスタグ:"
 
-#: src/post-types/class-service-menu-post-type.php:1352
+#: src/post-types/class-service-menu-post-type.php:1380
 msgid "Edit service tag"
 msgstr "サービスタグを編集"
 
-#: src/post-types/class-service-menu-post-type.php:1353
+#: src/post-types/class-service-menu-post-type.php:1381
 msgid "Update service tag"
 msgstr "サービスタグを更新"
 
-#: src/post-types/class-service-menu-post-type.php:1354
+#: src/post-types/class-service-menu-post-type.php:1382
 msgid "Add service tag"
 msgstr "サービスタグを追加"
 
-#: src/post-types/class-service-menu-post-type.php:1355
+#: src/post-types/class-service-menu-post-type.php:1383
 msgid "New Service Tag Name"
 msgstr "新しいサービスタグ名"
 
-#: src/post-types/class-service-menu-post-type.php:1383
-#: src/post-types/class-service-menu-post-type.php:1384
+#: src/post-types/class-service-menu-post-type.php:1411
+#: src/post-types/class-service-menu-post-type.php:1412
 msgid "Service Menu Group"
 msgstr "サービスメニューグループ"
 
-#: src/post-types/class-service-menu-post-type.php:1385
+#: src/post-types/class-service-menu-post-type.php:1413
 msgid "Search service menu group"
 msgstr "サービスメニューグループを検索"
 
-#: src/post-types/class-service-menu-post-type.php:1386
+#: src/post-types/class-service-menu-post-type.php:1414
 msgid "All service menu groups"
 msgstr "すべてのサービスメニューグループ"
 
-#: src/post-types/class-service-menu-post-type.php:1387
+#: src/post-types/class-service-menu-post-type.php:1415
 msgid "Parent service menu group"
 msgstr "親サービスメニューグループ"
 
-#: src/post-types/class-service-menu-post-type.php:1388
+#: src/post-types/class-service-menu-post-type.php:1416
 msgid "Parent service menu group:"
 msgstr "親サービスメニューグループ:"
 
-#: src/post-types/class-service-menu-post-type.php:1389
+#: src/post-types/class-service-menu-post-type.php:1417
 msgid "Edit service menu group"
 msgstr "サービスメニューグループを編集"
 
-#: src/post-types/class-service-menu-post-type.php:1390
+#: src/post-types/class-service-menu-post-type.php:1418
 msgid "Update service menu group"
 msgstr "サービスメニューグループを更新"
 
-#: src/post-types/class-service-menu-post-type.php:1391
+#: src/post-types/class-service-menu-post-type.php:1419
 msgid "Add service menu group"
 msgstr "サービスメニューグループを追加"
 
-#: src/post-types/class-service-menu-post-type.php:1392
+#: src/post-types/class-service-menu-post-type.php:1420
 msgid "New Service Menu Group Name"
 msgstr "新しいサービスメニューグループ名"
 
-#: src/post-types/class-service-menu-post-type.php:1393
+#: src/post-types/class-service-menu-post-type.php:1421
 msgid "Service Group"
 msgstr "サービスグループ"
 
-#: src/post-types/class-service-menu-post-type.php:1426
-#: src/post-types/class-service-menu-post-type.php:1453
+#: src/post-types/class-service-menu-post-type.php:1454
+#: src/post-types/class-service-menu-post-type.php:1481
 msgid "Display mode when displaying all items"
 msgstr "全件表示時の表示モード"
 
-#: src/post-types/class-service-menu-post-type.php:1428
 #: src/post-types/class-service-menu-post-type.php:1456
+#: src/post-types/class-service-menu-post-type.php:1484
 msgid "Use common settings"
 msgstr "共通設定を使用"
 
-#: src/post-types/class-service-menu-post-type.php:1432
 #: src/post-types/class-service-menu-post-type.php:1460
+#: src/post-types/class-service-menu-post-type.php:1488
 msgid "Applies only when the menu loop displays all groups."
 msgstr "メニューループが全グループ表示のときのみ適用されます。"
 
-#: src/post-types/class-service-menu-post-type.php:2384
+#: src/post-types/class-service-menu-post-type.php:2593
 msgid "Primary service menu group information."
 msgstr "親サービスメニューグループ"
 
-#: src/post-types/class-service-menu-post-type.php:2408
+#: src/post-types/class-service-menu-post-type.php:2617
 msgid ""
 "Minimum number of guests required to book this menu when staff nomination is "
 "used (0 = no restriction)."
 msgstr ""
 "このメニューで指名を使う場合に予約に必要な最低申し込み人数（0=制限なし）。"
 
-#: src/post-types/class-service-menu-post-type.php:2424
+#: src/post-types/class-service-menu-post-type.php:2635
+msgid ""
+"Price unit of the menu that is in effect on this site (per_guest or "
+"per_booking)."
+msgstr ""
+"このサイトで実際に効いているメニューの料金の単位（per_guest または "
+"per_booking）。"
+
+#: src/post-types/class-service-menu-post-type.php:2653
+msgid ""
+"Extra guest fee of the per-tour menu that is in effect on this site (enabled "
+"and the number of guests included in the basic price)."
+msgstr ""
+"このサイトで実際に効いている、1ツアーあたりのメニューの規定人数を超えた分の追"
+"加料金（有効かどうかと、基本料金に含まれる人数）。"
+
+#: src/post-types/class-service-menu-post-type.php:2672
 msgid ""
 "Reservation screen settings for a plan billed per night (null when the menu "
 "is not billed per night)."
 msgstr "泊単位のプランの予約画面に必要な設定（泊単位でないメニューは null）。"
 
-#: src/post-types/class-service-menu-post-type.php:2443
+#: src/post-types/class-service-menu-post-type.php:2691
 msgid ""
 "IDs of the resources (staff) that can be in charge of this menu, with \"all "
 "resources\" expanded to the published resources."
@@ -8913,52 +9079,52 @@ msgstr "販売日属性"
 msgid "Shift Attribute"
 msgstr "シフト属性"
 
-#: src/provider-settings/class-industry-presets.php:283
+#: src/provider-settings/class-industry-presets.php:285
 msgid "Salon"
 msgstr "サロン"
 
-#: src/provider-settings/class-industry-presets.php:284
+#: src/provider-settings/class-industry-presets.php:286
 msgid "Activity / Tour"
 msgstr "アクティビティ・ツアー"
 
-#: src/provider-settings/class-industry-presets.php:285
+#: src/provider-settings/class-industry-presets.php:287
 msgid "Seminar"
 msgstr "セミナー"
 
-#: src/provider-settings/class-industry-presets.php:286
+#: src/provider-settings/class-industry-presets.php:288
 msgid "Lodging"
 msgstr "宿泊"
 
-#: src/provider-settings/class-industry-presets.php:291
+#: src/provider-settings/class-industry-presets.php:293
 msgid "Guide"
 msgstr "ガイド"
 
-#: src/provider-settings/class-industry-presets.php:292
+#: src/provider-settings/class-industry-presets.php:294
 msgid "Instructor"
 msgstr "講師"
 
-#: src/provider-settings/class-industry-presets.php:293
+#: src/provider-settings/class-industry-presets.php:295
 msgid "Room"
 msgstr "客室"
 
-#: src/provider-settings/class-industry-presets.php:294
+#: src/provider-settings/class-industry-presets.php:296
 msgid "Rooms"
 msgstr "客室"
 
-#: src/provider-settings/class-industry-presets.php:295
+#: src/provider-settings/class-industry-presets.php:297
 msgid "Eligible rooms"
 msgstr "対象客室"
 
-#: src/provider-settings/class-industry-presets.php:296
+#: src/provider-settings/class-industry-presets.php:298
 msgid "Any available room"
 msgstr "おまかせ（空いている客室）"
 
-#: src/provider-settings/class-industry-presets.php:297
+#: src/provider-settings/class-industry-presets.php:299
 msgid "Number of guests staying"
 msgstr "宿泊人数"
 
-#: src/provider-settings/class-industry-presets.php:310
-#: src/provider-settings/class-industry-presets.php:403
+#: src/provider-settings/class-industry-presets.php:312
+#: src/provider-settings/class-industry-presets.php:405
 msgid "Custom"
 msgstr "カスタム"
 
@@ -9079,7 +9245,7 @@ msgid "(tax included)"
 msgstr " (税込)"
 
 #: src/provider-settings/class-settings-repository.php:428
-#: src/blocks/reservation/booking-confirm-app.js:1618
+#: src/blocks/reservation/booking-confirm-app.js:1664
 #: src/blocks/reservation/components/guest-verify-result.js:75
 msgid ""
 "We will check the details and email you once your reservation is confirmed. "
@@ -9897,12 +10063,12 @@ msgid "Loading the default days on sale."
 msgstr "初期値の販売日を読み込んでいます。"
 
 #: src/shifts/class-shift-lodging-editor.php:279
-#: src/blocks/reservation/app.js:3588 src/blocks/reservation/app.js:3775
-#: src/blocks/reservation/app.js:3951
-#: src/blocks/reservation/booking-confirm-app.js:1729
-#: src/blocks/reservation/booking-confirm-app.js:1736
-#: src/blocks/reservation/booking-confirm-app.js:2104
-#: src/blocks/reservation/booking-confirm-app.js:2283
+#: src/blocks/reservation/app.js:3658 src/blocks/reservation/app.js:3845
+#: src/blocks/reservation/app.js:4021
+#: src/blocks/reservation/booking-confirm-app.js:1775
+#: src/blocks/reservation/booking-confirm-app.js:1782
+#: src/blocks/reservation/booking-confirm-app.js:2152
+#: src/blocks/reservation/booking-confirm-app.js:2331
 #: src/blocks/reservation/booking-ui/calendar-grid.js:163
 #: src/blocks/reservation/lodging/lodging-range-calendar.js:231
 msgid "Loading…"
@@ -10230,226 +10396,226 @@ msgid "Proceed to Reservation Button Block"
 msgstr "予約に進むボタンブロック"
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:333
+#: src/blocks/reservation/app.js:339
 msgid "This menu requires a minimum of %d guests."
 msgstr "このメニューは最低 %d 名からのお申し込みです。"
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:354
+#: src/blocks/reservation/app.js:360
 msgid ""
 "This time slot cannot accept the minimum of %d guests required for this menu."
 msgstr ""
 "この時間帯は、このメニューの最低申し込み人数（%d名）を受け付けられません。"
 
-#: src/blocks/reservation/app.js:360
+#: src/blocks/reservation/app.js:366
 msgid "Please choose another time slot."
 msgstr "別の時間帯を選択してください。"
 
-#: src/blocks/reservation/app.js:814
+#: src/blocks/reservation/app.js:835
 msgid "There are no service menus available for the selected dates."
 msgstr "選んだ日程で予約できるサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:818
+#: src/blocks/reservation/app.js:839
 msgid "Change the dates or clear the dates to show all service menus."
 msgstr ""
 "日程を変えるか、日付の指定を外すと、すべてのサービスメニューが表示されます。"
 
-#: src/blocks/reservation/app.js:824
+#: src/blocks/reservation/app.js:845
 msgid "There are no service menus available on the selected date."
 msgstr "選んだ日に予約できるサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:828
+#: src/blocks/reservation/app.js:849
 msgid "Change the date or clear the date to show all service menus."
 msgstr ""
 "日付を変えるか、日付の指定を外すと、すべてのサービスメニューが表示されます。"
 
 #. translators: %s: resource label (e.g. "Staff"), customizable via basic settings.
-#: src/blocks/reservation/app.js:837
+#: src/blocks/reservation/app.js:858
 msgid "There are no service menus available for the selected %s."
 msgstr "選択した%sで予約できるサービスメニューがありません。"
 
 #. translators: %s: "No preference" label, customizable via basic settings.
-#: src/blocks/reservation/app.js:847
+#: src/blocks/reservation/app.js:868
 msgid "Choose %s to show all service menus."
 msgstr "全メニューを表示するには「%s」を選択してください。"
 
-#: src/blocks/reservation/app.js:857
+#: src/blocks/reservation/app.js:878
 msgid "There are no service menus to display."
 msgstr "表示するサービスメニューはありません。"
 
-#: src/blocks/reservation/app.js:1249
+#: src/blocks/reservation/app.js:1270
 msgid "Could not get menu list."
 msgstr "メニュー一覧を取得できませんでした。"
 
-#: src/blocks/reservation/app.js:1458
-#: src/blocks/reservation/booking-confirm-app.js:951
+#: src/blocks/reservation/app.js:1479
+#: src/blocks/reservation/booking-confirm-app.js:997
 msgid "The form could not be displayed."
 msgstr "フォームを表示できませんでした。"
 
-#: src/blocks/reservation/app.js:1504
-#: src/blocks/reservation/booking-confirm-app.js:994
+#: src/blocks/reservation/app.js:1525
+#: src/blocks/reservation/booking-confirm-app.js:1040
 msgid "Do you want to cancel this reservation?"
 msgstr "この予約をキャンセルしますか？"
 
-#: src/blocks/reservation/app.js:1533
-#: src/blocks/reservation/booking-confirm-app.js:1023
+#: src/blocks/reservation/app.js:1554
+#: src/blocks/reservation/booking-confirm-app.js:1069
 msgid "I was unable to cancel my reservation."
 msgstr "予約をキャンセルできませんでした。"
 
-#: src/blocks/reservation/app.js:1615
-#: src/blocks/reservation/booking-confirm-app.js:1083
+#: src/blocks/reservation/app.js:1636
+#: src/blocks/reservation/booking-confirm-app.js:1129
 msgid "The reservation list could not be loaded."
 msgstr "予約一覧を読み込めませんでした。"
 
-#: src/blocks/reservation/app.js:2298
+#: src/blocks/reservation/app.js:2364
 msgid "Failed to retrieve menu information."
 msgstr "メニュー情報の取得に失敗しました。"
 
 #. translators: %s: 診断理由の本文。
-#: src/blocks/reservation/app.js:2386
+#: src/blocks/reservation/app.js:2452
 msgid "[Administrator diagnostic] %s"
 msgstr "【管理者向け診断】%s"
 
-#: src/blocks/reservation/app.js:2461
+#: src/blocks/reservation/app.js:2527
 msgid "Failed to load calendar."
 msgstr "カレンダーの読み込みに失敗しました。"
 
-#: src/blocks/reservation/app.js:2546
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:368
+#: src/blocks/reservation/app.js:2612
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:375
 msgid "Failed to read free space."
 msgstr "空き状況の読み込みに失敗しました。"
 
-#: src/blocks/reservation/app.js:2936
+#: src/blocks/reservation/app.js:3006
 msgid "Could not delete the favorite."
 msgstr "お気に入りを削除できませんでした。"
 
-#: src/blocks/reservation/app.js:3067
+#: src/blocks/reservation/app.js:3137
 msgid "The details of the specified service menu cannot be displayed."
 msgstr "指定されたサービスメニューの詳細は表示できません。"
 
-#: src/blocks/reservation/app.js:3099 src/blocks/reservation/app.js:3273
+#: src/blocks/reservation/app.js:3169 src/blocks/reservation/app.js:3343
 msgid "Temporary reservation data save failed."
 msgstr "仮予約データの保存に失敗しました。"
 
-#: src/blocks/reservation/app.js:3121
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:721
+#: src/blocks/reservation/app.js:3191
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:725
 msgid "The editor does not transition to the confirmation page."
 msgstr "エディターが確認ページに遷移しません。"
 
-#: src/blocks/reservation/app.js:3131
+#: src/blocks/reservation/app.js:3201
 msgid "Please select your menu and reservation slot before proceeding."
 msgstr "進む前にメニューと予約枠を選択してください。"
 
-#: src/blocks/reservation/app.js:3143
+#: src/blocks/reservation/app.js:3213
 msgid "Please select the quantity."
 msgstr "数量を選択してください。"
 
-#: src/blocks/reservation/app.js:3293
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:750
+#: src/blocks/reservation/app.js:3363
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:754
 msgid "Failed to save reservation details. Please try again later."
 msgstr "予約詳細の保存に失敗しました。後でもう一度お試しください。"
 
-#: src/blocks/reservation/app.js:3344
-#: src/blocks/reservation/booking-confirm-app.js:2026
+#: src/blocks/reservation/app.js:3414
+#: src/blocks/reservation/booking-confirm-app.js:2074
 msgid "Reservation block navigation"
 msgstr "予約ブロックナビゲーション"
 
-#: src/blocks/reservation/app.js:3349
+#: src/blocks/reservation/app.js:3419
 #: src/blocks/reservation/components/reservation-header-nav.js:84
 msgid "Return"
 msgstr "戻る"
 
-#: src/blocks/reservation/app.js:3350
+#: src/blocks/reservation/app.js:3420
 msgid "return"
 msgstr "戻る"
 
-#: src/blocks/reservation/app.js:3383
+#: src/blocks/reservation/app.js:3453
 #: src/blocks/reservation/components/reservation-header-nav.js:118
 msgid "Back to the list"
 msgstr "一覧に戻る"
 
-#: src/blocks/reservation/app.js:3395
+#: src/blocks/reservation/app.js:3465
 msgid "Please check our cancellation policy before booking."
 msgstr "予約前にキャンセルポリシーをご確認ください。"
 
-#: src/blocks/reservation/app.js:3399
+#: src/blocks/reservation/app.js:3469
 msgid "Your reservation has been completed."
 msgstr "予約が完了しました。"
 
-#: src/blocks/reservation/app.js:3504 src/blocks/reservation/app.js:4534
-#: src/blocks/reservation/booking-confirm-app.js:2234
-#: src/blocks/reservation/booking-confirm-app.js:2829
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1351
+#: src/blocks/reservation/app.js:3574 src/blocks/reservation/app.js:4679
+#: src/blocks/reservation/booking-confirm-app.js:2282
+#: src/blocks/reservation/booking-confirm-app.js:2908
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1355
 msgid "Processing…"
 msgstr "処理中…"
 
-#: src/blocks/reservation/app.js:3516
+#: src/blocks/reservation/app.js:3586
 msgid "Book the same again"
 msgstr "同じ内容で予約する"
 
-#: src/blocks/reservation/app.js:3607
-#: src/blocks/reservation/booking-confirm-app.js:2122
+#: src/blocks/reservation/app.js:3677
+#: src/blocks/reservation/booking-confirm-app.js:2170
 msgid "There are no reservations to display."
 msgstr "表示する予約はありません。"
 
-#: src/blocks/reservation/app.js:3617
+#: src/blocks/reservation/app.js:3687
 msgid "Upcoming reservations"
 msgstr "今後の予約"
 
-#: src/blocks/reservation/app.js:3632
+#: src/blocks/reservation/app.js:3702
 msgid "Past reservations"
 msgstr "過去の予約"
 
-#: src/blocks/reservation/app.js:3723
+#: src/blocks/reservation/app.js:3793
 msgid "Favorites"
 msgstr "お気に入り"
 
-#: src/blocks/reservation/app.js:3729
+#: src/blocks/reservation/app.js:3799
 msgid "Your usual"
 msgstr "よく使う予約"
 
-#: src/blocks/reservation/app.js:3753
+#: src/blocks/reservation/app.js:3823
 msgid "Delete favorite"
 msgstr "お気に入りを削除"
 
-#: src/blocks/reservation/app.js:3909
+#: src/blocks/reservation/app.js:3979
 msgid "Loading service menu…"
 msgstr "サービスメニューを読み込み中"
 
-#: src/blocks/reservation/app.js:4026
+#: src/blocks/reservation/app.js:4097
 msgid "The date you had selected has passed."
 msgstr "選んでいた日付は過ぎています。"
 
-#: src/blocks/reservation/app.js:4030
+#: src/blocks/reservation/app.js:4101
 msgid "Please select the date again."
 msgstr "日付を選び直してください。"
 
 #. translators: %s: the date that was carried over and cannot be booked.
-#: src/blocks/reservation/app.js:4038
+#: src/blocks/reservation/app.js:4109
 msgid "The date you selected (%s) cannot be booked for this menu."
 msgstr "選んでいた%sは、このメニューでは予約できません。"
 
-#: src/blocks/reservation/app.js:4047
+#: src/blocks/reservation/app.js:4118
 msgid "Please select another date."
 msgstr "別の日付を選んでください。"
 
-#: src/blocks/reservation/app.js:4130
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1276
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1295
+#: src/blocks/reservation/app.js:4201
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1280
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1299
 msgid "Not selected"
 msgstr "未選択"
 
 #. translators: %s: total price.
-#: src/blocks/reservation/app.js:4243
+#: src/blocks/reservation/app.js:4351
 msgid "Total: %s"
 msgstr "合計：%s"
 
 #. translators: %d: number of remaining bookable guests.
-#: src/blocks/reservation/app.js:4263
+#: src/blocks/reservation/app.js:4373
 msgid "You can book up to %d more."
 msgstr "残り%d名まで予約できます。"
 
-#: src/blocks/reservation/app.js:4398
+#: src/blocks/reservation/app.js:4543
 msgid ""
 "Make this staff member's time slot private (no other bookings for that staff "
 "member will be accepted)"
@@ -10457,21 +10623,21 @@ msgstr ""
 "この時間帯の担当スタッフを貸切にする（その担当スタッフへの他の方の予約を受け"
 "付けません）"
 
-#: src/blocks/reservation/app.js:4402
+#: src/blocks/reservation/app.js:4547
 msgid "Make this time slot private (no other bookings will be accepted)"
 msgstr "この時間帯を貸切にする（他の方の予約を受け付けません）"
 
-#: src/blocks/reservation/app.js:4411
+#: src/blocks/reservation/app.js:4556
 msgid ""
 "This slot already has a booking, so a private booking cannot be specified."
 msgstr "この枠は既にご予約があるため貸切指定はできません"
 
 #. translators: %d: minimum number of guests required for a private booking.
-#: src/blocks/reservation/app.js:4423
+#: src/blocks/reservation/app.js:4568
 msgid "A private booking requires at least %d guests."
 msgstr "貸切にするには %d 名以上のお申し込みが必要です。"
 
-#: src/blocks/reservation/app.js:4433
+#: src/blocks/reservation/app.js:4578
 msgid ""
 "Making it private means no one else can book this staff member for this time "
 "slot."
@@ -10479,21 +10645,21 @@ msgstr ""
 "貸切にすると、この時間帯の担当スタッフへの予約を他の方が入れられなくなりま"
 "す。"
 
-#: src/blocks/reservation/app.js:4437
+#: src/blocks/reservation/app.js:4582
 msgid "Making it private means no one else can book this time slot."
 msgstr "貸切にすると、この枠は他の方が予約できなくなります。"
 
 #. translators: %d: number of guests at or above which the private booking fee is not charged.
-#: src/blocks/reservation/app.js:4447 src/blocks/reservation/app.js:4504
+#: src/blocks/reservation/app.js:4592 src/blocks/reservation/app.js:4649
 msgid "No private booking fee applies because there are %d or more guests."
 msgstr "%d 名以上のお申し込みのため貸切料金はかかりません"
 
 #. translators: %s: private booking fee per guest.
-#: src/blocks/reservation/app.js:4458
+#: src/blocks/reservation/app.js:4603
 msgid "A private booking fee of %s per guest will be added."
 msgstr "貸切料金として一人あたり %s プラスになります。"
 
-#: src/blocks/reservation/booking-confirm-app.js:458
+#: src/blocks/reservation/booking-confirm-app.js:504
 msgid ""
 "The URL does not include a temporary reservation data parameter. Please try "
 "again from the reservation page."
@@ -10501,128 +10667,128 @@ msgstr ""
 "URLに一時予約データパラメータが含まれていません。予約ページからもう一度お試し"
 "ください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:490
-#: src/blocks/reservation/booking-confirm-app.js:1488
+#: src/blocks/reservation/booking-confirm-app.js:536
+#: src/blocks/reservation/booking-confirm-app.js:1534
 msgid ""
 "Couldn't load temporary reservation data. Please try again from the "
 "reservation page."
 msgstr "仮予約データを読み込めませんでした。予約ページから再度お試しください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1137
+#: src/blocks/reservation/booking-confirm-app.js:1183
 msgid "Could not add to favorites."
 msgstr "お気に入りに登録できませんでした。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1214
+#: src/blocks/reservation/booking-confirm-app.js:1260
 msgid "The confirmation email could not be sent."
 msgstr "確認メールを送信できませんでした。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1357
+#: src/blocks/reservation/booking-confirm-app.js:1403
 msgid "An error occurred during payment processing."
 msgstr "決済処理中にエラーが発生しました。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1499
+#: src/blocks/reservation/booking-confirm-app.js:1545
 msgid "Confirmation of reservation failed. Please try again later."
 msgstr "予約の確認に失敗しました。しばらくしてからもう一度お試しください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:1581
+#: src/blocks/reservation/booking-confirm-app.js:1627
 msgid "Loading temporary reservation data…"
 msgstr "一時予約データを読み込み中…"
 
-#: src/blocks/reservation/booking-confirm-app.js:1611
+#: src/blocks/reservation/booking-confirm-app.js:1657
 #: src/blocks/reservation/components/guest-verify-result.js:68
 msgid "Your tentative reservation has been received"
 msgstr "仮予約を受け付けました"
 
-#: src/blocks/reservation/booking-confirm-app.js:1677
+#: src/blocks/reservation/booking-confirm-app.js:1723
 msgid "No entry"
 msgstr "記入なし"
 
-#: src/blocks/reservation/booking-confirm-app.js:1808
+#: src/blocks/reservation/booking-confirm-app.js:1854
 msgid "I agree to the cancellation policy"
 msgstr "キャンセルポリシーに同意します"
 
-#: src/blocks/reservation/booking-confirm-app.js:1852
-#: src/blocks/reservation/booking-confirm-app.js:2726
+#: src/blocks/reservation/booking-confirm-app.js:1898
+#: src/blocks/reservation/booking-confirm-app.js:2805
 msgid "Payment method"
 msgstr "決済方法"
 
-#: src/blocks/reservation/booking-confirm-app.js:1882
-#: src/blocks/reservation/booking-confirm-app.js:2749
+#: src/blocks/reservation/booking-confirm-app.js:1928
+#: src/blocks/reservation/booking-confirm-app.js:2828
 msgid "On-site payment"
 msgstr "現地決済"
 
-#: src/blocks/reservation/booking-confirm-app.js:1900
-#: src/blocks/reservation/booking-confirm-app.js:2767
+#: src/blocks/reservation/booking-confirm-app.js:1946
+#: src/blocks/reservation/booking-confirm-app.js:2846
 msgid "Card payment (Stripe)"
 msgstr "カード決済"
 
-#: src/blocks/reservation/booking-confirm-app.js:1937
+#: src/blocks/reservation/booking-confirm-app.js:1983
 msgid ""
 "Save these details so you can quickly book the same thing again next time "
 "(add to favorites)"
 msgstr "この予約内容で次回もすぐ予約できるようにする（お気に入り登録）"
 
-#: src/blocks/reservation/booking-confirm-app.js:2483
+#: src/blocks/reservation/booking-confirm-app.js:2562
 msgid "Private (exclusive use of this slot)"
 msgstr "貸切（この枠を専有）"
 
-#: src/blocks/reservation/booking-confirm-app.js:2540
+#: src/blocks/reservation/booking-confirm-app.js:2619
 msgid "Members can log in to make a reservation."
 msgstr "会員の方はログインしてご予約いただけます。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2544
+#: src/blocks/reservation/booking-confirm-app.js:2623
 msgid "You must log in to confirm your reservation."
 msgstr "予約を確認するにはログインする必要があります。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2577
+#: src/blocks/reservation/booking-confirm-app.js:2656
 #: src/blocks/reservation/components/guest-contact-fields.js:35
 #: src/blocks/reservation/components/reservation-header-nav.js:102
 msgid "Sign up"
 msgstr "新規登録"
 
-#: src/blocks/reservation/booking-confirm-app.js:2636
+#: src/blocks/reservation/booking-confirm-app.js:2715
 msgid "Requests/Notes"
 msgstr "ご要望・備考"
 
-#: src/blocks/reservation/booking-confirm-app.js:2645
+#: src/blocks/reservation/booking-confirm-app.js:2724
 msgid "Reserved name (required)"
 msgstr "予約者名（必須）"
 
-#: src/blocks/reservation/booking-confirm-app.js:2669
+#: src/blocks/reservation/booking-confirm-app.js:2748
 msgid "Please enter customer name."
 msgstr "お名前を入力してください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2687
+#: src/blocks/reservation/booking-confirm-app.js:2766
 msgid ""
 "If the customer name is unknown, enter \"Unknown\" or a similar placeholder."
 msgstr "お名前が分からない場合は「不明」などを入力してください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2707
+#: src/blocks/reservation/booking-confirm-app.js:2786
 msgid "Please enter your contact phone number."
 msgstr "ご連絡先の電話番号を入力してください。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2801
+#: src/blocks/reservation/booking-confirm-app.js:2880
 msgid ""
 "If the minimum number of participants is not reached, the session may not "
 "take place."
 msgstr "最少催行人数に満たない場合、開催されない可能性があります。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2810
+#: src/blocks/reservation/booking-confirm-app.js:2889
 msgid ""
 "We will send you a confirmation email after you submit. Your reservation "
 "will be completed when you open the link in the email."
 msgstr ""
 "送信後に確認メールをお送りします。メールのリンクを開くと予約が完了します。"
 
-#: src/blocks/reservation/booking-confirm-app.js:2831
+#: src/blocks/reservation/booking-confirm-app.js:2910
 msgid "Send confirmation email"
 msgstr "確認メールを送信する"
 
-#: src/blocks/reservation/booking-confirm-app.js:2835
+#: src/blocks/reservation/booking-confirm-app.js:2914
 msgid "Reserve with this content"
 msgstr "この内容で予約する"
 
-#: src/blocks/reservation/booking-confirm-app.js:2862
+#: src/blocks/reservation/booking-confirm-app.js:2941
 msgid "Added to favorites."
 msgstr "お気に入りに登録しました。"
 
@@ -10648,13 +10814,6 @@ msgstr "過去の日付のため選べません"
 #: src/blocks/reservation/lodging/lodging-range-calendar.js:69
 msgid "Not selectable (unavailable date)"
 msgstr "選べません（受付できない日）"
-
-#. translators: 1: date (e.g. October 10, 2026 (Sat)), 2: state of the date (e.g. Closed days).
-#. translators: 1: date (e.g. October 10, 2026 (Sat)), 2: state of the date (e.g. Check-in date).
-#: src/blocks/reservation/booking-ui/calendar-grid.js:200
-#: src/blocks/reservation/lodging/lodging-range-calendar.js:348
-msgid "%1$s, %2$s"
-msgstr "%1$s、%2$s"
 
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:47
 msgid ""
@@ -11064,53 +11223,53 @@ msgid "Please enter your email address."
 msgstr "メールアドレスを入力してください。"
 
 #. translators: 1: 更新後の泊数、2: 更新後の宿泊合計金額。
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:449
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:456
 msgid "Price updated: %1$d night, total %2$s."
 msgid_plural "Price updated: %1$d nights, total %2$s."
 msgstr[0] "料金を更新しました：%1$d泊、合計%2$s。"
 
 #. translators: %s: unavailable check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:608
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:615
 msgid ""
 "%s cannot be selected as the check-out date because it exceeds the maximum "
 "number of nights."
 msgstr "%s はチェックアウト日に選べません（泊数の上限を超えています）。"
 
 #. translators: %s: unavailable check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:617
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:624
 msgid ""
 "%s cannot be selected as the check-out date because the stay includes an "
 "unavailable night."
 msgstr "%s はチェックアウト日に選べません（途中に予約できない日があります）。"
 
 #. translators: %s: unavailable date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:625
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:632
 msgid "%s is not available. Please choose another date."
 msgstr "%s は予約できません。ほかの日を選んでください。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:773
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:777
 msgid "Select the check-in date."
 msgstr "チェックイン日を選んでください。"
 
 #. translators: %s: check-in date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:786
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:790
 msgid "Check-in: %s. Next, select the check-out date."
 msgstr "チェックイン: %s。次にチェックアウト日を選んでください。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:793
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:797
 msgid ""
 "No stay is available from this check-in date. Please choose another date."
 msgstr "このチェックイン日からは予約できません。ほかの日を選んでください。"
 
 #. translators: 1: check-in date, 2: latest check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:800
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:804
 msgid "Check-in: %1$s. Next, select the check-out date (up to %2$s)."
 msgstr ""
 "チェックイン: %1$s。次にチェックアウト日を選んでください（%2$s まで選べま"
 "す）。"
 
 #. translators: 1: check-in date, 2: check-out date, 3: label for a room (e.g. room).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:811
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:815
 msgid ""
 "Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the "
 "list. Select a date to choose again."
@@ -11119,37 +11278,37 @@ msgstr ""
 "ださい。日付を押すと選び直せます。"
 
 #. translators: 1: check-in date, 2: check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:822
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:826
 msgid "Check-in: %1$s, check-out: %2$s. Select a date to choose again."
 msgstr "チェックイン: %1$s、チェックアウト: %2$s。日付を押すと選び直せます。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:834
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:838
 #: src/blocks/reservation/lodging/lodging-room-list.js:46
 msgid "Checking available rooms…"
 msgstr "空いている客室を確認しています…"
 
 #. translators: %d: number of available rooms.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:841
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:845
 msgid "%d room is available."
 msgid_plural "%d rooms are available."
 msgstr[0] "空いている客室は%d件です。"
 
 #. translators: 1: minimum number of guests with unit (e.g. 1), 2: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:860
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:864
 msgid "The number of guests can be from %1$s to %2$s."
 msgstr "宿泊人数は %1$s から %2$s までです。"
 
 #. translators: %s: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:934
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:938
 msgid "The number of guests can be up to %s."
 msgstr "宿泊人数は %s までです。"
 
 #. translators: 1: base price per room per night, 2: number of guests included in the base price with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1016
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1020
 msgid "The rate is %1$s per room per night, which includes up to %2$s."
 msgstr "料金は 1室1泊あたり %1$s で、%2$sまでのご利用を含みます。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1023
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1027
 msgid ""
 "Guests beyond the included number are charged the additional fee shown for "
 "each guest category, per extra guest, per night."
@@ -11158,37 +11317,37 @@ msgstr ""
 "泊ごとに加算されます。"
 
 #. translators: %s: plan price per room per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1033
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1037
 msgid ""
 "The rate is %s per room per night. It does not change with the number of "
 "guests."
 msgstr "料金は 1室1泊あたり %s です。宿泊人数で料金は変わりません。"
 
 #. translators: %s: plan price per guest per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1041
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1045
 msgid "The rate is %s per guest per night."
 msgstr "料金は 1名1泊あたり %s です。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1056
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1060
 msgid ""
 "However, the rate varies by day, such as pre-holidays and special dates."
 msgstr "ただし、休前日や特定日など、日によって料金が変わります。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1060
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1064
 msgid "Select your dates and a room to see the rate for each night."
 msgstr "日程と客室を選ぶと、泊ごとの料金を表示します。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1076
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1080
 msgid "The dates you had selected have passed."
 msgstr "選んでいた日程は過ぎています。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1080
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1106
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1084
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1110
 msgid "Please select your dates again."
 msgstr "日程を選び直してください。"
 
 #. translators: 1: check-in date, 2: number of nights.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1090
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1094
 msgid ""
 "The dates you selected (%1$s, %2$s) cannot be booked for this plan because "
 "no rooms are available or they are outside the booking period."
@@ -11197,14 +11356,14 @@ msgstr ""
 "予約できません。"
 
 #. translators: %s: label for a room (e.g. room).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1147
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1151
 msgid ""
 "Could not load availability. Select your dates to check whether a %s is "
 "available."
 msgstr ""
 "空き状況を読み込めませんでした。日程を選ぶと、空いている%sを確かめられます。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1153
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1157
 msgid ""
 "× : Not available for check-in (fully booked, etc.). Within the selectable "
 "range, it can still be your check-out date."
@@ -11212,16 +11371,16 @@ msgstr ""
 "× はチェックインできない日です（満室など）。選べる範囲内なら、チェックアウト"
 "日には選べます。"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1169
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1173
 msgid "Reselect dates"
 msgstr "日程を選び直す"
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1181
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1185
 msgid "The room you selected is no longer available. Please select again."
 msgstr "選んでいた客室は選べなくなりました。もう一度お選びください。"
 
 #. translators: %d: 泊数。
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1308
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1312
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:127
 #: src/blocks/reservation/lodging/night-rates.js:291
 msgid "Total for %d night"
@@ -11229,7 +11388,7 @@ msgid_plural "Total for %d nights"
 msgstr[0] "%d泊合計"
 
 #. translators: %s: label for a room (e.g. room).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1333
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1337
 msgid "Select a %s to proceed to reservation."
 msgstr "%sを選ぶと、予約に進めます。"
 
@@ -11334,15 +11493,57 @@ msgstr "この泊の小計"
 msgid "Breakdown by night"
 msgstr "泊ごとの内訳"
 
+#: src/blocks/reservation/pricing-breakdown.js:210
+msgid "Tour fee (per tour)"
+msgstr "ツアー料金（1ツアーあたり）"
+
 #. translators: 1: unit price per person, 2: number of guests with unit (e.g. 2 guests)
-#: src/blocks/reservation/pricing-breakdown.js:214
+#: src/blocks/reservation/pricing-breakdown.js:256
 msgid "Service basic fee (%1$s × %2$s)"
 msgstr "サービス基本料金（%1$s × %2$s）"
 
+#. translators: 1: price category name (e.g. Child), 2: extra fee per guest, 3: number of extra guests with unit (e.g. 1 guest)
+#: src/blocks/reservation/pricing-breakdown.js:404
+msgid "Extra guest fee (%1$s %2$s × %3$s)"
+msgstr "追加料金（%1$s %2$s × %3$s）"
+
+#. translators: %s: extra fee per guest (e.g. ¥3,000).
+#: src/blocks/reservation/pricing-breakdown.js:440
+msgid "Extra fee %s"
+msgstr "追加料金 %s"
+
+#. translators: %s: tour fee (e.g. ¥30,000).
+#: src/blocks/reservation/pricing-breakdown.js:465
+msgid "Tour fee %s"
+msgstr "ツアー料金 %s"
+
+#. translators: %s: extra guest fee (e.g. ¥1,500).
+#: src/blocks/reservation/pricing-breakdown.js:470
+msgid "+ Extra guest fee %s"
+msgstr "＋ 追加料金 %s"
+
 #. translators: 1: price tier name (e.g. Adult), 2: unit price per person, 3: number of guests with unit (e.g. 2 guests)
-#: src/blocks/reservation/pricing-breakdown.js:311
+#: src/blocks/reservation/pricing-breakdown.js:558
 msgid "%1$s (%2$s × %3$s)"
 msgstr "%1$s（%2$s × %3$s）"
+
+#. translators: %s: price per tour (e.g. ¥30,000).
+#: src/blocks/reservation/pricing-breakdown.js:599
+msgid "The price is %s per tour."
+msgstr "料金は 1ツアーあたり %s です。"
+
+#. translators: 1: price per tour (e.g. ¥30,000), 2: number of guests included in the basic price with unit (e.g. 4 guests).
+#: src/blocks/reservation/pricing-breakdown.js:630
+msgid "The price is %1$s per tour and includes up to %2$s."
+msgstr "料金は 1ツアーあたり %1$s で、%2$sまでの参加を含みます。"
+
+#: src/blocks/reservation/pricing-breakdown.js:637
+msgid ""
+"For guests over this number, the extra fee shown for each category is added "
+"per extra guest."
+msgstr ""
+"これを超える人数には、区分ごとに表示した追加料金が、超えた1名あたりで加算され"
+"ます。"
 
 #. translators: %s: price amount
 #: src/blocks/shared/pricing.js:72
@@ -11475,6 +11676,24 @@ msgid ""
 "This is a reservation UI that allows you to select menus and search for "
 "available slots."
 msgstr "メニュー選択と空き枠検索を行う予約UIです。"
+
+#~ msgid "Tour fee %1$s + Extra guest fee %2$s"
+#~ msgstr "ツアー料金 %1$s ＋ 追加料金 %2$s"
+
+#~ msgid ""
+#~ "If you choose \"Per tour\" and save, private booking is turned on "
+#~ "automatically, and the private booking by customer settings and the price "
+#~ "categories are deleted."
+#~ msgstr ""
+#~ "「1ツアーあたり」を選んで保存すると、貸し切り予約が自動で有効になり、予約"
+#~ "者が選ぶ貸切の設定と料金区分は削除されます。"
+
+#~ msgid ""
+#~ "If you choose \"Per tour\" and save, private booking is turned on "
+#~ "automatically and the price categories are deleted."
+#~ msgstr ""
+#~ "「1ツアーあたり」を選んで保存すると、貸し切り予約が自動で有効になり、料金"
+#~ "区分は削除されます。"
 
 #~ msgid "This is the range of dates when this menu can be used."
 #~ msgstr "このメニューを利用できる日の範囲です。"

@@ -67,6 +67,8 @@ class ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4
         'VKBookingManager\\Capabilities\\Roles_Manager' => __DIR__ . '/../..' . '/src/capabilities/class-roles-manager.php',
         'VKBookingManager\\Common\\Attendee_Name' => __DIR__ . '/../..' . '/src/common/class-attendee-name.php',
         'VKBookingManager\\Common\\Booking_Datetime' => __DIR__ . '/../..' . '/src/common/class-booking-datetime.php',
+        'VKBookingManager\\Common\\Booking_Price' => __DIR__ . '/../..' . '/src/common/class-booking-price.php',
+        'VKBookingManager\\Common\\Booking_Price_Display' => __DIR__ . '/../..' . '/src/common/class-booking-price-display.php',
         'VKBookingManager\\Common\\Exclusive_Fee' => __DIR__ . '/../..' . '/src/common/class-exclusive-fee.php',
         'VKBookingManager\\Common\\Holiday_Calendar' => __DIR__ . '/../..' . '/src/common/class-holiday-calendar.php',
         'VKBookingManager\\Common\\Lodging_Price' => __DIR__ . '/../..' . '/src/common/class-lodging-price.php',

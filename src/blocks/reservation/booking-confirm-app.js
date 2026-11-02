@@ -29,6 +29,8 @@ import {
 	isStayBooking,
 } from './components/booking-stay-datetime';
 import {
+	buildExtraGuestFeeRows,
+	buildGuestCompositionText,
 	buildPriceTierRows,
 	buildServiceBasicFeeRow,
 	calculateBaseFeeTotal,
@@ -337,17 +339,22 @@ export const BookingConfirmApp = ( {
 		);
 		const hasDraftGuestTiers =
 			Array.isArray( draft?.guest_tiers ) && draft.guest_tiers.length > 0;
+		// 料金の単位が「1ツアーあたり」の予約は、人数を掛けず基本料金そのまま（#1002）。
+		// 下書きの price_unit は、サーバーが下書きを読み出した時点のメニュー設定（Service_Menu_Post_Type::get_price_unit()）を返す。
+		const isPerBooking = draft?.price_unit === 'per_booking';
 		const isMultiGuest = isMultiGuestFlatPricing( {
 			allowMultipleGuests: Boolean(
 				menu?.meta?._vkbm_allow_multiple_guests
 			),
 			hasPriceTiers: hasDraftGuestTiers,
 			guests: draftGuests,
+			isPerBooking,
 		} );
 		const baseRow = buildServiceBasicFeeRow( {
 			unitPrice: basePrice,
 			guests: draftGuests,
 			isMultiGuest,
+			isPerBooking,
 			currencySymbol: currencySymbolValue,
 			guestsUnitLabel,
 		} );
@@ -380,8 +387,18 @@ export const BookingConfirmApp = ( {
 						formatCurrency( nominationFee, currencySymbolValue )
 				  );
 
+		// 1ツアーあたりで規定人数を超えた分の追加料金（#1003）。サーバーが基本料金に含まれる人数を除いて求めた、
+		// 超過した人がいる区分と超過人数（draft.extra_guest.tiers）をそのまま使う。
+		const extraGuestTiers =
+			isPerBooking && Array.isArray( draft?.extra_guest?.tiers )
+				? draft.extra_guest.tiers.filter(
+						( tier ) => Math.floor( Number( tier?.count ) || 0 ) > 0
+				  )
+				: [];
+
 		// 合計はサーバーの計算値を正とし、無いときだけ下書き計算と同じ式で補う
-		// （区分なし: 基本料金 × 人数 ＋ 指名料 ＋ 貸し切り料金、区分あり: 区分小計の合計 ＋ 指名料 ＋ 貸し切り料金）。
+		// （区分なし: 基本料金 × 人数 ＋ 指名料 ＋ 貸し切り料金、区分あり: 区分小計の合計 ＋ 指名料 ＋ 貸し切り料金、
+		// 1ツアーあたり: 基本料金 ＋ 追加料金 ＋ 指名料 ＋ 貸し切り料金）。
 		const totalPrice =
 			normalizePriceValue( draft?.total_price ) ??
 			calculateBaseFeeTotal( {
@@ -394,6 +411,8 @@ export const BookingConfirmApp = ( {
 				tiersSubtotal: hasDraftGuestTiers
 					? sumPriceTierSubtotals( draft.guest_tiers )
 					: null,
+				isPerBooking,
+				extraGuestSubtotal: sumPriceTierSubtotals( extraGuestTiers ),
 			} );
 		const formattedTotal =
 			typeof draft?.total_price_formatted === 'string' &&
@@ -407,11 +426,13 @@ export const BookingConfirmApp = ( {
 
 		// #503: 料金区分ありの予約は、予約画面の料金欄と同じ「区分名（単価 × 人数）」＋小計で表示する。
 		// 0名の区分は省く。小計の金額はサーバーの整形済み値（税表記込み）を優先する。
-		const tiersWithGuests = hasDraftGuestTiers
-			? draft.guest_tiers.filter(
-					( tier ) => Math.floor( Number( tier?.count ) || 0 ) > 0
-			  )
-			: [];
+		// 1ツアーあたりは料金区分が追加料金の単価のため、区分ごとの行ではなくツアー料金の行と追加料金の行で出す（#1003）。
+		const tiersWithGuests =
+			hasDraftGuestTiers && ! isPerBooking
+				? draft.guest_tiers.filter(
+						( tier ) => Math.floor( Number( tier?.count ) || 0 ) > 0
+				  )
+				: [];
 		const tierRows = buildPriceTierRows( {
 			tiers: tiersWithGuests,
 			currencySymbol: currencySymbolValue,
@@ -435,8 +456,33 @@ export const BookingConfirmApp = ( {
 			};
 		} );
 
+		// 追加料金の行（「追加料金（子供 ¥1,500 × 1名）」と小計）。小計の金額はサーバーの整形済み値（税表記込み）を優先する。
+		const extraGuestRows = buildExtraGuestFeeRows( {
+			extraTiers: extraGuestTiers,
+			currencySymbol: currencySymbolValue,
+			guestsUnitLabel,
+		} ).map( ( extraRow, index ) => {
+			const subtotalFormatted =
+				extraGuestTiers[ index ]?.subtotal_formatted;
+			return {
+				label: extraRow.label,
+				labelParts: extraRow.labelParts,
+				value:
+					typeof subtotalFormatted === 'string' &&
+					subtotalFormatted.trim() !== ''
+						? subtotalFormatted
+						: ensureTaxLabel(
+								formatCurrency(
+									extraRow.amount,
+									currencySymbolValue
+								)
+						  ),
+			};
+		} );
+
 		return {
 			tierRows,
+			extraGuestRows,
 			baseRowLabel: baseRow.label,
 			baseRowLabelParts: baseRow.labelParts,
 			baseLabel: formattedBase,
@@ -1976,6 +2022,8 @@ export const BookingConfirmApp = ( {
 
 	const hasGuestTiers =
 		Array.isArray( draft?.guest_tiers ) && draft.guest_tiers.length > 0;
+	// 料金の単位が「1ツアーあたり」の予約か。区分があっても、基本料金の行（ツアー料金）を出す（#1003）。
+	const isPerBookingDraft = draft?.price_unit === 'per_booking';
 
 	// 宿泊（泊単位のプラン）の下書きか。サーバーが検証した泊の情報（draft.lodging）の有無で判定する。
 	// チェックイン／チェックアウトの日時・泊数・金額はサーバーの計算値をそのまま表示する。
@@ -2394,10 +2442,24 @@ export const BookingConfirmApp = ( {
 										) }
 										<SummaryRow
 											label={ guestsCountLabel }
-											value={ formatGuestsCount(
-												Number( draft.guests ),
-												guestsUnitLabel
-											) }
+											value={
+												isPerBookingDraft
+													? buildGuestCompositionText(
+															{
+																guests: Number(
+																	draft.guests
+																),
+																tiers: draft.guest_tiers,
+																guestsUnitLabel,
+															}
+													  )
+													: formatGuestsCount(
+															Number(
+																draft.guests
+															),
+															guestsUnitLabel
+													  )
+											}
 										/>
 									</>
 								) : (
@@ -2418,7 +2480,7 @@ export const BookingConfirmApp = ( {
 									/>
 								) }
 								{ /* 基本料金は指名機能の ON/OFF に関わらず常に表示する（#247）。ただし料金区分メニューでは区分ごとの小計が上に表示され、この行は常に0円で冗長になるため非表示にする（#338）。 */ }
-								{ ! hasGuestTiers && (
+								{ ( ! hasGuestTiers || isPerBookingDraft ) && (
 									<SummaryRow
 										label={
 											// #503: 「（単価 × 人数）」の括弧の途中で改行させない（予約画面と同じ）。
@@ -2433,6 +2495,23 @@ export const BookingConfirmApp = ( {
 										}
 										value={ pricingSummary.baseLabel }
 									/>
+								) }
+								{ /* 1ツアーあたりで規定人数を超えた分の追加料金は、超過した人がいる区分ごとに別の行で出す（#1003）。 */ }
+								{ pricingSummary.extraGuestRows.map(
+									( extraRow, index ) => (
+										<SummaryRow
+											key={ `extra-guest-${ index }` }
+											label={
+												<PricingRowLabel
+													label={ extraRow.label }
+													labelParts={
+														extraRow.labelParts
+													}
+												/>
+											}
+											value={ extraRow.value }
+										/>
+									)
 								) }
 								{ /* 指名料はこのメニューで指名機能 ON のときのみ表示する（#391）。 */ }
 								{ nominationEnabledForMenu && (

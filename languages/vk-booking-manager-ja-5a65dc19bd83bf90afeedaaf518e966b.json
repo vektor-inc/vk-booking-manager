@@ -262,6 +262,9 @@
 			"Temporary closure": [
 				"臨時休業"
 			],
+			"%1$s, %2$s": [
+				"%1$s、%2$s"
+			],
 			"Closed days": [
 				"休業日"
 			],
@@ -273,9 +276,6 @@
 			],
 			"Not selectable (unavailable date)": [
 				"選べません（受付できない日）"
-			],
-			"%1$s, %2$s": [
-				"%1$s、%2$s"
 			],
 			"When you select a date from the calendar, reservation candidates will be displayed.": [
 				"カレンダーから日付を選択すると、予約候補が表示されます。"
@@ -901,14 +901,44 @@
 			"For administrators: The REST API is not responding. Try saving the permalink settings. If that does not help, check your security plugins or server settings.": [
 				"管理者の方へ: REST API が応答していません。パーマリンク設定を保存してみてください。解消しない場合は、セキュリティ系プラグインやサーバーの設定をご確認ください。"
 			],
+			"The price does not change even if the number of guests is entered.": [
+				"人数を入力しても料金は変わりません。"
+			],
 			"Service basic fee": [
 				"サービス基本料金"
+			],
+			"%1$s %2$s": [
+				"%1$s%2$s"
+			],
+			"Tour fee (per tour)": [
+				"ツアー料金（1ツアーあたり）"
 			],
 			"Service basic fee (%1$s × %2$s)": [
 				"サービス基本料金（%1$s × %2$s）"
 			],
+			"Extra guest fee (%1$s %2$s × %3$s)": [
+				"追加料金（%1$s %2$s × %3$s）"
+			],
+			"Extra fee %s": [
+				"追加料金 %s"
+			],
+			"Tour fee %s": [
+				"ツアー料金 %s"
+			],
+			"+ Extra guest fee %s": [
+				"＋ 追加料金 %s"
+			],
 			"%1$s (%2$s × %3$s)": [
 				"%1$s（%2$s × %3$s）"
+			],
+			"The price is %s per tour.": [
+				"料金は 1ツアーあたり %s です。"
+			],
+			"The price is %1$s per tour and includes up to %2$s.": [
+				"料金は 1ツアーあたり %1$s で、%2$sまでの参加を含みます。"
+			],
+			"For guests over this number, the extra fee shown for each category is added per extra guest.": [
+				"これを超える人数には、区分ごとに表示した追加料金が、超えた1名あたりで加算されます。"
 			],
 			"The response is not a valid JSON response.": [
 				"有効な JSON 応答ではありません。"

@@ -82,8 +82,6 @@ class Availability_Service {
 	private const MENU_META_FIXED_START_TIMES           = '_vkbm_fixed_start_times';
 	private const MENU_META_MAX_CAPACITY                = '_vkbm_max_capacity';
 	private const MENU_META_MIN_CAPACITY                = '_vkbm_min_capacity';
-	private const MENU_META_ALLOW_MULTIPLE_GUESTS       = '_vkbm_allow_multiple_guests';
-	private const MENU_META_EXCLUSIVE_WHEN_BOOKED       = '_vkbm_exclusive_when_booked';
 
 	private const DAY_STATUS_OPEN            = 'open';
 	private const DAY_STATUS_REGULAR_HOLIDAY = 'regular_holiday';
@@ -2324,8 +2322,8 @@ class Availability_Service {
 	 * @return bool 貸し切り予約が有効なら true。
 	 */
 	public function is_menu_exclusive_when_booked( WP_Post $menu_post ): bool {
-		// メタが立っていなければ対象外。
-		if ( ! get_post_meta( $menu_post->ID, self::MENU_META_EXCLUSIVE_WHEN_BOOKED, true ) ) {
+		// メタが立っていなければ対象外。1ツアーあたりのメニューは保存値に関わらず ON として扱う（#1002）。
+		if ( ! Service_Menu_Post_Type::is_exclusive_when_booked_setting_on( $menu_post->ID ) ) {
 			return false;
 		}
 
@@ -2334,8 +2332,8 @@ class Availability_Service {
 			return false;
 		}
 
-		// 複数人一括予約が許可されていなければ無効。
-		if ( ! get_post_meta( $menu_post->ID, self::MENU_META_ALLOW_MULTIPLE_GUESTS, true ) ) {
+		// 複数人一括予約が許可されていなければ無効（1ツアーあたりのメニューは常に許可として扱う。#1002）。
+		if ( ! Service_Menu_Post_Type::is_allow_multiple_guests_setting_on( $menu_post->ID ) ) {
 			return false;
 		}
 
@@ -2416,7 +2414,8 @@ class Availability_Service {
 
 		// 複数人一括予約が許可されていないメニューは申込人数が常に1名固定のため、
 		// 最低申し込み人数を課すと誰も予約できなくなる。実効0（制限なし）へクランプする。
-		if ( ! (bool) get_post_meta( $menu_post->ID, self::MENU_META_ALLOW_MULTIPLE_GUESTS, true ) ) {
+		// 1ツアーあたりのメニューは常に許可として扱う（#1002）。
+		if ( ! Service_Menu_Post_Type::is_allow_multiple_guests_setting_on( $menu_post->ID ) ) {
 			return 0;
 		}
 

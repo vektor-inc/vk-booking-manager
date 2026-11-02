@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Booking_Price;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
@@ -230,7 +231,18 @@ class My_Bookings_Controller {
 			// 料金区分の人数内訳スナップショット。未設定の既存予約は空配列（従来表示）。
 			$guest_tiers    = Price_Tiers::normalize_guest_tiers( get_post_meta( $booking_id, self::META_GUEST_TIERS, true ) );
 			$has_base_total = metadata_exists( 'post', $booking_id, self::META_BASE_TOTAL_PRICE );
-			$base_total     = $has_base_total ? (int) get_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, true ) : max( 0, ( $base_price * $guests ) + $nomination_fee );
+			// 予約時点の料金の単位（1ツアーあたりの予約だけ保存されている）。合計未保存の旧データの再計算に使う。
+			$price_unit = Booking_Price::normalize_unit( get_post_meta( $booking_id, Booking_Price::META_BOOKING_PRICE_UNIT, true ) );
+			$base_total = $has_base_total
+				? (int) get_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, true )
+				: Booking_Price::calculate_total(
+					array(
+						'price_unit'     => $price_unit,
+						'base_price'     => $base_price,
+						'guests'         => $guests,
+						'nomination_fee' => $nomination_fee,
+					)
+				);
 
 			// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
 			// サイト全体の設定と等価な結果になるため、この置き換えで既存メニューの挙動は変わらない。
@@ -240,7 +252,13 @@ class My_Bookings_Controller {
 				// 指名ON時に作成され後で指名OFFになった予約で、合計が書き換わるのを防ぐ。
 				// 保存値が無い場合のみ「基本料金 × 人数」で再計算する。
 				if ( ! $has_base_total ) {
-					$base_total = max( 0, $base_price * $guests );
+					$base_total = Booking_Price::calculate_service_total(
+						array(
+							'price_unit' => $price_unit,
+							'base_price' => $base_price,
+							'guests'     => $guests,
+						)
+					);
 				}
 			}
 			$status = sanitize_text_field( (string) get_post_meta( $booking_id, self::META_STATUS, true ) );
@@ -269,6 +287,10 @@ class My_Bookings_Controller {
 				'base_price'          => $base_price,
 				'guests'              => $guests,
 				'guest_tiers'         => $guest_tiers,
+				// 予約時点の料金の単位。1ツアーあたりの予約は、区分ごとの人数を人数の行の構成として出す（#1003）。
+				'price_unit'          => $price_unit,
+				// 1ツアーあたりで規定人数を超えた分の追加料金の内訳（超過した人がいない予約は空配列。#1003）。画面はツアー料金（base_price）と分けて出す。
+				'extra_guests'        => Booking_Price::normalize_extra_guests( get_post_meta( $booking_id, Booking_Price::META_BOOKING_EXTRA_GUESTS, true ) ),
 				'nomination_fee'      => $nomination_fee,
 				'total_price'         => max( 0, $base_total ),
 				'status'              => $status,

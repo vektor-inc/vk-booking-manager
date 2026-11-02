@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Common\Booking_Price;
 use VKBookingManager\Common\Exclusive_Fee;
 use VKBookingManager\Common\Lodging_Price;
 use VKBookingManager\Common\Lodging_Price_Display;
@@ -474,7 +475,8 @@ class Booking_Draft_Controller {
 		// 区分が1つでもあれば、人数は単一の guests ではなく区分ごとの内訳で受け取る。
 		// 実効の最大受付数が1以下のメニューでは料金区分は無効（空配列扱い）にし、基本料金×人数へ倒す（#320）。
 		// get_max_guests() は複数人一括予約適用時に max(1, max_capacity) を返すため、>= 2 で「実効max_capacity≥2」と等価。
-		$menu_tiers      = ( $max_guests >= 2 ) ? Price_Tiers::normalize_tiers( get_post_meta( $menu_id, '_vkbm_price_tiers', true ) ) : array();
+		// 1ツアーあたりのメニューは、規定人数を超えた分の追加料金を使うときだけ料金区分で人数を受け取る（#1002、#1003）。
+		$menu_tiers      = ( $max_guests >= 2 && Service_Menu_Post_Type::allows_guest_tier_input( $menu_id ) ) ? Price_Tiers::normalize_tiers( get_post_meta( $menu_id, '_vkbm_price_tiers', true ) ) : array();
 		$has_price_tiers = ! empty( $menu_tiers );
 		$guest_tiers     = array();
 
@@ -786,11 +788,19 @@ class Booking_Draft_Controller {
 		// ラベル・料金は必ずサーバ保存メタを正とし、保存済みスナップショットの人数のみを使う（改竄防止）。
 		// 実効の最大受付数が1以下のメニューでは料金区分は無効（空配列扱い）にし、基本料金×人数へ倒す（#320）。
 		// get_max_guests() は複数人一括予約適用時に max(1, max_capacity) を返すため、>= 2 で「実効max_capacity≥2」と等価。
-		$menu_tiers      = ( $menu_id_for_price > 0 && $this->get_max_guests( $menu_id_for_price ) >= 2 )
+		// 料金の単位が「1ツアーあたり」のメニューは、人数にかかわらず基本料金そのまま。
+		// 規定人数を超えた分の追加料金を使うときだけ、料金区分を超過1名あたりの追加料金として使う（#1002、#1003）。
+		$price_unit      = Service_Menu_Post_Type::get_price_unit( $menu_id_for_price );
+		$menu_tiers      = ( $menu_id_for_price > 0 && $this->get_max_guests( $menu_id_for_price ) >= 2 && Service_Menu_Post_Type::allows_guest_tier_input( $menu_id_for_price ) )
 			? Price_Tiers::normalize_tiers( get_post_meta( $menu_id_for_price, '_vkbm_price_tiers', true ) )
 			: array();
 		$has_price_tiers = ! empty( $menu_tiers );
 		$is_lodging_read = isset( $payload['lodging'] ) && is_array( $payload['lodging'] );
+		// 画面が「× ◯名」の人数掛け表記を出すかの判定に使う、実際に効いた料金の単位。
+		$payload['price_unit'] = $price_unit;
+		// 1ツアーあたりの規定人数を超えた分の追加料金（#1003）。使わない予約は空の内訳を返し、保存済みの古い値を残さない。
+		$extra_guest_tiers      = array();
+		$payload['extra_guest'] = $this->format_extra_guest_for_response( 0, array(), $tax_enabled );
 
 		if ( $is_lodging_read ) {
 			// 泊の下書きは確定と同じく Lodging_Booking::resolve_guests() で人数と区分を決める
@@ -833,17 +843,38 @@ class Booking_Draft_Controller {
 			$payload['guests']      = $guests;
 			$payload['guest_tiers'] = $this->format_guest_tiers_for_response( $guest_tiers, $tax_enabled );
 
-			$tiers_total = Price_Tiers::total_price( $guest_tiers );
-			$total_price = $tiers_total + $payload['nomination_fee'];
+			// 1ツアーあたりは、基本料金に含まれる人数を超えた人数分の追加料金を求める（#1003）。
+			if ( Booking_Price::is_per_booking( $price_unit ) ) {
+				$included_guests        = Service_Menu_Post_Type::get_included_guests( $menu_id_for_price );
+				$extra_guest_tiers      = Booking_Price::resolve_extra_guest_tiers( $guest_tiers, $included_guests );
+				$payload['extra_guest'] = $this->format_extra_guest_for_response( $included_guests, $extra_guest_tiers, $tax_enabled );
+			}
+
+			// 1名あたりは区分の合計、1ツアーあたりは基本料金 ＋ 追加料金。どちらも ＋ 指名料（計算は Booking_Price に集約している）。
+			$total_price = Booking_Price::calculate_total(
+				array(
+					'price_unit'        => $price_unit,
+					'base_price'        => (int) ( $price_snapshot['display_price'] ?? 0 ),
+					'guest_tiers'       => $guest_tiers,
+					'extra_guest_tiers' => $extra_guest_tiers,
+					'nomination_fee'    => $payload['nomination_fee'],
+				)
+			);
 		} else {
-			// 区分未定義は従来どおり基本料金×人数（完全後方互換）。
+			// 区分未定義は従来どおり基本料金×人数（完全後方互換）。1ツアーあたりは人数を掛けず基本料金そのまま。
 			$guests                 = $this->resolve_guests( $menu_id_for_price, (int) ( $payload['guests'] ?? 1 ) );
 			$payload['guests']      = $guests;
 			$payload['guest_tiers'] = array();
 
-			$base_display_price = (int) ( $price_snapshot['display_price'] ?? 0 );
-			// 基本料金は人数分を掛ける。指名料は人数に関わらず1回分。
-			$total_price = ( $base_display_price * $guests ) + $payload['nomination_fee'];
+			// 指名料は人数に関わらず1回分。
+			$total_price = Booking_Price::calculate_total(
+				array(
+					'price_unit'     => $price_unit,
+					'base_price'     => (int) ( $price_snapshot['display_price'] ?? 0 ),
+					'guests'         => $guests,
+					'nomination_fee' => $payload['nomination_fee'],
+				)
+			);
 		}
 
 		// 貸し切り料金（#305）を権威的に再計算して合計へ加算する（フロント送信額は信用しない）。
@@ -1108,7 +1139,8 @@ class Booking_Draft_Controller {
 		// ユーザーによる貸し切り指定は受け付けない（#388）。両方ONで保存されると、指定した予約者だけ
 		// 貸し切り料金を負担する不整合（払った人が損をする）が起きるため排他にする。
 		// 確定コントローラ（Booking_Confirmation_Controller::is_user_exclusive_selectable）と同型の判定。
-		if ( get_post_meta( $menu_id, '_vkbm_exclusive_when_booked', true ) ) {
+		// 1ツアーあたりのメニューは貸し切り予約が自動で有効になるため、同じ扱いにする（#1002）。
+		if ( Service_Menu_Post_Type::is_exclusive_when_booked_setting_on( $menu_id ) ) {
 			return false;
 		}
 
@@ -1127,8 +1159,8 @@ class Booking_Draft_Controller {
 			return false;
 		}
 
-		// メニュー単位の複数人一括予約許可も必須。
-		if ( ! get_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true ) ) {
+		// メニュー単位の複数人一括予約許可も必須（1ツアーあたりのメニューは常に許可として扱う。#1002）。
+		if ( ! Service_Menu_Post_Type::is_allow_multiple_guests_setting_on( $menu_id ) ) {
 			return false;
 		}
 
@@ -1421,6 +1453,25 @@ class Booking_Draft_Controller {
 		}
 
 		return $formatted;
+	}
+
+	/**
+	 * 「1ツアーあたり」の追加料金の内訳に、フロント表示用の整形済み料金・小計を付与する（#1003）。
+	 *
+	 * @param int                                                      $included_guests   基本料金に含まれる人数。追加料金を使わない予約は 0。
+	 * @param array<int, array{label: string, price: int, count: int}> $extra_guest_tiers 超過した人がいる区分と超過人数。
+	 * @param bool                                                     $tax_enabled       税込ラベルを付けるか。
+	 * @return array{included_guests: int, tiers: array<int, array<string, mixed>>, total: int, total_formatted: string} 追加料金の内訳。
+	 */
+	private function format_extra_guest_for_response( int $included_guests, array $extra_guest_tiers, bool $tax_enabled ): array {
+		$total = Price_Tiers::total_price( $extra_guest_tiers );
+
+		return array(
+			'included_guests' => $included_guests,
+			'tiers'           => $this->format_guest_tiers_for_response( $extra_guest_tiers, $tax_enabled ),
+			'total'           => $total,
+			'total_formatted' => $this->format_currency_label( $total, $tax_enabled ),
+		);
 	}
 
 	/**

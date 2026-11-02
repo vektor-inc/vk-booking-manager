@@ -17,6 +17,8 @@ use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Booking_Price;
+use VKBookingManager\Common\Booking_Price_Display;
 use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -93,6 +95,29 @@ class Service_Menu_Post_Type {
 	 * Service_Menu_Editor など他クラスからも参照するため public にしている。
 	 */
 	public const META_BOOKING_UNIT = '_vkbm_booking_unit';
+
+	/**
+	 * 時間枠のメニューの料金の単位のメタキー（#1002）。
+	 *
+	 * 「1ツアーあたり」のときだけ Booking_Price::UNIT_PER_BOOKING を保存する。「1名あたり」（既定）は保存しない（メタなし）。
+	 * 宿泊プランの料金の単位（META_NIGHT_PRICE_UNIT）とは別の保存項目で、流用しない。
+	 */
+	public const META_PRICE_UNIT = '_vkbm_price_unit';
+
+	/**
+	 * 「1ツアーあたり」のメニューで、規定人数を超えた人数分の追加料金を使うかのメタキー（#1003）。
+	 *
+	 * 使うときだけ '1' を保存する（使わないときは保存しない）。料金の単位が「1ツアーあたり」のときだけ効く。
+	 * 宿泊プランの追加料金（META_NIGHT_EXTRA_GUEST_ENABLED）とは別の保存項目で、流用しない。
+	 */
+	public const META_EXTRA_GUEST_ENABLED = '_vkbm_extra_guest_enabled';
+
+	/**
+	 * 「1ツアーあたり」のメニューで、基本料金に含まれる人数のメタキー（#1003）。
+	 *
+	 * 1 以上の整数。「1ツアーの最大人数」を超える値は保存時に最大人数に丸める。追加料金を使うときだけ意味を持つ。
+	 */
+	public const META_INCLUDED_GUESTS = '_vkbm_included_guests';
 
 	/**
 	 * 泊単位のプランの料金の単位のメタキー（#572）。
@@ -441,6 +466,9 @@ class Service_Menu_Post_Type {
 					}
 					echo '<span class="screen-reader-text">' . esc_html__( 'Price categories', 'vk-booking-manager' ) . '</span>';
 					echo wp_kses_post( '<ul class="vkbm-admin-price-tiers-list">' . implode( '', $rows ) . '</ul>' );
+				} elseif ( self::is_price_per_booking( $post_id ) && $price > 0 ) {
+					// 1ツアーあたりのメニューだけ「¥30,000 / 1ツアー」と単位を付ける（1名あたりは金額だけの表示のまま）。
+					echo wp_kses_post( Booking_Price_Display::format_price_with_unit_html( $price ) );
 				} else {
 					echo esc_html( $price > 0 ? number_format_i18n( $price ) : '—' );
 				}
@@ -1646,6 +1674,58 @@ class Service_Menu_Post_Type {
 			)
 		);
 
+		// 時間枠のメニューの料金の単位（#1002）。「1ツアーあたり」のときだけ per_booking を保存する。
+		// 業種プリセットが「アクティビティ・ツアー」のサイト（Pro 版）以外では REST からも書き込めない。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_PRICE_UNIT,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): string {
+					return Booking_Price::is_per_booking( $value ) ? Booking_Price::UNIT_PER_BOOKING : '';
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id ) && Industry_Presets::supports( 'per_booking_price' );
+				},
+			)
+		);
+
+		// 「1ツアーあたり」の規定人数を超えた分の追加料金（#1003）。使うときだけ '1' を保存する。
+		// 料金の単位と同じく、業種プリセットが「アクティビティ・ツアー」のサイト以外では REST からも書き込めない。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_EXTRA_GUEST_ENABLED,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): string {
+					return '1' === (string) $value ? '1' : '';
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id ) && Industry_Presets::supports( 'per_booking_price' );
+				},
+			)
+		);
+		// 基本料金に含まれる人数（#1003）。1 以上の整数。
+		register_post_meta(
+			self::POST_TYPE,
+			self::META_INCLUDED_GUESTS,
+			array(
+				'type'              => 'integer',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => static function ( $value ): int {
+					return max( 1, is_numeric( $value ) ? (int) $value : 1 );
+				},
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id ) && Industry_Presets::supports( 'per_booking_price' );
+				},
+			)
+		);
+
 		register_post_meta(
 			self::POST_TYPE,
 			self::META_DISABLE_NOMINATION_FEE,
@@ -2271,8 +2351,134 @@ class Service_Menu_Post_Type {
 			return false;
 		}
 
+		// 1ツアーあたりのメニューは人数を入れても料金が変わらないため、許可フラグに関わらず ON として扱う（#1002）。
 		return self::is_night_price_per_room( $menu_id )
+			|| self::is_price_per_booking( $menu_id )
 			|| (bool) get_post_meta( $menu_id, self::META_ALLOW_MULTIPLE_GUESTS, true );
+	}
+
+	/**
+	 * 時間枠のメニューの料金の単位を、実際に効く値で返す（#1002）。
+	 *
+	 * 「1ツアーあたり」を返すのは、業種プリセットが「アクティビティ・ツアー」のサイト（Pro 版）で、
+	 * 時間枠のメニューに per_booking が保存されているときだけ。それ以外（保存なし・別の業種へ切り替えたあと・
+	 * 泊のプラン・無料版）はメタが残っていても「1名あたり」を返す（消さずに効かせないだけにする）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string Booking_Price::UNIT_PER_BOOKING または Booking_Price::UNIT_PER_GUEST。
+	 */
+	public static function get_price_unit( int $menu_id ): string {
+		if ( $menu_id <= 0 || ! Industry_Presets::supports( 'per_booking_price' ) || self::is_night_unit( $menu_id ) ) {
+			return Booking_Price::UNIT_PER_GUEST;
+		}
+
+		return self::get_stored_price_unit( $menu_id );
+	}
+
+	/**
+	 * 保存されている時間枠のメニューの料金の単位を、サイトの業種に関わらず返す（#1002）。
+	 *
+	 * 編集画面のラジオの初期選択専用。別の業種へ切り替えたあとに再保存しても、保存済みの選択が消えないようにする。
+	 * 料金計算など実際に使う値は get_price_unit() を使う。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string Booking_Price::UNIT_PER_BOOKING または Booking_Price::UNIT_PER_GUEST。
+	 */
+	public static function get_stored_price_unit( int $menu_id ): string {
+		if ( $menu_id <= 0 ) {
+			return Booking_Price::UNIT_PER_GUEST;
+		}
+
+		return Booking_Price::normalize_unit( get_post_meta( $menu_id, self::META_PRICE_UNIT, true ) );
+	}
+
+	/**
+	 * 「1ツアーあたり」のメニューで、規定人数を超えた人数分の追加料金を使うかを返す（#1003）。
+	 *
+	 * 料金の単位が「1ツアーあたり」（is_price_per_booking()）で、チェックが入っているときだけ true。
+	 * 1名あたりへ戻したメニューや別の業種へ切り替えたサイトでは、メタが残っていても false（消さずに効かせないだけ）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 追加料金を使うなら true。
+	 */
+	public static function is_extra_guest_fee_enabled( int $menu_id ): bool {
+		return self::is_price_per_booking( $menu_id )
+			&& '1' === (string) get_post_meta( $menu_id, self::META_EXTRA_GUEST_ENABLED, true );
+	}
+
+	/**
+	 * 予約時に、人数を料金区分ごとの内訳で受け取れるメニューかを、料金の単位の面から返す（#1003）。
+	 *
+	 * 1名あたりは true。1ツアーあたりは料金区分を使わない（人数にかかわらず基本料金そのまま）が、
+	 * 規定人数を超えた人数分の追加料金を使うときだけ、区分を超過1名あたりの追加料金として使うため true。
+	 * 複数人一括予約・予約枠の定員・区分の有無といった他のゲートは含まない（呼び出し側で別に判定する）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 料金の単位の面から、料金区分ごとの人数を受け取れるなら true。
+	 */
+	public static function allows_guest_tier_input( int $menu_id ): bool {
+		return ! self::is_price_per_booking( $menu_id ) || self::is_extra_guest_fee_enabled( $menu_id );
+	}
+
+	/**
+	 * 「1ツアーあたり」のメニューの、基本料金に含まれる人数を返す（#1003）。保存値が無い・1 未満は 1。
+	 *
+	 * 追加料金を使うかの判定（is_extra_guest_fee_enabled()）は含まない。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return int 基本料金に含まれる人数（1 以上）。
+	 */
+	public static function get_included_guests( int $menu_id ): int {
+		$raw = get_post_meta( $menu_id, self::META_INCLUDED_GUESTS, true );
+
+		return max( 1, is_numeric( $raw ) ? (int) $raw : 1 );
+	}
+
+	/**
+	 * 時間枠のメニューの料金の単位が「1ツアーあたり」かを返す（#1002）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool アクティビティのサイトで1ツアーあたりに設定されたメニューなら true。
+	 */
+	public static function is_price_per_booking( int $menu_id ): bool {
+		return Booking_Price::is_per_booking( self::get_price_unit( $menu_id ) );
+	}
+
+	/**
+	 * 「複数人一括予約を許可」の保存値が有効かを返す（#1002）。
+	 *
+	 * 「1ツアーあたり」のメニューは人数を入れても料金が変わらないため、保存値に関わらず ON として扱う。
+	 * 1室1泊あたりの泊のプランを含める is_multi_guest_booking_enabled() とは別に、時間枠の受付判定
+	 * （貸し切り・最低申し込み人数）が参照する。Pro 版・予約枠の定員機能・定員2以上といった他のゲートは含まない。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 複数人一括予約の許可が ON なら true。
+	 */
+	public static function is_allow_multiple_guests_setting_on( int $menu_id ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		return self::is_price_per_booking( $menu_id )
+			|| (bool) get_post_meta( $menu_id, self::META_ALLOW_MULTIPLE_GUESTS, true );
+	}
+
+	/**
+	 * 「貸し切り予約」（最初の予約が入った時点でその枠を貸切にする設定）の保存値が有効かを返す（#1002）。
+	 *
+	 * 「1ツアーあたり」のメニューは1件の予約＝1ツアーの占有のため、保存値に関わらず ON として扱う。
+	 * Pro 版・予約枠の定員機能・複数人一括予約・定員2以上といった他のゲートは含まない（呼び出し側で別に判定する）。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 貸し切り予約の設定が ON なら true。
+	 */
+	public static function is_exclusive_when_booked_setting_on( int $menu_id ): bool {
+		if ( $menu_id <= 0 ) {
+			return false;
+		}
+
+		return self::is_price_per_booking( $menu_id )
+			|| (bool) get_post_meta( $menu_id, self::META_EXCLUSIVE_WHEN_BOOKED, true );
 	}
 
 	/**
@@ -2341,6 +2547,9 @@ class Service_Menu_Post_Type {
 			self::META_OTHER_CONDITIONS,
 			'_vkbm_fixed_start_times',
 			self::META_BOOKING_UNIT,
+			self::META_PRICE_UNIT,
+			self::META_EXTRA_GUEST_ENABLED,
+			self::META_INCLUDED_GUESTS,
 			self::META_NIGHT_PRICE_UNIT,
 			self::META_NIGHT_EXTRA_GUEST_ENABLED,
 			self::META_NIGHT_INCLUDED_GUESTS,
@@ -2414,6 +2623,45 @@ class Service_Menu_Post_Type {
 			)
 		);
 
+		// 時間枠のメニューの、実際に効く料金の単位（#1002）。画面は業種プリセットの判定を自前で持たず、この値を使う。
+		register_rest_field(
+			self::POST_TYPE,
+			'vkbm_price_unit',
+			array(
+				'get_callback' => static function ( array $post ): string {
+					return self::get_price_unit( isset( $post['id'] ) ? (int) $post['id'] : 0 );
+				},
+				'schema'       => array(
+					'description' => __( 'Price unit of the menu that is in effect on this site (per_guest or per_booking).', 'vk-booking-manager' ),
+					'type'        => 'string',
+					'enum'        => array( Booking_Price::UNIT_PER_GUEST, Booking_Price::UNIT_PER_BOOKING ),
+					'context'     => array( 'view', 'edit' ),
+					'readonly'    => true,
+				),
+			)
+		);
+
+		// 「1ツアーあたり」の規定人数を超えた分の追加料金（#1003）。画面は設定の判定を自前で持たず、この値を使う。
+		register_rest_field(
+			self::POST_TYPE,
+			'vkbm_extra_guest_fee',
+			array(
+				'get_callback' => static function ( array $post ): array {
+					return self::get_extra_guest_fee_rest_value( isset( $post['id'] ) ? (int) $post['id'] : 0 );
+				},
+				'schema'       => array(
+					'description' => __( 'Extra guest fee of the per-tour menu that is in effect on this site (enabled and the number of guests included in the basic price).', 'vk-booking-manager' ),
+					'type'        => 'object',
+					'properties'  => array(
+						'enabled'         => array( 'type' => 'boolean' ),
+						'included_guests' => array( 'type' => 'integer' ),
+					),
+					'context'     => array( 'view', 'edit' ),
+					'readonly'    => true,
+				),
+			)
+		);
+
 		// 泊単位のプランの予約画面に必要な情報（#575）。泊単位でないメニュー・宿泊が有効でないサイトは null。
 		register_rest_field(
 			self::POST_TYPE,
@@ -2450,6 +2698,25 @@ class Service_Menu_Post_Type {
 					'readonly'    => true,
 				),
 			)
+		);
+	}
+
+	/**
+	 * REST レスポンス用に、「1ツアーあたり」の追加料金の実効値を返す（#1003）。
+	 *
+	 * 追加料金を使うのに料金区分（超過1名あたりの単価）が1件も無いメニューは、予約画面に区分ごとの人数欄が出ず
+	 * 追加料金が加算されないため、使わない扱い（enabled = false）にする。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return array{enabled: bool, included_guests: int} 追加料金を使うか、基本料金に含まれる人数。
+	 */
+	public static function get_extra_guest_fee_rest_value( int $menu_id ): array {
+		$is_enabled = self::is_extra_guest_fee_enabled( $menu_id )
+			&& Price_Tiers::has_tiers( get_post_meta( $menu_id, '_vkbm_price_tiers', true ) );
+
+		return array(
+			'enabled'         => $is_enabled,
+			'included_guests' => self::get_included_guests( $menu_id ),
 		);
 	}
 

@@ -19,11 +19,14 @@ use VKBookingManager\Bookings\Booking_Customer_Cancellation;
 use VKBookingManager\Bookings\Booking_Source;
 use VKBookingManager\Bookings\Guest_Cancel_Controller;
 use VKBookingManager\Bookings\Lodging_Booking;
+use VKBookingManager\Common\Booking_Price;
+use VKBookingManager\Common\Booking_Price_Display;
 use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
@@ -256,12 +259,32 @@ class Booking_Notification_Service {
 		}
 
 		// 料金は、泊の予約では確定時に計算するため出さない。料金区分があれば区分の合計、無ければ基本料金×人数。
-		$price_label = '';
+		$price_label           = '';
+		$price_breakdown_lines = array();
 		if ( 0 === $nights ) {
-			if ( ! empty( $guest_tiers ) ) {
+			// 料金の単位が「1ツアーあたり」のメニューは人数を掛けない（下書きの計算と同じ Booking_Price で求める）。
+			$price_unit        = Service_Menu_Post_Type::get_price_unit( $menu_id );
+			$base_price        = max( 0, (int) get_post_meta( $menu_id, '_vkbm_base_price', true ) );
+			$extra_guest_tiers = Booking_Price::is_per_booking( $price_unit ) && ! empty( $guest_tiers )
+				? Booking_Price::resolve_extra_guest_tiers( $guest_tiers, Service_Menu_Post_Type::get_included_guests( $menu_id ) )
+				: array();
+			if ( array() !== $extra_guest_tiers ) {
+				// 規定人数を超えた人がいる予約は、ツアー料金に追加料金を足した金額を出す（#1003）。超過がなければ従来の表記に戻る。
+				$price_label           = $this->format_price_with_tax_label(
+					Booking_Price::calculate_total(
+						array(
+							'price_unit'        => $price_unit,
+							'base_price'        => $base_price,
+							'extra_guest_tiers' => $extra_guest_tiers,
+							'nomination_fee'    => $nomination_fee,
+						)
+					)
+				);
+				$price_breakdown_lines = $this->build_extra_guest_breakdown_lines( $base_price, $extra_guest_tiers, $nomination_fee );
+			} elseif ( ! empty( $guest_tiers ) && ! Booking_Price::is_per_booking( $price_unit ) ) {
 				$price_label = $this->format_price_with_tax_label( max( 0, Price_Tiers::total_price( $guest_tiers ) + $nomination_fee ) );
 			} else {
-				$price_label = $this->get_menu_price_label( max( 0, (int) get_post_meta( $menu_id, '_vkbm_base_price', true ) ), $nomination_fee, $guests );
+				$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $guests, $price_unit );
 			}
 		}
 
@@ -276,7 +299,9 @@ class Booking_Notification_Service {
 			'duration_label'          => $duration,
 			'guests'                  => $guests,
 			'guest_tiers'             => $guest_tiers,
+			'guest_composition'       => Booking_Price::is_per_booking( Service_Menu_Post_Type::get_price_unit( $menu_id ) ) ? Booking_Price_Display::format_guest_composition( $guests, $guest_tiers ) : '',
 			'price_label'             => $price_label,
+			'price_breakdown_lines'   => $price_breakdown_lines,
 			'provider_email'          => sanitize_email( (string) ( $settings['provider_email'] ?? '' ) ),
 			'provider_name'           => isset( $settings['provider_name'] ) && '' !== $settings['provider_name'] ? $settings['provider_name'] : wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
 			'provider_phone'          => $settings['provider_phone'] ?? '',
@@ -1108,14 +1133,20 @@ class Booking_Notification_Service {
 		} else {
 			$duration = $this->get_menu_duration( $menu_id );
 		}
-		// 料金区分が定義されている予約は、確定保存済みの基本料金合計（区分料金合計＋指名料）をそのまま表示する。
-		// 区分未定義は従来どおり 基本料金 × 人数（＋指名料）で表示する。
-		if ( ( ! empty( $guest_tiers ) || $nights > 0 ) && metadata_exists( 'post', $booking_id, '_vkbm_booking_base_total_price' ) ) {
+		// 予約時点の料金の単位（1ツアーあたりの予約だけ保存されている）。
+		$price_unit = Booking_Price::normalize_unit( get_post_meta( $booking_id, Booking_Price::META_BOOKING_PRICE_UNIT, true ) );
+		// 料金区分がある予約・泊の予約・1ツアーあたりの予約は、確定保存済みの基本料金合計をそのまま表示する
+		// （基本料金 × 人数で計算し直すと、人数を掛けない1ツアーあたりの予約で人数倍の金額が載る）。
+		// それ以外は従来どおり 基本料金 × 人数（＋指名料）で表示する。
+		if ( ( ! empty( $guest_tiers ) || $nights > 0 || Booking_Price::is_per_booking( $price_unit ) ) && metadata_exists( 'post', $booking_id, '_vkbm_booking_base_total_price' ) ) {
 			$base_total  = max( 0, (int) get_post_meta( $booking_id, '_vkbm_booking_base_total_price', true ) );
 			$price_label = $this->format_price_with_tax_label( $base_total );
 		} else {
-			$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $guests );
+			$price_label = $this->get_menu_price_label( $base_price, $nomination_fee, $guests, $price_unit );
 		}
+		// 1ツアーあたりで規定人数を超えた分の追加料金がある予約は、ツアー料金と追加料金を分けた内訳も添える（#1003）。
+		$extra_guests          = Booking_Price::normalize_extra_guests( get_post_meta( $booking_id, Booking_Price::META_BOOKING_EXTRA_GUESTS, true ) );
+		$price_breakdown_lines = array() !== $extra_guests ? $this->build_extra_guest_breakdown_lines( $base_price, $extra_guests['tiers'], $nomination_fee ) : array();
 		// 無料版では保存値ではなく既定値を返す共通関数を通す。
 		$resource_label_singular = vkbm_get_resource_label_singular();
 		// Use the shared helper to get the duration label with fallback.
@@ -1160,7 +1191,9 @@ class Booking_Notification_Service {
 			'duration_label'               => $duration,
 			'guests'                       => $guests,
 			'guest_tiers'                  => $guest_tiers,
+			'guest_composition'            => Booking_Price::is_per_booking( $price_unit ) ? Booking_Price_Display::format_guest_composition( $guests, $guest_tiers ) : '',
 			'price_label'                  => $price_label,
+			'price_breakdown_lines'        => $price_breakdown_lines,
 			'customer_name'                => '' !== $customer_name ? $customer_name : __( 'Customer', 'vk-booking-manager' ),
 			'booking_author_name'          => $booking_author_name,
 			'customer_email'               => $customer_email,
@@ -1310,16 +1343,18 @@ class Booking_Notification_Service {
 		}
 		// 複数人予約の場合のみ数量行を出力する。
 		// 見出し・単位は基本設定でカスタマイズ可能（単位が空なら数値のみ）。
+		// 1ツアーあたりの予約は、人数の行に区分ごとの構成を添え、区分ごとの行は重ねて出さない（#1003）。
+		$guest_composition = isset( $payload['guest_composition'] ) ? (string) $payload['guest_composition'] : '';
 		if ( isset( $payload['guests'] ) && (int) $payload['guests'] > 1 ) {
 			$lines[] = sprintf(
 				/* translators: 1: Quantity label heading, 2: Quantity value (with unit). */
 				__( '%1$s: %2$s', 'vk-booking-manager' ),
 				vkbm_get_guests_count_label(),
-				vkbm_format_guests_count( (int) $payload['guests'] )
+				'' !== $guest_composition ? $guest_composition : vkbm_format_guests_count( (int) $payload['guests'] )
 			);
 		}
 		// 料金区分が定義されている予約は、区分ごとの人数内訳を出力する（0名の区分は省略する）。
-		if ( ! empty( $payload['guest_tiers'] ) && is_array( $payload['guest_tiers'] ) ) {
+		if ( '' === $guest_composition && ! empty( $payload['guest_tiers'] ) && is_array( $payload['guest_tiers'] ) ) {
 			foreach ( $payload['guest_tiers'] as $tier ) {
 				if ( ! is_array( $tier ) ) {
 					continue;
@@ -1349,6 +1384,12 @@ class Booking_Notification_Service {
 		if ( $payload['price_label'] ) {
 			/* translators: %s: Price label. */
 			$lines[] = sprintf( __( 'Price: %s', 'vk-booking-manager' ), $payload['price_label'] );
+		}
+		// 1ツアーあたりで規定人数を超えた分の追加料金がある予約は、ツアー料金と追加料金の内訳を料金の下に出す。
+		if ( ! empty( $payload['price_breakdown_lines'] ) && is_array( $payload['price_breakdown_lines'] ) ) {
+			foreach ( $payload['price_breakdown_lines'] as $breakdown_line ) {
+				$lines[] = (string) $breakdown_line;
+			}
 		}
 
 		return $lines;
@@ -1674,19 +1715,67 @@ class Booking_Notification_Service {
 	}
 
 	/**
+	 * 1ツアーあたりの予約の料金の内訳（ツアー料金と、規定人数を超えた分の追加料金）をメールの行にして返す（#1003）。
+	 *
+	 * 追加料金の行には、区分ごとの追加料金の単価と超過人数を添える。超過した人がいない（追加料金がない）ときは空配列。
+	 *
+	 * @param int                                                      $base_price        ツアー料金（基本料金）。
+	 * @param array<int, array{label: string, price: int, count: int}> $extra_guest_tiers 超過した人がいる区分と超過人数。
+	 * @param int                                                      $nomination_fee    指名料。0 のときは指名料の行を出さない。
+	 * @return array<int, string> メールの行。
+	 */
+	private function build_extra_guest_breakdown_lines( int $base_price, array $extra_guest_tiers, int $nomination_fee = 0 ): array {
+		if ( array() === $extra_guest_tiers ) {
+			return array();
+		}
+
+		$details = array();
+		foreach ( $extra_guest_tiers as $tier ) {
+			$details[] = Booking_Price_Display::format_extra_guest_tier_text( $tier );
+		}
+
+		$lines = array(
+			/* translators: %s: tour fee (the basic price of one tour). */
+			sprintf( __( 'Tour fee: %s', 'vk-booking-manager' ), VKBM_Helper::format_currency( max( 0, $base_price ) ) ),
+			sprintf(
+				/* translators: 1: total extra guest fee, 2: breakdown by price category (e.g. Child ¥1,500 × 1 guest). */
+				__( 'Extra guest fee: %1$s (%2$s)', 'vk-booking-manager' ),
+				VKBM_Helper::format_currency( Price_Tiers::total_price( $extra_guest_tiers ) ),
+				implode( ', ', $details )
+			),
+		);
+
+		// 合計にはツアー料金・追加料金のほかに指名料も入る。内訳だけでは合計と合わなくなるため、指名料があれば行を足す。
+		if ( $nomination_fee > 0 ) {
+			$lines[] = sprintf(
+				/* translators: 1: nomination fee label, 2: nomination fee amount. */
+				__( '%1$s: %2$s', 'vk-booking-manager' ),
+				vkbm_get_nomination_fee_label(),
+				VKBM_Helper::format_currency( $nomination_fee )
+			);
+		}
+
+		return $lines;
+	}
+
+	/**
 	 * Build the price label, including nomination fee if present.
 	 *
-	 * @param int $base_price     Base price (per guest).
-	 * @param int $nomination_fee Nomination fee.
-	 * @param int $guests         Number of guests (multi-guest booking).
+	 * @param int    $base_price     Base price (per guest, or per tour when the price unit is per booking).
+	 * @param int    $nomination_fee Nomination fee.
+	 * @param int    $guests         Number of guests (multi-guest booking).
+	 * @param string $price_unit     Booking_Price::UNIT_PER_GUEST or Booking_Price::UNIT_PER_BOOKING.
 	 * @return string
 	 */
-	private function get_menu_price_label( int $base_price, int $nomination_fee, int $guests = 1 ): string {
-		$base_price = max( 0, $base_price );
-		$guests     = max( 1, $guests );
-
-		// 基本料金は人数分を掛ける（複数人予約）。
-		$display = $base_price * $guests;
+	private function get_menu_price_label( int $base_price, int $nomination_fee, int $guests = 1, string $price_unit = Booking_Price::UNIT_PER_GUEST ): string {
+		// 基本料金は人数分を掛ける（複数人予約）。1ツアーあたりは人数を掛けない。計算は Booking_Price に集約している。
+		$display = Booking_Price::calculate_service_total(
+			array(
+				'price_unit' => $price_unit,
+				'base_price' => $base_price,
+				'guests'     => $guests,
+			)
+		);
 
 		// Build the base price portion.
 		// 基本料金部分を組み立てる。

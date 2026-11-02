@@ -348,15 +348,17 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 }
 
 /**
- * サービスメニュー編集：「1室1泊あたり」で規定人数を超えた分の追加料金（チェックと、基本料金に含まれる人数）。
+ * サービスメニュー編集：「1室1泊あたり」「1ツアーあたり」で規定人数を超えた分の追加料金（チェックと、基本料金に含まれる人数）。
  * 料金の単位のラジオとは別のまとまりとして、ラジオとの間に余白を取る。
  * 人数の欄はチェックの従属項目のため、左に細い区切り線とインデントを付けて親チェックへの従属を示す.
  */
-.vkbm-night-extra-guest {
+.vkbm-night-extra-guest,
+.vkbm-tour-extra-guest {
 	margin-top: var(--vkbm--spacing--sm);
 }
 
-.vkbm-night-included-guests {
+.vkbm-night-included-guests,
+.vkbm-tour-included-guests {
 	margin-top: var(--vkbm--spacing--xs);
 	padding-left: var(--vkbm--spacing--sm);
 	border-left: 2px solid var(--vkbm--admin--color--border, #dcdcde);
@@ -587,7 +589,8 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 /* ==========================================================================
    予約編集画面
    ========================================================================== */
-.vkbm-booking-guest-tiers {
+.vkbm-booking-guest-tiers,
+.vkbm-booking-extra-guests {
 	margin: 4px 0 0;
 }
 

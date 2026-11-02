@@ -26,16 +26,17 @@ import {
 } from './booking-ui/date-filter';
 import { joinSentences } from './booking-ui/join-sentences';
 import { GuestCountInput } from './booking-ui/guest-count-input';
+import { ExtraGuestTierPrice } from './components/extra-guest-tier-price';
 import {
 	extractAssignableStaffIds,
 	filterLodgingStaffOptions,
 } from './booking-ui/staff-options';
 import { getTodayIso } from './lodging/stay-dates';
 import {
-	TIME_SLOT_CALENDAR_MAX_YEAR,
 	createLatestRequestGuard,
 	filterSelectableMenus,
-	getFetchableStartMonth,
+	advanceToServicePeriodStart,
+	getCalendarServicePeriodStartMonth,
 	getUpcomingStartMonth,
 } from './booking-ui/service-period';
 import { formatReservationDate } from './date-format';
@@ -52,10 +53,15 @@ import {
 import { BookingConfirmApp } from './booking-confirm-app';
 import { isLodgingReservation } from '../shared/reservation-config';
 import {
+	buildExtraGuestFeeRows,
 	buildPriceTierRows,
 	buildServiceBasicFeeRow,
+	buildTourFeeSummaryParts,
 	resolvePlanPricingRows,
+	resolveExtraGuestTiers,
 	calculateBaseFeeTotal,
+	buildPerBookingExtraGuestPriceNote,
+	buildPerBookingPriceNote,
 	isMultiGuestFlatPricing,
 	sumPriceTierSubtotals,
 } from './pricing-breakdown';
@@ -578,6 +584,21 @@ export const ReservationApp = ( {
 	// 泊単位のプランか（#575）。REST の vkbm_lodging はサーバー側の宿泊判定（Service_Menu_Post_Type::is_night_unit()）
 	// を通った値で、泊単位でなければ null。宿泊用の画面へ切り替える分岐はこの値だけで行う。
 	const isLodgingMenu = Boolean( currentMenu?.vkbm_lodging );
+	// 料金の単位が「1ツアーあたり」のメニューか（#1002）。REST の vkbm_price_unit はサーバー側の判定
+	// （Service_Menu_Post_Type::get_price_unit()。アクティビティのサイトでだけ per_booking が返る）を通した値。
+	// 1ツアーあたりは人数にかかわらず基本料金そのままで、複数人一括予約と貸し切り予約が常に有効として扱われる。
+	const isPerBooking = currentMenu?.vkbm_price_unit === 'per_booking';
+	// 1ツアーあたりで、規定人数を超えた人数分の追加料金を使うメニューか、基本料金に含まれる人数（#1003）。
+	// REST の vkbm_extra_guest_fee はサーバー側の判定（Service_Menu_Post_Type::get_extra_guest_fee_rest_value()。
+	// 追加料金を使うのに料金区分が1件も無いメニューは enabled = false）を通した値。
+	const isExtraGuestFee =
+		isPerBooking && Boolean( currentMenu?.vkbm_extra_guest_fee?.enabled );
+	const includedGuests = Math.max(
+		1,
+		Math.floor(
+			Number( currentMenu?.vkbm_extra_guest_fee?.included_guests ) || 1
+		)
+	);
 	// #391: このメニューで指名機能を使うか。
 	// サイト全体の指名機能スイッチ（providerSettings.staffEnabled）がONで、かつ
 	// メニュー単位の無効化メタ（_vkbm_disable_nomination）が立っていない場合のみ true。
@@ -1639,8 +1660,10 @@ export const ReservationApp = ( {
 	// 有効」というゲートは外した。サーバ側（Staff_Editor::is_multi_guest_available_for_menu()）も
 	// 同様に指名条件を外しているため、_vkbm_allow_multiple_guests の値だけで判定できる。
 	const allowMultipleGuests = useMemo(
-		() => Boolean( currentMenu?.meta?._vkbm_allow_multiple_guests ),
-		[ currentMenu ]
+		() =>
+			Boolean( currentMenu?.meta?._vkbm_allow_multiple_guests ) ||
+			isPerBooking,
+		[ currentMenu, isPerBooking ]
 	);
 	// #393: 指名を使うメニューの最低申し込み人数（受付制限）。
 	// 1件の予約が1組の貸切になる指名メニューで、1名の予約に定員2以上の枠を占有されるのを
@@ -1709,7 +1732,8 @@ export const ReservationApp = ( {
 	// メニューに定義された料金区分（[ { label, price }, ... ]）。
 	// 複数人一括予約ONかつ区分が1件以上ある場合のみ、人数を区分ごとに入力する。
 	const priceTiers = useMemo( () => {
-		if ( ! allowMultipleGuests ) {
+		// 1ツアーあたりは、規定人数を超えた分の追加料金を使うときだけ料金区分を使う（#1002、#1003）。
+		if ( ! allowMultipleGuests || ( isPerBooking && ! isExtraGuestFee ) ) {
 			return [];
 		}
 		const rawTiers = currentMenu?.meta?._vkbm_price_tiers;
@@ -1722,7 +1746,7 @@ export const ReservationApp = ( {
 				price: Math.max( 0, Math.floor( Number( tier?.price ) || 0 ) ),
 			} ) )
 			.filter( ( tier ) => tier.label !== '' );
-	}, [ allowMultipleGuests, currentMenu ] );
+	}, [ allowMultipleGuests, isPerBooking, isExtraGuestFee, currentMenu ] );
 
 	const hasPriceTiers = priceTiers.length > 0;
 
@@ -1780,12 +1804,14 @@ export const ReservationApp = ( {
 	// 編集画面で設定でき、予約時にも効くように変更した（貸切の排他はメニュー全体ではなく
 	// 担当スタッフ単位。サーバ側の判定は Booking_Draft_Controller / Booking_Confirmation_Controller の
 	// slot_has_exclusive_booking_for_menu() 等を参照）。そのため menuNominationEnabled による除外は撤廃する。
+	// 1ツアーあたりは貸し切り予約が自動で有効になるため、予約者による貸切指定も出さない（#1002）。
 	const exclusiveSelectable = useMemo(
 		() =>
 			allowMultipleGuests &&
+			! isPerBooking &&
 			! currentMenu?.meta?._vkbm_exclusive_when_booked &&
 			Boolean( currentMenu?.meta?._vkbm_exclusive_user_selectable ),
-		[ allowMultipleGuests, currentMenu ]
+		[ allowMultipleGuests, isPerBooking, currentMenu ]
 	);
 	// 貸し切り料金（1人あたり単価）と適用外人数（0=上限なし＝常に加算）。
 	const exclusiveFeePerPerson = useMemo(
@@ -2070,6 +2096,7 @@ export const ReservationApp = ( {
 		allowMultipleGuests,
 		hasPriceTiers,
 		guests: currentGuestCount,
+		isPerBooking,
 	} );
 	// 料金欄の計算に使う人数。料金区分なしの複数人一括予約メニューだけ申込人数、それ以外は1名。
 	const pricingGuestCount = isMultiGuestFlat ? currentGuestCount : 1;
@@ -2089,6 +2116,22 @@ export const ReservationApp = ( {
 		hasPriceTiers && guestTiersTotalCount > 0
 			? sumPriceTierSubtotals( pricedGuestTiers )
 			: null;
+	// 1ツアーあたりで規定人数を超えた分の追加料金（#1003）。区分の単価は超過1名あたりの追加料金で、
+	// 単価の高い区分の人から順に基本料金に含め、残りの人を超過扱いにする（サーバーと同じ決め方）。
+	const extraGuestTiers = useMemo(
+		() =>
+			isExtraGuestFee && hasPriceTiers
+				? resolveExtraGuestTiers( pricedGuestTiers, includedGuests )
+				: [],
+		[ isExtraGuestFee, hasPriceTiers, pricedGuestTiers, includedGuests ]
+	);
+	const extraGuestSubtotal = sumPriceTierSubtotals( extraGuestTiers );
+	// 合計の上に添える「ツアー料金 ＋ 追加料金」の2つの塊（指名を使わないメニューの人数欄の下で使う）。
+	const tourFeeSummary = buildTourFeeSummaryParts( {
+		tourFee: basePrice ?? 0,
+		extraGuestFee: extraGuestSubtotal,
+		currencySymbol: providerSettings.currencySymbol || null,
+	} );
 
 	// #503: 予約確定時・下書き計算と同じ式で合計を出す。
 	// 料金区分なし: 基本料金 × 人数 ＋ 指名料 ＋ 貸し切り料金。
@@ -2106,8 +2149,12 @@ export const ReservationApp = ( {
 			nominationFee: staffNominationFee,
 			exclusiveFee,
 			tiersSubtotal,
+			isPerBooking,
+			extraGuestSubtotal,
 		} );
 	}, [
+		isPerBooking,
+		extraGuestSubtotal,
 		hasPriceTiers,
 		tiersSubtotal,
 		basePrice,
@@ -2144,41 +2191,58 @@ export const ReservationApp = ( {
 			unitPrice: basePrice,
 			guests: pricingGuestCount,
 			isMultiGuest: isMultiGuestFlat,
+			isPerBooking,
 			currencySymbol,
 			guestsUnitLabel: providerSettings.guestsUnitLabel,
 		} );
 		// #503: 料金区分ありのメニューは「サービス基本料金」行を出さず、区分ごとの行
 		// （「大人（¥5,000 × 2名）」＋小計。0名の区分は省く）を出す（確認画面 #338 と同じ考え方）。
-		const baseRows = hasPriceTiers
-			? buildPriceTierRows( {
-					tiers: pricedGuestTiers,
-					currencySymbol,
-					guestsUnitLabel: providerSettings.guestsUnitLabel,
-			  } ).map( ( tierRow, index ) => ( {
-					key: `tier-${ index }`,
-					label: tierRow.label,
-					labelParts: tierRow.labelParts,
-					...withTaxLabel(
-						formatCurrency( tierRow.amount, currencySymbol )
-					),
-			  } ) )
-			: [
-					{
-						key: 'base',
-						label: baseRow.label,
-						labelParts: baseRow.labelParts,
+		// 1ツアーあたりは、料金区分が追加料金の単価のため、区分ごとの行ではなくツアー料金の行を出し、
+		// 追加料金は超過した人がいる区分だけ別の行にする（#1003）。
+		const baseRows =
+			hasPriceTiers && ! isPerBooking
+				? buildPriceTierRows( {
+						tiers: pricedGuestTiers,
+						currencySymbol,
+						guestsUnitLabel: providerSettings.guestsUnitLabel,
+				  } ).map( ( tierRow, index ) => ( {
+						key: `tier-${ index }`,
+						label: tierRow.label,
+						labelParts: tierRow.labelParts,
 						...withTaxLabel(
-							baseRow.amount !== null
-								? formatCurrency(
-										baseRow.amount,
-										currencySymbol
-								  )
-								: '—'
+							formatCurrency( tierRow.amount, currencySymbol )
 						),
-					},
-			  ];
+				  } ) )
+				: [
+						{
+							key: 'base',
+							label: baseRow.label,
+							labelParts: baseRow.labelParts,
+							...withTaxLabel(
+								baseRow.amount !== null
+									? formatCurrency(
+											baseRow.amount,
+											currencySymbol
+									  )
+									: '—'
+							),
+						},
+				  ];
+		const extraGuestRows = buildExtraGuestFeeRows( {
+			extraTiers: extraGuestTiers,
+			currencySymbol,
+			guestsUnitLabel: providerSettings.guestsUnitLabel,
+		} ).map( ( extraRow, index ) => ( {
+			key: `extra-guest-${ index }`,
+			label: extraRow.label,
+			labelParts: extraRow.labelParts,
+			...withTaxLabel(
+				formatCurrency( extraRow.amount, currencySymbol )
+			),
+		} ) );
 		const rows = [
 			...baseRows,
+			...extraGuestRows,
 			{
 				key: 'nomination',
 				label: providerSettings.nominationFeeLabel,
@@ -2227,11 +2291,13 @@ export const ReservationApp = ( {
 		return resolvePlanPricingRows( rows, isLodgingMenu );
 	}, [
 		isLodgingMenu,
+		isPerBooking,
 		basePrice,
 		pricingGuestCount,
 		isMultiGuestFlat,
 		hasPriceTiers,
 		pricedGuestTiers,
+		extraGuestTiers,
 		exclusiveFee,
 		staffNominationFee,
 		totalPrice,
@@ -2245,7 +2311,7 @@ export const ReservationApp = ( {
 			buildApiPath( '/wp/v2/vkbm_service_menu', {
 				per_page: 100,
 				_fields:
-					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests,vkbm_assignable_staff_ids,vkbm_lodging',
+					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests,vkbm_assignable_staff_ids,vkbm_lodging,vkbm_price_unit,vkbm_extra_guest_fee',
 				status: canViewPrivateMenus ? 'publish,private' : undefined,
 			} ),
 		[ canViewPrivateMenus ]
@@ -2627,16 +2693,10 @@ export const ReservationApp = ( {
 	// すでに開始日の月以降を表示しているとき（URL の日付など）は動かさない。
 	// 宿泊のプランは、宿泊用の画面が自分の初期表示月を決める。
 	// カレンダー API が取得できる範囲より先の開始月へは移動しない（取得エラーになり次の月へも進めなくなるため）。
-	const servicePeriodStartMonth =
-		currentMenu && ! isLodgingMenu
-			? getFetchableStartMonth(
-					getUpcomingStartMonth(
-						currentMenu,
-						siteTodayForServicePeriod
-					),
-					TIME_SLOT_CALENDAR_MAX_YEAR
-			  )
-			: null;
+	const servicePeriodStartMonth = getCalendarServicePeriodStartMonth(
+		currentMenu,
+		siteTodayForServicePeriod
+	);
 	const servicePeriodStartKey = servicePeriodStartMonth
 		? `${ menuId }-${ servicePeriodStartMonth.year }-${ servicePeriodStartMonth.month }`
 		: '';
@@ -2645,10 +2705,7 @@ export const ReservationApp = ( {
 			return;
 		}
 		setMonthCursor( ( current ) =>
-			current.year * 12 + current.month <
-			servicePeriodStartMonth.year * 12 + servicePeriodStartMonth.month
-				? servicePeriodStartMonth
-				: current
+			advanceToServicePeriodStart( current, servicePeriodStartMonth )
 		);
 		// 開始日の月が変わったとき（別のメニューを選んだときを含む）だけ動かす。利用者が月を戻した操作は上書きしない.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2759,10 +2816,23 @@ export const ReservationApp = ( {
 		setGuestTierCounts( [] );
 		// メニュー変更時は貸し切り指定もリセットする（メニューごとに設定が異なるため）。
 		setUserExclusive( false );
-		setMonthCursor( {
-			year: carried.year,
-			month: carried.month,
-		} );
+		// 次のメニューの提供期間の開始日が先の月にあるときは、引き継いだ月ではなく開始月から表示する。
+		// 同じメニューを選び直したときは、上の useEffect（開始月のキーが変わったときだけ動く）が動かず、
+		// 月が今月に戻ったままになるため、月を決めるここでも開始月を考慮する。
+		// 宿泊の泊プランは、宿泊用の画面が自分の初期表示月を決める。
+		const nextServicePeriodStartMonth = getCalendarServicePeriodStartMonth(
+			nextMenu,
+			siteTodayForServicePeriod
+		);
+		setMonthCursor(
+			advanceToServicePeriodStart(
+				{
+					year: carried.year,
+					month: carried.month,
+				},
+				nextServicePeriodStartMonth
+			)
+		);
 	};
 
 	// 絞り込み検索で選んだ日付を表示中の URL へ反映する（履歴は増やさない）。
@@ -3965,6 +4035,7 @@ export const ReservationApp = ( {
 									currentMenu,
 									siteTodayForServicePeriod
 								) }
+								siteToday={ providerSettings.siteToday || '' }
 								locale={ userBootstrap?.locale }
 								guestsCountLabel={
 									providerSettings.guestsCountLabel
@@ -4175,10 +4246,22 @@ export const ReservationApp = ( {
 														{ tier.label }
 													</span>
 													<span className="vkbm-plan-summary__guest-tier-price">
-														{ formatCurrency(
-															tier.price,
-															providerSettings.currencySymbol ||
-																null
+														{ isPerBooking ? (
+															<ExtraGuestTierPrice
+																price={
+																	tier.price
+																}
+																currencySymbol={
+																	providerSettings.currencySymbol ||
+																	null
+																}
+															/>
+														) : (
+															formatCurrency(
+																tier.price,
+																providerSettings.currencySymbol ||
+																	null
+															)
 														) }
 													</span>
 												</label>
@@ -4188,6 +4271,11 @@ export const ReservationApp = ( {
 													min="0"
 													max={ maxSelectableGuests }
 													step="1"
+													aria-describedby={
+														isPerBooking
+															? 'vkbm-reservation-per-booking-note'
+															: undefined
+													}
 													value={
 														guestTierCounts[
 															index
@@ -4235,8 +4323,28 @@ export const ReservationApp = ( {
 										{ /* 人数未選択（合計0）のときは概算合計を表示しない。
 											#503: 指名を使うメニューでは料金欄に区分ごとの小計と基本料金合計（指名料込み）が出るため、
 											ここに指名料を含まない別の合計を並べると一致しない金額に見える。料金欄が無いとき（指名を使わないメニュー）だけ出す。 */ }
-										{ guestTiersTotalCount > 0 &&
+										{ /* 1ツアーあたりで追加料金があるときは、合計の上に「ツアー料金 ＋ 追加料金」の内訳を1行添える（#1003）。 */ }
+										{ isPerBooking &&
+											extraGuestSubtotal > 0 &&
+											basePrice !== null &&
 											! menuNominationEnabled && (
+												<p className="vkbm-plan-summary__guest-tiers-breakdown">
+													<span className="vkbm-plan-summary__nowrap">
+														{
+															tourFeeSummary.tourFee
+														}
+													</span>{ ' ' }
+													<span className="vkbm-plan-summary__nowrap">
+														{
+															tourFeeSummary.extraGuestFee
+														}
+													</span>
+												</p>
+											) }
+										{ guestTiersTotalCount > 0 &&
+											! menuNominationEnabled &&
+											( ! isPerBooking ||
+												totalPrice !== null ) && (
 												<div className="vkbm-plan-summary__guest-tiers-total">
 													{ sprintf(
 														/* translators: %s: total price. */
@@ -4245,9 +4353,11 @@ export const ReservationApp = ( {
 															'vk-booking-manager'
 														),
 														formatCurrency(
-															sumPriceTierSubtotals(
-																pricedGuestTiers
-															),
+															isPerBooking
+																? totalPrice
+																: sumPriceTierSubtotals(
+																		pricedGuestTiers
+																  ),
 															providerSettings.currencySymbol ||
 																null
 														)
@@ -4327,9 +4437,16 @@ export const ReservationApp = ( {
 											// フォーカス時に読み上げられるようにする（植草レビュー指摘）。
 											// 案内文が出ない（最低申し込み人数0または1）のときは付けない。
 											aria-describedby={
-												nominationMinGuests > 1
-													? 'vkbm-reservation-guests-hint'
-													: undefined
+												[
+													nominationMinGuests > 1
+														? 'vkbm-reservation-guests-hint'
+														: '',
+													isPerBooking
+														? 'vkbm-reservation-per-booking-note'
+														: '',
+												]
+													.filter( Boolean )
+													.join( ' ' ) || undefined
 											}
 											onChange={ ( event ) =>
 												// 手入力で小数が入る可能性があるため整数へ正規化してから範囲内にクランプする。
@@ -4371,6 +4488,34 @@ export const ReservationApp = ( {
 											</p>
 										) }
 									</div>
+								) }
+							{ /* 料金の単位が「1ツアーあたり」のメニュー（#1002）。人数を入力しても料金が変わらないことを人数欄の下で伝える。 */ }
+							{ isPerBooking &&
+								selectedSlot &&
+								basePrice !== null && (
+									<p
+										className="vkbm-plan-summary__hint"
+										id="vkbm-reservation-per-booking-note"
+									>
+										{ isExtraGuestFee
+											? buildPerBookingExtraGuestPriceNote(
+													{
+														price: basePrice,
+														includedGuests,
+														currencySymbol:
+															providerSettings.currencySymbol ||
+															null,
+														guestsUnitLabel:
+															providerSettings.guestsUnitLabel,
+													}
+											  )
+											: buildPerBookingPriceNote( {
+													price: basePrice,
+													currencySymbol:
+														providerSettings.currencySymbol ||
+														null,
+											  } ) }
+									</p>
 								) }
 							{ /* ユーザーによる貸し切り指定（#305）。人数入力の直下に表示する。 */ }
 							{ exclusiveSelectable && selectedSlot && (

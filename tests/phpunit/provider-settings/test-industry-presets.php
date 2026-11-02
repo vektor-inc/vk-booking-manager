@@ -638,10 +638,11 @@ class Industry_Presets_Test extends WP_UnitTestCase {
 			// 第三者プリセットがあるケースはそれ、無いケースは lodging の features を確認する。
 			$feature_holder = $case['third_party'] ? 'clinic' : 'lodging';
 			$this->assertSame( $case['expected_features'], $presets[ $feature_holder ]['features'], $case['test_condition_name'] . '（features）' );
-			// custom と既存3プリセットは features を持たない（宿泊の欄が増えない）。
-			foreach ( array( 'custom', 'salon', 'activity', 'seminar' ) as $existing_key ) {
+			// custom・salon・seminar は features を持たない（宿泊・1ツアーあたりの欄が増えない）。activity だけ per_booking_price を持つ（#1002）。
+			foreach ( array( 'custom', 'salon', 'seminar' ) as $existing_key ) {
 				$this->assertSame( array(), $presets[ $existing_key ]['features'], $case['test_condition_name'] . '（' . $existing_key . ' は features を持たない）' );
 			}
+			$this->assertSame( array( 'per_booking_price' ), $presets['activity']['features'], $case['test_condition_name'] . '（activity は per_booking_price だけを持つ）' );
 		}
 	}
 
@@ -701,7 +702,7 @@ class Industry_Presets_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * supports() が、無料版・custom・既存3プリセットでは false、宿泊だけ true を返すことを検証する（#570）。
+	 * supports() が、無料版では常に false、Pro 版では宿泊は lodging だけ・アクティビティは per_booking_price だけ true を返すことを検証する（#570、#1002）。
 	 *
 	 * @return void
 	 */
@@ -732,6 +733,36 @@ class Industry_Presets_Test extends WP_UnitTestCase {
 				'test_condition_name' => 'seminar は lodging を持たない',
 				'stored_preset'       => 'seminar',
 				'feature'             => 'lodging',
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => 'activity は per_booking_price を持つ（Pro 版）',
+				'stored_preset'       => 'activity',
+				'feature'             => 'per_booking_price',
+				'expected_pro'        => true,
+			),
+			array(
+				'test_condition_name' => 'custom は per_booking_price を持たない',
+				'stored_preset'       => 'custom',
+				'feature'             => 'per_booking_price',
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => 'salon は per_booking_price を持たない',
+				'stored_preset'       => 'salon',
+				'feature'             => 'per_booking_price',
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => 'seminar は per_booking_price を持たない',
+				'stored_preset'       => 'seminar',
+				'feature'             => 'per_booking_price',
+				'expected_pro'        => false,
+			),
+			array(
+				'test_condition_name' => 'lodging は per_booking_price を持たない',
+				'stored_preset'       => 'lodging',
+				'feature'             => 'per_booking_price',
 				'expected_pro'        => false,
 			),
 			array(

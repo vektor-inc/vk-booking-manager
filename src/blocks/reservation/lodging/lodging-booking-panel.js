@@ -35,9 +35,6 @@ import {
 } from '../booking-ui/service-period';
 import './lodging.scss';
 
-// 空き状況の窓口が受け付ける年の上限（今年 + 2 年）。PHP の get_lodging_calendar_meta() と同じ値を持つ。
-const LODGING_CALENDAR_YEARS_AHEAD = 2;
-
 /**
  * 人数の入力値を、1 以上の整数にそろえる。
  *
@@ -91,6 +88,7 @@ const DateTimeValue = ( date, time ) => (
  * @param {string}                         props.menuTitle               メニュー名。
  * @param {Object}                         props.lodging                 メニューの REST フィールド vkbm_lodging（人数の上限・料金区分・料金の単位・時刻）。
  * @param {?{year: number, month: number}} props.servicePeriodStartMonth 提供期間の開始日が今日より先のときの開始日の年月（カレンダーの初期表示月に使う。なければ null）。
+ * @param {string}                         props.siteToday               サイト時刻（WordPress のタイムゾーン）の今日（YYYY-MM-DD。カレンダーの上限年の基準。空文字ならブラウザの日付で代用する）。
  * @param {string}                         props.locale                  WordPress のロケール。
  * @param {string}                         props.guestsCountLabel        人数の見出し（業種プリセットの呼び方）。
  * @param {string}                         props.guestsUnitLabel         人数の単位。
@@ -108,6 +106,7 @@ const LodgingBookingPanel = ( {
 	menuTitle,
 	lodging,
 	servicePeriodStartMonth = null,
+	siteToday = '',
 	locale,
 	guestsCountLabel,
 	guestsUnitLabel,
@@ -141,6 +140,14 @@ const LodgingBookingPanel = ( {
 
 	// 今日はブラウザの日付（サーバー側でも過去日・受付期間は検証される）。
 	const [ todayIso ] = useState( () => getTodayIso() );
+	// 取得できる月の上限年は、サーバーと同じサイト時刻の年から決める（ブラウザと年がずれる日にサーバーが拒否する月を取りに行かないため）。
+	// siteToday の年が数値でないときは、ブラウザの日付の年で代用する。
+	const siteYear = Number( String( siteToday ).slice( 0, 4 ) );
+	const baseYear =
+		Number.isFinite( siteYear ) && siteYear > 0
+			? siteYear
+			: Number( todayIso.slice( 0, 4 ) );
+	const calendarMaxYear = baseYear + LODGING_CALENDAR_MAX_YEARS_AHEAD;
 	// 絞り込み検索で選んだ日程の引き継ぎは、チェックイン日・チェックアウト日の両方がそろっているときだけ使う。
 	const hasInitialRange = Boolean(
 		parseIsoDate( initialCheckIn ) && parseIsoDate( initialCheckOut )
@@ -149,7 +156,7 @@ const LodgingBookingPanel = ( {
 	// 宿泊カレンダー API が取得できる範囲より先の開始月は、そこへ移動すると取得エラーになり次の月へも進めないため、開始月として使わない（範囲内の今月などを維持する）。
 	const fetchableStartMonth = getFetchableStartMonth(
 		servicePeriodStartMonth,
-		Number( todayIso.slice( 0, 4 ) ) + LODGING_CALENDAR_MAX_YEARS_AHEAD
+		calendarMaxYear
 	);
 	const servicePeriodStartYear = fetchableStartMonth?.year ?? 0;
 	const servicePeriodStartMonthNumber = fetchableStartMonth?.month ?? 0;
@@ -687,15 +694,12 @@ const LodgingBookingPanel = ( {
 		);
 	}, [ todayIso, monthCursor ] );
 
-	// 今年 + 2 年の 12 月より先へは動かさない（空き状況の窓口が 400 を返すため）。
+	// サイト時刻の今年 + 2 年の 12 月より先へは動かさない（空き状況の窓口が 400 を返すため。下限の「今月より前」はブラウザの日付基準）。
 	// 窓口の範囲は PHP の Availability_Service::get_lodging_calendar_meta() と同じ値で、2 か所にある。
-	const isLastMonth = useMemo( () => {
-		const today = parseIsoDate( todayIso );
-		return (
-			monthCursor.year >= today.year + LODGING_CALENDAR_YEARS_AHEAD &&
-			monthCursor.month >= 12
-		);
-	}, [ todayIso, monthCursor ] );
+	const isLastMonth = useMemo(
+		() => monthCursor.year >= calendarMaxYear && monthCursor.month >= 12,
+		[ calendarMaxYear, monthCursor ]
+	);
 
 	const handleMonthChange = useCallback(
 		( delta ) => {
@@ -705,14 +709,14 @@ const LodgingBookingPanel = ( {
 				if (
 					next.year * 12 + next.month <
 						today.year * 12 + today.month ||
-					next.year > today.year + LODGING_CALENDAR_YEARS_AHEAD
+					next.year > calendarMaxYear
 				) {
 					return current;
 				}
 				return next;
 			} );
 		},
-		[ todayIso ]
+		[ todayIso, calendarMaxYear ]
 	);
 
 	const handleProceed = () => {

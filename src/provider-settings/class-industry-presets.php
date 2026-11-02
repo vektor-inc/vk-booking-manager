@@ -65,6 +65,7 @@ class Industry_Presets {
 	 */
 	public const FEATURES = array(
 		'lodging',
+		'per_booking_price',
 	);
 
 	/**
@@ -121,8 +122,9 @@ class Industry_Presets {
 			),
 		),
 		'activity' => array(
-			'label'  => 'Activity / Tour',
-			'fields' => array(
+			'label'    => 'Activity / Tour',
+			'features' => array( 'per_booking_price' ),
+			'fields'   => array(
 				'staff_enabled'           => array(
 					'value'   => false,
 					'display' => true,

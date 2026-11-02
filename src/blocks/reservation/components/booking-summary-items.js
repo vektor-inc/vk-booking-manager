@@ -1,6 +1,12 @@
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { formatCurrency } from '../../shared/pricing';
 import { formatGuestsCount } from '../../shared/guests';
+import {
+	buildExtraGuestFeeRows,
+	buildGuestCompositionText,
+	buildServiceBasicFeeRow,
+} from '../pricing-breakdown';
+import { PricingRowLabel } from './pricing-row-label';
 
 export const BookingSummaryItems = ( {
 	booking,
@@ -36,6 +42,28 @@ export const BookingSummaryItems = ( {
 		staffName = booking.resource_name;
 	}
 
+	// 1ツアーあたりの予約で区分ごとに人数を受けた予約は、区分ごとの行の代わりに、人数の行へ構成を添える（#1003）。
+	const isPerBookingTiers =
+		booking?.price_unit === 'per_booking' &&
+		Array.isArray( booking?.guest_tiers ) &&
+		booking.guest_tiers.length > 0;
+	// 1ツアーあたりで規定人数を超えた分の追加料金がある予約は、合計の前にツアー料金と追加料金を分けて出す（#1003）。
+	const extraGuestTiers = Array.isArray( booking?.extra_guests?.tiers )
+		? booking.extra_guests.tiers
+		: [];
+	const tourFeeRow =
+		extraGuestTiers.length > 0
+			? buildServiceBasicFeeRow( {
+					unitPrice: Number( booking?.base_price ) || 0,
+					isPerBooking: true,
+			  } )
+			: null;
+	const extraGuestRows = buildExtraGuestFeeRows( {
+		extraTiers: extraGuestTiers,
+		currencySymbol,
+		guestsUnitLabel,
+	} );
+
 	return (
 		<>
 			<dl className="vkbm-confirm__summary-item">
@@ -58,7 +86,8 @@ export const BookingSummaryItems = ( {
 					</dl>
 				) }
 			{ /* 料金区分の予約: 区分ごとの人数を表示する（0名の区分は省略）。 */ }
-			{ Array.isArray( booking?.guest_tiers ) &&
+			{ ! isPerBookingTiers &&
+				Array.isArray( booking?.guest_tiers ) &&
 				booking.guest_tiers.length > 0 &&
 				booking.guest_tiers
 					.filter( ( tier ) => Number( tier?.count ) > 0 )
@@ -107,10 +136,16 @@ export const BookingSummaryItems = ( {
 							: __( 'Number of guests', 'vk-booking-manager' ) }
 					</dt>
 					<dd className="vkbm-confirm__summary-item-value">
-						{ formatGuestsCount(
-							Number( booking.guests ),
-							guestsUnitLabel
-						) }
+						{ isPerBookingTiers
+							? buildGuestCompositionText( {
+									guests: Number( booking.guests ),
+									tiers: booking.guest_tiers,
+									guestsUnitLabel,
+							  } )
+							: formatGuestsCount(
+									Number( booking.guests ),
+									guestsUnitLabel
+							  ) }
 					</dd>
 				</dl>
 			) }
@@ -125,6 +160,35 @@ export const BookingSummaryItems = ( {
 					</dd>
 				</dl>
 			) }
+			{ tourFeeRow && (
+				<dl className="vkbm-confirm__summary-item">
+					<dt className="vkbm-confirm__summary-item-title">
+						<PricingRowLabel
+							label={ tourFeeRow.label }
+							labelParts={ tourFeeRow.labelParts }
+						/>
+					</dt>
+					<dd className="vkbm-confirm__summary-item-value">
+						{ formatCurrency( tourFeeRow.amount, currencySymbol ) }
+					</dd>
+				</dl>
+			) }
+			{ extraGuestRows.map( ( extraRow, index ) => (
+				<dl
+					key={ `extra-guest-${ index }` }
+					className="vkbm-confirm__summary-item"
+				>
+					<dt className="vkbm-confirm__summary-item-title">
+						<PricingRowLabel
+							label={ extraRow.label }
+							labelParts={ extraRow.labelParts }
+						/>
+					</dt>
+					<dd className="vkbm-confirm__summary-item-value">
+						{ formatCurrency( extraRow.amount, currencySymbol ) }
+					</dd>
+				</dl>
+			) ) }
 			<dl className="vkbm-confirm__summary-item">
 				<dt className="vkbm-confirm__summary-item-title">
 					{ __( 'Total basic fee', 'vk-booking-manager' ) }

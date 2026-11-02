@@ -17,6 +17,7 @@ use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Nomination_Min_Guests_Message;
+use VKBookingManager\Common\Booking_Price;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
 use VKBookingManager\Common\Service_Period;
@@ -373,6 +374,17 @@ class Service_Menu_Editor {
 					// #934: 1室1泊あたりで規定人数を超えた分の追加料金を使うときに切り替える、区分の列見出しと1室の最大人数の説明文。
 					'priceHeadExtraGuest'               => __( 'Additional fee per extra guest, per night', 'vk-booking-manager' ),
 					'maxCapacityExtraGuestNote'         => __( 'The price does not change with the number of people up to the number included in the basic price.', 'vk-booking-manager' ),
+					// #1002: アクティビティのサイトの料金の単位（1名あたり／1ツアーあたり）に合わせて JS で切り替える文言（PHP 初期描画と同じ文言）。
+					'supportsPerBookingPrice'           => Industry_Presets::supports( 'per_booking_price' ),
+					'priceUnitSuffixPerGuest'           => self::get_price_unit_suffix( Booking_Price::UNIT_PER_GUEST ),
+					'priceUnitSuffixPerBooking'         => self::get_price_unit_suffix( Booking_Price::UNIT_PER_BOOKING ),
+					'maxCapacityPerTourLabel'           => __( 'Maximum guests per tour', 'vk-booking-manager' ),
+					'maxCapacityPerTourDescription1'    => __( 'Enter the maximum number of guests who can join one tour.', 'vk-booking-manager' ),
+					'maxCapacityPerTourDescription2'    => __( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ),
+					'maxCapacityPerTourDescription3'    => __( 'The price does not change even if the number of guests is entered.', 'vk-booking-manager' ),
+					// #1003: 「1ツアーあたり」で規定人数を超えた分の追加料金を使うときに切り替える、区分の列見出しと最大人数の説明文（PHP 初期描画と同じ文言）。
+					'priceHeadExtraGuestPerTour'        => __( 'Additional fee per extra guest', 'vk-booking-manager' ),
+					'maxCapacityPerTourExtraGuestNote'  => __( 'The price does not change with the number of people up to the number included in the basic price.', 'vk-booking-manager' ),
 					'multipleGuestsPriceNoteDefault'    => __( 'The price is multiplied by the number of people.', 'vk-booking-manager' ),
 					'multipleGuestsPriceNotePerRoom'    => __( 'The price does not change with the number of people.', 'vk-booking-manager' ),
 					// #831: 1室1泊あたりのときに「予約枠の定員」から切り替える、1室の最大人数のラベル・説明文。
@@ -750,6 +762,11 @@ class Service_Menu_Editor {
 		$slot_only_hidden = $is_night_unit ? 'hidden' : '';
 		// 泊単位で「1室1泊あたり」のプランは料金区分を使わない（#572）。
 		$is_per_room_night = Service_Menu_Post_Type::is_night_price_per_room( $post->ID );
+		// アクティビティのサイトで料金の単位が「1ツアーあたり」のメニューは、料金区分・予約者による貸切指定を使わず、
+		// 複数人一括予約と貸し切り予約を常に有効として扱う（#1002）。
+		$is_per_booking = Service_Menu_Post_Type::is_price_per_booking( $post->ID );
+		// 1ツアーあたりで、規定人数を超えた人数分の追加料金を使うメニューは、料金区分を超過1名あたりの追加料金として使う（#1003）。
+		$is_per_booking_extra_guest_fee = Service_Menu_Post_Type::is_extra_guest_fee_enabled( $post->ID );
 		// 1室1泊あたりで、規定人数を超えた分の追加料金を使うプランは、料金区分を超過1名・1泊あたりの追加料金として使う（#934）。
 		$is_extra_guest_fee = Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $post->ID );
 		if ( $supports_lodging ) {
@@ -894,8 +911,11 @@ class Service_Menu_Editor {
 						<label for="vkbm_service_menu_max_capacity" id="vkbm-max-capacity-label">
 							<?php
 							// 1室1泊あたりのプランは「部屋を貸す」感覚で設定できるよう、ラベルと説明文を切り替える（#831）。
+							// 1ツアーあたりのメニューは「1ツアーの最大人数」に切り替える（#1002）。
 							if ( $is_per_room_night ) {
 								esc_html_e( 'Maximum guests per room', 'vk-booking-manager' );
+							} elseif ( $is_per_booking ) {
+								esc_html_e( 'Maximum guests per tour', 'vk-booking-manager' );
 							} else {
 								esc_html_e( 'Time slot capacity', 'vk-booking-manager' );
 							}
@@ -909,6 +929,10 @@ class Service_Menu_Editor {
 								<?php esc_html_e( 'Enter the maximum number of guests who can stay in this room.', 'vk-booking-manager' ); ?><br>
 								<?php esc_html_e( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ); ?><br>
 								<?php echo esc_html( $is_extra_guest_fee ? __( 'The price does not change with the number of people up to the number included in the basic price.', 'vk-booking-manager' ) : __( 'The price does not change with the number of people.', 'vk-booking-manager' ) ); ?><br>
+							<?php elseif ( $is_per_booking ) : ?>
+								<?php esc_html_e( 'Enter the maximum number of guests who can join one tour.', 'vk-booking-manager' ); ?><br>
+								<?php esc_html_e( 'Guests can choose up to this number in the number of guests field on the reservation screen.', 'vk-booking-manager' ); ?><br>
+								<?php echo esc_html( $is_per_booking_extra_guest_fee ? __( 'The price does not change with the number of people up to the number included in the basic price.', 'vk-booking-manager' ) : __( 'The price does not change even if the number of guests is entered.', 'vk-booking-manager' ) ); ?><br>
 							<?php elseif ( $is_min_guests_applied && $is_night_plan ) : ?>
 									<?php esc_html_e( 'Maximum number of guests that can be booked together in a single reservation.', 'vk-booking-manager' ); ?><br>
 							<?php elseif ( $is_min_guests_applied ) : ?>
@@ -963,7 +987,7 @@ class Service_Menu_Editor {
 						</p>
 					</td>
 				</tr>
-				<tr id="vkbm-allow-multiple-guests-field" <?php echo $is_per_room_night ? 'hidden' : ''; ?>>
+				<tr id="vkbm-allow-multiple-guests-field" <?php echo $is_per_room_night || $is_per_booking ? 'hidden' : ''; ?>>
 					<th scope="row">
 						<?php esc_html_e( 'Booking multiple people at once', 'vk-booking-manager' ); ?>
 					</th>
@@ -977,7 +1001,7 @@ class Service_Menu_Editor {
 							<?php echo esc_html( $resource_selection_strings['multiple_guests_assignment'] ); ?><br>
 							<span id="vkbm-multiple-guests-price-note">
 								<?php
-								if ( $is_per_room_night ) {
+								if ( $is_per_room_night || $is_per_booking ) {
 									esc_html_e( 'The price does not change with the number of people.', 'vk-booking-manager' );
 								} else {
 									esc_html_e( 'The price is multiplied by the number of people.', 'vk-booking-manager' );
@@ -999,16 +1023,21 @@ class Service_Menu_Editor {
 				</tr>
 				<?php
 				// 1室1泊あたりのプランは部屋ごとに1組だけが泊まるため、枠を貸し切りにする設定は意味を持たず、欄を出さない（#831）。
-				$this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields && ! $is_per_room_night );
+				// 1ツアーあたりのメニューは貸し切り予約が自動で有効になるため、この欄も出さない（#1002）。
+				$this->render_exclusive_when_booked_field( $post, $show_multi_guest_dependent_fields && ! $is_per_room_night && ! $is_per_booking );
 				?>
 				<?php
-				// 泊単位のプランでは予約者が選ぶ貸切の欄を出さない（#572）。
-				$this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields && ! $is_night_unit );
+				// 泊単位のプランと1ツアーあたりのメニューでは予約者が選ぶ貸切の欄を出さない（#572、#1002）。
+				$this->render_exclusive_user_selectable_field( $post, $show_multi_guest_dependent_fields && ! $is_night_unit && ! $is_per_booking );
 				// 1室1泊あたりのプランは、追加料金を使うときだけ料金区分の行を出す（#572、#934）。
-				$show_price_tiers = $show_multi_guest_dependent_fields && ( ! $is_per_room_night || $is_extra_guest_fee );
+				// 1ツアーあたりも、規定人数を超えた分の追加料金を使うときだけ出す（#1002、#1003）。
+				$show_price_tiers = $show_multi_guest_dependent_fields && ( ! $is_per_room_night || $is_extra_guest_fee ) && ( ! $is_per_booking || $is_per_booking_extra_guest_fee );
+				// アクティビティのサイトでは、基本料金の直前に「料金の単位」の行を出す（#1002）。
+				$this->render_price_unit_field( $post );
 				// #514: 基本料金の行を料金区分の行の直前に配置する。
 				// 1室1泊あたりは基本料金が常に使われる（区分は超過分の追加料金）ため、基本料金を区分で上書き扱いにしない。
-				$this->render_base_price_field( $post, $show_price_tiers && ! $is_per_room_night );
+				// 1ツアーあたりも、基本料金は区分で上書きされない（区分は超過分の追加料金。#1003）。
+				$this->render_base_price_field( $post, $show_price_tiers && ! $is_per_room_night && ! $is_per_booking );
 				$this->render_price_tiers_field( $post, $show_price_tiers );
 				?>
 			<?php endif; ?>
@@ -1303,6 +1332,121 @@ class Service_Menu_Editor {
 	}
 
 	/**
+	 * 時間枠のメニューの料金の単位（1名あたり／1ツアーあたり）を保存する（#1002）。
+	 *
+	 * 「1ツアーあたり」のときだけ per_booking を保存し、「1名あたり」（既定）はメタを削除する。
+	 * 業種プリセットが「アクティビティ・ツアー」のサイト以外・項目が送られない保存（予約枠の定員機能が OFF の画面など）では
+	 * 既存のメタに触れない（別の業種へ切り替えたあとも保存値を消さず、戻したときに復帰できるようにする）。
+	 *
+	 * @param int                  $post_id 投稿ID。
+	 * @param array<string, mixed> $data    送信された vkbm_service_menu 配列。
+	 */
+	private function save_price_unit_meta( int $post_id, array $data ): void {
+		if ( ! Industry_Presets::supports( 'per_booking_price' ) || ! isset( $data['price_unit'] ) ) {
+			return;
+		}
+
+		if ( Booking_Price::is_per_booking( $data['price_unit'] ) ) {
+			update_post_meta( $post_id, Service_Menu_Post_Type::META_PRICE_UNIT, Booking_Price::UNIT_PER_BOOKING );
+		} else {
+			delete_post_meta( $post_id, Service_Menu_Post_Type::META_PRICE_UNIT );
+		}
+	}
+
+	/**
+	 * 「1ツアーあたり」のメニューで、規定人数を超えた人数分の追加料金に関する設定を保存する（#1003）。
+	 *
+	 * - 追加料金を使うときだけ _vkbm_extra_guest_enabled を '1' で保存し、使わないときは削除する。
+	 * - 基本料金に含まれる人数は 1 以上にする。予約枠の定員機能が ON のときは、1ツアーの最大人数を超える値を最大人数に丸めて保存し、
+	 *   追加料金を使うときは丸めたことを管理画面の上部で知らせる（OFF のときは入力値を保持する）。
+	 * - 追加料金を使うのに料金区分が1件も無いときは、追加料金が加算されないことを管理画面の上部で知らせる（保存は止めない）。
+	 * - 「1ツアーあたり」で追加料金を使うときは、料金区分を超過1名あたりの追加料金として保存する
+	 *   （「複数人一括予約を許可」のチェックは1ツアーあたりでは使わないため、そのチェックに関わらず保存する）。
+	 * アクティビティ以外のサイト・項目が送られない保存（料金の単位の欄が無い画面）では何もしない。
+	 *
+	 * @param int                              $post_id        投稿ID。
+	 * @param array<string, mixed>             $data           送信された vkbm_service_menu 配列。
+	 * @param array<int, array<string, mixed>> $price_tiers    サニタイズ済みの料金区分。
+	 * @param bool                             $is_pro_edition Pro 版か。
+	 */
+	private function save_extra_guest_meta( int $post_id, array $data, array $price_tiers, bool $is_pro_edition ): void {
+		if ( ! Industry_Presets::supports( 'per_booking_price' ) || ! isset( $data['price_unit'] ) ) {
+			return;
+		}
+
+		$is_per_booking = Booking_Price::is_per_booking( $data['price_unit'] );
+		$is_enabled     = isset( $data['extra_guest_enabled'] ) && '1' === (string) $data['extra_guest_enabled'];
+		if ( $is_enabled ) {
+			update_post_meta( $post_id, Service_Menu_Post_Type::META_EXTRA_GUEST_ENABLED, '1' );
+		} else {
+			delete_post_meta( $post_id, Service_Menu_Post_Type::META_EXTRA_GUEST_ENABLED );
+		}
+
+		// 基本料金に含まれる人数。1 未満・空欄は 1。予約枠の定員機能が ON のときだけ、最大人数を超える値を最大人数に丸める。
+		// OFF のときは最大人数の欄が送られず保存済みの値が古いことがあるため、入力値を保持する（#412 の親スイッチ OFF は保持する方針）。
+		$is_capacity_enabled = $is_pro_edition && Staff_Editor::is_slot_capacity_enabled();
+		$requested           = max( 1, (int) $this->sanitize_integer_value( $data, 'included_guests' ) );
+		$max_capacity_raw    = get_post_meta( $post_id, self::META_MAX_CAPACITY, true );
+		$max_capacity        = '' === $max_capacity_raw ? 1 : max( 1, (int) $max_capacity_raw );
+		$included_guests     = $is_capacity_enabled ? min( $max_capacity, $requested ) : $requested;
+		update_post_meta( $post_id, Service_Menu_Post_Type::META_INCLUDED_GUESTS, $included_guests );
+		if ( $is_per_booking && $is_enabled && $included_guests < $requested ) {
+			$this->add_admin_notice(
+				sprintf(
+					/* translators: %d: maximum number of guests per tour (the number of guests included in the basic price was reduced to this value). */
+					__( 'The number of guests included in the basic price exceeded the maximum guests per tour, so it was reduced to %d.', 'vk-booking-manager' ),
+					$max_capacity
+				)
+			);
+		}
+
+		// 追加料金を使う1ツアーあたりは、複数人一括予約のチェックの保存分岐を通らないため、料金区分をここで保存する。
+		if ( $is_capacity_enabled && $is_per_booking && $is_enabled ) {
+			if ( ! empty( $price_tiers ) ) {
+				update_post_meta( $post_id, self::META_PRICE_TIERS, wp_slash( $price_tiers ) );
+			} else {
+				delete_post_meta( $post_id, self::META_PRICE_TIERS );
+				// 料金区分が無いと予約画面に区分ごとの人数欄が出ず、追加料金が加算されないため知らせる（保存は止めない）。
+				$this->add_admin_notice(
+					__( 'No price category is entered, so the extra guest fee is not added to the price. Enter at least one price category to charge the extra guest fee.', 'vk-booking-manager' )
+				);
+			}
+		}
+	}
+
+	/**
+	 * 料金の単位が「1ツアーあたり」のメニューで使わない設定のメタを削除する（#1002）。
+	 *
+	 * - 料金区分: 規定人数を超えた分の追加料金を使わないときは、人数にかかわらず基本料金そのままの料金に、
+	 *   区分の人数掛けが混ざる誤りを防ぐため削除する（追加料金を使うときは超過分の単価として残す。#1003）。
+	 *   保存前に区分があった場合は、削除したことを管理画面の上部で知らせる。
+	 * - 予約者による貸切指定（とその貸し切り料金・適用外人数）: 貸し切り予約が自動で有効になり意味を持たないため削除する。
+	 * 「1ツアーあたり」が効いていないメニュー（1名あたり・アクティビティ以外のサイト）では何もしない。
+	 *
+	 * @param int  $post_id         投稿ID。
+	 * @param bool $had_price_tiers 保存前に料金区分があったか。
+	 */
+	private function delete_per_booking_unsupported_meta( int $post_id, bool $had_price_tiers ): void {
+		if ( ! Service_Menu_Post_Type::is_price_per_booking( $post_id ) ) {
+			return;
+		}
+
+		delete_post_meta( $post_id, self::META_EXCLUSIVE_USER_SELECTABLE );
+		delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_PER_PERSON );
+		delete_post_meta( $post_id, self::META_EXCLUSIVE_FEE_EXEMPT_GUESTS );
+
+		// 規定人数を超えた分の追加料金を使うときは、料金区分を超過分の単価として残す（#1003）。
+		if ( Service_Menu_Post_Type::is_extra_guest_fee_enabled( $post_id ) ) {
+			return;
+		}
+
+		delete_post_meta( $post_id, self::META_PRICE_TIERS );
+		if ( $had_price_tiers ) {
+			$this->add_admin_notice( __( 'The price unit is "Per tour", so the price categories were deleted.', 'vk-booking-manager' ) );
+		}
+	}
+
+	/**
 	 * 1室1泊あたりで、規定人数を超えた分の追加料金に関する設定を保存する（#934）。
 	 *
 	 * - 追加料金を使うか（チェック）と、基本料金に含まれる人数を保存する。予約の単位や料金の単位に関わらず保存する
@@ -1514,6 +1658,92 @@ class Service_Menu_Editor {
 		<?php
 		// 表示が切り替わる時間枠専用の欄より前に、泊の料金設定をまとめて表示する（#900）。
 		$this->render_night_price_unit_field( $post, $night_price_unit, $is_night_unit );
+	}
+
+	/**
+	 * 基本料金の入力欄の後ろに出す、時間枠のメニューの料金の単位表記を返す（#1002）。
+	 *
+	 * @param string $price_unit 料金の単位（Booking_Price::UNIT_PER_BOOKING / Booking_Price::UNIT_PER_GUEST）。
+	 * @return string 単位表記。
+	 */
+	public static function get_price_unit_suffix( string $price_unit ): string {
+		if ( Booking_Price::is_per_booking( $price_unit ) ) {
+			return __( '/ 1 tour', 'vk-booking-manager' );
+		}
+
+		return __( '/ 1 guest', 'vk-booking-manager' );
+	}
+
+	/**
+	 * 「料金の単位」ラジオ（1名あたり／1ツアーあたり）の行を出力する（#1002）。
+	 *
+	 * 業種プリセットが「アクティビティ・ツアー」のサイト（Industry_Presets::supports( 'per_booking_price' )）でだけ、
+	 * 基本料金の行の直前に出す。「1ツアーあたり」を選んで保存したときの連動（貸し切り予約の自動有効化・複数人一括予約の常時有効扱い・
+	 * 料金区分の削除）は説明文で予告する。連動で隠す行の出し分けは service-menu-editor.js が行う。
+	 *
+	 * @param WP_Post $post Current post object.
+	 */
+	private function render_price_unit_field( WP_Post $post ): void {
+		if ( ! Industry_Presets::supports( 'per_booking_price' ) ) {
+			return;
+		}
+
+		$description_id = 'vkbm-price-unit-description';
+		$is_per_booking = Booking_Price::is_per_booking( Service_Menu_Post_Type::get_stored_price_unit( $post->ID ) );
+		// 1名あたりへ戻したメニューでも、保存済みの選択と人数を表示する（再保存で消さないため。#1003）。
+		$is_extra_guest_checked = '1' === (string) get_post_meta( $post->ID, Service_Menu_Post_Type::META_EXTRA_GUEST_ENABLED, true );
+		$included_guests        = Service_Menu_Post_Type::get_included_guests( $post->ID );
+		?>
+		<tr id="vkbm-price-unit-field">
+			<th scope="row"><?php esc_html_e( 'Price unit', 'vk-booking-manager' ); ?></th>
+			<td>
+				<fieldset aria-describedby="<?php echo esc_attr( $description_id ); ?>">
+					<legend class="screen-reader-text"><?php esc_html_e( 'Price unit', 'vk-booking-manager' ); ?></legend>
+					<label>
+						<input type="radio" name="vkbm_service_menu[price_unit]" value="<?php echo esc_attr( Booking_Price::UNIT_PER_GUEST ); ?>" <?php checked( false, $is_per_booking ); ?> />
+						<?php esc_html_e( 'Per guest', 'vk-booking-manager' ); ?>
+					</label>
+					&nbsp;
+					<label>
+						<input type="radio" name="vkbm_service_menu[price_unit]" value="<?php echo esc_attr( Booking_Price::UNIT_PER_BOOKING ); ?>" <?php checked( true, $is_per_booking ); ?> />
+						<?php esc_html_e( 'Per tour', 'vk-booking-manager' ); ?>
+					</label>
+				</fieldset>
+				<p class="description" id="<?php echo esc_attr( $description_id ); ?>">
+					<?php esc_html_e( 'If you choose "Per tour", the basic price is the price of one tour regardless of the number of guests.', 'vk-booking-manager' ); ?><br>
+					<?php esc_html_e( 'If you choose "Per tour" and save, private booking is turned on automatically, and the private booking by customer settings are deleted.', 'vk-booking-manager' ); ?><br>
+					<?php
+					// 料金区分の扱い（使える条件と、使わないときの削除）は1行にまとめて示す。
+					echo esc_html(
+						Nomination_Min_Guests_Message::join_sentences(
+							__( 'Price categories can be used with "Per tour" only when the additional fee for exceeding the specified number is enabled.', 'vk-booking-manager' ),
+							__( 'If it is not enabled, price categories you have already set are deleted when you save.', 'vk-booking-manager' )
+						)
+					);
+					?>
+				</p>
+				<?php // 規定人数を超えた分の追加料金は「1ツアーあたり」のときだけ出す。欄は hidden にするだけで DOM に残し、1名あたりへ切り替えても入力を保持する（#1003）。 ?>
+				<div id="vkbm-extra-guest-fields" class="vkbm-tour-extra-guest" <?php echo $is_per_booking ? '' : 'hidden'; ?>>
+					<label>
+						<input type="checkbox" id="vkbm_service_menu_extra_guest_enabled" name="vkbm_service_menu[extra_guest_enabled]" value="1" <?php checked( true, $is_extra_guest_checked ); ?> />
+						<?php esc_html_e( 'An additional fee applies, depending on the number of guests, when the specified number is exceeded', 'vk-booking-manager' ); ?>
+					</label>
+					<div id="vkbm-included-guests-field" class="vkbm-tour-included-guests" <?php echo $is_extra_guest_checked ? '' : 'hidden'; ?>>
+						<label for="vkbm_service_menu_included_guests"><?php esc_html_e( 'Guests included in the basic price', 'vk-booking-manager' ); ?></label>
+						<span class="vkbm-tour-included-guests__input text-nowrap">
+							<input type="number" id="vkbm_service_menu_included_guests" name="vkbm_service_menu[included_guests]" class="small-text" min="1" step="1" value="<?php echo esc_attr( (string) $included_guests ); ?>" aria-describedby="vkbm-included-guests-description" />
+							<?php esc_html_e( 'guests or fewer', 'vk-booking-manager' ); ?>
+						</span>
+						<p class="description" id="vkbm-included-guests-description">
+							<?php esc_html_e( 'Enter the specified number of guests (the number included in the basic price) as 1 or more.', 'vk-booking-manager' ); ?><br>
+							<?php esc_html_e( 'Set the basic price in the "Basic price" field below.', 'vk-booking-manager' ); ?><br>
+							<?php esc_html_e( 'Values above the maximum guests per tour are reduced to that maximum.', 'vk-booking-manager' ); ?>
+						</p>
+					</div>
+				</div>
+			</td>
+		</tr>
+		<?php
 	}
 
 	/**
@@ -1876,11 +2106,17 @@ class Service_Menu_Editor {
 		// 時間枠へ戻したメニューでも、基本料金の単位表記には保存済みの選択を使う。
 		$night_price_unit = Service_Menu_Post_Type::get_stored_night_price_unit( $post->ID );
 		$unit_suffix_id   = 'vkbm-base-price-unit';
+		// アクティビティのサイトでは、基本料金の後ろに料金の単位（/ 1名・/ 1ツアー）を出す（#1002）。
+		$supports_per_booking_price = Industry_Presets::supports( 'per_booking_price' );
+		$slot_unit_suffix_id        = 'vkbm-base-price-slot-unit';
 
 		// 基本料金の入力欄に関連付ける説明の ID（泊単位の単位表記、料金区分で上書き中の説明）。
 		$describedby_ids = array();
 		if ( $is_night_unit ) {
 			$describedby_ids[] = $unit_suffix_id;
+		}
+		if ( $supports_per_booking_price ) {
+			$describedby_ids[] = $slot_unit_suffix_id;
 		}
 		if ( $has_active_tier ) {
 			$describedby_ids[] = $description_id;
@@ -1921,6 +2157,10 @@ class Service_Menu_Editor {
 						<?php if ( $supports_lodging ) : ?>
 							<span class="vkbm-night-rate-caption vkbm-booking-unit-night-only" aria-hidden="true" <?php echo $is_night_unit ? '' : 'hidden'; ?>><?php esc_html_e( 'Regular', 'vk-booking-manager' ); ?></span>
 						<?php endif; ?>
+						<?php // 入力欄と単位は 1 つのまとまりにして、狭い幅でも単位だけが次の行に落ちないようにする。 ?>
+						<?php if ( $supports_per_booking_price ) : ?>
+							<span class="vkbm-night-rate-input-row">
+						<?php endif; ?>
 						<input
 							type="number"
 							id="vkbm_service_menu_base_price"
@@ -1942,6 +2182,10 @@ class Service_Menu_Editor {
 							}
 							?>
 						/>
+						<?php if ( $supports_per_booking_price ) : ?>
+								<span id="<?php echo esc_attr( $slot_unit_suffix_id ); ?>" class="vkbm-night-rate-suffix text-nowrap"><?php echo esc_html( self::get_price_unit_suffix( Service_Menu_Post_Type::get_stored_price_unit( $post->ID ) ) ); ?></span>
+							</span>
+						<?php endif; ?>
 					</span>
 					<?php if ( $supports_lodging ) : ?>
 						<?php foreach ( $night_base_extra_fields as $extra_index => $extra_field ) : ?>
@@ -2020,8 +2264,12 @@ class Service_Menu_Editor {
 		$is_night_unit = Service_Menu_Post_Type::is_night_unit( $post->ID );
 		// 1室1泊あたりで追加料金を使うときは、区分の料金を超過1名・1泊あたりの追加料金として扱う（#934）。
 		$is_extra_guest_fee = Service_Menu_Post_Type::is_night_extra_guest_fee_enabled( $post->ID );
+		// 1ツアーあたりで追加料金を使うときも、区分の料金を超過1名あたりの追加料金として扱う（#1003）。
+		$is_tour_extra_guest_fee = Service_Menu_Post_Type::is_extra_guest_fee_enabled( $post->ID );
 		if ( $is_extra_guest_fee ) {
 			$price_head_label = __( 'Additional fee per extra guest, per night', 'vk-booking-manager' );
+		} elseif ( $is_tour_extra_guest_fee ) {
+			$price_head_label = __( 'Additional fee per extra guest', 'vk-booking-manager' );
 		} elseif ( $is_night_unit ) {
 			$price_head_label = __( 'Price (per guest, per night)', 'vk-booking-manager' );
 		}
@@ -2097,10 +2345,13 @@ class Service_Menu_Editor {
 				<button type="button" id="vkbm-price-tier-add" class="button"><?php esc_html_e( '+ Add price category', 'vk-booking-manager' ); ?></button>
 				<p class="description"><?php esc_html_e( 'Define categories such as "Adult" and "Child", each with its own price.', 'vk-booking-manager' ); ?></p>
 				<?php // 追加料金を使う1室1泊あたりでは基本料金は区分で上書きされないため、既定の 2 文ではなく追加料金用の 2 文を出す（#934）。 ?>
-				<p class="description vkbm-price-tiers-description-default" <?php echo $is_extra_guest_fee ? 'hidden' : ''; ?>><?php esc_html_e( 'When one or more categories are defined, the basic price is ignored and the price is calculated from the categories.', 'vk-booking-manager' ); ?></p>
-				<p class="description vkbm-price-tiers-description-default" <?php echo $is_extra_guest_fee ? 'hidden' : ''; ?>><?php esc_html_e( 'If no category is defined, the basic price multiplied by the number of guests is used.', 'vk-booking-manager' ); ?></p>
+				<p class="description vkbm-price-tiers-description-default" <?php echo $is_extra_guest_fee || $is_tour_extra_guest_fee ? 'hidden' : ''; ?>><?php esc_html_e( 'When one or more categories are defined, the basic price is ignored and the price is calculated from the categories.', 'vk-booking-manager' ); ?></p>
+				<p class="description vkbm-price-tiers-description-default" <?php echo $is_extra_guest_fee || $is_tour_extra_guest_fee ? 'hidden' : ''; ?>><?php esc_html_e( 'If no category is defined, the basic price multiplied by the number of guests is used.', 'vk-booking-manager' ); ?></p>
 				<p class="description vkbm-price-tiers-description-extra-guest" <?php echo $is_extra_guest_fee ? '' : 'hidden'; ?>><?php esc_html_e( 'Enter the fee added for each guest over the number included in the basic price, per night.', 'vk-booking-manager' ); ?></p>
 				<p class="description vkbm-price-tiers-description-extra-guest" <?php echo $is_extra_guest_fee ? '' : 'hidden'; ?>><?php esc_html_e( 'Guests in the highest-priced categories are included in the basic price first, and the remaining guests are charged.', 'vk-booking-manager' ); ?></p>
+				<?php // 1ツアーあたりで追加料金を使うときの説明文（#1003）。 ?>
+				<p class="description vkbm-price-tiers-description-extra-guest-tour" <?php echo $is_tour_extra_guest_fee ? '' : 'hidden'; ?>><?php esc_html_e( 'Enter the fee added for each guest over the number included in the basic price.', 'vk-booking-manager' ); ?></p>
+				<p class="description vkbm-price-tiers-description-extra-guest-tour" <?php echo $is_tour_extra_guest_fee ? '' : 'hidden'; ?>><?php esc_html_e( 'Guests in the highest-priced categories are included in the basic price first, and the remaining guests are charged.', 'vk-booking-manager' ); ?></p>
 			</td>
 		</tr>
 		<?php
@@ -2347,6 +2598,9 @@ class Service_Menu_Editor {
 			return;
 		}
 
+		// 料金の単位を「1ツアーあたり」で保存するとき、保存前に料金区分があったかを通知の判断に使う（区分は下の保存処理で書き換わる）。
+		$had_price_tiers = array() !== Price_Tiers::normalize_tiers( get_post_meta( $post_id, self::META_PRICE_TIERS, true ) );
+
 		$data                 = wp_unslash( $_POST['vkbm_service_menu'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Each key is sanitized via sanitize_*_value() below.
 		$catch_copy           = $this->sanitize_text_value( $data, 'catch_copy' );
 		$internal_memo        = $this->sanitize_textarea_value( $data, 'internal_memo' );
@@ -2469,6 +2723,7 @@ class Service_Menu_Editor {
 		}
 
 		$this->save_booking_unit_meta( $post_id, $data );
+		$this->save_price_unit_meta( $post_id, $data );
 
 		// 予約枠の定員はPro版かつ予約枠の定員機能ON時のみ保存する。
 		//
@@ -2595,8 +2850,11 @@ class Service_Menu_Editor {
 		}
 		// 1室1泊あたりで規定人数を超えた分の追加料金を使う設定（#934）。料金区分を残すか消すかの判断に使うため、下の削除より先に保存する。
 		$this->save_night_extra_guest_meta( $post_id, $data, $price_tiers, $is_pro_edition );
+		// 1ツアーあたりで規定人数を超えた分の追加料金を使う設定（#1003）。料金区分を残すか消すかの判断に使うため、下の削除より先に保存する。
+		$this->save_extra_guest_meta( $post_id, $data, $price_tiers, $is_pro_edition );
 		// 予約枠の定員機能がオフでフォームに貸切・料金区分の欄が無い構成でも、泊単位では使わない値を残さない。
 		$this->delete_night_unit_unsupported_meta( $post_id );
+		$this->delete_per_booking_unsupported_meta( $post_id, $had_price_tiers );
 		if ( Staff_Editor::is_enabled() ) {
 			// 個別選択は「すべて」選択中も消さずに保持する（「選ぶ」へ戻したとき以前の選択を復元するため。#485）。
 			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );

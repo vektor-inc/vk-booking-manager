@@ -249,6 +249,11 @@ class Price_Tiers {
 			return false;
 		}
 
+		// 1ツアーあたりのメニューも料金区分を使わない（人数にかかわらず基本料金そのまま。保存時に区分も削除する。#1002）。
+		if ( Service_Menu_Post_Type::is_price_per_booking( $menu_id ) ) {
+			return false;
+		}
+
 		// max_capacity の取得方法はメニューカード（Menu_Loop_Block::render_meta_information()）と揃える。
 		$max_capacity = (int) get_post_meta( $menu_id, '_vkbm_max_capacity', true );
 		if ( $max_capacity < 2 ) {

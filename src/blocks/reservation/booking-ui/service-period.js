@@ -75,6 +75,40 @@ export const getFetchableStartMonth = ( startMonth, maxYear ) =>
 	startMonth && startMonth.year <= maxYear ? startMonth : null;
 
 /**
+ * 時間枠のカレンダーを、提供期間の開始月から開くべきときの開始月を返す。
+ *
+ * メニューがあり、宿泊の泊プランではなく、開始日が今日より後で、開始月がカレンダー API で取得できる範囲内のときだけ開始月を返す。
+ * 宿泊の泊プランは、宿泊用の画面が自分の初期表示月を決めるため対象外。
+ *
+ * @param {?Object} menu  REST のサービスメニュー（未選択なら null）。
+ * @param {string}  today 今日の日付（YYYY-MM-DD。サイトのタイムゾーン）。
+ * @return {?{year: number, month: number}} 開始月。該当しなければ null。
+ */
+export const getCalendarServicePeriodStartMonth = ( menu, today ) =>
+	menu && ! menu.vkbm_lodging
+		? getFetchableStartMonth(
+				getUpcomingStartMonth( menu, today ),
+				TIME_SLOT_CALENDAR_MAX_YEAR
+		  )
+		: null;
+
+/**
+ * 表示月が提供期間の開始月より前なら、開始月を返す（そうでなければ表示月をそのまま返す）。
+ *
+ * メニューを選んだ（選び直した）ときのカレンダーの表示月を決めるのに使う。
+ * 開始月が無いとき（開始日が先でないメニュー・宿泊の泊プラン・取得範囲外）は、表示月を動かさない。
+ *
+ * @param {{year: number, month: number}}  month      表示月の候補。
+ * @param {?{year: number, month: number}} startMonth 提供期間の開始月（なければ null）。
+ * @return {{year: number, month: number}} 表示月。
+ */
+export const advanceToServicePeriodStart = ( month, startMonth ) =>
+	startMonth &&
+	month.year * 12 + month.month < startMonth.year * 12 + startMonth.month
+		? startMonth
+		: month;
+
+/**
  * メニューの選択肢から、提供期間が終了したメニューを外す。
  *
  * 選択中のメニュー（selectedMenuId に一致するもの）だけは、終了済みでも残す（選択中のメニューが消えないように）。
