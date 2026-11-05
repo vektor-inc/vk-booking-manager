@@ -5,6 +5,7 @@ import {
 	resolvePluginSlug,
 	createShiftForMonth,
 	getCurrentAndNextTokyoMonths,
+	setAdminBlockEditorPreferences,
 } from './utils/helpers';
 
 /**
@@ -20,6 +21,7 @@ import {
  * - 既存テストデータのクリーンアップ
  * - スタッフ・シフト・サービスメニュー・予約ページの作成
  * - プロバイダー設定（メール認証無効化・レート制限無効化など）
+ * - 管理者のブロックエディター設定（「ようこそ」案内なし・メタボックス欄を開くなど）
  */
 async function globalSetup() {
 	console.log( '=== Global Setup: Starting ===' );
@@ -280,6 +282,18 @@ async function globalSetup() {
 	// Allow user registration
 	wpCliArgs( [ 'option', 'update', 'users_can_register', '1' ] );
 	console.log( 'User registration enabled' );
+
+	// 管理者のブロックエディター設定（「ようこそ」案内なし・メタボックス欄を開く・パターン選択の案内なし）を、
+	// 全 spec の前提としてここでそろえる。CI は spec を複数のジョブに分けて実行するため、
+	// 他の spec が書き残した設定に頼ると、ジョブの分かれ方で編集画面の状態が変わる（#534）。
+	try {
+		setAdminBlockEditorPreferences();
+	} catch ( e: any ) {
+		throw new Error(
+			`Block editor preferences setup failed — aborting global setup: ${ e.message }`
+		);
+	}
+	console.log( 'Block editor preferences set for admin' );
 
 	console.log( '=== Global Setup: Complete ===' );
 }

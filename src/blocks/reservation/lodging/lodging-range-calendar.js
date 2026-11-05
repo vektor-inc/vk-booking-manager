@@ -1,5 +1,6 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { useEffect, useMemo, useRef, useState } from '@wordpress/element';
+import { useCalendarNavigationFocus } from '../booking-ui/use-calendar-navigation-focus';
 import { formatReservationDate } from '../date-format';
 import {
 	addDays,
@@ -84,20 +85,22 @@ const describeDayState = (
  * PageUp / PageDown で前後の月へ動く。
  *
  * @param {Object}                              props
- * @param {number}                              props.year                 表示する年。
- * @param {number}                              props.month                表示する月（1〜12）。
- * @param {{checkIn: string, checkOut: string}} props.range                今の選択。
- * @param {string}                              props.todayIso             今日の日付（これより前は選べない）。
- * @param {Function}                            props.onSelectDate         日付を押したときに押した日を渡して呼ぶ。
- * @param {Function}                            props.onUnavailableDate    選べない日を押したときの処理。
- * @param {Function}                            props.onMonthChange        表示月を動かすときに月数を渡して呼ぶ。
- * @param {boolean}                             props.isPrevDisabled       前の月へ動かせないとき true（aria-disabled にする）。
- * @param {boolean}                             props.isNextDisabled       次の月へ動かせないとき true（aria-disabled にする）。
- * @param {string}                              props.guideId              ガイド文の要素 id（aria-describedby 用）。
- * @param {string}                              props.locale               WordPress のロケール。
- * @param {{status:string, days:Array}}         props.availability         空き状況。
- * @param {{status:string, days:Array}}         props.checkoutAvailability チェックアウト候補の空き状況。
- * @param {number}                              props.maxNights            最大泊数。
+ * @param {number}                              props.year                  表示する年。
+ * @param {number}                              props.month                 表示する月（1〜12）。
+ * @param {{checkIn: string, checkOut: string}} props.range                 今の選択。
+ * @param {string}                              props.todayIso              今日の日付（これより前は選べない）。
+ * @param {Function}                            props.onSelectDate          日付を押したときに押した日を渡して呼ぶ。
+ * @param {Function}                            props.onUnavailableDate     選べない日を押したときの処理。
+ * @param {Function}                            props.onMonthChange         表示月を動かすときに月数を渡して呼ぶ。
+ * @param {boolean}                             props.isPrevDisabled        前の月へ動かせないとき true（disabled にする）。
+ * @param {boolean}                             props.isNextDisabled        次の月へ動かせないとき true（disabled にする）。
+ * @param {boolean}                             props.isInteractionDisabled 回数制限または受付範囲外で操作を止める。
+ * @param {string}                              props.guideId               ガイド文の要素 id（aria-describedby 用）。
+ * @param {string}                              props.locale                WordPress のロケール。
+ * @param {{status:string, days:Array}}         props.availability          空き状況。
+ * @param {{status:string, days:Array}}         props.checkoutAvailability  チェックアウト候補の空き状況。
+ * @param {boolean}                             props.isLoading             空き状況の通信中か。
+ * @param {number}                              props.maxNights             最大泊数。
  * @return {JSX.Element} カレンダー。
  */
 export const LodgingRangeCalendar = ( {
@@ -112,10 +115,19 @@ export const LodgingRangeCalendar = ( {
 	locale,
 	isPrevDisabled = false,
 	isNextDisabled = false,
+	isInteractionDisabled = false,
 	availability = { status: 'loading', days: [] },
+	isLoading = availability.status === 'loading',
 	checkoutAvailability = { status: 'idle', days: [] },
 	maxNights = 30,
 } ) => {
+	const navigationRef = useCalendarNavigationFocus(
+		year,
+		month,
+		isPrevDisabled,
+		isNextDisabled,
+		isLoading
+	);
 	const weeks = useMemo(
 		() => buildMonthWeeks( year, month ),
 		[ year, month ]
@@ -161,6 +173,13 @@ export const LodgingRangeCalendar = ( {
 	}, [ focusIso, year, month ] );
 
 	const moveFocus = ( nextIso ) => {
+		if (
+			! nextIso.startsWith( monthPrefix ) &&
+			( ( nextIso < monthPrefix && isPrevDisabled ) ||
+				( nextIso > monthPrefix && isNextDisabled ) )
+		) {
+			return;
+		}
 		shouldMoveFocusRef.current = true;
 		setFocusIso( nextIso );
 
@@ -215,13 +234,17 @@ export const LodgingRangeCalendar = ( {
 				<button
 					type="button"
 					className="vkbm-calendar__nav"
-					onClick={ () => onMonthChange( -1 ) }
+					onClick={ ( event ) => {
+						navigationRef.current = event.currentTarget;
+						onMonthChange( -1 );
+					} }
 					aria-disabled={ isPrevDisabled }
+					disabled={ isPrevDisabled }
 					aria-label={ __( 'previous month', 'vk-booking-manager' ) }
 				>
 					‹
 				</button>
-				<div className="vkbm-calendar__current">
+				<div className="vkbm-calendar__current" tabIndex={ -1 }>
 					{ formatStayMonth( year, month, locale ) }
 					{ availability.status === 'loading' && (
 						<span
@@ -235,8 +258,12 @@ export const LodgingRangeCalendar = ( {
 				<button
 					type="button"
 					className="vkbm-calendar__nav"
-					onClick={ () => onMonthChange( 1 ) }
+					onClick={ ( event ) => {
+						navigationRef.current = event.currentTarget;
+						onMonthChange( 1 );
+					} }
 					aria-disabled={ isNextDisabled }
+					disabled={ isNextDisabled }
 					aria-label={ __( 'next month', 'vk-booking-manager' ) }
 				>
 					›
@@ -326,6 +353,7 @@ export const LodgingRangeCalendar = ( {
 								<button
 									type="button"
 									key={ day.iso }
+									disabled={ isInteractionDisabled }
 									ref={ ( node ) => {
 										buttonRefs.current[ day.iso ] = node;
 									} }

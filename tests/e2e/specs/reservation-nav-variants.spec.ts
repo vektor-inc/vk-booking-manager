@@ -1,3 +1,4 @@
+// @category 予約画面・カレンダー
 import { test, expect, Page } from '@playwright/test';
 import { wpCliArgs } from '../utils/helpers';
 

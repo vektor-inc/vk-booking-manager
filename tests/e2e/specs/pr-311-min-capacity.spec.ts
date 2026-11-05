@@ -16,6 +16,7 @@
  * 確定画面の注記（CodeRabbit #3）は availability_service が返す min_capacity/booked_guests に
  * 対する PHP ロジック（BookingConfirmApp の showMinCapacityNote 相当）を REST レスポンス検証で確認する。
  */
+// @category 人数・定員・貸し切り
 import { test, expect, type Page } from '@playwright/test';
 import {
 	wpCliArgs,

@@ -59,7 +59,7 @@ class Shift_Editor_Auto_Register_Test extends WP_UnitTestCase {
 	 * （ゴミ箱のシフトも「登録済み」として扱うことを含む）を検証する。
 	 */
 	public function test_handle_auto_register(): void {
-		$months = $this->get_offset_months( 3 );
+		$months = $this->get_offset_months( 7 );
 
 		$test_cases = array(
 			array(
@@ -78,6 +78,14 @@ class Shift_Editor_Auto_Register_Test extends WP_UnitTestCase {
 					'pre_existing' => array( 1 => 'publish' ),
 				),
 				'expected_new'        => array( 0, 2 ),
+			),
+			array(
+				'test_condition_name' => '「6ヶ月先まで」（6）を設定 => 6ヶ月先まで登録し7ヶ月先は登録しない',
+				'conditions'          => array(
+					'months_ahead' => 6,
+					'pre_existing' => array(),
+				),
+				'expected_new'        => array( 0, 1, 2, 3, 4, 5, 6 ),
 			),
 			array(
 				'test_condition_name' => '「翌月まで」（1）を設定し翌月分がゴミ箱にある => ゴミ箱のシフトも登録済みとして扱われ、重複登録されない（今月だけ新規登録）',

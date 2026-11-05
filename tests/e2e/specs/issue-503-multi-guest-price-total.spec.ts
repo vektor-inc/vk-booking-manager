@@ -16,6 +16,7 @@
  * - メニューは専用スタッフだけを担当させ、タイトルに固有の接頭辞を付けて他 spec と干渉しないようにする。
  * - 予約は確定させない（確認画面まで）。
  */
+// @category 料金表示
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpEvalPhp,

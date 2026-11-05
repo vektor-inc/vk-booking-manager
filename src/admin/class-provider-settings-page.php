@@ -856,7 +856,7 @@ class Provider_Settings_Page {
 			}
 		}
 		$reservation_deadline_hours        = isset( $settings['provider_reservation_deadline_hours'] ) ? (int) $settings['provider_reservation_deadline_hours'] : 0;
-		$max_advance_booking_days          = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
+		$max_advance_booking_days          = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : Settings_Repository::DEFAULT_MAX_ADVANCE_BOOKING_DAYS;
 		$customer_booking_limit            = isset( $settings[ Customer_Booking_Limit::SETTINGS_KEY ] ) ? (int) $settings[ Customer_Booking_Limit::SETTINGS_KEY ] : Customer_Booking_Limit::DEFAULT_LIMIT;
 		$slot_step_minutes                 = isset( $settings['provider_slot_step_minutes'] ) ? (int) $settings['provider_slot_step_minutes'] : 15;
 		$service_menu_buffer_after_minutes = isset( $settings['provider_service_menu_buffer_after_minutes'] ) ? (int) $settings['provider_service_menu_buffer_after_minutes'] : 0;
@@ -884,13 +884,14 @@ class Provider_Settings_Page {
 		// 「予約ブロック内で表示」は、予約ページURLが自サイトのURLとして設定されているときだけ働く。
 		$is_reservation_page_url_usable = '' !== Service_Menu_Detail_Link::resolve_usable_reservation_page_url( (string) ( $settings['reservation_page_url'] ?? '' ) );
 
-		$reservation_menu_list_display_mode = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
-		$shift_alert_months                 = isset( $settings['shift_alert_months'] ) ? (int) $settings['shift_alert_months'] : 1;
-		$shift_auto_register_months         = isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0;
-		$booking_auto_anonymize_months      = isset( $settings['booking_auto_anonymize_months'] ) ? (int) $settings['booking_auto_anonymize_months'] : 0;
-		$uninstall_cleanup                  = Uninstaller::normalize_mode( $settings['uninstall_cleanup'] ?? Uninstaller::MODE_KEEP );
-		$show_uninstall_cleanup             = current_user_can( 'manage_options' );
-		$booking_reminder_hours             = $settings['booking_reminder_hours'] ?? array();
+		$reservation_menu_list_image_aspect_ratio = Settings_Sanitizer::resolve_reservation_menu_list_image_aspect_ratio( $settings );
+		$reservation_menu_list_display_mode       = isset( $settings['reservation_menu_list_display_mode'] ) ? sanitize_key( (string) $settings['reservation_menu_list_display_mode'] ) : 'card';
+		$shift_alert_months                       = isset( $settings['shift_alert_months'] ) ? (int) $settings['shift_alert_months'] : 1;
+		$shift_auto_register_months               = isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0;
+		$booking_auto_anonymize_months            = isset( $settings['booking_auto_anonymize_months'] ) ? (int) $settings['booking_auto_anonymize_months'] : 0;
+		$uninstall_cleanup                        = Uninstaller::normalize_mode( $settings['uninstall_cleanup'] ?? Uninstaller::MODE_KEEP );
+		$show_uninstall_cleanup                   = current_user_can( 'manage_options' );
+		$booking_reminder_hours                   = $settings['booking_reminder_hours'] ?? array();
 		if ( ! is_array( $booking_reminder_hours ) ) {
 			$booking_reminder_hours = array();
 		}
@@ -1653,6 +1654,32 @@ class Provider_Settings_Page {
 											</select>
 										</td>
 									</tr>
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-reservation-menu-list-image-aspect-ratio-row" <?php echo ! empty( $settings['reservation_show_menu_list'] ) ? '' : 'hidden'; ?>>
+										<th scope="row">
+											<label for="vkbm-reservation-menu-list-image-aspect-ratio"><?php esc_html_e( 'Service menu image aspect ratio', 'vk-booking-manager' ); ?></label>
+										</th>
+										<td>
+											<select id="vkbm-reservation-menu-list-image-aspect-ratio" name="vkbm_provider_settings[reservation_menu_list_image_aspect_ratio]" aria-describedby="vkbm-reservation-menu-list-image-aspect-ratio-help">
+												<?php
+												$ratio_choices = array(
+													'content' => __( 'Match content height', 'vk-booking-manager' ),
+													'original' => _x( 'Original', 'image aspect ratio', 'vk-booking-manager' ),
+													'1-1'  => __( 'Square - 1:1', 'vk-booking-manager' ),
+													'4-3'  => __( 'Standard - 4:3', 'vk-booking-manager' ),
+													'16-9' => __( 'Wide - 16:9', 'vk-booking-manager' ),
+												);
+												foreach ( $ratio_choices as $ratio => $label ) :
+													?>
+													<option value="<?php echo esc_attr( $ratio ); ?>" <?php selected( $reservation_menu_list_image_aspect_ratio, $ratio ); ?>><?php echo esc_html( $label ); ?></option>
+												<?php endforeach; ?>
+											</select>
+											<div id="vkbm-reservation-menu-list-image-aspect-ratio-help">
+												<p class="description"><?php esc_html_e( 'Choose the aspect ratio of images shown as cards in the service menu list.', 'vk-booking-manager' ); ?></p>
+												<p class="description" id="vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help" <?php echo 'text' === $reservation_menu_list_display_mode ? '' : 'hidden'; ?>><?php esc_html_e( 'Sets the image ratio for service groups displayed as cards.', 'vk-booking-manager' ); ?></p>
+												<p class="description" id="vkbm-reservation-menu-list-image-aspect-ratio-mobile-help" <?php echo in_array( $reservation_menu_list_image_aspect_ratio, array( '1-1', '4-3', '16-9' ), true ) ? '' : 'hidden'; ?>><?php esc_html_e( 'The selected ratio also applies when images appear above the content, such as on smartphones.', 'vk-booking-manager' ); ?></p>
+											</div>
+										</td>
+									</tr>
 								<?php endif; ?>
 
 								<?php if ( 'system' === $active_tab ) : ?>
@@ -2219,6 +2246,7 @@ class Provider_Settings_Page {
 									);
 									?>
 								</p>
+								<p class="description"><?php esc_html_e( 'If your site uses a CDN or reverse proxy, ask your site administrator to configure the vkbm_trusted_proxy_ips filter.', 'vk-booking-manager' ); ?></p>
 							</td>
 						</tr>
 
@@ -3090,6 +3118,15 @@ class Provider_Settings_Page {
 									<option value="3" <?php selected( $shift_auto_register_months, 3 ); ?>>
 										<?php esc_html_e( 'Up to 3 months ahead', 'vk-booking-manager' ); ?>
 									</option>
+									<option value="4" <?php selected( $shift_auto_register_months, 4 ); ?>>
+										<?php esc_html_e( 'Up to 4 months ahead', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="5" <?php selected( $shift_auto_register_months, 5 ); ?>>
+										<?php esc_html_e( 'Up to 5 months ahead', 'vk-booking-manager' ); ?>
+									</option>
+									<option value="6" <?php selected( $shift_auto_register_months, 6 ); ?>>
+										<?php esc_html_e( 'Up to 6 months ahead', 'vk-booking-manager' ); ?>
+									</option>
 								</select>
 								<p class="description">
 									<?php
@@ -3433,6 +3470,7 @@ class Provider_Settings_Page {
 					<input type="hidden" name="vkbm_provider_settings[mail_from_email]" value="<?php echo esc_attr( $mail_from_email ); ?>" />
 				<?php endif; ?>
 				<?php if ( 'system' !== $active_tab ) : ?>
+					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_image_aspect_ratio]" value="<?php echo esc_attr( $reservation_menu_list_image_aspect_ratio ); ?>" />
 					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
 					<input type="hidden" name="vkbm_provider_settings[service_menu_detail_display_mode]" value="<?php echo esc_attr( $service_menu_detail_display_mode ); ?>" />
 					<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
@@ -3924,7 +3962,7 @@ class Provider_Settings_Page {
 			: null;
 			$output['provider_business_hours']                    = sanitize_textarea_field( $input['provider_business_hours'] ?? '' );
 			$output['provider_reservation_deadline_hours']        = absint( $input['provider_reservation_deadline_hours'] ?? 0 );
-			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? 0 );
+			$output['provider_max_advance_booking_days']          = absint( $input['provider_max_advance_booking_days'] ?? Settings_Repository::DEFAULT_MAX_ADVANCE_BOOKING_DAYS );
 			$output['provider_service_menu_buffer_after_minutes'] = absint( $input['provider_service_menu_buffer_after_minutes'] ?? 0 );
 			$output['provider_booking_status_mode']               = sanitize_key( (string) ( $input['provider_booking_status_mode'] ?? Settings_Repository::BOOKING_STATUS_MODE_PENDING ) );
 		$output['provider_booking_complete_message_pending']      = Settings_Sanitizer::sanitize_booking_complete_message( $input['provider_booking_complete_message_pending'] ?? '' );
@@ -3934,6 +3972,7 @@ class Provider_Settings_Page {
 		$output['reservation_page_url']                           = sanitize_text_field( $input['reservation_page_url'] ?? '' );
 		$output['reservation_show_menu_search']                   = ! empty( $input['reservation_show_menu_search'] );
 		$output['reservation_show_menu_list']                     = ! empty( $input['reservation_show_menu_list'] );
+		$output['reservation_menu_list_image_aspect_ratio']       = Settings_Sanitizer::resolve_reservation_menu_list_image_aspect_ratio( $input );
 		$output['reservation_menu_list_display_mode']             = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? 'card' ) );
 		$output['reservation_show_provider_logo']                 = ! empty( $input['reservation_show_provider_logo'] );
 		$output['reservation_show_provider_name']                 = ! empty( $input['reservation_show_provider_name'] );

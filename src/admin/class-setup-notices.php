@@ -1286,7 +1286,7 @@ class Setup_Notices {
 		$settings = ( new Settings_Repository() )->get_settings();
 		$required = self::get_holiday_data_required_until(
 			new \DateTimeImmutable( 'now', wp_timezone() ),
-			isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0,
+			isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : Settings_Repository::DEFAULT_MAX_ADVANCE_BOOKING_DAYS,
 			isset( $settings['shift_auto_register_months'] ) ? (int) $settings['shift_auto_register_months'] : 0
 		);
 		if ( $required <= $covered_until ) {

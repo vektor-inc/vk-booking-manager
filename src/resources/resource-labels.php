@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Admin\Pro_Upsell;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
@@ -467,6 +468,11 @@ function vkbm_format_guests_count( int $count, ?string $unit = null ): string {
  * @return string 表示用リソース名 / Display name for the resource.
  */
 function vkbm_get_resource_display_name( int $post_id ): string {
+	// リソースの投稿だけを対象にする。
+	if ( Resource_Post_Type::POST_TYPE !== get_post_type( $post_id ) ) {
+		return '';
+	}
+
 	// リクエスト内で設定値をキャッシュ（wp_cache 経由でテスト間のリセットにも対応）
 	// Cache the setting value within the request (via wp_cache so it resets between tests).
 	$enabled = wp_cache_get( 'resource_tag_display_enabled', 'vkbm' );

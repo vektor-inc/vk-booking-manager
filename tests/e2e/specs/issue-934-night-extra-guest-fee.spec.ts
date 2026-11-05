@@ -12,6 +12,7 @@
  * テストデータは接頭辞（E2E934）を付けて作り、afterAll で消す。BM 設定は beforeAll で控えて必ず戻す。
  * 予約は確定させない（確認画面まで）。
  */
+// @category 宿泊予約
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -20,6 +21,7 @@ import {
 	getCurrentAndNextTokyoMonths,
 	getTokyoDateParts,
 	loginAsAdmin,
+	setAdminBlockEditorPreferences,
 } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';
 
@@ -158,32 +160,6 @@ function restoreProviderSettings(): void {
 }
 
 /**
- * ブロックエディターの「ようこそ」案内を出さず、メタボックス欄を開いた状態にする。
- * 案内やメタボックス欄の折りたたみが、欄の操作を妨げるため。
- */
-function prepareBlockEditorPreferences(): void {
-	const result = wpEvalPhp( `
-		global $wpdb;
-		$user = get_user_by( 'login', 'admin' );
-		update_user_meta(
-			$user->ID,
-			$wpdb->get_blog_prefix() . 'persisted_preferences',
-			array(
-				'core/edit-post' => array(
-					'welcomeGuide'        => false,
-					'metaBoxesMainIsOpen' => true,
-				),
-				'core'           => array(
-					'enableChoosePatternModal' => false,
-				),
-			)
-		);
-		echo 'OK';
-	` );
-	expect( result ).toContain( 'OK' );
-}
-
-/**
  * 今日（Asia/Tokyo）から offset 日後の年・月・日を返す。
  *
  * @param offset 日数
@@ -312,7 +288,7 @@ test.describe
 
 	// @title 編集画面で追加料金のチェックを入れて、基本料金に含まれる人数と追加料金の区分を保存する
 	test( 'admin: extra guest fee settings', async ( { page } ) => {
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await loginAsAdmin( page );
 		// @step サービスメニューの編集画面を開く（料金の単位は「1室1泊あたり」、追加料金のチェックは外れている）
 		await page.goto(
@@ -422,7 +398,7 @@ test.describe
 
 	// @title 追加料金ありで料金区分を空にして保存すると、追加料金が加算されない旨の警告がエディタに出る
 	test( 'admin: warning when no price category', async ( { page } ) => {
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		const noTierMenuId = seedNightMenu(
 			`${ PREFIX } NoTier Plan`,
 			roomId,
@@ -501,8 +477,10 @@ test.describe
 		} );
 		await clickStayDay( page, tokyoDateAfter( 2 ) );
 		await clickStayDay( page, tokyoDateAfter( 2 + NIGHTS ) );
-		const room = page.locator( '.vkbm-lodging__room' ).first();
-		await expect( room ).toBeVisible( { timeout: 15000 } );
+		await expect(
+			page.locator( '.vkbm-plan-summary__action' ).first()
+		).toBeEnabled( { timeout: 15000 } );
+		const summary = page.locator( '.vkbm-lodging__summary' );
 
 		// @check 大人・子供の区分ごとの人数欄と追加料金（+¥3,000・+¥2,000）が出て、追加料金がかかる旨の案内が出る
 		const tierLabels = page.locator(
@@ -523,8 +501,8 @@ test.describe
 
 		// @step 大人 2 名・子供 2 名（規定人数の 4 名以内）を入れる
 		await fillGuestTiers( page, 2, 2 );
-		// @check 客室の合計が基本料金だけ（20,000円 × 2 泊 = 40,000円）になる
-		await expect( room ).toContainText(
+		// @check まとめ欄の合計が基本料金だけ（20,000円 × 2 泊 = 40,000円）になる
+		await expect( summary ).toContainText(
 			`¥${ ( BASE_PRICE * NIGHTS ).toLocaleString( 'en-US' ) }`,
 			{ timeout: 15000 }
 		);
@@ -533,20 +511,19 @@ test.describe
 		await fillGuestTiers( page, 3, 2 );
 		// @check 高い大人 3 名＋子供 1 名が基本料金に含まれ、子供 1 名分の 2,000円が1泊ごとに加算された合計（（20,000 + 2,000）× 2 泊 = 44,000円）になる
 		const expectedTotal = ( BASE_PRICE + CHILD_FEE ) * NIGHTS;
-		await expect( room ).toContainText(
+		await expect( summary ).toContainText(
 			`¥${ expectedTotal.toLocaleString( 'en-US' ) }`,
 			{ timeout: 15000 }
 		);
 
-		// @step 大人 5 名・子供 1 名（最大人数の 6 名。規定人数を 2 名超える）を入れて、客室を選び、予約に進む
+		// @step 大人 5 名・子供 1 名（最大人数の 6 名。規定人数を 2 名超える）を入れて、予約に進む
 		await fillGuestTiers( page, 5, 1 );
 		const expectedMaxTotal =
 			( BASE_PRICE + ADULT_FEE + CHILD_FEE ) * NIGHTS;
-		await expect( room ).toContainText(
+		await expect( summary ).toContainText(
 			`¥${ expectedMaxTotal.toLocaleString( 'en-US' ) }`,
 			{ timeout: 15000 }
 		);
-		await room.click();
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 

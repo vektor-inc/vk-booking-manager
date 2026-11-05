@@ -127,8 +127,7 @@ class Reservation_Block {
 		// #707: 認証フォームの CSS/JS は、予約ブロックが実際に描画されたページだけで読み込む。
 		// ブロック内のログイン・会員登録・会員情報フォームは REST（/vkbm/v1/auth-form）の HTML を
 		// フロント JS が差し込むため、REST 側では読み込めない。認証フォーム用の CSS/JS に限り、
-		// テンプレートやパターン内の予約ブロックでも効くよう、has_block() ではなく描画時に読み込む
-		// （予約ブロックのほかのアセットは従来どおり has_block() で判定している）。
+		// テンプレートやパターン内の予約ブロックでも効くよう、has_block() ではなく描画時に読み込む。
 		add_filter( 'render_block', array( $this, 'enqueue_auth_assets_on_render' ), 10, 2 );
 		// テンプレートや同期パターン内の予約ブロックでも、フロント用の設定を描画時に読み込む。
 		add_filter( 'render_block', array( $this, 'enqueue_reservation_config_on_render' ), 10, 2 );
@@ -163,7 +162,7 @@ class Reservation_Block {
 	}
 
 	/**
-	 * 予約ブロックの描画時に、フロント用の設定を読み込む。
+	 * 予約ブロックの描画時に、フロント用の設定とサブ画像の拡大表示を読み込む。
 	 *
 	 * 出力の HTML は変更せず、そのまま返す。
 	 *
@@ -172,12 +171,16 @@ class Reservation_Block {
 	 * @return string 引数の $block_content をそのまま返す。
 	 */
 	public function enqueue_reservation_config_on_render( string $block_content, array $block ): string {
-		// 予約ブロック以外、または本文の has_block() 経路で読み込み済みの場合は何もしない。
-		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) || wp_script_is( self::RESERVATION_CONFIG_HANDLE, 'enqueued' ) ) {
+		// 本文以外に配置された予約ブロックも対象にする。
+		if ( self::BLOCK_NAME !== ( $block['blockName'] ?? '' ) ) {
 			return $block_content;
 		}
 
-		$this->maybe_enqueue_reservation_config();
+		// 設定が読み込み済みでも、後から差し込むカードのサブ画像に必要。
+		Menu_Loop_Block::enqueue_gallery_assets();
+		if ( ! wp_script_is( self::RESERVATION_CONFIG_HANDLE, 'enqueued' ) ) {
+			$this->maybe_enqueue_reservation_config();
+		}
 
 		return $block_content;
 	}
@@ -221,8 +224,9 @@ class Reservation_Block {
 		}
 
 		$metadata_path = VKBM_PLUGIN_DIR_PATH . self::METADATA_PATH;
-		register_block_type_from_metadata( $metadata_path );
+		// メタデータで参照する共有スタイルを先に登録する。
 		$this->register_menu_loop_style();
+		register_block_type_from_metadata( $metadata_path );
 		$this->register_script_translations( 'vk-booking-manager/reservation', array( 'script', 'viewScript', 'editorScript' ) );
 
 		self::$block_registered = true;

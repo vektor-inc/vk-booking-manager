@@ -1,3 +1,4 @@
+// @category 管理画面
 import { test, expect, type Page } from '@playwright/test';
 import { wpCliArgs, wpEvalPhp, loginAsAdmin } from '../utils/helpers';
 

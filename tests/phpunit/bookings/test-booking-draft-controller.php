@@ -6,6 +6,8 @@ namespace VKBookingManager\Tests\Bookings;
 
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
+use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
@@ -2751,6 +2753,525 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'post_status' => 'publish',
 			]
 		);
+	}
+
+	/**
+	 * リソース（スタッフ・客室）を作成する。
+	 *
+	 * @param string $post_status 投稿の状態。
+	 * @return int 投稿 ID。
+	 */
+	private function create_resource( string $post_status = 'publish' ): int {
+		return (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => $post_status,
+			)
+		);
+	}
+
+	/**
+	 * 業種プリセットと指名機能の設定を保存し、関連するキャッシュを空にする。
+	 *
+	 * @param string $industry_preset 業種プリセットのキー。
+	 * @param bool   $staff_enabled   指名機能を使うか。
+	 */
+	private function apply_site_settings( string $industry_preset, bool $staff_enabled ): void {
+		$settings                    = ( new Settings_Repository() )->get_settings();
+		$settings['industry_preset']       = $industry_preset;
+		$settings['staff_enabled']         = $staff_enabled;
+		$settings['slot_capacity_enabled'] = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Industry_Presets::clear_cache();
+		Staff_Editor::clear_nomination_enabled_cache();
+	}
+
+	/**
+	 * 保存されている予約の下書き（一時保存）の件数を数える。
+	 *
+	 * @return int 件数。
+	 */
+	private function count_draft_transients(): int {
+		global $wpdb;
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( '_transient_' . self::TRANSIENT_PREFIX ) . '%'
+			)
+		);
+	}
+
+	/**
+	 * 予約メニュー・担当の ID の検証に使う投稿一式を作る。
+	 *
+	 * @return array<string, int> 投稿 ID の一覧。
+	 */
+	private function create_reference_fixtures(): array {
+		$staff_id = $this->create_resource();
+		$tour_id  = $this->create_menu();
+		foreach (
+			array(
+				'_vkbm_staff_ids'             => array( $staff_id ),
+				'_vkbm_max_capacity'          => 8,
+				'_vkbm_base_price'            => 30000,
+				'_vkbm_price_unit'            => 'per_booking',
+				'_vkbm_extra_guest_enabled'   => '1',
+				'_vkbm_included_guests'       => 4,
+				'_vkbm_allow_multiple_guests' => true,
+				'_vkbm_price_tiers'           => array(
+					array(
+						'label' => '大人',
+						'price' => 3000,
+					),
+					array(
+						'label' => '子供',
+						'price' => 1500,
+					),
+				),
+			) as $key => $value
+		) {
+			update_post_meta( $tour_id, $key, $value );
+		}
+
+		$menu_selected = $this->create_menu();
+		update_post_meta( $menu_selected, '_vkbm_staff_ids', array( $staff_id ) );
+		update_post_meta( $menu_selected, '_vkbm_base_price', 3000 );
+
+		$menu_no_nomination = $this->create_menu();
+		update_post_meta( $menu_no_nomination, '_vkbm_disable_nomination', true );
+
+		$menu_any = $this->create_menu();
+		update_post_meta( $menu_any, '_vkbm_base_price', 3000 );
+
+		return array(
+			'staff'              => $staff_id,
+			'other_staff'        => $this->create_resource(),
+			'draft_staff'        => $this->create_resource( 'draft' ),
+			'menu_any'           => $menu_any,
+			'menu_selected'      => $menu_selected,
+			'menu_no_nomination' => $menu_no_nomination,
+			'menu_tour'          => $tour_id,
+			'menu_draft'         => (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+					'post_status' => 'draft',
+				)
+			),
+			'menu_private'       => (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+					'post_status' => 'private',
+				)
+			),
+			'booking_post'       => (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Booking_Post_Type::POST_TYPE,
+					'post_status' => 'publish',
+				)
+			),
+			'page'               => (int) $this->factory()->post->create(
+				array(
+					'post_type'   => 'page',
+					'post_status' => 'publish',
+				)
+			),
+			'missing'            => 99999999,
+		);
+	}
+
+	/**
+	 * save_draft: 予約メニュー・担当の ID が、該当する投稿タイプで公開中であることを検証する。
+	 *
+	 * 予約メニューではない投稿・存在しない ID・公開されていないメニュー・担当ではない投稿・公開されていない担当・
+	 * そのメニューの担当ではないスタッフを拒否し、正規の予約（おまかせ・指名あり・指名を使わないメニュー・ツアー）は
+	 * これまでどおり保存できる。非公開のメニューは、予約の管理権限のあるログイン中の利用者だけが保存できる。
+	 */
+	public function test_save_draft_validates_menu_and_resource_ids(): void {
+		$is_free = Pro_Upsell::is_free_edition();
+		$fx      = $this->create_reference_fixtures();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '公開中の予約メニュー・おまかせ（resource_id=0）の会員 => 保存できる',
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'payload'             => array(
+					'menu_id'     => $fx['menu_any'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '公開中の予約メニュー・おまかせの未ログイン => 保存できる',
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'     => $fx['menu_any'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '担当の指定がないメニューで、公開中のスタッフを指名 => 保存できる',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'            => $fx['menu_any'],
+					'resource_id'        => $fx['other_staff'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '担当を個別選択したメニューで、選んだスタッフを指名 => 保存できる',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'            => $fx['menu_selected'],
+					'resource_id'        => $fx['staff'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '指名を使わないメニューは resource_id がおまかせ（0）に直される => 保存できる',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'     => $fx['menu_no_nomination'],
+					'resource_id' => $fx['booking_post'],
+				),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => 'アクティビティ・ツアー（1ツアーあたり・料金区分あり） => 保存できる',
+				'pro_only'            => true,
+				'site'                => array( 'activity', false ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'     => $fx['menu_tour'],
+					'resource_id' => 0,
+					'guest_tiers' => array( 4, 1 ),
+				),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => 'menu_id が予約の投稿の ID => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array( 'menu_id' => $fx['booking_post'] ),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が固定ページの ID => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array( 'menu_id' => $fx['page'] ),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が存在しない ID => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array( 'menu_id' => $fx['missing'] ),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が下書きの予約メニュー（未ログイン） => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array( 'menu_id' => $fx['menu_draft'] ),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が非公開の予約メニュー（未ログイン） => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array( 'menu_id' => $fx['menu_private'] ),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が非公開の予約メニュー（権限のない会員） => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'payload'             => array( 'menu_id' => $fx['menu_private'] ),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が非公開の予約メニュー（予約の管理権限のある利用者） => 保存できる（従来どおり）',
+				'site'                => array( 'custom', true ),
+				'user'                => 'manager',
+				'payload'             => array( 'menu_id' => $fx['menu_private'] ),
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => 'resource_id が予約の投稿の ID => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'            => $fx['menu_any'],
+					'resource_id'        => $fx['booking_post'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'invalid_resource',
+			),
+			array(
+				'test_condition_name' => 'resource_id が固定ページの ID => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'     => $fx['menu_any'],
+					'resource_id' => $fx['page'],
+				),
+				'expected'            => 'invalid_resource',
+			),
+			array(
+				'test_condition_name' => 'resource_id が存在しない ID => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'     => $fx['menu_any'],
+					'resource_id' => $fx['missing'],
+				),
+				'expected'            => 'invalid_resource',
+			),
+			array(
+				'test_condition_name' => 'resource_id が下書きのスタッフ => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'            => $fx['menu_any'],
+					'resource_id'        => $fx['draft_staff'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'invalid_resource',
+			),
+			array(
+				'test_condition_name' => 'resource_id がそのメニューの担当ではない公開中のスタッフ => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'guest',
+				'payload'             => array(
+					'menu_id'            => $fx['menu_selected'],
+					'resource_id'        => $fx['other_staff'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'invalid_resource',
+			),
+		);
+
+		$expected_messages = array(
+			'invalid_menu_id'  => __( 'Menu ID is invalid.', 'vk-booking-manager' ),
+			'invalid_resource' => __( 'The selected staff member cannot be assigned to this service menu.', 'vk-booking-manager' ),
+		);
+
+		foreach ( $test_cases as $case ) {
+			if ( $is_free && ! empty( $case['pro_only'] ) ) {
+				continue;
+			}
+
+			// サイト設定とログイン状態をケースに合わせる。
+			$this->apply_site_settings( $case['site'][0], $case['site'][1] );
+			$user_id = 0;
+			if ( 'member' === $case['user'] ) {
+				$user_id = $this->factory()->user->create();
+			} elseif ( 'manager' === $case['user'] ) {
+				$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+				get_user_by( 'id', $user_id )->add_cap( Capabilities::MANAGE_RESERVATIONS );
+			}
+			wp_set_current_user( $user_id );
+			if ( $user_id > 0 ) {
+				$this->owner_ids[] = 'user:' . $user_id;
+			}
+
+			$controller = new Booking_Draft_Controller();
+			$before     = $this->count_draft_transients();
+			$result     = $this->save_draft_raw(
+				$controller,
+				array_merge( $this->build_payload( $fx['menu_any'], '2026-11-15T10:00:00+09:00' ), $case['payload'] )
+			);
+
+			if ( 'ok' === $case['expected'] ) {
+				$this->assertInstanceOf( WP_REST_Response::class, $result, $case['test_condition_name'] );
+				$token          = (string) $result->get_data()['token'];
+				$this->tokens[] = $token;
+				$stored         = get_transient( self::TRANSIENT_PREFIX . $token );
+				$this->assertIsArray( $stored, $case['test_condition_name'] . '（下書きを保存）' );
+				$this->assertSame( (int) $case['payload']['menu_id'], $stored['menu_id'], $case['test_condition_name'] . '（保存された menu_id）' );
+				continue;
+			}
+
+			$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $result->get_error_code(), $case['test_condition_name'] );
+			$this->assertSame( $expected_messages[ $case['expected'] ], $result->get_error_message(), $case['test_condition_name'] . '（既存の文言）' );
+			$this->assertSame( $before, $this->count_draft_transients(), $case['test_condition_name'] . '（下書きを保存しない）' );
+		}
+	}
+
+	/**
+	 * get_draft: 保存済みの下書きのメニュー・担当が、今も予約できる投稿でなければエラーを返す。
+	 *
+	 * 保存処理を通さずに直接置いた下書きを読み出して確かめる。
+	 * 正規の下書きは、これまでどおり読み出せる。
+	 */
+	public function test_get_draft_validates_menu_and_resource_ids(): void {
+		$is_free = Pro_Upsell::is_free_edition();
+		$fx      = $this->create_reference_fixtures();
+		update_post_meta( $fx['staff'], Staff_Editor::META_NOMINATION_FEE, 1000 );
+		update_post_meta( $fx['menu_draft'], '_vkbm_base_price', 8888 );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '公開中の予約メニュー・おまかせ => 基本料金を返す',
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'     => $fx['menu_any'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'ok',
+				'expected_price'      => 3000,
+				'expected_fee'        => 0,
+			),
+			array(
+				'test_condition_name' => '公開中の予約メニュー・指名あり => 基本料金と指名料を返す',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'            => $fx['menu_selected'],
+					'resource_id'        => $fx['staff'],
+					'is_staff_preferred' => true,
+					'nomination_fee'     => 1000,
+				),
+				'expected'            => 'ok',
+				'expected_price'      => 3000,
+				'expected_fee'        => 1000,
+			),
+			array(
+				'test_condition_name' => '非公開の予約メニュー（予約の管理権限のある利用者） => 従来どおり読み出せる',
+				'site'                => array( 'custom', true ),
+				'user'                => 'manager',
+				'draft'               => array(
+					'menu_id'     => $fx['menu_draft'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'ok',
+				'expected_price'      => 8888,
+				'expected_fee'        => 0,
+			),
+			array(
+				'test_condition_name' => 'menu_id が予約の投稿の ID => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'     => $fx['booking_post'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が公開されていない予約メニュー（権限のない会員） => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'     => $fx['menu_draft'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'menu_id が存在しない ID => invalid_menu_id',
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'     => $fx['missing'],
+					'resource_id' => 0,
+				),
+				'expected'            => 'invalid_menu_id',
+			),
+			array(
+				'test_condition_name' => 'resource_id が予約の投稿の ID => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'            => $fx['menu_any'],
+					'resource_id'        => $fx['booking_post'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'invalid_resource',
+			),
+			array(
+				'test_condition_name' => 'resource_id がそのメニューの担当ではないスタッフ => invalid_resource',
+				'pro_only'            => true,
+				'site'                => array( 'custom', true ),
+				'user'                => 'member',
+				'draft'               => array(
+					'menu_id'            => $fx['menu_selected'],
+					'resource_id'        => $fx['other_staff'],
+					'is_staff_preferred' => true,
+				),
+				'expected'            => 'invalid_resource',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			if ( $is_free && ! empty( $case['pro_only'] ) ) {
+				continue;
+			}
+
+			$this->apply_site_settings( $case['site'][0], $case['site'][1] );
+			if ( 'manager' === $case['user'] ) {
+				$user_id = $this->factory()->user->create( array( 'role' => 'administrator' ) );
+				get_user_by( 'id', $user_id )->add_cap( Capabilities::MANAGE_RESERVATIONS );
+			} else {
+				$user_id = $this->factory()->user->create();
+			}
+			wp_set_current_user( $user_id );
+
+			// 保存処理を通さずに、下書きを直接置く。
+			$token          = 'legacy' . strtolower( wp_generate_password( 10, false, false ) );
+			$this->tokens[] = $token;
+			set_transient(
+				self::TRANSIENT_PREFIX . $token,
+				array_merge(
+					array(
+						'guests'        => 1,
+						'guest_tiers'   => array(),
+						'slot'          => array(
+							'slot_id'  => 'slot-1',
+							'start_at' => '2026-11-15T10:00:00+09:00',
+							'end_at'   => '2026-11-15T10:30:00+09:00',
+						),
+						'owner_user_id' => $user_id,
+					),
+					$case['draft']
+				),
+				1800
+			);
+
+			$result = ( new Booking_Draft_Controller() )->get_draft( $this->build_get_request( $token ) );
+
+			if ( 'ok' === $case['expected'] ) {
+				$this->assertInstanceOf( WP_REST_Response::class, $result, $case['test_condition_name'] );
+				$data = $result->get_data();
+				$this->assertSame( $case['expected_price'], (int) ( $data['menu_price'] ?? -1 ), $case['test_condition_name'] . '（基本料金）' );
+				$this->assertSame( $case['expected_fee'], (int) ( $data['nomination_fee'] ?? -1 ), $case['test_condition_name'] . '（指名料）' );
+				continue;
+			}
+
+			$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $result->get_error_code(), $case['test_condition_name'] );
+		}
 	}
 
 	/**

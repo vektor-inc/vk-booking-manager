@@ -198,6 +198,22 @@ class Availability_Service {
 		}
 
 		$timezone = $this->resolve_timezone();
+		$first    = sprintf( '%04d-%02d-01', $year, $month );
+		$range    = $this->get_booking_range( $menu, $first, ( new DateTimeImmutable( $first ) )->format( 'Y-m-t' ), $timezone );
+		if ( ! $range['in_range'] ) {
+			return array(
+				'year'          => $year,
+				'month'         => $month,
+				'days'          => array(),
+				'booking_range' => $range,
+				'meta'          => array(
+					'menu_id'      => $menu->ID,
+					'resource_id'  => $preferred_staff_id > 0 ? $preferred_staff_id : null,
+					'timezone'     => $timezone->getName(),
+					'generated_at' => $this->current_timestamp_iso( $timezone ),
+				),
+			);
+		}
 
 		// 枠生成・キャッシュキーへ渡す「スタッフを指名している」状態は、resource_id の
 		// 有無（$preferred_staff_id > 0）とは別に判定する（安藤さんレビュー・HIGH是正）。
@@ -219,6 +235,7 @@ class Availability_Service {
 
 		$cached = get_transient( $cache_key );
 		if ( $cached ) {
+			$cached['booking_range'] = $range;
 			return $cached;
 		}
 
@@ -248,10 +265,11 @@ class Availability_Service {
 		}
 
 		$payload = array(
-			'year'  => $year,
-			'month' => $month,
-			'days'  => $results,
-			'meta'  => array(
+			'booking_range' => $range,
+			'year'          => $year,
+			'month'         => $month,
+			'days'          => $results,
+			'meta'          => array(
 				'menu_id'      => $menu->ID,
 				// $preferred_staff_id は resolve_preferred_staff_id() で正規化済みの値（無料版は常に0）。
 				// レスポンスへ raw な $args['resource_id'] をそのまま返すと、無料版で resource_id の
@@ -265,6 +283,33 @@ class Availability_Service {
 		set_transient( $cache_key, $payload, 5 * MINUTE_IN_SECONDS );
 
 		return $payload;
+	}
+
+	/**
+	 * 今日・受付上限・提供期間を交差させ、要求期間が予約受付範囲に入るか返す。
+	 *
+	 * @param WP_Post      $menu     メニュー。
+	 * @param string       $first    要求開始日。
+	 * @param string       $last     要求終了日。
+	 * @param DateTimeZone $timezone タイムゾーン。
+	 * @return array 受付範囲と要求期間の判定。
+	 */
+	private function get_booking_range( WP_Post $menu, string $first, string $last, DateTimeZone $timezone ): array {
+		$settings = $this->get_menu_settings( $menu );
+		$today    = current_datetime()->setTimezone( $timezone )->format( 'Y-m-d' );
+		$start    = max( $today, (string) $settings['service_period_start'] );
+		$end      = '2100-12-31';
+		if ( $settings['max_advance_days'] > 0 ) {
+			$end = ( new DateTimeImmutable( $today, $timezone ) )->modify( '+' . $settings['max_advance_days'] . ' days' )->format( 'Y-m-d' );
+		}
+		if ( '' !== $settings['service_period_end'] ) {
+			$end = min( $end, $settings['service_period_end'] );
+		}
+		return array(
+			'first_date' => $start,
+			'last_date'  => $end,
+			'in_range'   => $start <= $end && $last >= $start && $first <= $end,
+		);
 	}
 
 	/**
@@ -415,13 +460,27 @@ class Availability_Service {
 
 		$date_string = (string) ( $args['date'] ?? '' );
 		$date        = DateTimeImmutable::createFromFormat( 'Y-m-d', $date_string, wp_timezone() );
-		if ( ! $date ) {
+		if ( ! $date || ! self::is_valid_date_string( $date_string ) ) {
 			return new WP_Error( 'invalid_date', __( 'Date format is incorrect.', 'vk-booking-manager' ) );
 		}
 
-		$timezone = $this->resolve_timezone();
-
+		$timezone           = $this->resolve_timezone();
 		$preferred_staff_id = $this->resolve_preferred_staff_id( $args );
+		$range              = $this->get_booking_range( $menu, $date_string, $date_string, $timezone );
+		if ( ! $range['in_range'] ) {
+			return array(
+				'date'          => $date_string,
+				'timezone'      => $timezone->getName(),
+				'slots'         => array(),
+				'booking_range' => $range,
+				'meta'          => array(
+					'menu_id'      => $menu->ID,
+					'resource_id'  => $preferred_staff_id > 0 ? $preferred_staff_id : null,
+					'generated_at' => $this->current_timestamp_iso( $timezone ),
+				),
+			);
+		}
+
 		// #431: リソースタグ絞り込み（ターム ID・AND条件）。
 		$tag_ids = $this->normalize_tag_ids( $args['resource_tag_ids'] ?? array() );
 
@@ -1038,12 +1097,14 @@ class Availability_Service {
 	}
 
 	/**
-	 * Validate menu post.
+	 * 予約メニューの投稿タイプで、予約できる公開状態の投稿を取得する。
 	 *
-	 * @param int $menu_id Menu ID.
-	 * @return WP_Post|WP_Error
+	 * 公開中の投稿を対象にし、権限のあるログイン中のユーザー（can_book_private_menu()）は非公開の投稿も対象にする。
+	 *
+	 * @param int $menu_id メニューの投稿 ID。
+	 * @return WP_Post|WP_Error 該当する投稿。該当しなければ WP_Error。
 	 */
-	private function validate_menu( int $menu_id ) {
+	private function resolve_menu_post( int $menu_id ) {
 		$post = get_post( $menu_id );
 
 		if ( ! $post || 'vkbm_service_menu' !== $post->post_type ) {
@@ -1052,6 +1113,64 @@ class Availability_Service {
 
 		if ( 'publish' !== $post->post_status && ! $this->can_book_private_menu() ) {
 			return new WP_Error( 'menu_not_public', __( 'Menu has not been published.', 'vk-booking-manager' ) );
+		}
+
+		return $post;
+	}
+
+	/**
+	 * 予約メニューの投稿タイプで、予約できる公開状態の投稿を返す。
+	 *
+	 * 空き状況の確認（validate_menu()）と同じ基準で、投稿タイプと公開状態だけを判定する。
+	 * 予約の下書きなど、利用者から受け取ったメニュー ID の検証に使う。
+	 *
+	 * @param int $menu_id メニューの投稿 ID。
+	 * @return WP_Post|null 該当する投稿。該当しなければ null。
+	 */
+	public function find_bookable_menu_post( int $menu_id ): ?WP_Post {
+		if ( $menu_id <= 0 ) {
+			return null;
+		}
+
+		$post = $this->resolve_menu_post( $menu_id );
+
+		return $post instanceof WP_Post ? $post : null;
+	}
+
+	/**
+	 * リソース（スタッフ・客室）が、メニューで担当できる公開中のリソースかどうかを返す。
+	 *
+	 * 空き状況の確認（resolve_staff_ids() の指名の判定）と同じ基準で判定する。
+	 * メニューに担当が設定されていればその中に含まれること、担当が未設定なら公開中のリソースであることが条件。
+	 *
+	 * @param int $menu_id     メニューの投稿 ID。
+	 * @param int $resource_id リソースの投稿 ID。
+	 * @return bool 担当できるリソースなら true。
+	 */
+	public function is_resource_assignable_to_menu( int $menu_id, int $resource_id ): bool {
+		if ( $menu_id <= 0 || $resource_id <= 0 ) {
+			return false;
+		}
+
+		$assignable = Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id );
+		if ( ! empty( $assignable ) && ! in_array( $resource_id, $assignable, true ) ) {
+			return false;
+		}
+
+		return array() !== $this->filter_published_resource_ids( array( $resource_id ) );
+	}
+
+	/**
+	 * Validate menu post.
+	 *
+	 * @param int $menu_id Menu ID.
+	 * @return WP_Post|WP_Error
+	 */
+	private function validate_menu( int $menu_id ) {
+		$post = $this->resolve_menu_post( $menu_id );
+
+		if ( is_wp_error( $post ) ) {
+			return $post;
 		}
 
 		if ( '1' === get_post_meta( $post->ID, self::MENU_META_ARCHIVED, true ) ) {
@@ -2452,7 +2571,7 @@ class Availability_Service {
 
 		// 予約可能期間（日数）の設定を取得。サービス個別設定があればそちらを優先。
 		// Retrieve max advance booking days. Per-service override takes priority.
-		$provider_max_advance = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : 0;
+		$provider_max_advance = isset( $settings['provider_max_advance_booking_days'] ) ? (int) $settings['provider_max_advance_booking_days'] : Settings_Repository::DEFAULT_MAX_ADVANCE_BOOKING_DAYS;
 		$max_advance_meta     = get_post_meta( $menu_post->ID, self::MENU_META_MAX_ADVANCE_DAYS, true );
 		$max_advance_days     = '' === $max_advance_meta ? $provider_max_advance : (int) $max_advance_meta;
 
@@ -2753,8 +2872,25 @@ class Availability_Service {
 		$month_last  = ( new DateTimeImmutable( $month_first ) )->format( 'Y-m-t' );
 		$first_date  = '' !== $check_in_date ? ( new DateTimeImmutable( $check_in_date ) )->modify( '+1 day' )->format( 'Y-m-d' ) : $month_first;
 		$last_date   = '' !== $check_in_date ? ( new DateTimeImmutable( $check_in_date ) )->modify( '+' . Night_Strategy::MAX_NIGHTS . ' days' )->format( 'Y-m-d' ) : $month_last;
-		$cache_key   = $this->build_lodging_calendar_cache_key( $menu->ID, $room_ids, $first_date, $last_date, $check_in_date, $timezone->getName() );
-		$raw_days    = get_transient( $cache_key );
+		$range       = $this->get_booking_range( $menu, $month_first, $month_last, $timezone );
+		if ( '' !== $check_in_date ) {
+			// 月末チェックインでも同じ月で選び直せるよう、候補を表示月で絞らない。
+			$range = array(
+				'first_date' => $first_date,
+				'last_date'  => $last_date,
+				'in_range'   => true,
+			);
+		}
+		if ( ! $range['in_range'] ) {
+			return array(
+				'days'          => array(),
+				'check_in_date' => $check_in_date,
+				'max_nights'    => Night_Strategy::MAX_NIGHTS,
+				'booking_range' => $range,
+			);
+		}
+		$cache_key = $this->build_lodging_calendar_cache_key( $menu->ID, $room_ids, $first_date, $last_date, $check_in_date, $timezone->getName() );
+		$raw_days  = get_transient( $cache_key );
 		if ( ! is_array( $raw_days ) ) {
 			$raw_days = $this->resolve_night_strategy()->get_calendar_availability(
 				$room_ids,
@@ -2787,6 +2923,7 @@ class Availability_Service {
 
 		return array(
 			'days'          => $days,
+			'booking_range' => $range,
 			'check_in_date' => $check_in_date,
 			'max_nights'    => Night_Strategy::MAX_NIGHTS,
 		);

@@ -47,6 +47,17 @@
       "type": "boolean",
       "default": true
     },
+    "imageAspectRatio": {
+      "type": "string",
+      "enum": [
+        "content",
+        "original",
+        "1-1",
+        "4-3",
+        "16-9"
+      ],
+      "default": "content"
+    },
     "showExcerpt": {
       "type": "boolean",
       "default": true

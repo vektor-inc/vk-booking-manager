@@ -19,6 +19,7 @@
  * 注: 語句は言語設定で変わるため、クラス名・属性を中心にセレクトする（案内の文言だけは日本語で確かめる）。
  * テストデータは接頭辞（E2E767）を付けて作り、afterAll で消す。BM 設定は beforeAll で控えて必ず戻す。
  */
+// @category 予約画面・カレンダー
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -656,15 +657,16 @@ test.describe
 			await expect(
 				page.locator( '.vkbm-lodging__carry-notice p' )
 			).toHaveCount( 0 );
-			// 空室一覧が出ていて、客室は未選択。
-			// @check 空室の一覧に客室が1つ出て、客室はまだ選ばれていない
-			await expect( page.locator( '.vkbm-lodging__room' ) ).toHaveCount(
-				1,
-				{ timeout: 15000 }
-			);
+			// @check 客室一覧は出ず、まとめ欄に客室名が表示され、予約に進める
 			await expect(
-				page.locator( '.vkbm-lodging__room[aria-pressed="true"]' )
+				page.locator( '.vkbm-plan-summary__action' ).first()
+			).toBeEnabled( { timeout: 15000 } );
+			await expect(
+				page.locator( '.vkbm-lodging__rooms-section' )
 			).toHaveCount( 0 );
+			await expect(
+				page.locator( '.vkbm-lodging__summary' )
+			).toContainText( `${ PREFIX } Room` );
 
 			// 対照: 日程を指定せずに同じ操作をすると、日程選択は未入力で開く。
 			// @step 日程を入れずに予約ページを開き、泊のプランの「詳細を見る」→「予約に進む」を押す

@@ -18,6 +18,7 @@
  *  - 貸し切り指定は Pro版・指名OFF・複数人予約ON でのみ意味を持つため、describe の間だけ指名OFFに切り替える。
  *  - DB 破壊操作（import/reset/export）は行わない。テストデータは作成系 wp-cli / wp eval で用意する。
  */
+// @category 人数・定員・貸し切り
 import { test, expect, Page } from '@playwright/test';
 import {
 	loginAsAdmin,

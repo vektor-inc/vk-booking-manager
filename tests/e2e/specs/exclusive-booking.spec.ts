@@ -14,6 +14,7 @@
  * - 「貸し切り予約」は指名OFF＋複数人予約ON でのみ意味を持つため、
  *   この describe の間だけ指名OFFへ切り替え、afterAll で復元する。
  */
+// @category 人数・定員・貸し切り
 import { test, expect } from '@playwright/test';
 import {
 	loginAsAdmin,

@@ -9,6 +9,7 @@ import { formatCurrency } from '../../shared/pricing';
  * 合計金額はサーバーが計算した値をそのまま表示する。
  *
  * @param {Object}   props
+ * @param {boolean}  props.hideHeading       見出しを省くか。
  * @param {string}   props.status            問い合わせの状態（idle / loading / done / error）。
  * @param {Array}    props.rooms             空いている客室（id / name / total_price）。
  * @param {string}   props.error             取得に失敗したときのメッセージ。
@@ -21,6 +22,7 @@ import { formatCurrency } from '../../shared/pricing';
  */
 export const LodgingRoomList = ( {
 	status,
+	hideHeading = false,
 	rooms,
 	error,
 	nights,
@@ -108,9 +110,11 @@ export const LodgingRoomList = ( {
 
 	return (
 		<section className="vkbm-lodging__rooms-section">
-			<h3 className="vkbm-lodging__heading">
-				{ __( 'Available rooms', 'vk-booking-manager' ) }
-			</h3>
+			{ ! hideHeading && (
+				<h3 className="vkbm-lodging__heading">
+					{ __( 'Available rooms', 'vk-booking-manager' ) }
+				</h3>
+			) }
 			{ body }
 		</section>
 	);

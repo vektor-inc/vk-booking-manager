@@ -352,6 +352,70 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 宿泊の申し込み時は実際の空室を確認し、送信後に埋まった場合はリンクで断る。
+	 */
+	public function test_create_guest_booking_request(): void {
+		$test_condition_name               = '空室なら確認メールを送り、満室なら送信とリンクでの確定を拒否';
+		$settings                          = ( new Settings_Repository() )->get_settings();
+		$settings['booking_customer_mode'] = 'guest';
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		wp_set_current_user( 0 );
+		$_COOKIE['vkbm_draft_owner'] = 'guest-lodging-1019';
+		$room_id                     = $this->create_room();
+		$menu_id                     = $this->create_menu( array( $room_id ) );
+		$token                       = $this->save_draft_token( $this->lodging_payload( $menu_id, $room_id, 10, 2 ) );
+		$notification                = new Guest_Notification_Recording_Double( true );
+		$confirmation                = new Booking_Confirmation_Controller( $notification, new Settings_Repository(), new Availability_Service() );
+		$controller                  = new \VKBookingManager\Bookings\Guest_Booking_Controller( $confirmation, $notification, new Settings_Repository() );
+		$request                     = new WP_REST_Request( 'POST', '/vkbm/v1/guest-bookings' );
+		foreach ( array(
+			'token'                     => $token,
+			'customer_name'             => '宿泊の予約者',
+			'customer_email'            => 'lodging-1019@example.com',
+			'customer_phone'            => '09012345678',
+			'agree_terms'               => true,
+			'agree_cancellation_policy' => true,
+			'agree_terms_of_service'    => true,
+		) as $key => $value ) {
+			$request->set_param( $key, $value );
+		}
+
+		// 正規の日程なら送信するが、予約はまだ作らない。
+		$result = $controller->create_guest_booking_request( $request );
+		$this->assertInstanceOf( WP_REST_Response::class, $result, is_wp_error( $result ) ? $result->get_error_message() : '' );
+		$this->assertCount( 1, $notification->verifications, $test_condition_name );
+		parse_str( (string) wp_parse_url( $notification->verifications[0]['verify_url'], PHP_URL_QUERY ), $query );
+
+		// 同じ客室の予約が後から入る。キャッシュに空室が残っていても拒否する。
+		$draft      = get_transient( self::TRANSIENT_PREFIX . $token );
+		$booking_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		foreach ( array(
+			'_vkbm_booking_menu_id'       => $menu_id,
+			'_vkbm_booking_resource_id'   => $room_id,
+			'_vkbm_booking_status'        => 'confirmed',
+			'_vkbm_booking_service_start' => wp_date( 'Y-m-d H:i:s', strtotime( $draft['slot']['start_at'] ) ),
+			'_vkbm_booking_service_end'   => wp_date( 'Y-m-d H:i:s', strtotime( $draft['slot']['end_at'] ) ),
+			'_vkbm_booking_total_end'     => wp_date( 'Y-m-d H:i:s', strtotime( $draft['slot']['end_at'] ) ),
+		) as $key => $value ) {
+			update_post_meta( $booking_id, $key, $value );
+		}
+		foreach ( array( 'lodging-other-a@example.com', 'lodging-other-b@example.com' ) as $email ) {
+			$request->set_param( 'customer_email', $email );
+			$result = $controller->create_guest_booking_request( $request );
+			$this->assertInstanceOf( WP_Error::class, $result, $test_condition_name );
+			$this->assertSame( 409, $result->get_error_data()['status'], $test_condition_name );
+			$this->assertFalse( get_transient( \VKBookingManager\Bookings\Guest_Booking_Controller::EMAIL_LIMIT_PREFIX . hash( 'sha256', $email ) ), $test_condition_name );
+		}
+		$this->assertCount( 1, $notification->verifications, $test_condition_name );
+		$this->assertSame( 'slot_unavailable', $controller->process_verification( $query['vkbm_guest_verify'] )['result'], $test_condition_name );
+	}
+
+	/**
 	 * 1室1泊あたりでは、保存済みの最低申し込み人数を下書き・確定の受付制限に使わない。
 	 */
 	public function test_per_room_booking_ignores_nomination_min_guests(): void {
@@ -407,6 +471,77 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 到着予定時刻を下書きで検証し、読み出し・確定・メタ保存まで引き継ぐ。
+	 */
+	public function test_save_draft_estimated_check_in_time(): void {
+		$room    = $this->create_room();
+		$menu_id = $this->create_menu( array( $room ) );
+		$test_cases = array(
+			array( 'test_condition_name' => '旧リクエストで項目なし => 開始時刻', 'time' => null, 'omit' => true, 'expected' => '15:00' ),
+			array( 'test_condition_name' => '開始時刻を指定 => 保存', 'time' => '15:00', 'expected' => '15:00' ),
+			array( 'test_condition_name' => '夕方の到着 => 保存', 'time' => '18:30', 'expected' => '18:30' ),
+			array( 'test_condition_name' => '当日の最終分 => 保存', 'time' => '23:59', 'expected' => '23:59' ),
+			array( 'test_condition_name' => '開始より前 => 拒否', 'time' => '14:59', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '空欄 => 拒否', 'time' => '', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '24時 => 拒否', 'time' => '24:00', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => 'HTML => 拒否', 'time' => '<b>18:30</b>', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '配列 => 拒否', 'time' => array( '18:30' ), 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => 'null => 拒否', 'time' => null, 'expected' => 'invalid_estimated_check_in_time:400' ),
+		);
+		foreach ( $test_cases as $index => $case ) {
+			// 利用者ごとの予約上限が時刻の検証に干渉しないよう分離する。
+			wp_set_current_user( $this->factory()->user->create() );
+			// 確定済み予約との期間重複を避け、時刻だけを検証する。
+			$in_days = 10 + $index * 2;
+			$result  = $this->post_draft( $this->lodging_payload( $menu_id, $room, $in_days, 1, ! empty( $case['omit'] ) ? array() : array( 'estimated_check_in_time' => $case['time'] ) ) );
+			if ( is_wp_error( $result ) ) {
+				$this->assertSame( $case['expected'], $this->code_of( $result ), $case['test_condition_name'] );
+				continue;
+			}
+			$token   = $result->get_data()['token'];
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/drafts/' . $token );
+			$request->set_param( 'token', $token );
+			$draft = ( new Booking_Draft_Controller() )->get_draft( $request );
+			$this->assertSame( $case['expected'], $draft->get_data()['lodging']['estimated_check_in_time'], $case['test_condition_name'] );
+			$result = $this->confirm( $token );
+			$this->assertInstanceOf( WP_REST_Response::class, $result, $case['test_condition_name'] );
+			$booking_id = (int) $result->get_data()['booking_id'];
+			$this->assertSame( $case['expected'], get_post_meta( $booking_id, Lodging_Booking::META_ESTIMATED_CHECK_IN_TIME, true ), $case['test_condition_name'] );
+			$this->assertSame( $this->date_after( $in_days ) . ' 15:00:00', get_post_meta( $booking_id, Booking_Overlap::META_START, true ), '客室の占有開始は到着予定で変わらない' );
+		}
+	}
+
+	/**
+	 * REST スキーマでも不正な時刻と型を拒否する。
+	 */
+	public function test_register_routes_estimated_check_in_time(): void {
+		global $wp_rest_server;
+		$previous_server = $wp_rest_server;
+		$controller      = new Booking_Draft_Controller();
+		add_action( 'rest_api_init', array( $controller, 'register_routes' ) );
+		try {
+			// REST 初期化フック内で登録し、他のテストのサーバーを汚さない。
+			$wp_rest_server = new \WP_REST_Server(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト専用のサーバーへ差し替える。
+			do_action( 'rest_api_init' );
+			$route  = $wp_rest_server->get_routes()['/vkbm/v1/drafts'];
+			$schema = $route[0]['args']['estimated_check_in_time'];
+			$test_cases = array(
+				array( 'test_condition_name' => '開始時刻 => 有効', 'time' => '15:00', 'expected' => true ),
+				array( 'test_condition_name' => '夜 => 有効', 'time' => '23:59', 'expected' => true ),
+				array( 'test_condition_name' => '24時 => 不正', 'time' => '24:00', 'expected' => false ),
+				array( 'test_condition_name' => '配列 => 不正', 'time' => array( '18:30' ), 'expected' => false ),
+				array( 'test_condition_name' => '空欄 => 不正', 'time' => '', 'expected' => false ),
+			);
+			foreach ( $test_cases as $case ) {
+				$this->assertSame( $case['expected'], true === rest_validate_value_from_schema( $case['time'], $schema, 'estimated_check_in_time' ), $case['test_condition_name'] );
+			}
+		} finally {
+			remove_action( 'rest_api_init', array( $controller, 'register_routes' ) );
+			$wp_rest_server = $previous_server; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前のサーバーへ復元する。
+		}
+	}
+
+	/**
 	 * 泊の下書き保存: 日付・客室・締切・販売日の検証と、保存される値（サーバー計算）を検証する。
 	 */
 	public function test_save_draft(): void {
@@ -419,6 +554,20 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 		$this->close_day( $closed, $this->date_after( 11 ) );
 		$menu_closed = $this->create_menu( array( $closed ) );
 		$menu_other  = $this->create_menu( array( $other, $draft ) );
+		// 予約メニューではない投稿（予約の投稿）と、公開されていない泊のメニュー。
+		$booking_post_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		$menu_unpublished = $this->create_menu( array( $room ) );
+		wp_update_post(
+			array(
+				'ID'          => $menu_unpublished,
+				'post_status' => 'draft',
+			)
+		);
 		wp_set_current_user( $this->factory()->user->create() );
 
 		$test_cases = array(
@@ -426,6 +575,16 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 				'test_condition_name' => '締切の外・正常な日付 => ok',
 				'payload'             => $this->lodging_payload( $menu_id, $room, 10, 2 ),
 				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => 'menu_id が予約の投稿の ID => invalid_menu_id',
+				'payload'             => $this->lodging_payload( $booking_post_id, $room, 10, 2 ),
+				'expected'            => 'invalid_menu_id:400',
+			),
+			array(
+				'test_condition_name' => 'menu_id が公開されていない泊のメニュー（予約の管理権限なし） => invalid_menu_id',
+				'payload'             => $this->lodging_payload( $menu_unpublished, $room, 10, 2 ),
+				'expected'            => 'invalid_menu_id:400',
 			),
 			array(
 				'test_condition_name' => '締切（72時間）の内側のチェックイン => reservation_deadline_passed',
@@ -497,6 +656,7 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 		wp_set_current_user( $admin_id );
 		$this->assertSame( 'staff_not_assigned:400', $this->code_of( $this->post_draft( $this->lodging_payload( $menu_other, $room, 10, 1 ) ) ), '予約の管理権限あり・担当外の客室' );
 		$this->assertSame( 'resource_not_found:400', $this->code_of( $this->post_draft( $this->lodging_payload( $menu_other, $draft, 10, 1 ) ) ), '予約の管理権限あり・未公開の客室' );
+		$this->assertSame( 'ok', $this->code_of( $this->post_draft( $this->lodging_payload( $menu_unpublished, $room, 10, 2 ) ) ), '予約の管理権限あり・公開されていない泊のメニューは従来どおり保存できる' );
 		wp_set_current_user( $this->factory()->user->create() );
 
 		// 保存される値はサーバーで計算した値。送られてきた金額・泊数・日時・タイムゾーンは使わない。
@@ -541,6 +701,335 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 		$this->assertSame( 20000, $data['total_price'] );
 		$this->assertSame( 10000, $data['lodging']['price_per_night'] );
 		$this->assertSame( 0, $data['lodging']['room_surcharge_per_night'] );
+	}
+
+	/**
+	 * 確定時に時刻を再検証し、旧下書きにだけ開始時刻を補う。
+	 */
+	public function test_confirm_estimated_check_in_time(): void {
+		$room    = $this->create_room();
+		$menu_id = $this->create_menu( array( $room ) );
+		$test_cases = array(
+			array( 'test_condition_name' => '夕方 => 確定', 'time' => '17:15', 'expected' => '17:15' ),
+			array( 'test_condition_name' => '夜 => 確定', 'time' => '22:00', 'expected' => '22:00' ),
+			array( 'test_condition_name' => '旧下書きで項目なし => 開始時刻', 'time' => null, 'omit' => true, 'expected' => '15:00' ),
+			array( 'test_condition_name' => '旧下書きで開始が遅く変更 => 最新の開始時刻', 'time' => null, 'omit' => true, 'plan_time' => '18:00', 'expected' => '18:00' ),
+			array( 'test_condition_name' => '開始が到着予定より遅く変更 => 拒否', 'time' => '17:15', 'plan_time' => '18:00', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '開始変更後も到着予定が開始以降 => 確定', 'time' => '19:00', 'plan_time' => '18:00', 'expected' => '19:00' ),
+			array( 'test_condition_name' => '不正値に変更 => 拒否', 'time' => '25:00', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '配列に変更 => 拒否', 'time' => array( '18:30' ), 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '空欄に変更 => 拒否', 'time' => '', 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => 'nullに変更 => 拒否', 'time' => null, 'expected' => 'invalid_estimated_check_in_time:400' ),
+			array( 'test_condition_name' => '開始前に変更 => 拒否', 'time' => '14:59', 'expected' => 'invalid_estimated_check_in_time:400' ),
+		);
+		foreach ( $test_cases as $index => $case ) {
+			// 利用者ごとの予約上限が時刻の検証に干渉しないよう分離する。
+			wp_set_current_user( $this->factory()->user->create() );
+			// 下書き作成後のプラン変更も、確定時点の開始時刻で検証する。
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, '15:00' );
+			$token = $this->save_draft_token( $this->lodging_payload( $menu_id, $room, 10 + $index * 2, 1 ) );
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, $case['plan_time'] ?? '15:00' );
+			$draft = get_transient( self::TRANSIENT_PREFIX . $token );
+			if ( ! empty( $case['omit'] ) ) {
+				unset( $draft['lodging']['estimated_check_in_time'] );
+			} else {
+				$draft['lodging']['estimated_check_in_time'] = $case['time'];
+			}
+			set_transient( self::TRANSIENT_PREFIX . $token, $draft, 1800 );
+			// 読み出しは欠落キーだけを補い、保存済みの不正値は確定時の検証に残す。
+			$read_draft = $this->get_draft_data( $token );
+			$this->assertSame( ! empty( $case['omit'] ) ? $case['expected'] : $case['time'], $read_draft['lodging']['estimated_check_in_time'], $case['test_condition_name'] );
+			$draft['lodging']['estimated_check_in_time'] = $read_draft['lodging']['estimated_check_in_time'];
+			$this->assertSame( $draft, get_transient( self::TRANSIENT_PREFIX . $token ), '補完値と所有者を保存する' );
+			$result = $this->confirm( $token );
+			$actual = is_wp_error( $result ) ? $this->code_of( $result ) : Lodging_Booking::get_booking_estimated_check_in_time( (int) $result->get_data()['booking_id'] );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 旧下書きの補完値と所有者を、有効期限を延長せず保存する。
+	 */
+	public function test_get_draft_backfills_estimated_check_in_time(): void {
+		$room       = $this->create_room();
+		$menu_id    = $this->create_menu( array( $room ) );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '会員の旧下書き',
+				'guest'               => false,
+				'legacy_owner'        => false,
+				'time'                => null,
+				'expected'            => '15:00',
+			),
+			array(
+				'test_condition_name' => 'ゲストの旧下書き',
+				'guest'               => true,
+				'legacy_owner'        => false,
+				'time'                => null,
+				'expected'            => '15:00',
+			),
+			array(
+				'test_condition_name' => '所有者も欠落した旧下書き',
+				'guest'               => true,
+				'legacy_owner'        => true,
+				'time'                => null,
+				'expected'            => '15:00',
+			),
+			array(
+				'test_condition_name' => '保存済みの空欄は補完しない',
+				'guest'               => false,
+				'legacy_owner'        => false,
+				'time'                => '',
+				'expected'            => '',
+			),
+		);
+		foreach ( $test_cases as $index => $case ) {
+			$_COOKIE['vkbm_draft_owner'] = 'legacyguestowner';
+			wp_set_current_user( $case['guest'] ? 0 : $this->factory()->user->create() );
+			$token = $this->save_draft_token( $this->lodging_payload( $menu_id, $room, 10 + $index * 2, 1 ) );
+			$key   = self::TRANSIENT_PREFIX . $token;
+			$draft = get_transient( $key );
+			if ( null === $case['time'] ) {
+				unset( $draft['lodging']['estimated_check_in_time'] );
+			} else {
+				$draft['lodging']['estimated_check_in_time'] = $case['time'];
+			}
+			if ( $case['legacy_owner'] ) {
+				unset( $draft['owner_user_id'], $draft['owner_key'] );
+			}
+			set_transient( $key, $draft, 60 );
+			$expires  = get_option( '_transient_timeout_' . $key );
+			$response = $this->get_draft_data( $token );
+			$stored   = get_transient( $key );
+			$this->assertSame( $case['expected'], $stored['lodging']['estimated_check_in_time'] ?? null, $case['test_condition_name'] );
+			$this->assertEqualsWithDelta( $expires, get_option( '_transient_timeout_' . $key ), 2, $case['test_condition_name'] );
+			$this->assertSame( $draft['owner_user_id'] ?? 0, $stored['owner_user_id'] );
+			if ( $case['guest'] ) {
+				$this->assertSame( $draft['owner_key'] ?? 'legacyguestowner', $stored['owner_key'] );
+			}
+			$this->assertArrayNotHasKey( 'owner_user_id', $response );
+			$this->assertArrayNotHasKey( 'owner_key', $response );
+			// 確認後のプラン変更でも、表示済みの予定時刻を再計算しない。
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, '14:00' );
+			$this->assertSame( $case['expected'], $this->get_draft_data( $token )['lodging']['estimated_check_in_time'] );
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, '15:00' );
+		}
+	}
+
+	/**
+	 * 所有者補完を保存できない旧下書きは、取得・保存・削除の全経路で拒否する。
+	 */
+	public function test_backfill_draft_owner(): void {
+		$room       = $this->create_room();
+		$menu_id    = $this->create_menu( array( $room ) );
+		$controller = new Booking_Draft_Controller();
+		$cases      = array(
+			array( 'test_condition_name' => 'DB・会員は最初の所有者を保存', 'external' => false, 'guest' => false, 'allowed' => true ),
+			array( 'test_condition_name' => 'DB・ゲストは最初の所有者を保存', 'external' => false, 'guest' => true, 'allowed' => true ),
+			array( 'test_condition_name' => '外部キャッシュ・会員は期限不明なら拒否', 'external' => true, 'guest' => false, 'allowed' => false ),
+			array( 'test_condition_name' => '外部キャッシュ・ゲストは期限不明なら拒否', 'external' => true, 'guest' => true, 'allowed' => false ),
+		);
+		// 未初期化（null）のまま戻すと wp_using_ext_object_cache() は値を変えないため、真偽値に揃えて確実に元へ戻す。
+		$original_cache = (bool) wp_using_ext_object_cache();
+		try {
+			foreach ( $cases as $case ) {
+				foreach ( array( 'get_draft', 'save_draft', 'delete_draft' ) as $operation ) {
+					// 有効な下書きを作り、所有者のない旧形式へ戻す。
+					wp_using_ext_object_cache( false );
+					$first_user = $this->factory()->user->create();
+					wp_set_current_user( $first_user );
+					$input = $this->lodging_payload( $menu_id, $room, 10, 1 );
+					$token = $this->save_draft_token( $input );
+					$key   = self::TRANSIENT_PREFIX . $token;
+					$draft = get_transient( $key );
+					unset( $draft['owner_user_id'], $draft['owner_key'] );
+					wp_using_ext_object_cache( $case['external'] );
+					set_transient( $key, $draft, 60 );
+					wp_set_current_user( $case['guest'] ? 0 : $first_user );
+					$_COOKIE['vkbm_draft_owner'] = 'firstlegacyowner';
+					$owner_id  = $case['guest'] ? 'cookie:firstlegacyowner' : 'user:' . $first_user;
+					$index_key = 'vkbm_draft_owner_idx_' . sha1( $owner_id );
+					// 作成時刻を持たない所有者一覧から期限を推測してはいけない。
+					if ( $case['external'] ) {
+						set_transient( $index_key, array( array( 'token' => $token ) ), 60 );
+					}
+					try {
+						$request = new WP_REST_Request( 'GET', '/vkbm/v1/drafts/' . $token );
+						$request->set_param( 'token', $token );
+						$first = $controller->get_draft( $request );
+						$this->assertSame( $case['allowed'], $first instanceof WP_REST_Response, $case['test_condition_name'] );
+						if ( $case['allowed'] ) {
+							$stored = get_transient( $key );
+							$this->assertSame( $case['guest'] ? 'firstlegacyowner' : $first_user, $case['guest'] ? $stored['owner_key'] : $stored['owner_user_id'] );
+						} else {
+							$this->assertSame( 'forbidden_draft', $first->get_error_code() );
+							$this->assertSame( 403, $first->get_error_data()['status'] );
+						}
+
+						// 別会員・別 Cookie で読み出し、上書き、削除を試す。
+						wp_set_current_user( $case['guest'] ? 0 : $this->factory()->user->create() );
+						$_COOKIE['vkbm_draft_owner'] = 'secondlegacyowner';
+						$before = get_transient( $key );
+						$result = 'save_draft' === $operation ? $this->post_draft( array_merge( $input, array( 'token' => $token ) ) ) : $controller->$operation( $request );
+						$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] . $operation );
+						$this->assertSame( 'forbidden_draft', $result->get_error_code() );
+						$this->assertSame( 403, $result->get_error_data()['status'] );
+						$this->assertSame( $before, get_transient( $key ), '拒否時は下書きを変更しない' );
+					} finally {
+						delete_transient( $key );
+						delete_transient( $index_key );
+					}
+				}
+			}
+		} finally {
+			wp_using_ext_object_cache( $original_cache );
+		}
+	}
+
+	/**
+	 * 補完保存が残り期間を維持し、消失・期限不明の下書きを保存しない。
+	 */
+	public function test_persist_backfilled_draft(): void {
+		$controller = new Booking_Draft_Controller();
+		$persist    = new \ReflectionMethod( $controller, 'persist_backfilled_draft' );
+		$persist->setAccessible( true );
+		$index_key = new \ReflectionMethod( $controller, 'build_owner_index_key' );
+		$index_key->setAccessible( true );
+		$cases          = array(
+			array(
+				'test_condition_name' => '残り60秒を維持',
+				'remaining'           => 60,
+				'exists'              => true,
+				'indexed'             => true,
+				'saved'               => true,
+			),
+			array(
+				'test_condition_name' => '残り120秒を維持',
+				'remaining'           => 120,
+				'exists'              => true,
+				'indexed'             => true,
+				'saved'               => true,
+			),
+			array(
+				'test_condition_name' => '削除済みは復活しない',
+				'remaining'           => 60,
+				'exists'              => false,
+				'indexed'             => true,
+				'saved'               => false,
+			),
+			array(
+				'test_condition_name' => '期限切れは保存しない',
+				'remaining'           => -10,
+				'exists'              => true,
+				'indexed'             => true,
+				'saved'               => false,
+			),
+			array(
+				'test_condition_name' => '期限不明は保存しない',
+				'remaining'           => 60,
+				'exists'              => true,
+				'indexed'             => false,
+				'saved'               => false,
+			),
+		);
+		// 未初期化（null）のまま戻すと wp_using_ext_object_cache() は値を変えないため、真偽値に揃えて確実に元へ戻す。
+		$original_cache = (bool) wp_using_ext_object_cache();
+		try {
+			foreach ( array( false, true ) as $external_cache ) {
+				wp_using_ext_object_cache( $external_cache );
+				foreach ( $cases as $case ) {
+					$token   = wp_generate_uuid4();
+					$key     = self::TRANSIENT_PREFIX . $token;
+					$owner   = $index_key->invoke( $controller, 'user:123' );
+					$payload = array( 'owner_user_id' => 123 );
+					$ttl     = null;
+					// キャッシュ実装に依存せず、公開 API へ渡す残り秒数を捕捉する。
+					$capture = static function ( $expiration ) use ( &$ttl ) {
+						$ttl = $expiration;
+						return $expiration;
+					};
+					if ( $case['exists'] ) {
+						set_transient( $key, $payload, 60 );
+					}
+					if ( $external_cache && $case['indexed'] ) {
+						set_transient(
+							$owner,
+							array(
+								array(
+									'token'      => $token,
+									'created_at' => time() - 1800 + $case['remaining'],
+								),
+							),
+							1800
+						);
+					} elseif ( ! $external_cache ) {
+						update_option( '_transient_timeout_' . $key, $case['indexed'] ? time() + $case['remaining'] : 0 );
+					}
+					add_filter( 'expiration_of_transient_' . $key, $capture );
+					try {
+						$this->assertSame( $case['saved'], $persist->invoke( $controller, $token, array_merge( $payload, array( 'backfilled' => true ) ) ), $case['test_condition_name'] );
+						$this->assertSame( $case['saved'], null !== $ttl, $case['test_condition_name'] );
+						if ( $case['saved'] ) {
+							$this->assertEqualsWithDelta( $case['remaining'], $ttl, 2, $case['test_condition_name'] );
+							$this->assertTrue( get_transient( $key )['backfilled'] );
+						} elseif ( ! $case['exists'] ) {
+							$this->assertFalse( get_transient( $key ) );
+						}
+					} finally {
+						remove_filter( 'expiration_of_transient_' . $key, $capture );
+						delete_transient( $key );
+						delete_transient( $owner );
+					}
+				}
+			}
+		} finally {
+			wp_using_ext_object_cache( $original_cache );
+		}
+	}
+
+	/**
+	 * メール送信前の検証で補完値を下書きへ戻し、プラン変更後も保持する。
+	 */
+	public function test_prepare_guest_draft_for_verification_estimated_check_in_time(): void {
+		$room       = $this->create_room();
+		$menu_id    = $this->create_menu( array( $room ) );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '旧下書きの開始時刻を保持',
+				'time'                => null,
+				'expected'            => '15:00',
+			),
+			array(
+				'test_condition_name' => '指定済み時刻を保持',
+				'time'                => '19:00',
+				'expected'            => '19:00',
+			),
+			array(
+				'test_condition_name' => '空欄は拒否',
+				'time'                => '',
+				'expected'            => 'invalid_estimated_check_in_time:400',
+			),
+		);
+		foreach ( $test_cases as $index => $case ) {
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, '15:00' );
+			$token = $this->save_draft_token( $this->lodging_payload( $menu_id, $room, 30 + $index * 2, 1 ) );
+			$draft = get_transient( self::TRANSIENT_PREFIX . $token );
+			if ( null === $case['time'] ) {
+				unset( $draft['lodging']['estimated_check_in_time'] );
+			} else {
+				$draft['lodging']['estimated_check_in_time'] = $case['time'];
+			}
+			$controller = new Booking_Confirmation_Controller( new Booking_Notification_Service_Test_Double(), new Settings_Repository(), new Availability_Service() );
+			$result     = $controller->prepare_guest_draft_for_verification( $draft );
+			$actual     = is_wp_error( $result ) ? $this->code_of( $result ) : ( $draft['lodging']['estimated_check_in_time'] ?? null );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+			if ( null === $result ) {
+				// 開始を早めても、一度通知用に補完した到着予定は変わらない。
+				update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, '14:00' );
+				$this->assertNull( $controller->prepare_guest_draft_for_verification( $draft ) );
+				$this->assertSame( $case['expected'], $draft['lodging']['estimated_check_in_time'] );
+			}
+		}
 	}
 
 	/**

@@ -1,3 +1,4 @@
+// @category サービスメニュー・ブロック表示
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin, wpEvalPhp } from '../utils/helpers';
 import { getTextContrast } from '../utils/contrast';

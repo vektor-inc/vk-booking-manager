@@ -17,6 +17,7 @@
  * - 料金付きの単価メニュー（指名料を持つスタッフ付き）を beforeAll で WP-CLI / wpEvalPhp により
  *   セットアップし、afterAll で削除・指名設定を元へ復元する。
  */
+// @category 料金表示
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,

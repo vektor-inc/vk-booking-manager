@@ -100,7 +100,77 @@ class Surface_Text_Styles_Test extends TestCase {
 			'footer modal'          => array( $reservation, '.vkbm-footer-modal__dialog' ),
 			'menu loop group title' => array( 'src/blocks/menu-loop/style.scss', '.vkbm-menu-loop__group-title' ),
 			'auth card'             => array( 'assets/scss/auth-forms.scss', '.vkbm-auth-card' ),
+			'guest count input'     => array( $reservation, '.vkbm-plan-summary__guests-select.vkbm-plan-summary__guests-select:not([type="button"]):not([type="submit"])' ),
+			'confirm input'         => array( $reservation, '.vkbm-confirm__guest-field input:not([type="checkbox"]):not([type="radio"])' ),
+			'auth input'            => array( 'assets/scss/auth-forms.scss', '.vkbm-auth-form__input.vkbm-auth-form__input:not([type="checkbox"]):not([type="radio"])' ),
 		);
+	}
+
+	/**
+	 * 入力欄の通常時・フォーカス時・プレースホルダーが白い面に合う配色を持つ。
+	 */
+	public function test_input_surface_states(): void {
+		// 白背景を持つ入力欄の通常時と、ネストした状態別ルールを確認する。
+		foreach ( $this->provide_surface_selectors() as $name => list( $file, $selector ) ) {
+			if ( ! in_array( $name, array( 'guest count input', 'confirm input', 'auth input' ), true ) ) {
+				continue;
+			}
+			$content = $this->read_local_file( $file );
+			$this->assertSame( 1, preg_match( '/^(\t*)' . preg_quote( $selector, '/' ) . '\s*\{([^{}&]*)(.*?)^\1\}/ms', $content, $rule ), $name );
+			$this->assertMatchesRegularExpression( '/color-scheme:\s*light;/', $rule[2], $name );
+			$this->assertMatchesRegularExpression( '/border(?:-color)?:[^;]*var\(--vkbm--color--border/', $rule[2], $name );
+
+			$this->assertSame( 1, preg_match( '/&:focus,\s*&:focus-visible\s*\{([^{}]*)\}/s', $rule[3], $focus ), $name );
+			$this->assertMatchesRegularExpression( '/background-color:\s*var\(--vkbm--color--bg-primary/', $focus[1], $name );
+			$this->assertMatchesRegularExpression( '/(?<![\w-])color:\s*var\(--vkbm--color--surface-text/', $focus[1], $name );
+			$this->assertMatchesRegularExpression( '/color-scheme:\s*light;/', $focus[1], $name );
+			$this->assertMatchesRegularExpression( '/border-color:\s*var\(--vkbm--color--(?:border|primary)/', $focus[1], $name );
+
+			// 人数欄は枠色を固定するため、テーマの輪郭に依存せずフォーカスを示す。
+			if ( 'guest count input' === $name ) {
+				$this->assertMatchesRegularExpression( '/&:focus-visible\s*\{\s*@include vkbm-focus-ring;\s*\}/', $rule[3], $name );
+			}
+
+			$this->assertSame( 1, preg_match( '/&::placeholder\s*\{([^{}]*)\}/s', $rule[3], $placeholder ), $name );
+			$this->assertMatchesRegularExpression( '/(?<![\w-])color:\s*var\(--vkbm--color--text-secondary/', $placeholder[1], $name );
+			$this->assertMatchesRegularExpression( '/opacity:\s*1;/', $placeholder[1], $name );
+		}
+	}
+
+	/**
+	 * 入力欄の通常時・フォーカス時の詳細度が Kit の指定を上回る。
+	 */
+	public function test_input_selectors_override_kit_styles(): void {
+		$reservation = $this->read_local_file( 'src/blocks/reservation/style.scss' );
+		$auth        = $this->read_local_file( 'assets/scss/auth-forms.scss' );
+		$cases       = array(
+			'認証'        => array( $auth, '.vkbm-auth-form__input.vkbm-auth-form__input:not([type="checkbox"]):not([type="radio"])', 0, 0 ),
+			'人数'        => array( $reservation, '.vkbm-plan-summary__guests-select.vkbm-plan-summary__guests-select:not([type="button"]):not([type="submit"])', 0, 0 ),
+			'日付'        => array( $reservation, '.vkbm-plan-summary__field .vkbm-plan-summary__date-input:not([type="button"]):not([type="submit"])', 0, 0 ),
+			'確認・会員・同行者' => array( $reservation, '.vkbm-confirm__form input:not([type="checkbox"]):not([type="radio"])', 1, 1 ),
+			'管理者'       => array( $reservation, '.vkbm-confirm__admin-field input:not([type="checkbox"]):not([type="radio"])', 1, 1 ),
+			'ゲスト'       => array( $reservation, '.vkbm-confirm__guest-field input:not([type="checkbox"]):not([type="radio"])', 1, 1 ),
+		);
+
+		foreach ( $cases as $name => list( $content, $selector, $ancestor_classes, $elements ) ) {
+			// セレクタ一覧の途中も対象にし、SCSS 内に実在する保護規則を検証する。
+			$this->assertMatchesRegularExpression( '/' . preg_quote( $selector, '/' ) . '\s*[,\{]/', $content, $name );
+			// 日付は明示したフォーカス規則、それ以外は同じ親規則内の入れ子を検証する。
+			if ( '日付' === $name ) {
+				$this->assertMatchesRegularExpression( '/' . preg_quote( $selector, '/' ) . ':focus\s*,/', $content, $name );
+				$this->assertMatchesRegularExpression( '/' . preg_quote( $selector, '/' ) . ':focus-visible\s*\{\s*background-color:/', $content, $name );
+			} else {
+				$this->assertSame( 1, preg_match( '/^(\t*)' . preg_quote( $selector, '/' ) . '\s*(?:,[^{]+)?\{(.*?)^\1\}/ms', $content, $rule ), $name );
+				$this->assertMatchesRegularExpression( '/&:focus,\s*&:focus-visible\s*\{\s*background-color:/', $rule[2], $name );
+			}
+			// 除外条件には属性の詳細度だけが加わるため、クラスと属性を合算する。
+			$class_count = preg_match_all( '/\.[a-zA-Z_-][a-zA-Z0-9_-]*|\[[^\]]+\]/', $selector ) + $ancestor_classes;
+			$this->assertGreaterThan( 31, 10 * $class_count + $elements, $name . ' 通常時: Kit (0,3,1) より強いこと' );
+			$this->assertGreaterThan( 41, 10 * ( $class_count + 1 ) + $elements, $name . ' フォーカス時: Kit (0,4,1) より強いこと' );
+		}
+
+		// disabled は強化した親規則内に置き、通常時と Kit より強い (0,5,0) で灰色を保つ。
+		$this->assertMatchesRegularExpression( '/&\[disabled\],\s*&:disabled\s*\{\s*background: #f1f5f9;\s*color: #94a3b8;/', $auth );
 	}
 
 	/**

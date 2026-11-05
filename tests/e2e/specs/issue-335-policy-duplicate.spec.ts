@@ -29,6 +29,7 @@
  * - beforeAll でプロバイダー設定を上記の再現条件へ切り替え、afterAll で
  *   global-setup が投入する既定値へ復元して他 spec への状態リークを防ぐ。
  */
+// @category 予約の確定・確認・キャンセル
 import { test, expect, Page } from '@playwright/test';
 import { wpEvalPhp, getServiceMenuId } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';

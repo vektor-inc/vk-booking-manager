@@ -83,6 +83,39 @@ class Rate_Limit_Trait_Test extends WP_UnitTestCase {
 		$this->assertFalse( $stub->consume_rate_limit_token( 'limited_action', 3, 60 ) );
 	}
 
+	/** IPv6 の同じ /64 は表記や端末アドレスを変えても同じ上限を使う。 */
+	public function test_consume_rate_limit_token_ipv6_subnet(): void {
+		add_filter( 'vkbm_rate_limit_enabled', '__return_true' );
+		$stub   = new Rate_Limit_Trait_Stub();
+		$action = 'ipv6_' . wp_generate_uuid4();
+		foreach ( array( '2001:db8:1234:5678::1', '2001:0db8:1234:5678:ffff::2', '2001:db8:1234:5679::1' ) as $index => $ip ) {
+			$_SERVER['REMOTE_ADDR'] = $ip;
+			$this->assertSame( $ip, $stub->get_client_ip() );
+			$this->assertSame( 1 !== $index, $stub->consume_rate_limit_token( $action, 1, 60 ) );
+		}
+		delete_transient( 'vkbm_rl_' . substr( sha1( $action . '|2001:db8:1234:5678::' ), 0, 20 ) );
+		delete_transient( 'vkbm_rl_' . substr( sha1( $action . '|2001:db8:1234:5679::' ), 0, 20 ) );
+	}
+
+	/** IPv4 射影表記は素の IPv4 と共有し、異なる IPv4 は別の上限を使う。 */
+	public function test_consume_rate_limit_token_ipv4_mapped(): void {
+		add_filter( 'vkbm_rate_limit_enabled', '__return_true' );
+		$stub   = new Rate_Limit_Trait_Stub();
+		$action = 'mapped_' . wp_generate_uuid4();
+		$cases  = array(
+			array( '::ffff:203.0.113.5', true ),
+			array( '::ffff:203.0.113.6', true ),
+			array( '203.0.113.5', false ),
+			array( '::ffff:cb00:7106', false ),
+		);
+		foreach ( $cases as $case ) {
+			$_SERVER['REMOTE_ADDR'] = $case[0];
+			$this->assertSame( $case[1], $stub->consume_rate_limit_token( $action, 1, 60 ), $case[0] );
+		}
+		$this->clear_state_for( $action, '203.0.113.5' );
+		$this->clear_state_for( $action, '203.0.113.6' );
+	}
+
 	public function test_filter_can_disable_rate_limit(): void {
 		// 明示的に false（無効化）を設定するフィルタを差し込む。
 		add_filter( 'vkbm_rate_limit_enabled', '__return_false' );
@@ -407,7 +440,9 @@ class Rate_Limit_Trait_Test extends WP_UnitTestCase {
 		$stub = new Rate_Limit_Trait_Stub();
 		try {
 			// ロック取得失敗 → 許可フォールバック（true）+ 監視アクション発火。
+			$started = microtime( true );
 			$this->assertTrue( $stub->consume_rate_limit_token( $action, 1, 60 ) );
+			$this->assertGreaterThanOrEqual( 0.9, microtime( true ) - $started, '並列要求のロックを1秒待つ' );
 			$this->assertCount( 1, $captured, '監視アクションは必ず 1 回発火する想定' );
 			$this->assertSame( $action, $captured[0]['action'] );
 			$this->assertSame( $hash, $captured[0]['hash'] );

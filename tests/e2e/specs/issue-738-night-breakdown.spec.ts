@@ -3,9 +3,9 @@
  *
  * 検証内容:
  * 1. 休前日の料金を設定したプランで、金曜から 2 泊（金曜 = 平日、土曜 = 休前日）の予約を確認画面まで進める。
- *    - 日程を選んだ直後、客室一覧の上に泊ごとの区分（平日・休前日）が出る。
+ *    - 日程を選んだ直後、まとめ欄の上に泊ごとの区分（平日・休前日）が出る。
  *    - 同じ欄に泊ごとの単価と泊の合計も出る（#969 で内訳を日程選択直後の欄へ移した。単価は客室によらないため、客室を選ぶ前に出せる）。
- *    - 客室を選んでも、まとめ欄には泊ごとの内訳を重ねて出さない（泊数と合計金額だけ）。
+ *    - まとめ欄には泊ごとの内訳を重ねて出さない（泊数と合計金額だけ）。
  *    - 確認画面は「1泊あたりの料金」の行の代わりに、泊ごとの内訳（常に開いた状態）が出る。
  *    - 合計金額が、泊ごとの単価の合計（10,000 + 15,000 = 25,000円）になっている。
  * 2. 休前日・特定日の料金を設定していないプランは、区分も内訳も出さず、「1泊あたりの料金」の行のまま。
@@ -16,6 +16,7 @@
  *   （業種プリセットが宿泊のまま次の spec へ残ると、他の spec が壊れるため）。
  * - 予約は確定させない（確認画面まで）。
  */
+// @category 宿泊予約
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -304,14 +305,14 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		}
 	} );
 
-	test( '金曜から 2 泊: 客室一覧の上・まとめ欄・確認画面に泊ごとの内訳が出て、合計が泊ごとの単価の合計になる', async ( {
+	test( '金曜から 2 泊: まとめ欄の上と確認画面に泊ごとの内訳が出て、合計が泊ごとの単価の合計になる', async ( {
 		page,
 	} ) => {
 		// @step 休前日の料金ありのプランの予約ページを開き、3 日後以降の金曜をチェックイン日、その 2 日後の日曜をチェックアウト日に選ぶ
 		await selectFridayStay( page, breakdownMenuId );
 
-		// 日程を選んだ直後、客室一覧の上に泊ごとの区分が出る（金曜 = 平日、土曜 = 休前日）。
-		// @check 客室一覧の上に、泊ごとの区分（1 泊目「平日」、2 泊目「休前日」）が表示される
+		// 日程を選んだ直後、まとめ欄の上に泊ごとの区分が出る（金曜 = 平日、土曜 = 休前日）。
+		// @check まとめ欄の上に、泊ごとの区分（1 泊目「平日」、2 泊目「休前日」）が表示される
 		const nightRates = page.locator( '.vkbm-lodging__night-rates' );
 		await expect( nightRates ).toBeVisible( { timeout: 15000 } );
 		const rateRows = nightRates.locator( '.vkbm-lodging__night' );
@@ -324,17 +325,19 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		await expect(
 			nightRates.locator( '.vkbm-lodging__night-total' )
 		).toHaveText( '2泊合計¥25,000' );
-		// 区分の表示は客室一覧より上にある。
+		// 区分の表示はまとめ欄より上にある。
 		const rateBox = await nightRates.boundingBox();
-		const roomListBox = await page
-			.locator( '.vkbm-lodging__rooms-section' )
+		const summaryBounds = await page
+			.locator( '.vkbm-lodging__summary' )
 			.boundingBox();
-		expect( rateBox && roomListBox ).toBeTruthy();
-		expect( rateBox!.y ).toBeLessThan( roomListBox!.y );
+		expect( rateBox && summaryBounds ).toBeTruthy();
+		expect( rateBox!.y ).toBeLessThan( summaryBounds!.y );
 
-		// 客室を選んでも、まとめ欄に同じ内訳を重ねて出さない（泊数と合計金額だけ）。
-		// @step 客室を選ぶ
-		await page.locator( '.vkbm-lodging__room' ).first().click();
+		// まとめ欄に同じ内訳を重ねて出さない（泊数と合計金額だけ）。
+		// @step 予約に進める状態になるまで待つ
+		await expect(
+			page.locator( '.vkbm-plan-summary__action' ).first()
+		).toBeEnabled( { timeout: 15000 } );
 		// @check まとめ欄には泊ごとの内訳が出ず、合計金額（¥25,000）だけが出る
 		const summaryBox = page.locator( '.vkbm-lodging__summary' );
 		await expect(
@@ -389,18 +392,18 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		// @step 休前日の料金なしのプランの予約ページを開き、3 日後以降の金曜をチェックイン日、その 2 日後の日曜をチェックアウト日に選ぶ
 		await selectFridayStay( page, plainMenuId );
 
-		// 客室一覧は出るが、泊ごとの区分は出ない。
-		// @check 客室一覧は出るが、泊ごとの区分は出ない
+		// @check 客室一覧は出ず、予約に進める。泊ごとの区分は出ない
 		await expect(
-			page.locator( '.vkbm-lodging__room' ).first()
-		).toBeVisible( { timeout: 15000 } );
+			page.locator( '.vkbm-lodging__rooms-section' )
+		).toHaveCount( 0 );
 		await expect(
 			page.locator( '.vkbm-lodging__night-rates' )
 		).toHaveCount( 0 );
 
-		// 客室を選んでも、まとめ欄に泊ごとの内訳は出ない。
-		// @step 客室を選ぶ
-		await page.locator( '.vkbm-lodging__room' ).first().click();
+		// @step 予約に進める状態になるまで待つ
+		await expect(
+			page.locator( '.vkbm-plan-summary__action' ).first()
+		).toBeEnabled( { timeout: 15000 } );
 		// @check まとめ欄に泊ごとの内訳は出ない
 		await expect( page.locator( '.vkbm-lodging__breakdown' ) ).toHaveCount(
 			0
@@ -448,7 +451,9 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		await selectFridayStay( page, menuId );
 		const priceStatus = page.locator( '.vkbm-lodging__price-status' );
 		await expect( priceStatus ).toHaveText( '' );
-		await page.locator( '.vkbm-lodging__room' ).first().click();
+		await expect(
+			page.locator( '.vkbm-plan-summary__action' ).first()
+		).toBeEnabled( { timeout: 15000 } );
 		const inputs = page.locator( '.vkbm-plan-summary__guest-tier input' );
 		const summary = page.locator( '.vkbm-lodging__summary' );
 		const rates = page.locator( '.vkbm-lodging__night-rates' );
@@ -456,7 +461,7 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 			'.vkbm-lodging__nights--priced > .vkbm-lodging__night'
 		);
 
-		// @check 客室を選ぶ前から日程選択直後の欄に出ていて、まとめ欄には内訳を重ねて出さない
+		// @check 日程選択直後の欄に出ていて、まとめ欄には内訳を重ねて出さない
 		await expect( summary.locator( '.vkbm-lodging__night' ) ).toHaveCount(
 			0
 		);

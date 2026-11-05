@@ -26,6 +26,7 @@ use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\PostTypes\Booking_Post_Type;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
@@ -41,6 +42,8 @@ use function get_user_by;
 use function get_option;
 use function get_post;
 use function get_post_meta;
+use function get_post_status;
+use function get_post_type;
 use function get_the_title;
 use function get_bloginfo;
 use function home_url;
@@ -153,13 +156,12 @@ class Booking_Notification_Service {
 
 		$expires_at = (int) ( $data['expires_at'] ?? 0 );
 		$lines      = array();
-		/* translators: %s: Customer name. */
-		$lines[] = sprintf( __( 'Dear %s', 'vk-booking-manager' ), $payload['customer_name'] );
-		$lines[] = '';
-		$lines[] = __( 'Your reservation is not complete yet. Please open the following link to complete your reservation.', 'vk-booking-manager' );
-		$lines[] = '';
-		$lines[] = (string) ( $data['verify_url'] ?? '' );
-		$lines[] = '';
+		$lines[]    = __( 'Dear customer,', 'vk-booking-manager' );
+		$lines[]    = '';
+		$lines[]    = __( 'Your reservation is not complete yet. Please open the following link to complete your reservation.', 'vk-booking-manager' );
+		$lines[]    = '';
+		$lines[]    = (string) ( $data['verify_url'] ?? '' );
+		$lines[]    = '';
 		if ( $expires_at > 0 ) {
 			$lines[] = sprintf(
 				/* translators: %s: Expiration date and time of the confirmation link. */
@@ -173,7 +175,10 @@ class Booking_Notification_Service {
 			$lines[] = __( 'After you open the link, your reservation will be a provisional reservation. The administrator will review and confirm it.', 'vk-booking-manager' );
 		}
 		$lines[] = '';
-		$lines   = array_merge( $lines, $this->get_reservation_information_lines( $payload ) );
+		// 確認前の自由入力を本文に出さないよう、送信に渡す payload と分ける。
+		$body_payload                  = $payload;
+		$body_payload['attendee_name'] = '';
+		$lines                         = array_merge( $lines, $this->get_reservation_information_lines( $body_payload ) );
 		if ( '' !== (string) $payload['price_label'] ) {
 			// 確認メールの料金は下書きからの目安。確定時に指名料・貸し切り料金などを計算し直すため、金額が変わることがある。
 			$lines[] = __( 'The price shown is a guide. The amount in the email sent after confirmation is the final amount.', 'vk-booking-manager' );
@@ -198,6 +203,35 @@ class Booking_Notification_Service {
 	}
 
 	/**
+	 * 指定した投稿タイプで、公開中の投稿かどうかを返す。
+	 *
+	 * @param int    $post_id   投稿 ID。
+	 * @param string $post_type 期待する投稿タイプ。
+	 * @return bool 該当すれば true。
+	 */
+	private function is_published_post_of_type( int $post_id, string $post_type ): bool {
+		if ( $post_id <= 0 ) {
+			return false;
+		}
+
+		return get_post_type( $post_id ) === $post_type && 'publish' === get_post_status( $post_id );
+	}
+
+	/**
+	 * 公開中のリソース（スタッフ・客室）の表示名を返す。該当しなければ空文字を返す。
+	 *
+	 * @param int $resource_id リソースの投稿 ID。
+	 * @return string 表示名。
+	 */
+	private function get_published_resource_display_name( int $resource_id ): string {
+		if ( ! $this->is_published_post_of_type( $resource_id, Resource_Post_Type::POST_TYPE ) ) {
+			return '';
+		}
+
+		return vkbm_get_resource_display_name( $resource_id );
+	}
+
+	/**
 	 * 予約の下書きから、確認メールの本文に使う予約内容を組み立てる。
 	 *
 	 * 予約が無い時点のため、保存済みの予約メタではなく下書きとメニュー・リソースの設定から作る。
@@ -213,24 +247,30 @@ class Booking_Notification_Service {
 		$staff_id           = isset( $draft['resource_id'] ) ? (int) $draft['resource_id'] : 0;
 		$is_staff_preferred = ! empty( $draft['is_staff_preferred'] ) && Staff_Editor::is_enabled();
 		$guests             = max( 1, isset( $draft['guests'] ) ? (int) $draft['guests'] : 1 );
-		$guest_tiers        = Price_Tiers::normalize_guest_tiers( $draft['guest_tiers'] ?? array() );
+		$resolved_tiers     = Price_Tiers::resolve_guest_tiers( Price_Tiers::normalize_tiers( get_post_meta( $menu_id, '_vkbm_price_tiers', true ) ), $draft['guest_tiers'] ?? array() );
+		// 無効になった区分のメタが残っていても、全区分0名で基本料金を上書きしない。
+		$guest_tiers        = Price_Tiers::total_count( $resolved_tiers ) > 0 ? $resolved_tiers : array();
 		$nomination_enabled = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
 		$nomination_fee     = $nomination_enabled ? max( 0, isset( $draft['nomination_fee'] ) ? (int) $draft['nomination_fee'] : 0 ) : 0;
 		$lodging            = isset( $draft['lodging'] ) && is_array( $draft['lodging'] ) ? $draft['lodging'] : array();
 		$slot               = isset( $draft['slot'] ) && is_array( $draft['slot'] ) ? $draft['slot'] : array();
 
-		$menu_title = $menu_id > 0 ? get_the_title( $menu_id ) : '';
-		if ( '' === $menu_title ) {
-			$menu_title = (string) ( $draft['menu_label'] ?? '' );
-		}
+		// 予約メニューとして公開中の投稿だけを対象にする。
+		$is_menu_usable = $this->is_published_post_of_type( $menu_id, Service_Menu_Post_Type::POST_TYPE );
+		$menu_title     = $is_menu_usable ? get_the_title( $menu_id ) : '';
 
 		$staff_title = '';
 		$nights      = 0;
 		if ( array() !== $lodging ) {
+			// キーの無い旧下書きだけ、確定時と同じ開始時刻を確認メールに出す。
+			if ( ! array_key_exists( 'estimated_check_in_time', $lodging ) ) {
+				$lodging['estimated_check_in_time'] = Service_Menu_Post_Type::get_check_in_time( $menu_id );
+			}
+
 			// 泊の予約: 客室を出し、日時の行はチェックイン／チェックアウトにする。
 			$nights = (int) ( $lodging['nights'] ?? 0 );
 			if ( $staff_id > 0 ) {
-				$staff_title = vkbm_get_resource_display_name( $staff_id );
+				$staff_title = $this->get_published_resource_display_name( $staff_id );
 			}
 			$date_format = (string) get_option( 'date_format' );
 			$datetime    = sprintf(
@@ -241,7 +281,7 @@ class Booking_Notification_Service {
 			);
 		} else {
 			if ( $nomination_enabled ) {
-				$staff_title = $is_staff_preferred && $staff_id > 0 ? vkbm_get_resource_display_name( $staff_id ) : vkbm_get_no_nomination_label();
+				$staff_title = $is_staff_preferred && $staff_id > 0 ? $this->get_published_resource_display_name( $staff_id ) : vkbm_get_no_nomination_label();
 			}
 			$start_ts = strtotime( (string) ( $slot['start_at'] ?? '' ) );
 			$end_ts   = strtotime( (string) ( $slot['end_at'] ?? '' ) );
@@ -293,6 +333,7 @@ class Booking_Notification_Service {
 			'menu_title'              => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
 			'staff_title'             => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
 			'reservation_datetime'    => $datetime,
+			'estimated_check_in_time' => $nights > 0 ? Service_Menu_Post_Type::sanitize_time_value( $lodging['estimated_check_in_time'] ?? '' ) : '',
 			'attendee_name'           => \VKBookingManager\Common\Attendee_Name::sanitize( $attendee_name ),
 			'attendee_name_mode'      => \VKBookingManager\Common\Attendee_Name::get_mode( $settings ),
 			'attendee_name_label'     => \VKBookingManager\Common\Attendee_Name::get_label( $settings ),
@@ -1184,6 +1225,7 @@ class Booking_Notification_Service {
 			'booking_id'                   => $booking_id,
 			'menu_title'                   => '' !== $menu_title ? $menu_title : __( 'Not set', 'vk-booking-manager' ),
 			'staff_title'                  => '' !== $staff_title ? $staff_title : __( 'TBD', 'vk-booking-manager' ),
+			'estimated_check_in_time'      => Lodging_Booking::get_booking_estimated_check_in_time( $booking_id ),
 			'reservation_datetime'         => $nights > 0 ? $this->format_stay_datetime_range( $start, $end ) : $this->format_reservation_datetime_range( $start, $end ),
 			'attendee_name'                => \VKBookingManager\Common\Attendee_Name::sanitize( get_post_meta( $booking_id, \VKBookingManager\Common\Attendee_Name::META_KEY, true ) ),
 			'attendee_name_mode'           => \VKBookingManager\Common\Attendee_Name::get_mode( $settings ),
@@ -1333,6 +1375,13 @@ class Booking_Notification_Service {
 		}
 		/* translators: %s: Reservation datetime range. */
 		$lines[] = sprintf( __( 'Reservation date and time: %s', 'vk-booking-manager' ), $payload['reservation_datetime'] );
+		if ( ! empty( $payload['estimated_check_in_time'] ) ) {
+			$lines[] = sprintf(
+				/* translators: %s: 宿泊者の到着予定時刻（HH:MM）。 */
+				__( 'Estimated check-in time: %s', 'vk-booking-manager' ),
+				$payload['estimated_check_in_time']
+			);
+		}
 		if ( 'disabled' !== ( $payload['attendee_name_mode'] ?? 'disabled' ) && '' !== ( $payload['attendee_name'] ?? '' ) ) {
 			$lines[] = sprintf(
 				/* translators: 1: Attendee name field label, 2: Attendee name. */

@@ -113,18 +113,18 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
-				'test_condition_name' => '自動登録の上限の 3ヶ月先まで => 3 が復元される',
+				'test_condition_name' => '自動登録の上限の 6ヶ月先まで => 6 が復元される',
 				'input'               => array(
-					'shift_auto_register_months' => '3',
+					'shift_auto_register_months' => '6',
 				),
 				'expected'            => array(
-					'shift_auto_register_months' => 3,
+					'shift_auto_register_months' => 6,
 				),
 			),
 			array(
-				'test_condition_name' => '自動登録に選択肢に無い月数（5） => 保存時と同じく 0（無効）になる',
+				'test_condition_name' => '自動登録に選択肢に無い月数（7） => 保存時と同じく 0（無効）になる',
 				'input'               => array(
-					'shift_auto_register_months' => '5',
+					'shift_auto_register_months' => '7',
 				),
 				'expected'            => array(
 					'shift_auto_register_months' => 0,
@@ -291,13 +291,13 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
-				'test_condition_name' => '入力エラーで自動登録 3ヶ月先まで・リソースタグ検索 OFF を送信 => 送信値が選択された状態で表示される',
+				'test_condition_name' => '入力エラーで自動登録 6ヶ月先まで・リソースタグ検索 OFF を送信 => 送信値が選択された状態で表示される',
 				'input'               => array(
 					'reservation_show_menu_search' => '1',
-					'shift_auto_register_months'   => '3',
+					'shift_auto_register_months'   => '6',
 				),
 				'expected'            => array(
-					'shift_auto_register_months'  => '3',
+					'shift_auto_register_months'  => '6',
 					'resource_tag_search_checked' => false,
 				),
 			),

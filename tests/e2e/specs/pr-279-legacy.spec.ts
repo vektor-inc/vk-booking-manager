@@ -8,6 +8,7 @@
  * - テストデータ（区分なし・複数人予約ONメニュー・指名OFF）は beforeAll で用意し、
  *   afterAll で元の状態へ復元する（グローバルセットアップは指名ON・該当メニューなしのため）。
  */
+// @category 料金表示
 import { test, expect } from '@playwright/test';
 import {
 	wpCliArgs,

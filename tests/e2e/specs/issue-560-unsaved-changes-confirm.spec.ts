@@ -1,3 +1,4 @@
+// @category 管理画面
 import { test, expect, Dialog } from '@playwright/test';
 import { loginAsAdmin } from '../utils/helpers';
 

@@ -14,6 +14,7 @@ namespace VKBookingManager\Bookings;
 
 use DateTimeImmutable;
 use Exception;
+use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
@@ -347,7 +348,7 @@ class Guest_Booking_Controller {
 	 * 連絡先・備考・金額など、本人以外に見せたくない値は含めない。
 	 *
 	 * @param int $booking_id 予約の投稿 ID。
-	 * @return array<string,mixed> startAt・endAt・timezone・menuName・resourceName（指名したときだけ）・guests。
+	 * @return array<string,mixed> startAt・endAt・timezone・menuName・resourceName（指名したときだけ）・guests・estimatedCheckInTime（泊の予約のみ）。
 	 */
 	public static function build_booking_summary( int $booking_id ): array {
 		$menu_id     = (int) get_post_meta( $booking_id, '_vkbm_booking_service_id', true );
@@ -355,12 +356,13 @@ class Guest_Booking_Controller {
 		$preferred   = '1' === (string) get_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', true );
 
 		return array(
-			'startAt'      => self::to_iso8601( (string) get_post_meta( $booking_id, Booking_Overlap::META_START, true ) ),
-			'endAt'        => self::to_iso8601( (string) get_post_meta( $booking_id, Booking_Overlap::META_END, true ) ),
-			'timezone'     => wp_timezone_string(),
-			'menuName'     => $menu_id > 0 ? wp_strip_all_tags( get_the_title( $menu_id ) ) : '',
-			'resourceName' => ( $preferred && $resource_id > 0 ) ? wp_strip_all_tags( get_the_title( $resource_id ) ) : '',
-			'guests'       => max( 1, (int) get_post_meta( $booking_id, '_vkbm_booking_guests', true ) ),
+			'startAt'              => self::to_iso8601( (string) get_post_meta( $booking_id, Booking_Overlap::META_START, true ) ),
+			'endAt'                => self::to_iso8601( (string) get_post_meta( $booking_id, Booking_Overlap::META_END, true ) ),
+			'timezone'             => wp_timezone_string(),
+			'estimatedCheckInTime' => Lodging_Booking::get_booking_estimated_check_in_time( $booking_id ),
+			'menuName'             => $menu_id > 0 ? wp_strip_all_tags( get_the_title( $menu_id ) ) : '',
+			'resourceName'         => ( $preferred && $resource_id > 0 ) ? wp_strip_all_tags( get_the_title( $resource_id ) ) : '',
+			'guests'               => max( 1, (int) get_post_meta( $booking_id, '_vkbm_booking_guests', true ) ),
 		);
 	}
 
@@ -525,6 +527,12 @@ class Guest_Booking_Controller {
 			return $draft;
 		}
 
+		// 下書きの予約メニューと担当が、今も予約できる投稿を指していることを確かめる。
+		$reference_error = Draft_Reference_Validator::validate_draft( new Availability_Service( $this->settings_repository ), $draft );
+		if ( null !== $reference_error ) {
+			return $reference_error;
+		}
+
 		// フォームの入力。リクエストに無ければ下書きの値を使う。
 		$form = $this->collect_form_values( $request, $draft );
 
@@ -558,6 +566,12 @@ class Guest_Booking_Controller {
 		// 顧客フラグと重複予約の判定は、ここ（申し込みの時点）では行わない。
 		// 確認前に断ると、他人のメールアドレス・電話番号を入れて、顧客フラグの有無や予約の有無を探れてしまうため。
 		// メールの持ち主が確認リンクを開いた時点で判定する（create_booking_from_draft()）。
+
+		// 空いていない枠への申し込みで、メールの送信回数を消費させない。
+		$availability_error = $this->confirmation_controller->prepare_guest_draft_for_verification( $draft );
+		if ( null !== $availability_error ) {
+			return $availability_error;
+		}
 
 		// 宛先の数の上限（1 つの下書きにつき）と、メールアドレスごとの回数制限を確かめて数える。
 		$reservation = array(

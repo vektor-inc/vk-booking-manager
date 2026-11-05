@@ -20,7 +20,7 @@ use WP_UnitTestCase;
  */
 class Settings_Sanitizer_Shift_Auto_Register_Test extends WP_UnitTestCase {
 	/**
-	 * 許可値（0〜3）はそのまま保持され、範囲外・非数値は無効（0）へフォールバックすることを検証する。
+	 * 許可値（0〜6）はそのまま保持され、範囲外・非数値は無効（0）へフォールバックすることを検証する。
 	 */
 	public function test_sanitize(): void {
 		$defaults = ( new Settings_Repository() )->get_default_settings();
@@ -47,8 +47,23 @@ class Settings_Sanitizer_Shift_Auto_Register_Test extends WP_UnitTestCase {
 				'expected'            => 3,
 			),
 			array(
-				'test_condition_name' => '範囲外の4を送信 => 無効（0）へフォールバック',
+				'test_condition_name' => '4（4ヶ月先まで）を送信 => 4を維持',
 				'conditions'          => array( 'input' => array( 'shift_auto_register_months' => '4' ) ),
+				'expected'            => 4,
+			),
+			array(
+				'test_condition_name' => '5（5ヶ月先まで）を送信 => 5を維持',
+				'conditions'          => array( 'input' => array( 'shift_auto_register_months' => '5' ) ),
+				'expected'            => 5,
+			),
+			array(
+				'test_condition_name' => '6（6ヶ月先まで）を送信 => 6を維持',
+				'conditions'          => array( 'input' => array( 'shift_auto_register_months' => '6' ) ),
+				'expected'            => 6,
+			),
+			array(
+				'test_condition_name' => '範囲外の7を送信 => 無効（0）へフォールバック',
+				'conditions'          => array( 'input' => array( 'shift_auto_register_months' => '7' ) ),
 				'expected'            => 0,
 			),
 			array(

@@ -103,3 +103,13 @@
 	height: 1.1em;
 	margin-top: 0.15em;
 }
+
+.vkbm-availability-notice > p {
+	margin: 0 0 var(--vkbm--spacing--xs, 0.5rem);
+}
+
+// 再試行を狭い画面でもタッチで操作できる大きさにする。
+.vkbm-availability-notice button {
+	min-width: 44px;
+	min-height: 44px;
+}

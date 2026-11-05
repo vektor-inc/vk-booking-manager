@@ -33,8 +33,8 @@ class Shift_Editor {
 
 	// シフトの自動登録（WP-Cron）で使うフック名。
 	private const AUTO_REGISTER_ACTION = 'vkbm_shift_auto_register_daily';
-	// シフトの自動登録を許可する月数（0=無効、1〜3=翌月〜3ヶ月先まで）。
-	private const AUTO_REGISTER_ALLOWED_MONTHS = array( 0, 1, 2, 3 );
+	// シフトの自動登録を許可する月数（0=無効、1〜6=翌月〜6ヶ月先まで）。
+	private const AUTO_REGISTER_ALLOWED_MONTHS = array( 0, 1, 2, 3, 4, 5, 6 );
 	// 毎日の自動登録を実行する固定時刻（サイトのタイムゾーン）。
 	private const AUTO_REGISTER_DAILY_HOUR   = 0;
 	private const AUTO_REGISTER_DAILY_MINUTE = 5;
@@ -1097,13 +1097,13 @@ class Shift_Editor {
 	}
 
 	/**
-	 * シフトの自動登録で許可される月数の範囲（0=無効、1〜3=翌月〜3ヶ月先まで）へ値を正規化する。
+	 * シフトの自動登録で許可される月数の範囲（0=無効、1〜6=翌月〜6ヶ月先まで）へ値を正規化する。
 	 *
 	 * Settings_Sanitizer（保存時の検証）・Setup_Notices（注意喚起の表示判定）・本クラス
 	 * （cron の実行月数判定）の3箇所で同じ判定基準を共有するために public static にしている。
 	 *
 	 * @param int $value 判定対象の値。
-	 * @return int 0〜3 のいずれか（範囲外は0=無効）。
+	 * @return int 0〜6 のいずれか（範囲外は0=無効）。
 	 */
 	public static function normalize_auto_register_months( int $value ): int {
 		return in_array( $value, self::AUTO_REGISTER_ALLOWED_MONTHS, true ) ? $value : 0;
@@ -1120,7 +1120,7 @@ class Shift_Editor {
 	}
 
 	/**
-	 * シフトの自動登録に設定されている月数（0=無効、1〜3=翌月〜3ヶ月先まで）を取得する。
+	 * シフトの自動登録に設定されている月数（0=無効、1〜6=翌月〜6ヶ月先まで）を取得する。
 	 *
 	 * @return int
 	 */
@@ -1135,7 +1135,7 @@ class Shift_Editor {
 	}
 
 	/**
-	 * 設定配列からシフトの自動登録の月数（0=無効、1〜3=翌月〜3ヶ月先まで）を取り出す。
+	 * 設定配列からシフトの自動登録の月数（0=無効、1〜6=翌月〜6ヶ月先まで）を取り出す。
 	 *
 	 * get_auto_register_months_ahead()（現在の設定値を都度取得する用途。cron や設定保存の
 	 * たびに最新値を見る必要があるため使う）から使う共通処理。設定配列から値を取り出し、

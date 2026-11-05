@@ -151,20 +151,37 @@
 	color: var(--vkbm--color--danger-text);
 }
 
-.vkbm-auth-form__input[disabled],
-.vkbm-auth-form__input:disabled {
-	background: #f1f5f9;
-	color: #94a3b8;
-	cursor: not-allowed;
-}
-
-.vkbm-auth-form__input:focus {
-	border-color: var(--vkbm--color--primary, #2563eb);
-	// プライマリカラーが薄い色でも位置が分かるよう、固定の濃色 outline を付ける（強制カラーモードでも有効）
-	outline: 2px solid #11181c;
-	outline-offset: 1px;
-	background: var(--vkbm--color--bg-primary, #fff);
+// Elementor の input:not([type=button]):not([type=submit]) より優先し、暗い背景の混入を防ぐ。
+.vkbm-auth-form__input.vkbm-auth-form__input:not([type="checkbox"]):not([type="radio"]) {
+	background-color: var(--vkbm--color--bg-primary, #fff);
 	color: var(--vkbm--color--surface-text, #333);
+	color-scheme: light;
+	border-color: var(--vkbm--color--border, #e0e0e0);
+
+	// テーマの入力中の配色でも、白背景と濃い文字の組み合わせを保つ。
+	&:focus,
+	&:focus-visible {
+		background-color: var(--vkbm--color--bg-primary, #fff);
+		color: var(--vkbm--color--surface-text, #333);
+		color-scheme: light;
+		border-color: var(--vkbm--color--primary, #2563eb);
+		// プライマリカラーが薄くても位置が分かる濃色の輪郭を付ける。
+		outline: 2px solid #11181c;
+		outline-offset: 1px;
+	}
+
+	&::placeholder {
+		color: var(--vkbm--color--text-secondary, #666);
+		opacity: 1;
+	}
+
+	// 通常時とテーマの指定より優先し、入力できない状態を灰色で示す。
+	&[disabled],
+	&:disabled {
+		background: #f1f5f9;
+		color: #94a3b8;
+		cursor: not-allowed;
+	}
 }
 
 .vkbm-auth-form__meta {

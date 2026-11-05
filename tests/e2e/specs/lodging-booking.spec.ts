@@ -20,6 +20,7 @@
  *   （業種プリセットが宿泊のまま次の spec へ残ると、他の spec が一斉に壊れるため）。
  * - 予約は確定させない（確認画面まで）。
  */
+// @category 宿泊予約
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -96,7 +97,11 @@ function seedRoom( title: string ): string {
  * @param roomIds 担当の客室 ID
  * @return プランの post ID
  */
-function seedMenu( title: string, isNight: boolean, roomIds: string[] ): string {
+function seedMenu(
+	title: string,
+	isNight: boolean,
+	roomIds: string[]
+): string {
 	const ids = roomIds.map( ( id ) => Number( id ) ).join( ', ' );
 	const unitLines = isNight
 		? `update_post_meta( $id, '_vkbm_booking_unit', 'night' );`
@@ -177,7 +182,13 @@ function cleanupSeededData(): void {
 function restoreProviderSettings(): void {
 	if ( originalSettingsJson ) {
 		wpCliArgs(
-			[ 'option', 'update', OPTION_NAME, originalSettingsJson, '--format=json' ],
+			[
+				'option',
+				'update',
+				OPTION_NAME,
+				originalSettingsJson,
+				'--format=json',
+			],
 			{ stdio: 'pipe' }
 		);
 		return;
@@ -233,13 +244,12 @@ async function clickStayDay(
 	await calendar.waitFor( { state: 'visible', timeout: 15000 } );
 
 	// 表示月の見出し（例: 2026年10月）が目的の月になるまで翌月へ送る（最大3回）。
-	const monthPattern = new RegExp(
-		`${ date.year }\\D+0?${ date.month }\\D`
-	);
+	const monthPattern = new RegExp( `${ date.year }\\D+0?${ date.month }\\D` );
 	for ( let i = 0; i < 3; i++ ) {
-		const heading = ( await calendar
-			.locator( '.vkbm-calendar__current' )
-			.innerText() ) + ' ';
+		const heading =
+			( await calendar
+				.locator( '.vkbm-calendar__current' )
+				.innerText() ) + ' ';
 		if ( monthPattern.test( heading ) ) {
 			break;
 		}
@@ -280,7 +290,8 @@ async function waitForConfirm( page: Page ) {
 		.waitFor( { state: 'visible', timeout: 15000 } );
 }
 
-test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の予約の流れ', () => {
+test.describe
+	.serial( '宿泊モード（業種プリセット「宿泊」）の予約の流れ', () => {
 	test.beforeAll( () => {
 		// BM 設定を控える（afterAll で必ず戻す）。
 		try {
@@ -342,7 +353,9 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		const values = await select
 			.locator( 'option' )
 			.evaluateAll( ( options ) =>
-				options.map( ( option ) => ( option as HTMLOptionElement ).value )
+				options.map(
+					( option ) => ( option as HTMLOptionElement ).value
+				)
 			);
 		expect( values ).toEqual( [
 			'custom',
@@ -414,6 +427,13 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 			`${ NIGHTS }泊`
 		);
 
+		// 初期値とは異なる予定時刻を入力し、確認画面への引き継ぎを確かめる。
+		// @step チェックイン予定時刻を「16:30」に変更する
+		const estimatedCheckInTime = '16:30';
+		await page
+			.getByLabel( 'チェックイン予定時刻', { exact: true } )
+			.fill( estimatedCheckInTime );
+
 		// 「予約に進む」で確認画面へ。
 		// @step 「予約に進む」を押す
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
@@ -428,14 +448,21 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		// チェックイン／チェックアウトの日付・時刻。表記はサイトの日付・時刻形式に従う
 		// （例: 「10月 5, 2026(月) 3:00 pm」「2026年10月5日(月) 3:00 PM」。24時間表記のサイトでは 15:00）ため、
 		// 月日と時刻は表記ゆれを許す正規表現で確かめる。既定の時刻はチェックイン 15:00・チェックアウト 10:00。
-		// 「メニュー」「客室」と同じ行の形（.vkbm-confirm__summary-item）で、サマリの先頭 2 行に並ぶ。
-		// @check 確認画面の先頭2行が「チェックイン」「チェックアウト」で、それぞれ選んだ日付と時刻（チェックイン 15:00、チェックアウト 10:00）が出る
+		// 予定時刻の行が増えても、施設のチェックイン／チェックアウト時刻と混同しないように検証する。
+		// @check 確認画面の先頭3行が「チェックイン」「チェックイン予定時刻」「チェックアウト」の順で、日付と施設の時刻（15:00、10:00）および入力した予定時刻「16:30」が出る
 		const rows = confirm.locator( '.vkbm-confirm__summary-item' );
 		const checkInRow = rows.nth( 0 );
-		const checkOutRow = rows.nth( 1 );
+		const estimatedCheckInRow = rows.nth( 1 );
+		const checkOutRow = rows.nth( 2 );
 		await expect(
 			checkInRow.locator( '.vkbm-confirm__summary-item-title' )
 		).toHaveText( 'チェックイン' );
+		await expect(
+			estimatedCheckInRow.locator( '.vkbm-confirm__summary-item-title' )
+		).toHaveText( 'チェックイン予定時刻' );
+		await expect(
+			estimatedCheckInRow.locator( '.vkbm-confirm__summary-item-value' )
+		).toHaveText( estimatedCheckInTime );
 		await expect(
 			checkOutRow.locator( '.vkbm-confirm__summary-item-title' )
 		).toHaveText( 'チェックアウト' );
@@ -469,10 +496,7 @@ test.describe.serial( '宿泊モード（業種プリセット「宿泊」）の
 		} );
 
 		await clickStayDay( page, tokyoDateAfter( CHECK_IN_OFFSET ) );
-		await clickStayDay(
-			page,
-			tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS )
-		);
+		await clickStayDay( page, tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS ) );
 
 		// @step 出てきた2室のうち、客室「E2E577 Room A」を選ぶ
 		const rooms = page.locator( '.vkbm-lodging__room' );

@@ -177,11 +177,19 @@ class Block_Style_Tokens_Test extends TestCase {
 			}
 		}
 
-		foreach ( array( 'reservation', 'menu-loop', 'menu-card', 'reservation-button', 'menu-search' ) as $block_name ) {
+		$block_styles = array(
+			// 予約ブロックはテンプレート・同期パターン内でもメニューカード CSS を読み込むため、共有ハンドルを固有 CSS より先に挟む。
+			'reservation'        => array( 'vkbm-components', 'vkbm-shared-menu-card', 'file:./style-index.css' ),
+			'menu-loop'          => array( 'vkbm-components', 'file:./style-index.css' ),
+			'menu-card'          => array( 'vkbm-components', 'file:./style-index.css' ),
+			'reservation-button' => array( 'vkbm-components', 'file:./style-index.css' ),
+			'menu-search'        => array( 'vkbm-components', 'file:./style-index.css' ),
+		);
+		foreach ( $block_styles as $block_name => $expected_styles ) {
 			$json = json_decode( $this->read_local_file( VKBM_PLUGIN_DIR_PATH . "src/blocks/{$block_name}/block.json" ), true );
 			$this->assertIsArray( $json, "{$block_name}/block.json を解析できません。" );
 			$this->assertSame(
-				array( 'vkbm-components', 'file:./style-index.css' ),
+				$expected_styles,
 				$json['style'] ?? null,
 				"{$block_name}/block.json の style は共通部品のハンドルを先に、ブロック固有 CSS を後に指定してください。"
 			);

@@ -9,6 +9,7 @@
  * - プランとユーザーは固有の接頭辞（E2E994 / user_e2e994_）を付けて作り、afterAll で削除する。
  * - 提供期間の開始日は「来月の 10 日」にする。
  */
+// @category 予約画面・カレンダー
 import { test, expect, Page } from '@playwright/test';
 import { wpCliArgs, wpEvalPhp, getStaffId } from '../utils/helpers';
 

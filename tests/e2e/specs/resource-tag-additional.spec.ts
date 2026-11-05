@@ -1,3 +1,4 @@
+// @category 管理画面
 import { test, expect } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
 import {

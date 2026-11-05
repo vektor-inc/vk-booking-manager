@@ -10,6 +10,7 @@
  * 注: 文言は日本語で確かめる（e2e のサイトは日本語）。
  * テストデータは接頭辞（E2E831）を付けて作り、afterAll で消す。BM 設定は beforeAll で控えて必ず戻す。
  */
+// @category 宿泊予約
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -18,6 +19,7 @@ import {
 	getCurrentAndNextTokyoMonths,
 	getTokyoDateParts,
 	loginAsAdmin,
+	setAdminBlockEditorPreferences,
 } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';
 
@@ -103,32 +105,6 @@ function restoreProviderSettings(): void {
 }
 
 /**
- * ブロックエディターの「ようこそ」案内を出さず、メタボックス欄を開いた状態にする。
- * 案内やメタボックス欄の折りたたみが、定員欄などの操作を妨げるため。
- */
-function prepareBlockEditorPreferences(): void {
-	const result = wpEvalPhp( `
-		global $wpdb;
-		$user = get_user_by( 'login', 'admin' );
-		update_user_meta(
-			$user->ID,
-			$wpdb->get_blog_prefix() . 'persisted_preferences',
-			array(
-				'core/edit-post' => array(
-					'welcomeGuide'        => false,
-					'metaBoxesMainIsOpen' => true,
-				),
-				'core'           => array(
-					'enableChoosePatternModal' => false,
-				),
-			)
-		);
-		echo 'OK';
-	` );
-	expect( result ).toContain( 'OK' );
-}
-
-/**
  * 今日（Asia/Tokyo）から offset 日後の年・月・日を返す。
  *
  * @param offset 日数
@@ -181,7 +157,7 @@ async function clickStayDay(
 }
 
 /**
- * 予約ページで泊のプランを開き、2 泊の日程を選んで客室の候補が出るまで進める。
+ * 予約ページで泊のプランを開き、2 泊の日程を選んで予約に進めるまで待つ。
  *
  * @param page Playwright の Page
  */
@@ -193,9 +169,9 @@ async function openAndPickDates( page: Page ) {
 	} );
 	await clickStayDay( page, tokyoDateAfter( 2 ) );
 	await clickStayDay( page, tokyoDateAfter( 4 ) );
-	await expect( page.locator( '.vkbm-lodging__room' ) ).toHaveCount( 1, {
-		timeout: 15000,
-	} );
+	await expect(
+		page.locator( '.vkbm-plan-summary__action' ).first()
+	).toBeEnabled( { timeout: 15000 } );
 }
 
 test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括予約', () => {
@@ -268,7 +244,7 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 		page,
 	} ) => {
 		// @step 管理者でログインし、プランの編集画面を開く
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto(
 			`/wp-admin/post.php?post=${ nightMenuId }&action=edit`
@@ -423,8 +399,6 @@ test.describe.serial( 'issue #831: 1室1泊あたりの定員と複数人一括�
 	} ) => {
 		// @step プランの予約ページを開き、2 日後をチェックイン日、4 日後をチェックアウト日に選ぶ
 		await openAndPickDates( page );
-		// @step 表示された客室を選ぶ
-		await page.locator( '.vkbm-lodging__room' ).first().click();
 
 		// @check 人数の入力欄が表示され、上限が 4 になっている
 		const guestsInput = page.locator(

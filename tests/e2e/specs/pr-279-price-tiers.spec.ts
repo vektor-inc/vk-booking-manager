@@ -16,6 +16,7 @@
  *   セットアップし、afterAll で元の状態へ復元する（グローバルセットアップは指名ON・
  *   料金区分なしのため、本 spec が自前で用意する）。
  */
+// @category 料金表示
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,

@@ -6,6 +6,8 @@
  */
 
 import { execFileSync, ExecFileSyncOptions } from 'child_process';
+import { existsSync } from 'fs';
+import { userInfo } from 'os';
 import { expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
@@ -23,6 +25,135 @@ const WP_ENV_TESTS_CONFIG =
 	process.env.WP_ENV_TESTS_CONFIG || '.wp-env-tests.json';
 
 /**
+ * WP-CLI の実行方式。
+ * - docker: wp-env が作った docker-compose.yml を使い、docker compose exec で cli コンテナに直接入る
+ * - wp-env: npx wp-env run を経由する（従来の方式）
+ */
+type WpCliRunner =
+	| { kind: 'docker'; composeFile: string; hostUidGid: string }
+	| { kind: 'wp-env' };
+
+/**
+ * このプロセスで決めた WP-CLI の実行方式。
+ * global-setup と各 worker は別プロセスのため、それぞれ最初の呼び出しで 1 回だけ決める。
+ */
+let resolvedWpCliRunner: WpCliRunner | undefined;
+
+/**
+ * wp-env 自身の設定読み込み（loadConfig）で docker-compose.yml の絶対パスを求め、標準出力に書くスクリプト。
+ * loadConfig は非同期のため、同期関数の wpCliArgs から使えるよう別プロセスの Node.js で実行する。
+ * process.argv[ 1 ] には --config に渡す設定ファイル名が入る。
+ */
+const RESOLVE_COMPOSE_FILE_SCRIPT = `
+const path = require( 'path' );
+require( '@wordpress/env/lib/config' )
+	.loadConfig( path.resolve( '.' ), process.argv[ 1 ] )
+	.then( ( config ) => process.stdout.write( config.dockerComposeConfigPath ) )
+	.catch( ( error ) => {
+		process.stderr.write( String( error && error.message ? error.message : error ) );
+		process.exit( 1 );
+	} );
+`;
+
+/**
+ * ホストのユーザーの uid と gid を「uid:gid」の形で返す。
+ * wp-env の getHostUser（@wordpress/env の lib/runtime/docker/get-host-user.js）と同じ求め方にそろえる。
+ * Windows では uid・gid が -1 になるため、wp-env と同じく 1000 に置き換える。
+ *
+ * @return uid:gid 形式の文字列
+ */
+const getHostUidGid = (): string => {
+	const { uid, gid } = userInfo();
+	return `${ uid === -1 ? 1000 : uid }:${ gid === -1 ? 1000 : gid }`;
+};
+
+/**
+ * docker compose exec で cli コンテナに入るときの引数を、実行するコマンドの手前まで作る。
+ * wp-env run の実処理（@wordpress/env の lib/runtime/docker/index.js の _spawnCommandDirectly）と同じ条件にそろえる。
+ * 作業ディレクトリは --env-cwd の既定値「.」を解決した /var/www/html。
+ * -T は、wp-env も標準入出力が端末でないときに付けるもの。e2e の呼び出しは stdio が pipe か ignore で端末にならないため、常に付ける。
+ *
+ * @param composeFile wp-env が作った docker-compose.yml の絶対パス
+ * @param hostUidGid  ホストのユーザーの uid:gid
+ * @return docker コマンドに渡す引数の配列
+ */
+const buildComposeExecArgs = (
+	composeFile: string,
+	hostUidGid: string
+): string[] => [
+	'compose',
+	'-f',
+	composeFile,
+	'exec',
+	'-w',
+	'/var/www/html',
+	'--user',
+	hostUidGid,
+	'-T',
+	'cli',
+];
+
+/**
+ * WP-CLI の実行方式を返す。最初の呼び出しで決め、以降はこのプロセスで保持した結果を返す。
+ *
+ * npx wp-env run は呼ぶたびに wp-env の起動と設定の読み込みが走り、1 回 2 秒前後かかる。
+ * e2e は 1 ジョブで数百回呼ぶため、wp-env が内部で実行している docker compose exec を直接呼ぶ。
+ * 次のときは npx wp-env run を使う。
+ * - 環境変数 VKBM_E2E_WPCLI に wp-env が指定されたとき（速さの比較と切り戻し用）
+ * - wp-env の設定から docker-compose.yml を求められない、またはファイルが無いとき
+ * - docker compose exec で cli コンテナのコマンドを実行できないとき
+ *
+ * @return WP-CLI の実行方式
+ */
+const resolveWpCliRunner = (): WpCliRunner => {
+	if ( resolvedWpCliRunner ) {
+		return resolvedWpCliRunner;
+	}
+
+	// 環境変数で従来の方式が指定されていれば、docker-compose.yml を求めずにそれを使う
+	if ( process.env.VKBM_E2E_WPCLI === 'wp-env' ) {
+		resolvedWpCliRunner = { kind: 'wp-env' };
+		return resolvedWpCliRunner;
+	}
+
+	try {
+		// wp-env run と同じ作業ディレクトリ・設定ファイルで、wp-env 自身に docker-compose.yml のパスを求めさせる
+		const composeFile =
+			execFileSync(
+				process.execPath,
+				[ '-e', RESOLVE_COMPOSE_FILE_SCRIPT, WP_ENV_TESTS_CONFIG ],
+				{ encoding: 'utf-8', stdio: [ 'ignore', 'pipe', 'pipe' ] }
+			)
+				.trim()
+				.split( '\n' )
+				.pop() ?? '';
+		if ( ! existsSync( composeFile ) ) {
+			throw new Error(
+				`docker-compose.yml not found: "${ composeFile }"`
+			);
+		}
+
+		// WP-CLI の呼び出しと同じ引数で何もしないコマンドを実行し、cli コンテナに入れることを確かめる
+		const hostUidGid = getHostUidGid();
+		execFileSync(
+			'docker',
+			[ ...buildComposeExecArgs( composeFile, hostUidGid ), 'true' ],
+			{ stdio: 'pipe' }
+		);
+
+		resolvedWpCliRunner = { kind: 'docker', composeFile, hostUidGid };
+	} catch ( e ) {
+		console.warn(
+			`WP-CLI: docker compose exec is unavailable, falling back to "npx wp-env run": ${
+				e instanceof Error ? e.message : String( e )
+			}`
+		);
+		resolvedWpCliRunner = { kind: 'wp-env' };
+	}
+	return resolvedWpCliRunner;
+};
+
+/**
  * WP-CLI コマンドを実行するヘルパー（推奨：引数を配列で渡す版）。
  * Helper to run WP-CLI commands via wp-env using execFileSync (recommended).
  *
@@ -30,6 +161,10 @@ const WP_ENV_TESTS_CONFIG =
  * 完全にスキップし、コマンドインジェクションの構造的リスクを排除する。
  * Using execFileSync skips shell interpretation entirely, eliminating
  * the structural risk of command injection.
+ *
+ * 実行方式は resolveWpCliRunner が決める（通常は docker compose exec で cli コンテナに直接入る）。
+ * docker compose exec を直接呼ぶ場合、wp-env と違い終了コード 130 も失敗として例外を投げる。
+ * 130 は Ctrl-C で抜けた対話コマンドを成功とみなすための扱いで、対話しない e2e では中断を意味するため。
  *
  * @param args WP-CLI に渡す引数の配列（'wp' 以降の各トークン）
  * @param opts execFileSync オプション（encoding は utf-8 で上書き可能）
@@ -39,22 +174,36 @@ export const wpCliArgs = (
 	args: string[],
 	opts?: ExecFileSyncOptions
 ): string => {
-	const out = execFileSync(
-		'npx',
-		[
-			'wp-env',
-			'run',
-			'--config',
-			WP_ENV_TESTS_CONFIG,
-			'cli',
-			'wp',
-			...args,
-		],
-		{
-			encoding: 'utf-8',
-			...opts,
-		}
-	);
+	const runner = resolveWpCliRunner();
+	const [ file, fileArgs ]: [ string, string[] ] =
+		runner.kind === 'docker'
+			? [
+					'docker',
+					[
+						...buildComposeExecArgs(
+							runner.composeFile,
+							runner.hostUidGid
+						),
+						'wp',
+						...args,
+					],
+			  ]
+			: [
+					'npx',
+					[
+						'wp-env',
+						'run',
+						'--config',
+						WP_ENV_TESTS_CONFIG,
+						'cli',
+						'wp',
+						...args,
+					],
+			  ];
+	const out = execFileSync( file, fileArgs, {
+		encoding: 'utf-8',
+		...opts,
+	} );
 	// stdio: 'inherit' を指定すると execFileSync は null を返すため、
 	// その場合は空文字として扱う（呼び出し側が戻り値を使わないケース用）。
 	// execFileSync returns null when stdio is 'inherit'; treat it as
@@ -184,6 +333,45 @@ export const loginAsAdmin = async (
 				waitUntil: 'domcontentloaded',
 				timeout: 30000,
 			}
+		);
+	}
+};
+
+/**
+ * 管理者のブロックエディター設定を、e2e の前提の状態にそろえるヘルパー。
+ *
+ * 「ようこそ」案内とパターン選択の案内を出さず、メタボックス欄を開いた状態にする。
+ * 案内やメタボックス欄の折りたたみが、編集画面の欄の操作を妨げるため。
+ * global-setup.ts（全 spec の開始時）と、編集画面を開く spec の両方から呼ぶ。
+ *
+ * 管理者がいない、または書き込んだ値を読み戻せないときは例外を投げる。
+ */
+export const setAdminBlockEditorPreferences = (): void => {
+	// 管理者が無ければ書き込まずに止め、書き込めたかは読み戻して確かめる。
+	// 成功時だけ固有の目印を出し、出力との完全一致で判定する（警告などの混入を成功と誤認しないため）。
+	const result = wpEvalPhp( `
+		global $wpdb;
+		$user = get_user_by( 'login', 'admin' );
+		if ( ! $user ) {
+			echo 'NO_ADMIN';
+			return;
+		}
+		$key   = $wpdb->get_blog_prefix() . 'persisted_preferences';
+		$prefs = array(
+			'core/edit-post' => array(
+				'welcomeGuide'        => false,
+				'metaBoxesMainIsOpen' => true,
+			),
+			'core'           => array(
+				'enableChoosePatternModal' => false,
+			),
+		);
+		update_user_meta( $user->ID, $key, $prefs );
+		echo get_user_meta( $user->ID, $key, true ) === $prefs ? 'VKBM_PREFS_OK' : 'VKBM_PREFS_NOT_SAVED';
+	` ).trim();
+	if ( result !== 'VKBM_PREFS_OK' ) {
+		throw new Error(
+			`Failed to set block editor preferences for admin: "${ result }"`
 		);
 	}
 };

@@ -9,8 +9,13 @@
  * 注: メディアライブラリのモーダル操作は不安定なため、添付は WP-CLI（PHP）で作って
  * メタに直接登録して準備する。語句は言語設定で変わるため、クラス名・属性でセレクトする。
  */
+// @category サービスメニュー・ブロック表示
 import { test, expect } from '@playwright/test';
-import { wpEvalPhp, loginAsAdmin } from '../utils/helpers';
+import {
+	wpEvalPhp,
+	loginAsAdmin,
+	setAdminBlockEditorPreferences,
+} from '../utils/helpers';
 
 /**
  * 検証用のサービスメニュー（サブ画像3枚つき）を作り直す。
@@ -83,32 +88,6 @@ function getStoredGalleryIds( menuId: number ): number[] {
 	return JSON.parse( wpEvalPhp( phpCode ).trim() );
 }
 
-/**
- * ブロックエディターの「ようこそ」案内を出さず、メタボックス欄を開いた状態にする。
- * 案内やメタボックス欄の折りたたみが、サブ画像欄の操作を妨げるため。
- */
-function prepareBlockEditorPreferences(): void {
-	const phpCode = `
-		global $wpdb;
-		$user = get_user_by( 'login', 'admin' );
-		update_user_meta(
-			$user->ID,
-			$wpdb->get_blog_prefix() . 'persisted_preferences',
-			array(
-				'core/edit-post' => array(
-					'welcomeGuide'        => false,
-					'metaBoxesMainIsOpen' => true,
-				),
-				'core'           => array(
-					'enableChoosePatternModal' => false,
-				),
-			)
-		);
-		echo 'OK';
-	`;
-	expect( wpEvalPhp( phpCode ) ).toContain( 'OK' );
-}
-
 test.describe( 'issue #623: サブ画像', () => {
 	let menuId: number;
 	let imageIds: number[];
@@ -122,7 +101,7 @@ test.describe( 'issue #623: サブ画像', () => {
 		page,
 	} ) => {
 		// @step 管理者でログインし、そのメニューの編集画面を開く
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 
@@ -221,7 +200,7 @@ test.describe( 'issue #623: サブ画像', () => {
 		expect( extra ).toHaveLength( 2 );
 
 		// @step 管理者でログインし、メニューの編集画面を開く
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 

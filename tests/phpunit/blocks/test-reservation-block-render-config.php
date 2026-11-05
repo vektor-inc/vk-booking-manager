@@ -47,6 +47,13 @@ class Reservation_Block_Render_Config_Test extends WP_UnitTestCase {
 	private $original_wp_scripts;
 
 	/**
+	 * 元のスタイルレジストリ。
+	 *
+	 * @var \WP_Styles
+	 */
+	private $original_wp_styles;
+
+	/**
 	 * テスト前のグローバル状態を保存する。
 	 */
 	protected function setUp(): void {
@@ -55,6 +62,7 @@ class Reservation_Block_Render_Config_Test extends WP_UnitTestCase {
 		$this->original_settings   = get_option( Settings_Repository::OPTION_KEY, false );
 		$this->original_post       = $GLOBALS['post'] ?? null;
 		$this->original_wp_scripts = $GLOBALS['wp_scripts'] ?? null;
+		$this->original_wp_styles  = clone wp_styles();
 	}
 
 	/**
@@ -69,6 +77,8 @@ class Reservation_Block_Render_Config_Test extends WP_UnitTestCase {
 		Industry_Presets::clear_cache();
 		$GLOBALS['post']       = $this->original_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の投稿へ戻すため。
 		$GLOBALS['wp_scripts'] = $this->original_wp_scripts; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前のスクリプトレジストリへ戻すため。
+
+		$GLOBALS['wp_styles'] = $this->original_wp_styles; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前のスタイルレジストリへ戻すため。
 
 		parent::tearDown();
 	}
@@ -115,6 +125,77 @@ class Reservation_Block_Render_Config_Test extends WP_UnitTestCase {
 			$config = json_decode( $matches[1], true );
 			$this->assertIsArray( $config, $case['test_condition_name'] );
 			$this->assertSame( $case['expected'], $config['isLodging'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * ソース・ビルド・登録結果が共有カード CSS を参照し、共通部品に依存することを検証する。
+	 */
+	public function test_register_block(): void {
+		$block_type = \WP_Block_Type_Registry::get_instance()->get_registered( 'vk-booking-manager/reservation' );
+		$cases      = array(
+			array(
+				'test_condition_name' => 'ソースのメタデータに共有カード CSS がある',
+				'actual'              => wp_json_file_decode( VKBM_PLUGIN_DIR_PATH . 'src/blocks/reservation/block.json', array( 'associative' => true ) )['style'],
+			),
+			array(
+				'test_condition_name' => 'ビルドのメタデータに共有カード CSS がある',
+				'actual'              => wp_json_file_decode( VKBM_PLUGIN_DIR_PATH . 'build/blocks/reservation/block.json', array( 'associative' => true ) )['style'],
+			),
+			array(
+				'test_condition_name' => '登録済みブロックがエディター・フロント共通の CSS として参照する',
+				'actual'              => $block_type->style_handles,
+			),
+		);
+		foreach ( $cases as $case ) {
+			$this->assertContains( 'vkbm-shared-menu-card', $case['actual'], $case['test_condition_name'] );
+		}
+		$this->assertTrue( wp_style_is( 'vkbm-shared-menu-card', 'registered' ) );
+		$this->assertSame( array( 'vkbm-components' ), wp_styles()->registered['vkbm-shared-menu-card']->deps );
+	}
+
+	/**
+	 * 本文外からの描画でカード CSS とギャラリーを読み込み、重複や他ブロックへの漏れが無いことを検証する。
+	 */
+	public function test_do_blocks(): void {
+		$cases = array(
+			array(
+				'test_condition_name' => '本文外の予約ブロックを描画すると必要なアセットを読み込む',
+				'content'             => '<!-- wp:vk-booking-manager/reservation --><div class="wp-block-vk-booking-manager-reservation vkbm-reservation-block"></div><!-- /wp:vk-booking-manager/reservation -->',
+				'config_enqueued'     => false,
+				'expected'            => 1,
+			),
+			array(
+				'test_condition_name' => '設定が読み込み済みでも複数の予約ブロックでアセットを1回だけ読み込む',
+				'content'             => str_repeat( '<!-- wp:vk-booking-manager/reservation --><div class="wp-block-vk-booking-manager-reservation vkbm-reservation-block"></div><!-- /wp:vk-booking-manager/reservation -->', 2 ),
+				'config_enqueued'     => true,
+				'expected'            => 1,
+			),
+			array(
+				'test_condition_name' => '予約ブロック以外ではカード CSS もギャラリーも読み込まない',
+				'content'             => '<!-- wp:paragraph --><p>sample</p><!-- /wp:paragraph -->',
+				'config_enqueued'     => false,
+				'expected'            => 0,
+			),
+		);
+		foreach ( $cases as $case ) {
+			// 本文には予約ブロックを置かず、テンプレート等に相当する描画だけを行う。
+			$GLOBALS['post']       = self::factory()->post->create_and_get( array( 'post_content' => '' ) ); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- 本文外の描画を検証するため。
+			$GLOBALS['wp_scripts'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- ケースごとにスクリプトを初期化するため。
+			wp_dequeue_style( 'vkbm-shared-menu-card' );
+			if ( $case['config_enqueued'] ) {
+				wp_register_script( 'vkbm-reservation-config', false, array(), '1.0', true );
+				wp_enqueue_script( 'vkbm-reservation-config' );
+			}
+
+			do_blocks( $case['content'] );
+
+			$this->assertFalse( has_block( 'vk-booking-manager/reservation', $GLOBALS['post'] ), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], count( array_keys( wp_styles()->queue, 'vkbm-shared-menu-card', true ) ), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], count( array_keys( wp_scripts()->queue, 'vkbm-menu-gallery-lightbox', true ) ), $case['test_condition_name'] );
+			if ( $case['expected'] ) {
+				$this->assertStringContainsString( 'vkbmMenuGallery', wp_scripts()->get_data( 'vkbm-menu-gallery-lightbox', 'data' ), $case['test_condition_name'] );
+			}
 		}
 	}
 }

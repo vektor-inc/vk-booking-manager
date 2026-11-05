@@ -2341,6 +2341,9 @@ export const BookingConfirmApp = ( {
 									roomName={ staffName }
 									checkIn={ lodgingCheckIn }
 									checkOut={ lodgingCheckOut }
+									estimatedCheckInTime={
+										draft.lodging.estimated_check_in_time
+									}
 									nights={
 										Number( draft.lodging.nights ) || 0
 									}

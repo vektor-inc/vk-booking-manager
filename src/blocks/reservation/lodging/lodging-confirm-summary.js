@@ -46,21 +46,22 @@ const DateTimeValue = ( { dateTime } ) => (
  * 呼び出し側（確認画面）がサイトの表示形式に整形した文字列を渡す（金額はサーバー計算値）。
  *
  * @param {Object}  props
- * @param {string}  props.menuName           プラン名。
- * @param {string}  props.roomLabel          客室の呼び方（見出し）。
- * @param {string}  props.roomName           客室名。
- * @param {Object}  props.checkIn            チェックイン（date / time を整形済みの文字列で持つ）。
- * @param {Object}  props.checkOut           チェックアウト（date / time を整形済みの文字列で持つ）。
- * @param {number}  props.nights             泊数。
- * @param {string}  props.guestsLabel        人数の見出し。
- * @param {string}  props.guestsText         人数（単位付き）。
- * @param {string}  props.pricePerNightText  1 泊あたりの料金（部屋全体）。空文字なら行を出さない。泊ごとの内訳を出すときは使わない。
- * @param {Array}   props.nightBreakdown     泊ごとの内訳（date / rate / plan_price / room_surcharge / price）。
- * @param {Array}   props.nightRates         泊ごとの区分（date / rate / special_label）。特定日の名称を添えるために使う。
- * @param {boolean} props.isRateTiersEnabled 予約者区分または休前日・特定日の料金を設定したプランか。true のとき「1 泊あたりの料金」の行を泊ごとの内訳（常に開いた状態）に置き換える。
- * @param {string}  props.locale             WordPress のロケール（泊の日付の曜日表記に使う）。
- * @param {?string} props.currencySymbol     通貨記号。
- * @param {string}  props.totalText          合計金額。
+ * @param {string}  props.menuName             プラン名。
+ * @param {string}  props.roomLabel            客室の呼び方（見出し）。
+ * @param {string}  props.roomName             客室名。
+ * @param {Object}  props.checkIn              チェックイン（date / time を整形済みの文字列で持つ）。
+ * @param {Object}  props.checkOut             チェックアウト（date / time を整形済みの文字列で持つ）。
+ * @param {string}  props.estimatedCheckInTime 宿泊者の到着予定時刻（HH:MM）。
+ * @param {number}  props.nights               泊数。
+ * @param {string}  props.guestsLabel          人数の見出し。
+ * @param {string}  props.guestsText           人数（単位付き）。
+ * @param {string}  props.pricePerNightText    1 泊あたりの料金（部屋全体）。空文字なら行を出さない。泊ごとの内訳を出すときは使わない。
+ * @param {Array}   props.nightBreakdown       泊ごとの内訳（date / rate / plan_price / room_surcharge / price）。
+ * @param {Array}   props.nightRates           泊ごとの区分（date / rate / special_label）。特定日の名称を添えるために使う。
+ * @param {boolean} props.isRateTiersEnabled   予約者区分または休前日・特定日の料金を設定したプランか。true のとき「1 泊あたりの料金」の行を泊ごとの内訳（常に開いた状態）に置き換える。
+ * @param {string}  props.locale               WordPress のロケール（泊の日付の曜日表記に使う）。
+ * @param {?string} props.currencySymbol       通貨記号。
+ * @param {string}  props.totalText            合計金額。
  * @return {JSX.Element} サマリ。
  */
 const LodgingConfirmSummary = ( {
@@ -69,6 +70,7 @@ const LodgingConfirmSummary = ( {
 	roomName,
 	checkIn,
 	checkOut,
+	estimatedCheckInTime,
 	nights,
 	guestsLabel,
 	guestsText,
@@ -85,6 +87,12 @@ const LodgingConfirmSummary = ( {
 			label={ __( 'Check-in', 'vk-booking-manager' ) }
 			value={ <DateTimeValue dateTime={ checkIn } /> }
 		/>
+		{ estimatedCheckInTime && (
+			<SummaryRow
+				label={ __( 'Estimated check-in time', 'vk-booking-manager' ) }
+				value={ estimatedCheckInTime }
+			/>
+		) }
 		<SummaryRow
 			label={ __( 'Check-out', 'vk-booking-manager' ) }
 			value={ <DateTimeValue dateTime={ checkOut } /> }

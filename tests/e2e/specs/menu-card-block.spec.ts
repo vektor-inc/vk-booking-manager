@@ -18,6 +18,7 @@
  * 注: ブロックは動的（save=null）なので、投稿本文にブロックコメントを直接埋め込めば
  * フロント表示時に render_callback が走る。ブロック挿入の Gutenberg UI 操作は不要。
  */
+// @category サービスメニュー・ブロック表示
 import { test, expect } from '@playwright/test';
 import { wpEvalPhp, loginAsAdmin } from '../utils/helpers';
 

@@ -275,7 +275,7 @@ class Menu_Date_Filter {
 		}
 
 		$settings = ( new Settings_Repository() )->get_settings();
-		$max_days = max( 0, (int) ( $settings['provider_max_advance_booking_days'] ?? 0 ) );
+		$max_days = max( 0, (int) ( $settings['provider_max_advance_booking_days'] ?? Settings_Repository::DEFAULT_MAX_ADVANCE_BOOKING_DAYS ) );
 		foreach ( $menu_ids as $menu_id ) {
 			$meta = get_post_meta( $menu_id, '_vkbm_max_advance_booking_days', true );
 			if ( '' === $meta ) {

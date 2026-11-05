@@ -30,6 +30,7 @@
  *   （exclusive-booking.spec.ts / menu-level-nomination-toggle.spec.ts と同じ手法）。
  *   ブラウザ経由の実予約確定（ログイン＋登録フロー）は本 spec のスコープ外とする。
  */
+// @category スタッフ指名
 import { test, expect } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
 import {

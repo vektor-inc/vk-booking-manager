@@ -1,6 +1,7 @@
 /**
  * issue #932: 宿泊カレンダーの予約できない日とチェックアウト境界を検証する。
  */
+// @category 宿泊予約
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,

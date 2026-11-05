@@ -9,6 +9,11 @@ import {
 } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { addQueryArgs } from '@wordpress/url';
+import {
+	AvailabilityNotice,
+	isLastBookingMonth,
+	isFirstBookingMonth,
+} from '../booking-ui/availability-notice';
 import { joinSentences } from '../booking-ui/join-sentences';
 import { GuestCountInput } from '../booking-ui/guest-count-input';
 import { formatCurrency } from '../../shared/pricing';
@@ -86,6 +91,7 @@ const DateTimeValue = ( date, time ) => (
  * @param {Object}                         props
  * @param {number}                         props.menuId                  選択中のメニュー（泊単位のプラン）の ID。
  * @param {string}                         props.menuTitle               メニュー名。
+ * @param {number[]}                       props.assignableRoomIds       プランを担当する客室 ID。
  * @param {Object}                         props.lodging                 メニューの REST フィールド vkbm_lodging（人数の上限・料金区分・料金の単位・時刻）。
  * @param {?{year: number, month: number}} props.servicePeriodStartMonth 提供期間の開始日が今日より先のときの開始日の年月（カレンダーの初期表示月に使う。なければ null）。
  * @param {string}                         props.siteToday               サイト時刻（WordPress のタイムゾーン）の今日（YYYY-MM-DD。カレンダーの上限年の基準。空文字ならブラウザの日付で代用する）。
@@ -104,6 +110,7 @@ const DateTimeValue = ( date, time ) => (
 const LodgingBookingPanel = ( {
 	menuId,
 	menuTitle,
+	assignableRoomIds = [],
 	lodging,
 	servicePeriodStartMonth = null,
 	siteToday = '',
@@ -211,6 +218,7 @@ const LodgingBookingPanel = ( {
 		useState( false );
 	const unavailableNoticeNonceRef = useRef( 0 );
 	const unavailableNoticeFrameRef = useRef( null );
+	const [ availabilityRetry, setAvailabilityRetry ] = useState( 0 );
 	const [ selectedRoomId, setSelectedRoomId ] = useState( 0 );
 	const [ isRoomLost, setIsRoomLost ] = useState( false );
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
@@ -237,6 +245,20 @@ const LodgingBookingPanel = ( {
 	const tierCountsKey = tierCounts.join( ',' );
 	const isRangeComplete = Boolean( range.checkIn && range.checkOut );
 	const nights = countNights( range.checkIn, range.checkOut );
+	const isSingleRoomPlan = assignableRoomIds.length === 1;
+	// effect が再取得を始める前の描画でも、前の日程・人数の結果を確定に使わない。
+	const availabilityKey = JSON.stringify( [
+		menuId,
+		range.checkIn,
+		range.checkOut,
+		guestCount,
+		hasTiers ? tierCountsKey : null,
+	] );
+	const isCurrentAvailability =
+		availability.status === 'done' &&
+		availability.requestKey === availabilityKey &&
+		isRangeComplete &&
+		isGuestCountValid;
 
 	// 表示月の1泊の空き状況は、チェックアウト選択中も月送りに合わせて問い合わせる。
 	useEffect( () => {
@@ -257,21 +279,24 @@ const LodgingBookingPanel = ( {
 					setCalendarAvailability( {
 						status: 'done',
 						days: response?.days ?? [],
+						bookingRange: response?.booking_range,
 					} );
 				}
 			} )
-			.catch( () => {
+			.catch( ( error ) => {
 				if ( active ) {
 					setCalendarAvailability( ( current ) => ( {
 						...current,
 						status: 'error',
+						busy: error?.code === 'rate_limited',
+						days: [],
 					} ) );
 				}
 			} );
 		return () => {
 			active = false;
 		};
-	}, [ menuId, monthCursor.year, monthCursor.month ] );
+	}, [ menuId, monthCursor.year, monthCursor.month, availabilityRetry ] );
 
 	// チェックイン日が決まったときだけ、滞在全体のチェックアウト候補を問い合わせる。
 	useEffect( () => {
@@ -285,6 +310,7 @@ const LodgingBookingPanel = ( {
 		}
 		let active = true;
 		setCheckoutAvailability( ( current ) => ( {
+			...current,
 			status: 'loading',
 			days: [],
 			maxNights: current.maxNights,
@@ -292,8 +318,8 @@ const LodgingBookingPanel = ( {
 		apiFetch( {
 			path: addQueryArgs( '/vkbm/v1/lodging-calendar-meta', {
 				menu_id: menuId,
-				year: monthCursor.year,
-				month: monthCursor.month,
+				year: Number( range.checkIn.slice( 0, 4 ) ),
+				month: Number( range.checkIn.slice( 5, 7 ) ),
 				check_in_date: range.checkIn,
 			} ),
 		} )
@@ -302,22 +328,25 @@ const LodgingBookingPanel = ( {
 					setCheckoutAvailability( {
 						status: 'done',
 						days: response?.days ?? [],
+						bookingRange: response?.booking_range,
 						maxNights: Number( response?.max_nights ) || 30,
 					} );
 				}
 			} )
-			.catch( () => {
+			.catch( ( error ) => {
 				if ( active ) {
 					setCheckoutAvailability( ( current ) => ( {
 						...current,
 						status: 'error',
+						busy: error?.code === 'rate_limited',
+						days: [],
 					} ) );
 				}
 			} );
 		return () => {
 			active = false;
 		};
-	}, [ menuId, range.checkIn, range.checkOut ] );
+	}, [ menuId, range.checkIn, range.checkOut, availabilityRetry ] );
 
 	// 日程・人数が変わったら、前の通知予約を取り消して空室を問い合わせ直す。
 	useEffect( () => {
@@ -336,6 +365,7 @@ const LodgingBookingPanel = ( {
 		// （表が外れて再マウントされると、画面の高さが跳ね、開いた <details> も閉じる）。日程が変わったときは捨てる。
 		const stayKey = `${ range.checkIn }|${ range.checkOut }`;
 		setAvailability( ( current ) => ( {
+			...current,
 			status: 'loading',
 			data: current.stayKey === stayKey ? current.data : null,
 			error: '',
@@ -361,6 +391,7 @@ const LodgingBookingPanel = ( {
 					data: response,
 					error: '',
 					stayKey,
+					requestKey: availabilityKey,
 				} );
 			} )
 			.catch( ( error ) => {
@@ -369,6 +400,7 @@ const LodgingBookingPanel = ( {
 				}
 				setAvailability( {
 					status: 'error',
+					busy: error?.code === 'rate_limited',
 					data: null,
 					error: resolveApiErrorMessage(
 						error,
@@ -387,6 +419,7 @@ const LodgingBookingPanel = ( {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		cancelPriceAnnouncement,
+		availabilityKey,
 		menuId,
 		range.checkIn,
 		range.checkOut,
@@ -395,17 +428,48 @@ const LodgingBookingPanel = ( {
 		isRangeComplete,
 		isGuestCountValid,
 		hasTiers,
+		availabilityRetry,
 	] );
 
-	const rooms = useMemo(
-		() =>
-			availability.status === 'done' &&
-			Array.isArray( availability.data?.rooms )
-				? availability.data.rooms
-				: [],
-		[ availability ]
+	const availabilityBusy =
+		calendarAvailability.busy ||
+		checkoutAvailability.busy ||
+		availability.busy;
+	// 日程確定後もチェックアウト側の上限を使い、翌月で操作できるようにする。
+	const bookingRange = range.checkIn
+		? {
+				first_date: addDays( range.checkIn, 1 ),
+				last_date: addDays(
+					range.checkIn,
+					checkoutAvailability.maxNights || 30
+				),
+		  }
+		: calendarAvailability.bookingRange;
+
+	const rooms = useMemo( () => {
+		if (
+			! isCurrentAvailability ||
+			! Array.isArray( availability.data?.rooms )
+		) {
+			return [];
+		}
+		return isSingleRoomPlan
+			? availability.data.rooms.filter(
+					( room ) => room.id === assignableRoomIds[ 0 ]
+			  )
+			: availability.data.rooms;
+	}, [
+		availability,
+		isCurrentAvailability,
+		isSingleRoomPlan,
+		assignableRoomIds,
+	] );
+	// 表示・ボタン・下書き送信は、同じ問い合わせ結果から導いた客室を使う。
+	const selectedRoom = rooms.find(
+		( room ) =>
+			room.id ===
+			( isSingleRoomPlan ? assignableRoomIds[ 0 ] : selectedRoomId )
 	);
-	const selectedRoom = rooms.find( ( room ) => room.id === selectedRoomId );
 	// 予約者区分または休前日・特定日の料金があるプランで、泊ごとの内訳を出す（サーバーが判定する）。
 	// 同じ日程の再取得中（status が loading で直前の結果が残っている間）も、表は出したままにする。
 	const isRateTiersEnabled =
@@ -423,6 +487,10 @@ const LodgingBookingPanel = ( {
 		availability.data?.check_in_time || lodging?.check_in_time || '';
 	const checkOutTime =
 		availability.data?.check_out_time || lodging?.check_out_time || '';
+	const [ estimatedCheckInTime, setEstimatedCheckInTime ] = useState( null );
+	const estimatedCheckInTimeRef = useRef( null );
+	const selectedEstimatedCheckInTime = estimatedCheckInTime ?? checkInTime;
+	useEffect( () => setEstimatedCheckInTime( null ), [ menuId ] );
 
 	// 即時応答ではloadingの描画が省略されるため、描画状態の遷移ではなく新しい取得結果を判定する。
 	// 初回取得・客室選択では通知せず、再取得成功時（客室選択済みならその客室、未選択なら泊ごとの料金）だけ短い合計を知らせる。
@@ -431,7 +499,7 @@ const LodgingBookingPanel = ( {
 			previousPriceAvailabilityRef.current !== availability;
 		previousPriceAvailabilityRef.current = availability;
 		cancelPriceAnnouncement();
-		if ( availability.status === 'done' && isNewResult ) {
+		if ( isCurrentAvailability && isNewResult ) {
 			// 客室を選んでいるときはその客室の合計、選ぶ前は泊ごとの料金（nightRates）の合計を知らせる。
 			// 客室を選ぶ前は、同じ日程で取得し直したとき（人数の変更）だけ知らせ、日程を選んだ直後の初回は知らせない。
 			const stayKey = `${ range.checkIn }|${ range.checkOut }`;
@@ -439,7 +507,10 @@ const LodgingBookingPanel = ( {
 			lastDoneStayKeyRef.current = stayKey;
 			const nightPrices = nightRates.map( getNightPrice );
 			let total = null;
-			if ( selectedRoom ) {
+			if (
+				selectedRoom &&
+				( ! isSingleRoomPlan || isRefetchForSameStay )
+			) {
 				total = selectedRoom.total_price;
 			} else if (
 				isRefetchForSameStay &&
@@ -467,6 +538,8 @@ const LodgingBookingPanel = ( {
 		}
 	}, [
 		availability,
+		isCurrentAvailability,
+		isSingleRoomPlan,
 		selectedRoom,
 		nightRates,
 		range.checkIn,
@@ -496,7 +569,7 @@ const LodgingBookingPanel = ( {
 	// 空室が届いて選べると分かったら、引き継ぎの確認は終わり。
 	useEffect( () => {
 		const carried = carriedRangeRef.current;
-		if ( ! carried ) {
+		if ( ! carried || availability.busy ) {
 			return;
 		}
 
@@ -510,7 +583,7 @@ const LodgingBookingPanel = ( {
 
 		if (
 			availability.status === 'error' ||
-			( availability.status === 'done' && rooms.length === 0 )
+			( isCurrentAvailability && rooms.length === 0 )
 		) {
 			carriedRangeRef.current = null;
 			setSelectedRoomId( 0 );
@@ -529,11 +602,13 @@ const LodgingBookingPanel = ( {
 						: current
 				);
 			}
-		} else if ( availability.status === 'done' ) {
+		} else if ( isCurrentAvailability ) {
 			carriedRangeRef.current = null;
 		}
 	}, [
 		availability.status,
+		availability.busy,
+		isCurrentAvailability,
 		rooms,
 		range,
 		servicePeriodStartYear,
@@ -543,14 +618,20 @@ const LodgingBookingPanel = ( {
 	// 結果が届いたとき、選んでいた客室が無ければ選択を外して知らせる（読み込み中は外さない）。
 	useEffect( () => {
 		if (
-			availability.status === 'done' &&
+			isCurrentAvailability &&
+			! isSingleRoomPlan &&
 			selectedRoomId &&
 			! selectedRoom
 		) {
 			setSelectedRoomId( 0 );
 			setIsRoomLost( true );
 		}
-	}, [ availability.status, selectedRoomId, selectedRoom ] );
+	}, [
+		isCurrentAvailability,
+		isSingleRoomPlan,
+		selectedRoomId,
+		selectedRoom,
+	] );
 
 	useEffect( () => {
 		setSubmitError( '' );
@@ -693,30 +774,61 @@ const LodgingBookingPanel = ( {
 			today.year * 12 + today.month
 		);
 	}, [ todayIso, monthCursor ] );
+	const isFirstMonth =
+		isCurrentMonth ||
+		isFirstBookingMonth( calendarAvailability.bookingRange, monthCursor );
 
 	// サイト時刻の今年 + 2 年の 12 月より先へは動かさない（空き状況の窓口が 400 を返すため。下限の「今月より前」はブラウザの日付基準）。
 	// 窓口の範囲は PHP の Availability_Service::get_lodging_calendar_meta() と同じ値で、2 か所にある。
 	const isLastMonth = useMemo(
-		() => monthCursor.year >= calendarMaxYear && monthCursor.month >= 12,
-		[ calendarMaxYear, monthCursor ]
+		() =>
+			( monthCursor.year >= calendarMaxYear &&
+				monthCursor.month >= 12 ) ||
+			isLastBookingMonth( bookingRange, monthCursor ),
+		[ calendarMaxYear, monthCursor, bookingRange ]
 	);
 
 	const handleMonthChange = useCallback(
 		( delta ) => {
-			setMonthCursor( ( current ) => {
-				const today = parseIsoDate( todayIso );
-				const next = shiftMonth( current, delta );
-				if (
-					next.year * 12 + next.month <
-						today.year * 12 + today.month ||
-					next.year > calendarMaxYear
-				) {
-					return current;
-				}
-				return next;
-			} );
+			const today = parseIsoDate( todayIso );
+			const next = shiftMonth( monthCursor, delta );
+			const nextMonthKey = `${ next.year }-${ String(
+				next.month
+			).padStart( 2, '0' ) }`;
+			if (
+				( delta > 0 &&
+					bookingRange?.last_date &&
+					nextMonthKey > bookingRange.last_date.slice( 0, 7 ) ) ||
+				( delta < 0 &&
+					calendarAvailability.bookingRange?.first_date &&
+					nextMonthKey <
+						calendarAvailability.bookingRange.first_date.slice(
+							0,
+							7
+						) )
+			) {
+				return;
+			}
+			if (
+				next.year * 12 + next.month < today.year * 12 + today.month ||
+				next.year > calendarMaxYear
+			) {
+				return;
+			}
+			// 子の effect が応答前に操作元を解除しないよう、月と同時に更新する。
+			setCalendarAvailability( ( value ) => ( {
+				...value,
+				status: 'loading',
+			} ) );
+			setMonthCursor( next );
 		},
-		[ todayIso, calendarMaxYear ]
+		[
+			monthCursor,
+			todayIso,
+			calendarMaxYear,
+			bookingRange,
+			calendarAvailability.bookingRange,
+		]
 	);
 
 	const handleProceed = () => {
@@ -733,6 +845,10 @@ const LodgingBookingPanel = ( {
 			return;
 		}
 
+		if ( ! estimatedCheckInTimeRef.current?.reportValidity() ) {
+			return;
+		}
+
 		setIsSubmitting( true );
 		setSubmitError( '' );
 
@@ -745,6 +861,7 @@ const LodgingBookingPanel = ( {
 			is_staff_preferred: false,
 			check_in_date: range.checkIn,
 			check_out_date: range.checkOut,
+			estimated_check_in_time: selectedEstimatedCheckInTime,
 			guests: guestCount,
 			...( hasTiers ? { guest_tiers: tierCounts } : {} ),
 		} ).catch( ( error ) => {
@@ -839,7 +956,16 @@ const LodgingBookingPanel = ( {
 			'Checking available rooms…',
 			'vk-booking-manager'
 		);
-	} else if ( availability.status === 'done' ) {
+	} else if ( isCurrentAvailability && isSingleRoomPlan && selectedRoom ) {
+		roomsStatusText = sprintf(
+			/* translators: %s: 確定した客室名。 */
+			__(
+				'%s is available; you can proceed to reservation.',
+				'vk-booking-manager'
+			),
+			selectedRoom.name
+		);
+	} else if ( isCurrentAvailability ) {
 		roomsStatusText = sprintf(
 			/* translators: %d: number of available rooms. */
 			_n(
@@ -1061,10 +1187,15 @@ const LodgingBookingPanel = ( {
 					'However, the rate varies by day, such as pre-holidays and special dates.',
 					'vk-booking-manager'
 				) }{ ' ' }
-				{ __(
-					'Select your dates and a room to see the rate for each night.',
-					'vk-booking-manager'
-				) }
+				{ isSingleRoomPlan
+					? __(
+							'Select your dates to see the rate for each night.',
+							'vk-booking-manager'
+					  )
+					: __(
+							'Select your dates and a room to see the rate for each night.',
+							'vk-booking-manager'
+					  ) }
 			</p>
 		);
 	};
@@ -1128,24 +1259,57 @@ const LodgingBookingPanel = ( {
 				{ renderCarryNotice() }
 			</div>
 
+			<AvailabilityNotice
+				busy={ availabilityBusy }
+				outside={
+					! range.checkIn &&
+					calendarAvailability.bookingRange?.in_range === false
+				}
+				range={ calendarAvailability.bookingRange }
+				cursor={ monthCursor }
+				loading={
+					calendarAvailability.status === 'loading' ||
+					checkoutAvailability.status === 'loading' ||
+					availability.status === 'loading'
+				}
+				lastMonth={
+					! range.checkIn &&
+					isLastBookingMonth( bookingRange, monthCursor )
+				}
+				onRetry={ () => setAvailabilityRetry( ( value ) => value + 1 ) }
+			/>
 			<LodgingRangeCalendar
 				year={ monthCursor.year }
 				month={ monthCursor.month }
 				range={ range }
 				todayIso={ todayIso }
 				onSelectDate={ handleSelectDate }
+				isInteractionDisabled={
+					availabilityBusy ||
+					( ! range.checkIn &&
+						calendarAvailability.bookingRange?.in_range === false )
+				}
 				onUnavailableDate={ handleUnavailableDate }
+				isLoading={ calendarAvailability.status === 'loading' }
 				onMonthChange={ handleMonthChange }
-				isPrevDisabled={ isCurrentMonth }
+				isPrevDisabled={ isFirstMonth }
 				isNextDisabled={ isLastMonth }
 				guideId={ guideId }
 				locale={ locale }
-				availability={ calendarAvailability }
-				checkoutAvailability={ checkoutAvailability }
+				availability={
+					availabilityBusy
+						? { status: 'loading', days: [] }
+						: calendarAvailability
+				}
+				checkoutAvailability={
+					availabilityBusy
+						? { status: 'loading', days: [] }
+						: checkoutAvailability
+				}
 				maxNights={ checkoutAvailability.maxNights }
 			/>
 			<p className="vkbm-lodging__availability-legend">
-				{ calendarAvailability.status === 'error'
+				{ calendarAvailability.status === 'error' && ! availabilityBusy
 					? sprintf(
 							/* translators: %s: label for a room (e.g. room). */
 							__(
@@ -1180,7 +1344,7 @@ const LodgingBookingPanel = ( {
 				<span className="vkbm-lodging__sr-only">
 					{ roomsStatusText }
 				</span>
-				{ isRoomLost && (
+				{ ! isSingleRoomPlan && isRoomLost && (
 					<p className="vkbm-alert vkbm-alert__warning vkbm-alert--compact">
 						{ __(
 							'The room you selected is no longer available. Please select again.',
@@ -1206,18 +1370,26 @@ const LodgingBookingPanel = ( {
 				/>
 			) }
 
-			{ isRangeComplete && (
-				<LodgingRoomList
-					status={ availability.status }
-					rooms={ rooms }
-					error={ availability.error }
-					nights={ nights }
-					currencySymbol={ currencySymbol }
-					selectedRoomId={ selectedRoomId }
-					onSelectRoom={ handleSelectRoom }
-					isGuestCountValid={ isGuestCountValid }
-				/>
-			) }
+			{ isRangeComplete &&
+				! availabilityBusy &&
+				! ( isSingleRoomPlan && selectedRoom ) && (
+					<LodgingRoomList
+						status={
+							availability.status === 'done' &&
+							! isCurrentAvailability
+								? 'loading'
+								: availability.status
+						}
+						hideHeading={ isSingleRoomPlan }
+						rooms={ rooms }
+						error={ availability.error }
+						nights={ nights }
+						currencySymbol={ currencySymbol }
+						selectedRoomId={ selectedRoomId }
+						onSelectRoom={ handleSelectRoom }
+						isGuestCountValid={ isGuestCountValid }
+					/>
+				) }
 
 			<div className="vkbm-lodging__summary-container">
 				<div className="vkbm-plan-summary__status vkbm-plan-summary__status--detached vkbm-lodging__summary">
@@ -1277,10 +1449,12 @@ const LodgingBookingPanel = ( {
 													selectedRoom.name
 												) : (
 													<span className="vkbm-lodging__summary-placeholder">
-														{ __(
-															'Not selected',
-															'vk-booking-manager'
-														) }
+														{ isSingleRoomPlan
+															? '—'
+															: __(
+																	'Not selected',
+																	'vk-booking-manager'
+															  ) }
 													</span>
 												)
 											}
@@ -1326,8 +1500,47 @@ const LodgingBookingPanel = ( {
 							</div>
 						) }
 					</div>
+					<div className="vkbm-plan-summary__field">
+						<label
+							className="vkbm-plan-summary__label text-nowrap"
+							htmlFor={ `${ idPrefix }-check-in-time` }
+						>
+							{ __(
+								'Estimated check-in time',
+								'vk-booking-manager'
+							) }
+						</label>
+						<input
+							ref={ estimatedCheckInTimeRef }
+							id={ `${ idPrefix }-check-in-time` }
+							className="vkbm-plan-summary__date-input"
+							type="time"
+							required
+							min={ checkInTime }
+							max="23:59"
+							step="60"
+							value={ selectedEstimatedCheckInTime }
+							onChange={ ( event ) =>
+								setEstimatedCheckInTime( event.target.value )
+							}
+							aria-describedby={ `${ idPrefix }-check-in-time-hint` }
+						/>
+						<p
+							className="vkbm-plan-summary__hint"
+							id={ `${ idPrefix }-check-in-time-hint` }
+						>
+							{ sprintf(
+								/* translators: %s: プランのチェックイン開始時刻（HH:MM）。 */
+								__(
+									'Enter your estimated check-in time (%s or later).',
+									'vk-booking-manager'
+								),
+								checkInTime
+							) }
+						</p>
+					</div>
 					<div className="vkbm-plan-summary__actions">
-						{ ! selectedRoom && (
+						{ ! isSingleRoomPlan && ! selectedRoom && (
 							<p
 								id={ actionHintId }
 								className="vkbm-plan-summary__hint vkbm-lodging__action-hint"
@@ -1346,9 +1559,15 @@ const LodgingBookingPanel = ( {
 							type="button"
 							className="vkbm-plan-summary__action vkbm-button vkbm-button__md vkbm-button__primary"
 							onClick={ handleProceed }
-							disabled={ ! selectedRoom || isSubmitting }
+							disabled={
+								availabilityBusy ||
+								! selectedRoom ||
+								isSubmitting
+							}
 							aria-describedby={
-								selectedRoom ? undefined : actionHintId
+								isSingleRoomPlan || selectedRoom
+									? undefined
+									: actionHintId
 							}
 						>
 							{ isSubmitting

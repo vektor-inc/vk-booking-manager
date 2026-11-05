@@ -11,6 +11,11 @@ import {
 } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
 import { dateI18n, __experimentalGetSettings } from '@wordpress/date';
+import {
+	AvailabilityNotice,
+	isLastBookingMonth,
+	isFirstBookingMonth,
+} from './booking-ui/availability-notice';
 import { CalendarGrid, DailySlotList, SelectedPlanSummary } from './booking-ui';
 import {
 	filterMenusByIds,
@@ -968,6 +973,11 @@ export const ReservationApp = ( {
 	const [ calendarData, setCalendarData ] = useState( null );
 	const [ calendarLoading, setCalendarLoading ] = useState( false );
 	const [ calendarError, setCalendarError ] = useState( null );
+	const [ calendarBusy, setCalendarBusy ] = useState( false );
+	const [ slotBusy, setSlotBusy ] = useState( false );
+	const [ slotBookingRange, setSlotBookingRange ] = useState( null );
+	const [ availabilityRetry, setAvailabilityRetry ] = useState( 0 );
+	const availabilityBusy = calendarBusy || slotBusy;
 	// #411 植草さん・安藤さんレビュー指摘（PR #414 再差し戻し）: 診断理由は成功応答
 	// （calendarData.unavailability_reason）とエラー応答（error.data.unavailability_reason）の
 	// 2箇所から来うるが、以前は両方を別々の state に持ち calendarData 優先で OR 結合していたため、
@@ -2481,6 +2491,7 @@ export const ReservationApp = ( {
 			! monthCursor.month
 		) {
 			setCalendarData( null );
+			setCalendarBusy( false );
 			setCalendarUnavailabilityReason( null );
 			// 待っていた古い要求は無効にしたため、その finally では読み込み中を解除されない。ここで解除する。
 			setCalendarLoading( false );
@@ -2510,6 +2521,7 @@ export const ReservationApp = ( {
 				if ( ! isLatestRequest() ) {
 					return;
 				}
+				setCalendarBusy( false );
 				setCalendarData( response );
 				// 成功応答でも、has_bookable_day() が false のときだけサーバー側で
 				// unavailability_reason が付与される（無ければ null）。
@@ -2521,6 +2533,8 @@ export const ReservationApp = ( {
 				if ( ! isLatestRequest() ) {
 					return;
 				}
+				setCalendarBusy( error?.code === 'rate_limited' );
+				setCalendarData( null );
 				setCalendarError(
 					resolveApiErrorMessage(
 						error,
@@ -2548,6 +2562,7 @@ export const ReservationApp = ( {
 		monthCursor,
 		canManageReservations,
 		isLodgingMenu,
+		availabilityRetry,
 	] );
 
 	useEffect( () => {
@@ -2556,12 +2571,17 @@ export const ReservationApp = ( {
 
 	useEffect( () => {
 		if ( ! menuId || ! selectedDate || isLodgingMenu ) {
+			setSlotBusy( false );
+			setSlotBookingRange( null );
+			setSlotLoading( false );
 			setSlotData( [] );
 			return;
 		}
 
+		let active = true;
 		setSlotLoading( true );
 		setSlotError( null );
+		setSlotBookingRange( null );
 
 		const path = buildApiPath( '/vkbm/v1/availabilities', {
 			menu_id: menuId,
@@ -2575,6 +2595,9 @@ export const ReservationApp = ( {
 
 		apiFetch( { path } )
 			.then( ( response ) => {
+				if ( ! active ) {
+					return;
+				}
 				const slots = Array.isArray( response?.slots )
 					? response.slots
 					: [];
@@ -2603,9 +2626,16 @@ export const ReservationApp = ( {
 					};
 				} );
 
+				setSlotBusy( false );
 				setSlotData( decoratedSlots );
+				setSlotBookingRange( response?.booking_range ?? null );
 			} )
 			.catch( ( error ) => {
+				if ( ! active ) {
+					return;
+				}
+				setSlotBusy( error?.code === 'rate_limited' );
+				setSlotData( [] );
 				setSlotError(
 					resolveApiErrorMessage(
 						error,
@@ -2618,8 +2648,13 @@ export const ReservationApp = ( {
 				);
 			} )
 			.finally( () => {
-				setSlotLoading( false );
+				if ( active ) {
+					setSlotLoading( false );
+				}
 			} );
+		return () => {
+			active = false;
+		};
 	}, [
 		menuId,
 		staffId,
@@ -2629,6 +2664,7 @@ export const ReservationApp = ( {
 		currentStaff,
 		canManageReservations,
 		isLodgingMenu,
+		availabilityRetry,
 	] );
 
 	useEffect( () => {
@@ -2712,13 +2748,30 @@ export const ReservationApp = ( {
 	}, [ servicePeriodStartKey ] );
 
 	const handleMonthChange = ( delta ) => {
-		setMonthCursor( ( current ) => {
-			const newMonth = current.month + delta;
-			const date = new Date( current.year, newMonth - 1, 1 );
-			return {
-				year: date.getFullYear(),
-				month: date.getMonth() + 1,
-			};
+		const date = new Date(
+			monthCursor.year,
+			monthCursor.month + delta - 1,
+			1
+		);
+		const nextMonthKey = `${ date.getFullYear() }-${ String(
+			date.getMonth() + 1
+		).padStart( 2, '0' ) }`;
+		const bounds = calendarData?.booking_range;
+		if (
+			( delta > 0 &&
+				bounds?.last_date &&
+				nextMonthKey > bounds.last_date.slice( 0, 7 ) ) ||
+			( delta < 0 &&
+				bounds?.first_date &&
+				nextMonthKey < bounds.first_date.slice( 0, 7 ) )
+		) {
+			return;
+		}
+		// 月が変わる最初の描画から、応答待ちのフォーカス参照を保持する。
+		setCalendarLoading( true );
+		setMonthCursor( {
+			year: date.getFullYear(),
+			month: date.getMonth() + 1,
 		} );
 	};
 
@@ -3145,15 +3198,27 @@ export const ReservationApp = ( {
 	// 複数人一括予約メニューで満枠（選択可能人数が0）のスロットは予約へ進めない。
 	// 料金区分メニューは合計人数が 1〜選択可能上限の範囲にある場合のみ進める。
 	// #393: 指名を使うメニューの最低申し込み人数（受付制限）を満たさない場合も進めない。
-	const canProceed = Boolean(
-		menuId &&
-			selectedSlot &&
-			( ! allowMultipleGuests || maxSelectableGuests >= 1 ) &&
-			( ! hasPriceTiers ||
-				( guestTiersTotalCount >= 1 &&
-					guestTiersTotalCount <= maxSelectableGuests ) ) &&
-			currentGuestCount >= nominationMinGuests
-	);
+	const canProceed =
+		! availabilityBusy &&
+		! calendarLoading &&
+		! slotLoading &&
+		! calendarError &&
+		! slotError &&
+		Boolean(
+			menuId &&
+				selectedSlot &&
+				slotData.some(
+					( slot ) =>
+						slot.slot_id === selectedSlot.slot_id &&
+						slot.remaining > 0 &&
+						! slot.exclusive_closed
+				) &&
+				( ! allowMultipleGuests || maxSelectableGuests >= 1 ) &&
+				( ! hasPriceTiers ||
+					( guestTiersTotalCount >= 1 &&
+						guestTiersTotalCount <= maxSelectableGuests ) ) &&
+				currentGuestCount >= nominationMinGuests
+		);
 
 	// 宿泊用の画面（#575）が組み立てた下書きの内容を保存し、確認画面へ移動する。
 	// 失敗時は reject し、エラーメッセージの表示は呼び出し側（宿泊用の画面）が行う。
@@ -4030,6 +4095,7 @@ export const ReservationApp = ( {
 									currentMenu?.title ??
 									''
 								}
+								assignableRoomIds={ assignableStaffIds }
 								lodging={ currentMenu.vkbm_lodging }
 								servicePeriodStartMonth={ getUpcomingStartMonth(
 									currentMenu,
@@ -4123,11 +4189,46 @@ export const ReservationApp = ( {
 									</p>
 								) }
 							</div>
+							<AvailabilityNotice
+								busy={ availabilityBusy }
+								loading={ calendarLoading || slotLoading }
+								range={ calendarData?.booking_range }
+								cursor={ monthCursor }
+								outside={
+									calendarData?.booking_range?.in_range ===
+										false ||
+									slotBookingRange?.in_range === false
+								}
+								lastMonth={ isLastBookingMonth(
+									calendarData?.booking_range,
+									monthCursor
+								) }
+								onRetry={ () =>
+									setAvailabilityRetry(
+										( value ) => value + 1
+									)
+								}
+							/>
 							<CalendarGrid
 								year={ monthCursor.year }
 								month={ monthCursor.month }
-								dayMetaMap={ dayMetaMap }
+								dayMetaMap={
+									availabilityBusy ? {} : dayMetaMap
+								}
+								isPrevDisabled={ isFirstBookingMonth(
+									calendarData?.booking_range,
+									monthCursor
+								) }
+								isNextDisabled={ isLastBookingMonth(
+									calendarData?.booking_range,
+									monthCursor
+								) }
 								selectedDate={ selectedDate }
+								isUnavailable={
+									availabilityBusy ||
+									calendarData?.booking_range?.in_range ===
+										false
+								}
 								onSelectDate={ handleSelectDate }
 								onMonthChange={ handleMonthChange }
 								isLoading={ calendarLoading }
@@ -4138,29 +4239,41 @@ export const ReservationApp = ( {
 							/>
 
 							<div className="vkbm-reservation-content__slots">
-								<DailySlotList
-									slots={ slotData }
-									selectedDate={ selectedDate }
-									onSelectSlot={ ( slot ) =>
-										setSelectedSlot( slot )
-									}
-									selectedSlotId={ selectedSlot?.slot_id }
-									isLoading={ slotLoading }
-									error={ slotListError }
-									showStaffLabel={ menuNominationEnabled }
-									isNominationMenu={ menuNominationEnabled }
-									selectedStaffLabel={
-										staffId
-											? currentStaff?.title?.rendered ??
-											  currentStaff?.title ??
-											  currentStaff?.name ??
-											  ''
-											: ''
-									}
-									noNominationLabel={
-										providerSettings.noNominationLabel
-									}
-								/>
+								{ ! availabilityBusy &&
+									slotBookingRange?.in_range !== false &&
+									calendarData?.booking_range?.in_range !==
+										false && (
+										<DailySlotList
+											slots={ slotData }
+											selectedDate={ selectedDate }
+											onSelectSlot={ ( slot ) =>
+												setSelectedSlot( slot )
+											}
+											selectedSlotId={
+												selectedSlot?.slot_id
+											}
+											isLoading={ slotLoading }
+											error={ slotListError }
+											showStaffLabel={
+												menuNominationEnabled
+											}
+											isNominationMenu={
+												menuNominationEnabled
+											}
+											selectedStaffLabel={
+												staffId
+													? currentStaff?.title
+															?.rendered ??
+													  currentStaff?.title ??
+													  currentStaff?.name ??
+													  ''
+													: ''
+											}
+											noNominationLabel={
+												providerSettings.noNominationLabel
+											}
+										/>
+									) }
 							</div>
 						</div>
 					) }

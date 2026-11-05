@@ -388,7 +388,9 @@
 
 	function updateReservationMenuListModeState() {
 		const $checkbox = $( '#vkbm-reservation-show-menu-list' );
-		const $row = $( '#vkbm-reservation-menu-list-display-mode-row' );
+		const $row = $(
+			'#vkbm-reservation-menu-list-display-mode-row, #vkbm-reservation-menu-list-image-aspect-ratio-row'
+		);
 		const $select = $( '#vkbm-reservation-menu-list-display-mode' );
 		if ( ! $checkbox.length || ! $row.length ) {
 			return;
@@ -397,6 +399,15 @@
 		const enabled = $checkbox.is( ':checked' );
 
 		$row.prop( 'hidden', ! enabled );
+		$(
+			'#vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help'
+		).prop( 'hidden', 'text' !== $select.val() );
+		$( '#vkbm-reservation-menu-list-image-aspect-ratio-mobile-help' ).prop(
+			'hidden',
+			! [ '1-1', '4-3', '16-9' ].includes(
+				$( '#vkbm-reservation-menu-list-image-aspect-ratio' ).val()
+			)
+		);
 		if ( $select.length ) {
 			$select.prop( 'disabled', ! enabled );
 		}
@@ -975,7 +986,7 @@
 
 	$( document ).on(
 		'change',
-		'#vkbm-reservation-show-menu-list',
+		'#vkbm-reservation-show-menu-list, #vkbm-reservation-menu-list-display-mode, #vkbm-reservation-menu-list-image-aspect-ratio',
 		function () {
 			updateReservationMenuListModeState();
 		}

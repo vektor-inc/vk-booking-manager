@@ -365,21 +365,30 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 		$cases = array(
 			array(
 				'name'         => '利用者名が有効かつ値あり => 見出しと値の行を出力',
-				'overrides'    => array( 'attendee_name' => '利用者花子', 'attendee_name_mode' => 'optional' ),
+				'overrides'    => array(
+					'attendee_name'      => '利用者花子',
+					'attendee_name_mode' => 'optional',
+				),
 				'status_label' => '',
 				'contains'     => array( '受診者名: 利用者花子' ),
 				'not_contains' => array(),
 			),
 			array(
 				'name'         => '利用者名が空または無効 => 行を出力しない',
-				'overrides'    => array( 'attendee_name' => '利用者花子', 'attendee_name_mode' => 'disabled' ),
+				'overrides'    => array(
+					'attendee_name'      => '利用者花子',
+					'attendee_name_mode' => 'disabled',
+				),
 				'status_label' => '',
 				'contains'     => array(),
 				'not_contains' => array( '利用者花子', '受診者名' ),
 			),
 			array(
 				'name'         => '利用者名が有効でも値が空 => 行を出力しない',
-				'overrides'    => array( 'attendee_name' => '', 'attendee_name_mode' => 'optional' ),
+				'overrides'    => array(
+					'attendee_name'      => '',
+					'attendee_name_mode' => 'optional',
+				),
 				'status_label' => '',
 				'contains'     => array(),
 				'not_contains' => array( '受診者名' ),
@@ -684,6 +693,312 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 			Industry_Presets::clear_cache();
 			Staff_Editor::clear_nomination_enabled_cache();
 			restore_previous_locale();
+		}
+	}
+
+	/**
+	 * 確認前のメールに自由入力・ブラウザ由来の表示名を載せない。
+	 */
+	public function test_send_guest_verification(): void {
+		$test_condition_name                    = '確認メールに正規のメニュー名だけを載せ、自由入力の文字列は載せない';
+		$original_settings                      = get_option( Settings_Repository::OPTION_KEY, false );
+		$settings                               = ( new Settings_Repository() )->get_settings();
+		$settings['booking_attendee_name_mode'] = 'optional';
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		$menu_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => '正規のメニュー',
+			)
+		);
+		$marker  = 'https://untrusted.example/誘導文';
+		$mail    = array();
+		$capture = static function ( $result, $args ) use ( &$mail ) {
+			$mail = $args;
+			return true;
+		};
+		add_filter( 'pre_wp_mail', $capture, 10, 2 );
+		try {
+			$service = new Booking_Notification_Service( new Settings_Repository() );
+			$this->assertTrue(
+				$service->send_guest_verification(
+					array(
+						'name'          => $marker,
+						'email'         => 'verification@example.com',
+						'attendee_name' => $marker,
+						'verify_url'    => 'https://example.com/?verify=trusted',
+						'draft'         => array(
+							'menu_id'        => $menu_id,
+							'menu_label'     => $marker,
+							'resource_label' => $marker,
+							'memo'           => $marker,
+							'guest_tiers'    => array(
+								array(
+									'id'    => 'adult',
+									'label' => $marker,
+									'count' => 2,
+									'price' => 100,
+								),
+							),
+						),
+					)
+				),
+				$test_condition_name
+			);
+			$this->assertStringNotContainsString( $marker, $mail['message'], $test_condition_name );
+			$this->assertStringContainsString( '正規のメニュー', $mail['message'], $test_condition_name );
+			// 正規のタイトルが空でも下書きのラベルに戻さない。
+			wp_update_post(
+				array(
+					'ID'         => $menu_id,
+					'post_title' => '',
+				)
+			);
+			$this->assertTrue(
+				$service->send_guest_verification(
+					array(
+						'email' => 'verification@example.com',
+						'draft' => array(
+							'menu_id'    => $menu_id,
+							'menu_label' => $marker,
+						),
+					)
+				),
+				$test_condition_name
+			);
+			$this->assertStringNotContainsString( $marker, $mail['message'], $test_condition_name );
+		} finally {
+			remove_filter( 'pre_wp_mail', $capture, 10 );
+			if ( false === $original_settings ) {
+				delete_option( Settings_Repository::OPTION_KEY );
+			} else {
+				update_option( Settings_Repository::OPTION_KEY, $original_settings );
+			}
+		}
+	}
+
+	/**
+	 * build_draft_payload(): 下書きの menu_id・resource_id が、予約メニュー・スタッフとして公開中の投稿を指すときだけ、その名称を使う。
+	 */
+	public function test_build_draft_payload(): void {
+		$original_settings = get_option( Settings_Repository::OPTION_KEY, false );
+		$is_free           = Pro_Upsell::is_free_edition();
+
+		$settings                    = ( new Settings_Repository() )->get_settings();
+		$settings['industry_preset'] = 'custom';
+		$settings['staff_enabled']   = true;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		Industry_Presets::clear_cache();
+		Staff_Editor::clear_nomination_enabled_cache();
+
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$method  = new ReflectionMethod( Booking_Notification_Service::class, 'build_draft_payload' );
+		$method->setAccessible( true );
+
+		/**
+		 * 予約メニューを作る。
+		 *
+		 * @param string $title  タイトル。
+		 * @param string $status 投稿の状態。
+		 * @return int 投稿 ID。
+		 */
+		$create_menu     = function ( string $title, string $status = 'publish' ): int {
+			return (int) $this->factory()->post->create(
+				array(
+					'post_type'    => Service_Menu_Post_Type::POST_TYPE,
+					'post_status'  => $status,
+					'post_title'   => $title,
+					// タイトルが空でも作れるよう、本文を入れておく。
+					'post_content' => 'メニューの説明',
+				)
+			);
+		};
+		/**
+		 * リソース（スタッフ）を作る。
+		 *
+		 * @param string $title  タイトル。
+		 * @param string $status 投稿の状態。
+		 * @return int 投稿 ID。
+		 */
+		$create_resource = function ( string $title, string $status = 'publish' ): int {
+			return (int) $this->factory()->post->create(
+				array(
+					'post_type'   => Resource_Post_Type::POST_TYPE,
+					'post_status' => $status,
+					'post_title'  => $title,
+				)
+			);
+		};
+
+		$menu_id         = $create_menu( 'カット' );
+		$draft_menu_id   = $create_menu( '公開前のメニュー', 'draft' );
+		$empty_menu_id   = $create_menu( '' );
+		$staff_id        = $create_resource( '田中' );
+		$draft_staff_id  = $create_resource( '公開前のスタッフ', 'draft' );
+		$booking_post_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => 'テスト用の別の投稿',
+			)
+		);
+		$page_id         = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+				'post_title'  => '会社概要',
+			)
+		);
+
+		$not_set = __( 'Not set', 'vk-booking-manager' );
+		$tbd     = __( 'TBD', 'vk-booking-manager' );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '公開中の予約メニュー => メニュー名は「カット」',
+				'draft'               => array( 'menu_id' => $menu_id ),
+				'expected_menu'       => 'カット',
+				'expected_staff'      => null,
+			),
+			array(
+				'test_condition_name' => '公開中の予約メニュー・公開中のスタッフを指名 => 担当は「田中」',
+				'pro_only'            => true,
+				'draft'               => array(
+					'menu_id'            => $menu_id,
+					'resource_id'        => $staff_id,
+					'is_staff_preferred' => true,
+				),
+				'expected_menu'       => 'カット',
+				'expected_staff'      => '田中',
+			),
+			array(
+				'test_condition_name' => 'タイトルが空の予約メニュー => メニュー名は「未設定」',
+				'draft'               => array(
+					'menu_id'    => $empty_menu_id,
+					'menu_label' => 'ラベルのメニュー',
+				),
+				'expected_menu'       => $not_set,
+				'expected_staff'      => null,
+			),
+			array(
+				'test_condition_name' => 'menu_id が予約の投稿の ID => メニュー名は「未設定」',
+				'draft'               => array(
+					'menu_id'    => $booking_post_id,
+					'menu_label' => 'ラベル',
+				),
+				'expected_menu'       => $not_set,
+				'expected_staff'      => null,
+			),
+			array(
+				'test_condition_name' => 'menu_id が固定ページの ID => メニュー名は「未設定」',
+				'draft'               => array( 'menu_id' => $page_id ),
+				'expected_menu'       => $not_set,
+				'expected_staff'      => null,
+			),
+			array(
+				'test_condition_name' => 'menu_id が下書きの予約メニュー => メニュー名は「未設定」',
+				'draft'               => array( 'menu_id' => $draft_menu_id ),
+				'expected_menu'       => $not_set,
+				'expected_staff'      => null,
+			),
+			array(
+				'test_condition_name' => 'menu_id が存在しない ID => メニュー名は「未設定」',
+				'draft'               => array( 'menu_id' => 99999999 ),
+				'expected_menu'       => $not_set,
+				'expected_staff'      => null,
+			),
+			array(
+				'test_condition_name' => 'resource_id が予約の投稿の ID（指名あり） => 担当は「未定」',
+				'pro_only'            => true,
+				'draft'               => array(
+					'menu_id'            => $menu_id,
+					'resource_id'        => $booking_post_id,
+					'is_staff_preferred' => true,
+				),
+				'expected_menu'       => 'カット',
+				'expected_staff'      => $tbd,
+			),
+			array(
+				'test_condition_name' => 'resource_id が下書きのスタッフ（指名あり） => 担当は「未定」',
+				'pro_only'            => true,
+				'draft'               => array(
+					'menu_id'            => $menu_id,
+					'resource_id'        => $draft_staff_id,
+					'is_staff_preferred' => true,
+				),
+				'expected_menu'       => 'カット',
+				'expected_staff'      => $tbd,
+			),
+			array(
+				'test_condition_name' => '泊の下書きで resource_id が予約の投稿の ID => 客室は「未定」',
+				'draft'               => array(
+					'menu_id'     => $menu_id,
+					'resource_id' => $booking_post_id,
+					'lodging'     => array(
+						'check_in_date'  => '2026-11-10',
+						'check_out_date' => '2026-11-11',
+						'nights'         => 1,
+					),
+				),
+				'expected_menu'       => 'カット',
+				'expected_staff'      => $tbd,
+			),
+			array(
+				'test_condition_name' => '泊の下書きで resource_id が公開中の客室 => 客室は「田中」',
+				'draft'               => array(
+					'menu_id'     => $menu_id,
+					'resource_id' => $staff_id,
+					'lodging'     => array(
+						'check_in_date'  => '2026-11-10',
+						'check_out_date' => '2026-11-11',
+						'nights'         => 1,
+					),
+				),
+				'expected_menu'       => 'カット',
+				'expected_staff'      => '田中',
+			),
+		);
+
+		try {
+			foreach ( $test_cases as $case ) {
+				if ( $is_free && ! empty( $case['pro_only'] ) ) {
+					continue;
+				}
+
+				$payload = $method->invoke(
+					$service,
+					array_merge(
+						array(
+							'guests' => 1,
+							'slot'   => array(
+								'start_at' => '2026-11-10T10:00:00+09:00',
+								'end_at'   => '2026-11-10T10:30:00+09:00',
+							),
+						),
+						$case['draft']
+					),
+					''
+				);
+
+				$this->assertSame( $case['expected_menu'], $payload['menu_title'], $case['test_condition_name'] . '（メニュー名）' );
+				if ( null !== $case['expected_staff'] ) {
+					$this->assertSame( $case['expected_staff'], $payload['staff_title'], $case['test_condition_name'] . '（担当・客室名）' );
+				}
+				// 日本語がエスケープされないよう JSON_UNESCAPED_UNICODE を付けて、材料全体を文字列にして確かめる。
+				$encoded = (string) wp_json_encode( $payload, JSON_UNESCAPED_UNICODE );
+				$this->assertStringNotContainsString( 'テスト用の別の投稿', $encoded, $case['test_condition_name'] . '（他の投稿の文字列を含まない）' );
+				$this->assertStringNotContainsString( '会社概要', $encoded, $case['test_condition_name'] . '（他の投稿の文字列を含まない）' );
+				$this->assertStringNotContainsString( '公開前の', $encoded, $case['test_condition_name'] . '（他の投稿の文字列を含まない）' );
+			}
+		} finally {
+			if ( false === $original_settings ) {
+				delete_option( Settings_Repository::OPTION_KEY );
+			} else {
+				update_option( Settings_Repository::OPTION_KEY, $original_settings );
+			}
+			Industry_Presets::clear_cache();
+			Staff_Editor::clear_nomination_enabled_cache();
 		}
 	}
 

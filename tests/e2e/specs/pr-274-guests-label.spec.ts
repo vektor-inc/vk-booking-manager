@@ -14,6 +14,7 @@
  *
  * PR #274 (issue #263): Verifies the configurable heading/unit for multi-guest quantity display.
  */
+// @category 人数・定員・貸し切り
 import { test, expect } from '@playwright/test';
 import { wpEvalPhp } from '../utils/helpers';
 

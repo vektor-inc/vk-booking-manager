@@ -16,6 +16,7 @@
  * - 料金区分は「指名OFF＋複数人予約ON」でのみ有効なため、この describe の間だけ指名を OFF にし、
  *   終了時に元へ戻す。
  */
+// @category 料金表示
 import { test, expect } from '@playwright/test';
 import {
 	wpCliArgs,

@@ -23,6 +23,9 @@ use function __;
 class Settings_Repository {
 	public const OPTION_KEY = 'vkbm_provider_settings';
 
+	/** 未保存の予約受付期間（日数）。保存済みの 0 は無制限。 */
+	public const DEFAULT_MAX_ADVANCE_BOOKING_DAYS = 365;
+
 	/**
 	 * サービスメニュー詳細ページの表示方法の設定キー（#635）。
 	 */
@@ -144,7 +147,7 @@ class Settings_Repository {
 			'guests_unit_label'                          => null,
 			'provider_business_hours'                    => '',
 			'provider_reservation_deadline_hours'        => 3,
-			'provider_max_advance_booking_days'          => 0,
+			'provider_max_advance_booking_days'          => self::DEFAULT_MAX_ADVANCE_BOOKING_DAYS,
 			// お客様1人あたりの、これから先の予約数の上限。0 は上限なし。保存済みの値が無いサイトにも 3 が効く。
 			Customer_Booking_Limit::SETTINGS_KEY         => Customer_Booking_Limit::DEFAULT_LIMIT,
 			'provider_slot_step_minutes'                 => 15,
@@ -169,7 +172,7 @@ class Settings_Repository {
 			'provider_email'                             => '',
 			'mail_from_email'                            => '',
 			'shift_alert_months'                         => 1,
-			// シフトの自動登録設定。0=無効（既定）、1〜3=翌月〜3ヶ月先までを自動登録する。
+			// シフトの自動登録設定。0=無効（既定）、1〜6=翌月〜6ヶ月先までを自動登録する。
 			// 未保存時は既定の0（無効）が適用されるため、導入前の既存サイトの挙動は変わらない。
 			'shift_auto_register_months'                 => 0,
 			'booking_auto_anonymize_months'              => 0,
@@ -280,6 +283,7 @@ Contact us: Please contact our store.",
 			'reservation_date_search_enabled'            => false,
 			'reservation_show_menu_list'                 => true,
 			'reservation_menu_list_display_mode'         => 'card',
+			'reservation_menu_list_image_aspect_ratio'   => 'content',
 			// #635: サービスメニュー詳細ページの表示方法。実効値は get_settings() が保存状況に応じて決める。
 			'service_menu_detail_display_mode'           => 'block',
 			'reservation_show_provider_logo'             => false,

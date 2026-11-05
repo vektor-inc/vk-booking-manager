@@ -17,6 +17,7 @@ use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Common\Resource_Tag_Id_List;
+use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use WP_Error;
 use WP_REST_Request;
@@ -31,7 +32,11 @@ use function is_array;
  * REST controller for availability endpoints.
  */
 class Availability_Controller {
-	private const NAMESPACE = 'vkbm/v1';
+	use Rate_Limit_Trait;
+
+	/** 空き状況の4 URL で共有する1分間の上限。 */
+	private const RATE_LIMIT_MAX = 120;
+	private const NAMESPACE      = 'vkbm/v1';
 
 	/**
 	 * 泊の空き状況で、訪問者自身の入力に起因するためマスクせずに返すエラーコード。
@@ -56,6 +61,18 @@ class Availability_Controller {
 	 * @var Availability_Service
 	 */
 	private Availability_Service $service;
+
+	/**
+	 * 空き状況の共通回数制限を適用する。
+	 *
+	 * @return WP_Error|null 制限中のエラー、または null。
+	 */
+	private function consume_availability_token(): ?WP_Error {
+		if ( current_user_can( Capabilities::MANAGE_RESERVATIONS ) || $this->consume_rate_limit_token( 'availability_read', self::RATE_LIMIT_MAX, MINUTE_IN_SECONDS ) ) {
+			return null;
+		}
+		return new WP_Error( 'rate_limited', __( 'Availability is temporarily busy.', 'vk-booking-manager' ), array( 'status' => 429 ) );
+	}
 
 	/**
 	 * Constructor.
@@ -136,6 +153,12 @@ class Availability_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function handle_lodging_calendar_meta( WP_REST_Request $request ) {
+		// キャッシュに当たる要求も、同じ IP の共通枠で数える。
+		$rate_error = $this->consume_availability_token();
+		if ( null !== $rate_error ) {
+			return $rate_error;
+		}
+
 		$data = $this->service->get_lodging_calendar_meta(
 			array(
 				'menu_id'       => (int) $request['menu_id'],
@@ -163,6 +186,12 @@ class Availability_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function handle_calendar_meta( WP_REST_Request $request ) {
+		// キャッシュに当たる要求も、同じ IP の共通枠で数える。
+		$rate_error = $this->consume_availability_token();
+		if ( null !== $rate_error ) {
+			return $rate_error;
+		}
+
 		$args = array(
 			'menu_id'          => (int) $request['menu_id'],
 			'resource_id'      => isset( $request['resource_id'] ) ? (int) $request['resource_id'] : null,
@@ -315,6 +344,12 @@ class Availability_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function handle_daily_slots( WP_REST_Request $request ) {
+		// キャッシュに当たる要求も、同じ IP の共通枠で数える。
+		$rate_error = $this->consume_availability_token();
+		if ( null !== $rate_error ) {
+			return $rate_error;
+		}
+
 		$data = $this->service->get_daily_slots(
 			array(
 				'menu_id'          => (int) $request['menu_id'],
@@ -343,6 +378,12 @@ class Availability_Controller {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function handle_lodging_availabilities( WP_REST_Request $request ) {
+		// キャッシュに当たる要求も、同じ IP の共通枠で数える。
+		$rate_error = $this->consume_availability_token();
+		if ( null !== $rate_error ) {
+			return $rate_error;
+		}
+
 		$data = $this->service->get_lodging_availability(
 			array(
 				'menu_id'        => (int) $request['menu_id'],

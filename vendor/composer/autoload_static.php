@@ -55,6 +55,7 @@ class ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4
         'VKBookingManager\\Bookings\\Booking_Privacy_Eraser' => __DIR__ . '/../..' . '/src/bookings/class-booking-privacy-eraser.php',
         'VKBookingManager\\Bookings\\Booking_Source' => __DIR__ . '/../..' . '/src/bookings/class-booking-source.php',
         'VKBookingManager\\Bookings\\Customer_Booking_Limit' => __DIR__ . '/../..' . '/src/bookings/class-customer-booking-limit.php',
+        'VKBookingManager\\Bookings\\Draft_Reference_Validator' => __DIR__ . '/../..' . '/src/bookings/class-draft-reference-validator.php',
         'VKBookingManager\\Bookings\\Guest_Booking_Admin' => __DIR__ . '/../..' . '/src/bookings/class-guest-booking-admin.php',
         'VKBookingManager\\Bookings\\Guest_Booking_Controller' => __DIR__ . '/../..' . '/src/bookings/class-guest-booking-controller.php',
         'VKBookingManager\\Bookings\\Guest_Cancel_Controller' => __DIR__ . '/../..' . '/src/bookings/class-guest-cancel-controller.php',

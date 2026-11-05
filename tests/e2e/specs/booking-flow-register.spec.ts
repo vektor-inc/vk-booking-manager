@@ -1,3 +1,4 @@
+// @category ログイン・会員登録・ゲスト予約
 import { test, expect } from '@playwright/test';
 import { wpCliArgs, getServiceMenuId } from '../utils/helpers';
 import { checkConfirmConsents } from '../utils/consent-helpers';

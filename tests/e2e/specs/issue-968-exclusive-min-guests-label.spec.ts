@@ -13,6 +13,7 @@
  * 「貸し切り予約」は指名OFF＋複数人予約ON でのみ意味を持つため、この describe の間だけ指名OFFへ切り替え、
  * afterAll で復元する。
  */
+// @category 人数・定員・貸し切り
 import { test, expect } from '@playwright/test';
 import {
 	loginAsAdmin,
@@ -67,6 +68,7 @@ function seedMenu(): string {
 
 test.describe( '#968: 貸し切り予約ONの最少人数欄の表記', () => {
 	test.beforeAll( () => {
+		// @step 基本設定で指名機能を使わない設定にし、複数人予約がオン・最大受付数3・最少人数2のサービスメニューを用意する
 		originalStaffEnabled = getStaffEnabled();
 		setStaffEnabled( false );
 		menuId = seedMenu();
@@ -92,6 +94,7 @@ test.describe( '#968: 貸し切り予約ONの最少人数欄の表記', () => {
 	test( '貸し切り予約のチェック切り替えに最少人数欄のラベル・説明文が連動する', async ( {
 		page,
 	} ) => {
+		// @step 管理者でログインし、用意したサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 		await page.waitForLoadState( 'domcontentloaded' );
@@ -105,22 +108,28 @@ test.describe( '#968: 貸し切り予約ONの最少人数欄の表記', () => {
 		await exclusive.waitFor( { state: 'attached', timeout: 15000 } );
 
 		// 貸し切り予約OFF: 従来の表記。
+		// @check 「貸し切り予約」がオフの間は、人数欄の見出しが「最少催行人数」になっている
 		await expect( label ).toHaveText( LABEL_DEFAULT );
 		await expect( description ).not.toContainText( INTRO_EXCLUSIVE );
 		const maxBefore = ( await maxDescription.textContent() ) ?? '';
 
+		// @step 「貸し切り予約」にチェックを入れる（保存はしない）
 		// DOM でチェックし change を発火する（メタボックス内の要素は可視判定が不安定なため）。
 		await exclusive.evaluate( ( el ) => {
 			const input = el as HTMLInputElement;
 			input.checked = true;
 			input.dispatchEvent( new Event( 'change', { bubbles: true } ) );
 		} );
+		// @check 見出しがすぐに「最低申し込み人数」へ変わり、説明文に「貸し切り予約がオンのため、1件の予約でこの時間枠が埋まります。」が出る
+		// @check 予約枠の定員欄の説明文は変わらない
 		await expect( label ).toHaveText( LABEL_LIMIT );
 		await expect( description ).toContainText( INTRO_EXCLUSIVE );
 		// 予約枠の定員欄の説明文は「1組の最大人数」に切り替えない。
 		await expect( maxDescription ).toHaveText( maxBefore );
 
 		// チェックを外すと元の表記へ戻る。
+		// @step 「貸し切り予約」のチェックを外す
+		// @check 見出しが「最少催行人数」に戻り、貸し切り用の説明文が消える
 		await exclusive.evaluate( ( el ) => {
 			const input = el as HTMLInputElement;
 			input.checked = false;
@@ -133,16 +142,19 @@ test.describe( '#968: 貸し切り予約ONの最少人数欄の表記', () => {
 	test( '保存済みで貸し切り予約がONのメニューは初期表示から最低申し込み人数になっている', async ( {
 		page,
 	} ) => {
+		// @step 用意したサービスメニューを、「貸し切り予約」がオンの状態で保存しておく
 		wpEvalPhp(
 			`update_post_meta( ${ Number.parseInt(
 				menuId,
 				10
 			) }, '_vkbm_exclusive_when_booked', true );`
 		);
+		// @step 管理者でログインし、そのサービスメニューの編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 		await page.waitForLoadState( 'domcontentloaded' );
 
+		// @check 開いた時点で、人数欄の見出しが「最低申し込み人数」になり、貸し切り用の説明文が出ている
 		await expect( page.locator( '#vkbm-min-capacity-label' ) ).toHaveText(
 			LABEL_LIMIT
 		);

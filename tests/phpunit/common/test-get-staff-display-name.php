@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Common;
 
+use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
@@ -78,6 +79,22 @@ class Get_Staff_Display_Name_Test extends WP_UnitTestCase {
 		$female_term  = wp_insert_term( '女性', Resource_Tag_Taxonomy::TAXONOMY, array( 'slug' => 'female' ) );
 		$veteran_term = wp_insert_term( 'ベテラン', Resource_Tag_Taxonomy::TAXONOMY, array( 'slug' => 'veteran' ) );
 
+		// リソースではない投稿（予約の投稿・固定ページ）。
+		$booking_post_id = $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_title'  => 'テスト用の別の投稿',
+				'post_status' => 'publish',
+			)
+		);
+		$page_id         = $this->factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_title'  => '会社概要',
+				'post_status' => 'publish',
+			)
+		);
+
 		$test_cases = array(
 			array(
 				'test_condition_name' => 'タグ未設定の場合 => スタッフ名のみ返す / No tags => name only',
@@ -98,6 +115,18 @@ class Get_Staff_Display_Name_Test extends WP_UnitTestCase {
 				'test_condition_name' => '存在しない投稿IDの場合 => 空文字を返す / Invalid post ID => empty string',
 				'tag_term_ids'       => array(),
 				'post_id'            => 99999,
+				'expected'           => '',
+			),
+			array(
+				'test_condition_name' => 'リソースではない投稿（予約の投稿）のIDの場合 => 空文字を返す',
+				'tag_term_ids'       => array(),
+				'post_id'            => $booking_post_id,
+				'expected'           => '',
+			),
+			array(
+				'test_condition_name' => 'リソースではない投稿（固定ページ）のIDの場合 => 空文字を返す',
+				'tag_term_ids'       => array(),
+				'post_id'            => $page_id,
 				'expected'           => '',
 			),
 		);

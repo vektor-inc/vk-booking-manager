@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, _x } from '@wordpress/i18n';
 import { useBlockProps, InspectorControls } from '@wordpress/block-editor';
 import {
 	PanelBody,
@@ -30,6 +30,20 @@ const ORDER_OPTIONS = [
 const DISPLAY_MODE_OPTIONS = [
 	{ label: __( 'card', 'vk-booking-manager' ), value: 'card' },
 	{ label: __( 'text', 'vk-booking-manager' ), value: 'text' },
+];
+
+const IMAGE_ASPECT_RATIO_OPTIONS = [
+	{
+		label: __( 'Match content height', 'vk-booking-manager' ),
+		value: 'content',
+	},
+	{
+		label: _x( 'Original', 'image aspect ratio', 'vk-booking-manager' ),
+		value: 'original',
+	},
+	{ label: __( 'Square - 1:1', 'vk-booking-manager' ), value: '1-1' },
+	{ label: __( 'Standard - 4:3', 'vk-booking-manager' ), value: '4-3' },
+	{ label: __( 'Wide - 16:9', 'vk-booking-manager' ), value: '16-9' },
 ];
 
 const GROUP_FILTER_MODE_OPTIONS = [
@@ -97,6 +111,30 @@ const EditComponent = ( { attributes, setAttributes, clientId } ) => {
 	const selectedGroupIds = Array.isArray( attributes.selectedGroupIds )
 		? attributes.selectedGroupIds
 		: [];
+
+	// 全グループ表示では、グループ設定でテキストからカードに切り替わる場合がある。
+	const isCardMode = ( attributes.displayMode || 'card' ) === 'card';
+	const isAllGroups = ( attributes.groupFilterMode || 'all' ) === 'all';
+	const canDisplayCards = isCardMode || isAllGroups;
+
+	// 設定の対象を先に伝え、固定比率の説明を続ける。
+	const imageAspectRatioHelp = [];
+	if ( ! isCardMode && isAllGroups ) {
+		imageAspectRatioHelp.push(
+			__(
+				'Sets the image ratio for service groups displayed as cards.',
+				'vk-booking-manager'
+			)
+		);
+	}
+	if ( [ '1-1', '4-3', '16-9' ].includes( attributes.imageAspectRatio ) ) {
+		imageAspectRatioHelp.push(
+			__(
+				'The selected ratio also applies when images appear above the content, such as on smartphones.',
+				'vk-booking-manager'
+			)
+		);
+	}
 
 	const toggleGroupSelection = ( termId, checked ) => {
 		const id = Number( termId );
@@ -238,6 +276,31 @@ const EditComponent = ( { attributes, setAttributes, clientId } ) => {
 							setAttributes( { showImage: value } )
 						}
 					/>
+					{ attributes.showImage && canDisplayCards && (
+						<SelectControl
+							label={ __(
+								'Image aspect ratio',
+								'vk-booking-manager'
+							) }
+							value={ attributes.imageAspectRatio }
+							options={ IMAGE_ASPECT_RATIO_OPTIONS }
+							onChange={ ( value ) =>
+								setAttributes( { imageAspectRatio: value } )
+							}
+							help={
+								imageAspectRatioHelp.length
+									? imageAspectRatioHelp.map( ( text ) => (
+											<span
+												key={ text }
+												style={ { display: 'block' } }
+											>
+												{ text }
+											</span>
+									  ) )
+									: undefined
+							}
+						/>
+					) }
 					<ToggleControl
 						label={ __( 'View Service Tag', 'vk-booking-manager' ) }
 						checked={ attributes.showCategories }

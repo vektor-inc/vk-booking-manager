@@ -100,6 +100,29 @@ class Booking_Admin {
 	private const META_GUESTS                 = '_vkbm_booking_guests';
 	private const META_GUEST_TIERS            = '_vkbm_booking_guest_tiers';
 
+	/**
+	 * 更新前にアップロードした履歴画像の添付を非公開へ切り替える一度きりの処理が終わったことを記録する option 名。
+	 * 管理画面の表示のたびに読むため autoload を有効にして保存する。
+	 */
+	public const OPTION_ATTACHMENTS_PRIVATE_DONE = 'vkbm_booking_attachments_private_done';
+
+	/**
+	 * 履歴画像の添付を非公開へ切り替える処理で、1回の問い合わせで取り出す添付の件数。
+	 */
+	private const ATTACHMENTS_PRIVATE_BATCH_SIZE = 100;
+
+	/**
+	 * 履歴画像の添付を非公開へ切り替える処理で、1回のリクエストで繰り返す問い合わせの上限回数。
+	 * 件数の上限は ATTACHMENTS_PRIVATE_BATCH_SIZE との積（100 × 5 = 500 件）になり、残りは次のリクエストで続ける。
+	 */
+	private const ATTACHMENTS_PRIVATE_MAX_BATCHES_PER_REQUEST = 5;
+
+	/**
+	 * 予約の編集画面からアップロードしたファイルに付けるランダムな名前の長さ（拡張子を除く）。
+	 * ランダムなバイト列を 16 進数にして作るため、偶数にすること。
+	 */
+	private const UPLOAD_RANDOM_FILENAME_LENGTH = 24;
+
 	private const STATUS_CONFIRMED              = 'confirmed';
 	private const STATUS_PENDING                = 'pending';
 	private const STATUS_CANCELLED              = Staff_Conflict_Detector::STATUS_CANCELLED;
@@ -201,6 +224,10 @@ class Booking_Admin {
 		add_action( 'add_meta_boxes_' . Booking_Post_Type::POST_TYPE, array( $this, 'remove_author_meta_box' ), 100 );
 		add_filter( 'wp_generate_attachment_metadata', array( $this, 'filter_booking_attachment_metadata' ), 10, 2 );
 		add_filter( 'wp_editor_set_quality', array( $this, 'filter_booking_upload_quality' ), 10, 2 );
+		add_filter( 'wp_handle_upload_prefilter', array( $this, 'filter_booking_upload_filename' ) );
+		add_filter( 'wp_insert_attachment_data', array( $this, 'filter_booking_attachment_insert_data' ), 10, 4 );
+		// 受け取る引数を 0 にしているのは、admin_init が渡す空文字が件数の引数に入らないようにするため（変えると型エラーになる）。
+		add_action( 'admin_init', array( $this, 'maybe_make_existing_booking_attachments_private' ), 10, 0 );
 	}
 
 	/**
@@ -272,7 +299,7 @@ class Booking_Admin {
 			return;
 		}
 
-		// 予約編集画面の独自 UI（添付画像・担当配分・メタボックスなど）の CSS（issue #659）。
+		// 予約編集画面の独自 UI 用 CSS を読み込む。
 		wp_enqueue_style( Common_Styles::ADMIN_HANDLE );
 
 		wp_enqueue_media();
@@ -681,7 +708,13 @@ class Booking_Admin {
 					<tr>
 						<th scope="row"><?php esc_html_e( 'Stay', 'vk-booking-manager' ); ?></th>
 						<td>
-							<?php echo esc_html( $this->format_stay_datetime_admin( $post->ID, (string) $start, (string) $end ) ); ?>
+							<?php foreach ( $this->format_stay_datetime_admin( $post->ID, (string) $start, (string) $end ) as $line_index => $line ) : ?>
+								<?php if ( $line_index > 0 ) : ?>
+									<br><span class="vkbm-booking-estimated-check-in-time"><?php echo esc_html( $line ); ?></span>
+								<?php else : ?>
+									<?php echo esc_html( $line ); ?>
+								<?php endif; ?>
+							<?php endforeach; ?>
 							<p class="description"><?php esc_html_e( 'The check-in and check-out date and time of a stay reservation cannot be changed on this screen. To change the dates, cancel this reservation and accept a new one.', 'vk-booking-manager' ); ?></p>
 						</td>
 					</tr>
@@ -1679,7 +1712,13 @@ class Booking_Admin {
 
 				if ( $start && $end && Lodging_Booking::is_stay_booking( $post_id ) ) {
 					// 泊の予約は、チェックイン日時〜チェックアウト日時と泊数を表示する。
-					echo esc_html( $this->format_stay_datetime_admin( $post_id, (string) $start, (string) $end ) );
+					foreach ( $this->format_stay_datetime_admin( $post_id, (string) $start, (string) $end, true ) as $line_index => $line ) {
+						if ( $line_index > 0 ) {
+							echo '<br><span class="vkbm-booking-estimated-check-in-time">' . esc_html( $line ) . '</span>';
+						} else {
+							echo esc_html( $line );
+						}
+					}
 				} elseif ( $start ) {
 					echo esc_html( $this->format_datetime_admin( $start ) );
 					if ( $end ) {
@@ -2668,21 +2707,38 @@ class Booking_Admin {
 	}
 
 	/**
-	 * 泊の予約のチェックイン日時・チェックアウト日時・泊数を管理画面用の1行にする。
+	 * 泊の予約のチェックイン日時・チェックアウト日時・泊数・到着予定時刻を管理画面用の行ごとに分ける。
 	 *
 	 * @param int    $post_id   予約の投稿ID。
 	 * @param string $check_in  保存済みのチェックイン日時。
 	 * @param string $check_out 保存済みのチェックアウト日時。
-	 * @return string
+	 * @param bool   $short_label 一覧用の短い見出しを使うか。
+	 * @return string[] 宿泊日程と、保存されている場合の到着予定時刻。
 	 */
-	private function format_stay_datetime_admin( int $post_id, string $check_in, string $check_out ): string {
-		return sprintf(
+	private function format_stay_datetime_admin( int $post_id, string $check_in, string $check_out, bool $short_label = false ): array {
+		$stay_summary = sprintf(
 			/* translators: 1: Check-in date and time, 2: Check-out date and time, 3: Number of nights (e.g. 1 night). */
 			__( 'Check-in %1$s - Check-out %2$s (%3$s)', 'vk-booking-manager' ),
 			$this->format_datetime_admin( $check_in ),
 			$this->format_datetime_admin( $check_out ),
 			Lodging_Booking::format_nights_label( Lodging_Booking::get_booking_nights( $post_id ) )
 		);
+		// 翻訳文の外で改行できるよう、日程と到着予定時刻を分ける。
+		$lines                   = array( $stay_summary );
+		$estimated_check_in_time = Lodging_Booking::get_booking_estimated_check_in_time( $post_id );
+		if ( '' !== $estimated_check_in_time ) {
+			$label = $short_label
+				/* translators: %s: 到着予定時刻（HH:MM）。予約一覧の狭い列用の短い表記。 */
+				? __( 'Arrival: %s', 'vk-booking-manager' )
+				/* translators: %s: 宿泊者の到着予定時刻（HH:MM）。 */
+				: __( 'Estimated check-in time: %s', 'vk-booking-manager' );
+			$lines[] = sprintf(
+				$label,
+				$estimated_check_in_time
+			);
+		}
+
+		return $lines;
 	}
 
 	/**
@@ -3180,5 +3236,153 @@ class Booking_Admin {
 		}
 
 		return current_user_can( Capabilities::MANAGE_RESERVATIONS, $post_id );
+	}
+
+	/**
+	 * 予約の編集画面からアップロードしたファイルの名前を、ランダムな名前に置き換える。
+	 *
+	 * 予約の編集画面からの新規アップロードだけが対象で、拡張子はそのまま残す。
+	 * すでに保存してあるファイルの名前は変えない。
+	 *
+	 * @param array<string,mixed> $file アップロードされたファイルの情報（$_FILES の1件分）。
+	 * @return array<string,mixed> 名前を置き換えたファイルの情報。対象外ならそのまま返す。
+	 */
+	public function filter_booking_upload_filename( $file ) {
+		if ( ! is_array( $file ) || empty( $file['name'] ) || ! is_string( $file['name'] ) ) {
+			return $file;
+		}
+
+		if ( ! $this->is_booking_upload_request() ) {
+			return $file;
+		}
+
+		// 拡張子の無いファイルは種類を判定できず WordPress 側で拒否されるため、名前を変えずに渡す。
+		$extension = pathinfo( $file['name'], PATHINFO_EXTENSION );
+		if ( '' === $extension ) {
+			return $file;
+		}
+
+		$file['name'] = bin2hex( random_bytes( intdiv( self::UPLOAD_RANDOM_FILENAME_LENGTH, 2 ) ) ) . '.' . $extension;
+
+		return $file;
+	}
+
+	/**
+	 * 予約の編集画面からアップロードした添付を、非公開（private）の状態で新規作成する。
+	 *
+	 * 既存の添付の更新（JPEG 変換後の MIME タイプの更新など）では状態を変えない。
+	 *
+	 * @param array<string,mixed> $data                保存する添付のデータ。
+	 * @param array<string,mixed> $postarr             呼び出し元から渡された添付のデータ。
+	 * @param array<string,mixed> $unsanitized_postarr サニタイズ前の添付のデータ。
+	 * @param bool                $update              既存の添付の更新なら true。
+	 * @return array<string,mixed> 保存する添付のデータ。
+	 */
+	public function filter_booking_attachment_insert_data( $data, $postarr, $unsanitized_postarr, $update ) {
+		if ( $update || ! is_array( $data ) ) {
+			return $data;
+		}
+
+		if ( ! $this->is_booking_upload_request() ) {
+			return $data;
+		}
+
+		$data['post_status'] = 'private';
+
+		return $data;
+	}
+
+	/**
+	 * 更新前にアップロードした履歴画像の添付を、一度だけ非公開（private）へ切り替える。
+	 *
+	 * 対象は、公開状態が親に従う（inherit）添付のうち、予約の編集画面からアップロードした目印があるもの、
+	 * または親が予約の投稿のもの。メディアライブラリから選んだ一般の画像は対象にしない。
+	 * ID の小さい順に件数を区切って取り出し、1回のリクエストでは上限回数まで繰り返す。
+	 * 最後まで到達し、すべて切り替えられたら option に記録し、以後は何もしない。
+	 * 上限で打ち切った場合や、切り替えに失敗した添付があった場合は記録せず、次に管理画面を開いたときに残りを続ける。
+	 *
+	 * @param int $batch_size 1回の問い合わせで取り出す添付の件数。
+	 * @return void
+	 */
+	public function maybe_make_existing_booking_attachments_private( int $batch_size = self::ATTACHMENTS_PRIVATE_BATCH_SIZE ): void {
+		if ( '1' === (string) get_option( self::OPTION_ATTACHMENTS_PRIVATE_DONE ) ) {
+			return;
+		}
+
+		// Ajax（ハートビートやメディアの一覧取得など）では実行せず、通常の管理画面の表示にだけ負荷を寄せる。
+		if ( wp_doing_ajax() ) {
+			return;
+		}
+
+		$batch_size  = max( 1, $batch_size );
+		$last_id     = 0;
+		$has_failed  = false;
+		$reached_end = false;
+
+		// ID を順に進めながら取り出すため、切り替えに失敗した添付があっても同じ添付を取り出し続けない。
+		for ( $batch = 0; $batch < self::ATTACHMENTS_PRIVATE_MAX_BATCHES_PER_REQUEST; $batch++ ) {
+			$attachment_ids = $this->get_inherit_booking_attachment_ids( $last_id, $batch_size );
+			$fetched_count  = count( $attachment_ids );
+
+			foreach ( $attachment_ids as $attachment_id ) {
+				$last_id = $attachment_id;
+				$result  = wp_update_post(
+					array(
+						'ID'          => $attachment_id,
+						'post_status' => 'private',
+					),
+					true
+				);
+				if ( is_wp_error( $result ) || 0 === $result ) {
+					$has_failed = true;
+				}
+			}
+
+			// 取り出した件数が1回分に満たなければ、対象の最後まで到達している。
+			if ( $fetched_count < $batch_size ) {
+				$reached_end = true;
+				break;
+			}
+		}
+
+		if ( $reached_end && ! $has_failed ) {
+			update_option( self::OPTION_ATTACHMENTS_PRIVATE_DONE, '1', true );
+		}
+	}
+
+	/**
+	 * 非公開へ切り替える対象の履歴画像の添付 ID を、指定した ID より大きいものから順に取り出す。
+	 *
+	 * 公開状態が親に従う（inherit）添付のうち、予約の編集画面からアップロードした目印があるもの、
+	 * または親が予約の投稿のものを対象にする。
+	 *
+	 * @param int $after_id この ID より大きい添付だけを取り出す。
+	 * @param int $limit    取り出す件数の上限。
+	 * @return array<int> 添付 ID の配列（ID の小さい順）。
+	 */
+	private function get_inherit_booking_attachment_ids( int $after_id, int $limit ): array {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- 「目印のメタがある、または親が予約の投稿」という条件と ID カーソルは投稿 API では表現できない。
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT a.ID FROM {$wpdb->posts} a
+				WHERE a.post_type = 'attachment'
+					AND a.post_status = 'inherit'
+					AND a.ID > %d
+					AND (
+						EXISTS ( SELECT 1 FROM {$wpdb->postmeta} m WHERE m.post_id = a.ID AND m.meta_key = %s )
+						OR EXISTS ( SELECT 1 FROM {$wpdb->posts} p WHERE p.ID = a.post_parent AND p.post_type = %s )
+					)
+				ORDER BY a.ID ASC
+				LIMIT %d",
+				$after_id,
+				self::META_ATTACHMENT_UPLOAD_FLAG,
+				Booking_Post_Type::POST_TYPE,
+				$limit
+			)
+		);
+
+		return array_map( 'intval', (array) $ids );
 	}
 }

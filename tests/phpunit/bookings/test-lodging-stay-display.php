@@ -225,6 +225,86 @@ class Lodging_Stay_Display_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * ゲストの確認メールにも下書きの到着予定時刻を含める。
+	 */
+	public function test_build_draft_payload(): void {
+		$menu_id = $this->create_menu( '1泊プラン' );
+		$method = new ReflectionMethod( Booking_Notification_Service::class, 'build_draft_payload' );
+		$method->setAccessible( true );
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$test_cases = array(
+			array( 'test_condition_name' => '夕方 => 表示', 'time' => '18:30', 'expected' => '18:30' ),
+			array( 'test_condition_name' => '夜 => 表示', 'time' => '23:59', 'expected' => '23:59' ),
+			array( 'test_condition_name' => '旧下書き => 開始時刻', 'omit' => true, 'expected' => '15:00' ),
+			array( 'test_condition_name' => '旧下書きで開始変更 => 最新の開始時刻', 'omit' => true, 'plan_time' => '18:00', 'expected' => '18:00' ),
+			array( 'test_condition_name' => '開始変更後も指定あり => 補完しない', 'time' => '18:30', 'plan_time' => '19:00', 'expected' => '18:30' ),
+			array( 'test_condition_name' => '空欄 => 省略', 'time' => '', 'expected' => '' ),
+			array( 'test_condition_name' => 'null => 省略', 'time' => null, 'expected' => '' ),
+			array( 'test_condition_name' => '不正時刻 => 省略', 'time' => '25:00', 'expected' => '' ),
+			array( 'test_condition_name' => '不正値 => 省略', 'time' => array(), 'expected' => '' ),
+		);
+		foreach ( $test_cases as $case ) {
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, $case['plan_time'] ?? '15:00' );
+			$draft = array( 'menu_id' => $menu_id, 'lodging' => array( 'nights' => 1, 'check_in_date' => '2026-10-10', 'check_out_date' => '2026-10-11' ) );
+			// 旧下書きのキー欠落と、保存済みの空欄を別々に検証する。
+			if ( empty( $case['omit'] ) ) {
+				$draft['lodging']['estimated_check_in_time'] = $case['time'];
+			}
+			$payload = $method->invoke( $service, $draft, '' );
+			$this->assertSame( $case['expected'], $payload['estimated_check_in_time'], $case['test_condition_name'] );
+			$lines = implode( "\n", $this->build_information_lines( $payload ) );
+			if ( '' !== $case['expected'] ) {
+				$this->assertStringContainsString( 'Estimated check-in time: ' . $case['expected'], $lines, $case['test_condition_name'] );
+			} else {
+				$this->assertStringNotContainsString( 'Estimated check-in time:', $lines, $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
+	 * 到着予定時刻は保存済みの泊の予約だけに表示し、業種変更後も引き継ぐ。
+	 */
+	public function test_get_booking_estimated_check_in_time(): void {
+		$user_id = $this->factory()->user->create();
+		wp_set_current_user( $user_id );
+		$menu_id = $this->create_menu( '宿泊プラン' );
+		$test_cases = array(
+			array( 'test_condition_name' => '夕方の到着 => 表示', 'nights' => 1, 'time' => '18:30', 'expected' => '18:30' ),
+			array( 'test_condition_name' => '夜の到着 => 表示', 'nights' => 2, 'time' => '23:59', 'expected' => '23:59' ),
+			array( 'test_condition_name' => '既存の未入力予約 => 非表示', 'nights' => 1, 'time' => '', 'expected' => '' ),
+			array( 'test_condition_name' => '保存値が不正 => 非表示', 'nights' => 1, 'time' => '<b>18:30</b>', 'expected' => '' ),
+			array( 'test_condition_name' => '時間枠の予約 => 非表示', 'nights' => 0, 'time' => '18:30', 'expected' => '' ),
+		);
+		foreach ( $test_cases as $case ) {
+			$booking_id = $this->create_stay_booking( $menu_id, $user_id );
+			update_post_meta( $booking_id, Lodging_Booking::META_NIGHTS, $case['nights'] );
+			update_post_meta( $booking_id, Lodging_Booking::META_ESTIMATED_CHECK_IN_TIME, $case['time'] );
+			$this->set_site( 'custom' );
+			$this->assertSame( $case['expected'], Lodging_Booking::get_booking_estimated_check_in_time( $booking_id ), $case['test_condition_name'] );
+
+			// メール・マイページ・ゲスト結果画面・管理画面は同じ保存値を使う。
+			$payload = $this->build_notification_payload( $booking_id );
+			$this->assertSame( $case['expected'], $payload['estimated_check_in_time'], $case['test_condition_name'] );
+			$guest = \VKBookingManager\Bookings\Guest_Booking_Controller::build_booking_summary( $booking_id );
+			$this->assertSame( $case['expected'], $guest['estimatedCheckInTime'], $case['test_condition_name'] );
+			$request = new WP_REST_Request( 'GET', '/vkbm/v1/my-bookings' );
+			$request->set_param( 'future_only', false );
+			$items = ( new My_Bookings_Controller() )->get_bookings( $request )->get_data();
+			$items = array_column( $items, null, 'id' );
+			$this->assertSame( $case['expected'], $items[ $booking_id ]['estimated_check_in_time'], $case['test_condition_name'] );
+			$lines = implode( "\n", $this->build_information_lines( $payload ) );
+			$html  = $this->render_admin_datetime_column( $booking_id );
+			if ( '' === $case['expected'] ) {
+				$this->assertStringNotContainsString( 'Estimated check-in time:', $lines, $case['test_condition_name'] );
+				$this->assertStringNotContainsString( 'Arrival:', $html, $case['test_condition_name'] );
+			} else {
+				$this->assertStringContainsString( 'Estimated check-in time: ' . $case['expected'], $lines, $case['test_condition_name'] );
+				$this->assertStringContainsString( 'Arrival: ' . $case['expected'], $html, $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
 	 * 泊の予約の通知メールは、日時の行がチェックイン／チェックアウトの1行になり、所要時間の行が泊数に置き換わる。
 	 */
 	public function test_notification_for_stay_booking_shows_check_in_out_and_nights(): void {
@@ -515,6 +595,49 @@ class Lodging_Stay_Display_Test extends WP_UnitTestCase {
 		( new Booking_Admin() )->render_column( 'vkbm_booking_datetime', $booking_id );
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * 宿泊日程と到着予定時刻は別行にし、各行の翻訳文をエスケープする。
+	 */
+	public function test_format_stay_datetime_admin(): void {
+		wp_set_current_user( $this->factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$menu_id = $this->create_menu( '1泊プラン' );
+		$test_cases = array(
+			array( 'test_condition_name' => '夕方の到着 => 2行', 'time' => '18:30', 'expected' => '18:30' ),
+			array( 'test_condition_name' => '深夜の到着 => 2行', 'time' => '23:59', 'expected' => '23:59' ),
+			array( 'test_condition_name' => '旧予約の未入力 => 1行', 'time' => '', 'expected' => '' ),
+			array( 'test_condition_name' => '不正な保存値 => 1行', 'time' => '<b>18:30</b>', 'expected' => '' ),
+		);
+		// 翻訳文に HTML が含まれても、各行の出力時に無害化する。
+		$translation_filter = static function ( $translation, $text, $domain ) {
+			if ( 'vk-booking-manager' === $domain && in_array( $text, array( 'Check-in %1$s - Check-out %2$s (%3$s)', 'Estimated check-in time: %s', 'Arrival: %s' ), true ) ) {
+				return '<b>' . $translation . '</b>';
+			}
+			return $translation;
+		};
+		add_filter( 'gettext', $translation_filter, 10, 3 );
+		try {
+			foreach ( $test_cases as $case ) {
+				$booking_id = $this->create_stay_booking( $menu_id );
+				update_post_meta( $booking_id, Lodging_Booking::META_ESTIMATED_CHECK_IN_TIME, $case['time'] );
+				$expected = '&lt;b&gt;Check-in 2026.10.10 15:00 - Check-out 2026.10.11 10:00 (1 night)&lt;/b&gt;';
+				if ( '' !== $case['expected'] ) {
+					$expected .= '<br><span class="vkbm-booking-estimated-check-in-time">&lt;b&gt;Estimated check-in time: ' . $case['expected'] . '&lt;/b&gt;</span>';
+				}
+				$this->assertSame( str_replace( 'Estimated check-in time:', 'Arrival:', $expected ), $this->render_admin_datetime_column( $booking_id ), $case['test_condition_name'] );
+
+				// 編集画面の宿泊欄も同じ行構成で、余分な改行を出さない。
+				ob_start();
+				( new Booking_Admin() )->render_meta_box( get_post( $booking_id ) );
+				$html = (string) ob_get_clean();
+				preg_match( '/<td>\s*(&lt;b&gt;Check-in.*?)<p class="description">/s', $html, $matches );
+				$actual = implode( '<br>', array_map( 'trim', explode( '<br>', trim( $matches[1] ?? '' ) ) ) );
+				$this->assertSame( $expected, $actual, $case['test_condition_name'] );
+			}
+		} finally {
+			remove_filter( 'gettext', $translation_filter, 10 );
+		}
 	}
 
 	/**

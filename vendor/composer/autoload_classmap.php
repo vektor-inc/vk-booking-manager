@@ -54,6 +54,7 @@ return array(
     'VKBookingManager\\Bookings\\Booking_Privacy_Eraser' => $baseDir . '/src/bookings/class-booking-privacy-eraser.php',
     'VKBookingManager\\Bookings\\Booking_Source' => $baseDir . '/src/bookings/class-booking-source.php',
     'VKBookingManager\\Bookings\\Customer_Booking_Limit' => $baseDir . '/src/bookings/class-customer-booking-limit.php',
+    'VKBookingManager\\Bookings\\Draft_Reference_Validator' => $baseDir . '/src/bookings/class-draft-reference-validator.php',
     'VKBookingManager\\Bookings\\Guest_Booking_Admin' => $baseDir . '/src/bookings/class-guest-booking-admin.php',
     'VKBookingManager\\Bookings\\Guest_Booking_Controller' => $baseDir . '/src/bookings/class-guest-booking-controller.php',
     'VKBookingManager\\Bookings\\Guest_Cancel_Controller' => $baseDir . '/src/bookings/class-guest-cancel-controller.php',

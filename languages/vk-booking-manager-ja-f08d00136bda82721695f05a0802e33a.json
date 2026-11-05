@@ -19,6 +19,27 @@
 			"text": [
 				"テキスト"
 			],
+			"Match content height": [
+				"本文の高さに合わせる"
+			],
+			"image aspect ratio\u0004Original": [
+				"元のサイズ"
+			],
+			"Square - 1:1": [
+				"正方形 - 1:1"
+			],
+			"Standard - 4:3": [
+				"標準 - 4:3"
+			],
+			"Wide - 16:9": [
+				"ワイド - 16:9"
+			],
+			"Sets the image ratio for service groups displayed as cards.": [
+				"カード表示のサービスグループの画像比率を選べます。"
+			],
+			"The selected ratio also applies when images appear above the content, such as on smartphones.": [
+				"スマホなどで画像が本文の上に並ぶときも、選んだ比率で表示されます。"
+			],
 			"Menu order": [
 				"メニュー順"
 			],
@@ -90,6 +111,9 @@
 			],
 			"Display element": [
 				"表示要素"
+			],
+			"Image aspect ratio": [
+				"画像の比率"
 			],
 			"View Service Tag": [
 				"サービスタグを表示"

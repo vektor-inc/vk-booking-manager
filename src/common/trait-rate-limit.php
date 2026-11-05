@@ -99,6 +99,16 @@ trait Rate_Limit_Trait {
 			return true;
 		}
 
+		// IPv6 は端末アドレスの切り替えによる回避を防ぐため /64 にまとめる。
+		if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+			$packed_ip = inet_pton( $ip );
+			if ( false !== $packed_ip ) {
+				// IPv4 射影アドレスは元の IPv4 と同じカウンタを使う。
+				$is_mapped = substr( $packed_ip, 0, 12 ) === str_repeat( "\0", 10 ) . "\xff\xff";
+				$ip        = inet_ntop( $is_mapped ? substr( $packed_ip, 12 ) : substr( $packed_ip, 0, 8 ) . str_repeat( "\0", 8 ) );
+			}
+		}
+
 		// アクション名とIPからキーの素となるハッシュを生成する。
 		// transient / object cache / GET_LOCK のキー名はすべてこの hash を流用する。
 		$hash = substr( sha1( $action . '|' . $ip ), 0, 20 );
@@ -248,9 +258,9 @@ trait Rate_Limit_Trait {
 
 		$got_lock = null;
 		if ( isset( $wpdb ) && is_object( $wpdb ) ) {
-			// タイムアウト 0 秒 = 即時取得を試みる。
+			// 並列の要求も数えられるよう、ロック取得を最大 1 秒待つ。
 			// $wpdb->prepare で SQL インジェクション対策を行う。
-			$got_lock = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 0)', $lock_name ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$got_lock = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK(%s, 1)', $lock_name ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		}
 
 		// 取得失敗 (NULL = エラー、'0' = タイムアウト) なら許可して終わる。

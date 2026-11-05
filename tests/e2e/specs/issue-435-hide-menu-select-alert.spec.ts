@@ -1,3 +1,4 @@
+// @category 予約画面・カレンダー
 import { test, expect } from '@playwright/test';
 import {
 	getMenuListDisplayEnabled,

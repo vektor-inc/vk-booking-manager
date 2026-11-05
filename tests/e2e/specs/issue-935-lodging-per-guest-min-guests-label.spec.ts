@@ -13,6 +13,7 @@
  * - BM 設定（vkbm_provider_settings）は beforeAll で控え、afterAll の finally で必ず元へ戻す
  *   （業種プリセットが宿泊のまま次の spec へ残ると、他の spec が壊れるため）。
  */
+// @category 宿泊予約
 import { test, expect } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -20,6 +21,7 @@ import {
 	loginAsAdmin,
 	createShiftForMonth,
 	getCurrentAndNextTokyoMonths,
+	setAdminBlockEditorPreferences,
 } from '../utils/helpers';
 
 // テストデータの識別用接頭辞（他 spec のデータと区別する）。
@@ -106,32 +108,6 @@ function restoreProviderSettings(): void {
 	} catch {
 		// 元から無い（削除済み）なら何もしない。
 	}
-}
-
-/**
- * ブロックエディターの「ようこそ」案内を出さず、メタボックス欄を開いた状態にする。
- * 案内やメタボックス欄の折りたたみが、下限の欄などの操作を妨げるため。
- */
-function prepareBlockEditorPreferences(): void {
-	const result = wpEvalPhp( `
-		global $wpdb;
-		$user = get_user_by( 'login', 'admin' );
-		update_user_meta(
-			$user->ID,
-			$wpdb->get_blog_prefix() . 'persisted_preferences',
-			array(
-				'core/edit-post' => array(
-					'welcomeGuide'        => false,
-					'metaBoxesMainIsOpen' => true,
-				),
-				'core'           => array(
-					'enableChoosePatternModal' => false,
-				),
-			)
-		);
-		echo 'OK';
-	` );
-	expect( result ).toContain( 'OK' );
 }
 
 test.describe
@@ -221,7 +197,7 @@ test.describe
 	test( '編集画面で「最低申し込み人数」と新しい説明文が表示され、1室1泊あたりでは隠れる', async ( {
 		page,
 	} ) => {
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		// @step 管理者でログインし、プランの編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
@@ -326,7 +302,7 @@ test.describe
 
 		// 画面から下限に 2 を入れて保存する。
 		// @step 管理者でログインし、プランの編集画面で「最低申し込み人数」に 2 を入れて保存する
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await loginAsAdmin( page );
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
 		const minInput = page.locator( '#vkbm_service_menu_min_capacity' );

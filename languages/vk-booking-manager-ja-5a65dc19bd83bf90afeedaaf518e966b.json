@@ -52,6 +52,9 @@
 			"Please select at least one guest.": [
 				"1名以上を選択してください。"
 			],
+			"Please choose another time slot.": [
+				"別の時間帯を選択してください。"
+			],
 			"This menu accepts bookings from %d guests.": [
 				"このメニューは %d 名からお申し込みいただけます。"
 			],
@@ -69,9 +72,6 @@
 			],
 			"This time slot cannot accept the minimum of %d guests required for this menu.": [
 				"この時間帯は、このメニューの最低申し込み人数（%d名）を受け付けられません。"
-			],
-			"Please choose another time slot.": [
-				"別の時間帯を選択してください。"
 			],
 			"There are no service menus available for the selected dates.": [
 				"選んだ日程で予約できるサービスメニューはありません。"
@@ -231,6 +231,30 @@
 			],
 			"A private booking fee of %s per guest will be added.": [
 				"貸切料金として一人あたり %s プラスになります。"
+			],
+			"Availability is temporarily busy.": [
+				"空き状況の確認が一時的に混み合っています。"
+			],
+			"Your selections are kept.": [
+				"選んだ内容はそのままです。"
+			],
+			"Please wait a moment and try again.": [
+				"少し待ってから再試行してください。"
+			],
+			"This month is outside the booking period.": [
+				"この月は予約受付期間外です。"
+			],
+			"Please choose a later month.": [
+				"次の月を選んでください。"
+			],
+			"Please choose an earlier month.": [
+				"前の月を選んでください。"
+			],
+			"This is the last month available for booking.": [
+				"予約できる月はここまでです。"
+			],
+			"Try again": [
+				"再試行"
 			],
 			"Mon": [
 				"月"
@@ -408,6 +432,9 @@
 			],
 			"Check-out": [
 				"チェックアウト"
+			],
+			"Estimated check-in time": [
+				"チェックイン予定時刻"
 			],
 			"Cancellation policy": [
 				"キャンセルポリシー"
@@ -658,6 +685,9 @@
 			"Checking available rooms…": [
 				"空いている客室を確認しています…"
 			],
+			"%s is available; you can proceed to reservation.": [
+				"%sの空きを確認しましたので、予約に進めます。"
+			],
 			"%d room is available.": [
 				"空いている客室は%d件です。"
 			],
@@ -681,6 +711,9 @@
 			],
 			"However, the rate varies by day, such as pre-holidays and special dates.": [
 				"ただし、休前日や特定日など、日によって料金が変わります。"
+			],
+			"Select your dates to see the rate for each night.": [
+				"日程を選ぶと、泊ごとの料金を表示します。"
 			],
 			"Select your dates and a room to see the rate for each night.": [
 				"日程と客室を選ぶと、泊ごとの料金を表示します。"
@@ -708,6 +741,9 @@
 			],
 			"Total for %d night": [
 				"%d泊合計"
+			],
+			"Enter your estimated check-in time (%s or later).": [
+				"チェックイン予定時刻を入力してください（%s以降）。"
 			],
 			"Select a %s to proceed to reservation.": [
 				"%sを選ぶと、予約に進めます。"

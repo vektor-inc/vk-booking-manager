@@ -1,6 +1,7 @@
 /**
  * issue #830: 1室1泊あたりでは最低申し込み人数の行を隠す。
  */
+// @category 宿泊予約
 import { test, expect } from '@playwright/test';
 import { loginAsAdmin, wpCliArgs, wpEvalPhp } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';

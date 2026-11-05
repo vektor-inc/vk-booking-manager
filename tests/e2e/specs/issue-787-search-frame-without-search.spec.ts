@@ -14,6 +14,7 @@
  *
  * BM 設定は beforeAll で控えて、afterAll で必ず戻す。
  */
+// @category 予約画面・カレンダー
 import { test, expect } from '@playwright/test';
 import { wpCliArgs, wpEvalPhp, getServiceMenuId } from '../utils/helpers';
 

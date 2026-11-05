@@ -1,3 +1,4 @@
+// @category 予約の確定・確認・キャンセル
 import { test, expect, type Page } from '@playwright/test';
 import { loginAsAdmin, getServiceMenuId, wpCliArgs } from '../utils/helpers';
 import { selectAvailableCalendarDay } from '../utils/calendar-helpers';

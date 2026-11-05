@@ -34,6 +34,7 @@
  * 4. 指名機能の有効/無効いずれの場合も: max_capacity の値を変更して保存し、
  *    再度読み込むと値が保持されている（回帰確認）
  */
+// @category スタッフ指名
 import { test, expect } from '@playwright/test';
 import {
 	wpCli,

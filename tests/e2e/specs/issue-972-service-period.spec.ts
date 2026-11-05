@@ -11,12 +11,14 @@
  * - プランは固有の接頭辞（E2E972）を付けて作り、afterAll で接頭辞を手がかりに削除する。
  * - 期間は「来月の 10 日〜20 日」にする（global-setup が今月と来月のシフトを登録済みのため）。
  */
+// @category 予約画面・カレンダー
 import { test, expect } from '@playwright/test';
 import {
 	wpCliArgs,
 	wpEvalPhp,
 	loginAsAdmin,
 	getStaffId,
+	setAdminBlockEditorPreferences,
 } from '../utils/helpers';
 
 // テストデータの識別用接頭辞（他 spec のデータと区別する）。
@@ -89,31 +91,6 @@ function createMenu( title: string, staffId: string, meta: string ): string {
 	);
 }
 
-/**
- * ブロックエディターの「ようこそ」案内を出さず、メタボックス欄を開いた状態にする。
- */
-function prepareBlockEditorPreferences(): void {
-	const result = wpEvalPhp( `
-		global $wpdb;
-		$user = get_user_by( 'login', 'admin' );
-		update_user_meta(
-			$user->ID,
-			$wpdb->get_blog_prefix() . 'persisted_preferences',
-			array(
-				'core/edit-post' => array(
-					'welcomeGuide'        => false,
-					'metaBoxesMainIsOpen' => true,
-				),
-				'core'           => array(
-					'enableChoosePatternModal' => false,
-				),
-			)
-		);
-		echo 'OK';
-	` );
-	expect( result ).toContain( 'OK' );
-}
-
 test.describe.serial( 'サービスメニューの提供期間（#972）', () => {
 	test.beforeAll( () => {
 		// 来月の 10 日・20 日と、昨日の日付（サイトのタイムゾーン）を求める。
@@ -144,14 +121,14 @@ test.describe.serial( 'サービスメニューの提供期間（#972）', () =>
 		// （「スタッフ連携」など）が非表示になって落ちるため、エディターの設定を既定の状態へ戻す。
 		// Opening the editor at 390px closes the settings sidebar and persists that state;
 		// reset the preferences so later specs see the sidebar meta boxes.
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 	} );
 
 	// @title 編集画面の提供期間欄（逆転エラーと保存）
 	test( '「予約可能日」の直上に提供期間欄があり、開始日が終了日より後だとエラーが出て、正しい期間は保存できる', async ( {
 		page,
 	} ) => {
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		// @step 管理者でログインし、「E2E972 Summer Plan」の編集画面を開く
 		await loginAsAdmin( page );
 		await page.goto(

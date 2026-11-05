@@ -794,4 +794,78 @@ class Lodging_Availability_Test extends WP_UnitTestCase {
 		);
 		$this->assertStringContainsString( '30', $beyond->get_error_message() );
 	}
+
+	/** 受付上限の月を越えるチェックアウト候補も、最大泊数内なら返す。 */
+	public function test_checkout_calendar_crosses_booking_limit_month(): void {
+		$room_id  = $this->create_room( '境界の客室' );
+		$check_in = current_datetime()->modify( 'last day of next month' );
+		$days     = (int) current_datetime()->setTime( 0, 0 )->diff( $check_in->setTime( 0, 0 ) )->days;
+		$menu_id  = $this->create_menu( array( $room_id ), array( '_vkbm_max_advance_booking_days' => $days ) );
+		$month    = $check_in->modify( '+1 day' );
+		$service  = new Availability_Service();
+		// 受付上限日のある月では選択でき、翌月のチェックインは範囲外になる。
+		foreach ( array( array( $check_in, true ), array( $month, false ) ) as $case ) {
+			$calendar = $service->get_lodging_calendar_meta(
+				array(
+					'menu_id' => $menu_id,
+					'year'    => (int) $case[0]->format( 'Y' ),
+					'month'   => (int) $case[0]->format( 'n' ),
+				)
+			);
+			$this->assertSame( $case[1], $calendar['booking_range']['in_range'] );
+		}
+		// 月末の同月・前月・翌月でも、同じチェックアウト候補を返す。
+		foreach ( array( $check_in, $check_in->modify( 'first day of previous month' ), $month ) as $cursor ) {
+			$result = $service->get_lodging_calendar_meta(
+				array(
+					'menu_id'       => $menu_id,
+					'year'          => (int) $cursor->format( 'Y' ),
+					'month'         => (int) $cursor->format( 'n' ),
+					'check_in_date' => $check_in->format( 'Y-m-d' ),
+				)
+			);
+			$this->assertIsArray( $result );
+			$this->assertTrue( $result['booking_range']['in_range'] );
+			$this->assertCount( 30, $result['days'] );
+			$this->assertSame( $month->format( 'Y-m-d' ), $result['days'][0]['date'] );
+			$this->assertTrue( $result['days'][0]['available'] );
+		}
+	}
+
+	/** 全日が過去の宿泊月は空の成功応答になる。 */
+	public function test_get_lodging_calendar_meta_past_month(): void {
+		$room_id = $this->create_room( '過去の客室' );
+		$menu_id = $this->create_menu( array( $room_id ) );
+		$month   = current_datetime()->modify( 'first day of previous month' );
+		$result  = ( new Availability_Service() )->get_lodging_calendar_meta(
+			array(
+				'menu_id' => $menu_id,
+				'year'    => (int) $month->format( 'Y' ),
+				'month'   => (int) $month->format( 'n' ),
+			)
+		);
+		$this->assertSame( array(), $result['days'] );
+		$this->assertFalse( $result['booking_range']['in_range'] );
+	}
+
+	/** 範囲外の宿泊カレンダーも空の成功応答とし、保存しない。 */
+	public function test_lodging_outside_month_does_not_write_cache(): void {
+		$room_id = $this->create_room( '範囲外の客室' );
+		$menu_id = $this->create_menu( array( $room_id ), array( '_vkbm_max_advance_booking_days' => 1 ) );
+		$month   = current_datetime()->modify( 'first day of +2 months' );
+		global $wpdb;
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery -- 保存件数の増加をキャッシュなしで検証する。
+		$before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_vkbm_lodging_calendar_%'" );
+		$result = ( new Availability_Service() )->get_lodging_calendar_meta(
+			array(
+				'menu_id' => $menu_id,
+				'year'    => (int) $month->format( 'Y' ),
+				'month'   => (int) $month->format( 'n' ),
+			)
+		);
+		$this->assertSame( array(), $result['days'] );
+		$this->assertFalse( $result['booking_range']['in_range'] );
+		$this->assertSame( $before, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE '_transient_vkbm_lodging_calendar_%'" ) );
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery
+	}
 }

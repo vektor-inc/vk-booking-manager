@@ -12,6 +12,7 @@
  *
  * 注: 語句は言語設定で変わるため、クラス名・属性を中心にセレクトする。
  */
+// @category サービスメニュー・ブロック表示
 import { test, expect } from '@playwright/test';
 import { wpEvalPhp } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';

@@ -22,6 +22,7 @@
   "viewScript": "file:./view.js",
   "style": [
     "vkbm-components",
+    "vkbm-shared-menu-card",
     "file:./style-index.css"
   ],
   "editorStyle": "file:./index.css"

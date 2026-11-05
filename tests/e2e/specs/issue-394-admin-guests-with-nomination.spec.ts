@@ -19,6 +19,7 @@
  *   同じ手法（wp_insert_post を wpEvalPhp 経由で直接シード）で作成する。
  *   ブラウザ経由の実予約確定（ログイン＋フロント予約フロー）は本 spec のスコープ外とする。
  */
+// @category スタッフ指名
 import { test, expect } from '@playwright/test';
 import {
 	loginAsAdmin,

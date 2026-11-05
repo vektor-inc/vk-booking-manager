@@ -1876,6 +1876,9 @@ class Availability_Snapshot_Test extends WP_UnitTestCase {
 			)
 		);
 
+		// 遠い将来の応答構造を検証するため、受付上限を明示的に解除する。
+		update_post_meta( $context['menu_id'], '_vkbm_max_advance_booking_days', 0 );
+
 		$result = ( new Availability_Service() )->get_calendar_meta(
 			array(
 				'menu_id'  => $context['menu_id'],
@@ -1885,7 +1888,7 @@ class Availability_Snapshot_Test extends WP_UnitTestCase {
 			)
 		);
 
-		$this->assertSame( $sorted( array( 'year', 'month', 'days', 'meta' ) ), $sorted( array_keys( $result ) ), '戻り値の最上位のキー' );
+		$this->assertSame( $sorted( array( 'year', 'month', 'days', 'meta', 'booking_range' ) ), $sorted( array_keys( $result ) ), '戻り値の最上位のキー' );
 		$this->assertSame( 2099, $result['year'], 'year' );
 		$this->assertSame( 3, $result['month'], 'month' );
 		$this->assertCount( 31, $result['days'], '3月は31日分' );

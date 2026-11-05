@@ -41,6 +41,7 @@
  * - playwright.config の baseURL（テスト用 wp-env）に対して実行する。
  *   絶対URLはハードコードせず page.goto には相対パスを渡す。
  */
+// @category 料金表示
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,

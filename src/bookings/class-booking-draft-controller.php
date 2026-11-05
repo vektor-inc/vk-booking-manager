@@ -188,7 +188,12 @@ class Booking_Draft_Controller {
 				'callback'            => array( $this, 'save_draft' ),
 				'permission_callback' => '__return_true',
 				'args'                => array(
-					'attendee_name' => array(
+					'estimated_check_in_time' => array(
+						'type'      => 'string',
+						'pattern'   => '^([01][0-9]|2[0-3]):[0-5][0-9]$',
+						'maxLength' => 5,
+					),
+					'attendee_name'           => array(
 						'type'      => 'string',
 						'maxLength' => Attendee_Name::MAX_LENGTH,
 					),
@@ -254,6 +259,12 @@ class Booking_Draft_Controller {
 			return $limit_error;
 		}
 
+		// 予約メニューの ID が、予約できる予約メニューを指していることを確かめる。
+		$menu_error = Draft_Reference_Validator::validate_menu( $this->availability_service, $menu_id );
+		if ( null !== $menu_error ) {
+			return $menu_error;
+		}
+
 		// チェックイン日・チェックアウト日を含むリクエストは泊の経路。時間枠の経路には影響しない。
 		$is_lodging_request = Lodging_Booking::is_requested( is_array( $params ) ? $params : array() );
 		if ( ! $is_lodging_request && Lodging_Price::is_applicable( $menu_id ) ) {
@@ -297,6 +308,15 @@ class Booking_Draft_Controller {
 			// 空き枠・定員のチェックは自動割り当て（ベストフィット）経路で通常どおり効くため、
 			// 金銭・データへの影響は無い（従来からのサイト全体OFF時と同じ経路を通るだけ）。
 			$resource_id = 0;
+		}
+
+		// 時間枠の経路で担当が指定されたときは、そのメニューで担当できる公開中のリソースかを確かめる。
+		// 泊の経路は、客室を Lodging_Booking::prepare() が同じ基準で確かめる。
+		if ( ! $is_lodging_request ) {
+			$resource_error = Draft_Reference_Validator::validate_resource( $this->availability_service, $menu_id, $resource_id );
+			if ( null !== $resource_error ) {
+				return $resource_error;
+			}
 		}
 
 		$slot = isset( $params['slot'] ) && is_array( $params['slot'] ) ? $params['slot'] : array();
@@ -365,17 +385,19 @@ class Booking_Draft_Controller {
 		// 送られてきたスロット・日時・金額は使わない（保存するのはサーバーで計算した値だけ）。
 		$lodging_stay = null;
 		if ( $is_lodging_request ) {
-			$lodging_stay = Lodging_Booking::prepare(
-				$this->availability_service,
-				array(
-					'menu_id'        => $menu_id,
-					'resource_id'    => $resource_id,
-					'check_in_date'  => isset( $params['check_in_date'] ) ? sanitize_text_field( (string) $params['check_in_date'] ) : '',
-					'check_out_date' => isset( $params['check_out_date'] ) ? sanitize_text_field( (string) $params['check_out_date'] ) : '',
-					'guests'         => isset( $params['guests'] ) ? (int) $params['guests'] : 1,
-					'guest_tiers'    => isset( $params['guest_tiers'] ) ? $params['guest_tiers'] : array(),
-				)
+			$lodging_args = array(
+				'menu_id'        => $menu_id,
+				'resource_id'    => $resource_id,
+				'check_in_date'  => isset( $params['check_in_date'] ) ? sanitize_text_field( (string) $params['check_in_date'] ) : '',
+				'check_out_date' => isset( $params['check_out_date'] ) ? sanitize_text_field( (string) $params['check_out_date'] ) : '',
+				'guests'         => isset( $params['guests'] ) ? (int) $params['guests'] : 1,
+				'guest_tiers'    => isset( $params['guest_tiers'] ) ? $params['guest_tiers'] : array(),
 			);
+			// 未指定の旧リクエスト・下書きの補完は prepare() で行う。
+			if ( array_key_exists( 'estimated_check_in_time', $params ) ) {
+				$lodging_args['estimated_check_in_time'] = $params['estimated_check_in_time'];
+			}
+			$lodging_stay = Lodging_Booking::prepare( $this->availability_service, $lodging_args );
 			if ( is_wp_error( $lodging_stay ) ) {
 				return Lodging_Booking::mask_room_error_for_visitors( $lodging_stay );
 			}
@@ -421,7 +443,7 @@ class Booking_Draft_Controller {
 			if ( $this->slot_has_exclusive_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
 				return new WP_Error(
 					'capacity_exceeded',
-					__( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ),
+					Nomination_Min_Guests_Message::join_sentences( __( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ), __( 'Please choose another time slot.', 'vk-booking-manager' ) ),
 					array( 'status' => 409 )
 				);
 			}
@@ -636,9 +658,10 @@ class Booking_Draft_Controller {
 		if ( null !== $lodging_stay ) {
 			// 泊の予約のチェックイン日・チェックアウト日・泊数（サーバーで検証・計算した値）。金額は読み出し時・確定時に再計算する。
 			$payload['lodging'] = array(
-				'check_in_date'  => $lodging_stay['check_in_date'],
-				'check_out_date' => $lodging_stay['check_out_date'],
-				'nights'         => $lodging_stay['nights'],
+				'check_in_date'           => $lodging_stay['check_in_date'],
+				'check_out_date'          => $lodging_stay['check_out_date'],
+				'estimated_check_in_time' => $lodging_stay['estimated_check_in_time'],
+				'nights'                  => $lodging_stay['nights'],
 			);
 		}
 
@@ -739,6 +762,18 @@ class Booking_Draft_Controller {
 				__( 'You do not have permission to access this temporary reservation data.', 'vk-booking-manager' ),
 				array( 'status' => 403 )
 			);
+		}
+
+		// 予約メニューと担当が、今も予約できる投稿を指していることを確かめる。
+		$reference_error = Draft_Reference_Validator::validate_draft( $this->availability_service, $payload );
+		if ( null !== $reference_error ) {
+			return $reference_error;
+		}
+
+		// 表示した補完時刻を確定処理でも使えるよう、所有者を除く前に保存する。
+		if ( isset( $payload['lodging'] ) && is_array( $payload['lodging'] ) && ! array_key_exists( 'estimated_check_in_time', $payload['lodging'] ) ) {
+			$payload['lodging']['estimated_check_in_time'] = Service_Menu_Post_Type::get_check_in_time( (int) ( $payload['menu_id'] ?? 0 ) );
+			$this->persist_backfilled_draft( $token, $payload );
 		}
 
 		unset( $payload['owner_user_id'], $payload['owner_key'] );
@@ -1783,14 +1818,56 @@ class Booking_Draft_Controller {
 			return $payload;
 		}
 
+		$original_payload         = $payload;
 		$payload['owner_user_id'] = (int) get_current_user_id();
 		if ( 0 === $payload['owner_user_id'] ) {
 			$payload['owner_key'] = $this->ensure_owner_cookie();
 		}
 
-		set_transient( $this->build_transient_key( $token ), $payload, self::TTL_SECONDS );
+		// 保存できない所有者情報でアクセスを許可しない。
+		if ( ! $this->persist_backfilled_draft( $token, $payload ) ) {
+			return $original_payload;
+		}
 
 		return $payload;
+	}
+
+	/**
+	 * 既存下書きの補完値を、有効期限を延長せず保存する。
+	 *
+	 * @param string              $token 下書きトークン。
+	 * @param array<string,mixed> $payload 補完済みの下書き。
+	 * @return bool 保存できた場合は true。
+	 */
+	private function persist_backfilled_draft( string $token, array $payload ): bool {
+		$key      = $this->build_transient_key( $token );
+		$existing = get_transient( $key );
+		if ( ! is_array( $existing ) ) {
+			return false;
+		}
+
+		$expires_at = 0;
+		if ( wp_using_ext_object_cache() ) {
+			// TTL を取得できないキャッシュでは、保存時に記録した作成時刻を使う。
+			$owner_id = $this->resolve_owner_id( $existing );
+			if ( '' !== $owner_id ) {
+				foreach ( $this->read_owner_index( $owner_id ) as $entry ) {
+					if ( $entry['token'] === $token && $entry['created_at'] > 0 ) {
+						$expires_at = $entry['created_at'] + self::TTL_SECONDS;
+						break;
+					}
+				}
+			}
+		} else {
+			$expires_at = (int) get_option( '_transient_timeout_' . $key, 0 );
+		}
+
+		// 期限不明・期限切れの旧下書きは保存せず、無期限の復活を防ぐ。
+		$remaining = $expires_at - time();
+		if ( $expires_at <= 0 || $remaining <= 0 || false === get_transient( $key ) ) {
+			return false;
+		}
+		return set_transient( $key, $payload, $remaining );
 	}
 
 	/**

@@ -1,5 +1,6 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { useMemo } from '@wordpress/element';
+import { useCalendarNavigationFocus } from './use-calendar-navigation-focus';
 import { formatReservationDate } from '../date-format';
 
 const WEEKDAYS = [
@@ -98,7 +99,17 @@ export const CalendarGrid = ( {
 	isLoading,
 	locale,
 	closedDayLabel = '',
+	isNextDisabled = false,
+	isPrevDisabled = false,
+	isUnavailable = false,
 } ) => {
+	const navigationRef = useCalendarNavigationFocus(
+		year,
+		month,
+		isPrevDisabled,
+		isNextDisabled,
+		isLoading
+	);
 	const todayIso = toISODate( new Date() );
 
 	const renderStatusLabel = ( status ) => {
@@ -148,12 +159,16 @@ export const CalendarGrid = ( {
 				<button
 					type="button"
 					className="vkbm-calendar__nav"
-					onClick={ () => onMonthChange( -1 ) }
+					onClick={ ( event ) => {
+						navigationRef.current = event.currentTarget;
+						onMonthChange( -1 );
+					} }
+					disabled={ isPrevDisabled }
 					aria-label={ __( 'previous month', 'vk-booking-manager' ) }
 				>
 					‹
 				</button>
-				<div className="vkbm-calendar__current">
+				<div className="vkbm-calendar__current" tabIndex={ -1 }>
 					{ formatMonthLabel( year, month, locale ) }
 					{ isLoading && (
 						<span
@@ -167,7 +182,11 @@ export const CalendarGrid = ( {
 				<button
 					type="button"
 					className="vkbm-calendar__nav"
-					onClick={ () => onMonthChange( 1 ) }
+					onClick={ ( event ) => {
+						navigationRef.current = event.currentTarget;
+						onMonthChange( 1 );
+					} }
+					disabled={ isNextDisabled }
 					aria-label={ __( 'next month', 'vk-booking-manager' ) }
 				>
 					›
@@ -190,6 +209,7 @@ export const CalendarGrid = ( {
 							const meta = dayMetaMap[ day.iso ] || {};
 							const isSelected = selectedDate === day.iso;
 							const disabled =
+								isUnavailable ||
 								! day.inMonth ||
 								Boolean( meta.is_disabled ) ||
 								day.iso < todayIso;

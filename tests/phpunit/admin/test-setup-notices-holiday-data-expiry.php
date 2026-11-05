@@ -71,6 +71,12 @@ class Setup_Notices_Holiday_Data_Expiry_Test extends WP_UnitTestCase {
 				'expected'            => '2027-01-31',
 			),
 			array(
+				'test_condition_name' => '自動登録 6か月 => 年をまたぐ6か月先の月末',
+				'max_advance_days'    => 0,
+				'auto_months'         => 6,
+				'expected'            => '2027-04-30',
+			),
+			array(
 				'test_condition_name' => '自動登録 1か月（今日+3か月のほうが先） => 今日+3か月',
 				'max_advance_days'    => 0,
 				'auto_months'         => 1,

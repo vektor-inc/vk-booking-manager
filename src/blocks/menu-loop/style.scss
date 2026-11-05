@@ -112,6 +112,34 @@
 	}
 }
 
+/* 画像の比率
+   ========================================================================== */
+
+.vkbm-menu-loop__card-media:where(
+	.vkbm-menu-loop__card-media--ratio-original,
+	.vkbm-menu-loop__card-media--ratio-1-1,
+	.vkbm-menu-loop__card-media--ratio-4-3,
+	.vkbm-menu-loop__card-media--ratio-16-9
+) {
+	align-self: flex-start;
+
+	img {
+		height: auto;
+	}
+}
+
+.vkbm-menu-loop__card-media--ratio-1-1 img {
+	aspect-ratio: 1 / 1;
+}
+
+.vkbm-menu-loop__card-media--ratio-4-3 img {
+	aspect-ratio: 4 / 3;
+}
+
+.vkbm-menu-loop__card-media--ratio-16-9 img {
+	aspect-ratio: 16 / 9;
+}
+
 .vkbm-menu-loop__card-body {
 	flex-grow: 1;
 	height: 100%;

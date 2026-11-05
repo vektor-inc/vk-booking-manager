@@ -838,3 +838,13 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 		}
 	}
 }
+
+/* ==========================================================================
+   宿泊予約のチェックイン予定時刻
+   ========================================================================== */
+
+.vkbm-booking-estimated-check-in-time {
+	word-break: keep-all;
+	line-break: strict;
+	overflow-wrap: anywhere;
+}

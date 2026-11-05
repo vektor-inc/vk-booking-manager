@@ -336,6 +336,16 @@ $vkbm-plan-summary-control-height: 44px;
 	}
 }
 
+// テーマのフォーカス色で日付・メニュー欄の文字が読めなくなるのを防ぐ。
+.vkbm-plan-summary__field select:focus,
+.vkbm-plan-summary__field select:focus-visible,
+.vkbm-plan-summary__field .vkbm-plan-summary__date-input:not([type="button"]):not([type="submit"]):focus,
+.vkbm-plan-summary__field .vkbm-plan-summary__date-input:not([type="button"]):not([type="submit"]):focus-visible {
+	background-color: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--surface-text, #333);
+	color-scheme: light;
+}
+
 // 各欄のラベル。本文向けの大きな line-height を継承すると、字面の上下に見えない余白が付いて
 // ラベルと入力欄の間が広がるため、1 行で収まるラベルは行の高さを抑える（design-rules「行の高さで余白を広げない」）。
 .vkbm-plan-summary__field > .vkbm-plan-summary__label {
@@ -355,7 +365,7 @@ $vkbm-plan-summary-control-height: 44px;
 // プルダウン（select）と同じ見た目にそろえ、タップ領域は 44px 以上にする。
 // 背景と文字色を select と同じトークンにそろえる。PC のカレンダーアイコンを保つため、appearance は iPhone・iPad 以外では変更しない（下の @supports を参照）。
 // 欄の下の補助テキスト・選んだ日付・解除ボタンは、欄と同じグループとして近接させる（親の gap のみ）。
-.vkbm-plan-summary__field .vkbm-plan-summary__date-input {
+.vkbm-plan-summary__field .vkbm-plan-summary__date-input:not([type="button"]):not([type="submit"]) {
 	box-sizing: border-box;
 	width: 100%;
 	min-width: 0;
@@ -695,6 +705,34 @@ $vkbm-plan-summary-control-height: 44px;
 	font-size: max(16px, 0.95rem);
 }
 
+// Elementor の input:not([type=button]):not([type=submit]) より優先し、配色とフォーカス枠を保護する。
+.vkbm-plan-summary__guests-select.vkbm-plan-summary__guests-select:not([type="button"]):not([type="submit"]) {
+	border-color: var(--vkbm--color--border, #e0e0e0);
+	background-color: var(--vkbm--color--bg-primary, #fff);
+	color: var(--vkbm--color--surface-text, #333);
+	color-scheme: light;
+
+	// テーマの入力中の配色でも、白背景と濃い文字の組み合わせを保つ。
+	&:focus,
+	&:focus-visible {
+		background-color: var(--vkbm--color--bg-primary, #fff);
+		color: var(--vkbm--color--surface-text, #333);
+		color-scheme: light;
+		border-color: var(--vkbm--color--border, #e0e0e0);
+	}
+
+	// テーマが outline を消しても、枠色の固定でフォーカス位置が失われないようにする。
+	&:focus-visible {
+
+		@include vkbm-focus-ring;
+	}
+
+	&::placeholder {
+		color: var(--vkbm--color--text-secondary, #666);
+		opacity: 1;
+	}
+}
+
 // 料金区分（大人料金・子供料金など）の人数入力欄.
 .vkbm-plan-summary__guest-tiers {
 	display: flex;
@@ -905,6 +943,14 @@ $vkbm-plan-summary-control-height: 44px;
 .vkbm-reservation-content__body {
 	display: grid;
 	gap: 1.5rem;
+
+	// 案内の表示でカレンダーと枠の列がずれないよう、通知は独立した行に置く。
+	> .vkbm-availability-notice,
+	> .vkbm-alert--admin-diagnostic {
+		grid-column: 1 / -1;
+		align-self: start;
+		margin: 0;
+	}
 
 	@include vkbm-bp-up($vkbm-bp-front-md) {
 		grid-template-columns: 1.2fr 1fr;
@@ -1632,24 +1678,42 @@ $vkbm-plan-summary-control-height: 44px;
 		font-size: 0.9rem;
 	}
 
-	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])),
+	// checkbox・radio を除き、テーマの強い input 指定より白い配色を優先する。
+	.vkbm-confirm__form input:not([type="checkbox"]):not([type="radio"]),
 	.vkbm-confirm__form textarea,
-	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])),
+	.vkbm-confirm__admin-field input:not([type="checkbox"]):not([type="radio"]),
 	.vkbm-confirm__admin-field textarea,
-	.vkbm-confirm__guest-field input:where(:not([type="checkbox"]):not([type="radio"])) {
+	.vkbm-confirm__guest-field input:not([type="checkbox"]):not([type="radio"]) {
 		box-sizing: border-box;
 		width: 100%;
 		border-radius: var(--vkbm--radius--md, 8px);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		padding: 0.5rem 0.75rem;
 		font-size: 0.95rem;
+		background-color: var(--vkbm--color--bg-primary, #fff);
+		color: var(--vkbm--color--surface-text, #333);
+		color-scheme: light;
+
+		// テーマの入力中の配色でも、白背景と濃い文字の組み合わせを保つ。
+		&:focus,
+		&:focus-visible {
+			background-color: var(--vkbm--color--bg-primary, #fff);
+			color: var(--vkbm--color--surface-text, #333);
+			color-scheme: light;
+			border-color: var(--vkbm--color--border, #e0e0e0);
+		}
+
+		&::placeholder {
+			color: var(--vkbm--color--text-secondary, #666);
+			opacity: 1;
+		}
 	}
 
-	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible,
+	.vkbm-confirm__form input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 	.vkbm-confirm__form textarea:focus-visible,
-	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible,
+	.vkbm-confirm__admin-field input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 	.vkbm-confirm__admin-field textarea:focus-visible,
-	.vkbm-confirm__guest-field input:where(:not([type="checkbox"]):not([type="radio"])):focus-visible {
+	.vkbm-confirm__guest-field input:not([type="checkbox"]):not([type="radio"]):focus-visible {
 
 		@include vkbm-focus-ring;
 	}

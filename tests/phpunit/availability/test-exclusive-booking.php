@@ -61,6 +61,8 @@ class Exclusive_Booking_Test extends WP_UnitTestCase {
 		$settings                          = $repository->get_settings();
 		$settings['staff_enabled']         = false;
 		$settings['slot_capacity_enabled'] = true;
+		// 受付上限ではなく貸し切りを検証するため、来年12月も受付可能にする。
+		$settings['provider_max_advance_booking_days'] = 0;
 		update_option( Settings_Repository::OPTION_KEY, $settings );
 		Staff_Editor::clear_nomination_enabled_cache();
 	}

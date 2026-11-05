@@ -21,6 +21,63 @@ use WP_UnitTestCase;
  * @group provider-settings
  */
 class Settings_Sanitizer_Test extends WP_UnitTestCase {
+	/** 予約一覧の画像比率は許可した5値だけを保存する。 */
+	public function test_reservation_menu_list_image_aspect_ratio(): void {
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+		$this->assertSame( 'content', $defaults['reservation_menu_list_image_aspect_ratio'] );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '未送信は本文の高さ',
+				'input'               => array(),
+				'expected'            => 'content',
+			),
+			array(
+				'test_condition_name' => '本文の高さを保存',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => 'content' ),
+				'expected'            => 'content',
+			),
+			array(
+				'test_condition_name' => '元のサイズを保存',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => 'original' ),
+				'expected'            => 'original',
+			),
+			array(
+				'test_condition_name' => '正方形を保存',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => '1-1' ),
+				'expected'            => '1-1',
+			),
+			array(
+				'test_condition_name' => '標準を保存',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => '4-3' ),
+				'expected'            => '4-3',
+			),
+			array(
+				'test_condition_name' => 'ワイドを保存',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => '16-9' ),
+				'expected'            => '16-9',
+			),
+			array(
+				'test_condition_name' => '不正文字列は本文の高さ',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => 'invalid' ),
+				'expected'            => 'content',
+			),
+			array(
+				'test_condition_name' => '配列は本文の高さ',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => array( '1-1' ) ),
+				'expected'            => 'content',
+			),
+			array(
+				'test_condition_name' => '空文字は本文の高さ',
+				'input'               => array( 'reservation_menu_list_image_aspect_ratio' => '' ),
+				'expected'            => 'content',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$result = ( new Settings_Sanitizer() )->sanitize( $case['input'], $defaults );
+			$this->assertSame( $case['expected'], $result['reservation_menu_list_image_aspect_ratio'], $case['test_condition_name'] );
+		}
+	}
+
 	/** カード背景の許可値・不正値・未送信時の初期値を検証する。 */
 	public function test_design_menu_card_background(): void {
 		$defaults = ( new Settings_Repository() )->get_default_settings();

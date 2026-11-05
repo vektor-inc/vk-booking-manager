@@ -645,11 +645,11 @@ class Menu_Loop_Block {
 	}
 
 	/**
-	 * Render single menu card.
+	 * サービスメニューのカードを描画する。
 	 *
-	 * @param WP_Post             $post       Post object.
-	 * @param array<string,mixed> $attributes Block attributes.
-	 * @return string
+	 * @param WP_Post             $post       サービスメニュー投稿。
+	 * @param array<string,mixed> $attributes ブロック属性。
+	 * @return string カードの HTML。
 	 */
 	private function render_item( WP_Post $post, array $attributes ): string {
 		$mode = $this->normalize_display_mode( (string) ( $attributes['displayMode'] ?? 'card' ) );
@@ -660,8 +660,16 @@ class Menu_Loop_Block {
 		$parts = array();
 
 		if ( ! empty( $attributes['showImage'] ) && VKBM_Helper::has_thumbnail( $post, 'direct' ) ) {
+			// 選択可能な比率だけを画像枠のクラスに反映する。
+			$media_class = 'vkbm-menu-loop__card-media';
+			$image_ratio = $attributes['imageAspectRatio'] ?? 'content';
+			if ( in_array( $image_ratio, array( 'original', '1-1', '4-3', '16-9' ), true ) ) {
+				$media_class .= ' vkbm-menu-loop__card-media--ratio-' . $image_ratio;
+			}
+
 			$parts[] = sprintf(
-				'<div class="vkbm-menu-loop__card-media">%s</div>',
+				'<div class="%1$s">%2$s</div>',
+				esc_attr( $media_class ),
 				$this->get_card_image_html( $post )
 			);
 		}
@@ -889,11 +897,12 @@ class Menu_Loop_Block {
 			)
 		);
 
-		$provider_settings         = $this->get_provider_settings();
-		$mode                      = $this->normalize_display_mode(
+		$provider_settings              = $this->get_provider_settings();
+		$mode                           = $this->normalize_display_mode(
 			(string) ( $provider_settings['reservation_menu_list_display_mode'] ?? 'card' )
 		);
-		$attributes['displayMode'] = $mode;
+		$attributes['displayMode']      = $mode;
+		$attributes['imageAspectRatio'] = $provider_settings['reservation_menu_list_image_aspect_ratio'] ?? 'content';
 
 		$items_markup = $this->render_grouped_items( $posts, $attributes );
 
@@ -1995,6 +2004,7 @@ class Menu_Loop_Block {
 	private function get_default_attributes(): array {
 		return array(
 			'showImage'         => true,
+			'imageAspectRatio'  => 'content',
 			'showExcerpt'       => true,
 			'showMeta'          => true,
 			'showCategories'    => true,

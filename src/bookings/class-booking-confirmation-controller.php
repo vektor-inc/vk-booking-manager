@@ -449,162 +449,26 @@ class Booking_Confirmation_Controller {
 			}
 		}
 
-		// 泊単位のプランを時間枠の下書きで確定させない（1枠ぶんの料金で泊の予約が確定してしまうのを防ぐ）。
-		if ( ! $is_lodging_draft && Lodging_Price::is_applicable( $menu_id ) ) {
-			return Lodging_Booking::dates_required_error();
+		$guest_counts = $this->resolve_draft_guests( $draft );
+		if ( is_wp_error( $guest_counts ) ) {
+			return $guest_counts;
 		}
+		$guests      = $guest_counts['guests'];
+		$guest_tiers = $guest_counts['guest_tiers'];
 
-		// 料金区分が定義されているメニューは、人数を区分ごとの内訳から確定する。
-		// ラベル・料金は必ずサーバ保存メタを正とし、下書きに保存済みの人数のみ突き合わせる（改竄防止）。
-		$menu_price_tiers = $this->resolve_menu_price_tiers( $menu_id );
-		$guest_tiers      = array();
-		if ( $is_lodging_draft ) {
-			// 泊の下書き: 人数と区分の内訳は Lodging_Booking::resolve_guests()（空き状況・下書きと同じ決め方）で、
-			// 現在のメニュー設定に対して決め直す。時間枠の決め方（resolve_guests）を通すと、設定が揃わない
-			// 泊のプランで人数が 1 名に丸められ、空室一覧で表示した料金より安い金額で確定してしまう。
-			$lodging_guests = Lodging_Booking::resolve_guests(
-				$menu_id,
-				isset( $draft['guests'] ) ? (int) $draft['guests'] : 1,
-				isset( $draft['guest_tiers'] ) && is_array( $draft['guest_tiers'] ) ? $draft['guest_tiers'] : array()
-			);
-			if ( is_wp_error( $lodging_guests ) ) {
-				return $lodging_guests;
-			}
-			$guests      = $lodging_guests['guests'];
-			$guest_tiers = $lodging_guests['guest_tiers'];
-		} elseif ( ! empty( $menu_price_tiers ) ) {
-			$stored_tiers = isset( $draft['guest_tiers'] ) && is_array( $draft['guest_tiers'] ) ? $draft['guest_tiers'] : array();
-			$guest_tiers  = Price_Tiers::resolve_guest_tiers( $menu_price_tiers, $stored_tiers );
-			// 区分人数の合計を予約人数とする（枠消費・後方互換集計に使う）。
-			// 全区分0名（合計0）の予約は成立させない。max() で1名に丸めると0名予約が確定してしまうため、
-			// 合計1名未満は明示的にエラーで拒否する（下書き保存時のバリデーションと対称）。
-			$guests = Price_Tiers::total_count( $guest_tiers );
-			if ( $guests < 1 ) {
-				return new WP_Error(
-					'guests_required',
-					__( 'Please select at least one guest.', 'vk-booking-manager' ),
-					array( 'status' => 400 )
-				);
-			}
-			// #392: 区分内訳の合計人数は resolve_guests() のクランプ（1〜max_capacity）を
-			// 通らない経路のため、ここで確定時点の定員（get_menu_max_capacity()）を明示的に
-			// 再検証する。下書き作成後に管理者が予約枠の定員を引き下げた場合、区分内訳のままだと
-			// 定員超過の人数で確定できてしまう（#392より前は指名予約＝必ず1名だったため
-			// 存在しなかった穴）。
-			if ( $guests > $this->get_menu_max_capacity( $menu_id ) ) {
-				return new WP_Error(
-					'guests_exceeded',
-					__( 'The number of guests exceeds the maximum that can be booked.', 'vk-booking-manager' ),
-					array( 'status' => 400 )
-				);
-			}
-		} else {
-			// 予約人数（複数人一括予約）を確定する。メニュー設定に応じて 1〜最大人数にクランプする。
-			$guests = $this->resolve_guests( $menu_id, isset( $draft['guests'] ) ? (int) $draft['guests'] : 1 );
+		$exclusive = $this->resolve_user_exclusive( $draft, $menu_id, $guests );
+		if ( is_wp_error( $exclusive ) ) {
+			return $exclusive;
 		}
+		$user_exclusive = $exclusive['user_exclusive'];
+		$exclusive_fee  = $exclusive['exclusive_fee'];
 
-		// 指名を使うメニュー、または貸し切り予約ONのメニューの最低申し込み人数（受付制限。#393・#968）。
-		// フロントの入力欄下限・警告表示は迂回可能なため、確定時にサーバ側でも権威的に再判定する。
-		// get_menu_min_capacity()（催行状態の表示専用、指名メニュー・貸し切り予約ONのメニューで常に0）とは別の取得経路。
-		$nomination_min_guests = $this->get_menu_nomination_min_guests( $menu_id );
-		if ( $nomination_min_guests > 0 && $guests < $nomination_min_guests ) {
-			return new WP_Error(
-				'nomination_min_guests',
-				Nomination_Min_Guests_Message::build_message( $nomination_min_guests ),
-				array( 'status' => 400 )
-			);
+		$availability = $this->prepare_draft_availability( $draft, $guests, $guest_tiers );
+		if ( is_wp_error( $availability ) ) {
+			return $availability;
 		}
-
-		// ユーザーによる貸し切り指定（#305）。下書きに保存されたユーザー選択フラグを取得する。
-		// フロントの抑止は迂回可能なため、サーバ側でフルゲート（メニュー設定・最小催行人数・空き枠）を再判定する。
-		$user_requested_exclusive = ! empty( $draft['user_exclusive'] ) && ! $is_lodging_draft;
-		$user_exclusive           = false;
-		$exclusive_fee            = 0;
-		if ( $user_requested_exclusive ) {
-			if ( ! $this->is_user_exclusive_selectable( $menu_id ) ) {
-				// 利用者が下書きで明示的に貸し切りを指定したのに、確定時点でメニュー設定が
-				// 貸し切り不可（受付OFF・予約枠の定員機能の無効化・指名ON等）に変わっている場合は、
-				// 黙って通常予約に変換せず 409 で拒否し、再選択を促す（明示的な意思を失わせない）。
-				return new WP_Error(
-					'exclusive_unavailable',
-					__( 'This slot can no longer be reserved exclusively. Please review your selection.', 'vk-booking-manager' ),
-					array( 'status' => 409 )
-				);
-			} else {
-				// 最小催行人数（>=）を満たさない場合は貸し切り指定を拒否する。
-				// 正規ヘルパ経由で取得し、最大受付数1以下のメニューでは実効0（判定無効）になるようにする（#320）。
-				$min_capacity = $this->get_menu_min_capacity( $menu_id );
-				if ( $min_capacity > 0 && $guests < $min_capacity ) {
-					return new WP_Error(
-						'exclusive_min_capacity',
-						__( 'The number of guests does not reach the minimum required for a private booking.', 'vk-booking-manager' ),
-						array( 'status' => 400 )
-					);
-				}
-				$user_exclusive = true;
-				// 貸し切り料金をサーバ保存メタから権威的に再計算する（フロント送信額は信用しない）。
-				$exclusive_fee = $this->calculate_exclusive_fee( $menu_id, $guests );
-			}
-		}
-
-		// 予約できる日（曜日・日付の指定）の判定は、従来どおり空き枠の再検証より前に行う。
-		// 後段の再検証で開始が空き枠と時刻として一致することを確かめるため、ここでの判定結果は
-		// 取り直した空き枠の開始で判定した場合と同じになる（#528）。
-		$reservation_day_type = (string) get_post_meta( $menu_id, self::MENU_META_RESERVATION_DAY_TYPE, true );
-		if ( ! $is_lodging_draft && '' !== $reservation_day_type && ! $this->is_reservation_day_allowed( $reservation_day_type, $start_at, $menu_id ) ) {
-			return new WP_Error(
-				'invalid_reservation_day',
-				__( 'The selected date cannot be reserved. Please choose another date.', 'vk-booking-manager' ),
-				array( 'status' => 400 )
-			);
-		}
-
-		// 時間枠のプランは、予約の日付が提供期間の中かを確かめる（泊のプランは日程の検証でチェックイン日を確かめる）。
-		if ( ! $is_lodging_draft && ! $this->is_start_within_service_period( $menu_id, $start_at ) ) {
-			return new WP_Error(
-				'service_period_out_of_range',
-				__( 'The selected date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
-				array( 'status' => 400 )
-			);
-		}
-
-		// 改竄された下書きでシフト時刻の解釈を変えられないよう、サイト設定で上書きする。
-		$timezone = wp_timezone()->getName();
-
-		$lodging_stay = null;
-		if ( $is_lodging_draft ) {
-			// 泊の予約: 下書きに保存された日付・客室をサーバー側で検証し直し、日時・泊数・金額を計算し直す。
-			// 下書きに保存されたスロットの日時・金額は使わない。
-			$lodging_stay = Lodging_Booking::prepare(
-				$this->availability_service,
-				array(
-					'menu_id'        => $menu_id,
-					'resource_id'    => $staff_id,
-					'check_in_date'  => (string) ( $draft['lodging']['check_in_date'] ?? '' ),
-					'check_out_date' => (string) ( $draft['lodging']['check_out_date'] ?? '' ),
-					'guests'         => $guests,
-					'guest_tiers'    => $guest_tiers,
-				)
-			);
-			if ( is_wp_error( $lodging_stay ) ) {
-				return $lodging_stay;
-			}
-
-			$available_slot = array(
-				'start_at'             => $lodging_stay['check_in_at'],
-				'end_at'               => $lodging_stay['check_out_at'],
-				'service_end_at'       => $lodging_stay['check_out_at'],
-				'staff'                => array( 'id' => $lodging_stay['room_id'] ),
-				'assignable_staff_ids' => array( $lodging_stay['room_id'] ),
-				'auto_assign'          => false,
-			);
-		} else {
-			// Re-check availability for the selected slot before confirming. / 予約確定前に空きを再検証します.
-			$available_slot = $this->revalidate_draft_slot( $menu_id, $staff_id, $slot, $timezone, $tag_ids );
-			if ( is_wp_error( $available_slot ) ) {
-				return $available_slot;
-			}
-		}
+		$available_slot = $availability['slot'];
+		$lodging_stay   = $availability['lodging'];
 
 		// 以降の判定・ロック・保存・予約タイトル・通知には、再検証で取り直した空き枠の日時を使う（#528）。
 		// 再検証で下書きの日時と時刻として一致することを確かめているため、通常の予約では値は変わらない。
@@ -619,57 +483,15 @@ class Booking_Confirmation_Controller {
 			$slot['staff'] = $available_slot['staff'];
 		}
 
-		$assignable_staff = $this->normalize_assignable_staff_ids( $available_slot['assignable_staff_ids'] ?? array() );
-
-		// #466 差し戻し（安藤さんレビュー指摘）: 無料版はスタッフ指名機能自体が常に無効なため、
-		// 下書きの is_staff_preferred フラグも $staff_id 同様に信用しない。改竄された指名フラグで
-		// 自動割当（ベストフィット判定）をバイパスされることを防ぐ。
-		$is_staff_preferred = Staff_Editor::is_enabled() && ! empty( $draft['is_staff_preferred'] );
-
-		// 自動割当スロットでは、確定直前のロック保持下で単一スタッフへベストフィット割り当てする（分割しない）。
-		$is_auto_assign = ! empty( $available_slot['auto_assign'] );
-
-		if ( $is_staff_preferred && $staff_id > 0 ) {
-			// 指名予約：選択された1名のスタッフへ割り当てる。
-			$is_staff_preferred = true;
-		} elseif ( ! empty( $assignable_staff ) ) {
-			// 自動割当：スタッフの確定はロック保持下のベストフィット判定（check_capacity_with_mutex）で行う。
-			$is_staff_preferred = false;
+		$assignment_slot = array_merge( $available_slot, array( 'staff' => $slot['staff'] ?? array() ) );
+		$assignment      = $this->resolve_draft_staff_assignment( $draft, $assignment_slot, $staff_id );
+		if ( is_wp_error( $assignment ) ) {
+			return $assignment;
 		}
-
-		// 自動割当でスタッフがまだ未確定（$staff_id <= 0）の場合は、直前の空き枠再検証が返した
-		// スタッフ（$slot['staff']['id']）を単一候補として確定処理へ渡す。
-		// 無料版で resource_id を 0 へ正規化したケースもここを通るため、上の elseif chain を独立させて
-		// おかないと候補ゼロのまま check_capacity_with_mutex() へ渡り、capacity_exceeded を誤って
-		// 返してしまう（無料版の予約確定が失敗する回帰）。
-		if ( $staff_id <= 0 && isset( $slot['staff']['id'] ) ) {
-			$staff_id = (int) $slot['staff']['id'];
-		}
-
-		// 無料版では選択可能スタッフの制限を解除.
-		// 指名予約で選択スタッフが候補外なら拒否する（自動割当はロック保持下で確定するため対象外）。
-		if ( Staff_Editor::is_enabled() && $is_staff_preferred && $staff_id > 0 && ! empty( $assignable_staff ) && ! in_array( $staff_id, $assignable_staff, true ) ) {
-			return new WP_Error(
-				'staff_unavailable',
-				__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),
-				array( 'status' => 409 )
-			);
-		}
-
-		// 指名予約はこの時点でスタッフが確定している必要がある。
-		// 自動割当はロック保持下のベストフィット判定でスタッフを確定するため、ここではチェックしない。
-		if ( $is_staff_preferred && $staff_id <= 0 ) {
-			$singular = vkbm_get_resource_label_singular();
-			return new WP_Error(
-				'staff_assignment_failed',
-				sprintf(
-					/* translators: %s: Resource label (singular). */
-					__( 'Could not assign person %s. Please try a different frame.', 'vk-booking-manager' ),
-					$singular
-				),
-				array( 'status' => 409 )
-			);
-		}
+		$staff_id           = $assignment['staff_id'];
+		$assignable_staff   = $assignment['assignable_staff'];
+		$is_staff_preferred = $assignment['is_staff_preferred'];
+		$is_auto_assign     = $assignment['is_auto_assign'];
 
 		// 備考は下書きと同じ上限（vkbm_draft_memo_max_length）で切り詰める。
 		// Truncate memo with the same limit as the draft controller.
@@ -1012,6 +834,7 @@ class Booking_Confirmation_Controller {
 				if ( null !== $lodging_stay ) {
 					// 泊数と1泊あたりの合計（部屋全体）を保存する。チェックイン・チェックアウトの日時は開始・終了のメタに保存済み。
 					update_post_meta( $booking_id, Lodging_Booking::META_NIGHTS, (int) $lodging_stay['nights'] );
+					update_post_meta( $booking_id, Lodging_Booking::META_ESTIMATED_CHECK_IN_TIME, $lodging_stay['estimated_check_in_time'] );
 					// 泊ごとの内訳を固定で保存する。1泊あたりの合計は、すべての泊が同じ金額のときだけ保存する。
 					update_post_meta( $booking_id, Lodging_Booking::META_NIGHT_BREAKDOWN, $lodging_stay['price']['night_breakdown'] );
 					if ( null !== $lodging_stay['price']['price_per_night'] ) {
@@ -1400,6 +1223,338 @@ class Booking_Confirmation_Controller {
 				'phone' => $phone,
 			),
 		);
+	}
+
+	/**
+	 * 下書きの貸し切り指定を、連絡先に依存しないメニュー設定から判定する。
+	 *
+	 * @param array<string,mixed> $draft 下書き。
+	 * @param int                 $menu_id メニュー ID。
+	 * @param int                 $guests 人数。
+	 * @return array|WP_Error 貸し切り指定と料金、またはエラー。
+	 */
+	private function resolve_user_exclusive( array $draft, int $menu_id, int $guests ) {
+		// ユーザーによる貸し切り指定（#305）。下書きに保存されたユーザー選択フラグを取得する。
+		// フロントの抑止は迂回可能なため、サーバ側でフルゲート（メニュー設定・最小催行人数・空き枠）を再判定する。
+		$user_requested_exclusive = ! empty( $draft['user_exclusive'] ) && ! ( isset( $draft['lodging'] ) && is_array( $draft['lodging'] ) );
+		$user_exclusive           = false;
+		$exclusive_fee            = 0;
+		if ( $user_requested_exclusive ) {
+			if ( ! $this->is_user_exclusive_selectable( $menu_id ) ) {
+				// 利用者が下書きで明示的に貸し切りを指定したのに、確定時点でメニュー設定が
+				// 貸し切り不可（受付OFF・予約枠の定員機能の無効化・指名ON等）に変わっている場合は、
+				// 黙って通常予約に変換せず 409 で拒否し、再選択を促す（明示的な意思を失わせない）。
+				return new WP_Error(
+					'exclusive_unavailable',
+					__( 'This slot can no longer be reserved exclusively. Please review your selection.', 'vk-booking-manager' ),
+					array( 'status' => 409 )
+				);
+			} else {
+				// 最小催行人数（>=）を満たさない場合は貸し切り指定を拒否する。
+				// 正規ヘルパ経由で取得し、最大受付数1以下のメニューでは実効0（判定無効）になるようにする（#320）。
+				$min_capacity = $this->get_menu_min_capacity( $menu_id );
+				if ( $min_capacity > 0 && $guests < $min_capacity ) {
+					return new WP_Error(
+						'exclusive_min_capacity',
+						__( 'The number of guests does not reach the minimum required for a private booking.', 'vk-booking-manager' ),
+						array( 'status' => 400 )
+					);
+				}
+				$user_exclusive = true;
+				// 貸し切り料金をサーバ保存メタから権威的に再計算する（フロント送信額は信用しない）。
+				$exclusive_fee = $this->calculate_exclusive_fee( $menu_id, $guests );
+			}
+		}
+
+		return array(
+			'user_exclusive' => $user_exclusive,
+			'exclusive_fee'  => $exclusive_fee,
+		);
+	}
+
+	/**
+	 * 最新の空き枠から下書きの担当割当条件をそろえる。
+	 *
+	 * @param array<string,mixed> $draft 下書き。
+	 * @param array<string,mixed> $available_slot 最新の空き枠。
+	 * @param int                 $staff_id 選択された担当 ID。
+	 * @return array|WP_Error 担当割当条件、またはエラー。
+	 */
+	private function resolve_draft_staff_assignment( array $draft, array $available_slot, int $staff_id ) {
+		$assignable_staff = $this->normalize_assignable_staff_ids( $available_slot['assignable_staff_ids'] ?? array() );
+
+		// #466 差し戻し（安藤さんレビュー指摘）: 無料版はスタッフ指名機能自体が常に無効なため、
+		// 下書きの is_staff_preferred フラグも $staff_id 同様に信用しない。改竄された指名フラグで
+		// 自動割当（ベストフィット判定）をバイパスされることを防ぐ。
+		$is_staff_preferred = Staff_Editor::is_enabled() && ! empty( $draft['is_staff_preferred'] );
+
+		// 自動割当スロットでは、確定直前のロック保持下で単一スタッフへベストフィット割り当てする（分割しない）。
+		$is_auto_assign = ! empty( $available_slot['auto_assign'] );
+
+		if ( $is_staff_preferred && $staff_id > 0 ) {
+			// 指名予約：選択された1名のスタッフへ割り当てる。
+			$is_staff_preferred = true;
+		} elseif ( ! empty( $assignable_staff ) ) {
+			// 自動割当：スタッフの確定はロック保持下のベストフィット判定（check_capacity_with_mutex）で行う。
+			$is_staff_preferred = false;
+		}
+
+		// 自動割当でスタッフがまだ未確定（$staff_id <= 0）の場合は、直前の空き枠再検証が返した
+		// スタッフ（$available_slot['staff']['id']）を単一候補として確定処理へ渡す。
+		// 無料版で resource_id を 0 へ正規化したケースもここを通るため、上の elseif chain を独立させて
+		// おかないと候補ゼロのまま check_capacity_with_mutex() へ渡り、capacity_exceeded を誤って
+		// 返してしまう（無料版の予約確定が失敗する回帰）。
+		if ( $staff_id <= 0 && isset( $available_slot['staff']['id'] ) ) {
+			$staff_id = (int) $available_slot['staff']['id'];
+		}
+
+		// 無料版では選択可能スタッフの制限を解除.
+		// 指名予約で選択スタッフが候補外なら拒否する（自動割当はロック保持下で確定するため対象外）。
+		if ( Staff_Editor::is_enabled() && $is_staff_preferred && $staff_id > 0 && ! empty( $assignable_staff ) && ! in_array( $staff_id, $assignable_staff, true ) ) {
+			return new WP_Error(
+				'staff_unavailable',
+				Nomination_Min_Guests_Message::join_sentences( __( 'The selected staff member is no longer available at this date and time.', 'vk-booking-manager' ), __( 'Please choose another date and time or another staff member.', 'vk-booking-manager' ) ),
+				array( 'status' => 409 )
+			);
+		}
+
+		// 指名予約はこの時点でスタッフが確定している必要がある。
+		// 自動割当はロック保持下のベストフィット判定でスタッフを確定するため、ここではチェックしない。
+		if ( $is_staff_preferred && $staff_id <= 0 ) {
+			$singular = vkbm_get_resource_label_singular();
+			return new WP_Error(
+				'staff_assignment_failed',
+				sprintf(
+					/* translators: %s: Resource label (singular). */
+					__( 'Could not assign person %s. Please try a different frame.', 'vk-booking-manager' ),
+					$singular
+				),
+				array( 'status' => 409 )
+			);
+		}
+
+		return array(
+			'staff_id'           => $staff_id,
+			'assignable_staff'   => $assignable_staff,
+			'is_staff_preferred' => $is_staff_preferred,
+			'is_auto_assign'     => $is_auto_assign,
+		);
+	}
+
+	/**
+	 * 下書きの人数を現在のメニュー設定から検証する。
+	 *
+	 * @param array<string,mixed> $draft 下書き。
+	 * @return array{guests:int,guest_tiers:array}|WP_Error 人数・区分、またはエラー。
+	 */
+	private function resolve_draft_guests( array $draft ) {
+		$menu_id          = (int) ( $draft['menu_id'] ?? 0 );
+		$is_lodging_draft = isset( $draft['lodging'] ) && is_array( $draft['lodging'] );
+		// 泊単位のプランを時間枠の下書きで確定させない（1枠ぶんの料金で泊の予約が確定してしまうのを防ぐ）。
+		if ( ! $is_lodging_draft && Lodging_Price::is_applicable( $menu_id ) ) {
+			return Lodging_Booking::dates_required_error();
+		}
+
+		// 料金区分が定義されているメニューは、人数を区分ごとの内訳から確定する。
+		// ラベル・料金は必ずサーバ保存メタを正とし、下書きに保存済みの人数のみ突き合わせる（改竄防止）。
+		$menu_price_tiers = $this->resolve_menu_price_tiers( $menu_id );
+		$guest_tiers      = array();
+		if ( $is_lodging_draft ) {
+			// 泊の下書き: 人数と区分の内訳は Lodging_Booking::resolve_guests()（空き状況・下書きと同じ決め方）で、
+			// 現在のメニュー設定に対して決め直す。時間枠の決め方（resolve_guests）を通すと、設定が揃わない
+			// 泊のプランで人数が 1 名に丸められ、空室一覧で表示した料金より安い金額で確定してしまう。
+			$lodging_guests = Lodging_Booking::resolve_guests(
+				$menu_id,
+				isset( $draft['guests'] ) ? (int) $draft['guests'] : 1,
+				isset( $draft['guest_tiers'] ) && is_array( $draft['guest_tiers'] ) ? $draft['guest_tiers'] : array()
+			);
+			if ( is_wp_error( $lodging_guests ) ) {
+				return $lodging_guests;
+			}
+			$guests      = $lodging_guests['guests'];
+			$guest_tiers = $lodging_guests['guest_tiers'];
+		} elseif ( ! empty( $menu_price_tiers ) ) {
+			$stored_tiers = isset( $draft['guest_tiers'] ) && is_array( $draft['guest_tiers'] ) ? $draft['guest_tiers'] : array();
+			$guest_tiers  = Price_Tiers::resolve_guest_tiers( $menu_price_tiers, $stored_tiers );
+			// 区分人数の合計を予約人数とする（枠消費・後方互換集計に使う）。
+			// 全区分0名（合計0）の予約は成立させない。max() で1名に丸めると0名予約が確定してしまうため、
+			// 合計1名未満は明示的にエラーで拒否する（下書き保存時のバリデーションと対称）。
+			$guests = Price_Tiers::total_count( $guest_tiers );
+			if ( $guests < 1 ) {
+				return new WP_Error(
+					'guests_required',
+					__( 'Please select at least one guest.', 'vk-booking-manager' ),
+					array( 'status' => 400 )
+				);
+			}
+			// #392: 区分内訳の合計人数は resolve_guests() のクランプ（1〜max_capacity）を
+			// 通らない経路のため、ここで確定時点の定員（get_menu_max_capacity()）を明示的に
+			// 再検証する。下書き作成後に管理者が予約枠の定員を引き下げた場合、区分内訳のままだと
+			// 定員超過の人数で確定できてしまう（#392より前は指名予約＝必ず1名だったため
+			// 存在しなかった穴）。
+			if ( $guests > $this->get_menu_max_capacity( $menu_id ) ) {
+				return new WP_Error(
+					'guests_exceeded',
+					__( 'The number of guests exceeds the maximum that can be booked.', 'vk-booking-manager' ),
+					array( 'status' => 400 )
+				);
+			}
+		} else {
+			// 予約人数（複数人一括予約）を確定する。メニュー設定に応じて 1〜最大人数にクランプする。
+			$guests = $this->resolve_guests( $menu_id, isset( $draft['guests'] ) ? (int) $draft['guests'] : 1 );
+		}
+
+		// 指名を使うメニュー、または貸し切り予約ONのメニューの最低申し込み人数（受付制限。#393・#968）。
+		// フロントの入力欄下限・警告表示は迂回可能なため、確定時にサーバ側でも権威的に再判定する。
+		// get_menu_min_capacity()（催行状態の表示専用、指名メニュー・貸し切り予約ONのメニューで常に0）とは別の取得経路。
+		$nomination_min_guests = $this->get_menu_nomination_min_guests( $menu_id );
+		if ( $nomination_min_guests > 0 && $guests < $nomination_min_guests ) {
+			return new WP_Error(
+				'nomination_min_guests',
+				Nomination_Min_Guests_Message::build_message( $nomination_min_guests ),
+				array( 'status' => 400 )
+			);
+		}
+
+		return array(
+			'guests'      => $guests,
+			'guest_tiers' => $guest_tiers,
+		);
+	}
+
+	/**
+	 * 申し込みと確定で共通の、連絡先に依存しない空き枠判定。
+	 *
+	 * @param array<string,mixed> $draft 下書き。
+	 * @param int                 $guests 人数。
+	 * @param array               $guest_tiers 正規の料金区分。
+	 * @return array{slot:array,lodging:array|null}|WP_Error 正規の枠と滞在、またはエラー。
+	 */
+	private function prepare_draft_availability( array $draft, int $guests, array $guest_tiers ) {
+		$menu_id          = (int) ( $draft['menu_id'] ?? 0 );
+		$is_lodging_draft = isset( $draft['lodging'] ) && is_array( $draft['lodging'] );
+		$staff_id         = $is_lodging_draft || Staff_Editor::is_enabled() ? (int) ( $draft['resource_id'] ?? 0 ) : 0;
+		$slot             = isset( $draft['slot'] ) && is_array( $draft['slot'] ) ? $draft['slot'] : array();
+		$start_at         = (string) ( $slot['start_at'] ?? '' );
+		$tag_ids          = $is_lodging_draft ? array() : Resource_Tag_Id_List::normalize( $draft['resource_tag_ids'] ?? array() );
+		// 予約できる日（曜日・日付の指定）の判定は、従来どおり空き枠の再検証より前に行う。
+		// 後段の再検証で開始が空き枠と時刻として一致することを確かめるため、ここでの判定結果は
+		// 取り直した空き枠の開始で判定した場合と同じになる（#528）。
+		$reservation_day_type = (string) get_post_meta( $menu_id, self::MENU_META_RESERVATION_DAY_TYPE, true );
+		if ( ! $is_lodging_draft && '' !== $reservation_day_type && ! $this->is_reservation_day_allowed( $reservation_day_type, $start_at, $menu_id ) ) {
+			return new WP_Error(
+				'invalid_reservation_day',
+				__( 'The selected date cannot be reserved. Please choose another date.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// 時間枠のプランは、予約の日付が提供期間の中かを確かめる（泊のプランは日程の検証でチェックイン日を確かめる）。
+		if ( ! $is_lodging_draft && ! $this->is_start_within_service_period( $menu_id, $start_at ) ) {
+			return new WP_Error(
+				'service_period_out_of_range',
+				__( 'The selected date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
+			);
+		}
+
+		// 改竄された下書きでシフト時刻の解釈を変えられないよう、サイト設定で上書きする。
+		$timezone = wp_timezone()->getName();
+
+		$lodging_stay = null;
+		if ( $is_lodging_draft ) {
+			// 泊の予約: 下書きに保存された日付・客室をサーバー側で検証し直し、日時・泊数・金額を計算し直す。
+			// 下書きに保存されたスロットの日時・金額は使わない。
+			$lodging_args = array(
+				'menu_id'        => $menu_id,
+				'resource_id'    => $staff_id,
+				'check_in_date'  => (string) ( $draft['lodging']['check_in_date'] ?? '' ),
+				'check_out_date' => (string) ( $draft['lodging']['check_out_date'] ?? '' ),
+				'guests'         => $guests,
+				'guest_tiers'    => $guest_tiers,
+			);
+			// 未指定の旧リクエスト・下書きの補完は prepare() で行う。
+			if ( array_key_exists( 'estimated_check_in_time', $draft['lodging'] ) ) {
+				$lodging_args['estimated_check_in_time'] = $draft['lodging']['estimated_check_in_time'];
+			}
+			$lodging_stay = Lodging_Booking::prepare( $this->availability_service, $lodging_args );
+			if ( is_wp_error( $lodging_stay ) ) {
+				return $lodging_stay;
+			}
+
+			$available_slot = array(
+				'start_at'             => $lodging_stay['check_in_at'],
+				'end_at'               => $lodging_stay['check_out_at'],
+				'service_end_at'       => $lodging_stay['check_out_at'],
+				'staff'                => array( 'id' => $lodging_stay['room_id'] ),
+				'assignable_staff_ids' => array( $lodging_stay['room_id'] ),
+				'auto_assign'          => false,
+			);
+		} else {
+			// Re-check availability for the selected slot before confirming. / 予約確定前に空きを再検証します.
+			$available_slot = $this->revalidate_draft_slot( $menu_id, $staff_id, $slot, $timezone, $tag_ids );
+			if ( is_wp_error( $available_slot ) ) {
+				return $available_slot;
+			}
+		}
+
+		return array(
+			'slot'    => $available_slot,
+			'lodging' => $lodging_stay,
+		);
+	}
+
+	/**
+	 * 確認メールの送信前に枠と定員を確かめ、本文用の日時を正規の値に直す。
+	 *
+	 * 顧客フラグ・重複予約はここでは調べない。ロックは判定直後に解放し、枠を確保しない。
+	 *
+	 * @param array<string,mixed> $draft 下書き（検証済みの日時に更新）。
+	 * @return WP_Error|null 予約できなければエラー。
+	 */
+	public function prepare_guest_draft_for_verification( array &$draft ): ?WP_Error {
+		$counts = $this->resolve_draft_guests( $draft );
+		if ( is_wp_error( $counts ) ) {
+			return $counts;
+		}
+		$exclusive = $this->resolve_user_exclusive( $draft, (int) ( $draft['menu_id'] ?? 0 ), $counts['guests'] );
+		if ( is_wp_error( $exclusive ) ) {
+			return $exclusive;
+		}
+		$availability = $this->prepare_draft_availability( $draft, $counts['guests'], $counts['guest_tiers'] );
+		if ( is_wp_error( $availability ) ) {
+			return $availability;
+		}
+
+		// キャッシュ済みの空き枠が残っていても、確定時と同じ定員判定で最新の予約を調べる。
+		$slot       = $availability['slot'];
+		$menu_id    = (int) ( $draft['menu_id'] ?? 0 );
+		$staff_id   = Staff_Editor::is_enabled() ? (int) ( $draft['resource_id'] ?? 0 ) : 0;
+		$assignment = $this->resolve_draft_staff_assignment( $draft, $slot, $staff_id );
+		if ( is_wp_error( $assignment ) ) {
+			return $assignment;
+		}
+		$staff_id           = $assignment['staff_id'];
+		$assignable_staff   = $assignment['assignable_staff'];
+		$is_staff_preferred = $assignment['is_staff_preferred'];
+		$is_auto_assign     = $assignment['is_auto_assign'];
+
+		$lock = null !== $availability['lodging']
+			? $this->check_lodging_room_with_mutex( $availability['lodging'] )
+			: $this->check_capacity_with_mutex( $menu_id, $staff_id, $slot['start_at'], $slot['end_at'], $counts['guests'], $is_staff_preferred, $is_auto_assign ? $assignable_staff : array(), $exclusive['user_exclusive'] );
+		if ( is_wp_error( $lock ) ) {
+			return $lock;
+		}
+		$this->release_slot_mutex( $lock['name'], $lock['token'] );
+
+		$draft['slot']        = array_merge( $draft['slot'] ?? array(), $slot );
+		$draft['guests']      = $counts['guests'];
+		$draft['guest_tiers'] = $counts['guest_tiers'];
+		if ( null !== $availability['lodging'] ) {
+			$draft['lodging']['nights']                  = $availability['lodging']['nights'];
+			$draft['lodging']['estimated_check_in_time'] = $availability['lodging']['estimated_check_in_time'];
+		}
+		return null;
 	}
 
 	/**
@@ -1864,7 +2019,7 @@ class Booking_Confirmation_Controller {
 			if ( 0 === $matched_staff_id || $matched_staff_id !== $preferred_staff_id ) {
 				return new WP_Error(
 					'staff_unavailable',
-					__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),
+					Nomination_Min_Guests_Message::join_sentences( __( 'The selected staff member is no longer available at this date and time.', 'vk-booking-manager' ), __( 'Please choose another date and time or another staff member.', 'vk-booking-manager' ) ),
 					array( 'status' => 409 )
 				);
 			}
@@ -2080,7 +2235,7 @@ class Booking_Confirmation_Controller {
 				$this->release_slot_mutex( $option_name, $lock_token );
 				return new WP_Error(
 					'capacity_exceeded',
-					__( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ),
+					Nomination_Min_Guests_Message::join_sentences( __( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ), __( 'Please choose another time slot.', 'vk-booking-manager' ) ),
 					array( 'status' => 409 )
 				);
 			}
@@ -2106,7 +2261,7 @@ class Booking_Confirmation_Controller {
 				$this->release_slot_mutex( $option_name, $lock_token );
 				return new WP_Error(
 					'staff_unavailable',
-					__( 'The selected staff member is no longer available.', 'vk-booking-manager' ),
+					Nomination_Min_Guests_Message::join_sentences( __( 'The selected staff member is no longer available at this date and time.', 'vk-booking-manager' ), __( 'Please choose another date and time or another staff member.', 'vk-booking-manager' ) ),
 					array( 'status' => 409 )
 				);
 			}

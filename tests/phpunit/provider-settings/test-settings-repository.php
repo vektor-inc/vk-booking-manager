@@ -127,11 +127,11 @@ class Settings_Repository_Test extends WP_UnitTestCase {
 
 		$test_cases = [
 			[
-				'test_condition_name' => '保存値がない場合はデフォルトの 0（無制限）を返す',
+				'test_condition_name' => '保存値がない場合はデフォルトの365日を返す',
 				'conditions'          => [
 					'stored_settings' => null,
 				],
-				'expected'            => 0,
+				'expected'            => 365,
 			],
 			[
 				'test_condition_name' => '保存値が 14 の場合は 14 を返す',

@@ -25,6 +25,17 @@ use function vkbm_sanitize_resource_menu_icon;
  */
 class Settings_Sanitizer {
 	/**
+	 * 予約メニュー一覧の画像比率を許可値に正規化する。
+	 *
+	 * @param array $settings プロバイダー設定。
+	 * @return string 許可された画像比率。未設定・不正値は content。
+	 */
+	public static function resolve_reservation_menu_list_image_aspect_ratio( array $settings ): string {
+		$value = $settings['reservation_menu_list_image_aspect_ratio'] ?? 'content';
+		return in_array( $value, array( 'content', 'original', '1-1', '4-3', '16-9' ), true ) ? $value : 'content';
+	}
+
+	/**
 	 * 自動匿名化で選べる保持月数を返す。
 	 *
 	 * @return int[]
@@ -289,16 +300,17 @@ class Settings_Sanitizer {
 		}
 		// 「日付で絞り込む」チェックボックス。「絞り込み検索」の子項目のため、
 		// 親（reservation_show_menu_search）がOFFなら送信値に関わらず強制的にOFFにする（リソースタグ検索と同じ扱い）。
-		$data['reservation_date_search_enabled']    = ! empty( $input['reservation_date_search_enabled'] ) && $data['reservation_show_menu_search'];
-		$data['reservation_show_menu_list']         = ! empty( $input['reservation_show_menu_list'] );
-		$menu_list_display_mode                     = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? ( $data['reservation_menu_list_display_mode'] ?? 'card' ) ) );
-		$data['reservation_menu_list_display_mode'] = in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ? $menu_list_display_mode : 'card';
-		$data['reservation_show_provider_logo']     = ! empty( $input['reservation_show_provider_logo'] );
-		$data['reservation_show_provider_name']     = ! empty( $input['reservation_show_provider_name'] );
-		$data['reservation_show_footer']            = ! empty( $input['reservation_show_footer'] );
-		$currency_symbol_raw                        = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
-		$data['currency_symbol']                    = sanitize_text_field( $currency_symbol_raw );
-		$tax_label_raw                              = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
+		$data['reservation_date_search_enabled']          = ! empty( $input['reservation_date_search_enabled'] ) && $data['reservation_show_menu_search'];
+		$data['reservation_show_menu_list']               = ! empty( $input['reservation_show_menu_list'] );
+		$menu_list_display_mode                           = sanitize_key( (string) ( $input['reservation_menu_list_display_mode'] ?? ( $data['reservation_menu_list_display_mode'] ?? 'card' ) ) );
+		$data['reservation_menu_list_display_mode']       = in_array( $menu_list_display_mode, array( 'card', 'text' ), true ) ? $menu_list_display_mode : 'card';
+		$data['reservation_menu_list_image_aspect_ratio'] = self::resolve_reservation_menu_list_image_aspect_ratio( array_merge( $data, $input ) );
+		$data['reservation_show_provider_logo']           = ! empty( $input['reservation_show_provider_logo'] );
+		$data['reservation_show_provider_name']           = ! empty( $input['reservation_show_provider_name'] );
+		$data['reservation_show_footer']                  = ! empty( $input['reservation_show_footer'] );
+		$currency_symbol_raw                              = (string) ( $input['currency_symbol'] ?? ( $data['currency_symbol'] ?? '' ) );
+		$data['currency_symbol']                          = sanitize_text_field( $currency_symbol_raw );
+		$tax_label_raw                                    = (string) ( $input['tax_label_text'] ?? ( $data['tax_label_text'] ?? '' ) );
 		// Allow leading/trailing spaces, while stripping tags.
 		// 先頭・末尾の空白は維持しつつ、タグは除去します.
 		$data['tax_label_text'] = wp_kses( $tax_label_raw, array() );
@@ -325,7 +337,7 @@ class Settings_Sanitizer {
 			$input['shift_alert_months'] ?? ( $data['shift_alert_months'] ?? 1 )
 		);
 		$data['shift_alert_months'] = min( 4, max( 1, $shift_alert_months ) );
-		// シフトの自動登録月数。許可値（0〜3）の判定は Shift_Editor::normalize_auto_register_months() に
+		// シフトの自動登録月数。許可値（0〜6）の判定は Shift_Editor::normalize_auto_register_months() に
 		// 一本化している（Setup_Notices・Shift_Editor 自身の判定と基準をそろえるため）。
 		$shift_auto_register_months         = $this->sanitize_non_negative_int(
 			$input['shift_auto_register_months'] ?? ( $data['shift_auto_register_months'] ?? 0 )

@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Bookings;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Bookings\Booking_Anonymizer;
 use VKBookingManager\Bookings\Booking_Confirmation_Controller;
@@ -235,6 +236,158 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 実際のシフトから枠を作り、シフトなし・満席をメール送信前に断る。
+	 */
+	public function test_create_guest_booking_request_real_slots(): void {
+		$test_condition_name = '実際のシフトの空き枠だけ送信し、シフトなし・満席は送信前に拒否';
+		$this->save_settings(
+			array(
+				'booking_customer_mode' => 'guest',
+				'industry_preset'       => 'custom',
+				'staff_enabled'         => true,
+			)
+		);
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+		update_post_meta( $menu_id, '_vkbm_duration_minutes', 30 );
+		$date         = new \DateTimeImmutable( '+10 days 10:00:00', wp_timezone() );
+		$start        = $date->format( DATE_ATOM );
+		$end          = $date->modify( '+30 minutes' )->format( DATE_ATOM );
+		$token        = $this->store_draft( $menu_id, $staff_id, $start, $end );
+		$notification = new Guest_Notification_Recording_Double( true );
+		$settings     = new Settings_Repository();
+		$confirmation = new Booking_Confirmation_Controller( $notification, $settings, new Availability_Service( $settings ) );
+		$controller   = new Guest_Booking_Controller( $confirmation, $notification, $settings );
+		$result       = $controller->create_guest_booking_request( $this->build_request( $token ) );
+		$this->assertInstanceOf( WP_Error::class, $result, 'シフトのない日時を拒否する' );
+		$this->assertCount( 0, $notification->verifications, $test_condition_name );
+
+		// 正規のシフトを登録して空き枠 API の応答そのものを下書きに使う。
+		$this->factory()->post->create(
+			array(
+				'post_type'   => \VKBookingManager\PostTypes\Shift_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'meta_input'  => array(
+					'_vkbm_shift_resource_id' => $staff_id,
+					'_vkbm_shift_year'        => (int) $date->format( 'Y' ),
+					'_vkbm_shift_month'       => (int) $date->format( 'n' ),
+					'_vkbm_shift_days'        => array(
+						(int) $date->format( 'j' ) => array(
+							'status' => 'open',
+							'slots'  => array(
+								array(
+									'start' => '10:00',
+									'end'   => '12:00',
+								),
+							),
+						),
+					),
+				),
+			)
+		);
+		\VKBookingManager\Availability\Availability_Cache_Generation::bump();
+		\VKBookingManager\Availability\Availability_Cache_Generation::flush_bump();
+		$availability = new Availability_Service( $settings );
+		$slots        = $availability->get_daily_slots(
+			array(
+				'menu_id'     => $menu_id,
+				'resource_id' => $staff_id,
+				'date'        => $date->format( 'Y-m-d' ),
+				'timezone'    => 'Asia/Tokyo',
+			)
+		);
+		$this->assertNotWPError( $slots, $test_condition_name );
+		$this->assertNotEmpty( $slots['slots'], $test_condition_name );
+		$slot         = $slots['slots'][0];
+		$token        = $this->store_draft( $menu_id, $staff_id, $slot['start_at'], $slot['end_at'], array( 'slot' => $slot ) );
+		$confirmation = new Booking_Confirmation_Controller( $notification, $settings, $availability );
+		$controller   = new Guest_Booking_Controller( $confirmation, $notification, $settings );
+		$result       = $controller->create_guest_booking_request( $this->build_request( $token ) );
+		$this->assertInstanceOf( WP_REST_Response::class, $result, is_wp_error( $result ) ? $result->get_error_message() : '' );
+		$this->assertCount( 1, $notification->verifications, $test_condition_name );
+		$this->assertSame( 0, $this->count_bookings(), '送信だけでは枠を確保しない' );
+
+		// 空き枠をキャッシュしたまま、同じ枠を埋める。
+		$booking_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		foreach ( array(
+			'_vkbm_booking_menu_id'       => $menu_id,
+			'_vkbm_booking_resource_id'   => $staff_id,
+			'_vkbm_booking_status'        => 'confirmed',
+			'_vkbm_booking_guests'        => 1,
+			'_vkbm_booking_service_start' => wp_date( 'Y-m-d H:i:s', strtotime( $slot['start_at'] ) ),
+			'_vkbm_booking_service_end'   => wp_date( 'Y-m-d H:i:s', strtotime( $slot['end_at'] ) ),
+			'_vkbm_booking_total_end'     => wp_date( 'Y-m-d H:i:s', strtotime( $slot['end_at'] ) ),
+		) as $key => $value ) {
+			update_post_meta( $booking_id, $key, $value );
+		}
+		foreach ( array( 'full-a@example.com', 'full-b@example.com' ) as $email ) {
+			$result = $controller->create_guest_booking_request( $this->build_request( $token, array( 'customer_email' => $email ) ) );
+			$this->assertInstanceOf( WP_Error::class, $result, $test_condition_name );
+			$this->assertSame( 409, $result->get_error_data()['status'], $test_condition_name );
+			$this->assertFalse( get_transient( Guest_Booking_Controller::EMAIL_LIMIT_PREFIX . hash( 'sha256', $email ) ), $test_condition_name );
+		}
+		$this->assertCount( 1, $notification->verifications, $test_condition_name );
+	}
+
+	/**
+	 * 枠が存在しない・埋まった場合は、連絡先によらず送信前に断り、回数を消費しない。
+	 */
+	public function test_create_guest_booking_request_availability(): void {
+		$this->save_settings( array( 'booking_customer_mode' => 'guest' ) );
+		$menu_id    = $this->create_menu();
+		$staff_id   = $this->create_staff();
+		$test_cases = array(
+			array(
+				'test_condition_name' => '過去の架空枠',
+				'start'               => '1999-01-01T10:00:00+09:00',
+				'end'                 => '1999-01-01T10:30:00+09:00',
+				'available'           => true,
+			),
+			array(
+				'test_condition_name' => '開始の改竄',
+				'start'               => '2026-12-01T09:59:00+09:00',
+				'end'                 => self::END,
+				'available'           => true,
+			),
+			array(
+				'test_condition_name' => '終了の改竄',
+				'start'               => self::START,
+				'end'                 => '2026-12-01T12:00:00+09:00',
+				'available'           => true,
+			),
+			array(
+				'test_condition_name' => '空き枠なし',
+				'start'               => self::START,
+				'end'                 => self::END,
+				'available'           => false,
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			foreach ( array( 'availability-a@example.com', 'availability-b@example.com' ) as $email ) {
+				list( $controller, $notification ) = $this->build_controller( $staff_id, $case['available'] );
+				$token                             = $this->store_draft( $menu_id, $staff_id, $case['start'], $case['end'] );
+				$result                            = $controller->create_guest_booking_request( $this->build_request( $token, array( 'customer_email' => $email ) ) );
+				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+				$this->assertSame( 'slot_unavailable', $result->get_error_code() );
+				$this->assertSame( 409, $result->get_error_data()['status'] );
+				$this->assertCount( 0, $notification->verifications );
+				// 断った直後でも同じ宛先へ正規の申し込みを送れる。
+				list( $valid_controller, $valid_notification ) = $this->build_controller( $staff_id );
+				$valid = $valid_controller->create_guest_booking_request( $this->build_request( $this->store_draft( $menu_id, $staff_id ), array( 'customer_email' => $email ) ) );
+				$this->assertInstanceOf( WP_REST_Response::class, $valid );
+				$this->assertCount( 1, $valid_notification->verifications );
+				delete_transient( Guest_Booking_Controller::EMAIL_LIMIT_PREFIX . hash( 'sha256', $email ) );
+			}
+		}
+	}
+
+	/**
 	 * 申し込みを送り、確認メールに入った生のトークンを返す。
 	 *
 	 * @param Guest_Booking_Controller            $controller   コントローラー。
@@ -340,6 +493,20 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 		update_post_meta( $booked_id, '_vkbm_booking_customer_email', 'booked@example.com' );
 		update_post_meta( $booked_id, '_vkbm_booking_status', 'confirmed' );
 
+		// 下書きのメニュー・担当の検証に使う投稿（予約の投稿・公開されていないメニュー・公開されていないスタッフ）。
+		$draft_menu_id  = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'draft',
+			)
+		);
+		$draft_staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'draft',
+			)
+		);
+
 		$test_cases = array(
 			array(
 				'test_condition_name' => '受付方法が「会員のみ」（初期値）の場合 => 403 で受け付けない',
@@ -438,6 +605,60 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 				'expected_status'     => 200,
 			),
 			array(
+				'test_condition_name' => '下書きの menu_id が予約の投稿の ID の場合 => 申し込みの時点で断る',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'draft_menu_id'       => $booked_id,
+				'params'              => array(),
+				'expected_code'       => 'invalid_menu_id',
+				'expected_status'     => 400,
+			),
+			array(
+				'test_condition_name' => '下書きの menu_id が公開されていない予約メニューの場合 => 申し込みの時点で断る',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'draft_menu_id'       => $draft_menu_id,
+				'params'              => array(),
+				'expected_code'       => 'invalid_menu_id',
+				'expected_status'     => 400,
+			),
+			array(
+				'test_condition_name' => '下書きの menu_id が存在しない ID の場合 => 申し込みの時点で断る',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'draft_menu_id'       => 99999999,
+				'params'              => array(),
+				'expected_code'       => 'invalid_menu_id',
+				'expected_status'     => 400,
+			),
+			array(
+				'test_condition_name' => '下書きの resource_id が予約の投稿の ID の場合 => 申し込みの時点で断る',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'draft_staff_id'      => $booked_id,
+				'params'              => array(),
+				'expected_code'       => 'invalid_resource',
+				'expected_status'     => 400,
+			),
+			array(
+				'test_condition_name' => '下書きの resource_id が公開されていないスタッフの場合 => 申し込みの時点で断る',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'draft_staff_id'      => $draft_staff_id,
+				'params'              => array(),
+				'expected_code'       => 'invalid_resource',
+				'expected_status'     => 400,
+			),
+			array(
+				'test_condition_name' => '下書きの resource_id がおまかせ（0）の場合 => 受け付ける',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'draft_staff_id'      => 0,
+				'params'              => array(),
+				'expected_code'       => '',
+				'expected_status'     => 200,
+			),
+			array(
 				'test_condition_name' => 'キャンセルポリシーが設定されていて同意が無い場合 => 申し込みの時点で断る',
 				'mode'                => 'both',
 				'logged_in'           => false,
@@ -494,7 +715,7 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 				)
 			);
 			wp_set_current_user( $case['logged_in'] ? $this->factory()->user->create() : 0 );
-			$draft_token = $this->store_draft( $menu_id, $staff_id );
+			$draft_token = $this->store_draft( $case['draft_menu_id'] ?? $menu_id, $case['draft_staff_id'] ?? $staff_id );
 			list( $controller, $notification ) = $this->build_controller( $staff_id );
 			$before = $this->count_bookings();
 
@@ -748,7 +969,236 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 0, $count, '生のトークンは保存しない' );
 
 		$this->assertSame( 0, $this->count_bookings(), '確認リンクを開くまで予約データを作らない' );
-		$this->assertCount( 0, get_posts( array( 'post_type' => Booking_Post_Type::POST_TYPE, 'post_status' => 'any' ) ) );
+		$this->assertCount(
+			0,
+			get_posts(
+				array(
+					'post_type'   => Booking_Post_Type::POST_TYPE,
+					'post_status' => 'any',
+				)
+			)
+		);
+	}
+
+	/**
+	 * 無効な区分の残存メタは基本料金を消さず、有効な区分は正規の内訳で表示する。
+	 */
+	public function test_send_guest_verification_price_tiers(): void {
+		$menu_id = $this->create_menu();
+		update_post_meta( $menu_id, '_vkbm_base_price', 3000 );
+		update_post_meta(
+			$menu_id,
+			'_vkbm_price_tiers',
+			array(
+				array(
+					'label' => '大人',
+					'price' => 2000,
+				),
+			)
+		);
+		$cases = array(
+			array(
+				'test_condition_name' => '定員1名で区分なし => 基本料金',
+				'tiers'               => array(),
+				'capacity'            => 1,
+				'multiple'            => true,
+				'unit'                => '',
+				'price'               => '3,000',
+				'label'               => false,
+			),
+			array(
+				'test_condition_name' => '複数人数が無効 => 基本料金',
+				'tiers'               => array(),
+				'capacity'            => 3,
+				'multiple'            => false,
+				'unit'                => '',
+				'price'               => '3,000',
+				'label'               => false,
+			),
+			array(
+				'test_condition_name' => '予約単位で区分なし => 基本料金',
+				'tiers'               => array(),
+				'capacity'            => 3,
+				'multiple'            => true,
+				'unit'                => 'per_booking',
+				'price'               => '3,000',
+				'label'               => false,
+			),
+			array(
+				'test_condition_name' => '改竄した区分 => 正規料金と内訳',
+				'tiers'               => array(
+					array(
+						'label' => 'FORGED',
+						'price' => 1,
+						'count' => 2,
+					),
+				),
+				'capacity'            => 3,
+				'multiple'            => true,
+				'unit'                => '',
+				'price'               => '4,000',
+				'label'               => true,
+			),
+		);
+		foreach ( $cases as $case ) {
+			$test_condition_name = $case['test_condition_name'];
+			update_post_meta( $menu_id, '_vkbm_max_capacity', $case['capacity'] );
+			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', $case['multiple'] );
+			update_post_meta( $menu_id, '_vkbm_price_unit', $case['unit'] );
+			// 実際の確認メールを捕捉し、金額と内訳を確かめる。
+			$mails   = array();
+			$capture = static function ( $pre, $atts ) use ( &$mails ) {
+				$mails[] = $atts;
+				return true;
+			};
+			add_filter( 'pre_wp_mail', $capture, 10, 2 );
+			try {
+				$notification = new Booking_Notification_Service( new Settings_Repository() );
+				$this->assertTrue(
+					$notification->send_guest_verification(
+						array(
+							'email'      => 'guest@example.com',
+							'verify_url' => 'https://example.com/verify',
+							'expires_at' => time() + 3600,
+							'draft'      => array(
+								'menu_id'     => $menu_id,
+								'guests'      => 1,
+								'guest_tiers' => $case['tiers'],
+								'slot'        => array(
+									'start_at' => self::START,
+									'end_at'   => self::END,
+								),
+							),
+						)
+					),
+					$test_condition_name
+				);
+			} finally {
+				remove_filter( 'pre_wp_mail', $capture, 10 );
+			}
+			$body = $mails[0]['message'];
+			$this->assertStringContainsString( $case['price'], $body, $test_condition_name );
+			$this->assertStringNotContainsString( 'FORGED', $body, $test_condition_name );
+			if ( $case['label'] ) {
+				/* translators: 1: Price category label, 2: Quantity value (with unit). */
+				$this->assertStringContainsString( sprintf( __( '%1$s: %2$s', 'vk-booking-manager' ), '大人', vkbm_format_guests_count( 2 ) ), $body, $test_condition_name );
+			}
+		}
+	}
+
+	/**
+	 * キャッシュに空きがあっても、担当未指定の最新残席を超える申し込みは送信しない。
+	 */
+	public function test_create_guest_booking_request_remaining_capacity(): void {
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( '定員と貸し切りは Pro 版限定のため、無料版ではスキップする。' );
+		}
+
+		$test_condition_name = '定員3名で指名なしのメニュー => 定員制を使う';
+		$this->save_settings(
+			array(
+				'booking_customer_mode' => 'guest',
+				'industry_preset'       => 'custom',
+				'staff_enabled'         => true,
+				'slot_capacity_enabled' => true,
+			)
+		);
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+		update_post_meta( $menu_id, '_vkbm_disable_nomination', true );
+		update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
+		update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
+		$this->assertTrue( Staff_Editor::is_slot_capacity_enabled(), $test_condition_name );
+		$this->assertFalse( Staff_Editor::is_nomination_enabled_for_menu( $menu_id ), $test_condition_name );
+		$this->assertSame( 3, ( new Availability_Service( new Settings_Repository() ) )->get_menu_max_capacity( get_post( $menu_id ) ), $test_condition_name );
+		// キャッシュ相当の空き枠は固定し、保存済み予約だけを後から増やす。
+		$slot         = array(
+			'slot_id'              => 'slot-1',
+			'start_at'             => self::START,
+			'end_at'               => self::END,
+			'staff'                => array( 'id' => 0 ),
+			'assignable_staff_ids' => array( $staff_id ),
+			'auto_assign'          => true,
+		);
+		$settings     = new Settings_Repository();
+		$notification = new Guest_Notification_Recording_Double( true );
+		$confirmation = new Booking_Confirmation_Controller( $notification, $settings, new Guest_Availability_Test_Double( $slot ) );
+		$controller   = new Guest_Booking_Controller( $confirmation, $notification, $settings );
+		$booking_id   = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		foreach ( array(
+			'_vkbm_booking_service_id'    => $menu_id,
+			'_vkbm_booking_resource_id'   => $staff_id,
+			'_vkbm_booking_status'        => 'confirmed',
+			'_vkbm_booking_guests'        => 1,
+			'_vkbm_booking_service_start' => '2026-12-01 10:00:00',
+			'_vkbm_booking_service_end'   => '2026-12-01 10:30:00',
+			'_vkbm_booking_total_end'     => '2026-12-01 10:30:00',
+		) as $key => $value ) {
+			update_post_meta( $booking_id, $key, $value );
+		}
+		$cases = array(
+			array(
+				'test_condition_name' => '残席2名に3名 => 拒否',
+				'booked'              => 1,
+				'guests'              => 3,
+				'expected'            => 'capacity_exceeded',
+			),
+			array(
+				'test_condition_name' => '残席2名に2名 => 送信',
+				'booked'              => 1,
+				'guests'              => 2,
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '満席に1名 => 拒否',
+				'booked'              => 3,
+				'guests'              => 1,
+				'expected'            => 'capacity_exceeded',
+			),
+		);
+		foreach ( $cases as $case ) {
+			$test_condition_name = $case['test_condition_name'];
+			update_post_meta( $booking_id, '_vkbm_booking_guests', $case['booked'] );
+			foreach ( array( 'capacity-a@example.com', 'capacity-b@example.com' ) as $email ) {
+				$this->reset_email_limit( $email );
+				$before = count( $notification->verifications );
+				$token  = $this->store_draft( $menu_id, 0, self::START, self::END, array( 'guests' => $case['guests'] ) );
+				$result = $controller->create_guest_booking_request( $this->build_request( $token, array( 'customer_email' => $email ) ) );
+				if ( '' === $case['expected'] ) {
+					$this->assertInstanceOf( WP_REST_Response::class, $result, is_wp_error( $result ) ? $result->get_error_message() : '' );
+					$this->assertCount( $before + 1, $notification->verifications, $test_condition_name );
+				} else {
+					$this->assertInstanceOf( WP_Error::class, $result, $test_condition_name );
+					$this->assertSame( $case['expected'], $result->get_error_code(), $test_condition_name );
+					$this->assertCount( $before, $notification->verifications, $test_condition_name );
+					$this->assertFalse( get_transient( Guest_Booking_Controller::EMAIL_LIMIT_PREFIX . hash( 'sha256', $email ) ), $test_condition_name );
+				}
+			}
+		}
+	}
+
+	/**
+	 * 貸し切り設定が無効になった下書きは、連絡先によらず送信前に拒否する。
+	 */
+	public function test_create_guest_booking_request_exclusive_unavailable(): void {
+		$test_condition_name = '貸し切りが無効な下書き => 連絡先によらず送信前に拒否';
+		$menu_id             = $this->create_menu();
+		$staff_id            = $this->create_staff();
+		$this->save_settings( array( 'booking_customer_mode' => 'guest' ) );
+		foreach ( array( 'first@example.com', 'second@example.com' ) as $email ) {
+			list( $controller, $notification ) = $this->build_controller( $staff_id );
+			$token                             = $this->store_draft( $menu_id, $staff_id, self::START, self::END, array( 'user_exclusive' => true ) );
+			$result                            = $controller->create_guest_booking_request( $this->build_request( $token, array( 'customer_email' => $email ) ) );
+			$this->assertInstanceOf( WP_Error::class, $result, $test_condition_name );
+			$this->assertSame( 'exclusive_unavailable', $result->get_error_code(), $test_condition_name );
+			$this->assertCount( 0, $notification->verifications, $test_condition_name );
+		}
 	}
 
 	/**
@@ -815,7 +1265,7 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 			$this->assertStringContainsString( 'テスト店', $mails[0]['subject'], $case['test_condition_name'] );
 			$body = (string) $mails[0]['message'];
 			$this->assertStringContainsString( 'vkbm_guest_verify=ABCDEFGHIJKLMNOPQRSTUVWXYZ012345', $body, $case['test_condition_name'] . '（リンク）' );
-			$this->assertStringContainsString( 'ゲスト 太郎', $body, $case['test_condition_name'] . '（お名前）' );
+			$this->assertStringNotContainsString( 'ゲスト 太郎', $body, $case['test_condition_name'] . '（お名前）' );
 			$this->assertStringContainsString( 'カット', $body, $case['test_condition_name'] . '（予約内容）' );
 			$this->assertStringNotContainsString( 'SECRET_MEMO_TEXT', $body, $case['test_condition_name'] . '（備考は載せない）' );
 			$this->assertStringNotContainsString( '#0', $body, $case['test_condition_name'] . '（予約番号は載せない）' );
@@ -983,7 +1433,7 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 		$this->reset_email_limit( 'guest@example.com' );
 		$second = $this->request_and_get_token( $controller, $notification, $this->build_request( $this->store_draft( $menu_id, $staff_id ) ) );
 		$this->reset_email_limit( 'guest@example.com' );
-		$other_slot = $this->request_and_get_token( $controller, $notification, $this->build_request( $this->store_draft( $menu_id, $staff_id, '2026-12-02T10:00:00+09:00', '2026-12-02T10:30:00+09:00' ) ) );
+		$other_slot = $this->request_and_get_token( $controller, $notification, $this->build_request( $this->store_draft( $menu_id, $staff_id, self::START, self::END, array( 'menu_id' => $this->create_menu() ) ) ) );
 
 		$pending = static function ( string $raw ) {
 			return get_transient( Guest_Booking_Controller::PENDING_PREFIX . hash( 'sha256', $raw ) );

@@ -1,3 +1,4 @@
+// @category 予約画面・カレンダー
 import { test, expect } from '@playwright/test';
 import { selectAvailableCalendarDay } from '../utils/calendar-helpers';
 
@@ -11,6 +12,9 @@ test( '押せない日は薄く表示され、押しても選択日と枠一覧�
 	);
 	await page.locator( '.vkbm-menu-loop__button--reserve' ).first().click();
 	await calendarMetaResponse;
+	// 初期日付の自動選択と日別の読み込みが終わってから、変更前の状態を記録する。
+	await expect( page.locator( '.vkbm-calendar__spinner' ) ).toHaveCount( 0 );
+	await page.waitForLoadState( 'networkidle' );
 
 	// @step カレンダーで押せない日を探す（今月に無ければ翌月へ進む）
 	let disabledDay = page

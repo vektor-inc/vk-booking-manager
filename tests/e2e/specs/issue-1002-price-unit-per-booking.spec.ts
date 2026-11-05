@@ -11,6 +11,7 @@
  * 注: 文言は日本語で確かめる（e2e のサイトは日本語）。
  * テストデータは接頭辞（E2E1002）を付けて作り、afterAll で消す。BM 設定は beforeAll で控えて必ず戻す。
  */
+// @category 料金表示
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -18,6 +19,7 @@ import {
 	createShiftForMonth,
 	getCurrentAndNextTokyoMonths,
 	loginAsAdmin,
+	setAdminBlockEditorPreferences,
 } from '../utils/helpers';
 import { configureProviderSettings } from '../utils/setup';
 import { selectAvailableCalendarDay } from '../utils/calendar-helpers';
@@ -114,31 +116,6 @@ function restoreProviderSettings(): void {
 	} catch {
 		// 元から無いなら何もしない。
 	}
-}
-
-/**
- * ブロックエディターの「ようこそ」案内を出さず、メタボックス欄を開いた状態にする。
- */
-function prepareBlockEditorPreferences(): void {
-	const result = wpEvalPhp( `
-		global $wpdb;
-		$user = get_user_by( 'login', 'admin' );
-		update_user_meta(
-			$user->ID,
-			$wpdb->get_blog_prefix() . 'persisted_preferences',
-			array(
-				'core/edit-post' => array(
-					'welcomeGuide'        => false,
-					'metaBoxesMainIsOpen' => true,
-				),
-				'core'           => array(
-					'enableChoosePatternModal' => false,
-				),
-			)
-		);
-		echo 'OK';
-	` );
-	expect( result ).toContain( 'OK' );
 }
 
 /**
@@ -291,7 +268,7 @@ test.describe
 
 	// @title 編集画面で料金の単位を「1ツアーあたり」にして保存する
 	test( 'admin: choose the price unit per tour', async ( { page } ) => {
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await loginAsAdmin( page );
 		// @step サービスメニューの編集画面を開く（料金の単位は「1名あたり」のまま）
 		await page.goto( `/wp-admin/post.php?post=${ menuId }&action=edit` );
@@ -440,7 +417,7 @@ test.describe
 		expect( booking.unit ).toBe( 'per_booking' );
 
 		// @step 管理者でログインして、その予約の編集画面を開く
-		prepareBlockEditorPreferences();
+		setAdminBlockEditorPreferences();
 		await page.context().clearCookies();
 		await loginAsAdmin( page );
 		await page.goto(

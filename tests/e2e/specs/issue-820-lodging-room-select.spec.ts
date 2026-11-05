@@ -12,6 +12,7 @@
  * 注: 案内の文言は日本語で確かめる（e2e のサイトは日本語）。
  * テストデータは接頭辞（E2E820）を付けて作り、afterAll で消す。BM 設定は beforeAll で控えて必ず戻す。
  */
+// @category 宿泊予約
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,
@@ -29,6 +30,7 @@ let originalSettingsJson: string | null = null;
 let roomAId = '';
 let roomBId = '';
 let nightMenuId = '';
+let singleRoomMenuId = '';
 
 /**
  * PHP を実行し、出力が正の整数（post ID）であることを確かめて返す。
@@ -230,6 +232,23 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		`,
 			'night menu'
 		);
+		// #1021: 客室が1室のプランも用意し、選択操作なしで確認画面へ進む経路を確かめる。
+		singleRoomMenuId = insertAndGetId(
+			`
+			$id = wp_insert_post( array(
+				'post_type' => 'vkbm_service_menu',
+				'post_status' => 'publish',
+				'post_title' => '${ PREFIX } Single Room Plan',
+			) );
+			if ( is_wp_error( $id ) || ! $id ) { echo 'Error'; return; }
+			update_post_meta( $id, '_vkbm_staff_ids', array( ${ Number( roomAId ) } ) );
+			update_post_meta( $id, '_vkbm_base_price', 10000 );
+			update_post_meta( $id, '_vkbm_booking_unit', 'night' );
+			echo $id;
+			`,
+			'single room menu'
+		);
+
 		// 宿泊のサイトにする。「リソースの呼び方」は自由入力の値で翻訳されないため、
 		// 宿泊のサイトで運営者が入れる呼び方（客室）を直接入れる。option だけを書き換える e2e では
 		// 呼び方が空のままで「スタッフ」と表示され、「客室」の文言を確かめられないため。
@@ -308,6 +327,48 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		await expect( hint ).toHaveCount( 0 );
 		await expect( summary ).not.toContainText( '未選択' );
 		await expect( proceed ).toBeEnabled();
+	} );
+
+	test( 'issue #1021: 担当1室のプランは客室を選ばずに確認画面へ進める', async ( {
+		page,
+	} ) => {
+		// @step 担当客室が1室のプランを開き、2日後から2泊の日程を選ぶ
+		await page.goto( `/booking/?menu_id=${ singleRoomMenuId }` );
+		await expect( page.locator( '.vkbm-lodging' ) ).toBeVisible();
+		await clickStayDay( page, tokyoDateAfter( 2 ) );
+		await clickStayDay( page, tokyoDateAfter( 4 ) );
+		const summary = page.locator( '.vkbm-lodging__summary' );
+		const proceed = summary.locator( '.vkbm-plan-summary__action' );
+		// @check 空室確認後、客室名と合計金額が表示され、客室カード・選択案内なしで予約へ進める
+		await expect( proceed ).toBeEnabled();
+		await expect( summary ).toContainText( `${ PREFIX } Room A` );
+		await expect( summary ).toContainText( '20,000' );
+		await expect(
+			page.locator( '.vkbm-lodging__rooms-section' )
+		).toHaveCount( 0 );
+		await expect(
+			page.locator( '.vkbm-lodging__action-hint' )
+		).toHaveCount( 0 );
+		await expect(
+			page.locator( '.vkbm-lodging__guide' )
+		).not.toContainText( '次に、空いている客室' );
+		await expect( page.locator( '.vkbm-lodging__live' ) ).toContainText(
+			`${ PREFIX } Room Aの空きを確認しましたので、予約に進めます。`
+		);
+		// @step 客室を操作せず「予約に進む」を押す
+		const draftRequest = page.waitForRequest(
+			( request ) =>
+				request.method() === 'POST' &&
+				request.url().includes( '/vkbm/v1/drafts' )
+		);
+		await proceed.click();
+		// @check 下書きの客室ID・客室名と、確認画面の客室名が一致する
+		const payload = ( await draftRequest ).postDataJSON();
+		expect( payload.resource_id ).toBe( Number( roomAId ) );
+		expect( payload.staff_label ).toBe( `${ PREFIX } Room A` );
+		await expect(
+			page.locator( '.vkbm-confirm__summary' ).first()
+		).toContainText( `${ PREFIX } Room A`, { timeout: 15000 } );
 	} );
 
 	test( 'スマホ幅では、ボタン上の案内が左寄せでボタンの上に出る', async ( {

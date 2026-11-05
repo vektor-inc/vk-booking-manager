@@ -1,3 +1,4 @@
+// @category ログイン・会員登録・ゲスト予約
 import { test, expect, Page } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import {

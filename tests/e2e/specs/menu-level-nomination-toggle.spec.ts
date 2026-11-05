@@ -39,6 +39,7 @@
  * - playwright.config の baseURL（テスト用 wp-env）に対して実行する。
  *   絶対URLはハードコードせず page.goto / page.request には相対パスを渡す。
  */
+// @category スタッフ指名
 import { test, expect } from '@playwright/test';
 import {
 	wpEvalPhp,

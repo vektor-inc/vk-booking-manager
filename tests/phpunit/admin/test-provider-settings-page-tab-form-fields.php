@@ -72,6 +72,104 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	}
 
 
+	/** 画像比率の行の表示条件・選択値と、全タブの送信項目を検証する。 */
+	public function test_reservation_menu_list_image_aspect_ratio(): void {
+		$page       = $this->create_page();
+		$test_cases = array(
+			array(
+				'test_condition_name' => '一覧オン・カードでは表示',
+				'enabled'             => true,
+				'mode'                => 'card',
+				'ratio'               => '1-1',
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => '一覧オン・テキストでもグループ向けに表示',
+				'enabled'             => true,
+				'mode'                => 'text',
+				'ratio'               => '4-3',
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => '一覧オフでは非表示',
+				'enabled'             => false,
+				'mode'                => 'card',
+				'ratio'               => 'original',
+				'expected_hidden'     => true,
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array(
+					'reservation_show_menu_list'         => $case['enabled'],
+					'reservation_menu_list_display_mode' => $case['mode'],
+					'reservation_menu_list_image_aspect_ratio' => $case['ratio'],
+				)
+			);
+			$html = $this->render_tab( $page, 'system' );
+			preg_match( '/<tr[^>]*id="vkbm-reservation-menu-list-image-aspect-ratio-row"([^>]*)>/', $html, $matches );
+			$this->assertNotEmpty( $matches, $case['test_condition_name'] );
+			$is_hidden = str_contains( $matches[1], 'hidden' );
+			$this->assertSame( $case['expected_hidden'], $is_hidden, $case['test_condition_name'] );
+			$this->assertMatchesRegularExpression( '/<option value="' . $case['ratio'] . '"[^>]*selected/', $html, $case['test_condition_name'] );
+			foreach ( self::FORM_TABS as $tab ) {
+				$html = $this->render_tab( $page, $tab );
+				$this->assertContains( 'reservation_menu_list_image_aspect_ratio', $this->get_form_keys( $html ), $case['test_condition_name'] . $tab );
+			}
+		}
+	}
+
+	/** 表示モードに応じてカード表示グループ向けの説明を切り替える。 */
+	public function test_render_page_image_aspect_ratio_text_mode_help(): void {
+		$page       = $this->create_page();
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'テキスト表示では追加説明を表示する',
+				'mode'                => 'text',
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => 'カード表示では追加説明を隠す',
+				'mode'                => 'card',
+				'expected_hidden'     => true,
+			),
+			array(
+				'test_condition_name' => '不正な表示モードはカードに正規化して追加説明を隠す',
+				'mode'                => 'invalid',
+				'expected_hidden'     => true,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 保存値から初期表示を描画する。
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array(
+					'reservation_show_menu_list'         => true,
+					'reservation_menu_list_display_mode' => $case['mode'],
+				)
+			);
+			$html = $this->render_tab( $page, 'system' );
+
+			// 共通説明領域内の文言・順番と hidden 属性を検証する。
+			$document = new DOMDocument();
+			$previous = libxml_use_internal_errors( true );
+			$document->loadHTML( '<?xml encoding="UTF-8">' . $html );
+			libxml_clear_errors();
+			libxml_use_internal_errors( $previous );
+			$xpath = new DOMXPath( $document );
+			$help  = $xpath->query( '//*[@id="vkbm-reservation-menu-list-image-aspect-ratio-help"]/p' );
+			$this->assertSame( 3, $help->length, $case['test_condition_name'] );
+			$this->assertSame( 'vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help', $help->item( 1 )->getAttribute( 'id' ), $case['test_condition_name'] );
+			$this->assertSame( __( 'Sets the image ratio for service groups displayed as cards.', 'vk-booking-manager' ), $help->item( 1 )->textContent, $case['test_condition_name'] );
+			$this->assertSame( $case['expected_hidden'], $help->item( 1 )->hasAttribute( 'hidden' ), $case['test_condition_name'] );
+			$this->assertSame( 'vkbm-reservation-menu-list-image-aspect-ratio-mobile-help', $help->item( 2 )->getAttribute( 'id' ), $case['test_condition_name'] );
+			$select = $xpath->query( '//*[@id="vkbm-reservation-menu-list-image-aspect-ratio"]' )->item( 0 );
+			$this->assertFalse( $select->hasAttribute( 'disabled' ), $case['test_condition_name'] );
+		}
+	}
+
 	/** 未送信だけ現在値を保持し、明示的な不正値は初期値へ戻す。 */
 	public function test_save_menu_card_background(): void {
 		$test_cases = array(
@@ -717,8 +815,8 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 				array_merge(
 					$repository->get_default_settings(),
 					array(
-						'design_footer_background_color'       => $case['footer_bg'],
-						'design_footer_text_color'             => $case['footer_text'],
+						'design_footer_background_color' => $case['footer_bg'],
+						'design_footer_text_color'       => $case['footer_text'],
 						'design_menu_heading_use_footer_color' => true,
 					)
 				)
@@ -739,7 +837,8 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 			$this->assertStringNotContainsString( 'colspan', $matches[2], $case['test_condition_name'] . '（colspan でまとめない）' );
 
 			// フッターの色の有無で hidden 属性を出し分ける。
-			$this->assertSame( $case['expected_hidden'], 1 === preg_match( '/(^|\s)hidden(\s|$)/', $matches[1] ), $case['test_condition_name'] );
+			$is_hidden = (bool) preg_match( '/(^|\s)hidden(\s|$)/', $matches[1] );
+			$this->assertSame( $case['expected_hidden'], $is_hidden, $case['test_condition_name'] );
 
 			// 隠していても、チェック状態は保存済みのまま出力する。
 			$this->assertMatchesRegularExpression( '/id="vkbm-design-menu-heading-use-footer-color"[^>]*checked=\'checked\'/', $html, $case['test_condition_name'] . '（チェック状態を保つ）' );
@@ -776,6 +875,23 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 				$case['test_condition_name'] . '（前提: 入力欄が描画される）'
 			);
 			$this->assertMatchesRegularExpression( '/\stype="text"/', $matches[0], $case['test_condition_name'] );
+		}
+	}
+
+	/** 未保存では365日、保存済み0では無制限を表示する。 */
+	public function test_advance_booking_default_and_saved_zero(): void {
+		$page = $this->create_page();
+		foreach ( array( null, 0 ) as $saved ) {
+			if ( null === $saved ) {
+				delete_option( Settings_Repository::OPTION_KEY );
+			} else {
+				update_option( Settings_Repository::OPTION_KEY, array( 'provider_max_advance_booking_days' => $saved ) );
+			}
+			$html = $this->render_tab( $page, 'system' );
+			$this->assertMatchesRegularExpression( '/id="vkbm-provider-max-advance-booking-days"[^>]*value="' . ( null === $saved ? '365' : '0' ) . '"/s', $html );
+			$this->assertStringContainsString( esc_html( __( 'The maximum number of days in advance that reservations can be made. Set to 0 for no limit.', 'vk-booking-manager' ) ), $html );
+			$this->assertStringNotContainsString( 'specification-operation-owner.md#', $html );
+			$this->assertStringContainsString( 'vkbm_trusted_proxy_ips', $this->render_tab( $page, 'registration' ) );
 		}
 	}
 

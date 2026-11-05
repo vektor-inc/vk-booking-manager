@@ -1,3 +1,4 @@
+// @category 予約の確定・確認・キャンセル
 import { test, expect } from '@playwright/test';
 import { wpEvalPhp, getServiceMenuId, getStaffId } from '../utils/helpers';
 

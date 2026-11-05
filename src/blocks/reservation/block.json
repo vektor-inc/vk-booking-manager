@@ -8,10 +8,7 @@
 	"textdomain": "vk-booking-manager",
 	"attributes": {},
 	"supports": {
-		"align": [
-			"wide",
-			"full"
-		],
+		"align": [ "wide", "full" ],
 		"anchor": true,
 		"spacing": {
 			"margin": true,
@@ -20,6 +17,10 @@
 	},
 	"editorScript": "file:./index.js",
 	"viewScript": "file:./view.js",
-	"style": [ "vkbm-components", "file:./style-index.css" ],
+	"style": [
+		"vkbm-components",
+		"vkbm-shared-menu-card",
+		"file:./style-index.css"
+	],
 	"editorStyle": "file:./index.css"
 }

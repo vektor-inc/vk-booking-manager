@@ -50,6 +50,11 @@ class Lodging_Booking {
 	public const META_NIGHTS = '_vkbm_booking_nights';
 
 	/**
+	 * 宿泊者のチェックイン予定時刻（HH:MM）。客室の占有開始日時とは分けて保存する。
+	 */
+	public const META_ESTIMATED_CHECK_IN_TIME = '_vkbm_booking_estimated_check_in_time';
+
+	/**
 	 * 予約に保存する1泊あたりの合計（プランの料金＋客室の追加料金。部屋全体）のメタキー。
 	 *
 	 * すべての泊が同じ金額の予約にだけ保存する。泊ごとに金額が違う予約は META_NIGHT_BREAKDOWN を使う。
@@ -94,6 +99,18 @@ class Lodging_Booking {
 		}
 
 		return max( 0, (int) get_post_meta( $booking_id, self::META_NIGHTS, true ) );
+	}
+
+	/**
+	 * 泊の予約に保存したチェックイン予定時刻を返す。
+	 *
+	 * @param int $booking_id 予約の投稿 ID。
+	 * @return string HH:MM。未保存・不正値・時間枠の予約は空文字。
+	 */
+	public static function get_booking_estimated_check_in_time( int $booking_id ): string {
+		return self::is_stay_booking( $booking_id )
+			? Service_Menu_Post_Type::sanitize_time_value( get_post_meta( $booking_id, self::META_ESTIMATED_CHECK_IN_TIME, true ) )
+			: '';
 	}
 
 	/**
@@ -183,6 +200,7 @@ class Lodging_Booking {
 	 *
 	 * $args のキー:
 	 * - menu_id, resource_id（客室。必須）, check_in_date, check_out_date（Y-m-d）
+	 * - estimated_check_in_time（宿泊者の到着予定時刻。HH:MM。未指定の旧クライアントはプランの開始時刻）
 	 * - guests（人数）, guest_tiers（料金区分ごとの人数。区分のあるメニューでは人数はこちらから決まる）
 	 *   人数は resolve_guests() で決める（空き状況と同じ決め方）。解決した人数と区分の内訳は戻り値の guests / guest_tiers に入る。
 	 *
@@ -224,8 +242,17 @@ class Lodging_Booking {
 		// チェックイン・チェックアウトの日時（サイトのタイムゾーン）を作る。
 		$check_in_time  = Service_Menu_Post_Type::get_check_in_time( $menu_id );
 		$check_out_time = Service_Menu_Post_Type::get_check_out_time( $menu_id );
-		$check_in_at    = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $check_in_date . ' ' . $check_in_time, $timezone );
-		$check_out_at   = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $check_out_date . ' ' . $check_out_time, $timezone );
+		// 到着予定時刻を検証する。空室・締切の判定にはプランの開始時刻を使う。
+		$estimated_check_in_time = Service_Menu_Post_Type::sanitize_time_value( array_key_exists( 'estimated_check_in_time', $args ) ? $args['estimated_check_in_time'] : $check_in_time );
+		if ( '' === $estimated_check_in_time || $estimated_check_in_time < $check_in_time ) {
+			return new WP_Error(
+				'invalid_estimated_check_in_time',
+				__( 'Please enter a check-in time on or after the plan\'s check-in time.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
+			);
+		}
+		$check_in_at  = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $check_in_date . ' ' . $check_in_time, $timezone );
+		$check_out_at = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $check_out_date . ' ' . $check_out_time, $timezone );
 		if ( ! $check_in_at || ! $check_out_at || $check_out_at <= $check_in_at ) {
 			return new WP_Error( 'invalid_date_range', __( 'The check-out date must be after the check-in date.', 'vk-booking-manager' ), array( 'status' => 400 ) );
 		}
@@ -242,18 +269,19 @@ class Lodging_Booking {
 		}
 
 		return array(
-			'menu_id'          => $menu_id,
-			'room_id'          => $room_id,
-			'check_in_date'    => $check_in_date,
-			'check_out_date'   => $check_out_date,
-			'nights'           => $nights,
-			'check_in_at'      => $check_in_at->format( 'c' ),
-			'check_out_at'     => $check_out_at->format( 'c' ),
-			'check_in_stored'  => $check_in_at->format( 'Y-m-d H:i:s' ),
-			'check_out_stored' => $check_out_at->format( 'Y-m-d H:i:s' ),
-			'guests'           => $resolved['guests'],
-			'guest_tiers'      => $resolved['guest_tiers'],
-			'price'            => self::calculate_price( $menu_id, $room_id, $check_in_date, $nights, $resolved['guests'], $resolved['guest_tiers'] ),
+			'menu_id'                 => $menu_id,
+			'room_id'                 => $room_id,
+			'check_in_date'           => $check_in_date,
+			'check_out_date'          => $check_out_date,
+			'estimated_check_in_time' => $estimated_check_in_time,
+			'nights'                  => $nights,
+			'check_in_at'             => $check_in_at->format( 'c' ),
+			'check_out_at'            => $check_out_at->format( 'c' ),
+			'check_in_stored'         => $check_in_at->format( 'Y-m-d H:i:s' ),
+			'check_out_stored'        => $check_out_at->format( 'Y-m-d H:i:s' ),
+			'guests'                  => $resolved['guests'],
+			'guest_tiers'             => $resolved['guest_tiers'],
+			'price'                   => self::calculate_price( $menu_id, $room_id, $check_in_date, $nights, $resolved['guests'], $resolved['guest_tiers'] ),
 		);
 	}
 

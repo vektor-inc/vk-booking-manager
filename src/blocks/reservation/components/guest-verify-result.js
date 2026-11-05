@@ -248,7 +248,7 @@ export const getGuestVerifyResultView = (
  * 結果画面に出す予約内容（日時・メニュー・担当・人数）。確認画面のまとめと同じ見た目にする。
  *
  * @param {Object} props                 プロパティ。
- * @param {Object} props.booking         サーバーから渡された予約内容（startAt・endAt・timezone・menuName・resourceName・guests）。
+ * @param {Object} props.booking         サーバーから渡された予約内容（startAt・endAt・timezone・menuName・resourceName・guests・estimatedCheckInTime）。
  * @param {string} props.resourceLabel   担当の見出し（基本設定の実効値）。
  * @param {string} props.guestsLabel     人数の見出し（基本設定の実効値）。
  * @param {string} props.guestsUnitLabel 人数の単位。
@@ -272,6 +272,10 @@ export const GuestVerifyBookingSummary = ( {
 	const rows = [
 		{ label: __( 'Menu', 'vk-booking-manager' ), value: booking.menuName },
 		{ label: resourceLabel, value: booking.resourceName },
+		{
+			label: __( 'Estimated check-in time', 'vk-booking-manager' ),
+			value: booking.estimatedCheckInTime,
+		},
 		{
 			label: guestsLabel,
 			value:

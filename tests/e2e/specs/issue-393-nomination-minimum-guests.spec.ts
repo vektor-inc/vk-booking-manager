@@ -39,6 +39,7 @@
  * - REST 検証は既存 issue-392-nomination-slot-capacity.spec.ts と同じ手法で、
  *   POST /vkbm/v1/drafts の permission_callback が __return_true（認証不要）であることを利用する。
  */
+// @category スタッフ指名
 import { test, expect } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
 import {

@@ -1,3 +1,4 @@
+// @category スタッフ指名
 import { test, expect } from '@playwright/test';
 import { mkdirSync } from 'fs';
 import {

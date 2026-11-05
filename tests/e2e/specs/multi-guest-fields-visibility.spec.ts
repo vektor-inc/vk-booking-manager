@@ -20,6 +20,7 @@
  * - 指名OFF・複数人予約ON の設定とサービスメニューは beforeAll で用意し、
  *   afterAll で指名設定を元の状態へ復元する。
  */
+// @category 人数・定員・貸し切り
 import { test, expect, Page } from '@playwright/test';
 import {
 	wpCliArgs,

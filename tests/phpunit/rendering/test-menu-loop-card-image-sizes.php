@@ -16,6 +16,7 @@ namespace VKBookingManager\Tests\Frontend;
 
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_HTML_Tag_Processor;
 use WP_UnitTestCase;
 
@@ -166,6 +167,220 @@ class Menu_Loop_Card_Image_Sizes_Test extends WP_UnitTestCase {
 			$this->assertStringContainsString( 'attachment-large size-large ' . Menu_Loop_Block::CARD_IMAGE_CLASS, (string) $this->get_img_attribute( $case['html'], 'class' ), $case['test_condition_name'] );
 			// 中間サイズから srcset が生成されていることを確認する。
 			$this->assertStringContainsString( 'card-768x432.jpg 768w', (string) $this->get_img_attribute( $case['html'], 'srcset' ), $case['test_condition_name'] );
+		}
+	}
+
+	/** 予約一覧は既定の HTML を保ち、各画像比率だけをカードへ反映する。 */
+	public function test_get_selection_list(): void {
+		$menu_id = $this->create_menu_with_thumbnail();
+		delete_option( Settings_Repository::OPTION_KEY );
+		// 追加前と同じ属性で描画したカードとラッパーを期待値にする。
+		$card       = ( new Menu_Loop_Block() )->render_menu_card(
+			$menu_id,
+			array(
+				'showDetailButton'  => true,
+				'showReserveButton' => true,
+				'disableTitleLink'  => true,
+			)
+		);
+		$expected   = '<div class="vkbm-menu-loop vkbm-menu-loop--selection vkbm-menu-loop--mode-card"><div class="vkbm-menu-loop__list vkbm-menu-loop__list--card"><section class="vkbm-menu-loop__group vkbm-menu-loop__group--mode-card"><div class="vkbm-menu-loop__list vkbm-menu-loop__list--card">' . $card . '</div></section></div></div>';
+		$test_cases = array(
+			array(
+				'test_condition_name' => '未保存は従来と同じ HTML',
+				'settings'            => array(),
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => 'content は従来と同じ HTML',
+				'settings'            => array( 'reservation_menu_list_image_aspect_ratio' => 'content' ),
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '元のサイズのクラス',
+				'settings'            => array( 'reservation_menu_list_image_aspect_ratio' => 'original' ),
+				'expected'            => 'original',
+			),
+			array(
+				'test_condition_name' => '正方形のクラス',
+				'settings'            => array( 'reservation_menu_list_image_aspect_ratio' => '1-1' ),
+				'expected'            => '1-1',
+			),
+			array(
+				'test_condition_name' => '標準のクラス',
+				'settings'            => array( 'reservation_menu_list_image_aspect_ratio' => '4-3' ),
+				'expected'            => '4-3',
+			),
+			array(
+				'test_condition_name' => 'ワイドのクラス',
+				'settings'            => array( 'reservation_menu_list_image_aspect_ratio' => '16-9' ),
+				'expected'            => '16-9',
+			),
+			array(
+				'test_condition_name' => '不正値は従来と同じ HTML',
+				'settings'            => array( 'reservation_menu_list_image_aspect_ratio' => 'invalid' ),
+				'expected'            => '',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			update_option( Settings_Repository::OPTION_KEY, $case['settings'] );
+			$result = ( new Menu_Loop_Block() )->get_selection_list();
+			$this->assertSame( array( $menu_id ), $result['menu_ids'], $case['test_condition_name'] );
+			if ( '' === $case['expected'] ) {
+				$this->assertSame( $expected, $result['html'], $case['test_condition_name'] );
+			} else {
+				$this->assertStringContainsString( 'vkbm-menu-loop__card-media--ratio-' . $case['expected'], $result['html'], $case['test_condition_name'] );
+			}
+		}
+		delete_option( Settings_Repository::OPTION_KEY );
+	}
+
+	/**
+	 * 画像比率の属性未保存・既定値・各比率・画像非表示の出力を確認する。
+	 */
+	public function test_render_menu_card_image_aspect_ratio(): void {
+		$menu_id = $this->create_menu_with_thumbnail();
+		$default = $this->block->render_menu_card( $menu_id );
+		$this->assertStringContainsString( '<div class="vkbm-menu-loop__card-media">', $default );
+		$this->assertStringNotContainsString( 'card-media--ratio-', $default );
+
+		// 保存済みのブロックコメントも、現在の属性定義を通して描画する。
+		$loop_default = do_blocks( '<!-- wp:vk-booking-manager/menu-loop {"loopId":"image-ratio-test"} /-->' );
+		$this->assertStringContainsString( '<div class="vkbm-menu-loop__card-media">', $loop_default );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '属性未保存 => 追加クラスなし',
+				'attributes'          => array(),
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '本文の高さに合わせる => 追加クラスなし',
+				'attributes'          => array( 'imageAspectRatio' => 'content' ),
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '元のサイズ => original クラス',
+				'attributes'          => array( 'imageAspectRatio' => 'original' ),
+				'expected'            => 'original',
+			),
+			array(
+				'test_condition_name' => '正方形 => 1-1 クラス',
+				'attributes'          => array( 'imageAspectRatio' => '1-1' ),
+				'expected'            => '1-1',
+			),
+			array(
+				'test_condition_name' => '標準 => 4-3 クラス',
+				'attributes'          => array( 'imageAspectRatio' => '4-3' ),
+				'expected'            => '4-3',
+			),
+			array(
+				'test_condition_name' => 'ワイド => 16-9 クラス',
+				'attributes'          => array( 'imageAspectRatio' => '16-9' ),
+				'expected'            => '16-9',
+			),
+			array(
+				'test_condition_name' => '不正な値 => 追加クラスなし',
+				'attributes'          => array( 'imageAspectRatio' => 'invalid" onclick="alert(1)' ),
+				'expected'            => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$html = $this->block->render_menu_card( $menu_id, $case['attributes'] );
+			$loop = do_blocks( '<!-- wp:vk-booking-manager/menu-loop ' . wp_json_encode( array_merge( array( 'loopId' => 'image-ratio-test' ), $case['attributes'] ) ) . ' /-->' );
+			// 比率クラス以外の HTML は、属性未保存のカードと完全に一致する。
+			if ( '' === $case['expected'] ) {
+				$this->assertSame( $default, $html, $case['test_condition_name'] );
+				$this->assertSame( $loop_default, $loop, $case['test_condition_name'] );
+			} else {
+				$ratio_class = ' vkbm-menu-loop__card-media--ratio-' . $case['expected'];
+				$this->assertStringContainsString( $ratio_class . '"', $html, $case['test_condition_name'] );
+				$this->assertSame( $default, str_replace( $ratio_class, '', $html ), $case['test_condition_name'] );
+				$this->assertStringContainsString( $ratio_class . '"', $loop, $case['test_condition_name'] );
+				$this->assertSame( $loop_default, str_replace( $ratio_class, '', $loop ), $case['test_condition_name'] );
+			}
+		}
+
+		// 画像非表示やテキスト表示では比率を指定しても画像枠を出さない。
+		foreach ( array( array( 'showImage' => false ), array( 'displayMode' => 'text' ) ) as $attributes ) {
+			$html = $this->block->render_menu_card( $menu_id, array_merge( $attributes, array( 'imageAspectRatio' => '1-1' ) ) );
+			$this->assertStringNotContainsString( 'vkbm-menu-loop__card-media', $html );
+		}
+	}
+
+	/**
+	 * 全体がテキスト表示でも、グループ設定でカード表示になる画像に比率を適用する。
+	 */
+	public function test_render_group_image_aspect_ratio(): void {
+		$menu_id = $this->create_menu_with_thumbnail();
+		$term_id = $this->factory()->term->create( array( 'taxonomy' => Service_Menu_Post_Type::TAXONOMY_GROUP ) );
+		wp_set_object_terms( $menu_id, array( $term_id ), Service_Menu_Post_Type::TAXONOMY_GROUP );
+
+		// グループ設定の適用条件と、画像非表示時の境界を確認する。
+		$test_cases = array(
+			array(
+				'test_condition_name' => '全グループ・グループはカード => 比率クラスあり',
+				'attributes'          => array( 'groupFilterMode' => 'all' ),
+				'group_display_mode'  => 'card',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => 'グループ指定属性なし・グループはカード => 比率クラスあり',
+				'attributes'          => array(),
+				'group_display_mode'  => 'card',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '指定グループ・グループはカード => 上書きされず比率クラスなし',
+				'attributes'          => array(
+					'groupFilterMode'  => 'selected',
+					'selectedGroupIds' => array( $term_id ),
+				),
+				'group_display_mode'  => 'card',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '全グループ・グループは継承 => 比率クラスなし',
+				'attributes'          => array( 'groupFilterMode' => 'all' ),
+				'group_display_mode'  => 'inherit',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '全グループ・グループはテキスト => 比率クラスなし',
+				'attributes'          => array( 'groupFilterMode' => 'all' ),
+				'group_display_mode'  => 'text',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '全グループ・グループはカード・画像非表示 => 比率クラスなし',
+				'attributes'          => array(
+					'groupFilterMode' => 'all',
+					'showImage'       => false,
+				),
+				'group_display_mode'  => 'card',
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			update_term_meta( $term_id, 'vkbm_menu_group_display_mode', $case['group_display_mode'] );
+			$attributes = array_merge(
+				array(
+					'loopId'           => 'group-image-ratio-test',
+					'displayMode'      => 'text',
+					'imageAspectRatio' => '4-3',
+				),
+				$case['attributes']
+			);
+			$html       = do_blocks( '<!-- wp:vk-booking-manager/menu-loop ' . wp_json_encode( $attributes ) . ' /-->' );
+
+			// 空の描画を成功扱いにせず、対象メニューが描画されたうえで比率クラスを検証する。
+			$this->assertStringContainsString( 'data-menu-id="' . $menu_id . '"', $html, $case['test_condition_name'] );
+			if ( $case['expected'] ) {
+				$this->assertStringContainsString( 'vkbm-menu-loop__card-media--ratio-4-3', $html, $case['test_condition_name'] );
+			} else {
+				$this->assertStringNotContainsString( 'card-media--ratio-', $html, $case['test_condition_name'] );
+			}
 		}
 	}
 

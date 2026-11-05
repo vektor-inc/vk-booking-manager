@@ -6,6 +6,7 @@
  * 決まるため、ブラウザ時計だけを変えて旧来の RED を期待すると実際の今月になる（#766）。
  * UTC・Asia/Tokyo のどちらでもサイト日付の月を表示し、空き日を選べることを検証する。
  */
+// @category 予約画面・カレンダー
 import { test, expect, Browser } from '@playwright/test';
 import {
 	wpCliArgs,

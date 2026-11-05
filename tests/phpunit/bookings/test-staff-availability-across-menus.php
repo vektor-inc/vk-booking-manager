@@ -53,6 +53,8 @@ class Staff_Availability_Across_Menus_Test extends WP_UnitTestCase {
 		$settings                          = $repository->get_settings();
 		$settings['staff_enabled']         = false;
 		$settings['slot_capacity_enabled'] = true;
+		// 来年12月の担当者競合を、受付上限とは分けて検証する。
+		$settings['provider_max_advance_booking_days'] = 0;
 		update_option( Settings_Repository::OPTION_KEY, $settings );
 		Staff_Editor::clear_nomination_enabled_cache();
 	}

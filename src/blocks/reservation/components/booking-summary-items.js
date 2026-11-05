@@ -107,6 +107,19 @@ export const BookingSummaryItems = ( {
 							</dd>
 						</dl>
 					) ) }
+			{ isStayBooking && booking.estimated_check_in_time && (
+				<dl className="vkbm-confirm__summary-item">
+					<dt className="vkbm-confirm__summary-item-title">
+						{ __(
+							'Estimated check-in time',
+							'vk-booking-manager'
+						) }
+					</dt>
+					<dd className="vkbm-confirm__summary-item-value">
+						{ booking.estimated_check_in_time }
+					</dd>
+				</dl>
+			) }
 			{ /* 泊の予約: 泊数を表示する（時間枠の予約には nights が無いため出ない）。 */ }
 			{ Number( booking?.nights ) > 0 && (
 				<dl className="vkbm-confirm__summary-item">
