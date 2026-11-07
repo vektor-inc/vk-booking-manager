@@ -13,6 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Customer_Address;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_Error;
@@ -119,6 +121,7 @@ class Current_User_Controller extends WP_REST_Controller {
 
 		return new WP_REST_Response(
 			array(
+				'address_full'            => Industry_Presets::supports( 'lodging' ) && ! current_user_can( Capabilities::MANAGE_RESERVATIONS ) ? (string) get_user_meta( get_current_user_id(), Customer_Address::USER_META, true ) : '',
 				'can_manage_reservations' => current_user_can( Capabilities::MANAGE_RESERVATIONS ),
 				'shift_dashboard_url'     => admin_url( 'admin.php?page=vkbm-shift-dashboard' ),
 				// BM 設定画面を開ける権限（MANAGE_PROVIDER_SETTINGS）が無いユーザーには URL を渡さない。

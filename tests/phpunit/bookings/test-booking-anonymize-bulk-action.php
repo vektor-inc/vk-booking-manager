@@ -73,6 +73,7 @@ class Booking_Anonymize_Bulk_Action_Test extends WP_UnitTestCase {
 		update_post_meta( $booking_id, '_vkbm_booking_status', 'confirmed' );
 		update_post_meta( $booking_id, '_vkbm_booking_customer_name', '山田太郎' );
 		update_post_meta( $booking_id, '_vkbm_booking_customer_email', 'taro@example.com' );
+		update_post_meta( $booking_id, '_vkbm_booking_customer_address_full', '東京都1-2' );
 		if ( '' !== $end_modifier ) {
 			update_post_meta( $booking_id, '_vkbm_booking_service_end', $this->relative_datetime( $end_modifier ) );
 		}
@@ -163,9 +164,13 @@ class Booking_Anonymize_Bulk_Action_Test extends WP_UnitTestCase {
 		// 実際の中身: 終了済みだけが匿名化され、他は変わらない。
 		$this->assertTrue( Booking_Anonymizer::is_anonymized( $ended_1 ) );
 		$this->assertTrue( Booking_Anonymizer::is_anonymized( $ended_2 ) );
+		foreach ( array( $ended_1, $ended_2 ) as $id ) {
+			$this->assertSame( '', get_post_meta( $id, '_vkbm_booking_customer_address_full', true ) );
+		}
 		foreach ( array( $not_ended_1, $not_ended_2, $no_datetime ) as $booking_id ) {
 			$this->assertFalse( Booking_Anonymizer::is_anonymized( $booking_id ) );
 			$this->assertSame( '山田太郎', get_post_meta( $booking_id, '_vkbm_booking_customer_name', true ) );
+			$this->assertSame( '東京都1-2', get_post_meta( $booking_id, '_vkbm_booking_customer_address_full', true ) );
 		}
 	}
 

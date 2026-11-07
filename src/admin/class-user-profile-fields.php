@@ -14,6 +14,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Customer_Address;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Auth\Auth_Shortcodes;
 use VKBookingManager\Auth\Email_Verification;
@@ -50,6 +52,7 @@ class User_Profile_Fields {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'show_user_profile', array( $this, 'render_fields' ) );
 		add_action( 'edit_user_profile', array( $this, 'render_fields' ) );
+		add_action( 'user_profile_update_errors', array( $this, 'validate_address' ) );
 		add_action( 'personal_options_update', array( $this, 'save_fields' ) );
 		add_action( 'edit_user_profile_update', array( $this, 'save_fields' ) );
 		add_filter( 'manage_users_columns', array( $this, 'register_verification_column' ) );
@@ -86,6 +89,11 @@ class User_Profile_Fields {
 		$phone = (string) get_user_meta( $user->ID, 'phone_number', true );
 		$birth = (string) get_user_meta( $user->ID, 'vkbm_birth_date', true );
 
+		$address = (string) get_user_meta( $user->ID, Customer_Address::USER_META, true );
+		// WordPress が入力エラーで再表示する場合も、訂正中の住所を保持する。
+		if ( isset( $_POST['vkbm_user_address'] ) && is_string( $_POST['vkbm_user_address'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			$address = sanitize_text_field( wp_unslash( $_POST['vkbm_user_address'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		}
 		$birth_parts = $this->resolve_birth_parts( $birth );
 		?>
 		<h2><?php esc_html_e( 'Reservation system information', 'vk-booking-manager' ); ?></h2>
@@ -141,6 +149,15 @@ class User_Profile_Fields {
 					<?php echo esc_html_x( 'day', 'date unit', 'vk-booking-manager' ); ?>
 				</td>
 			</tr>
+			<?php if ( Industry_Presets::supports( 'lodging' ) ) : ?>
+			<tr>
+				<th><label for="vkbm-user-address"><?php esc_html_e( 'Address (optional)', 'vk-booking-manager' ); ?></label></th>
+				<td>
+					<input type="text" class="regular-text" name="vkbm_user_address" id="vkbm-user-address" value="<?php echo esc_attr( $address ); ?>" aria-describedby="vkbm-user-address-help" autocomplete="street-address">
+					<p class="description" id="vkbm-user-address-help"><?php esc_html_e( 'Please enter your domestic or international address in 255 characters or fewer.', 'vk-booking-manager' ); ?></p>
+				</td>
+			</tr>
+			<?php endif; ?>
 		</table>
 		<?php
 		$this->render_email_verification_section( $user );
@@ -291,6 +308,13 @@ class User_Profile_Fields {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce verification is handled by WordPress core hooks (edit_user_profile_update/personal_options_update).
 		$raw = wp_unslash( $_POST );
 
+		// 宿泊プロフィールの任意住所を検証し、保存用の文字列だけを反映する。
+		if ( Industry_Presets::supports( 'lodging' ) && array_key_exists( 'vkbm_user_address', $raw ) ) {
+			$address = Customer_Address::sanitize_and_validate( $raw['vkbm_user_address'] );
+			if ( ! is_wp_error( $address ) ) {
+				$this->update_user_meta_value( $user_id, Customer_Address::USER_META, wp_slash( $address ) );
+			}
+		}
 		$kana      = sanitize_text_field( $raw['vkbm_user_kana'] ?? '' );
 		$phone_raw = sanitize_text_field( $raw['vkbm_user_phone'] ?? '' );
 		$phone     = VKBM_Helper::normalize_phone_number( $phone_raw );
@@ -304,6 +328,23 @@ class User_Profile_Fields {
 		$this->update_user_meta_value( $user_id, 'vkbm_birth_date', $birth );
 
 		$this->save_email_verification_fields( $user_id, $raw );
+	}
+
+	/**
+	 * WordPress のプロフィール更新前に住所の長さを検証する。
+	 *
+	 * @param \WP_Error $errors 更新エラー。
+	 * @return void
+	 */
+	public function validate_address( \WP_Error $errors ): void {
+		// nonce と権限は WordPress のプロフィール更新処理が確認する。
+		if ( ! Industry_Presets::supports( 'lodging' ) || ! isset( $_POST['vkbm_user_address'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return;
+		}
+		$address = Customer_Address::sanitize_and_validate( wp_unslash( $_POST['vkbm_user_address'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_and_validate() で検証とサニタイズを行う。
+		if ( is_wp_error( $address ) ) {
+			$errors->add( $address->get_error_code(), $address->get_error_message() );
+		}
 	}
 
 	/**

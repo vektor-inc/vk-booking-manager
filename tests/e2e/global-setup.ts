@@ -1,3 +1,6 @@
+import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
+import path from 'path';
 import { configureProviderSettings } from './utils/setup';
 import {
 	wpCliArgs,
@@ -16,7 +19,7 @@ import {
  * 以下の処理を実行:
  * - プラグインの有効化
  * - 日本語ロケールのインストール・切り替え
- * - テーマの切り替え（Twenty Twenty-One）
+ * - テーマの切り替え（X-T9）
  * - パーマリンク設定
  * - 既存テストデータのクリーンアップ
  * - スタッフ・シフト・サービスメニュー・予約ページの作成
@@ -25,6 +28,36 @@ import {
  */
 async function globalSetup() {
 	console.log( '=== Global Setup: Starting ===' );
+
+	// build/ は Git 管理外のため、新しい worktree には存在しない。
+	// 未ビルドでもプラグインの有効化は成功するが、予約ブロックは登録されず本文が空になる。
+	// CI のビルド済み環境はそのまま使い、ローカルでは不足するアセットを有効化前に生成する。
+	const pluginRoot = path.resolve( __dirname, '../..' );
+	const assetBuilds = [
+		{
+			script: 'build:js',
+			files: [
+				'build/blocks/reservation/block.json',
+				'build/blocks/reservation/view.js',
+			],
+		},
+		{
+			script: 'build:css',
+			files: [ 'build/assets/css/vkbm-components.min.css' ],
+		},
+	];
+	for ( const { script, files } of assetBuilds ) {
+		if (
+			files.some(
+				( file ) => ! existsSync( path.join( pluginRoot, file ) )
+			)
+		) {
+			execFileSync( 'npm', [ 'run', script ], {
+				cwd: pluginRoot,
+				stdio: 'inherit',
+			} );
+		}
+	}
 
 	// プラグインを有効化（失敗時は後続処理が全て壊れるため即時停止）
 	// Activate the plugin (fail-fast: subsequent steps depend on the plugin)
@@ -81,13 +114,12 @@ async function globalSetup() {
 		);
 	}
 
-	// テスト安定化のためテーマを Twenty Twenty-One に切り替え（失敗時は即時停止）
-	// Switch theme to Twenty Twenty-One for stable testing (fail-fast)
+	// テスト安定化のためテーマを X-T9 に切り替え（失敗時は即時停止）
 	try {
-		wpCliArgs( [ 'theme', 'install', 'twentytwentyone', '--activate' ], {
+		wpCliArgs( [ 'theme', 'install', 'x-t9', '--activate' ], {
 			stdio: 'ignore',
 		} );
-		console.log( 'Theme set to twentytwentyone' );
+		console.log( 'Theme set to X-T9 (x-t9)' );
 	} catch ( e: any ) {
 		throw new Error(
 			`Theme installation failed — aborting global setup: ${ e.message }`

@@ -176,6 +176,7 @@ class Settings_Repository {
 			// 未保存時は既定の0（無効）が適用されるため、導入前の既存サイトの挙動は変わらない。
 			'shift_auto_register_months'                 => 0,
 			'booking_auto_anonymize_months'              => 0,
+			'lodging_address_required'                   => true,
 			'booking_reminder_hours'                     => array(),
 			// プラグイン削除時の片付け。既定は「残す（Google連携情報は削除）」。
 			// 既存のサイトが何も変えずにプラグインを削除したとき、予約データが消えないようにするため。

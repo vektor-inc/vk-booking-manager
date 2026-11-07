@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.10.0
+ * Version:     3.11.0
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
@@ -61,6 +61,7 @@ require_once __DIR__ . '/src/bookings/class-customer-booking-limit.php';
 require_once __DIR__ . '/src/bookings/class-booking-source.php';
 require_once __DIR__ . '/src/bookings/class-reserver-search.php';
 require_once __DIR__ . '/src/bookings/class-booking-anonymizer.php';
+require_once __DIR__ . '/src/bookings/class-booking-user-deletion.php';
 require_once __DIR__ . '/src/bookings/class-booking-privacy-eraser.php';
 require_once __DIR__ . '/src/bookings/class-booking-anonymize-bulk-action.php';
 require_once __DIR__ . '/src/bookings/class-booking-admin.php';
@@ -383,6 +384,7 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// 予約一覧の一括操作「個人情報を匿名化」を登録する（無料版・Pro 版とも。issue #870）。
 		// 匿名化の処理本体は共有のディスパッチャーを渡し、Google カレンダーの予定も匿名化した値で上書きさせる。
 		Booking_Anonymizer::register();
+		( new \VKBookingManager\Bookings\Booking_User_Deletion( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();
 		\VKBookingManager\Bookings\Booking_Source::register();
 		( new Booking_Anonymize_Bulk_Action( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();
 		( new Booking_Privacy_Eraser( new Booking_Anonymizer( $booking_event_dispatcher ) ) )->register();

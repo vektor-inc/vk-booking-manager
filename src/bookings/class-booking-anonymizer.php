@@ -64,6 +64,9 @@ class Booking_Anonymizer {
 	/** 自動匿名化の設定による匿名化。 */
 	public const ANONYMIZED_BY_AUTO = 'auto';
 
+	/** ユーザー削除の指定による匿名化。 */
+	public const ANONYMIZED_BY_USER_DELETION = 'user_deletion';
+
 	/**
 	 * 匿名化できた。
 	 */
@@ -190,6 +193,10 @@ class Booking_Anonymizer {
 				'label' => __( 'telephone number', 'vk-booking-manager' ),
 				'value' => '',
 			),
+			'_vkbm_booking_customer_address_full'   => array(
+				'label' => __( 'Address', 'vk-booking-manager' ),
+				'value' => '',
+			),
 			'_vkbm_booking_customer_email'          => array(
 				'label' => __( 'email address', 'vk-booking-manager' ),
 				'value' => '',
@@ -287,7 +294,7 @@ class Booking_Anonymizer {
 	public static function get_anonymized_by( int $booking_id ): string {
 		$value = (string) get_post_meta( $booking_id, self::META_ANONYMIZED_BY, true );
 
-		return in_array( $value, array( self::ANONYMIZED_BY_BULK, self::ANONYMIZED_BY_PRIVACY_REQUEST, self::ANONYMIZED_BY_AUTO ), true ) ? $value : '';
+		return in_array( $value, array( self::ANONYMIZED_BY_BULK, self::ANONYMIZED_BY_PRIVACY_REQUEST, self::ANONYMIZED_BY_AUTO, self::ANONYMIZED_BY_USER_DELETION ), true ) ? $value : '';
 	}
 
 	/**
@@ -332,6 +339,18 @@ class Booking_Anonymizer {
 			return self::RESULT_INVALID;
 		}
 
+		return self::check_booking_metadata( $booking_id );
+	}
+
+	/**
+	 * 予約と確認済みの ID について、日時と印だけで匿名化の可否を判定する。
+	 *
+	 * 確認画面の集計は投稿本文を読む必要がないため、投稿タイプの確認とメタの判定を分ける。
+	 *
+	 * @param int $booking_id 予約の投稿 ID。
+	 * @return string 匿名化の可否。
+	 */
+	public static function check_booking_metadata( int $booking_id ): string {
 		if ( self::is_anonymized( $booking_id ) ) {
 			return self::RESULT_ALREADY_ANONYMIZED;
 		}
@@ -405,7 +424,7 @@ class Booking_Anonymizer {
 		}
 
 		// 許可した値だけを保存し、既存の呼び出し元と不正値は一括操作として記録する。
-		if ( ! in_array( $anonymized_by, array( self::ANONYMIZED_BY_BULK, self::ANONYMIZED_BY_PRIVACY_REQUEST, self::ANONYMIZED_BY_AUTO ), true ) ) {
+		if ( ! in_array( $anonymized_by, array( self::ANONYMIZED_BY_BULK, self::ANONYMIZED_BY_PRIVACY_REQUEST, self::ANONYMIZED_BY_AUTO, self::ANONYMIZED_BY_USER_DELETION ), true ) ) {
 			$anonymized_by = self::ANONYMIZED_BY_BULK;
 		}
 		update_post_meta( $booking_id, self::META_ANONYMIZED_BY, $anonymized_by );

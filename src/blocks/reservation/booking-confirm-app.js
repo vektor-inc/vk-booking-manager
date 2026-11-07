@@ -50,6 +50,11 @@ import {
 	GuestContactFields,
 	GuestLoginPrompt,
 } from './components/guest-contact-fields';
+import { useCustomerAddress } from './hooks/use-customer-address';
+import {
+	CustomerAddressField,
+	validateCustomerAddress,
+} from './components/customer-address-field';
 import { GuestVerificationSent } from './components/guest-verification-sent';
 import {
 	BOOKING_CUSTOMER_MODE,
@@ -134,7 +139,7 @@ export const BookingConfirmApp = ( {
 	isEditor = false,
 	// issue #512: サーバー側（render_block フィルタ）が同一リクエスト内で判明した
 	// ログイン失敗コードを wrapper の data-vkbm-login-error に埋め込み、view.js 経由で
-	// ここまで渡す。初回の auth-form 取得時だけ REST の error パラメータとして送る。
+	// ここまで渡す。初回の auth-form 取得時だけ REST の login_error パラメータとして送る。
 	initialLoginError = '',
 	// issue #512 植草指摘（ちらつき対策）: 上記コードに対応する、サーバー側フォール
 	// バックが既に表示していたエラー文そのもの。REST 応答が届くまでの間、同じ文言を
@@ -189,6 +194,30 @@ export const BookingConfirmApp = ( {
 	const [ customerNameFocusRequest, setCustomerNameFocusRequest ] =
 		useState( 0 );
 	const [ customerPhone, setCustomerPhone ] = useState( '' );
+	const [ currentUser, setCurrentUser ] = useState( null );
+	const currentUserRequest = useRef( null );
+	const { address: customerAddress, setAddress: setCustomerAddress } =
+		useCustomerAddress( {
+			enabled:
+				resolveLoginState( { userBootstrap, isEditor } ) &&
+				Boolean( draft?.lodging ),
+			isProxy: Boolean( currentUser?.can_manage_reservations ),
+			currentUser,
+		} );
+	const addressRef = useRef( null );
+	const [ addressError, setAddressError ] = useState( '' );
+	const [ addressRequired, setAddressRequired ] = useState( true );
+
+	// 保存住所の自動入力でも、解消した入力エラーを取り除く。
+	useEffect( () => {
+		if (
+			addressError &&
+			! validateCustomerAddress( customerAddress, addressRequired )
+		) {
+			setAddressError( '' );
+		}
+	}, [ customerAddress, addressRequired, addressError ] );
+
 	const [ providerNote, setProviderNote ] = useState( '' );
 	const [ paymentMethod, setPaymentMethod ] = useState( 'onsite' );
 	const [ canManageReservations, setCanManageReservations ] = useState(
@@ -681,6 +710,9 @@ export const BookingConfirmApp = ( {
 						response.reservation_page_url
 					);
 				}
+				setAddressRequired(
+					response?.lodging_address_required !== false
+				);
 				setBookingCustomerMode(
 					normalizeBookingCustomerMode(
 						response?.booking_customer_mode
@@ -729,6 +761,8 @@ export const BookingConfirmApp = ( {
 		let isMounted = true;
 
 		if ( ! isLoggedIn ) {
+			currentUserRequest.current = null;
+			setCurrentUser( null );
 			setCanManageReservations( false );
 			setLogoutUrl( '' );
 			setShiftDashboardUrl( '' );
@@ -750,9 +784,11 @@ export const BookingConfirmApp = ( {
 			setLogoutUrl( userBootstrap.logoutUrl || '' );
 			setShiftDashboardUrl( userBootstrap.shiftDashboardUrl || '' );
 			setSettingsUrl( userBootstrap.settingsUrl || '' );
-			return () => {
-				isMounted = false;
-			};
+			if ( ! draft?.lodging || userBootstrap.canManageReservations ) {
+				return () => {
+					isMounted = false;
+				};
+			}
 		}
 
 		const currentUrl = getCurrentUrl();
@@ -760,12 +796,19 @@ export const BookingConfirmApp = ( {
 			redirect: currentUrl || undefined,
 		} );
 
-		apiFetch( { path } )
+		// 住所は本人情報 API から取得し、既存の取得と共有する。
+		if ( ! currentUserRequest.current ) {
+			currentUserRequest.current = apiFetch( { path } );
+		}
+		const request = currentUserRequest.current;
+		request
 			.then( ( response ) => {
 				if ( ! isMounted ) {
 					return;
 				}
 
+				// 権限と住所は同じ取得結果を共有する。
+				setCurrentUser( response );
 				setCanManageReservations(
 					Boolean( response?.can_manage_reservations )
 				);
@@ -774,7 +817,15 @@ export const BookingConfirmApp = ( {
 				setSettingsUrl( response?.settings_url || '' );
 			} )
 			.catch( () => {
+				// 失敗した取得だけを解除し、effect の再実行で再取得できるようにする。
+				if ( currentUserRequest.current === request ) {
+					currentUserRequest.current = null;
+				}
 				if ( isMounted ) {
+					setCurrentUser( null );
+					if ( userBootstrap ) {
+						return;
+					}
 					setCanManageReservations( false );
 					setLogoutUrl( '' );
 					setShiftDashboardUrl( '' );
@@ -785,7 +836,7 @@ export const BookingConfirmApp = ( {
 		return () => {
 			isMounted = false;
 		};
-	}, [ isLoggedIn ] );
+	}, [ isLoggedIn, Boolean( draft?.lodging ) ] );
 
 	useEffect( () => {
 		if ( ! canManageReservations ) {
@@ -920,7 +971,7 @@ export const BookingConfirmApp = ( {
 		}
 
 		// issue #512 植草指摘（ちらつき対策）: サーバー側フォールバックのエラー文を
-		// 初回の auth-form 取得中は消さない（=まだ error パラメータを送っておらず、
+		// 初回の auth-form 取得中は消さない（=まだ login_error パラメータを送っておらず、
 		// かつ引き継いだ初期エラー文がある場合だけ）。それ以外（モード切替の再取得等）
 		// は従来どおり毎回クリアする。
 		const includeInitialLoginError =
@@ -952,7 +1003,7 @@ export const BookingConfirmApp = ( {
 			// issue #512: サーバーで判明したログイン失敗コードは、初回の auth-form
 			// 取得時だけ渡す。モード切替等での再取得では渡さない。
 			if ( includeInitialLoginError ) {
-				params.set( 'error', initialLoginError );
+				params.set( 'login_error', initialLoginError );
 			}
 		} else if ( authMode === 'register' ) {
 			params.set( 'login_url', buildModeUrl( 'login' ) );
@@ -1215,6 +1266,23 @@ export const BookingConfirmApp = ( {
 		window.setTimeout( () => target.current?.focus(), 0 );
 	};
 
+	const validateAddress = () => {
+		if ( draft?.lodging ) {
+			const error = validateCustomerAddress(
+				customerAddress,
+				addressRequired
+			);
+			setAddressError( error );
+			if ( error ) {
+				setSubmitError( '' );
+				addressRef.current?.focus();
+				return false;
+			}
+		}
+
+		return true;
+	};
+
 	// 会員登録せずに予約する申し込みを送る。確認メールのリンクを開くまで、予約は作られない。
 	const handleGuestSubmit = async ( agreement ) => {
 		// 入力の検査（お名前・メールアドレス・電話番号はすべて必須）。
@@ -1225,12 +1293,19 @@ export const BookingConfirmApp = ( {
 			return;
 		}
 
+		if ( ! validateAddress() ) {
+			return;
+		}
+
 		setSubmitting( true );
 		setSubmitError( '' );
 
 		try {
 			const response = await postGuestBooking(
 				buildGuestBookingPayload( {
+					customerAddress: draft?.lodging
+						? customerAddress
+						: undefined,
 					draftToken,
 					contact: guestContact,
 					honeypot: guestHoneypot,
@@ -1362,6 +1437,9 @@ export const BookingConfirmApp = ( {
 			return;
 		}
 		setCustomerNameError( '' );
+		if ( ! validateAddress() ) {
+			return;
+		}
 
 		setSubmitting( true );
 		setSubmitError( '' );
@@ -1380,6 +1458,9 @@ export const BookingConfirmApp = ( {
 				: true,
 		};
 
+		if ( draft?.lodging ) {
+			payload.customer_address_full = customerAddress;
+		}
 		if ( canManageReservations ) {
 			payload.customer_name = customerName;
 			payload.customer_phone = customerPhone;
@@ -1687,6 +1768,31 @@ export const BookingConfirmApp = ( {
 	const showSuccessMessage = success && ! redirectUrl;
 	// 予約の完了後、または確認メールの送信後は、入力欄を読み取り専用にする。
 	const isFormLocked = showSuccessMessage || Boolean( guestSent );
+
+	const renderCustomerAddressField = ( inGroup = false ) => {
+		if (
+			! isLodgingDraft ||
+			guestSent ||
+			! ( isLoggedIn || showGuestForm )
+		) {
+			return null;
+		}
+		return (
+			<CustomerAddressField
+				value={ customerAddress }
+				required={ addressRequired }
+				readOnly={ isFormLocked }
+				error={ addressError }
+				inputRef={ addressRef }
+				inGroup={ inGroup }
+				isOwnBooking={ isLoggedIn && ! canManageReservations }
+				onChange={ ( value ) => {
+					setCustomerAddress( value );
+					setAddressError( '' );
+				} }
+			/>
+		);
+	};
 
 	const renderMemoField = () => {
 		// バックエンド (Booking_Draft_Controller::resolve_memo_max_length) と
@@ -2003,6 +2109,7 @@ export const BookingConfirmApp = ( {
 			? providerPaymentMethod
 			: '';
 	const canSubmit =
+		( ! draft?.lodging || providerSettingsSettled ) &&
 		( isLoggedIn || showGuestForm ) &&
 		! guestSent &&
 		! attendeeStale &&
@@ -2601,6 +2708,9 @@ export const BookingConfirmApp = ( {
 								/>
 							) }
 							<GuestContactFields
+								addressField={ renderCustomerAddressField(
+									true
+								) }
 								values={ guestContact }
 								errors={ guestErrors }
 								inputRefs={ {
@@ -2713,6 +2823,10 @@ export const BookingConfirmApp = ( {
 							: renderAttendeeNameField() ) }
 					{ renderAttendeeStatus() }
 
+					{ ! showGuestForm &&
+						! canManageReservations &&
+						renderCustomerAddressField() }
+
 					<div className="vkbm-confirm__form">
 						<label htmlFor="vkbm-confirm-memo">
 							{ __( 'Requests/Notes', 'vk-booking-manager' ) }
@@ -2792,6 +2906,7 @@ export const BookingConfirmApp = ( {
 									) }
 								/>
 							</div>
+							{ renderCustomerAddressField( true ) }
 							{ attendeeStale && attendeeRosterActive && (
 								<div className="vkbm-confirm__admin-field">
 									{ renderAttendeeLoading() }

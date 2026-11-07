@@ -75,6 +75,7 @@ class Booking_Anonymizer_Test extends WP_UnitTestCase {
 				'_vkbm_booking_customer_name'      => '山田太郎',
 				'_vkbm_booking_customer_tel'       => '09012345678',
 				'_vkbm_booking_customer_email'     => 'taro@example.com',
+				'_vkbm_booking_customer_address_full' => '東京都1-2',
 				'_vkbm_booking_note'               => 'アレルギーがあります',
 				'_vkbm_booking_internal_note'      => '常連のお客様',
 				'_vkbm_booking_resource_id'        => '123',
@@ -316,6 +317,7 @@ class Booking_Anonymizer_Test extends WP_UnitTestCase {
 			'_vkbm_booking_customer_name'  => Booking_Anonymizer::get_deleted_label(),
 			'_vkbm_booking_customer_tel'   => '',
 			'_vkbm_booking_customer_email' => '',
+			'_vkbm_booking_customer_address_full' => '',
 			'_vkbm_booking_note'           => '',
 			'_vkbm_booking_internal_note'  => '',
 		);
@@ -594,20 +596,17 @@ class Booking_Anonymizer_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 参考: 匿名化していない予約は、お客様のユーザーを wp_delete_user（再割り当てなし）で消すと一緒に消える。
-	 *
-	 * 予約の投稿タイプは author をサポートし、delete_with_user を指定していない（null）ため、
-	 * WordPress 本体がユーザーと一緒に投稿を削除する（親 issue #869 の懸念の確認）。
+	 * 指定なしでユーザーを削除しても、予約と個人情報を残す。
 	 */
-	public function test_not_anonymized_booking_is_deleted_with_wp_delete_user(): void {
+	public function test_not_anonymized_booking_survives_wp_delete_user(): void {
 		require_once ABSPATH . 'wp-admin/includes/user.php';
-
 		$customer_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
 		$booking_id  = $this->create_booking( array(), $customer_id );
-
 		wp_delete_user( $customer_id );
-
-		$this->assertNull( get_post( $booking_id ), '匿名化していない予約は、再割り当てなしでユーザーを消すと一緒に消える' );
+		$this->assertInstanceOf( \WP_Post::class, get_post( $booking_id ), 'ユーザー削除で予約を消さない' );
+		$this->assertSame( 0, (int) get_post( $booking_id )->post_author );
+		$this->assertNotEmpty( get_post_meta( $booking_id, '_vkbm_booking_author_deleted_at', true ) );
+		$this->assertSame( '山田太郎', get_post_meta( $booking_id, '_vkbm_booking_customer_name', true ) );
 	}
 
 	/**

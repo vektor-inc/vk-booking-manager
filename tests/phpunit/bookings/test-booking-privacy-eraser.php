@@ -68,6 +68,7 @@ class Booking_Privacy_Eraser_Test extends WP_UnitTestCase {
 		$meta       = array_merge(
 			array(
 				'_vkbm_booking_customer_email' => $email,
+				'_vkbm_booking_customer_address_full' => '東京都1-2',
 				'_vkbm_booking_customer_name'  => '予約者',
 				'_vkbm_booking_service_start'  => $this->relative_datetime( '-2 hours' ),
 				'_vkbm_booking_service_end'    => $this->relative_datetime( '-1 hour' ),
@@ -115,6 +116,7 @@ class Booking_Privacy_Eraser_Test extends WP_UnitTestCase {
 			$booking_id = $this->create_booking( $case['email'], array(), $case['author_id'] );
 			$this->eraser->erase_personal_data( 'target@example.com' );
 			$this->assertSame( $case['expected'], Booking_Anonymizer::is_anonymized( $booking_id ), $case['test_condition_name'] );
+			$this->assertSame( $case['expected'] ? '' : '東京都1-2', get_post_meta( $booking_id, '_vkbm_booking_customer_address_full', true ), $case['test_condition_name'] );
 		}
 
 		foreach ( array( '', 'invalid-address' ) as $invalid_email ) {
@@ -317,6 +319,7 @@ class Booking_Privacy_Eraser_Test extends WP_UnitTestCase {
 		$email   = 'member@example.com';
 		$user_id = $this->factory()->user->create( array( 'user_email' => $email ) );
 		update_user_meta( $user_id, 'vkbm_full_name', '会員氏名' );
+		update_user_meta( $user_id, 'vkbm_address_full', '会員住所' );
 		$this->create_booking( $email, array(), $user_id );
 		wp_set_current_user( 0 );
 
@@ -324,6 +327,7 @@ class Booking_Privacy_Eraser_Test extends WP_UnitTestCase {
 
 		$this->assertTrue( $result['items_removed'], '未ログインでも匿名化できる' );
 		$this->assertSame( '会員氏名', get_user_meta( $user_id, 'vkbm_full_name', true ), '会員メタは変更しない' );
+		$this->assertSame( '会員住所', get_user_meta( $user_id, 'vkbm_address_full', true ), '消去でも会員住所は変更しない' );
 		$this->assertCount( 2, $result['messages'], '成功と会員情報の案内を返す' );
 		$this->assertFalse( $result['items_retained'], '会員情報の案内だけでは保持扱いにしない' );
 	}

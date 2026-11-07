@@ -20,6 +20,7 @@ use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\ProviderSettings\Settings_Repository;
+use VKBookingManager\Common\Customer_Address;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -535,6 +536,14 @@ class Guest_Booking_Controller {
 
 		// フォームの入力。リクエストに無ければ下書きの値を使う。
 		$form = $this->collect_form_values( $request, $draft );
+		if ( isset( $draft['lodging'] ) && is_array( $draft['lodging'] ) ) {
+			// 確認待ちへ保存する前に、申し込み時点の住所の必須設定と安全性を検証する。
+			$address = Customer_Address::sanitize_and_validate( $request->get_param( 'customer_address_full' ) ?? '', ! empty( $settings['lodging_address_required'] ?? true ) );
+			if ( is_wp_error( $address ) ) {
+				return $address;
+			}
+			$form['customer_address_full'] = $address;
+		}
 
 		// キャンセルポリシーと利用規約への同意（設定されているときだけ必須）。リンクを開いた後に失敗させないよう、申し込みの時点で確かめる。
 		if ( '' !== trim( (string) ( $settings['provider_cancellation_policy'] ?? '' ) ) && ! $form['agree_cancellation_policy'] ) {
@@ -770,7 +779,7 @@ class Guest_Booking_Controller {
 		$form  = isset( $pending['form'] ) && is_array( $pending['form'] ) ? $pending['form'] : array();
 
 		$request = new WP_REST_Request( 'POST', '/' . self::REST_NAMESPACE . '/guest-bookings' );
-		foreach ( array( 'memo', 'agree_terms', 'agree_cancellation_policy', 'agree_terms_of_service', 'attendee_name' ) as $key ) {
+		foreach ( array( 'memo', 'agree_terms', 'agree_cancellation_policy', 'agree_terms_of_service', 'attendee_name', 'customer_address_full' ) as $key ) {
 			if ( array_key_exists( $key, $form ) ) {
 				$request->set_param( $key, $form[ $key ] );
 			}

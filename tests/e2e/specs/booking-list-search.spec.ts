@@ -55,9 +55,13 @@ test( '長い日本語名と英数字アカウント名がPCとモバイルで�
 						return range.getBoundingClientRect();
 					} );
 					const clips = [ cell, bounds ];
+					// body と html の overflow は画面全体のスクロールに引き継がれ、文字を切らない。
+					// 判定に含めると、画面の下端より下に折り返した行を「欠け」と誤判定する。
 					for (
 						let parent = el.parentElement;
-						parent;
+						parent &&
+						parent !== document.body &&
+						parent !== document.documentElement;
 						parent = parent.parentElement
 					) {
 						if (

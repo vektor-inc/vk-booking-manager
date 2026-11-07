@@ -233,8 +233,11 @@ function tokyoDateAfter( offset: number ) {
 /**
  * 宿泊のカレンダーで、指定した日をクリックする（表示月が違えば翌月へ送る）。
  *
- * @param page Playwright の Page
- * @param date 選ぶ日（Asia/Tokyo の年・月・日）
+ * @param page       Playwright の Page
+ * @param date       選ぶ日（Asia/Tokyo の年・月・日）
+ * @param date.year  年。
+ * @param date.month 月。
+ * @param date.day   日。
  */
 async function clickStayDay(
 	page: Page,
@@ -484,6 +487,110 @@ test.describe
 		);
 		await expect( checkInValue ).toContainText( /(15:00|3:00\s*pm)/i );
 		await expect( checkOutValue ).toContainText( /10:00/i );
+	} );
+
+	// @title 宿泊ゲストの住所が必須／任意で表示され、エラー時も他の入力を保持する (#1022)
+	test( '宿泊ゲストの住所: 必須エラー・255文字上限・任意設定', async ( {
+		page,
+	} ) => {
+		const saved = wpCliArgs(
+			[ 'option', 'get', OPTION_NAME, '--format=json' ],
+			{ stdio: 'pipe' }
+		);
+		try {
+			// @step 宿泊の受付をゲスト予約にし、住所を必須にする
+			wpEvalPhp(
+				`$s = get_option( '${ OPTION_NAME }', array() ); $s['booking_customer_mode'] = 'guest'; $s['lodging_address_required'] = true; $s['provider_cancellation_policy'] = ''; $s['provider_terms_of_service'] = ''; $s['booking_attendee_name_mode'] = 'disabled'; $s['attendee_roster_enabled'] = false; update_option( '${ OPTION_NAME }', $s );`
+			);
+			await openMenu( page, nightMenuId );
+			await clickStayDay( page, tokyoDateAfter( CHECK_IN_OFFSET ) );
+			await clickStayDay(
+				page,
+				tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS )
+			);
+			await page.locator( '.vkbm-lodging__room' ).first().click();
+			await page.locator( '.vkbm-plan-summary__action' ).first().click();
+			await waitForConfirm( page );
+			const address = page.getByLabel( '住所（必須）', { exact: true } );
+			// @check 住所はお客様情報の箱で電話番号の直後にある
+			const guestFields = page.locator( '.vkbm-confirm__guest-fields' );
+			await expect(
+				guestFields.locator( '#vkbm-confirm-address' )
+			).toHaveCount( 1 );
+			await expect(
+				guestFields
+					.locator( '.vkbm-confirm__guest-field' )
+					.last()
+					.locator( 'input' )
+			).toHaveAttribute( 'id', 'vkbm-confirm-guest-phone' );
+			await expect(
+				guestFields.locator(
+					'.vkbm-confirm__guest-field + .vkbm-confirm__address-group-item input'
+				)
+			).toHaveAttribute( 'id', 'vkbm-confirm-address' );
+			// @check 住所のラベルは必須を文字で示し、説明と関連付いている
+			await expect( address ).toBeVisible();
+			await expect( address ).toHaveAttribute(
+				'aria-describedby',
+				'vkbm-confirm-address-help'
+			);
+			// @step 連絡先と住所が空のまま送信する
+			await page.locator( '.vkbm-confirm__button' ).click();
+			// @check 連絡先のエラーが先に出て、住所にはエラーが付かない
+			await expect(
+				page.locator( '#vkbm-confirm-guest-name' )
+			).toHaveAttribute( 'aria-invalid', 'true' );
+			await expect( address ).not.toHaveAttribute(
+				'aria-invalid',
+				'true'
+			);
+			await expect(
+				page.locator( '#vkbm-confirm-address-error' )
+			).toHaveCount( 0 );
+			// @step お名前・メールアドレス・電話番号を入力し、住所を空白だけにして送信する
+			await page
+				.locator( '#vkbm-confirm-guest-name' )
+				.fill( '保持する名前' );
+			await page
+				.locator( '#vkbm-confirm-guest-email' )
+				.fill( 'address-1022@example.com' );
+			await page
+				.locator( '#vkbm-confirm-guest-phone' )
+				.fill( '09012345678' );
+			await address.fill( '　 ' );
+			await page.locator( '.vkbm-confirm__button' ).click();
+			// @check 住所にエラーとフォーカスが付き、名前は残る
+			await expect( address ).toHaveAttribute( 'aria-invalid', 'true' );
+			await expect( address ).toBeFocused();
+			await expect(
+				page.locator( '#vkbm-confirm-guest-name' )
+			).toHaveValue( '保持する名前' );
+			// @step 256文字を入力して再送信する
+			await address.fill( '住'.repeat( 256 ) );
+			await page.locator( '.vkbm-confirm__button' ).click();
+			// @check 住所は切り捨てられず、文字数のエラーが表示される
+			await expect( address ).toHaveValue( '住'.repeat( 256 ) );
+			await expect(
+				page.locator( '#vkbm-confirm-address-error' )
+			).toContainText( '255' );
+			// @step 住所を任意に変更して確認画面を読み直す
+			wpEvalPhp(
+				`$s = get_option( '${ OPTION_NAME }', array() ); $s['lodging_address_required'] = false; update_option( '${ OPTION_NAME }', $s );`
+			);
+			await page.reload();
+			// @check ラベルが任意になり、必須属性が外れる
+			await expect(
+				page.getByLabel( '住所（任意）', { exact: true } )
+			).toBeVisible();
+			await expect(
+				page.locator( '#vkbm-confirm-address' )
+			).not.toHaveAttribute( 'required' );
+		} finally {
+			const encoded = Buffer.from( saved ).toString( 'base64' );
+			wpEvalPhp(
+				`update_option( '${ OPTION_NAME }', json_decode( base64_decode( '${ encoded }' ), true ) );`
+			);
+		}
 	} );
 
 	test( '予約画面（泊のプラン）: 選択中の客室は通常時・ホバー中・押下中のどれでも淡い選択色の背景になる（issue #844）', async ( {

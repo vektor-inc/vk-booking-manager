@@ -132,18 +132,20 @@ const GuestField = ( {
 };
 
 /**
- * 「お客様情報」欄（お名前・メールアドレス・電話番号。すべて必須）。
+ * 「お客様情報」欄（お名前・メールアドレス・電話番号と宿泊時の住所）。
  *
- * @param {Object}   props                  プロパティ。
- * @param {Object}   props.values           name・email・phone の入力値。
- * @param {Object}   props.errors           name・email・phone のエラー文。
- * @param {Object}   props.inputRefs        name・email・phone の入力欄の ref。
- * @param {string}   props.honeypot         隠し入力欄の値。
- * @param {Function} props.onChange         入力時の処理（欄の名前と値を受け取る）。
- * @param {Function} props.onHoneypotChange 隠し入力欄の入力時の処理。
+ * @param {Object}      props                  プロパティ。
+ * @param {JSX.Element} props.addressField     宿泊時の住所欄。
+ * @param {Object}      props.values           name・email・phone の入力値。
+ * @param {Object}      props.errors           name・email・phone のエラー文。
+ * @param {Object}      props.inputRefs        name・email・phone の入力欄の ref。
+ * @param {string}      props.honeypot         隠し入力欄の値。
+ * @param {Function}    props.onChange         入力時の処理（欄の名前と値を受け取る）。
+ * @param {Function}    props.onHoneypotChange 隠し入力欄の入力時の処理。
  * @return {JSX.Element} お客様情報欄。
  */
 export const GuestContactFields = ( {
+	addressField,
 	values,
 	errors,
 	inputRefs,
@@ -197,6 +199,7 @@ export const GuestContactFields = ( {
 			maxLength={ 30 }
 			onChange={ ( value ) => onChange( 'phone', value ) }
 		/>
+		{ addressField }
 		{ /* ロボット対策の隠し入力欄。人には見えず、キー操作でも届かない。入力があればサーバーが断る。 */ }
 		<div className="vkbm-confirm__guest-hp" aria-hidden="true">
 			<input

@@ -36,6 +36,7 @@ use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
 use WP_Post;
 use WP_Query;
+use VKBookingManager\Common\Customer_Address;
 use WP_User;
 use function admin_url;
 use function get_edit_post_link;
@@ -580,8 +581,8 @@ class Booking_Admin {
 	public function render_meta_box( WP_Post $post ): void {
 		wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME );
 
-		// issue #870: 個人情報を匿名化済みの予約は、上部に注記を出し、個人情報の欄を表示のみにする。
 		$is_anonymized = Booking_Anonymizer::is_anonymized( $post->ID );
+		// issue #870: 個人情報を匿名化済みの予約は、上部に注記を出し、個人情報の欄を表示のみにする。
 		if ( $is_anonymized ) {
 			$this->render_anonymized_notice( $post->ID );
 		}
@@ -656,7 +657,21 @@ class Booking_Admin {
 		$attachment_ids_csv     = implode( ',', $attachment_ids );
 
 		// 泊の予約は予約に保存した泊数で判定する（サイトの業種が変わっても保存した日時のまま表示する）。
-		$is_stay_booking = Lodging_Booking::is_stay_booking( $post->ID );
+		$is_stay_booking  = Lodging_Booking::is_stay_booking( $post->ID );
+		$customer_address = '';
+		// 未匿名化の宿泊予約だけ、保存失敗時の訂正入力を一度だけ復元する。
+		if ( $is_stay_booking && ! $is_anonymized ) {
+			$customer_address  = (string) get_post_meta( $post->ID, Customer_Address::BOOKING_META, true );
+			$address_input_key = Customer_Address::booking_input_key( (int) $post->ID );
+			$address_input     = get_transient( $address_input_key );
+			if ( false !== $address_input ) {
+				if ( is_string( $address_input ) ) {
+					$customer_address = $address_input;
+				}
+				delete_transient( $address_input_key );
+			}
+		}
+
 		// #828: 泊の予約は指名区分を使わないため「指名区分」の行を出さない。
 		// 指名料は画面に出す金額が 0 円のときだけ「指名料」の行を出さず、合計欄の説明文も指名料に触れない文にする。
 		// 行の表示と説明文の差し替えは、この1つの判定結果で決める。
@@ -1221,6 +1236,19 @@ class Booking_Admin {
 						</td>
 					</tr>
 					<?php endif; ?>
+					<?php if ( $is_stay_booking ) : ?>
+						<?php if ( $is_anonymized ) : ?>
+							<?php $this->render_readonly_row( __( 'Address', 'vk-booking-manager' ), '' ); ?>
+						<?php else : ?>
+						<tr>
+							<th scope="row"><label for="vkbm-booking-address"><?php esc_html_e( 'Address (optional)', 'vk-booking-manager' ); ?></label></th>
+							<td>
+								<input type="text" class="regular-text" id="vkbm-booking-address" name="vkbm_booking[customer_address_full]" value="<?php echo esc_attr( $customer_address ); ?>" aria-describedby="vkbm-booking-address-help" />
+								<p class="description" id="vkbm-booking-address-help"><?php esc_html_e( 'Please enter the address at the time of booking in 255 characters or fewer.', 'vk-booking-manager' ); ?></p>
+							</td>
+						</tr>
+						<?php endif; ?>
+					<?php endif; ?>
 					<tr>
 						<th scope="row"><label for="vkbm-booking-attachments"><?php esc_html_e( 'History image', 'vk-booking-manager' ); ?></label></th>
 						<td>
@@ -1489,6 +1517,9 @@ class Booking_Admin {
 					);
 				}
 			);
+			if ( (int) get_post_field( 'post_author', $post_id ) === $author_id ) {
+				delete_post_meta( $post_id, Booking_User_Deletion::META_AUTHOR_DELETED_AT );
+			}
 			// 付け替え先の会員の名簿とは無関係になるため、ID は手入力扱いへ置き換える。名前・番号の写しは残す。
 			update_post_meta( $post_id, Booking_Attendee_Resolver::META_ID, Booking_Attendee_Resolver::ID_MANUAL );
 		}
@@ -1553,6 +1584,16 @@ class Booking_Admin {
 			$this->update_meta_value( $post_id, self::META_CUSTOMER, $customer );
 			$this->update_meta_value( $post_id, self::META_CUSTOMER_TEL, $customer_tel );
 			$this->update_meta_value( $post_id, self::META_CUSTOMER_MAIL, $customer_mail );
+			if ( $is_stay_booking && array_key_exists( 'customer_address_full', $raw ) ) {
+				$address = Customer_Address::sanitize_and_validate( $raw['customer_address_full'] );
+				if ( is_wp_error( $address ) ) {
+					set_transient( Customer_Address::booking_input_key( $post_id ), Customer_Address::sanitize_for_redisplay( $raw['customer_address_full'] ), 5 * MINUTE_IN_SECONDS );
+					$this->push_admin_notice( $post_id, $address->get_error_message(), self::ADMIN_NOTICE_TYPE_ERROR );
+				} else {
+					delete_transient( Customer_Address::booking_input_key( $post_id ) );
+					$this->update_meta_value( $post_id, Customer_Address::BOOKING_META, wp_slash( $address ) );
+				}
+			}
 		}
 		$this->update_attachment_meta( $post_id, $attachment_ids );
 		$this->maybe_optimize_booking_attachments( $attachment_ids );
@@ -2953,6 +2994,9 @@ class Booking_Admin {
 		} elseif ( Booking_Anonymizer::ANONYMIZED_BY_PRIVACY_REQUEST === $anonymized_by ) {
 			/* translators: %s: Date and time when the personal data was anonymized. */
 			$anonymized_message = sprintf( __( 'The personal data of this reservation was anonymized on %s by a personal data erasure request.', 'vk-booking-manager' ), $date_label );
+		} elseif ( Booking_Anonymizer::ANONYMIZED_BY_USER_DELETION === $anonymized_by ) {
+			/* translators: %s: Date and time when the personal data was anonymized. */
+			$anonymized_message = sprintf( __( "The personal data of this reservation was anonymized on %s because the reserver's user account was deleted.", 'vk-booking-manager' ), $date_label );
 		} elseif ( Booking_Anonymizer::ANONYMIZED_BY_AUTO === $anonymized_by ) {
 			/* translators: %s: Date and time when the personal data was anonymized. */
 			$anonymized_message = sprintf( __( 'The personal data of this reservation was anonymized on %s by the automatic anonymization setting.', 'vk-booking-manager' ), $date_label );
@@ -3033,7 +3077,10 @@ class Booking_Admin {
 		// ゲスト予約は、会員に紐付いていないあいだ予約者欄に「ゲスト予約」と出す。
 		// 後から会員に紐付けても印は残るため、その場合は会員名の下に注記を足す。
 		$is_guest_booking = Guest_Booking_Admin::is_guest_booking( $post->ID );
-		if ( $is_guest_booking && $author_id <= 0 ) {
+		$author_deleted   = Booking_User_Deletion::has_deleted_author( $post->ID );
+		if ( $author_deleted ) {
+			$author_label = __( 'Deleted user', 'vk-booking-manager' );
+		} elseif ( $is_guest_booking && $author_id <= 0 ) {
 			$author_label = __( 'Guest booking (not linked to a member)', 'vk-booking-manager' );
 		}
 
@@ -3055,6 +3102,21 @@ class Booking_Admin {
 					<p class="description vkbm-reserver__guest-note"><?php esc_html_e( 'This booking was made as a guest booking.', 'vk-booking-manager' ); ?></p>
 				<?php endif; ?>
 			</div>
+			<?php if ( $author_deleted ) : ?>
+				<p class="description">
+				<?php
+				if ( Booking_Anonymizer::RESULT_ANONYMIZED === Booking_Anonymizer::check_booking_metadata( $post->ID ) ) {
+					esc_html_e( 'The user linked to this reservation has been deleted.', 'vk-booking-manager' );
+					echo ' ' . wp_kses_post( Booking_User_Deletion::link_list( __( 'To clear the personal data, anonymize this reservation from the reservation list.', 'vk-booking-manager' ) ) );
+				} else {
+					esc_html_e( 'The user linked to this reservation has been deleted.', 'vk-booking-manager' );
+					echo ' ' . esc_html__( 'This reservation no longer appears on any My Page.', 'vk-booking-manager' );
+					echo ' ' . esc_html__( 'Contact the customer directly using the phone number or email address on this reservation.', 'vk-booking-manager' );
+					echo ' ' . esc_html__( 'If they register again, you can select them as the reserver.', 'vk-booking-manager' );
+				}
+				?>
+				</p>
+			<?php endif; ?>
 			<div class="vkbm-reserver__actions">
 				<?php if ( $can_search ) : ?>
 					<button type="button" class="button button-secondary vkbm-reserver__change" hidden aria-expanded="false" aria-controls="vkbm-reserver-panel" data-vkbm-reserver-change data-change-label="<?php echo esc_attr( __( 'Change reserver', 'vk-booking-manager' ) ); ?>" data-select-label="<?php echo esc_attr( __( 'Select reserver', 'vk-booking-manager' ) ); ?>"><?php echo esc_html( $change_label ); ?></button>

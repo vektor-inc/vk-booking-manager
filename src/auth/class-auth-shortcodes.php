@@ -13,6 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Customer_Address;
+use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Attendees\Attendee_Roster;
 use VKBookingManager\Assets\Common_Styles;
@@ -1302,11 +1304,18 @@ else :
 		$action_base = $this->normalize_redirect( $atts['action_url'] ?? '' );
 		$form_action = $this->get_auth_action_url( 'profile', $action_base );
 
-		$current_user      = wp_get_current_user();
+		$current_user = wp_get_current_user();
+		$posted_key   = $this->profile_input_key( (int) $current_user->ID );
+		$posted       = get_transient( $posted_key );
+		if ( is_array( $posted ) ) {
+			$this->profile_posted_data = $posted;
+			delete_transient( $posted_key );
+		}
 		$first_value       = $this->profile_posted_data['first_name'] ?? (string) $current_user->first_name;
 		$last_value        = $this->profile_posted_data['last_name'] ?? (string) $current_user->last_name;
 		$email_value       = $this->profile_posted_data['user_email'] ?? (string) $current_user->user_email;
 		$kana_value        = $this->profile_posted_data['kana_name'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_kana_name', true );
+		$address_value     = $this->profile_posted_data['address_full'] ?? (string) get_user_meta( $current_user->ID, Customer_Address::USER_META, true );
 		$phone_value       = $this->profile_posted_data['phone_number'] ?? (string) get_user_meta( $current_user->ID, 'phone_number', true );
 		$birth_value       = $this->profile_posted_data['birth_date'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_birth_date', true );
 		$birth_parts       = $this->resolve_birth_parts( $this->profile_posted_data, $birth_value );
@@ -1377,6 +1386,15 @@ else :
 						'required' => true,
 					)
 				);
+				if ( Industry_Presets::supports( 'lodging' ) ) {
+					?>
+					<div class="vkbm-auth-form__field">
+						<label class="vkbm-auth-form__label" for="vkbm-profile-address"><?php esc_html_e( 'Address (optional)', 'vk-booking-manager' ); ?></label>
+						<input type="text" class="vkbm-auth-form__input" id="vkbm-profile-address" name="address_full" value="<?php echo esc_attr( $address_value ); ?>" autocomplete="street-address" aria-describedby="vkbm-profile-address-help">
+						<p class="vkbm-auth-form__note" id="vkbm-profile-address-help"><?php esc_html_e( 'Please enter your domestic or international address in 255 characters or fewer.', 'vk-booking-manager' ); ?></p>
+					</div>
+					<?php
+				}
 				$this->render_gender_field( 'vkbm-profile-gender', $gender_value );
 				?>
 				<div class="vkbm-auth-form__field">
@@ -1485,6 +1503,15 @@ else :
 
 		$errors  = new WP_Error();
 		$user_id = get_current_user_id();
+		// プロフィール住所は任意。検証結果と訂正用の入力を分けて保持する。
+		$address = null;
+		if ( Industry_Presets::supports( 'lodging' ) && array_key_exists( 'address_full', $raw ) ) {
+			$address                                   = Customer_Address::sanitize_and_validate( $raw['address_full'] );
+			$this->profile_posted_data['address_full'] = Customer_Address::sanitize_for_redisplay( $raw['address_full'] );
+			if ( is_wp_error( $address ) ) {
+				$errors->add( $address->get_error_code(), $address->get_error_message() );
+			}
+		}
 
 		$this->add_required_field_errors(
 			$errors,
@@ -1510,6 +1537,7 @@ else :
 		if ( $errors->has_errors() ) {
 			// Save errors to cookie and redirect so the SPA can display them.
 			// エラーを Cookie に保存してリダイレクトし、SPA 側でエラーを表示できるようにする。
+			set_transient( $this->profile_input_key( $user_id ), $this->profile_posted_data, 5 * MINUTE_IN_SECONDS );
 			$this->set_profile_errors_cookie( $errors );
 			$this->profile_errors = $errors;
 
@@ -1544,6 +1572,7 @@ else :
 		if ( is_wp_error( $update ) ) {
 			// Save wp_update_user errors to cookie and redirect.
 			// wp_update_user のエラーを Cookie に保存してリダイレクトする。
+			set_transient( $this->profile_input_key( $user_id ), $this->profile_posted_data, 5 * MINUTE_IN_SECONDS );
 			$this->set_profile_errors_cookie( $update );
 			$this->profile_errors = $update;
 
@@ -1562,10 +1591,16 @@ else :
 			update_user_meta( $user_id, 'vkbm_full_name', $display_name );
 		}
 
+		if ( is_string( $address ) ) {
+			update_user_meta( $user_id, Customer_Address::USER_META, wp_slash( $address ) );
+		}
 		update_user_meta( $user_id, 'vkbm_kana_name', $kana_name );
 		update_user_meta( $user_id, 'phone_number', $phone );
 		update_user_meta( $user_id, 'gender', $gender );
 		update_user_meta( $user_id, 'vkbm_birth_date', $birth );
+
+		delete_transient( $this->profile_input_key( $user_id ) );
+		$this->profile_posted_data = array();
 
 		$this->set_profile_notice( __( 'User information has been updated.', 'vk-booking-manager' ) );
 
@@ -1573,6 +1608,16 @@ else :
 		$redirect_to = add_query_arg( 'vkbm_auth', 'profile', $redirect_to );
 
 		$this->redirect_and_exit( $redirect_to );
+	}
+
+	/**
+	 * プロフィール入力の復元キーを返す。
+	 *
+	 * @param int $user_id 利用者 ID。
+	 * @return string transient キー。
+	 */
+	private function profile_input_key( int $user_id ): string {
+		return 'vkbm_profile_input_' . $user_id;
 	}
 
 	/**
@@ -3317,7 +3362,7 @@ else :
 	/**
 	 * Returns the fixed whitelist of login error codes (without messages).
 	 *
-	 * issue #512 レビュー対応（安藤さん指摘）: REST `/vkbm/v1/auth-form` の `error`
+	 * issue #512 レビュー対応（安藤さん指摘）: REST `/vkbm/v1/auth-form` の `login_error`
 	 * 引数を `register_rest_route()` の `args` で self-describing に宣言する際、
 	 * その説明文（description）に一覧を載せるために使う（`enum` は使わない。理由は
 	 * `Auth_Form_Controller::register_routes()` のコメント参照）。ホワイトリストの

@@ -66,6 +66,7 @@ class Booking_Post_Type {
 				'show_in_nav_menus' => false,
 				'show_in_rest'      => false,
 				'supports'          => array( 'title', 'author', 'content' ),
+				'delete_with_user'  => false,
 				'has_archive'       => false,
 				'hierarchical'      => false,
 				'rewrite'           => false,

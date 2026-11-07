@@ -126,7 +126,7 @@ class Auth_Form_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * issue #512: `vkbm_login_error` Cookie の廃止に伴い、ログイン失敗コードは REST の
-	 * `error` パラメータで受け渡す。ホワイトリストのコードは既存の統一文言に変換され、
+	 * `login_error` パラメータで受け渡す。ホワイトリストのコードは既存の統一文言に変換され、
 	 * 一覧に無いコードでは何も表示されないこと（`vkbm_login_error` Cookie 自体が
 	 * 発行されないことも合わせて確認する）。
 	 */
@@ -147,7 +147,7 @@ class Auth_Form_Controller_Test extends WP_UnitTestCase {
 				'expect_message'      => false,
 			],
 			[
-				'test_condition_name' => 'error パラメータ省略時 => 何も出ない（従来どおり）',
+				'test_condition_name' => 'login_error パラメータ省略時 => 何も出ない（従来どおり）',
 				'error_param'         => '',
 				'expect_message'      => false,
 			],
@@ -158,7 +158,7 @@ class Auth_Form_Controller_Test extends WP_UnitTestCase {
 			$request->set_param( 'type', 'login' );
 			$request->set_param( 'redirect', home_url( '/' ) );
 			if ( '' !== $case['error_param'] ) {
-				$request->set_param( 'error', $case['error_param'] );
+				$request->set_param( Auth_Form_Controller::LOGIN_ERROR_PARAM, $case['error_param'] );
 			}
 
 			$response = $controller->get_form( $request );
@@ -177,6 +177,55 @@ class Auth_Form_Controller_Test extends WP_UnitTestCase {
 			// #512 の対応前まで発行されていた一時 Cookie が、この経路では一切
 			// 発行されないことを確認する。
 			$this->assertArrayNotHasKey( 'vkbm_login_error', $_COOKIE, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * ログイン失敗コードの REST パラメータ名が、WordPress 本体の予約クエリ変数と重ならないことを確認する。
+	 *
+	 * 予約クエリ変数（例: `error`）は WP::parse_request() が REST の処理より前に $_GET から消すため、
+	 * 実際の HTTP リクエストでは値が届かず、ログイン失敗の文言が表示されなくなる。
+	 *
+	 * @return void
+	 */
+	public function test_login_error_param_is_not_a_reserved_query_var(): void {
+		$wp = new \WP();
+
+		$this->assertNotContains( Auth_Form_Controller::LOGIN_ERROR_PARAM, $wp->public_query_vars );
+		$this->assertNotContains( Auth_Form_Controller::LOGIN_ERROR_PARAM, $wp->private_query_vars );
+	}
+
+	/**
+	 * ログイン失敗コードが、実際の HTTP リクエストと同じ経路（WP::parse_request() を通った $_GET）でも届くことを確認する。
+	 *
+	 * @return void
+	 */
+	public function test_login_error_param_survives_parse_request(): void {
+		// 本番と同じく、パーマリンク設定済みの /wp-json/ の URL として解析させる。
+		$this->set_permalink_structure( '/%postname%/' );
+		rest_api_register_rewrites();
+		flush_rewrite_rules( false );
+
+		$original_get         = $_GET; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- テスト前の値を復元するために退避する。
+		$original_request_uri = $_SERVER['REQUEST_URI'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- テスト前の値を復元するために退避する。
+		$_GET                 = array(
+			'type'                                  => 'login',
+			Auth_Form_Controller::LOGIN_ERROR_PARAM => 'auth_failed',
+		);
+		$_SERVER['REQUEST_URI'] = '/wp-json/vkbm/v1/auth-form?type=login&' . Auth_Form_Controller::LOGIN_ERROR_PARAM . '=auth_failed';
+
+		try {
+			$wp = new \WP();
+			$wp->parse_request();
+
+			$this->assertSame( 'auth_failed', $_GET[ Auth_Form_Controller::LOGIN_ERROR_PARAM ] ?? '' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- 読み取りのみ。
+		} finally {
+			$_GET = $original_get;
+			if ( null === $original_request_uri ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $original_request_uri;
+			}
 		}
 	}
 

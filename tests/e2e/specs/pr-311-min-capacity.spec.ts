@@ -1137,7 +1137,7 @@ test.describe( 'PR #311: 最小催行人数 - 実機フロント表示（バッ�
 			expect( row.remaining ).toBeGreaterThanOrEqual( 4.5 );
 		}
 
-		// ホバー中もテーマ（Twenty Twenty-One は背景を透明にする）の色に変わらない。
+		// ホバー中もテーマのボタン用の色に変わらない。
 		const first = page.locator( '.vkbm-slot-list__item' ).first();
 		const before = await first.evaluate(
 			( el ) => window.getComputedStyle( el ).backgroundColor

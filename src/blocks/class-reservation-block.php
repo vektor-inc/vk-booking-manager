@@ -513,7 +513,7 @@ class Reservation_Block {
 	 * 未ログイン時のログイン導線（`vkbm_auth=login` の GET、またはこのショートコードの
 	 * `vkbm_login_form` POST）に限り、この render_block フィルタで同一リクエスト内に
 	 * - ログイン失敗コードを wrapper の data-vkbm-login-error 属性へ埋め込む
-	 *   （JS は初回の auth-form 取得時だけこれを REST の error パラメータとして送る）
+	 *   （JS は初回の auth-form 取得時だけこれを REST の login_error パラメータとして送る）
 	 * - 「フォームを読み込み中…」（常時）／ログイン失敗時のみエラー文／
 	 *   約3秒後に表示する「別のログイン画面」への案内（JS 未実行時の保険）
 	 * を直接埋め込む。

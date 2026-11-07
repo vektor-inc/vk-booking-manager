@@ -33,6 +33,7 @@ const FREE_EXCLUDED_PATHS = [
 	'tests/phpunit/admin/test-provider-settings-page-integration-tab.php',
 	'tests/phpunit/resources/test-resource-delete-guard.php',
 	'tests/phpunit/uninstall/test-uninstaller-google-revoke.php',
+	'tests/phpunit/updater/test-vkbm-pro-updater.php',
 	'tests/e2e/specs/resource-delete-guard.spec.ts',
 ];
 

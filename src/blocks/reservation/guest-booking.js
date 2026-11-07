@@ -93,6 +93,7 @@ export const hasGuestContactErrors = ( errors ) =>
  *
  * @param {Object}  params                         引数。
  * @param {string}  params.draftToken              予約の下書きのトークン。
+ * @param {string}  params.customerAddress         宿泊時の住所。
  * @param {Object}  params.contact                 name・email・phone。
  * @param {string}  params.honeypot                隠し入力欄の値（人は入力しない）。
  * @param {string}  params.memo                    ご要望／備考。
@@ -105,6 +106,7 @@ export const hasGuestContactErrors = ( errors ) =>
 export const buildGuestBookingPayload = ( {
 	draftToken,
 	contact,
+	customerAddress,
 	honeypot = '',
 	memo = '',
 	attendeeName = '',
@@ -113,6 +115,9 @@ export const buildGuestBookingPayload = ( {
 	agreeTerms = false,
 } ) => ( {
 	token: draftToken,
+	...( customerAddress !== undefined
+		? { customer_address_full: customerAddress }
+		: {} ),
 	customer_name: String( contact.name || '' ).trim(),
 	customer_email: String( contact.email || '' ).trim(),
 	customer_phone: String( contact.phone || '' ).trim(),

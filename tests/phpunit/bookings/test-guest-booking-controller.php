@@ -945,7 +945,7 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 		list( $controller, $notification ) = $this->build_controller( $staff_id );
 		$draft_token = $this->store_draft( $menu_id, $staff_id, self::START, self::END, array( 'memo' => '窓際の席を希望' ) );
 
-		$response = $controller->create_guest_booking_request( $this->build_request( $draft_token ) );
+		$response = $controller->create_guest_booking_request( $this->build_request( $draft_token, array( 'customer_address_full' => str_repeat( '住', 256 ) ) ) );
 		$this->assertInstanceOf( WP_REST_Response::class, $response );
 		$data = $response->get_data();
 		$this->assertSame( 'verification_sent', $data['status'] );
@@ -958,6 +958,7 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 
 		$pending = get_transient( Guest_Booking_Controller::PENDING_PREFIX . $hash );
 		$this->assertIsArray( $pending, 'ハッシュの名前で確認待ちデータがある' );
+		$this->assertArrayNotHasKey( 'customer_address_full', $pending['form'], '時間枠予約に住所を保存しない' );
 		$this->assertSame( 'guest@example.com', $pending['guest']['email'] );
 		$this->assertSame( '09012345678', $pending['guest']['phone'], '電話番号は全角を半角にして数字だけ' );
 		$this->assertSame( '窓際の席を希望', $pending['form']['memo'], '備考は予約を作るときのために保存する' );

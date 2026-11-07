@@ -421,7 +421,7 @@ export const ReservationApp = ( {
 	isEditor = false,
 	// issue #512: サーバー側（render_block フィルタ）が同一リクエスト内で判明した
 	// ログイン失敗コードを wrapper の data-vkbm-login-error に埋め込み、view.js 経由で
-	// ここまで渡す。初回の auth-form 取得時だけ REST の error パラメータとして送る。
+	// ここまで渡す。初回の auth-form 取得時だけ REST の login_error パラメータとして送る。
 	initialLoginError = '',
 	// issue #512 植草指摘（ちらつき対策）: 上記コードに対応する、サーバー側フォール
 	// バックが既に表示していたエラー文そのもの（view.js が DOM から読み取った値）。
@@ -1408,7 +1408,7 @@ export const ReservationApp = ( {
 		}
 
 		// issue #512 植草指摘（ちらつき対策）: サーバー側フォールバックのエラー文を
-		// 初回の auth-form 取得中は消さない（=まだ error パラメータを送っておらず、
+		// 初回の auth-form 取得中は消さない（=まだ login_error パラメータを送っておらず、
 		// かつ引き継いだ初期エラー文がある場合だけ）。それ以外（モード切替の再取得等）
 		// は従来どおり毎回クリアする。
 		const includeInitialLoginError =
@@ -1444,7 +1444,7 @@ export const ReservationApp = ( {
 			// issue #512: サーバーで判明したログイン失敗コードは、初回の auth-form
 			// 取得時だけ渡す。モード切替等での再取得では渡さない。
 			if ( includeInitialLoginError ) {
-				params.set( 'error', initialLoginError );
+				params.set( 'login_error', initialLoginError );
 			}
 		} else if ( authMode === 'register' ) {
 			params.set( 'login_url', buildModeUrl( 'login' ) );

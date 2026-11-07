@@ -37,6 +37,7 @@ use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Resources\Resource_Tag_Taxonomy;
 use VKBookingManager\Staff\Staff_Editor;
+use VKBookingManager\Common\Customer_Address;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -554,7 +555,12 @@ class Booking_Confirmation_Controller {
 			}
 		}
 
-		$settings              = $this->settings_repository->get_settings();
+		$settings = $this->settings_repository->get_settings();
+		// ゲストは申し込み時の必須判定を維持し、確認時は型・文字数などの安全性だけ再検証する。
+		$customer_address = $is_lodging_draft ? Customer_Address::sanitize_and_validate( $request->get_param( 'customer_address_full' ) ?? '', ! $is_guest && ! empty( $settings['lodging_address_required'] ?? true ) ) : '';
+		if ( is_wp_error( $customer_address ) ) {
+			return $customer_address;
+		}
 		$requires_cancellation = '' !== trim( (string) ( $settings['provider_cancellation_policy'] ?? '' ) );
 		$requires_tos          = '' !== trim( (string) ( $settings['provider_terms_of_service'] ?? '' ) );
 		$status_mode           = sanitize_key( (string) ( $settings['provider_booking_status_mode'] ?? self::BOOKING_STATUS_PENDING ) );
@@ -897,6 +903,9 @@ class Booking_Confirmation_Controller {
 					update_post_meta( $booking_id, Booking_Attendee_Resolver::META_NUMBER, $attendee['number'] );
 				}
 				update_post_meta( $booking_id, self::META_CUSTOMER_MAIL, $customer_email );
+				if ( $is_lodging_draft ) {
+					update_post_meta( $booking_id, Customer_Address::BOOKING_META, wp_slash( $customer_address ) );
+				}
 				if ( '' !== $customer_phone ) {
 					update_post_meta( $booking_id, self::META_CUSTOMER_TEL, $customer_phone );
 				} else {

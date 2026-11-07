@@ -91,6 +91,7 @@ class Provider_Settings_Page {
 		'shift_alert_months',
 		'shift_auto_register_months',
 		'booking_auto_anonymize_months',
+		'lodging_address_required',
 		'uninstall_cleanup',
 		'design_primary_color',
 		'design_menu_card_catch_color',
@@ -3241,6 +3242,16 @@ class Provider_Settings_Page {
 								<p class="description">
 									<?php esc_html_e( 'If you choose "Delete everything", all data including booking data will be deleted. This cannot be undone after deletion.', 'vk-booking-manager' ); ?>
 								</p>
+							</td>
+						</tr>
+						<?php endif; ?>
+						<?php if ( Industry_Presets::supports( 'lodging' ) ) : ?>
+						<tr class="vkbm-provider-settings__tab-advanced">
+							<th scope="row"><label for="vkbm-lodging-address-required"><?php esc_html_e( 'Require an address for lodging bookings', 'vk-booking-manager' ); ?></label></th>
+							<td>
+								<input type="hidden" name="vkbm_provider_settings[lodging_address_required]" value="0" />
+								<input type="checkbox" id="vkbm-lodging-address-required" name="vkbm_provider_settings[lodging_address_required]" value="1" <?php checked( ! empty( $settings['lodging_address_required'] ?? true ) ); ?> aria-describedby="vkbm-lodging-address-required-help" />
+								<p class="description" id="vkbm-lodging-address-required-help"><?php esc_html_e( 'When disabled, the address is optional for lodging bookings.', 'vk-booking-manager' ); ?></p>
 							</td>
 						</tr>
 						<?php endif; ?>

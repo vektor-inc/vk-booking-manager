@@ -848,3 +848,67 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 	line-break: strict;
 	overflow-wrap: anywhere;
 }
+
+// =============================================================================
+// ユーザー削除時の予約案内
+// =============================================================================
+
+.notice.vkbm-user-deletion {
+	display: flex;
+	flex-direction: column;
+	gap: var(--vkbm--spacing--md, 16px);
+	padding: var(--vkbm--spacing--md, 16px);
+
+	h2,
+	p,
+	ul,
+	fieldset,
+	legend {
+		margin: 0;
+		padding: 0;
+	}
+
+	h2,
+	p,
+	legend,
+	label {
+		text-box: trim-both cap alphabetic;
+	}
+
+	fieldset p {
+		margin-top: 12px;
+	}
+
+	legend {
+		// コアのユーザー削除フォームの float による選択肢の回り込みを防ぐ。
+		float: none;
+	}
+
+	ul {
+		// text-box からはみ出す日本語の字面とリンク一覧の間隔を確保する。
+		margin-top: 12px;
+	}
+
+	li {
+		margin-bottom: 4px;
+	}
+
+	.vkbm-user-deletion__choices {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-top: 8px;
+	}
+
+	label {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		line-height: 1.4;
+	}
+
+	input[type="radio"] {
+		flex: 0 0 auto;
+		margin: 0;
+	}
+}

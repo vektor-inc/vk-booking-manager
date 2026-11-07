@@ -32,6 +32,12 @@ class Auth_Form_Controller {
 	private const NAMESPACE = 'vkbm/v1';
 
 	/**
+	 * ログイン失敗コードを受け取る REST パラメータ名。
+	 * WordPress 本体の予約クエリ変数（WP::$public_query_vars）と重ならない名前にする。
+	 */
+	public const LOGIN_ERROR_PARAM = 'login_error';
+
+	/**
 	 * Auth shortcodes handler.
 	 *
 	 * @var Auth_Shortcodes
@@ -72,7 +78,7 @@ class Auth_Form_Controller {
 				'callback'            => array( $this, 'get_form' ),
 				'permission_callback' => '__return_true',
 				'args'                => array(
-					// issue #512 レビュー対応（安藤さん指摘）: `error` 引数を self-describing
+					// issue #512 レビュー対応（安藤さん指摘）: `login_error` 引数を self-describing
 					// にするための宣言。あえて `enum` は使わない。`enum` はホワイトリスト外の
 					// 値を REST 層で 400 として弾いてしまい、フォーム取得そのものが失敗する
 					// （JS 側は「フォームを表示できませんでした」という汎用エラーになり、
@@ -81,7 +87,9 @@ class Auth_Form_Controller {
 					// 求めているため、ホワイトリスト判定は
 					// Auth_Shortcodes::get_login_error_message() に委ね、ここでは
 					// 型とサニタイズだけを宣言する。
-					'error'                  => array(
+					// 名前を `error` にしない。`error` は WordPress 本体の予約クエリ変数で、
+					// WP::parse_request() が REST 処理より前に $_GET から消すため、値が届かない。
+					self::LOGIN_ERROR_PARAM  => array(
 						'type'              => 'string',
 						'sanitize_callback' => 'sanitize_key',
 						'description'       => sprintf(
@@ -144,7 +152,7 @@ class Auth_Form_Controller {
 		// issue #512: `vkbm_login_error` Cookie の代わりに、フロントが初回の auth-form
 		// 取得時だけ渡すログイン失敗コード。ホワイトリスト外は
 		// Auth_Shortcodes::render_login_form() 側で無視され、何も表示されない。
-		$error_code = sanitize_key( (string) $request->get_param( 'error' ) );
+		$error_code = sanitize_key( (string) $request->get_param( self::LOGIN_ERROR_PARAM ) );
 		// issue #516: `vkbm_registration_errors` Cookie の代わりに、フロントが初回の
 		// auth-form 取得時だけ渡す会員登録失敗トークン。ホワイトリスト外という概念は
 		// なく、Auth_Shortcodes::restore_registration_errors() が transient に

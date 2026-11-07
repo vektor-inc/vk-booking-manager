@@ -13,6 +13,7 @@ use DateTimeImmutable;
 use VKBookingManager\Bookings\Booking_Admin;
 use VKBookingManager\Bookings\Booking_Anonymizer;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\Customer_Address;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use WP_UnitTestCase;
 
@@ -75,8 +76,9 @@ class Booking_Admin_Anonymized_Test extends WP_UnitTestCase {
 	 *
 	 * @param int $booking_id    予約の投稿ID。
 	 * @param int $new_author_id 送信する予約者のユーザーID。
+	 * @param string $address 送信する予約住所。
 	 */
-	private function save_with_personal_data( int $booking_id, int $new_author_id ): void {
+	private function save_with_personal_data( int $booking_id, int $new_author_id, string $address = '訂正した住所' ): void {
 		$_POST = array(
 			'_vkbm_booking_meta_nonce' => wp_create_nonce( 'vkbm_booking_meta' ),
 			'vkbm_booking'             => array(
@@ -88,6 +90,7 @@ class Booking_Admin_Anonymized_Test extends WP_UnitTestCase {
 				'customer'       => '佐藤花子',
 				'customer_tel'   => '08011112222',
 				'customer_email' => 'hanako@example.com',
+				'customer_address_full' => $address,
 				'attendee_name'  => '復活させようとした利用者名',
 				'note'           => '入れ直したメモ',
 				'internal_note'  => '入れ直した運営側メモ',
@@ -200,6 +203,96 @@ class Booking_Admin_Anonymized_Test extends WP_UnitTestCase {
 				$this->assertStringContainsString( Booking_Anonymizer::get_field_labels_text(), $html );
 				$this->assertStringContainsString( __( 'Anonymized', 'vk-booking-manager' ), $html, '予約者欄の表示' );
 				$this->assertStringNotContainsString( '山田太郎', $html );
+			}
+		}
+	}
+
+	/** 宿泊予約の住所を訂正し、不正値と匿名化後の再入力を拒否する。 */
+	public function test_save_post_customer_address(): void {
+		$this->switch_to_manager();
+		$author = $this->factory()->user->create();
+		update_user_meta( $author, 'vkbm_address_full', '会員の住所' );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '国内住所へ訂正',
+				'stay'                => true,
+				'anonymous'           => false,
+				'input'               => '東京都1-2',
+				'expected'            => '東京都1-2',
+			),
+			array(
+				'test_condition_name' => '国外住所へ訂正',
+				'stay'                => true,
+				'anonymous'           => false,
+				'input'               => '12 Rue de l’Église',
+				'expected'            => '12 Rue de l’Église',
+			),
+			array(
+				'test_condition_name' => '256文字で元の住所を保持',
+				'stay'                => true,
+				'anonymous'           => false,
+				'input'               => str_repeat( '住', 256 ),
+				'expected'            => '予約時の住所',
+			),
+			array(
+				'test_condition_name' => '巨大な住所は復元用の1024文字だけ保持',
+				'stay'                => true,
+				'anonymous'           => false,
+				'input'               => str_repeat( '住', 100000 ),
+				'expected'            => '予約時の住所',
+			),
+			array(
+				'test_condition_name' => '匿名化後は再入力不可',
+				'stay'                => true,
+				'anonymous'           => true,
+				'input'               => '再入力した住所',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '宿泊以外は住所を保存しない',
+				'stay'                => false,
+				'anonymous'           => false,
+				'input'               => '対象外',
+				'expected'            => '予約時の住所',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$id = $this->create_ended_booking( $author );
+			update_post_meta( $id, '_vkbm_booking_customer_address_full', '予約時の住所' );
+			if ( $case['stay'] ) {
+				update_post_meta( $id, '_vkbm_booking_nights', 1 );
+			}
+			if ( $case['anonymous'] ) {
+				// 前の訂正入力で save_post が再実行されるのを防ぐ。
+				$_POST = array();
+				$this->assertSame( Booking_Anonymizer::RESULT_ANONYMIZED, ( new Booking_Anonymizer() )->anonymize( $id ), $case['test_condition_name'] );
+			}
+			$input_key = Customer_Address::booking_input_key( $id );
+			set_transient( $input_key, '古い訂正入力', 300 );
+			$this->save_with_personal_data( $id, $author, $case['input'] );
+			$this->assertSame( $case['expected'], get_post_meta( $id, '_vkbm_booking_customer_address_full', true ), $case['test_condition_name'] );
+			$this->assertSame( '会員の住所', get_user_meta( $author, 'vkbm_address_full', true ), '予約の訂正・匿名化は会員住所を変更しない' );
+			$reads = 0;
+			$count_reads = static function ( $value ) use ( &$reads ) {
+				++$reads;
+				return $value;
+			};
+			add_filter( 'pre_transient_' . $input_key, $count_reads );
+			ob_start();
+			( new Booking_Admin() )->render_meta_box( get_post( $id ) );
+			$html = ob_get_clean();
+			remove_filter( 'pre_transient_' . $input_key, $count_reads );
+			$this->assertSame( $case['stay'] && ! $case['anonymous'] ? 1 : 0, $reads, '未匿名化の宿泊予約だけ復元を問い合わせる' );
+			if ( $case['stay'] && ! $case['anonymous'] ) {
+				$this->assertFalse( get_transient( $input_key ), '復元値は保存成功または再表示で削除' );
+			} else {
+				$this->assertSame( '古い訂正入力', get_transient( $input_key ), '対象外では復元値を読まず削除しない' );
+			}
+
+			$this->assertSame( $case['stay'] && ! $case['anonymous'], str_contains( $html, 'id="vkbm-booking-address"' ), $case['test_condition_name'] );
+			if ( mb_strlen( $case['input'] ) > 255 ) {
+				$expected_input = mb_strlen( $case['input'] ) > 1024 ? str_repeat( '住', 1024 ) : $case['input'];
+				$this->assertStringContainsString( esc_attr( $expected_input ), $html, 'エラー時も上限内の訂正中の住所を保持' );
 			}
 		}
 	}

@@ -436,6 +436,24 @@
 			"Estimated check-in time": [
 				"チェックイン予定時刻"
 			],
+			"Address (optional)": [
+				"住所（任意）"
+			],
+			"Please enter your domestic or international address in 255 characters or fewer.": [
+				"国内・国外の住所を255文字以内で入力してください。"
+			],
+			"Please enter an address of 255 characters or fewer.": [
+				"住所は255文字以内で入力してください。"
+			],
+			"Please enter your address.": [
+				"住所を入力してください。"
+			],
+			"Address (required)": [
+				"住所（必須）"
+			],
+			"Address changes apply only to this booking.": [
+				"住所を変更しても、反映されるのは今回の予約だけです。"
+			],
 			"Cancellation policy": [
 				"キャンセルポリシー"
 			],

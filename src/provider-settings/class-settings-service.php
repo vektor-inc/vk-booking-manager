@@ -115,9 +115,9 @@ class Settings_Service {
 				$raw_settings[ $attendee_key ] = $current[ $attendee_key ];
 			}
 		}
-		// 休前日の曜日・特定日（#737）は、宿泊の業種でだけ画面に欄が出る。欄が無い保存（別のタブ・宿泊以外の業種・REST など）で
+		// 休前日の曜日・特定日・住所の必須設定は、宿泊の業種でだけ画面に欄が出る。欄が無い保存（別のタブ・宿泊以外の業種・REST など）で
 		// 送られなかったときは、既定値ではなく保存済みの値を引き継ぎ、入力済みの値を消さない。
-		foreach ( array( 'lodging_pre_holiday_weekdays', 'lodging_special_dates' ) as $lodging_key ) {
+		foreach ( array( 'lodging_pre_holiday_weekdays', 'lodging_special_dates', 'lodging_address_required' ) as $lodging_key ) {
 			if ( ! array_key_exists( $lodging_key, $raw_settings ) && isset( $current[ $lodging_key ] ) ) {
 				$raw_settings[ $lodging_key ] = $current[ $lodging_key ];
 			}

@@ -88,7 +88,7 @@ class Booking_Source {
 	}
 
 	/**
-	 * 予約したユーザーを持たない予約（ゲスト予約・iCal 取り込み予約）を保存し直すとき、投稿者 0 を保つ。
+	 * 予約したユーザーを持たない予約（ゲスト・iCal 取り込み・ユーザー削除済み）を保存し直すとき、投稿者 0 を保つ。
 	 *
 	 * WordPress 本体の保存（編集画面・クイック編集・wp_update_post）は投稿者 0 を空とみなして保存した人の ID に
 	 * 置き換えるため、DB に書く直前で 0 に戻す。編集画面・クイック編集は保存した人の ID を明示して渡すので、
@@ -104,10 +104,12 @@ class Booking_Source {
 		}
 
 		$booking_id = (int) ( $postarr['ID'] ?? 0 );
-		if ( $booking_id <= 0 || 0 !== (int) get_post_field( 'post_author', $booking_id ) ) {
+		if ( $booking_id <= 0 ) {
 			return $data;
 		}
-		if ( ! in_array( get_post_meta( $booking_id, self::META_KEY, true ), self::AUTHORLESS_VALUES, true ) ) {
+		$author_deleted = '' !== (string) get_post_meta( $booking_id, Booking_User_Deletion::META_AUTHOR_DELETED_AT, true );
+		if ( ! $author_deleted && ( 0 !== (int) get_post_field( 'post_author', $booking_id )
+			|| ! in_array( get_post_meta( $booking_id, self::META_KEY, true ), self::AUTHORLESS_VALUES, true ) ) ) {
 			return $data;
 		}
 		// 予約者の選び直し（allow_author_change() の中の保存）だけ通す。

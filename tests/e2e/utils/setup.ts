@@ -119,13 +119,11 @@ export const createBookingPage = () => {
 			console.warn( 'Failed to switch language to ja:', e.message );
 		}
 
-		// Switch theme to twentytwentyone for stable testing
-		// テスト安定化のためテーマをTwenty Twenty-Oneに切り替え
+		// global setup と同じ X-T9 に切り替えてテストする。
 		try {
-			wpCliArgs(
-				[ 'theme', 'install', 'twentytwentyone', '--activate' ],
-				{ stdio: 'ignore' }
-			);
+			wpCliArgs( [ 'theme', 'install', 'x-t9', '--activate' ], {
+				stdio: 'ignore',
+			} );
 		} catch ( e: any ) {
 			console.warn( 'Failed to switch theme:', e.message );
 		}

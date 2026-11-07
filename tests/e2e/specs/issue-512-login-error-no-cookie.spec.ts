@@ -144,12 +144,12 @@ function flushRateLimitTransients(): void {
 
 /**
  * REST の auth-form エンドポイント（`/vkbm/v1/auth-form`）への GET リクエストの
- * URL が、期待する `error` クエリを持つかどうかを判定する。
+ * URL が、期待する `login_error` クエリを持つかどうかを判定する。
  *
  * CodeRabbit 指摘対応（PR #513 レビュー）: 通常フロー（JS 正常）のテストは
  * `.vkbm-alert__danger` の文言だけを見ていたが、これは render_block フィルタの
  * サーバー側フォールバックも同じクラスで出すため、JS が初回リクエストで
- * `error=auth_failed` を渡し忘れても画面上は区別がつかずテストが見落として
+ * `login_error=auth_failed` を渡し忘れても画面上は区別がつかずテストが見落として
  * しまう。REST リクエストの URL そのもの（クエリパラメータ）を直接検証する。
  *
  * パーマリンク設定済み環境では pathname に `/vkbm/v1/auth-form` を含む形
@@ -158,9 +158,9 @@ function flushRateLimitTransients(): void {
  * 両方に一致するようにする。
  *
  * @param requestUrl    リクエストの完全な URL 文字列。
- * @param expectedError 期待する `error` クエリの値。`null` の場合は
+ * @param expectedError 期待する `login_error` クエリの値。`null` の場合は
  *                      「クエリが存在しない、または空」であることを期待する。
- * @return auth-form エンドポイントへのリクエストで、かつ `error` クエリが
+ * @return auth-form エンドポイントへのリクエストで、かつ `login_error` クエリが
  *         期待どおりなら true。
  */
 function isAuthFormRequestWithError(
@@ -181,7 +181,7 @@ function isAuthFormRequestWithError(
 		return false;
 	}
 
-	const errorParam = url.searchParams.get( 'error' );
+	const errorParam = url.searchParams.get( 'login_error' );
 	if ( null === expectedError ) {
 		return ! errorParam;
 	}
@@ -244,7 +244,7 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 			{ timeout: 20000 }
 		);
 
-		// クライアントが初回の auth-form 取得で error=auth_failed を渡していること。
+		// クライアントが初回の auth-form 取得で login_error=auth_failed を渡していること。
 		// （サーバー側フォールバックが同じ .vkbm-alert__danger を出すため、これを
 		// 怠っても下の文言チェックだけでは見落としてしまう。CodeRabbit 指摘対応）
 		// @check 再読み込み後のログインフォームの取得で、ログイン失敗のエラーが一緒に要求される
@@ -257,7 +257,14 @@ test.describe( 'issue #512 ログイン失敗時の画面真っ白/Cookie廃止'
 		// ログイン失敗後、統一文言（#194）がどこかに表示される
 		// （通常フローでは REST が返した authFormHtml 内のエラー欄に出る）。
 		// @check 「ユーザー名またはパスワードが正しくありません。」のエラーが表示される
-		const errorAlert = page.locator( '.vkbm-alert__danger' ).first();
+		// 予約ブロックが REST の応答を描画するまでは、ページ側で引き継いだ同じクラスのエラー文が
+		// 先に見えている。応答で置き換わった後も消えないことを確かめるため、REST が返した
+		// フォーム（.vkbm-reservation-content__auth-form）の中のエラー文を見る。
+		const errorAlert = page
+			.locator(
+				'.vkbm-reservation-content__auth-form .vkbm-alert__danger'
+			)
+			.first();
 		await expect( errorAlert ).toBeVisible( { timeout: 15000 } );
 		const text = ( ( await errorAlert.textContent() ) || '' ).replace(
 			/\s+/g,

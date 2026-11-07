@@ -336,9 +336,10 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 	 * 下書きを確定する（ログイン済みの利用者として）。
 	 *
 	 * @param string $token 下書きのトークン。
+	 * @param array  $extra 住所などの確定入力。
 	 * @return WP_REST_Response|WP_Error
 	 */
-	private function confirm( string $token ) {
+	private function confirm( string $token, array $extra = array() ) {
 		$controller = new Booking_Confirmation_Controller(
 			new Booking_Notification_Service_Test_Double(),
 			new Settings_Repository(),
@@ -347,6 +348,9 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 		$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 		$request->set_param( 'token', $token );
 		$request->set_param( 'agree_terms', true );
+		foreach ( array_merge( array( 'customer_address_full' => '東京都1-2' ), $extra ) as $key => $value ) {
+			$request->set_param( $key, $value );
+		}
 
 		return $controller->create_booking( $request );
 	}
@@ -373,6 +377,7 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 			'customer_name'             => '宿泊の予約者',
 			'customer_email'            => 'lodging-1019@example.com',
 			'customer_phone'            => '09012345678',
+			'customer_address_full'     => '東京都1-2',
 			'agree_terms'               => true,
 			'agree_cancellation_policy' => true,
 			'agree_terms_of_service'    => true,
@@ -1715,5 +1720,164 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 		update_post_meta( $menu_id, '_vkbm_max_capacity', '1' );
 		$this->assertSame( 'guests_exceeded:400', $this->code_of( $this->confirm( $token ) ), '下書きの後に上限が下がったとき' );
 		$this->assertSame( 0, $this->count_slot_lock_rows() );
+	}
+
+	/** 本人・代理予約は住所を予約だけに保存し、必須設定と文字数を検証する。 */
+	public function test_create_booking_customer_address(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '本人予約の国内住所',
+				'proxy'               => false,
+				'required'            => true,
+				'address'             => '東京都1-2',
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '代理予約の国外住所',
+				'proxy'               => true,
+				'required'            => true,
+				'address'             => '12 Main St, London',
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '任意なら空欄を保存',
+				'proxy'               => false,
+				'required'            => false,
+				'address'             => '',
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '必須なら空白のみを拒否',
+				'proxy'               => false,
+				'required'            => true,
+				'address'             => '　 ',
+				'expected'            => 'customer_address_required:400',
+			),
+			array(
+				'test_condition_name' => '代理でも必須を免除しない',
+				'proxy'               => true,
+				'required'            => true,
+				'address'             => '',
+				'expected'            => 'customer_address_required:400',
+			),
+			array(
+				'test_condition_name' => '任意でも256文字を拒否',
+				'proxy'               => false,
+				'required'            => false,
+				'address'             => str_repeat( '住', 256 ),
+				'expected'            => 'customer_address_too_long:400',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$settings                            = ( new Settings_Repository() )->get_settings();
+			$settings['lodging_address_required'] = $case['required'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			$user_id = $this->factory()->user->create();
+			if ( $case['proxy'] ) {
+				get_user_by( 'id', $user_id )->add_cap( Capabilities::MANAGE_RESERVATIONS );
+			}
+			wp_set_current_user( $user_id );
+			update_user_meta( $user_id, 'vkbm_address_full', 'プロフィール住所' );
+			$room   = $this->create_room();
+			$menu   = $this->create_menu( array( $room ) );
+			$token  = $this->save_draft_token( $this->lodging_payload( $menu, $room, 10, 1 ) );
+			$result = $this->confirm(
+				$token,
+				array(
+					'customer_address_full' => $case['address'],
+					'customer_name'         => '代理のお客様',
+				)
+			);
+			$this->assertSame( $case['expected'], $this->code_of( $result ), $case['test_condition_name'] );
+			$this->assertSame( 'プロフィール住所', get_user_meta( $user_id, 'vkbm_address_full', true ), $case['test_condition_name'] );
+			if ( $result instanceof WP_REST_Response ) {
+				$id = (int) $result->get_data()['booking_id'];
+				update_user_meta( $user_id, 'vkbm_address_full', '変更後の住所' );
+				$this->assertSame( $case['address'], get_post_meta( $id, '_vkbm_booking_customer_address_full', true ), 'プロフィールを変更しても予約時点の住所を保持' );
+			}
+		}
+	}
+
+	/** ゲストの住所を確認前に検証し、確認待ちから予約へ同じ値を渡す。 */
+	public function test_create_guest_booking_customer_address(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '国内住所を確認後まで保持',
+				'required'            => true,
+				'address'             => '東京都1-2',
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '国外住所を確認後まで保持',
+				'required'            => true,
+				'address'             => '12 Main St, London',
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '任意なら空欄可',
+				'required'            => false,
+				'address'             => '',
+				'expected'            => 'ok',
+			),
+			array(
+				'test_condition_name' => '必須の空欄は送信前に拒否',
+				'required'            => true,
+				'address'             => '　 ',
+				'expected'            => 'customer_address_required:400',
+			),
+			array(
+				'test_condition_name' => '256文字は送信前に拒否',
+				'required'            => false,
+				'address'             => str_repeat( '住', 256 ),
+				'expected'            => 'customer_address_too_long:400',
+			),
+		);
+		foreach ( $test_cases as $index => $case ) {
+			wp_set_current_user( 0 );
+			$_COOKIE['vkbm_draft_owner']          = 'guest-address-1022';
+			$settings                                 = ( new Settings_Repository() )->get_settings();
+			// 住所の検証は、同意項目の既存設定に依存させない。
+			$settings['provider_cancellation_policy'] = '';
+			$settings['provider_terms_of_service']    = '';
+			$settings['booking_customer_mode']        = 'guest';
+			$settings['lodging_address_required']     = $case['required'];
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			$room         = $this->create_room();
+			$menu         = $this->create_menu( array( $room ) );
+			$token        = $this->save_draft_token( $this->lodging_payload( $menu, $room, 10, 1 ) );
+			$notification = new Guest_Notification_Recording_Double( true );
+			$confirmation = new Booking_Confirmation_Controller( $notification, new Settings_Repository(), new Availability_Service() );
+			$controller   = new \VKBookingManager\Bookings\Guest_Booking_Controller( $confirmation, $notification, new Settings_Repository() );
+			$request      = new WP_REST_Request( 'POST', '/vkbm/v1/guest-bookings' );
+			foreach ( array(
+				'token'                 => $token,
+				'customer_name'         => '宿泊予約者',
+				'customer_email'        => 'address-' . $index . '@example.com',
+				'customer_phone'        => '09012345678',
+				'customer_address_full' => $case['address'],
+				'agree_terms'           => true,
+			) as $key => $value ) {
+				$request->set_param( $key, $value );
+			}
+			$result = $controller->create_guest_booking_request( $request );
+			$this->assertSame( $case['expected'], $this->code_of( $result ), $case['test_condition_name'] );
+			if ( $result instanceof WP_Error ) {
+				$this->assertCount( 0, $notification->verifications, '不正住所ではメールを送らない' );
+				continue;
+			}
+			$this->assertArrayNotHasKey( 'customer_address_full', $notification->verifications[0], 'メールには住所を渡さない' );
+			parse_str( (string) wp_parse_url( $notification->verifications[0]['verify_url'], PHP_URL_QUERY ), $query );
+			$raw_token   = $query['vkbm_guest_verify'];
+			$pending_key = \VKBookingManager\Bookings\Guest_Booking_Controller::PENDING_PREFIX . hash( 'sha256', $raw_token );
+			$pending     = get_transient( $pending_key );
+			$this->assertSame( $case['address'], $pending['form']['customer_address_full'], $case['test_condition_name'] );
+			// 申し込み後に必須へ変更されても、受付済みの任意住所は確定できる。
+			$settings['lodging_address_required'] = true;
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			$verified = $controller->process_verification( $raw_token );
+			$this->assertSame( 'pending', $verified['result'], $case['test_condition_name'] );
+			$this->assertSame( $case['address'], get_post_meta( (int) $verified['booking_id'], '_vkbm_booking_customer_address_full', true ), $case['test_condition_name'] );
+			$this->assertFalse( get_transient( $pending_key ), '確認後は一時データを削除する' );
+		}
 	}
 }

@@ -72,7 +72,7 @@ class Surface_Text_Styles_Test extends TestCase {
 
 		$this->assertSame(
 			1,
-			preg_match( '/' . preg_quote( $selector, '/' ) . '\s*\{([^{}]*)/s', $content, $matches ),
+			preg_match( '/^[\t ]*(?:[^{};]*,\s*)?' . preg_quote( $selector, '/' ) . '\s*(?:,[^{};]+)?\{([^{}]*)/ms', $content, $matches ),
 			$selector . ' のルールが見つかりません。'
 		);
 		// 見出し（#864）は、オン時だけ出力する --vkbm--color--menu-heading-* の代替値として背景色・surface-text を持つ。
@@ -116,7 +116,7 @@ class Surface_Text_Styles_Test extends TestCase {
 				continue;
 			}
 			$content = $this->read_local_file( $file );
-			$this->assertSame( 1, preg_match( '/^(\t*)' . preg_quote( $selector, '/' ) . '\s*\{([^{}&]*)(.*?)^\1\}/ms', $content, $rule ), $name );
+			$this->assertSame( 1, preg_match( '/^(\t*)(?:[^\s{};][^{};]*,\s*)?' . preg_quote( $selector, '/' ) . '\s*(?:,[^{};]+)?\{([^{}&]*)(.*?)^\1\}/ms', $content, $rule ), $name );
 			$this->assertMatchesRegularExpression( '/color-scheme:\s*light;/', $rule[2], $name );
 			$this->assertMatchesRegularExpression( '/border(?:-color)?:[^;]*var\(--vkbm--color--border/', $rule[2], $name );
 

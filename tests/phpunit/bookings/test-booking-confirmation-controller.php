@@ -263,6 +263,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			wp_set_current_user( 0 );
 			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 			$request->set_param( 'agree_terms', true );
+			$request->set_param( 'customer_address_full', str_repeat( '住', 256 ) );
 			$result = $this->build_controller( $staff_id, $start, $end )->create_booking_from_draft(
 				$draft,
 				$case['pass_token'] ? $token : '',
@@ -275,6 +276,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				$this->assertIsArray( $result, $case['test_condition_name'] );
 				$this->assertContains( $result['status'], array( 'pending', 'confirmed' ), $case['test_condition_name'] );
 				$this->assertSame( $user_id, (int) get_post( $result['booking_id'] )->post_author, $case['test_condition_name'] );
+				$this->assertFalse( metadata_exists( 'post', $result['booking_id'], '_vkbm_booking_customer_address_full' ), '時間枠予約に住所を保存しない' );
 			} else {
 				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
 				$this->assertSame( $case['expected_error'], $result->get_error_code(), $case['test_condition_name'] );

@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.3
-Stable tag: 3.10.0
+Stable tag: 3.11.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -118,6 +118,12 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.11.0 =
+* [ 機能追加 ][ 予約ブロック ] 宿泊予約とプロフィールに住所欄を追加し、住所の必須設定・予約管理での訂正・匿名化に対応
+* [ 不具合修正 ] ライセンスキーを入力・変更しても、入力前の更新確認の結果が残り、しばらくアップデートに失敗する不具合を修正
+* [ 不具合修正 ] ユーザーを削除すると予約も消える不具合を修正し、過去の予約の個人情報を匿名化するか選べるように変更
+* [ 不具合修正 ][ 予約ブロック ] ログインに失敗すると、エラー文が一瞬だけ表示されてすぐ消え、失敗したことが分からない不具合を修正
 
 = 3.10.0 =
 * [ 機能追加 ][ メニュー一覧ブロック / 予約ブロック ] カード表示で、画像の比率（正方形・4:3・16:9 など）を選べる設定を追加
