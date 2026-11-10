@@ -11,6 +11,7 @@ return array(
     'VKBookingManager\\Admin\\Email_Log_Repository' => $baseDir . '/src/admin/class-email-log-repository.php',
     'VKBookingManager\\Admin\\Owner_Admin_Menu_Filter' => $baseDir . '/src/admin/class-owner-admin-menu-filter.php',
     'VKBookingManager\\Admin\\Pro_Upsell' => $baseDir . '/src/admin/class-pro-upsell.php',
+    'VKBookingManager\\Admin\\Provider_Settings_Navigation' => $baseDir . '/src/admin/class-provider-settings-navigation.php',
     'VKBookingManager\\Admin\\Provider_Settings_Page' => $baseDir . '/src/admin/class-provider-settings-page.php',
     'VKBookingManager\\Admin\\Service_Menu_Editor' => $baseDir . '/src/admin/class-service-menu-editor.php',
     'VKBookingManager\\Admin\\Setup_Notices' => $baseDir . '/src/admin/class-setup-notices.php',

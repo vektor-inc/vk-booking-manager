@@ -288,11 +288,11 @@ class Booking_Draft_Controller {
 			: $agreed;
 		// menu_label / staff_label は sanitize 後にラベル用の静的上限で切り詰める。
 		// Apply static label length cap after sanitize.
-		$menu_label         = isset( $params['menu_label'] ) ? sanitize_text_field( (string) $params['menu_label'] ) : '';
-		$menu_label         = self::truncate_text( $menu_label, self::LABEL_MAX_LENGTH );
-		$staff_label        = isset( $params['staff_label'] ) ? sanitize_text_field( (string) $params['staff_label'] ) : '';
-		$staff_label        = self::truncate_text( $staff_label, self::LABEL_MAX_LENGTH );
-		$is_staff_preferred = ! empty( $params['is_staff_preferred'] );
+		$menu_label  = isset( $params['menu_label'] ) ? sanitize_text_field( (string) $params['menu_label'] ) : '';
+		$menu_label  = self::truncate_text( $menu_label, self::LABEL_MAX_LENGTH );
+		$staff_label = isset( $params['staff_label'] ) ? sanitize_text_field( (string) $params['staff_label'] ) : '';
+		$staff_label = self::truncate_text( $staff_label, self::LABEL_MAX_LENGTH );
+		// 指名フラグ（$is_staff_preferred）はクライアント値を信用せず、下の分岐で resource_id から導出する。
 
 		// このメニューで指名機能が無効の場合、指名フラグを強制的に false にする。
 		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。既存メニュー（新メタ未設定＝指名を使う）は
@@ -308,6 +308,10 @@ class Booking_Draft_Controller {
 			// 空き枠・定員のチェックは自動割り当て（ベストフィット）経路で通常どおり効くため、
 			// 金銭・データへの影響は無い（従来からのサイト全体OFF時と同じ経路を通るだけ）。
 			$resource_id = 0;
+		} else {
+			// 指名フラグはクライアントから受け取らず、空き計算（Availability_Service）と同じ定義
+			// 「resource_id > 0 ＝指名あり」でサーバー側が決める。
+			$is_staff_preferred = $resource_id > 0;
 		}
 
 		// 時間枠の経路で担当が指定されたときは、そのメニューで担当できる公開中のリソースかを確かめる。

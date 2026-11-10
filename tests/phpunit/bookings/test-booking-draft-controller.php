@@ -966,6 +966,24 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'expected_nomination_enabled' => false,
 				'expected_nomination_fee'     => 0,
 			),
+			array(
+				'test_condition_name'         => '指名ONのメニューで is_staff_preferred=false + resource_id=スタッフ（改竄） => resource_id から指名と導出され指名料が計上される',
+				'menu_disable_nomination'     => false,
+				'industry_preset'             => 'custom',
+				'submitted_is_staff_preferred' => false,
+				'expected_is_staff_preferred' => true,
+				'expected_nomination_enabled' => true,
+				'expected_nomination_fee'     => 1000,
+			),
+			array(
+				'test_condition_name'         => '指名ONのメニューで resource_id=0（おまかせ）に is_staff_preferred=true が送られても => 指名なしのまま・指名料0',
+				'menu_disable_nomination'     => false,
+				'industry_preset'             => 'custom',
+				'submitted_resource_id'       => 0,
+				'expected_is_staff_preferred' => false,
+				'expected_nomination_enabled' => true,
+				'expected_nomination_fee'     => 0,
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -999,8 +1017,8 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			$payload    = array_merge(
 				$this->build_payload( $menu_id, '2024-11-15T10:00:00+09:00' ),
 				array(
-					'resource_id'         => $staff_id,
-					'is_staff_preferred'  => true,
+					'resource_id'         => $case['submitted_resource_id'] ?? $staff_id,
+					'is_staff_preferred'  => $case['submitted_is_staff_preferred'] ?? true,
 				)
 			);
 			$token = $this->save_draft( $controller, $payload );

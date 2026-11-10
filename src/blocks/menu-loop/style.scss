@@ -577,16 +577,15 @@
    ========================================================================== */
 
 // 基本設定の「予約ボタンの色」（--vkbm--color--reservation-action）を使う。
-// 共通の .vkbm-button__primary と同じ詳細度のため、共通 CSS より後に読み込まれる
-// このファイルに置いて後勝ちにする。
-.vkbm-menu-loop__button--reserve {
+// レンダラーが常に付ける2クラスで、共通ボタン指定より予約色を優先する。
+.vkbm-button.vkbm-menu-loop__button--reserve {
 	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
-	color: #fff;
+	color: var(--vkbm--color--reservation-action-text, #fff);
 }
 
-.vkbm-menu-loop__button--reserve:hover {
+.vkbm-button.vkbm-menu-loop__button--reserve:hover {
 
-	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)));
+	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)), --vkbm--color--reservation-action-hover);
 }
 
 /* ==========================================================================

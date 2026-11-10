@@ -1,29 +1,196 @@
 @use "breakpoints" as *;
 
 // =============================================================================
-// 基本設定画面のタブ見出し
+// 基本設定画面の設定メニュー（左サイドバー・狭い幅の開閉式メニュー）
 // =============================================================================
-// タブが多く、画面幅が狭いと途中から複数段に折り返す。WordPress 本体の .nav-tab は
-// 下枠が無く段の間隔も 0 のため、折り返すと上の段と下の段がくっついて 1 つの塊に見える。
-// WordPress 本体は 782px 以下では各タブを下枠付き・上余白 10px に切り替えて独立させるので、
-// それより広い幅でだけ、同じ考え方で段ごとに下枠と段の間隔を付ける。
-// 1 段のときは見た目を変えない（下枠は下線に重ねる）。
-@include vkbm-bp-up($vkbm-bp-admin-sm) {
+// 広い幅（1101px 以上）は本文の左に縦のメニュー、それより狭い幅は本文の上の開閉式メニューにする（issue #1065）。
+// 切り替え幅を 782px にしないのは、783〜約1050px でサイドバー分だけ本文が狭まり、設定ラベル（.form-table th）が語の途中で折れるため。
+// 項目は本体の項目（.vkbm-provider-settings__nav-link）と、拡張プラグインが出力する a.nav-tab に同じ見た目を当てる。
+// 色は WordPress 管理画面の既存色（強調色は管理画面の配色に追従する変数）を使う。
 
-	.vkbm-provider-settings__tabs.nav-tab-wrapper {
-		display: flex;
-		flex-wrap: wrap;
-		row-gap: 8px;
+// 項目 1 つ分の見た目（区切り線・ホバー・現在地）。
+@mixin vkbm-provider-settings-nav-item {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	// a.nav-tab に当たる WordPress 本体の .nav-tab（float・内容幅・折り返さない指定）を打ち消し、全幅で縦に並べる
+	float: none;
+	width: 100%;
+	min-height: 36px;
+	margin: 0;
+	padding: 8px 12px 8px 8px;
+	border: 0;
+	border-left: 4px solid transparent;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	color: #2c3338;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 20px;
+	text-decoration: none;
+	white-space: normal;
+	transition: background-color 0.15s, color 0.15s;
 
-		// WordPress 本体のクリアフィックス用の擬似要素（flex では余分な段になる）を消す
-		&::after {
-			content: none;
+	&:hover {
+		background: #f6f7f7;
+		color: var(--wp-admin-theme-color, #2271b1);
+	}
+
+	// フォーカス枠はパネルの角丸で切れないよう、項目の内側に出す
+	&:focus-visible {
+		outline: 2px solid var(--wp-admin-theme-color, #2271b1);
+		outline-offset: -2px;
+		box-shadow: none;
+	}
+
+	// 現在地は色だけに頼らず、左の縦線・太字・背景で示す。
+	// ホバー・フォーカスの指定より後に置く（この位置より上へ移動しないこと）。
+	&[aria-current="page"],
+	&.nav-tab-active,
+	&[aria-current="page"]:hover,
+	&.nav-tab-active:hover,
+	&.nav-tab-active:focus,
+	&.nav-tab-active:focus:active {
+		border-left-color: var(--wp-admin-theme-color, #2271b1);
+		background: #f0f6fc;
+		color: #1d2327;
+		font-weight: 600;
+	}
+
+	// 狭い幅は指で押しやすい高さにする
+	@include vkbm-bp-down($vkbm-bp-admin-sm) {
+		min-height: 44px;
+		padding-top: 12px;
+		padding-bottom: 12px;
+		font-size: 14px;
+	}
+}
+
+.vkbm-provider-settings {
+
+	// 本文との並び
+	// -----------------------------------------------------------------------------
+	@include vkbm-bp-up($vkbm-bp-admin-lg) {
+
+		.vkbm-provider-settings__layout {
+			display: grid;
+			grid-template-columns: 220px minmax(0, 1fr);
+			gap: 32px;
+			align-items: start;
+		}
+	}
+
+	.vkbm-provider-settings__main {
+		min-width: 0;
+	}
+
+	// 現在の項目名の見出し。WordPress 本体の .wrap h2 の指定より優先する
+	.vkbm-provider-settings__panel-title {
+		margin: 0 0 8px;
+		padding: 0;
+		color: #1d2327;
+		font-size: 18px;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+
+	// 広い幅のサイドバー
+	// -----------------------------------------------------------------------------
+	.vkbm-provider-settings__nav--sidebar {
+		display: none;
+	}
+
+	@include vkbm-bp-up($vkbm-bp-admin-lg) {
+
+		.vkbm-provider-settings__nav--sidebar {
+			display: block;
+			position: sticky;
+			top: 48px; // 管理バーの高さ（32px）の下に余白を足した位置
+			max-height: calc(100vh - 64px);
+			overflow-y: auto; // 画面より高いときはメニューの中でスクロールする
+			border: 1px solid #c3c4c7;
+			border-radius: 4px;
+			background: #fff;
 		}
 
-		// 選択中のタブは WordPress 本体の指定（下枠を背景色にして下線を消す）のまま使う
-		.nav-tab:where(:not(.nav-tab-active)) {
-			margin-bottom: -1px;
-			border-bottom: 1px solid #c3c4c7; // WordPress 本体の .nav-tab の枠線の色
+		.vkbm-provider-settings__nav-mobile {
+			display: none;
+		}
+	}
+
+	// 狭い幅の開閉式メニュー
+	// -----------------------------------------------------------------------------
+	.vkbm-provider-settings__nav-mobile {
+		margin: 0 0 20px;
+		border: 1px solid #c3c4c7;
+		border-radius: 4px;
+		background: #fff;
+		overflow: hidden;
+
+		.vkbm-provider-settings__nav--mobile {
+			border-top: 1px solid #c3c4c7;
+		}
+	}
+
+	.vkbm-provider-settings__nav-mobile-summary {
+		box-sizing: border-box;
+		min-height: 44px;
+		padding: 13px 12px;
+		color: #1d2327;
+		font-size: 14px;
+		line-height: 1.3;
+		cursor: pointer;
+
+		&:focus-visible {
+			outline: 2px solid var(--wp-admin-theme-color, #2271b1);
+			outline-offset: -2px;
+		}
+	}
+
+	// グループと項目
+	// -----------------------------------------------------------------------------
+	.vkbm-provider-settings__nav-group + .vkbm-provider-settings__nav-group {
+		border-top: 1px solid #c3c4c7;
+	}
+
+	.vkbm-provider-settings__nav-group-title {
+		margin: 0;
+		padding: 8px 12px;
+		border-bottom: 1px solid #dcdcde;
+		background: #f6f7f7;
+		color: #50575e;
+		font-size: 12px;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+
+	.vkbm-provider-settings__nav-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+
+		> li {
+			margin: 0;
+		}
+
+		> li + li {
+			border-top: 1px solid #dcdcde;
+		}
+	}
+
+	.vkbm-provider-settings__nav-link {
+
+		@include vkbm-provider-settings-nav-item;
+	}
+
+	// 拡張プラグインが出力する a.nav-tab。WordPress 本体の .nav-tab の指定より優先するため、詳細度を上げている
+	.vkbm-provider-settings__nav-extra .nav-tab {
+
+		@include vkbm-provider-settings-nav-item;
+
+		+ .nav-tab {
+			border-top: 1px solid #dcdcde;
 		}
 	}
 }
@@ -90,6 +257,40 @@ $vkbm-provider-settings-tabs: store, system, attendees, email, registration, con
 			vertical-align: middle;
 		}
 
+		// 表のどのセルも語の途中で折り返さない。日本語は文節の切れ目で折り返し（未対応のブラウザは通常の折り返し）、
+		// 行ラベルの曜日名・定休日バッジと、チェックボックスの文言は語を分けない（keep-all）。
+		// 全言語で white-space: nowrap にすると英語の長い文言（Specify individual business hours など）が縮まず表がはみ出すため、
+		// 英語は単語の区切り（スペース）で折り返せるようにし、日本語（lang="ja"）のときだけ折り返さない
+		// （keep-all だけでは「定休日（毎週）」が全角かっこの前で折れるため）。
+		th,
+		td {
+			word-break: auto-phrase;
+		}
+
+		.column-use-basic label {
+			word-break: keep-all;
+
+			&:lang(ja) {
+				white-space: nowrap;
+			}
+		}
+
+		// 行ラベルは、曜日名と定休日バッジを横に並べ、入りきらないときはバッジを次の行の左端にそろえて落とす
+		.vkbm-business-hours-label {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 4px 6px;
+		}
+
+		.vkbm-business-hours-day {
+			word-break: keep-all;
+
+			&:lang(ja) {
+				white-space: nowrap;
+			}
+		}
+
 		.column-use-basic {
 			width: 220px;
 		}
@@ -106,11 +307,15 @@ $vkbm-provider-settings-tabs: store, system, attendees, email, registration, con
 
 	.vkbm-business-hours-row.is-regular-holiday .vkbm-business-hours-note {
 		display: inline-block;
-		margin-left: 6px;
 		padding: 2px 6px;
 		font-size: 12px;
+		word-break: keep-all;
 		background: #ececec;
 		border-radius: 3px;
+
+		&:lang(ja) {
+			white-space: nowrap;
+		}
 	}
 
 	.vkbm-basic-business-hours {
@@ -218,6 +423,12 @@ $vkbm-provider-settings-tabs: store, system, attendees, email, registration, con
 
 	.vkbm-provider-settings__cancel-hours-field {
 		margin-left: 0.75rem;
+	}
+
+	// 予約ボタン名や文末が語句の途中で折り返されるのを防ぐ。
+	&:lang(ja) .vkbm-provider-settings__reservation-button-color .description {
+		word-break: auto-phrase;
+		line-break: strict;
 	}
 
 	.vkbm-provider-settings__privacy-policy-field {

@@ -655,7 +655,7 @@ class Setup_Notices {
 	private function get_google_calendar_sync_broken_message( string $reason, bool $has_listed_bookings = false ): string {
 		if ( Google_Calendar_Event_Sync::REASON_AUTH === $reason ) {
 			$message  = __( 'Reflecting to Google Calendar has failed repeatedly, possibly because access to Google was lost.', 'vk-booking-manager' );
-			$message .= __( ' Please check the connection on the Integration tab.', 'vk-booking-manager' );
+			$message .= __( ' Please check the connection in "Integration".', 'vk-booking-manager' );
 
 			return $message;
 		}
@@ -685,7 +685,7 @@ class Setup_Notices {
 	private function get_google_calendar_sync_broken_button( string $reason ): array {
 		if ( Google_Calendar_Event_Sync::REASON_AUTH === $reason ) {
 			return array(
-				'label' => __( 'Open the Integration tab', 'vk-booking-manager' ),
+				'label' => __( 'Open "Integration"', 'vk-booking-manager' ),
 				'url'   => Google_Calendar_Connect_Controller::get_settings_tab_url(),
 			);
 		}

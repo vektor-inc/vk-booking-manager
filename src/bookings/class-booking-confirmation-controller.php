@@ -1311,6 +1311,12 @@ class Booking_Confirmation_Controller {
 		// 下書きの is_staff_preferred フラグも $staff_id 同様に信用しない。改竄された指名フラグで
 		// 自動割当（ベストフィット判定）をバイパスされることを防ぐ。
 		$is_staff_preferred = Staff_Editor::is_enabled() && ! empty( $draft['is_staff_preferred'] );
+		// 多層防御: 指名を使うメニューで特定スタッフ（$staff_id > 0）が指定された下書きは、フラグの値によらず
+		// 指名として扱う（指名料を再計算する）。泊の下書きは客室を指すため対象外。
+		$is_lodging_draft = isset( $draft['lodging'] ) && is_array( $draft['lodging'] );
+		if ( ! $is_staff_preferred && ! $is_lodging_draft && $staff_id > 0 && Staff_Editor::is_enabled() && Staff_Editor::is_nomination_enabled_for_menu( (int) ( $draft['menu_id'] ?? 0 ) ) ) {
+			$is_staff_preferred = true;
+		}
 
 		// 自動割当スロットでは、確定直前のロック保持下で単一スタッフへベストフィット割り当てする（分割しない）。
 		$is_auto_assign = ! empty( $available_slot['auto_assign'] );

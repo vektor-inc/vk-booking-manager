@@ -1,7 +1,6 @@
 @use "mixins" as *;
 
 .vkbm-button {
-	text-box: trim-both text;
 	align-items: center;
 	appearance: none;
 	border: 1px solid transparent;
@@ -13,7 +12,9 @@
 	gap: 0.35rem;
 	justify-content: center;
 	line-height: 1;
-	padding: 0.6rem 1.5rem;
+	// 上下の合計を保ち、フォントに合わせて文字位置だけを調整する。
+	padding-inline: 1.5rem;
+	padding-block: calc(0.6rem - var(--vkbm--button--text-offset, 0px)) calc(0.6rem + var(--vkbm--button--text-offset, 0px));
 	text-decoration: none;
 	transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, filter 0.2s ease;
 	user-select: none;
@@ -58,19 +59,22 @@
 }
 
 .vkbm-button__xs {
-	padding: 3px 0.8rem;
+	padding-inline: 0.8rem;
+	padding-block: calc(3px - var(--vkbm--button--text-offset, 0px)) calc(3px + var(--vkbm--button--text-offset, 0px));
 	font-size: 0.75rem;
 	border-radius: var(--vkbm--radius--sm, 4px);
 }
 
 .vkbm-button__sm {
-	padding: 0.4rem 1rem;
+	padding-inline: 1rem;
+	padding-block: calc(0.4rem - var(--vkbm--button--text-offset, 0px)) calc(0.4rem + var(--vkbm--button--text-offset, 0px));
 	font-size: 0.88rem;
 	border-radius: var(--vkbm--radius--sm, 4px);
 }
 
 .vkbm-button__lg {
-	padding: 0.8rem 1.75rem;
+	padding-inline: 1.75rem;
+	padding-block: calc(0.8rem - var(--vkbm--button--text-offset, 0px)) calc(0.8rem + var(--vkbm--button--text-offset, 0px));
 	font-size: 1.05rem;
 }
 

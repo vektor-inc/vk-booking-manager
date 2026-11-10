@@ -1069,8 +1069,9 @@
 			return false;
 		}
 
-		// 画面のタブ一覧に移動先が無いとき（拡張プラグインがタブを外した環境）は、再読み込みの繰り返しを防ぐため移動しない。
-		const availableTabs = $( '.nav-tab-wrapper a.nav-tab' )
+		// 設定メニューに移動先が無いとき（拡張プラグインがリンクを外した環境）は、再読み込みの繰り返しを防ぐため移動しない。
+		// 拡張プラグインのリンク（a.nav-tab）も設定メニュー内に出力される。
+		const availableTabs = $( '.vkbm-provider-settings__nav a[href]' )
 			.map( function () {
 				return new URL(
 					this.href,
@@ -1187,7 +1188,7 @@
 			lastSubmitEvent = event;
 		} );
 
-		// 本体と拡張プラグインのタブ、および本文内にある別タブへのリンクを一括で扱う。
+		// 設定メニュー（本体と拡張プラグインの項目・狭い幅用の開閉式メニュー）と、本文内にある別の設定画面へのリンクを一括で扱う。
 		page.addEventListener( 'click', function ( event ) {
 			const eventTarget = event.target;
 			const link =

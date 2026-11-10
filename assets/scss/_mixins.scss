@@ -11,10 +11,17 @@
 // ボタンの hover 色は「元の色を 75% 残して黒を混ぜる」で統一している。式が各ファイルに
 // 直書きされていると、片方だけ割合を変えたときにボタンごとに hover の暗さがずれる。
 // 暗さを変えるときはここだけ直すこと。
+// $override には、コントラストを保つための計算済みホバー色の CSS 変数名を渡せる。
 // $color には、通常時の背景に使っているのと同じ色（var(...) の式でよい）を渡す。
 // 通常時の色と式がずれると hover で色相が変わるため、通常時と同じ式を渡すこと。
-@mixin vkbm-hover-darken($color) {
-	background: color-mix(in srgb, #{$color} 75%, #000);
+@mixin vkbm-hover-darken($color, $override: null) {
+	$background: color-mix(in srgb, #{$color} 75%, #000);
+
+	@if $override {
+		background: var(#{$override}, #{$background});
+	} @else {
+		background: $background;
+	}
 }
 
 // 画面には出さず、読み上げだけ残す（visually-hidden）

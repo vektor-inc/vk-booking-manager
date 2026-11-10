@@ -365,7 +365,7 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 		}
 
 		// メールログの有効・無効で、手順 1 の案内を出し分ける。
-		$this->assertStringContainsString( esc_html__( 'Turn on "Enable email log" on this tab and save the settings.', 'vk-booking-manager' ), $email_html, 'メールログが無効なら、このタブで有効にする案内を出すこと' );
+		$this->assertStringContainsString( esc_html__( 'Turn on "Enable email log" on this page and save the settings.', 'vk-booking-manager' ), $email_html, 'メールログが無効なら、このタブで有効にする案内を出すこと' );
 		$this->assertStringContainsString( 'tab=email#vkbm-email-log-enabled', $faq_html, 'メールログが無効なら、よくある質問からメール設定タブのメールログ設定へのリンクが出ること' );
 		$settings                      = ( new Settings_Repository() )->get_settings();
 		$settings['email_log_enabled'] = true;
@@ -374,7 +374,7 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 		$faq_html_log_enabled   = $this->render_tab( $this->create_page(), 'faq' );
 		$this->assertStringContainsString( 'page=vkbm-email-log', $faq_html_log_enabled, 'メールログが有効なら、よくある質問にメールログ画面へのリンクが出ること' );
 		$this->assertStringNotContainsString( 'tab=email#vkbm-email-log-enabled', $faq_html_log_enabled, 'メールログが有効なら、よくある質問に有効化の案内が出ないこと' );
-		$this->assertStringNotContainsString( esc_html__( 'Turn on "Enable email log" on this tab and save the settings.', 'vk-booking-manager' ), $email_html_log_enabled, 'メールログが有効なら、有効にする案内を出さないこと' );
+		$this->assertStringNotContainsString( esc_html__( 'Turn on "Enable email log" on this page and save the settings.', 'vk-booking-manager' ), $email_html_log_enabled, 'メールログが有効なら、有効にする案内を出さないこと' );
 		$this->assertStringContainsString( 'page=vkbm-email-log', $email_html_log_enabled, 'メールログが有効なら、メールログ画面へのリンクを出すこと' );
 
 		// 移した項目は、メール設定タブの行として出力される。

@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.3
-Stable tag: 3.11.0
+Stable tag: 3.13.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -109,6 +109,18 @@ Yes, logged-in customers can view their booking history and upcoming appointment
 
 The plugin supports irregular business hours, multiple shifts per day, special days (holidays, temporary closures), and service-specific availability. The booking form will only display time slots that are actually available based on all these factors. In the Pro version, you can also set staff-specific schedules for individual staff members.
 
+= How can I adjust button text that looks too low or too high with a web font? =
+
+Open your site's Additional CSS editor. For a classic theme, go to Appearance > Customize > Additional CSS. For a block theme, open Appearance > Editor > Styles and find Additional CSS in the Styles menu. Paste the following rule, then save or publish your changes:
+
+`:root { --vkbm--button--text-offset: 0.5px; }`
+
+A positive value moves the text up; a negative value moves it down. Try 0.5px if the text looks too low, or -0.5px if it looks too high. Adjust in 0.5px steps while checking your site's desktop and mobile views. Some browsers may not show a visible change for a 0.5px difference; if nothing changes, try 1px or -1px. Always include a unit such as px, even for 0 (write 0px). To restore the original position, remove this rule or change the value to 0px.
+
+Measured starting values are 0.5px for Noto Sans JP, Noto Serif JP, and Zen Kaku Gothic New, and 0px for M PLUS 1p and BIZ UDPGothic. Results vary with the text, font size, operating system, and browser. These are starting points, not automatic corrections.
+
+Small adjustments preserve the button height. Keep the value close to 0px: large values can change the height when the top or bottom padding reaches zero. Text links without vertical padding are excluded.
+
 == Screenshots ==
 
 1. Booking form - User-friendly reservation interface with menu and staff selection
@@ -118,6 +130,13 @@ The plugin supports irregular business hours, multiple shifts per day, special d
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.13.0 =
+* [ 仕様変更 ] セミナーモードのシフト・予約表を、表示指定がないか不正なときは月表示で開くよう変更
+* [ 仕様変更 ] BM設定 > 基本設定の画面上部のタブを、グループ見出し付きの左サイドバーに変更（項目の URL・名前は変更なし。画面幅が狭いときは本文上の開閉式メニューに変更）
+* [ 不具合修正 ][ 予約ブロック ] 「予約に進むボタンの色」が予約確認画面の「この内容で予約する」に反映されない不具合を修正し、指定色に応じてボタンの文字色を自動調整
+* [ デザイン不具合修正 ] Web フォントによってボタンの文字が上下にずれて見える場合に、CSS 変数で文字の上下位置を調整できるよう対応
+* [ セキュリティ修正 ][ 予約ブロック ] 指名の有無を担当者の指定から判定するよう変更
 
 = 3.12.0 =
 * [ 機能追加 ] 新規登録・プロフィール編集・ゲスト予約で電話番号を必須にするかを選べる設定を追加

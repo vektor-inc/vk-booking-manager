@@ -8,7 +8,7 @@ const SETTINGS_URL_WITHOUT_TAB =
 	'/wp-admin/admin.php?page=vkbm-provider-settings';
 const PROVIDER_NAME = '#vkbm-provider-name';
 const SYSTEM_TAB =
-	'.vkbm-provider-settings__tabs a.nav-tab[href*="tab=system"]';
+	'.vkbm-provider-settings__nav--sidebar a[href*="tab=system"]';
 
 test.beforeEach( async ( { page } ) => {
 	// 各シナリオを保存済みの店舗タブから開始する。

@@ -779,8 +779,11 @@ class Shift_Dashboard_Page {
 			}
 		}
 
-		// 表示指定が無い、または不正な場合は、宿泊の運用に適した月表示を既定にする。
-		return Industry_Presets::supports( 'lodging' ) ? 'month' : 'day';
+		// 無料版で保存済みの業種を実効値と誤認しないよう、正規のプリセット判定を使う。
+		$settings = $this->get_display_settings();
+		$defaults = ( new Settings_Repository() )->get_default_settings();
+		$preset   = Industry_Presets::get_current_preset( $settings, $defaults );
+		return in_array( $preset, array( 'seminar', 'lodging' ), true ) ? 'month' : 'day';
 	}
 
 	/**

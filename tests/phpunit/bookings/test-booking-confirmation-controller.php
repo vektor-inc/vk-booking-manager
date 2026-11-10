@@ -2198,6 +2198,14 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				'industry_preset'         => 'custom',
 				'expected_nomination_fee' => 0,
 			),
+			array(
+				'test_condition_name'     => '指名ONのメニューで下書きが is_staff_preferred=false + resource_id=スタッフ（改竄・古い下書き） => 指名として扱い指名料1000を計上（多層防御）',
+				'menu_disable_nomination' => false,
+				'industry_preset'         => 'custom',
+				'draft_is_staff_preferred' => false,
+				'expected_nomination_fee' => 1000,
+				'expected_is_staff_preferred' => '1',
+			),
 		);
 
 		foreach ( $test_cases as $index => $case ) {
@@ -2221,7 +2229,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			$start = sprintf( '2024-08-%02dT10:00:00+09:00', 10 + $index );
 			$end   = sprintf( '2024-08-%02dT10:30:00+09:00', 10 + $index );
 
-			$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end, 1, true );
+			$token      = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end, 1, $case['draft_is_staff_preferred'] ?? true );
 			$controller = $this->build_controller( $staff_id, $start, $end );
 			$request    = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
 			$request->set_param( 'token', $token );
@@ -2237,6 +2245,15 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				(int) get_post_meta( $booking_id, '_vkbm_booking_nomination_fee', true ),
 				$case['test_condition_name']
 			);
+
+			// 指名料だけ保存され指名状態が false のままになる退行を拾うため、キーを持つケースだけ指名メタも検証する。
+			if ( isset( $case['expected_is_staff_preferred'] ) ) {
+				$this->assertSame(
+					$case['expected_is_staff_preferred'],
+					(string) get_post_meta( $booking_id, '_vkbm_booking_is_staff_preferred', true ),
+					$case['test_condition_name'] . ' / is_staff_preferred'
+				);
+			}
 
 			wp_set_current_user( 0 );
 		}

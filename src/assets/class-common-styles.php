@@ -34,6 +34,17 @@ class Common_Styles {
 	public const FOOTER_TEXT_COLOR_PREFERRED = '#333333';
 
 	/**
+	 * 予約ボタンでコントラスト比を満たすときに優先する文字色（白）。
+	 */
+	public const RESERVATION_TEXT_COLOR_PREFERRED = '#ffffff';
+
+	/**
+	 * ホバー時に残す元の色の割合。assets/scss/_mixins.scss の
+	 * vkbm-hover-darken の割合を変えたら、この値も修正すること。
+	 */
+	public const RESERVATION_HOVER_COLOR_WEIGHT = 0.75;
+
+	/**
 	 * 文字色に求めるコントラスト比の下限（WCAG 2.1 AA の本文の基準）。
 	 */
 	public const MIN_TEXT_CONTRAST_RATIO = 4.5;
@@ -257,6 +268,15 @@ class Common_Styles {
 			}
 		}
 
+		// 有効な予約ボタンの背景色があるときだけ、読みやすい文字色を出力する。
+		if ( isset( $properties['--vkbm--color--reservation-action'] ) ) {
+			$properties['--vkbm--color--reservation-action-text'] = self::get_reservation_text_color( $properties['--vkbm--color--reservation-action'] );
+			$hover_color = self::get_reservation_hover_color( $properties['--vkbm--color--reservation-action'] );
+			if ( '' !== $hover_color ) {
+				$properties['--vkbm--color--reservation-action-hover'] = $hover_color;
+			}
+		}
+
 		$properties = array_merge( $properties, self::get_footer_color_properties( $settings ) );
 		$properties = array_merge( $properties, self::get_menu_heading_color_properties( $settings ) );
 
@@ -355,6 +375,65 @@ class Common_Styles {
 		$white_ratio = self::get_contrast_ratio( '#ffffff', $background_color );
 
 		return $black_ratio >= $white_ratio ? '#000000' : '#ffffff';
+	}
+
+	/**
+	 * 予約ボタンの背景色に対して読みやすい文字色を返す。
+	 *
+	 * 通常時に白で 4.5:1 以上なら白を使い、届かなければ黒を使う。
+	 *
+	 * @param string $background_color 背景色（sanitize_hex_color() を通した #rgb / #rrggbb）。
+	 * @return string 文字色（#rrggbb）。
+	 */
+	public static function get_reservation_text_color( string $background_color ): string {
+		$white_ratio = self::get_contrast_ratio( self::RESERVATION_TEXT_COLOR_PREFERRED, $background_color );
+
+		return $white_ratio >= self::MIN_TEXT_CONTRAST_RATIO ? self::RESERVATION_TEXT_COLOR_PREFERRED : '#000000';
+	}
+
+	/**
+	 * 黒文字で 4.5:1 を保てる範囲で、最大 25% 暗くした予約ボタンのホバー色を返す。
+	 *
+	 * @param string $background_color 背景色（#rgb / #rrggbb）。
+	 * @return string ホバー色（#rrggbb）。白文字・空欄・不正な色なら空文字。
+	 */
+	public static function get_reservation_hover_color( string $background_color ): string {
+		$background_color = self::sanitize_hex_color_or_empty( $background_color );
+		if ( '' === $background_color || '#000000' !== self::get_reservation_text_color( $background_color ) ) {
+			return '';
+		}
+
+		// 丸めた色そのものを判定し、境界でコントラスト比が基準を割るのを防ぐ。
+		$channels    = self::hex_to_rgb( $background_color );
+		$mix_color   = static function ( float $darken ) use ( $channels ): string {
+			return sprintf(
+				'#%02x%02x%02x',
+				(int) round( $channels[0] * ( 1 - $darken ) ),
+				(int) round( $channels[1] * ( 1 - $darken ) ),
+				(int) round( $channels[2] * ( 1 - $darken ) )
+			);
+		};
+		$maximum     = 1 - self::RESERVATION_HOVER_COLOR_WEIGHT;
+		$hover_color = $mix_color( $maximum );
+		if ( self::get_contrast_ratio( '#000000', $hover_color ) >= self::MIN_TEXT_CONTRAST_RATIO ) {
+			return $hover_color;
+		}
+
+		// 二分探索では基準を満たした側の色だけを保持する。
+		$minimum     = 0.0;
+		$hover_color = $mix_color( $minimum );
+		for ( $iteration = 0; $iteration < 24; ++$iteration ) {
+			$darken    = ( $minimum + $maximum ) / 2;
+			$candidate = $mix_color( $darken );
+			if ( self::get_contrast_ratio( '#000000', $candidate ) >= self::MIN_TEXT_CONTRAST_RATIO ) {
+				$minimum     = $darken;
+				$hover_color = $candidate;
+			} else {
+				$maximum = $darken;
+			}
+		}
+
+		return $hover_color;
 	}
 
 	/**

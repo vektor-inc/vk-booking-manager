@@ -20,6 +20,9 @@ class Common_Styles_Test extends WP_UnitTestCase {
 	 */
 	private $original_wp_styles;
 
+	/**
+	 * 設定した色と角丸から生成される CSS と、不正な色の除外を検証する。
+	 */
 	public function test_get_custom_css_returns_expected_string(): void {
 		$test_cases = [
 			[
@@ -52,8 +55,28 @@ class Common_Styles_Test extends WP_UnitTestCase {
 						'design_radius_md'               => '',
 					],
 				],
-				'expected'            => ':root{--vkbm--color--reservation-action: #445566;}',
+				'expected'            => ':root{--vkbm--color--reservation-action: #445566;--vkbm--color--reservation-action-text: #ffffff;}',
 			],
+			array(
+				'test_condition_name' => '白の予約色 => 黒文字',
+				'conditions'          => array(
+					'options' => array(
+						'design_reservation_button_color' => '#ffffff',
+						'design_radius_md'                => '',
+					),
+				),
+				'expected'            => ':root{--vkbm--color--reservation-action: #ffffff;--vkbm--color--reservation-action-text: #000000;--vkbm--color--reservation-action-hover: #bfbfbf;}',
+			),
+			array(
+				'test_condition_name' => '淡い黄色の予約色 => 黒文字',
+				'conditions'          => array(
+					'options' => array(
+						'design_reservation_button_color' => '#ffeb3b',
+						'design_radius_md'                => '',
+					),
+				),
+				'expected'            => ':root{--vkbm--color--reservation-action: #ffeb3b;--vkbm--color--reservation-action-text: #000000;--vkbm--color--reservation-action-hover: #bfb02c;}',
+			),
 			[
 				'test_condition_name' => 'menu_card_catch_color_only',
 				'conditions'          => [
@@ -452,6 +475,145 @@ class Common_Styles_Test extends WP_UnitTestCase {
 			$actual = Common_Styles::get_menu_heading_color_properties( $case['conditions'] );
 
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 予約ボタンの文字色が通常時に 4.5:1 を満たし、白を優先することを検証する。
+	 */
+	public function test_get_reservation_text_color(): void {
+		// 白の優先条件と、通常時の比による黒への切り替えを確認する。
+		$test_cases = array(
+			array(
+				'test_condition_name' => '濃い青 => 白',
+				'background'          => '#123',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => '白 => 黒',
+				'background'          => '#ffffff',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '淡い黄色 => 黒',
+				'background'          => '#ffeb3b',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '白が約 4.54 で黒より低くても白を優先',
+				'background'          => '#767676',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => '通常時の白が 4.5 未満の境界 => 黒',
+				'background'          => '#777777',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '3 桁の境界色も通常時の比で選ぶ => 黒',
+				'background'          => '#777',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '通常時の白が 4.5 未満の中間色 => 黒',
+				'background'          => '#858585',
+				'expected'            => '#000000',
+			),
+			array(
+				'test_condition_name' => '通常時の黒が基準を満たす中間色 => 黒',
+				'background'          => '#878787',
+				'expected'            => '#000000',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Common_Styles::get_reservation_text_color( $case['background'] );
+
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+			$this->assertGreaterThanOrEqual( 4.5, Common_Styles::get_contrast_ratio( $actual, $case['background'] ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * ホバー色が丸めた後も黒文字の比を保ち、白文字・未指定では出力されないことを検証する。
+	 */
+	public function test_get_reservation_hover_color(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '白文字の境界色はホバー変数なし',
+				'background'          => '#767676',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '黒文字の境界色は最小限暗くする',
+				'background'          => '#777777',
+				'expected'            => '#757575',
+			),
+			array(
+				'test_condition_name' => '中間色も比を保つ',
+				'background'          => '#858585',
+				'expected'            => '#757575',
+			),
+			array(
+				'test_condition_name' => '明るい中間色も比を保つ',
+				'background'          => '#878787',
+				'expected'            => '#757575',
+			),
+			array(
+				'test_condition_name' => '白背景は上限まで暗くする',
+				'background'          => '#ffffff',
+				'expected'            => '#bfbfbf',
+			),
+			array(
+				'test_condition_name' => '黄色背景は上限まで暗くする',
+				'background'          => '#ffeb3b',
+				'expected'            => '#bfb02c',
+			),
+			array(
+				'test_condition_name' => '濃い色はホバー変数なし',
+				'background'          => '#123456',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '3桁色を6桁へ展開する',
+				'background'          => '#777',
+				'expected'            => '#757575',
+			),
+			array(
+				'test_condition_name' => '空欄はホバー変数なし',
+				'background'          => '',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '不正な値はホバー変数なし',
+				'background'          => '#fff;}body{display:none}',
+				'expected'            => '',
+			),
+		);
+		$method     = new \ReflectionMethod( Common_Styles::class, 'get_custom_css' );
+		$method->setAccessible( true );
+
+		foreach ( $test_cases as $case ) {
+			$actual = Common_Styles::get_reservation_hover_color( $case['background'] );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+
+			// 出力経路でも、不要な変数の省略と6桁色の出力を確認する。
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array(
+					'design_reservation_button_color' => $case['background'],
+					'design_radius_md'                => '',
+				)
+			);
+			$css = $method->invoke( new Common_Styles() );
+			if ( '' === $actual ) {
+				$this->assertStringNotContainsString( '--vkbm--color--reservation-action-hover:', $css, $case['test_condition_name'] );
+				continue;
+			}
+			$this->assertMatchesRegularExpression( '/^#[0-9a-f]{6}$/', $actual );
+			$this->assertStringContainsString( '--vkbm--color--reservation-action-hover: ' . $actual . ';', $css );
+			$this->assertGreaterThanOrEqual( 4.5, Common_Styles::get_contrast_ratio( '#000000', $actual ), $case['test_condition_name'] );
+			$this->assertLessThanOrEqual( Common_Styles::get_contrast_ratio( '#000000', $case['background'] ), Common_Styles::get_contrast_ratio( '#000000', $actual ), $case['test_condition_name'] );
 		}
 	}
 

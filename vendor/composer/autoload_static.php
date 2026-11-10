@@ -12,6 +12,7 @@ class ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4
         'VKBookingManager\\Admin\\Email_Log_Repository' => __DIR__ . '/../..' . '/src/admin/class-email-log-repository.php',
         'VKBookingManager\\Admin\\Owner_Admin_Menu_Filter' => __DIR__ . '/../..' . '/src/admin/class-owner-admin-menu-filter.php',
         'VKBookingManager\\Admin\\Pro_Upsell' => __DIR__ . '/../..' . '/src/admin/class-pro-upsell.php',
+        'VKBookingManager\\Admin\\Provider_Settings_Navigation' => __DIR__ . '/../..' . '/src/admin/class-provider-settings-navigation.php',
         'VKBookingManager\\Admin\\Provider_Settings_Page' => __DIR__ . '/../..' . '/src/admin/class-provider-settings-page.php',
         'VKBookingManager\\Admin\\Service_Menu_Editor' => __DIR__ . '/../..' . '/src/admin/class-service-menu-editor.php',
         'VKBookingManager\\Admin\\Setup_Notices' => __DIR__ . '/../..' . '/src/admin/class-setup-notices.php',

@@ -11,7 +11,7 @@
 		max-width: 100%;
 	}
 
-	// 既定で primary 背景＋白文字を当て、menu-loop の予約ボタンと見た目を揃える。
+	// 既定で予約色の背景＋自動文字色を当て、menu-loop の予約ボタンと見た目を揃える。
 	// （無色のテキストリンク状態にならないようにする。WCAG 1.4.11 対策）
 	// ユーザーがコアの color supports で背景色を上書きした場合（ラッパーに
 	// .has-background が付く）は、既定の背景色を当てずユーザー指定を優先する。
@@ -21,19 +21,26 @@
 
 	&:not(.has-background) .vkbm-reservation-button__link:hover {
 
-		@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)));
+		@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)), --vkbm--color--reservation-action-hover);
 	}
 
-	// 文字色も同様に、ユーザーがコアの color supports で文字色を指定した場合
-	// （ラッパーに .has-text-color が付く）は既定の白文字を当てない。
+	// 自動文字色は、計算元と同じ予約色の背景を使う場合だけ当てる。
 	&:not(.has-text-color) .vkbm-reservation-button__link {
 		color: #fff;
+	}
+
+	&:not(.has-background):not(.has-text-color) .vkbm-reservation-button__link {
+		color: var(--vkbm--color--reservation-action-text, #fff);
 	}
 
 	// 無効状態（オンライン予約不可）のボタンは既定の primary 着色を上書きし、
 	// 共通の .is-disabled（薄いグレー＋操作不可）の見た目を保つ。
 	&:not(.has-background) .vkbm-reservation-button__link.is-disabled {
 		background: var(--vkbm--color--text-secondary, #666);
+	}
+
+	&:not(.has-background):not(.has-text-color) .vkbm-reservation-button__link.is-disabled {
+		color: #fff;
 	}
 }
 

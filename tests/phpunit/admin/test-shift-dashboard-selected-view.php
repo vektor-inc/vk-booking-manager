@@ -21,6 +21,7 @@ use WP_UnitTestCase;
  *
  * @group admin
  * @group lodging
+ * @group seminar
  */
 class Shift_Dashboard_Selected_View_Test extends WP_UnitTestCase {
 
@@ -72,32 +73,49 @@ class Shift_Dashboard_Selected_View_Test extends WP_UnitTestCase {
 	 * @return void
 	 */
 	public function test_get_selected_view(): void {
-		if ( Pro_Upsell::is_free_edition() ) {
-			$this->markTestSkipped( '宿泊の表示既定値は Pro 版で検証する。' );
-		}
+		// @pro-gate-ignore 表示既定値を編集版ごとに検証するため、無料版もスキップしない。
+		$is_free = Pro_Upsell::is_free_edition();
 
 		$test_cases = array(
 			array(
-				'test_condition_name' => '宿泊以外・表示指定なし => 日表示',
+				'test_condition_name' => 'カスタム・表示指定なし => 日表示',
 				'preset'              => 'custom',
 				'view'                => null,
 				'expected'            => 'day',
 			),
 			array(
-				'test_condition_name' => '宿泊・表示指定なし => 月表示',
-				'preset'              => 'lodging',
+				'test_condition_name' => 'セミナー・表示指定なし => 編集版に応じた既定表示',
+				'preset'              => 'seminar',
 				'view'                => null,
-				'expected'            => 'month',
+				'expected'            => $is_free ? 'day' : 'month',
 			),
 			array(
-				'test_condition_name' => '宿泊以外・日表示を明示 => 日表示',
+				'test_condition_name' => '宿泊・表示指定なし => 編集版に応じた既定表示',
+				'preset'              => 'lodging',
+				'view'                => null,
+				'expected'            => $is_free ? 'day' : 'month',
+			),
+			array(
+				'test_condition_name' => 'カスタム・日表示を明示 => 日表示',
 				'preset'              => 'custom',
 				'view'                => 'day',
 				'expected'            => 'day',
 			),
 			array(
-				'test_condition_name' => '宿泊以外・月表示を明示 => 月表示',
+				'test_condition_name' => 'カスタム・月表示を明示 => 月表示',
 				'preset'              => 'custom',
+				'view'                => 'month',
+				'expected'            => 'month',
+			),
+			array(
+				'test_condition_name' => 'セミナー・日表示を明示 => 日表示',
+				'preset'              => 'seminar',
+				'view'                => 'day',
+				'expected'            => 'day',
+			),
+			array(
+				'test_condition_name' => 'セミナー・月表示を明示 => 月表示',
+				'preset'              => 'seminar',
 				'view'                => 'month',
 				'expected'            => 'month',
 			),
@@ -114,16 +132,22 @@ class Shift_Dashboard_Selected_View_Test extends WP_UnitTestCase {
 				'expected'            => 'month',
 			),
 			array(
-				'test_condition_name' => '宿泊以外・不正な表示指定 => 日表示',
+				'test_condition_name' => 'カスタム・不正な表示指定 => 日表示',
 				'preset'              => 'custom',
 				'view'                => 'week',
 				'expected'            => 'day',
 			),
 			array(
-				'test_condition_name' => '宿泊・不正な表示指定 => 月表示',
+				'test_condition_name' => 'セミナー・不正な表示指定 => 編集版に応じた既定表示',
+				'preset'              => 'seminar',
+				'view'                => 'week',
+				'expected'            => $is_free ? 'day' : 'month',
+			),
+			array(
+				'test_condition_name' => '宿泊・不正な表示指定 => 編集版に応じた既定表示',
 				'preset'              => 'lodging',
 				'view'                => 'week',
-				'expected'            => 'month',
+				'expected'            => $is_free ? 'day' : 'month',
 			),
 		);
 
@@ -133,6 +157,10 @@ class Shift_Dashboard_Selected_View_Test extends WP_UnitTestCase {
 		foreach ( $test_cases as $case ) {
 			// 業種とクエリをケースごとに設定する。
 			$this->set_preset( $case['preset'] );
+			if ( $is_free ) {
+				$stored = get_option( Settings_Repository::OPTION_KEY, array() );
+				$this->assertSame( $case['preset'], $stored['industry_preset'], '無料版でも保存済みの業種を保持すること' );
+			}
 			if ( null === $case['view'] ) {
 				unset( $_GET['vkbm_view'] );
 			} else {

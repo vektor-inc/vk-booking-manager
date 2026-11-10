@@ -908,11 +908,12 @@ $vkbm-plan-summary-control-height: 44px;
 // 基本設定の「予約ボタンの色」（--vkbm--color--reservation-action）を使う。
 .vkbm-plan-summary__action.vkbm-button__primary {
 	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
+	color: var(--vkbm--color--reservation-action-text, #fff);
 }
 
 .vkbm-plan-summary__action.vkbm-button__primary:hover {
 
-	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)));
+	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)), --vkbm--color--reservation-action-hover);
 }
 
 .vkbm-plan-summary__hint,
@@ -1393,6 +1394,18 @@ $vkbm-plan-summary-control-height: 44px;
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
+}
+
+// 「この内容で予約する」ボタンの背景色。共通の .vkbm-button__primary より優先して、
+// 基本設定の「予約に進むボタンの色」（--vkbm--color--reservation-action）を使う。
+.vkbm-confirm__button.vkbm-button__primary {
+	background: var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb));
+	color: var(--vkbm--color--reservation-action-text, #fff);
+}
+
+.vkbm-confirm__button.vkbm-button__primary:hover {
+
+	@include vkbm-hover-darken(var(--vkbm--color--reservation-action, var(--vkbm--color--primary, #2563eb)), --vkbm--color--reservation-action-hover);
 }
 
 // 予約完了画面の通知ブロック（見出し＋任意の本文）。
@@ -2290,7 +2303,8 @@ body:has(.wp-site-blocks):not(:has(header.wp-block-template-part)):not(:has(foot
 		box-sizing: border-box;
 		width: 100%;
 		min-height: 44px;
-		padding: var(--vkbm--spacing--xs, 0.5rem) 0;
+		padding-inline: 0;
+		padding-block: calc(var(--vkbm--spacing--xs, 0.5rem) - var(--vkbm--button--text-offset, 0px)) calc(var(--vkbm--spacing--xs, 0.5rem) + var(--vkbm--button--text-offset, 0px));
 		text-decoration: none;
 	}
 

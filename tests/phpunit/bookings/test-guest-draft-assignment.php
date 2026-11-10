@@ -47,11 +47,11 @@ class Guest_Draft_Assignment_Test extends WP_UnitTestCase {
 		// 確定時に使う担当IDと指名フラグを期待値として並べる。
 		$cases = array(
 			array(
-				'test_condition_name' => '指名なし => 担当IDを維持',
+				'test_condition_name' => '指名フラグなしでも担当IDあり => 担当IDを維持し指名として扱う（多層防御）',
 				'preferred'           => false,
 				'id'                  => 10,
 				'slot'                => array(),
-				'expected'            => array( 10, false ),
+				'expected'            => array( 10, true ),
 			),
 			array(
 				'test_condition_name' => '指名ありで担当なし => 拒否',
