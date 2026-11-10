@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Error;
@@ -319,9 +320,7 @@ class Guest_Cancel_Controller {
 	 */
 	public static function build_cancel_url( int $booking_id, string $raw_token, array $settings ): string {
 		$base = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			$base = vkbm_normalize_reservation_page_url( $base );
-		}
+		$base = Reservation_Page_Url::resolve_usable( $base );
 		if ( '' === $base ) {
 			$base = home_url( '/' );
 		}

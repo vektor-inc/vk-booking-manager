@@ -207,6 +207,7 @@ export const BookingConfirmApp = ( {
 	const addressRef = useRef( null );
 	const [ addressError, setAddressError ] = useState( '' );
 	const [ addressRequired, setAddressRequired ] = useState( true );
+	const [ phoneRequired, setPhoneRequired ] = useState( true );
 
 	// 保存住所の自動入力でも、解消した入力エラーを取り除く。
 	useEffect( () => {
@@ -713,6 +714,7 @@ export const BookingConfirmApp = ( {
 				setAddressRequired(
 					response?.lodging_address_required !== false
 				);
+				setPhoneRequired( response?.customer_phone_required !== false );
 				setBookingCustomerMode(
 					normalizeBookingCustomerMode(
 						response?.booking_customer_mode
@@ -1285,8 +1287,8 @@ export const BookingConfirmApp = ( {
 
 	// 会員登録せずに予約する申し込みを送る。確認メールのリンクを開くまで、予約は作られない。
 	const handleGuestSubmit = async ( agreement ) => {
-		// 入力の検査（お名前・メールアドレス・電話番号はすべて必須）。
-		const errors = validateGuestContact( guestContact );
+		// 入力の検査（お名前・メールアドレスは必須。電話番号は設定で必須のときだけ必須）。
+		const errors = validateGuestContact( guestContact, phoneRequired );
 		setGuestErrors( errors );
 		if ( hasGuestContactErrors( errors ) ) {
 			focusFirstGuestError( errors );
@@ -2708,6 +2710,7 @@ export const BookingConfirmApp = ( {
 								/>
 							) }
 							<GuestContactFields
+								phoneRequired={ phoneRequired }
 								addressField={ renderCustomerAddressField(
 									true
 								) }

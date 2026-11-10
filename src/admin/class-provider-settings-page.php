@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Bookings\Customer_Booking_Limit;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Settings_Panel;
@@ -92,6 +93,7 @@ class Provider_Settings_Page {
 		'shift_auto_register_months',
 		'booking_auto_anonymize_months',
 		'lodging_address_required',
+		'customer_phone_required',
 		'uninstall_cleanup',
 		'design_primary_color',
 		'design_menu_card_catch_color',
@@ -1510,6 +1512,13 @@ class Provider_Settings_Page {
 									value="<?php echo esc_attr( $settings['reservation_page_url'] ?? '' ); ?>"
 									placeholder="https://"
 								/>
+								<?php // サイトのドメインを移したあと、旧ドメインのまま残っていることに気付けるようにする。 ?>
+								<?php $reservation_page_url_mismatch = Reservation_Page_Url::get_mismatch( (string) ( $settings['reservation_page_url'] ?? '' ) ); ?>
+								<?php if ( null !== $reservation_page_url_mismatch ) : ?>
+									<div class="notice notice-warning inline vkbm-reservation-page-url-warning">
+										<p><?php echo wp_kses( Reservation_Page_Url::build_mismatch_message( $reservation_page_url_mismatch ), array( 'code' => array() ) ); ?></p>
+									</div>
+								<?php endif; ?>
 								<p class="description">
 									<?php esc_html_e( 'Place a "reservation block" on the fixed page you want to use as a reservation page, and then enter the public URL of that fixed page.', 'vk-booking-manager' ); ?>
 								</p>
@@ -1655,7 +1664,7 @@ class Provider_Settings_Page {
 											</select>
 										</td>
 									</tr>
-									<tr class="vkbm-provider-settings__tab-system" id="vkbm-reservation-menu-list-image-aspect-ratio-row" <?php echo ! empty( $settings['reservation_show_menu_list'] ) ? '' : 'hidden'; ?>>
+									<tr class="vkbm-provider-settings__tab-system" id="vkbm-reservation-menu-list-image-aspect-ratio-row">
 										<th scope="row">
 											<label for="vkbm-reservation-menu-list-image-aspect-ratio"><?php esc_html_e( 'Service menu image aspect ratio', 'vk-booking-manager' ); ?></label>
 										</th>
@@ -1675,8 +1684,9 @@ class Provider_Settings_Page {
 												<?php endforeach; ?>
 											</select>
 											<div id="vkbm-reservation-menu-list-image-aspect-ratio-help">
-												<p class="description"><?php esc_html_e( 'Choose the aspect ratio of images shown as cards in the service menu list.', 'vk-booking-manager' ); ?></p>
-												<p class="description" id="vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help" <?php echo 'text' === $reservation_menu_list_display_mode ? '' : 'hidden'; ?>><?php esc_html_e( 'Sets the image ratio for service groups displayed as cards.', 'vk-booking-manager' ); ?></p>
+												<p class="description"><?php esc_html_e( 'Choose the aspect ratio of the main image on service menu cards.', 'vk-booking-manager' ); ?></p>
+												<p class="description" id="vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help" <?php echo ! empty( $settings['reservation_show_menu_list'] ) && 'text' === $reservation_menu_list_display_mode ? '' : 'hidden'; ?>><?php esc_html_e( 'Sets the image ratio for service groups displayed as cards.', 'vk-booking-manager' ); ?></p>
+												<p class="description" id="vkbm-reservation-menu-list-image-aspect-ratio-list-hidden-help" <?php echo ! empty( $settings['reservation_show_menu_list'] ) ? 'hidden' : ''; ?>><?php esc_html_e( 'This also applies to the cards shown on the date selection screen and elsewhere, even when the service menu list is hidden.', 'vk-booking-manager' ); ?></p>
 												<p class="description" id="vkbm-reservation-menu-list-image-aspect-ratio-mobile-help" <?php echo in_array( $reservation_menu_list_image_aspect_ratio, array( '1-1', '4-3', '16-9' ), true ) ? '' : 'hidden'; ?>><?php esc_html_e( 'The selected ratio also applies when images appear above the content, such as on smartphones.', 'vk-booking-manager' ); ?></p>
 											</div>
 										</td>
@@ -1985,6 +1995,21 @@ class Provider_Settings_Page {
 								</p>
 							</td>
 						</tr>
+
+							<tr class="vkbm-provider-settings__tab-system">
+								<th scope="row"><label for="vkbm-customer-phone-required"><?php esc_html_e( 'Customer phone number', 'vk-booking-manager' ); ?></label></th>
+							<td>
+								<input type="hidden" name="vkbm_provider_settings[customer_phone_required]" value="0" />
+								<input type="checkbox" id="vkbm-customer-phone-required" name="vkbm_provider_settings[customer_phone_required]" value="1" <?php checked( ! empty( $settings['customer_phone_required'] ?? true ) ); ?> aria-describedby="vkbm-customer-phone-required-help" />
+								<label for="vkbm-customer-phone-required"><?php esc_html_e( 'Require a phone number', 'vk-booking-manager' ); ?></label>
+								<p class="description vkbm-provider-settings__strict-line-break" id="vkbm-customer-phone-required-help">
+									<?php esc_html_e( 'When unchecked, customers can submit the user registration form, the profile editing form, and the customer information fields for guest reservations without entering a phone number.', 'vk-booking-manager' ); ?>
+								</p>
+								<p class="description vkbm-provider-settings__strict-line-break">
+									<?php esc_html_e( 'The phone number is used to contact customers when email does not reach them and to match customer flags. Uncheck this for services that never contact customers by phone, such as online seminars.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+							</tr>
 
 							<tr class="vkbm-provider-settings__tab-system">
 								<th scope="row">

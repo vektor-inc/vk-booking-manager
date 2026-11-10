@@ -45,6 +45,18 @@
 	margin: 0.35rem 0;
 }
 
+// 長いドメインが通知の幅からはみ出さず折り返せるようにする。
+.vkbm-notice code,
+.vkbm-reservation-page-url-warning code {
+	overflow-wrap: anywhere;
+}
+
+// 入力欄の直下に置く警告箱。コアの inline 通知は上の余白が 5px で、警告文の行間より狭く入力欄に貼り付いて見えるため、8px にする。
+// （入力欄との間隔 < 警告箱と説明文の間隔、の大小は保つ。コアの `.wrap div.notice` より詳細度を上げている）
+.vkbm-provider-settings .vkbm-reservation-page-url-warning.notice {
+	margin-top: 8px;
+}
+
 .vkbm-notice ul {
 	margin: 0.5rem 0 0;
 	padding-left: 1.1rem;

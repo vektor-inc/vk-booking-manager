@@ -219,13 +219,18 @@ class Guest_Cancel_Controller_Test extends WP_UnitTestCase {
 		$test_cases = array(
 			array(
 				'test_condition_name' => '予約ページ URL がある => その URL にクエリを付ける',
-				'settings'            => array( 'reservation_page_url' => 'https://example.com/reserve/' ),
-				'expected'            => 'https://example.com/reserve/?vkbm_guest_cancel=' . $raw . '&booking=12',
+				'settings'            => array( 'reservation_page_url' => home_url( '/reserve/' ) ),
+				'expected'            => home_url( '/reserve/' ) . '?vkbm_guest_cancel=' . $raw . '&booking=12',
 			),
 			array(
 				'test_condition_name' => '予約ページ URL が ?page_id= の形 => 既存のクエリを残して付ける',
-				'settings'            => array( 'reservation_page_url' => 'https://example.com/?page_id=7' ),
-				'expected'            => 'https://example.com/?page_id=7&vkbm_guest_cancel=' . $raw . '&booking=12',
+				'settings'            => array( 'reservation_page_url' => home_url( '/?page_id=7' ) ),
+				'expected'            => home_url( '/?page_id=7' ) . '&vkbm_guest_cancel=' . $raw . '&booking=12',
+			),
+			array(
+				'test_condition_name' => '予約ページ URL が旧ドメイン => 使わず、サイトのトップページに付ける（issue #1049）',
+				'settings'            => array( 'reservation_page_url' => 'https://old.example.com/reserve/' ),
+				'expected'            => home_url( '/' ) . '?vkbm_guest_cancel=' . $raw . '&booking=12',
 			),
 			array(
 				'test_condition_name' => '予約ページ URL が無い => サイトのトップページに付ける',

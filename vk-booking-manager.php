@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.11.0
+ * Version:     3.12.0
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
@@ -74,6 +74,7 @@ require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
 require_once __DIR__ . '/src/common/class-attendee-name.php';
 require_once __DIR__ . '/src/common/class-mail-from.php';
 require_once __DIR__ . '/src/common/class-site-url.php';
+require_once __DIR__ . '/src/common/class-reservation-page-url.php';
 require_once __DIR__ . '/src/common/class-scheduled-events.php';
 require_once __DIR__ . '/src/uninstall/class-uninstaller.php';
 require_once __DIR__ . '/src/common/class-price-tiers.php';
@@ -642,7 +643,7 @@ if ( ! function_exists( 'vkbm_get_reservation_page_logout_url' ) ) {
 		$settings   = $repository->get_settings();
 		$raw_url    = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		$cached = vkbm_normalize_reservation_page_url( $raw_url );
+		$cached = \VKBookingManager\Common\Reservation_Page_Url::resolve_usable( $raw_url );
 
 		return $cached;
 	}

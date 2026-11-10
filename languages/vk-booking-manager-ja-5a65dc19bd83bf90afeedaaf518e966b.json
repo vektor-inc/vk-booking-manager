@@ -547,6 +547,9 @@
 			"Phone number (required)": [
 				"電話番号（必須）"
 			],
+			"Phone number (optional)": [
+				"電話番号（任意）"
+			],
 			"We have sent you a confirmation email": [
 				"確認メールをお送りしました"
 			],

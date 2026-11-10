@@ -36,15 +36,19 @@ export const isEmailFormat = ( email ) =>
 	/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test( String( email || '' ).trim() );
 
 /**
- * お客様情報（お名前・メールアドレス・電話番号）の入力を検査する。すべて必須。
+ * お客様情報（お名前・メールアドレス・電話番号）の入力を検査する。お名前・メールアドレスは必須。電話番号は設定で必須のときだけ必須。
  *
- * @param {Object} values       入力値。
- * @param {string} values.name  予約者のお名前。
- * @param {string} values.email メールアドレス。
- * @param {string} values.phone 電話番号。
+ * @param {Object}  values               入力値。
+ * @param {string}  values.name          予約者のお名前。
+ * @param {string}  values.email         メールアドレス。
+ * @param {string}  values.phone         電話番号。
+ * @param {boolean} [phoneRequired=true] 電話番号を必須にするか（provider-settings の customer_phone_required）。
  * @return {{name: string, email: string, phone: string}} 欄ごとのエラー文。問題がない欄は空文字。
  */
-export const validateGuestContact = ( { name, email, phone } ) => {
+export const validateGuestContact = (
+	{ name, email, phone },
+	phoneRequired = true
+) => {
 	const errors = { name: '', email: '', phone: '' };
 
 	// お名前（空白だけは未入力として扱う）。
@@ -67,7 +71,10 @@ export const validateGuestContact = ( { name, email, phone } ) => {
 	}
 
 	// 電話番号（数字を 1 文字も含まないものは未入力と同じ扱い。全角数字も数字として数える）。
-	if ( ! /[0-9０-９]/.test( String( phone || '' ) ) ) {
+	// 任意のときは、空（空白だけを含む）なら通し、何か入力されたときだけ数字を含むかを調べる。
+	const phoneText = String( phone || '' );
+	const skipPhoneCheck = ! phoneRequired && phoneText.trim() === '';
+	if ( ! skipPhoneCheck && ! /[0-9０-９]/.test( phoneText ) ) {
 		errors.phone = __(
 			'Please enter your phone number.',
 			'vk-booking-manager'

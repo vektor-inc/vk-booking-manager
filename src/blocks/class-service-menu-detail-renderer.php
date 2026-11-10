@@ -209,6 +209,7 @@ class Service_Menu_Detail_Renderer {
 				'displayMode'      => 'card',
 				'showDetailButton' => false,
 				'disableTitleLink' => true,
+				'imageAspectRatio' => $this->menu_loop_block->get_reservation_card_image_aspect_ratio(),
 			)
 		);
 

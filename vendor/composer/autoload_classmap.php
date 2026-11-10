@@ -82,6 +82,7 @@ return array(
     'VKBookingManager\\Common\\Price_Tiers' => $baseDir . '/src/common/class-price-tiers.php',
     'VKBookingManager\\Common\\Rate_Limit_Trait' => $baseDir . '/src/common/trait-rate-limit.php',
     'VKBookingManager\\Common\\Reservation_Day' => $baseDir . '/src/common/class-reservation-day.php',
+    'VKBookingManager\\Common\\Reservation_Page_Url' => $baseDir . '/src/common/class-reservation-page-url.php',
     'VKBookingManager\\Common\\Resource_Tag_Id_List' => $baseDir . '/src/common/class-resource-tag-id-list.php',
     'VKBookingManager\\Common\\Scheduled_Events' => $baseDir . '/src/common/class-scheduled-events.php',
     'VKBookingManager\\Common\\Service_Period' => $baseDir . '/src/common/class-service-period.php',

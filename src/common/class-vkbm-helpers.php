@@ -97,6 +97,25 @@ class VKBM_Helper {
 	}
 
 	/**
+	 * Check whether a raw phone number input is acceptable for the "phone number required" setting.
+	 *
+	 * 電話番号の入力が、必須設定に照らして受け付けられるかを返す。必須のときは正規化後に数字が残ること。
+	 * 任意のときは、空（全角空白だけを含む）なら通し、入力があれば正規化後に数字が残ること（「なし」「abc」は断る）。
+	 *
+	 * @param string $raw      正規化前の入力値。
+	 * @param bool   $required 電話番号を必須にしているか。
+	 * @return bool 受け付けられるなら true。
+	 */
+	public static function is_phone_input_acceptable( string $raw, bool $required ): bool {
+		$is_blank = '' === preg_replace( '/[\s\p{Z}]+/u', '', $raw );
+		if ( $is_blank && ! $required ) {
+			return true;
+		}
+
+		return '' !== self::normalize_phone_number( $raw );
+	}
+
+	/**
 	 * Normalize an email address for comparison (trim and lowercase).
 	 *
 	 * メールアドレスを比較用にそろえる。前後の空白を除き、小文字にする（ゲスト予約の顧客フラグ照合・重複予約の判定に使う）。

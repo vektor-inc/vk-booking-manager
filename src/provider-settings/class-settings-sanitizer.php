@@ -351,6 +351,7 @@ class Settings_Sanitizer {
 			$auto_anonymize                                      = (int) ( $defaults['booking_auto_anonymize_months'] ?? 0 );
 		}
 		$data['lodging_address_required']      = ! empty( $input['lodging_address_required'] ?? $data['lodging_address_required'] ?? true );
+		$data['customer_phone_required']       = ! empty( $input['customer_phone_required'] ?? $data['customer_phone_required'] ?? true );
 		$data['booking_auto_anonymize_months'] = \VKBookingManager\Admin\Pro_Upsell::is_free_edition() ? 0 : $auto_anonymize;
 		$data['booking_reminder_hours']        = $this->sanitize_reminder_hours(
 			$input['booking_reminder_hours'] ?? ( $data['booking_reminder_hours'] ?? array() )

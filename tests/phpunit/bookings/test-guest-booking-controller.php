@@ -557,6 +557,85 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 				'expected_status'     => 400,
 			),
 			array(
+				'test_condition_name' => '電話番号が必須の設定（初期値）で空の場合 => 電話番号を含む必須エラー',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => true ),
+				'params'              => array( 'customer_phone' => '' ),
+				'expected_code'       => 'guest_contact_required',
+				'expected_status'     => 400,
+				'expected_message'    => __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' ),
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で空の場合 => 受け付ける',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array( 'customer_phone' => '' ),
+				'expected_code'       => '',
+				'expected_status'     => 200,
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で空白だけの場合 => 受け付ける',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array( 'customer_phone' => '   ' ),
+				'expected_code'       => '',
+				'expected_status'     => 200,
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で全角空白だけの場合 => 受け付ける',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array( 'customer_phone' => '　　' ),
+				'expected_code'       => '',
+				'expected_status'     => 200,
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で数字の無い入力（なし）の場合 => 電話番号のエラー',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array( 'customer_phone' => 'なし' ),
+				'expected_code'       => 'guest_contact_required',
+				'expected_status'     => 400,
+				'expected_message'    => __( 'Please enter your phone number.', 'vk-booking-manager' ),
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で数字の無い入力（abc）の場合 => 電話番号のエラー',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array( 'customer_phone' => 'abc' ),
+				'expected_code'       => 'guest_contact_required',
+				'expected_status'     => 400,
+				'expected_message'    => __( 'Please enter your phone number.', 'vk-booking-manager' ),
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で全角数字がある場合 => 受け付ける',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array( 'customer_phone' => '０９０-１２３４' ),
+				'expected_code'       => '',
+				'expected_status'     => 200,
+			),
+			array(
+				'test_condition_name' => '電話番号が任意の設定で名前が空の場合 => 電話番号を含まない必須エラー',
+				'mode'                => 'both',
+				'logged_in'           => false,
+				'settings'            => array( 'customer_phone_required' => false ),
+				'params'              => array(
+					'customer_name'  => '  ',
+					'customer_phone' => '',
+				),
+				'expected_code'       => 'guest_contact_required',
+				'expected_status'     => 400,
+				'expected_message'    => __( 'Please enter your name and email address.', 'vk-booking-manager' ),
+			),
+			array(
 				'test_condition_name' => 'メールアドレスの形が正しくない場合 => 形式エラー',
 				'mode'                => 'both',
 				'logged_in'           => false,
@@ -710,6 +789,7 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 						'booking_customer_mode'        => $case['mode'],
 						'provider_cancellation_policy' => '',
 						'provider_terms_of_service'    => '',
+						'customer_phone_required'      => true,
 					),
 					$case['settings'] ?? array()
 				)
@@ -728,6 +808,9 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
 				$this->assertSame( $case['expected_code'], $response->get_error_code(), $case['test_condition_name'] );
 				$this->assertSame( $case['expected_status'], $response->get_error_data()['status'], $case['test_condition_name'] );
+				if ( isset( $case['expected_message'] ) ) {
+					$this->assertSame( $case['expected_message'], $response->get_error_message(), $case['test_condition_name'] );
+				}
 				$this->assertCount( 0, $notification->verifications, $case['test_condition_name'] . '（確認メールを送らない）' );
 			}
 			// どの場合も、予約データはまだ作らない。
@@ -1571,6 +1654,65 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 			$this->reset_email_limit( 'guest' . $index . '@example.com' );
 			// 次の案件が同じ枠で満席にならないよう、作った予約を片付ける。
 			wp_delete_post( $booking_id, true );
+		}
+	}
+
+	/**
+	 * 電話番号が任意の設定では、電話番号なしで申し込んだゲストの予約が作られる。必須の設定では、電話番号が空の確認待ちデータは予約にならない。
+	 */
+	public function test_process_verification_phone_optional(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '電話番号が任意の設定で電話番号なし => 予約が作られ、電話番号のメタは保存されない',
+				'phone_required'      => false,
+				'expected_result'     => 'confirmed',
+			),
+			array(
+				'test_condition_name' => '電話番号が必須の設定に戻した後に、電話番号なしの確認待ちデータを開いた場合 => 予約は作られない',
+				'phone_required'      => true,
+				'expected_result'     => 'rejected',
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			$this->save_settings(
+				array(
+					'booking_customer_mode'        => 'both',
+					'provider_booking_status_mode' => 'confirmed',
+					'customer_phone_required'      => false,
+				)
+			);
+			list( $controller, $notification ) = $this->build_controller( $staff_id );
+			$draft_token                       = $this->store_draft( $menu_id, $staff_id );
+			$email                             = 'nophone' . $index . '@example.com';
+			$raw_token                         = $this->request_and_get_token( $controller, $notification, $this->build_request( $draft_token, array( 'customer_email' => $email, 'customer_phone' => '' ) ) );
+
+			// 確認リンクを開くまでに、設定が変わりうる。
+			$this->save_settings( array( 'customer_phone_required' => $case['phone_required'] ) );
+			$payment_guest = null;
+			$payment_check = static function ( $result, $request, $draft, $price, $context ) use ( &$payment_guest ) {
+				$payment_guest = $context['guest'] ?? null;
+				return $result;
+			};
+			add_filter( 'vkbm_booking_payment_check', $payment_check, 10, 5 );
+			$result = $controller->process_verification( $raw_token );
+			remove_filter( 'vkbm_booking_payment_check', $payment_check, 10 );
+
+			$this->assertSame( $case['expected_result'], $result['result'], $case['test_condition_name'] . ' code=' . $result['code'] );
+			if ( 'confirmed' === $case['expected_result'] ) {
+				$booking_id = $result['booking_id'];
+				$this->assertGreaterThan( 0, $booking_id, $case['test_condition_name'] );
+				$this->assertSame( '', (string) get_post_meta( $booking_id, '_vkbm_booking_customer_tel', true ), $case['test_condition_name'] );
+				$this->assertIsArray( $payment_guest, $case['test_condition_name'] . '（決済の確認にゲストの連絡先が渡る）' );
+				$this->assertSame( '', $payment_guest['phone'], $case['test_condition_name'] . '（電話番号は空で渡る）' );
+				wp_delete_post( $booking_id, true );
+			} else {
+				$this->assertSame( 0, $this->count_bookings(), $case['test_condition_name'] );
+			}
+			$this->reset_email_limit( $email );
 		}
 	}
 

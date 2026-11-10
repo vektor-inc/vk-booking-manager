@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Common\Customer_Address;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Capabilities\Capabilities;
@@ -26,9 +27,7 @@ use function admin_url;
 use function current_user_can;
 use function esc_url_raw;
 use function home_url;
-use function is_ssl;
 use function is_user_logged_in;
-use function str_starts_with;
 use function wp_logout_url;
 use function wp_unslash;
 use function wp_validate_redirect;
@@ -159,43 +158,9 @@ class Current_User_Controller extends WP_REST_Controller {
 	 * @return string
 	 */
 	private function get_reservation_page_redirect(): string {
-		$settings   = $this->settings_service->get_settings();
-		$url        = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		$normalized = $this->normalize_reservation_page_url( $url );
+		$settings = $this->settings_service->get_settings();
+		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		if ( '' === $normalized ) {
-			return '';
-		}
-
-		return wp_validate_redirect( $normalized, '' );
-	}
-
-	/**
-	 * Normalize reservation page URL to an absolute URL.
-	 *
-	 * @param string $url Raw URL.
-	 * @return string
-	 */
-	private function normalize_reservation_page_url( string $url ): string {
-		$url = trim( $url );
-
-		if ( '' === $url ) {
-			return '';
-		}
-
-		if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
-			return esc_url_raw( $url );
-		}
-
-		if ( str_starts_with( $url, '//' ) ) {
-			$scheme = is_ssl() ? 'https:' : 'http:';
-			return esc_url_raw( $scheme . $url );
-		}
-
-		if ( ! str_starts_with( $url, '/' ) ) {
-			$url = '/' . $url;
-		}
-
-		return esc_url_raw( home_url( $url ) );
+		return Reservation_Page_Url::resolve_usable( $url );
 	}
 }

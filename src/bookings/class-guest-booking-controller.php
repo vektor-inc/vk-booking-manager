@@ -14,6 +14,7 @@ namespace VKBookingManager\Bookings;
 
 use DateTimeImmutable;
 use Exception;
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\Common\Rate_Limit_Trait;
@@ -442,7 +443,7 @@ class Guest_Booking_Controller {
 	 * 予約データは作らない。確認待ちデータを一時保存に置き、リンク付きのメールを送るだけ。
 	 *
 	 * リクエストの値: token（予約の下書きのトークン。POST /drafts が返したもの）、customer_name、customer_email、customer_phone
-	 * （すべて必須）、vkbm_hp_email（隠し入力欄。人は入力しない）。備考・同意・ご利用になる方は下書きの値を使う。
+	 * （customer_phone は設定で必須のときだけ必須）、vkbm_hp_email（隠し入力欄。人は入力しない）。備考・同意・ご利用になる方は下書きの値を使う。
 	 *
 	 * @param WP_REST_Request $request リクエスト。
 	 * @return WP_REST_Response|WP_Error
@@ -500,15 +501,29 @@ class Guest_Booking_Controller {
 			return $check;
 		}
 
-		// 名前・メールアドレス・電話番号はすべて必須。
-		$name  = sanitize_text_field( (string) $request->get_param( 'customer_name' ) );
-		$name  = mb_substr( $name, 0, 100 );
-		$email = sanitize_email( (string) $request->get_param( 'customer_email' ) );
-		$phone = VKBM_Helper::normalize_phone_number( sanitize_text_field( (string) $request->get_param( 'customer_phone' ) ) );
-		if ( '' === $name || '' === $email || '' === $phone ) {
+		// 名前・メールアドレスは必須。電話番号は設定（customer_phone_required）で必須のときだけ必須。
+		$name           = sanitize_text_field( (string) $request->get_param( 'customer_name' ) );
+		$name           = mb_substr( $name, 0, 100 );
+		$email          = sanitize_email( (string) $request->get_param( 'customer_email' ) );
+		$phone_raw      = sanitize_text_field( (string) $request->get_param( 'customer_phone' ) );
+		$phone          = VKBM_Helper::normalize_phone_number( $phone_raw );
+		$phone_required = Settings_Repository::is_customer_phone_required( $settings );
+		if ( '' === $name || '' === $email ) {
 			return new WP_Error(
 				'guest_contact_required',
-				__( 'Please enter your name, email address and phone number.', 'vk-booking-manager' ),
+				$phone_required
+					? __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' )
+					: __( 'Please enter your name and email address.', 'vk-booking-manager' ),
+				array( 'status' => 400 )
+			);
+		}
+		// 必須のときは数字が必要。任意のときは、空なら通し、入力があるのに数字が無ければ断る。
+		if ( ! VKBM_Helper::is_phone_input_acceptable( $phone_raw, $phone_required ) ) {
+			return new WP_Error(
+				'guest_contact_required',
+				$phone_required
+					? __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' )
+					: __( 'Please enter your phone number.', 'vk-booking-manager' ),
 				array( 'status' => 400 )
 			);
 		}
@@ -1383,9 +1398,7 @@ class Guest_Booking_Controller {
 		$settings = $this->settings_repository->get_settings();
 		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			$url = vkbm_normalize_reservation_page_url( $url );
-		}
+		$url = Reservation_Page_Url::resolve_usable( $url );
 
 		return '' !== $url ? $url : home_url( '/' );
 	}

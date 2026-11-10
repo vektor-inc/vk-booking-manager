@@ -121,6 +121,16 @@ class Current_User_Controller_Logout_Redirect_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 予約ページ URL が旧ドメインのままなら使わず、home_url に置き換わる（issue #1049）。
+	 * 変更前は旧ドメインの URL へ移動していた。
+	 */
+	public function test_old_domain_reservation_page_url_is_not_used_for_logout_redirect(): void {
+		$this->set_reservation_page_url( 'https://old.example.com/reservation/' );
+
+		$this->assertSame( $this->expected_logout_url( home_url() ), $this->fetch_logout_url( null ) );
+	}
+
+	/**
 	 * 予約ページ URL を設定値へ保存する。
 	 *
 	 * @param string $url 予約ページ URL。

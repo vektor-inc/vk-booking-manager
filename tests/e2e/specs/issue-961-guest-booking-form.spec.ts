@@ -477,6 +477,57 @@ test.describe( 'Issue #961: guest booking form on the reservation screen', () =>
 		).toBeFocused();
 	} );
 
+	// @title 電話番号を必須にしない設定では、電話番号が空でも送れて、ラベルは「（任意）」になる（#1053）
+	test( 'phone number is optional when the setting is off', async ( {
+		page,
+	} ) => {
+		setCustomerMode( 'guest' );
+		// @step 設定で電話番号を必須から外し、「ゲストのみ」の予約確認画面を開いて同意欄にチェックを入れる
+		updateSettings( { customer_phone_required: false } );
+		try {
+			await gotoConfirmScreen( page );
+			await checkConfirmConsents( page );
+
+			// @check 電話番号のラベルが「電話番号（任意）」で、お名前・メールアドレスは「（必須）」のまま
+			const phone = page.locator( '#vkbm-confirm-guest-phone' );
+			await expect(
+				page.locator( 'label[for="vkbm-confirm-guest-phone"]' )
+			).toHaveText( '電話番号（任意）' );
+			await expect( phone ).not.toHaveAttribute( 'aria-required', /.*/ );
+			await expect(
+				page.locator( 'label[for="vkbm-confirm-guest-email"]' )
+			).toHaveText( 'メールアドレス（必須）' );
+
+			// @step 何も入力せずに予約ボタンを押す
+			await page.locator( '.vkbm-confirm__button' ).click();
+			// @check お名前とメールアドレスの下にだけエラーが出て、電話番号の下にはエラーが出ない
+			await expect(
+				page.locator( '#vkbm-confirm-guest-name-error' )
+			).toBeVisible();
+			await expect(
+				page.locator( '#vkbm-confirm-guest-email-error' )
+			).toBeVisible();
+			await expect(
+				page.locator( '#vkbm-confirm-guest-phone-error' )
+			).toHaveCount( 0 );
+
+			// @step お名前とメールアドレスだけを入れて（電話番号は空のまま）もう一度押す
+			const email = newGuestEmail();
+			await fillGuestContact( page, '山田 花子', email, '' );
+			await page.locator( '.vkbm-confirm__button' ).click();
+			// @check 電話番号のエラーは出ず、「確認メールをお送りしました」の画面になる
+			await expect(
+				page.locator( '.vkbm-confirm__guest-sent' )
+			).toBeVisible( { timeout: 15000 } );
+			await expect(
+				page.locator( '#vkbm-confirm-guest-phone-error' )
+			).toHaveCount( 0 );
+		} finally {
+			// 後続のテストは電話番号が必須の前提のため、必ず元に戻す。
+			updateSettings( { customer_phone_required: true } );
+		}
+	} );
+
 	// @title 「どちらでも」では入力欄が開いていて、ログイン・新規登録へ切り替えても入力が残る
 	test( 'both mode keeps the typed customer information when switching to login', async ( {
 		page,

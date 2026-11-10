@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Holiday_Calendar;
@@ -89,6 +90,21 @@ class Setup_Notices {
 	private ?array $missing_shift_months_cache = null;
 
 	/**
+	 * 予約ページURLの警告情報のキャッシュ（同じリクエストで設定を読み直さないため）。
+	 * 判定済みかどうかは reservation_url_mismatch_loaded で持つ（結果が null の場合と区別するため）。
+	 *
+	 * @var array{entered_host:string,site_host:string}|null
+	 */
+	private ?array $reservation_url_mismatch_cache = null;
+
+	/**
+	 * 予約ページURLの警告情報を判定済みか。
+	 *
+	 * @var bool
+	 */
+	private bool $reservation_url_mismatch_loaded = false;
+
+	/**
 	 * has_shift_for_month() の判定結果（'年-月' => bool）。transient の中身を 1 リクエスト内で保持する.
 	 * null は transient 未読込.
 	 *
@@ -119,6 +135,7 @@ class Setup_Notices {
 		add_action( 'admin_notices', array( $this, 'render_shift_auto_register_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_google_calendar_sync_broken_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_holiday_data_expiry_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_reservation_page_url_mismatch_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_vkbm_dismiss_notice', array( $this, 'handle_dismiss' ) );
 		add_action( 'vkbm_shift_dashboard_notices', array( $this, 'render_shift_dashboard_notice' ) );
@@ -835,6 +852,11 @@ class Setup_Notices {
 				continue;
 			}
 
+			// 旧ドメインのままの場合は、同じ原因を専用の通知（render_reservation_page_url_mismatch_notice）が案内するので、ここでは重ねて出さない。
+			if ( 'reservation_page_url' === ( $item['id'] ?? '' ) && null !== $this->get_reservation_page_url_mismatch() ) {
+				continue;
+			}
+
 			$missing[] = $item;
 		}
 
@@ -930,16 +952,17 @@ class Setup_Notices {
 	}
 
 	/**
-	 * Check if reservation page URL is set.
+	 * Check if a usable (this site's) reservation page URL is set.
 	 *
 	 * @return bool
 	 */
 	private function has_reservation_page_url(): bool {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
-		$url        = isset( $settings['reservation_page_url'] ) ? trim( (string) $settings['reservation_page_url'] ) : '';
+		$url        = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		return '' !== $url;
+		// 自サイトのURLでないもの（旧ドメインのまま等）は、未設定と同じ扱いにする。
+		return '' !== Reservation_Page_Url::resolve_usable( $url );
 	}
 
 	/**
@@ -1184,6 +1207,20 @@ class Setup_Notices {
 	}
 
 	/**
+	 * 基本設定（vkbm-provider-settings）のシステム設定タブを開いているかを判定する。
+	 *
+	 * タブの省略・不明な値は、基本設定画面側の挙動に合わせて「店舗情報」タブ扱いなので、システム設定タブではない。
+	 *
+	 * @return bool
+	 */
+	private function is_system_settings_tab_screen(): bool {
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		$tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+
+		return 'vkbm-provider-settings' === $page && 'system' === $tab;
+	}
+
+	/**
 	 * Check if current screen is shift post type.
 	 *
 	 * @return bool
@@ -1256,6 +1293,56 @@ class Setup_Notices {
 		?>
 		<div class="notice vkbm-notice vkbm-notice__warning">
 			<p><?php echo wp_kses( $message, array( 'a' => array( 'href' => array() ) ) ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * 保存済みの予約ページURLについて、自サイトのURLでないときの警告用情報を返す。
+	 *
+	 * @return array{entered_host:string,site_host:string}|null 警告が要るときだけ配列。
+	 */
+	private function get_reservation_page_url_mismatch(): ?array {
+		if ( ! $this->reservation_url_mismatch_loaded ) {
+			$settings = ( new Settings_Repository() )->get_settings();
+
+			$this->reservation_url_mismatch_cache  = Reservation_Page_Url::get_mismatch( isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '' );
+			$this->reservation_url_mismatch_loaded = true;
+		}
+
+		return $this->reservation_url_mismatch_cache;
+	}
+
+	/**
+	 * 予約ページURLが自サイトのURLでないとき（サイトのドメインを移したあとに旧ドメインが残っている等）に警告する。
+	 *
+	 * 閉じるボタンは付けない（直すまで予約ボタン等が使えないため、出し続ける）。
+	 * 店舗設定の権限を持つユーザーにだけ、管理画面のどの画面でも表示する。
+	 */
+	public function render_reservation_page_url_mismatch_notice(): void {
+		if ( ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			return;
+		}
+
+		// 基本設定のシステム設定タブでは、入力欄の下に同じ警告が出るため、上部の通知は重ねて出さない。
+		if ( $this->is_system_settings_tab_screen() ) {
+			return;
+		}
+
+		$mismatch = $this->get_reservation_page_url_mismatch();
+		if ( null === $mismatch ) {
+			return;
+		}
+		?>
+		<div class="notice vkbm-notice vkbm-notice__warning">
+			<h3><?php echo esc_html__( 'Please check the reservation page URL', 'vk-booking-manager' ); ?></h3>
+			<p><?php echo wp_kses( Reservation_Page_Url::build_mismatch_message( $mismatch ), array( 'code' => array() ) ); ?></p>
+			<p><?php echo esc_html__( 'This URL is also used for the "Reservation page" link in the admin menu.', 'vk-booking-manager' ); ?></p>
+			<div class="vkbm-buttons">
+				<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-reservation-page-url' ) ); ?>">
+					<?php echo esc_html__( 'Set the reservation page URL', 'vk-booking-manager' ); ?>
+				</a>
+			</div>
 		</div>
 		<?php
 	}

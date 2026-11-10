@@ -11,6 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
 
@@ -37,7 +38,7 @@ class OEmbed_Override {
 		$repository = new Settings_Repository();
 		$settings   = $repository->get_settings();
 		$raw_url    = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		$target_url = vkbm_normalize_reservation_page_url( $raw_url );
+		$target_url = Reservation_Page_Url::resolve_usable( $raw_url );
 
 		if ( '' === $target_url ) {
 			return $data;

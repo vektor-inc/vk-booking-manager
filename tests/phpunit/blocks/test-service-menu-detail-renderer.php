@@ -96,6 +96,68 @@ class Service_Menu_Detail_Renderer_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 詳細表示のカードに共通の画像比率が適用され、既定値の HTML は変わらない。
+	 */
+	public function test_render_card_image_aspect_ratio(): void {
+		$menu          = $this->create_menu();
+		$attachment_id = self::factory()->attachment->create(
+			array(
+				'post_mime_type' => 'image/jpeg',
+				'file'           => '2026/11/detail-card.jpg',
+			)
+		);
+		wp_update_attachment_metadata(
+			$attachment_id,
+			array(
+				'file'   => '2026/11/detail-card.jpg',
+				'width'  => 800,
+				'height' => 600,
+			)
+		);
+		update_post_meta( $menu->ID, '_thumbnail_id', $attachment_id );
+		$_GET    = array(
+			'vkbm_view' => 'detail',
+			'menu_id'   => (string) $menu->ID,
+		);
+		$default = $this->make_renderer()->build_source_markup();
+		$this->assertStringNotContainsString( 'card-media--ratio-', $default );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '正方形を指定するとカードへ適用',
+				'ratio'               => '1-1',
+				'expected'            => '1-1',
+			),
+			array(
+				'test_condition_name' => 'ワイドを指定するとカードへ適用',
+				'ratio'               => '16-9',
+				'expected'            => '16-9',
+			),
+			array(
+				'test_condition_name' => '許可外の値は既定のHTML',
+				'ratio'               => 'invalid',
+				'expected'            => '',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array(
+					'service_menu_detail_display_mode' => 'block',
+					'reservation_page_url'             => home_url( '/booking/' ),
+					'reservation_menu_list_image_aspect_ratio' => $case['ratio'],
+				)
+			);
+			$actual      = $this->make_renderer()->build_source_markup();
+			$ratio_class = $case['expected'] ? ' vkbm-menu-loop__card-media--ratio-' . $case['expected'] : '';
+			$this->assertSame( $default, str_replace( $ratio_class, '', $actual ), $case['test_condition_name'] );
+			if ( $case['expected'] ) {
+				$this->assertStringContainsString( $ratio_class . '"', $actual, $case['test_condition_name'] );
+			}
+		}
+	}
+
+	/**
 	 * 詳細ソースが、対象メニューを編集できる利用者にだけ編集リンクを渡すことを検証する。
 	 */
 	public function test_build_source_markup_edit_link(): void {

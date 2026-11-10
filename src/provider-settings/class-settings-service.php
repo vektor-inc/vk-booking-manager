@@ -122,6 +122,10 @@ class Settings_Service {
 				$raw_settings[ $lodging_key ] = $current[ $lodging_key ];
 			}
 		}
+		// 電話番号の必須設定は、欄が無い保存（REST など）で送られなかったとき、既定値ではなく保存済みの値を引き継ぐ。
+		if ( ! array_key_exists( 'customer_phone_required', $raw_settings ) && isset( $current['customer_phone_required'] ) ) {
+			$raw_settings['customer_phone_required'] = $current['customer_phone_required'];
+		}
 		$sanitized = $this->sanitizer->sanitize( $raw_settings, $defaults );
 		$sanitized = Industry_Presets::apply_transition( $current, $sanitized, $raw_settings, $defaults );
 

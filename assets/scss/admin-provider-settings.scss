@@ -471,6 +471,14 @@ $vkbm-provider-settings-tabs: store, system, attendees, email, registration, con
 // フォームラベル
 // -----------------------------------------------------------------------------
 
+// 説明文の折り返しで、小書き文字（「ェ」など）が行頭に来ないようにする（例: 「お客様の電話番号」の説明文）。
+// common.scss の text-box（vkbm- クラスの p の上下を文字の高さに揃える指定）を打ち消し、クラス追加前の行の高さと余白を保つ。
+// 同じ詳細度のままだと読み込み順で common.scss に負けるため、他の同種クラスと同様に .vkbm-provider-settings 配下に限定して詳細度を上げる。
+.vkbm-provider-settings .vkbm-provider-settings__strict-line-break {
+	text-box: normal;
+	line-break: strict;
+}
+
 // 長いラベルの末尾だけが次行に落ちることを防ぐ。
 .vkbm-provider-settings__balanced-label {
 	display: block;

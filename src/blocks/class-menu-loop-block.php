@@ -511,23 +511,7 @@ class Menu_Loop_Block {
 		$order_by = $this->normalize_order_by( (string) ( $attributes['orderBy'] ?? 'menu_order' ) );
 		$filters  = $this->get_filters_from_request( $loop_id );
 
-		$meta_query = array(
-			'relation' => 'AND',
-			array(
-				'relation' => 'OR',
-				array(
-					'key'     => '_vkbm_is_archived',
-					'compare' => 'NOT EXISTS',
-				),
-				array(
-					'key'     => '_vkbm_is_archived',
-					'value'   => '1',
-					'compare' => '!=',
-				),
-			),
-			// 提供期間が終了したメニューは一覧に出さない。
-			Service_Period::build_not_ended_meta_query( Service_Period::get_today() ),
-		);
+		$meta_query = Service_Menu_Post_Type::build_public_listing_meta_query();
 
 		if ( $filters['staff'] > 0 ) {
 			// 個別選択（_vkbm_staff_ids のシリアライズ値の部分一致）に加え、#485 で追加した
@@ -902,7 +886,7 @@ class Menu_Loop_Block {
 			(string) ( $provider_settings['reservation_menu_list_display_mode'] ?? 'card' )
 		);
 		$attributes['displayMode']      = $mode;
-		$attributes['imageAspectRatio'] = $provider_settings['reservation_menu_list_image_aspect_ratio'] ?? 'content';
+		$attributes['imageAspectRatio'] = $this->get_reservation_card_image_aspect_ratio();
 
 		$items_markup = $this->render_grouped_items( $posts, $attributes );
 
@@ -914,6 +898,15 @@ class Menu_Loop_Block {
 			),
 			'menu_ids' => $menu_ids,
 		);
+	}
+
+	/**
+	 * 予約ブロック内のカードに使う画像比率を取得する。
+	 *
+	 * @return string 許可された画像比率。未設定・不正値は content。
+	 */
+	public function get_reservation_card_image_aspect_ratio(): string {
+		return Settings_Sanitizer::resolve_reservation_menu_list_image_aspect_ratio( $this->get_provider_settings() );
 	}
 
 	/**
@@ -942,23 +935,7 @@ class Menu_Loop_Block {
 				),
 				'order'               => 'ASC',
 				'ignore_sticky_posts' => true,
-				'meta_query'          => array(
-					'relation' => 'AND',
-					array(
-						'relation' => 'OR',
-						array(
-							'key'     => '_vkbm_is_archived',
-							'compare' => 'NOT EXISTS',
-						),
-						array(
-							'key'     => '_vkbm_is_archived',
-							'value'   => '1',
-							'compare' => '!=',
-						),
-					),
-					// 提供期間が終了したメニューは予約ページの一覧に出さない。
-					Service_Period::build_not_ended_meta_query( Service_Period::get_today() ),
-				),
+				'meta_query'          => Service_Menu_Post_Type::build_public_listing_meta_query(),
 			)
 		);
 

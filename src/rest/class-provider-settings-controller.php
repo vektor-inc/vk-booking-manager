@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Attendee_Name;
@@ -25,9 +26,6 @@ use function __;
 use function add_action;
 use function current_datetime;
 use function esc_url_raw;
-use function home_url;
-use function is_ssl;
-use function str_starts_with;
 use function wp_get_attachment_image_url;
 use function wp_login_url;
 use function wp_registration_url;
@@ -100,7 +98,7 @@ class Provider_Settings_Controller {
 		$nomination_fee_label = vkbm_get_nomination_fee_label();
 		$provider_name        = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
 		$provider_logo_id     = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
-		$reservation          = $this->normalize_reservation_page_url(
+		$reservation          = Reservation_Page_Url::resolve_usable(
 			isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : ''
 		);
 		$show_menu_search     = ! empty( $settings['reservation_show_menu_search'] );
@@ -210,6 +208,8 @@ class Provider_Settings_Controller {
 			'booking_attendee_name_label'        => Attendee_Name::get_label( $settings ),
 			// 宿泊予約の住所入力を必須にするか。
 			'lodging_address_required'           => (bool) ( $settings['lodging_address_required'] ?? true ),
+			// お客様の電話番号を必須にするか。会員登録・プロフィール編集・ゲスト予約の入力チェックが読む。
+			'customer_phone_required'            => (bool) ( $settings['customer_phone_required'] ?? true ),
 			// 予約の受付方法（member / guest / both。#958）。予約画面が受付方法に応じて表示を切り替えるために読む。
 			'booking_customer_mode'              => Settings_Repository::normalize_booking_customer_mode( $settings['booking_customer_mode'] ?? null ),
 		);
@@ -319,34 +319,5 @@ class Provider_Settings_Controller {
 			return strtolower( untrailingslashit( trim( $url ) ) );
 		};
 		return $normalize( $website_url ) === $normalize( $reservation_url ) ? '' : $website_url;
-	}
-
-	/**
-	 * Normalize reservation page URL to an absolute path.
-	 *
-	 * @param string $url Raw URL.
-	 * @return string
-	 */
-	private function normalize_reservation_page_url( string $url ): string {
-		$url = trim( $url );
-
-		if ( '' === $url ) {
-			return '';
-		}
-
-		if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
-			return esc_url_raw( $url );
-		}
-
-		if ( str_starts_with( $url, '//' ) ) {
-			$scheme = is_ssl() ? 'https:' : 'http:';
-			return esc_url_raw( $scheme . $url );
-		}
-
-		if ( ! str_starts_with( $url, '/' ) ) {
-			$url = '/' . $url;
-		}
-
-		return esc_url_raw( home_url( $url ) );
 	}
 }

@@ -177,6 +177,8 @@ class Settings_Repository {
 			'shift_auto_register_months'                 => 0,
 			'booking_auto_anonymize_months'              => 0,
 			'lodging_address_required'                   => true,
+			// お客様の電話番号を必須にするか。既定は必須（更新しただけでは既存サイトの挙動を変えない）。
+			'customer_phone_required'                    => true,
 			'booking_reminder_hours'                     => array(),
 			// プラグイン削除時の片付け。既定は「残す（Google連携情報は削除）」。
 			// 既存のサイトが何も変えずにプラグインを削除したとき、予約データが消えないようにするため。
@@ -394,6 +396,16 @@ Contact us: Please contact our store.",
 		$mode = is_string( $stored[ self::KEY_BOOKING_STATUS_MODE ] ) ? $stored[ self::KEY_BOOKING_STATUS_MODE ] : '';
 
 		return in_array( $mode, self::BOOKING_STATUS_MODES, true ) ? $mode : self::BOOKING_STATUS_MODE_PENDING;
+	}
+
+	/**
+	 * お客様の電話番号を必須にする設定かを返す。未保存・未設定のときは必須（従来の動作）とみなす。
+	 *
+	 * @param array<string,mixed> $settings 設定値。
+	 * @return bool 必須なら true。
+	 */
+	public static function is_customer_phone_required( array $settings ): bool {
+		return ! empty( $settings['customer_phone_required'] ?? true );
 	}
 
 	/**

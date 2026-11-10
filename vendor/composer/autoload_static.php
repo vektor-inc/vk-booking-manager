@@ -83,6 +83,7 @@ class ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4
         'VKBookingManager\\Common\\Price_Tiers' => __DIR__ . '/../..' . '/src/common/class-price-tiers.php',
         'VKBookingManager\\Common\\Rate_Limit_Trait' => __DIR__ . '/../..' . '/src/common/trait-rate-limit.php',
         'VKBookingManager\\Common\\Reservation_Day' => __DIR__ . '/../..' . '/src/common/class-reservation-day.php',
+        'VKBookingManager\\Common\\Reservation_Page_Url' => __DIR__ . '/../..' . '/src/common/class-reservation-page-url.php',
         'VKBookingManager\\Common\\Resource_Tag_Id_List' => __DIR__ . '/../..' . '/src/common/class-resource-tag-id-list.php',
         'VKBookingManager\\Common\\Scheduled_Events' => __DIR__ . '/../..' . '/src/common/class-scheduled-events.php',
         'VKBookingManager\\Common\\Service_Period' => __DIR__ . '/../..' . '/src/common/class-service-period.php',

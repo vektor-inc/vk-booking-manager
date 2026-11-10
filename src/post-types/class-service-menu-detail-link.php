@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
@@ -22,7 +23,6 @@ use function current_user_can;
 use function get_permalink;
 use function get_post_meta;
 use function post_password_required;
-use function wp_validate_redirect;
 
 /**
  * サービスメニューの詳細ページへのリンク先を決める（#635）。
@@ -103,14 +103,8 @@ class Service_Menu_Detail_Link {
 	 * @return string 自サイトのURLとして使えるときは正規化済みURL、未設定・自サイト外のときは空文字。
 	 */
 	public static function resolve_usable_reservation_page_url( string $raw_url ): string {
-		$url = function_exists( 'vkbm_normalize_reservation_page_url' ) ? vkbm_normalize_reservation_page_url( $raw_url ) : trim( $raw_url );
-
-		if ( '' === $url ) {
-			return '';
-		}
-
-		// 自サイトとして許可されないホストのURLは、リンク先にもリダイレクト先にも使わない。
-		return wp_validate_redirect( $url, '' );
+		// 自サイトのURLでないものは、リンク先にもリダイレクト先にも使わない（判定は共通処理に集約）。
+		return Reservation_Page_Url::resolve_usable( $raw_url );
 	}
 
 	/**

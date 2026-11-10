@@ -30,6 +30,7 @@ use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\TermOrder\Term_Order_Manager;
 use WP_Post;
+use WP_REST_Request;
 use function add_action;
 use function current_user_can;
 use function get_current_screen;
@@ -237,6 +238,7 @@ class Service_Menu_Post_Type {
 		add_action( 'wp_restore_post_revision', array( $this, 'restore_reversed_service_period_after_revision_restore' ), 20, 2 );
 		add_filter( 'rest_pre_insert_' . self::POST_TYPE, array( $this, 'remember_service_period_before_rest_save' ), 10, 2 );
 		add_action( 'rest_after_insert_' . self::POST_TYPE, array( $this, 'restore_reversed_service_period_after_rest_save' ), 10, 2 );
+		add_filter( 'rest_' . self::POST_TYPE . '_query', array( $this, 'filter_rest_collection_query' ), 10, 2 );
 		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
 		// カスタムメタもリビジョンに保存・復元できるよう、対象メタキーを登録する。
 		add_filter( 'wp_post_revision_meta_keys', array( $this, 'filter_revision_meta_keys' ), 10, 2 );
@@ -250,6 +252,73 @@ class Service_Menu_Post_Type {
 		add_action( 'quick_edit_custom_box', array( $this, 'render_quick_edit_fields' ), 10, 2 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_quick_edit_assets' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_quick_edit' ), 20, 3 );
+	}
+
+	/**
+	 * 公開の一覧から外すメニューの meta_query を返す。
+	 *
+	 * アーカイブ済みと提供期間終了を除く。メニュー一覧（カード）と同じ条件。
+	 *
+	 * @return array<string, mixed> WP_Query の meta_query。
+	 */
+	public static function build_public_listing_meta_query(): array {
+		return array(
+			'relation' => 'AND',
+			array(
+				'relation' => 'OR',
+				array(
+					'key'     => '_vkbm_is_archived',
+					'compare' => 'NOT EXISTS',
+				),
+				array(
+					'key'     => '_vkbm_is_archived',
+					'value'   => '1',
+					'compare' => '!=',
+				),
+			),
+			Service_Period::build_not_ended_meta_query( Service_Period::get_today() ),
+		);
+	}
+
+	/**
+	 * 予約フォームが使う投稿一覧 API から、公開の一覧に出さないメニューを外す。
+	 *
+	 * 編集画面用（context=edit）かつメニューを編集できる利用者だけ、アーカイブ済みも残す。
+	 * 投稿 ID を指定した 1 件取得には効かない。
+	 *
+	 * @param array<string, mixed> $args    WP_Query に渡す引数。
+	 * @param WP_REST_Request      $request REST リクエスト。
+	 * @return array<string, mixed> 条件を足した引数。
+	 */
+	public function filter_rest_collection_query( array $args, WP_REST_Request $request ): array {
+		if ( $this->should_include_hidden_menus_in_rest_collection( $request ) ) {
+			return $args;
+		}
+
+		$listing_query = self::build_public_listing_meta_query();
+		if ( empty( $args['meta_query'] ) || ! is_array( $args['meta_query'] ) ) {
+			$args['meta_query'] = $listing_query;
+			return $args;
+		}
+
+		$args['meta_query'] = array(
+			'relation' => 'AND',
+			$args['meta_query'],
+			$listing_query,
+		);
+
+		return $args;
+	}
+
+	/**
+	 * 投稿一覧 API に、公開の一覧から外すメニューを残すか。
+	 *
+	 * @param WP_REST_Request $request REST リクエスト。
+	 * @return bool 残すなら true。
+	 */
+	private function should_include_hidden_menus_in_rest_collection( WP_REST_Request $request ): bool {
+		return 'edit' === $request->get_param( 'context' )
+			&& current_user_can( Capabilities::MANAGE_SERVICE_MENUS );
 	}
 
 	/**

@@ -388,9 +388,7 @@
 
 	function updateReservationMenuListModeState() {
 		const $checkbox = $( '#vkbm-reservation-show-menu-list' );
-		const $row = $(
-			'#vkbm-reservation-menu-list-display-mode-row, #vkbm-reservation-menu-list-image-aspect-ratio-row'
-		);
+		const $row = $( '#vkbm-reservation-menu-list-display-mode-row' );
 		const $select = $( '#vkbm-reservation-menu-list-display-mode' );
 		if ( ! $checkbox.length || ! $row.length ) {
 			return;
@@ -401,7 +399,10 @@
 		$row.prop( 'hidden', ! enabled );
 		$(
 			'#vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help'
-		).prop( 'hidden', 'text' !== $select.val() );
+		).prop( 'hidden', ! ( enabled && 'text' === $select.val() ) );
+		$(
+			'#vkbm-reservation-menu-list-image-aspect-ratio-list-hidden-help'
+		).prop( 'hidden', enabled );
 		$( '#vkbm-reservation-menu-list-image-aspect-ratio-mobile-help' ).prop(
 			'hidden',
 			! [ '1-1', '4-3', '16-9' ].includes(

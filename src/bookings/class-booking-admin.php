@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Attendees\Booking_Attendee_Display;
 use VKBookingManager\Attendees\Booking_Attendee_Resolver;
@@ -43,7 +44,6 @@ use function get_edit_post_link;
 use function get_edit_user_link;
 use function get_userdata;
 use function vkbm_get_resource_label_singular;
-use function vkbm_normalize_reservation_page_url;
 use function number_format_i18n;
 
 /**
@@ -237,7 +237,7 @@ class Booking_Admin {
 	public function register_reservation_page_menu(): void {
 		$settings = ( new Settings_Repository() )->get_settings();
 		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		$url      = vkbm_normalize_reservation_page_url( $url );
+		$url      = Reservation_Page_Url::resolve_usable( $url );
 
 		if ( '' === $url ) {
 			$url = admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-reservation-page-url' );

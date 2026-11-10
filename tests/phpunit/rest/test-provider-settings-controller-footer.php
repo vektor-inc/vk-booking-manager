@@ -144,6 +144,38 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * get_settings() の reservation_page_url が、自サイトのURLだけを返し、旧ドメインのURLは空文字にすることを検証する（issue #1049）。
+	 */
+	public function test_get_settings_reservation_page_url(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name'  => '相対パス => 自サイトの絶対URL',
+				'reservation_page_url' => '/booking/',
+				'expected'             => home_url( '/booking/' ),
+			),
+			array(
+				'test_condition_name'  => '旧ドメインのURL => 空文字（JS側で旧ドメインへのリンクを作らせない）',
+				'reservation_page_url' => 'https://old.example.com/booking/',
+				'expected'             => '',
+			),
+			array(
+				'test_condition_name'  => '未設定 => 空文字',
+				'reservation_page_url' => '',
+				'expected'             => '',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			update_option( Settings_Repository::OPTION_KEY, array( 'reservation_page_url' => $case['reservation_page_url'] ) );
+
+			$controller = new Provider_Settings_Controller( new Settings_Repository() );
+			$data       = $controller->get_settings()->get_data();
+
+			$this->assertSame( $case['expected'], $data['reservation_page_url'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * build_footer_data() が、前後の空白の除去と、プライバシーポリシーの不正なモードの
 	 * 「表示しない」への丸め込みを行うことを検証する。
 	 */

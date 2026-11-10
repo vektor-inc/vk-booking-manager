@@ -18,7 +18,6 @@ use WP_UnitTestCase;
  * @group guest-booking
  */
 class Booking_Notification_Guest_Cancel_Test extends WP_UnitTestCase {
-	private const PAGE_URL = 'https://example.com/reserve/';
 
 	/**
 	 * @var mixed
@@ -79,7 +78,7 @@ class Booking_Notification_Guest_Cancel_Test extends WP_UnitTestCase {
 			array_merge(
 				$repository->get_settings(),
 				array(
-					'reservation_page_url'                   => self::PAGE_URL,
+					'reservation_page_url'                   => home_url( '/reserve/' ),
 					'provider_email'                         => 'shop@example.com',
 					'provider_phone'                         => '03-1234-5678',
 					'provider_booking_cancel_mode'           => 'hours',
@@ -232,7 +231,7 @@ class Booking_Notification_Guest_Cancel_Test extends WP_UnitTestCase {
 				$body = $this->customer_mail_body();
 				$this->assertNotSame( '', $body, $name . '（お客様宛てのメールを送る）' );
 				$this->assertSame( $case['expected_header'], false !== strpos( $body, $header ), $name . '（節の見出し）' );
-				$expected_url = self::PAGE_URL . '?vkbm_guest_cancel=' . $raw . '&booking=' . $booking_id;
+				$expected_url = home_url( '/reserve/' ) . '?vkbm_guest_cancel=' . $raw . '&booking=' . $booking_id;
 				$this->assertSame( $case['expected_link'], false !== strpos( $body, $expected_url ), $name . '（リンク）' );
 				$this->assertSame( $case['expected_tel_line'], false !== strpos( $body, 'TEL: 03-1234-5678' ) && substr_count( $body, 'TEL: 03-1234-5678' ) >= 2, $name . '（案内の TEL 行。署名の分を除く）' );
 

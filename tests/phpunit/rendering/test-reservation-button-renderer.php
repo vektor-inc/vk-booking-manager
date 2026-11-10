@@ -79,7 +79,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * 予約ページが設定済みなら menu_id 付きのリンクHTMLを生成する。
 	 */
 	public function test_render_button_builds_link_with_menu_id(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
 
@@ -95,7 +95,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * サイズを省略した場合は標準サイズ（サイズクラス無し）になる。
 	 */
 	public function test_render_button_has_no_size_class_by_default(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reservation/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
 
@@ -109,7 +109,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * 許可したサイズ値を指定すると、対応するサイズ修飾クラスが付く。
 	 */
 	public function test_render_button_adds_size_class_for_allowed_sizes(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reservation/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
 
@@ -128,7 +128,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * 想定外のサイズ値は標準サイズ（サイズクラス無し）になり、任意の文字列は出力されない。
 	 */
 	public function test_render_button_ignores_unexpected_size(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reservation/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
 
@@ -142,7 +142,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * 予約ボタンブロックは従来どおり小さいサイズ（vkbm-button__sm）で出力する。
 	 */
 	public function test_reservation_button_block_keeps_small_size_class(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reservation/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reservation/' ) ) );
 		$post  = $this->create_menu_post();
 		$block = new Reservation_Button_Block( $this->make_renderer() );
 
@@ -171,7 +171,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * オンライン予約不可のプランは無効状態の span を出力する。
 	 */
 	public function test_render_button_renders_disabled_span_for_unavailable_menu(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post(
 			array(
@@ -205,7 +205,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * オンライン予約不可のメニューでは「ウェブ予約不可」の表示を優先する（issue #451）。
 	 */
 	public function test_render_button_prefers_disabled_label_over_custom_label_when_unavailable(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post(
 			array(
@@ -235,7 +235,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	public function test_render_button_prefers_disabled_label_over_settings_label_when_unavailable(): void {
 		$this->set_settings(
 			array(
-				'reservation_page_url' => 'https://example.com/reserve/',
+				'reservation_page_url' => home_url( '/reserve/' ),
 				Reservation_Button_Renderer::SETTING_RESERVE_LABEL => 'いますぐ予約',
 			)
 		);
@@ -260,7 +260,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * オンライン予約可能なメニューでは、従来どおり指定ラベル（基本設定・属性）を表示する。
 	 */
 	public function test_render_button_keeps_custom_label_when_available(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
 
@@ -283,7 +283,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * どのプランのボタンかを伝えるためプラン名は screen-reader-text に残す（issue #451）。
 	 */
 	public function test_render_disabled_button_includes_plan_name_for_screen_readers(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post(
 			array(
@@ -319,6 +319,49 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 		$html = $renderer->render_button( $post );
 
 		$this->assertSame( '', $html );
+	}
+
+	/**
+	 * get_reservation_page_url() / render_button() が、自サイトのURLだけを使い、旧ドメインのURLは使わないことを検証する（issue #1049）。
+	 */
+	public function test_get_reservation_page_url(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name'  => '自サイトの絶対URL => そのまま使う',
+				'reservation_page_url' => home_url( '/booking/' ),
+				'expected'             => home_url( '/booking/' ),
+				'expect_button'        => true,
+			),
+			array(
+				'test_condition_name'  => '相対パス => 自サイトのURLにして使う',
+				'reservation_page_url' => '/booking/',
+				'expected'             => home_url( '/booking/' ),
+				'expect_button'        => true,
+			),
+			array(
+				'test_condition_name'  => 'http と https が違うだけの自サイトURL => 使う',
+				'reservation_page_url' => 'https://' . wp_parse_url( home_url(), PHP_URL_HOST ) . '/booking/',
+				'expected'             => 'https://' . wp_parse_url( home_url(), PHP_URL_HOST ) . '/booking/',
+				'expect_button'        => true,
+			),
+			array(
+				'test_condition_name'  => '旧ドメインのURL => 使わない（ボタンも出さない）',
+				'reservation_page_url' => 'https://old.example.com/booking/',
+				'expected'             => '',
+				'expect_button'        => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->set_settings( array( 'reservation_page_url' => $case['reservation_page_url'] ) );
+			$renderer = $this->make_renderer();
+
+			$this->assertSame( $case['expected'], $renderer->get_reservation_page_url(), $case['test_condition_name'] );
+
+			$html = $renderer->render_button( $this->create_menu_post() );
+			$this->assertSame( $case['expect_button'], false !== strpos( $html, 'href=' ), $case['test_condition_name'] . '（ボタンのリンク出力）' );
+			$this->assertStringNotContainsString( 'old.example.com', $html, $case['test_condition_name'] . '（旧ドメインを出力しない）' );
+		}
 	}
 
 	/**
@@ -390,7 +433,7 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * accessible_suffix を渡すと aria-label にプラン名等を含める。
 	 */
 	public function test_render_button_includes_accessible_name(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
 
@@ -423,10 +466,10 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * build_reservation_link() が、表示中の URL の検証済みの日付だけをリンクへ引き継ぐことを検証する。
 	 */
 	public function test_build_reservation_link_carries_valid_dates_only(): void {
-		$this->set_settings( array( 'reservation_page_url' => 'https://example.com/reserve/' ) );
+		$this->set_settings( array( 'reservation_page_url' => home_url( '/reserve/' ) ) );
 		$renderer = $this->make_renderer();
 		$post     = $this->create_menu_post();
-		$base     = 'https://example.com/reserve/?menu_id=' . $post->ID;
+		$base     = home_url( '/reserve/' ) . '?menu_id=' . $post->ID;
 
 		$test_cases = array(
 			array(

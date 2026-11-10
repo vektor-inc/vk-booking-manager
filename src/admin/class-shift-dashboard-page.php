@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use DateTimeImmutable;
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Attendees\Booking_Attendee_Display;
 use VKBookingManager\Availability\Night_Strategy;
@@ -2910,36 +2911,7 @@ class Shift_Dashboard_Page {
 		$settings = ( new Settings_Repository() )->get_settings();
 		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		return $this->normalize_reservation_page_url( $url );
-	}
-
-	/**
-	 * Normalize reservation page URL to an absolute URL.
-	 *
-	 * @param string $url Raw URL.
-	 * @return string
-	 */
-	private function normalize_reservation_page_url( string $url ): string {
-		$url = trim( $url );
-
-		if ( '' === $url ) {
-			return '';
-		}
-
-		if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
-			return esc_url_raw( $url );
-		}
-
-		if ( str_starts_with( $url, '//' ) ) {
-			$scheme = is_ssl() ? 'https:' : 'http:';
-			return esc_url_raw( $scheme . $url );
-		}
-
-		if ( ! str_starts_with( $url, '/' ) ) {
-			$url = '/' . $url;
-		}
-
-		return esc_url_raw( home_url( $url ) );
+		return Reservation_Page_Url::resolve_usable( $url );
 	}
 
 	/**

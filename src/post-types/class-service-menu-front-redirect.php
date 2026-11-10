@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
@@ -28,7 +29,6 @@ use function untrailingslashit;
 use function wp_unslash;
 use function wp_parse_str;
 use function wp_parse_url;
-use function wp_safe_redirect;
 use function wp_validate_redirect;
 
 /**
@@ -156,10 +156,11 @@ class Service_Menu_Front_Redirect {
 			return;
 		}
 
-		// resolve_redirect_url() で自サイトとして許可されるホストかどうかは検証済みだが、
-		// 念のための多層防御として wp_safe_redirect() を使う
-		// （同じ予約ページURLを扱う Auth_Shortcodes::redirect_free_user_from_admin() 等と同じ方針）.
-		wp_safe_redirect( $redirect_url, 302 );
+		// resolve_redirect_url() の2経路のうち、予約ページ側は wp_validate_redirect() も通るが、
+		// 詳細ページ（予約ブロック内表示）側は Reservation_Page_Url::resolve_usable() の検証だけを通る。
+		// wp_safe_redirect() は www の有無が違うURLを弾いて管理画面（ログイン画面）へ送ってしまうため、
+		// 自サイトのURLとして検証済みの値に限って wp_redirect() を使う（この検証を外さないこと）.
+		wp_redirect( $redirect_url, 302 ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- 自サイトのURLとして検証済み。
 		exit;
 	}
 
@@ -172,8 +173,8 @@ class Service_Menu_Front_Redirect {
 	 * - 「詳細ページを使用する」がONの投稿は詳細ページをそのまま表示するため、空文字を返す。
 	 * - 予約ページURLが未設定（正規化後に空）の場合も、遷移先が無いため空文字を返す。
 	 * - 予約ページURLが自サイトとして許可されないホスト（他サイトのURLが誤って入力されている場合等）
-	 *   の場合も空文字を返す（#453 レビュー対応）。許可しないと wp_safe_redirect() が既定で
-	 *   admin_url() へフォールバックし、未ログイン訪問者を意図せずログイン画面へ送ってしまうため。
+	 *   の場合も空文字を返す（#453 レビュー対応）。許可しないと旧ドメイン等へ
+	 *   訪問者を送ってしまうため。
 	 * - 予約ページURLがこのサービスメニュー自身の個別ページURLと同じ場合も空文字を返す
 	 *   （#453 レビュー対応）。リダイレクトすると無限リダイレクトになるため。
 	 *
@@ -261,11 +262,7 @@ class Service_Menu_Front_Redirect {
 		$settings = $this->settings_repository->get_settings();
 		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			return vkbm_normalize_reservation_page_url( $url );
-		}
-
-		return $url;
+		return Reservation_Page_Url::resolve_usable( $url );
 	}
 
 	/**

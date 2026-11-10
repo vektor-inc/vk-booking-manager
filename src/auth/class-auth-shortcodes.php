@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Common\Customer_Address;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Admin\Email_Log_Repository;
@@ -24,6 +25,7 @@ use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Provider_Display_Name;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use WP_Error;
 use WP_Post;
@@ -1044,6 +1046,7 @@ else :
 		$last_value             = isset( $this->registration_posted_data['last_name'] ) ? (string) $this->registration_posted_data['last_name'] : '';
 		$name_value             = isset( $this->registration_posted_data['full_name'] ) ? (string) $this->registration_posted_data['full_name'] : '';
 		$kana_value             = isset( $this->registration_posted_data['kana_name'] ) ? (string) $this->registration_posted_data['kana_name'] : '';
+		$phone_required         = $this->is_phone_required();
 		$phone_value            = isset( $this->registration_posted_data['phone_number'] ) ? (string) $this->registration_posted_data['phone_number'] : '';
 		$birth_value            = isset( $this->registration_posted_data['birth_date'] ) ? (string) $this->registration_posted_data['birth_date'] : '';
 		$birth_parts            = $this->resolve_birth_parts( $this->registration_posted_data, $birth_value );
@@ -1136,7 +1139,7 @@ else :
 						'value'        => $phone_value,
 						'type'         => 'tel',
 						'autocomplete' => 'tel',
-						'required'     => true,
+						'required'     => $phone_required,
 					)
 				);
 				$this->render_gender_field( 'vkbm-register-gender', $gender_value );
@@ -1316,6 +1319,7 @@ else :
 		$email_value       = $this->profile_posted_data['user_email'] ?? (string) $current_user->user_email;
 		$kana_value        = $this->profile_posted_data['kana_name'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_kana_name', true );
 		$address_value     = $this->profile_posted_data['address_full'] ?? (string) get_user_meta( $current_user->ID, Customer_Address::USER_META, true );
+		$phone_required    = $this->is_phone_required();
 		$phone_value       = $this->profile_posted_data['phone_number'] ?? (string) get_user_meta( $current_user->ID, 'phone_number', true );
 		$birth_value       = $this->profile_posted_data['birth_date'] ?? (string) get_user_meta( $current_user->ID, 'vkbm_birth_date', true );
 		$birth_parts       = $this->resolve_birth_parts( $this->profile_posted_data, $birth_value );
@@ -1383,7 +1387,7 @@ else :
 						'label'    => __( 'telephone number', 'vk-booking-manager' ),
 						'value'    => $phone_value,
 						'type'     => 'tel',
-						'required' => true,
+						'required' => $phone_required,
 					)
 				);
 				if ( Industry_Presets::supports( 'lodging' ) ) {
@@ -1521,13 +1525,12 @@ else :
 					'code'    => 'missing_kana_name',
 					'message' => $this->get_required_field_message( 'kana_name' ),
 				),
-				array(
-					'value'   => $phone,
-					'code'    => 'missing_phone',
-					'message' => $this->get_required_field_message( 'phone_number' ),
-				),
 			)
 		);
+		// 電話番号は、必須のときは数字が必要。任意のときは、空なら通し、入力があるのに数字が無ければ断る。
+		if ( ! VKBM_Helper::is_phone_input_acceptable( $phone_raw, $this->is_phone_required() ) ) {
+			$errors->add( 'missing_phone', $this->get_required_field_message( 'phone_number' ) );
+		}
 		$this->validate_email_for_context( $errors, $email, 'profile', $user_id );
 
 		if ( '' !== $new_pass || '' !== $pass_confirm ) {
@@ -2058,13 +2061,12 @@ else :
 						'code'    => 'missing_kana_name',
 						'message' => $this->get_required_field_message( 'kana_name' ),
 					),
-					array(
-						'value'   => $phone,
-						'code'    => 'empty_phone',
-						'message' => $this->get_required_field_message( 'phone_number' ),
-					),
 				)
 			);
+		// 電話番号は、必須のときは数字が必要。任意のときは、空なら通し、入力があるのに数字が無ければ断る。
+		if ( ! VKBM_Helper::is_phone_input_acceptable( $phone_raw, $this->is_phone_required() ) ) {
+			$this->registration_errors->add( 'empty_phone', $this->get_required_field_message( 'phone_number' ) );
+		}
 		$settings         = $this->settings_service->get_settings();
 		$terms_of_service = isset( $settings['provider_terms_of_service'] ) ? trim( (string) $settings['provider_terms_of_service'] ) : '';
 		if ( '' !== $terms_of_service && ! $agree_terms ) {
@@ -2524,10 +2526,10 @@ else :
 	}
 
 	/**
-	 * Returns the normalized reservation page URL from provider settings, or '' if unset.
+	 * Returns the normalized reservation page URL from provider settings, or '' if unset or not this site's URL.
 	 *
-	 * 予約ページURL設定値を正規化して返す（`vkbm_normalize_reservation_page_url()` が
-	 * 定義されていれば適用）。redirect_wp_register_to_vkbm() / redirect_wp_login_to_vkbm() /
+	 * 予約ページURL設定値を正規化して返す。自サイトのURLでない場合（旧ドメインのまま等）は空文字を返す
+	 * （判定は Reservation_Page_Url::resolve_usable() に集約）。redirect_wp_register_to_vkbm() / redirect_wp_login_to_vkbm() /
 	 * redirect_free_user_from_admin() で重複していた同じ取得処理を1か所にまとめたもの。
 	 * issue #512 のフォールバック案内リンク（Reservation_Block::get_native_login_fallback_url()）
 	 * からも参照する。
@@ -2538,11 +2540,7 @@ else :
 		$settings        = $this->settings_service->get_settings();
 		$reservation_url = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
 
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			$reservation_url = vkbm_normalize_reservation_page_url( $reservation_url );
-		}
-
-		return $reservation_url;
+		return Reservation_Page_Url::resolve_usable( $reservation_url );
 	}
 
 	/**
@@ -3187,6 +3185,17 @@ else :
 				$errors->add( $code, $message );
 			}
 		}
+	}
+
+	/**
+	 * Whether the phone number is required by the provider settings.
+	 *
+	 * 設定でお客様の電話番号を必須にしているかを返します。
+	 *
+	 * @return bool True when required.
+	 */
+	private function is_phone_required(): bool {
+		return Settings_Repository::is_customer_phone_required( $this->settings_service->get_settings() );
 	}
 
 	/**

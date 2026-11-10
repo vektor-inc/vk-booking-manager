@@ -74,6 +74,7 @@ export const GuestBackButton = ( { onClick } ) => (
  * @param {number}   props.maxLength    最大文字数。
  * @param {Function} props.onChange     入力時の処理（値を受け取る）。
  * @param {string}   props.inputMode    input の inputMode。
+ * @param {boolean}  props.required     必須か（既定は必須）。
  * @return {JSX.Element} 1 欄分の要素。
  */
 const GuestField = ( {
@@ -88,6 +89,7 @@ const GuestField = ( {
 	maxLength,
 	onChange,
 	inputMode,
+	required = true,
 } ) => {
 	const errorId = `${ id }-error`;
 	const helpId = `${ id }-help`;
@@ -104,8 +106,8 @@ const GuestField = ( {
 				type={ type }
 				id={ id }
 				value={ value }
-				required
-				aria-required="true"
+				required={ required }
+				aria-required={ required ? 'true' : undefined }
 				aria-invalid={ error ? 'true' : undefined }
 				aria-describedby={ describedBy }
 				autoComplete={ autoComplete }
@@ -136,6 +138,7 @@ const GuestField = ( {
  *
  * @param {Object}      props                  プロパティ。
  * @param {JSX.Element} props.addressField     宿泊時の住所欄。
+ * @param {boolean}     props.phoneRequired    電話番号が必須か（設定 customer_phone_required）。
  * @param {Object}      props.values           name・email・phone の入力値。
  * @param {Object}      props.errors           name・email・phone のエラー文。
  * @param {Object}      props.inputRefs        name・email・phone の入力欄の ref。
@@ -146,6 +149,7 @@ const GuestField = ( {
  */
 export const GuestContactFields = ( {
 	addressField,
+	phoneRequired = true,
 	values,
 	errors,
 	inputRefs,
@@ -189,7 +193,12 @@ export const GuestContactFields = ( {
 		/>
 		<GuestField
 			id="vkbm-confirm-guest-phone"
-			label={ __( 'Phone number (required)', 'vk-booking-manager' ) }
+			label={
+				phoneRequired
+					? __( 'Phone number (required)', 'vk-booking-manager' )
+					: __( 'Phone number (optional)', 'vk-booking-manager' )
+			}
+			required={ phoneRequired }
 			type="tel"
 			autoComplete="tel"
 			inputMode="tel"

@@ -391,8 +391,23 @@ class Booking_Confirmation_Controller {
 			$guest_email          = VKBM_Helper::normalize_email( (string) ( $guest['email'] ?? '' ) );
 			$guest_phone          = VKBM_Helper::normalize_phone_number( (string) ( $guest['phone'] ?? '' ) );
 			$guest_verified_at    = (string) ( $guest['verified_at'] ?? gmdate( 'Y-m-d H:i:s' ) );
-			if ( '' === $guest_name || '' === $guest_email || '' === $guest_phone ) {
-				return new WP_Error( 'guest_contact_required', __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			// 電話番号は設定で必須のときだけ必須にする。
+			$guest_phone_required = Settings_Repository::is_customer_phone_required( $this->settings_repository->get_settings() );
+			if ( '' === $guest_name || '' === $guest_email ) {
+				$guest_contact_message = $guest_phone_required
+					? __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' )
+					: __( 'Please enter your name and email address.', 'vk-booking-manager' );
+				return new WP_Error( 'guest_contact_required', $guest_contact_message, array( 'status' => 400 ) );
+			}
+			// 確認待ちデータの電話番号は申し込み時に正規化済み。必須のときだけ空を断る（任意で入力があったものは申し込み時に数字を確かめている）。
+			if ( ! VKBM_Helper::is_phone_input_acceptable( (string) ( $guest['phone'] ?? '' ), $guest_phone_required ) ) {
+				return new WP_Error(
+					'guest_contact_required',
+					$guest_phone_required
+						? __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' )
+						: __( 'Please enter your phone number.', 'vk-booking-manager' ),
+					array( 'status' => 400 )
+				);
 			}
 			$user = null;
 		} else {

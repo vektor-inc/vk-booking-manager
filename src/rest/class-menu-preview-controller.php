@@ -17,11 +17,16 @@ use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\Availability\Night_Strategy;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Common\Resource_Tag_Id_List;
+use VKBookingManager\Common\Service_Period;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_Error;
+use WP_Post;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_REST_Server;
 use function __;
+use function get_post;
+use function get_post_meta;
 
 /**
  * REST controller that returns rendered service menu previews.
@@ -158,13 +163,19 @@ class Menu_Preview_Controller {
 			);
 		}
 
-		$html = $this->menu_loop_block->render_menu_card(
-			$menu_id,
-			array(
-				'showDetailButton'  => false,
-				'showReserveButton' => false,
-			)
-		);
+		// #1017: 一覧で隠しているメニュー（アーカイブ済み・提供期間終了・パスワード保護）は、
+		// ID を直接指定されてもカードを返さず、下書き・非公開と同じ 404 にする。
+		// render_menu_card() は menu-card ブロックや詳細表示でも使うため、判定はこの入口だけに置く。
+		$html = $this->is_hidden_from_preview( $menu_id )
+			? ''
+			: $this->menu_loop_block->render_menu_card(
+				$menu_id,
+				array(
+					'showDetailButton'  => false,
+					'showReserveButton' => false,
+					'imageAspectRatio'  => $this->menu_loop_block->get_reservation_card_image_aspect_ratio(),
+				)
+			);
 
 		if ( '' === $html ) {
 			return new WP_Error(
@@ -181,6 +192,40 @@ class Menu_Preview_Controller {
 				'html' => $html,
 			)
 		);
+	}
+
+	/**
+	 * プレビューのカードを返してはいけないメニューかどうかを返す。
+	 *
+	 * サービスメニュー一覧（Menu_Loop_Block）が除外する基準（アーカイブ済み・提供期間終了）と、
+	 * パスワード保護を対象にする。次のものは対象にしない（今までどおりカードを返す）。
+	 * - 「詳細ページを使用する」が OFF のメニュー（通常のカードとして表示するため）
+	 * - 提供開始前のメニュー（先行予約を維持するため）
+	 *
+	 * 存在しない ID・メニュー以外の投稿・下書きや非公開は、render_menu_card() 側が空文字を返して 404 になる。
+	 *
+	 * @param int $menu_id サービスメニューの投稿 ID。
+	 * @return bool 隠すべきメニューなら true。
+	 */
+	private function is_hidden_from_preview( int $menu_id ): bool {
+		$post = get_post( $menu_id );
+
+		if ( ! $post instanceof WP_Post || Service_Menu_Post_Type::POST_TYPE !== $post->post_type ) {
+			return false;
+		}
+
+		if ( '1' === (string) get_post_meta( $post->ID, '_vkbm_is_archived', true ) ) {
+			return true;
+		}
+
+		$period = Service_Period::get_period( $post->ID );
+		if ( Service_Period::is_ended( $period['end'], Service_Period::get_today() ) ) {
+			return true;
+		}
+
+		// Cookie で解除済みでも、パスワード保護のメニューはカードを返さない。
+		// post_password_required() は Cookie があると false になるため使わない。
+		return '' !== (string) $post->post_password;
 	}
 
 	/**

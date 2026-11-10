@@ -91,11 +91,11 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 				'expected_hidden'     => false,
 			),
 			array(
-				'test_condition_name' => '一覧オフでは非表示',
+				'test_condition_name' => '一覧オフでも表示',
 				'enabled'             => false,
 				'mode'                => 'card',
 				'ratio'               => 'original',
-				'expected_hidden'     => true,
+				'expected_hidden'     => false,
 			),
 		);
 		foreach ( $test_cases as $case ) {
@@ -120,23 +120,38 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 		}
 	}
 
-	/** 表示モードに応じてカード表示グループ向けの説明を切り替える。 */
+	/** 一覧の表示状態と表示モードに応じて補足を切り替える。 */
 	public function test_render_page_image_aspect_ratio_text_mode_help(): void {
 		$page       = $this->create_page();
 		$test_cases = array(
 			array(
 				'test_condition_name' => 'テキスト表示では追加説明を表示する',
+				'enabled'             => true,
 				'mode'                => 'text',
 				'expected_hidden'     => false,
 			),
 			array(
 				'test_condition_name' => 'カード表示では追加説明を隠す',
+				'enabled'             => true,
 				'mode'                => 'card',
 				'expected_hidden'     => true,
 			),
 			array(
 				'test_condition_name' => '不正な表示モードはカードに正規化して追加説明を隠す',
+				'enabled'             => true,
 				'mode'                => 'invalid',
+				'expected_hidden'     => true,
+			),
+			array(
+				'test_condition_name' => '一覧オフ・テキストでは一覧非表示向けの説明だけ表示する',
+				'enabled'             => false,
+				'mode'                => 'text',
+				'expected_hidden'     => true,
+			),
+			array(
+				'test_condition_name' => '一覧オフ・カードでは一覧非表示向けの説明だけ表示する',
+				'enabled'             => false,
+				'mode'                => 'card',
 				'expected_hidden'     => true,
 			),
 		);
@@ -146,7 +161,7 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 			update_option(
 				Settings_Repository::OPTION_KEY,
 				array(
-					'reservation_show_menu_list'         => true,
+					'reservation_show_menu_list'         => $case['enabled'],
 					'reservation_menu_list_display_mode' => $case['mode'],
 				)
 			);
@@ -160,11 +175,14 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 			libxml_use_internal_errors( $previous );
 			$xpath = new DOMXPath( $document );
 			$help  = $xpath->query( '//*[@id="vkbm-reservation-menu-list-image-aspect-ratio-help"]/p' );
-			$this->assertSame( 3, $help->length, $case['test_condition_name'] );
+			$this->assertSame( 4, $help->length, $case['test_condition_name'] );
 			$this->assertSame( 'vkbm-reservation-menu-list-image-aspect-ratio-text-mode-help', $help->item( 1 )->getAttribute( 'id' ), $case['test_condition_name'] );
 			$this->assertSame( __( 'Sets the image ratio for service groups displayed as cards.', 'vk-booking-manager' ), $help->item( 1 )->textContent, $case['test_condition_name'] );
 			$this->assertSame( $case['expected_hidden'], $help->item( 1 )->hasAttribute( 'hidden' ), $case['test_condition_name'] );
-			$this->assertSame( 'vkbm-reservation-menu-list-image-aspect-ratio-mobile-help', $help->item( 2 )->getAttribute( 'id' ), $case['test_condition_name'] );
+			$this->assertSame( 'vkbm-reservation-menu-list-image-aspect-ratio-mobile-help', $help->item( 3 )->getAttribute( 'id' ), $case['test_condition_name'] );
+			$this->assertSame( 'vkbm-reservation-menu-list-image-aspect-ratio-list-hidden-help', $help->item( 2 )->getAttribute( 'id' ), $case['test_condition_name'] );
+			$this->assertSame( __( 'This also applies to the cards shown on the date selection screen and elsewhere, even when the service menu list is hidden.', 'vk-booking-manager' ), $help->item( 2 )->textContent, $case['test_condition_name'] );
+			$this->assertSame( $case['enabled'], $help->item( 2 )->hasAttribute( 'hidden' ), $case['test_condition_name'] );
 			$select = $xpath->query( '//*[@id="vkbm-reservation-menu-list-image-aspect-ratio"]' )->item( 0 );
 			$this->assertFalse( $select->hasAttribute( 'disabled' ), $case['test_condition_name'] );
 		}

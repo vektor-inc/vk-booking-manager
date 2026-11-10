@@ -287,6 +287,58 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * ゲスト予約の確認後の作成で、電話番号が受け付けられないときのエラー文言は、電話番号の必須設定に合わせる。
+	 */
+	public function test_create_booking_from_draft_guest_phone_error_message(): void {
+		$this->disable_nomination();
+		$test_cases = array(
+			array(
+				'test_condition_name' => '電話番号が任意の設定で数字の無い値 => 電話番号だけを求める文言',
+				'phone_required'      => false,
+				'guest_phone'         => 'なし',
+				'expected_message'    => __( 'Please enter your phone number.', 'vk-booking-manager' ),
+			),
+			array(
+				'test_condition_name' => '電話番号が必須の設定で空 => 名前・メール・電話番号を求める従来の文言',
+				'phone_required'      => true,
+				'guest_phone'         => '',
+				'expected_message'    => __( 'Please enter your name, email address and phone number.', 'vk-booking-manager' ),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$settings = ( new Settings_Repository() )->get_settings();
+			update_option( Settings_Repository::OPTION_KEY, array_merge( $settings, array( 'customer_phone_required' => $case['phone_required'] ) ) );
+
+			$menu_id  = $this->create_menu();
+			$staff_id = $this->create_staff();
+			$start    = '2026-08-03T10:00:00+09:00';
+			$end      = '2026-08-03T10:30:00+09:00';
+			$token    = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+			$draft    = get_transient( self::TRANSIENT_PREFIX . $token );
+
+			wp_set_current_user( 0 );
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$result  = $this->build_controller( $staff_id, $start, $end )->create_booking_from_draft(
+				$draft,
+				$token,
+				0,
+				false,
+				$request,
+				array(
+					'name'  => 'ゲスト太郎',
+					'email' => 'guest-phone-error@example.com',
+					'phone' => $case['guest_phone'],
+				)
+			);
+
+			$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
+			$this->assertSame( 'guest_contact_required', $result->get_error_code(), $case['test_condition_name'] );
+			$this->assertSame( $case['expected_message'], $result->get_error_message(), $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * 顧客フラグによる予約ブロックの判定には、引数の操作者 ID を渡す（代理予約の場合は判定しない）。
 	 */
 	public function test_create_booking_from_draft_block_check(): void {

@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Post;
@@ -23,10 +24,6 @@ use function add_query_arg;
 use function esc_attr;
 use function esc_html;
 use function esc_url;
-use function esc_url_raw;
-use function home_url;
-use function is_ssl;
-use function str_starts_with;
 
 /**
  * 予約ボタンの共通描画ヘルパー。
@@ -105,7 +102,7 @@ class Reservation_Button_Renderer {
 		$settings = $this->get_provider_settings();
 		$url      = isset( $settings[ self::SETTING_RESERVATION_PAGE_URL ] ) ? (string) $settings[ self::SETTING_RESERVATION_PAGE_URL ] : '';
 
-		return $this->normalize_reservation_page_url( $url );
+		return Reservation_Page_Url::resolve_usable( $url );
 	}
 
 	/**
@@ -268,41 +265,5 @@ class Reservation_Button_Renderer {
 		}
 
 		return $this->provider_settings;
-	}
-
-	/**
-	 * 予約ページURLをサイトに対して正規化する。
-	 *
-	 * グローバルヘルパー vkbm_normalize_reservation_page_url があればそれを使い、
-	 * 無い場合（単体テスト等）は同等のロジックでフォールバックする。
-	 *
-	 * @param string $url 生のURL。
-	 * @return string 正規化済みURL。空なら空文字。
-	 */
-	private function normalize_reservation_page_url( string $url ): string {
-		if ( function_exists( 'vkbm_normalize_reservation_page_url' ) ) {
-			return vkbm_normalize_reservation_page_url( $url );
-		}
-
-		$url = trim( $url );
-
-		if ( '' === $url ) {
-			return '';
-		}
-
-		if ( str_starts_with( $url, 'http://' ) || str_starts_with( $url, 'https://' ) ) {
-			return esc_url_raw( $url );
-		}
-
-		if ( str_starts_with( $url, '//' ) ) {
-			$scheme = is_ssl() ? 'https:' : 'http:';
-			return esc_url_raw( $scheme . $url );
-		}
-
-		if ( ! str_starts_with( $url, '/' ) ) {
-			$url = '/' . $url;
-		}
-
-		return esc_url_raw( home_url( $url ) );
 	}
 }
