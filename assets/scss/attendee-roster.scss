@@ -1,24 +1,47 @@
+/* ==========================================================================
+   マイページの名簿カード
+   ========================================================================== */
 .vkbm-attendee-roster {
-	box-sizing: border-box;
 	display: grid;
-	gap: var(--vkbm--spacing--lg);
-	width: 100%;
-	max-width: 100%;
+	// 字面の上下の余白も含め、カードの内側余白より内部の間隔を小さく保つ。
+	gap: var(--vkbm--spacing--xs);
+	min-width: 0;
+	// index.scss と認証 CSS バンドルで auth-forms より後に読み込み、カードの margin を上書きする。
 	margin-top: var(--vkbm--spacing--lg);
-	padding: var(--vkbm--spacing--lg);
-	border: 1px solid var(--vkbm--color--border);
-	border-radius: var(--vkbm--radius--md);
 
+	> .vkbm-auth-card__title,
+	> p {
+		margin: 0;
+	}
+
+	> .vkbm-auth-card__title {
+		line-height: 1.4;
+	}
+
+	> p {
+		line-height: 1.6;
+	}
+
+	.vkbm-alert {
+		// 通知の下に共通の margin とカードの gap が重なるのを防ぐ。
+		margin: 0;
+	}
+
+	/* 各項目と入力欄
+	   ========================================================================== */
 	&__row {
-		box-sizing: border-box;
 		min-width: 0;
-		padding: var(--vkbm--spacing--md);
-		border: 1px solid var(--vkbm--color--border);
-		border-radius: var(--vkbm--radius--md);
+		margin: 0;
+		padding: 0;
+		border: 0;
+
+		+ .vkbm-attendee-roster__row {
+			margin-top: var(--vkbm--spacing--xs);
+			padding-top: calc(var(--vkbm--spacing--sm) * 0.75);
+			border-top: 1px solid var(--vkbm--color--border);
+		}
 
 		fieldset {
-			display: grid;
-			gap: var(--vkbm--spacing--md);
 			min-width: 0;
 			margin: 0;
 			padding: 0;
@@ -26,15 +49,19 @@
 		}
 
 		legend {
-			margin-bottom: var(--vkbm--spacing--md);
+			// 入力欄の grid と分け、見出しの下に gap と margin が重なるのを防ぐ。
+			margin: 0 0 var(--vkbm--spacing--xs);
+			padding: 0;
 			font-weight: 600;
+			line-height: 1.4;
 			line-break: strict;
 		}
 
 		label {
 			display: grid;
-			gap: var(--vkbm--spacing--sm);
+			gap: calc(var(--vkbm--spacing--xs) / 2);
 			min-width: 0;
+			line-height: 1.4;
 			line-break: strict;
 		}
 
@@ -43,6 +70,51 @@
 			width: 100%;
 			min-width: 0;
 		}
+	}
+
+	&__fields {
+		display: grid;
+		gap: calc(var(--vkbm--spacing--sm) * 0.75);
+		min-width: 0;
+	}
+
+	&__fields > .vkbm-button,
+	> .vkbm-button {
+		justify-self: start;
+	}
+
+	/* 番号の値と補足
+	   ========================================================================== */
+	&__fields > .vkbm-auth-form__note {
+		// grid の項目間隔に共通の補足文の margin を重ねない。
+		margin: 0;
+		line-height: 1.6;
+	}
+
+	&__number .vkbm-auth-form__note {
+		// 折り返した補足文の字面の行間以上に、入力欄から離す。
+		margin-top: calc(var(--vkbm--spacing--xs) * 1.25);
+		line-height: 1.6;
+	}
+
+	&__number:where(:has(.vkbm-attendee-roster__unregistered)) .vkbm-auth-form__note {
+		// 値の字面から測る未登録時だけ近づけ、補足の後ろをより広く保つ。
+		margin-top: var(--vkbm--spacing--xs);
+	}
+
+	&__unregistered {
+		color: var(--vkbm--color--text-secondary);
+		font-size: 0.85rem;
+		font-weight: 400;
+		// 単行の値の下にレディングを残さず、補足文とのまとまりを保つ。
+		line-height: 1;
+	}
+
+	/* 操作
+	   ========================================================================== */
+	&__row + p {
+		// 上限案内は直前の利用者の入力項目から離し、無効の追加ボタンとまとめる。
+		margin-top: var(--vkbm--spacing--xs);
 	}
 
 	&__actions {

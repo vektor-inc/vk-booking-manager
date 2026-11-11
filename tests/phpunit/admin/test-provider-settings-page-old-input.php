@@ -236,12 +236,12 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 		}
 
 		// フォームに出力される設定項目（vkbm_provider_settings[項目名]）を実際の描画から集める。
-		// タブによって描画される項目が異なる（例: 通貨記号・税表記は「システム」タブ、ライセンスキーは
+		// タブによって描画される項目が異なる（例: 通貨記号・税表記は「表記設定」タブ、ライセンスキーは
 		// 「ライセンス」タブのときだけ描画される）ため、render_page() のタブ定義の全タブで描画して合算する。
 		// 「連携」タブは保存フォームの外に描画され、設定項目を持たないため対象外。
 		// 「ライセンス」タブは無料版では存在せず、既定の「店舗」タブとして描画される。
 		$form_keys = array();
-		foreach ( array( 'store', 'system', 'registration', 'consent', 'design', 'advanced', 'faq', 'license' ) as $tab ) {
+		foreach ( array( 'store', 'system', 'notation', 'email', 'registration', 'consent', 'design', 'advanced', 'faq', 'license' ) as $tab ) {
 			$_GET['tab'] = $tab;
 			ob_start();
 			$page->render_page();

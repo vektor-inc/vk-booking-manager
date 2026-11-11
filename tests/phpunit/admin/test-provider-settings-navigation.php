@@ -16,6 +16,7 @@ use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_UnitTestCase;
 use function add_action;
 use function add_filter;
@@ -133,7 +134,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'test_condition_name' => '連携・ライセンス・拡張プラグインなし => 「拡張・連携」グループは出ない',
 				'conditions'          => array( false, false, false ),
 				'expected'            => array(
-					'service'  => array( 'store', 'system', 'email', 'design' ),
+					'service'  => array( 'store', 'system', 'notation', 'email', 'design' ),
 					'customer' => array( 'attendees', 'registration', 'consent' ),
 					'admin'    => array( 'advanced' ),
 					'help'     => array( 'faq' ),
@@ -143,7 +144,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'test_condition_name' => '連携あり・ライセンスあり => 「拡張・連携」に連携、「管理」にライセンスが入る',
 				'conditions'          => array( true, true, false ),
 				'expected'            => array(
-					'service'   => array( 'store', 'system', 'email', 'design' ),
+					'service'   => array( 'store', 'system', 'notation', 'email', 'design' ),
 					'customer'  => array( 'attendees', 'registration', 'consent' ),
 					'extension' => array( 'integration' ),
 					'admin'     => array( 'advanced', 'license' ),
@@ -154,7 +155,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'test_condition_name' => '拡張プラグインのリンクだけある => 項目が空でも「拡張・連携」グループは出る',
 				'conditions'          => array( false, false, true ),
 				'expected'            => array(
-					'service'   => array( 'store', 'system', 'email', 'design' ),
+					'service'   => array( 'store', 'system', 'notation', 'email', 'design' ),
 					'customer'  => array( 'attendees', 'registration', 'consent' ),
 					'extension' => array(),
 					'admin'     => array( 'advanced' ),
@@ -172,6 +173,65 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 			}
 
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
+	}
+
+	/**
+	 * 表記項目の所属と、別タブ保存時に通貨・税表記が送信されることを確かめる。
+	 */
+	public function test_render_page_notation_fields(): void {
+		$test_cases                  = array(
+			array(
+				'test_condition_name' => '表記設定では通貨記号と税表記を編集できる',
+				'tab'                 => 'notation',
+				'expected_visible'    => true,
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => 'システム設定では通貨記号と税表記を保持する',
+				'tab'                 => 'system',
+				'expected_visible'    => false,
+				'expected_hidden'     => true,
+			),
+			array(
+				'test_condition_name' => '関連しないタブでも通貨記号と税表記を保持する',
+				'tab'                 => 'faq',
+				'expected_visible'    => false,
+				'expected_hidden'     => true,
+			),
+		);
+		$settings                    = ( new Settings_Repository() )->get_default_settings();
+		$settings['currency_symbol'] = '€';
+		$settings['tax_label_text']  = '(税込)';
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+
+		foreach ( $test_cases as $case ) {
+			$xpath = $this->render_page_xpath( $case['tab'] );
+			// 表示名とボタン文言は同じ表記設定の行へ集める。
+			foreach ( array( 'guests_unit_label', 'guests_count_label', 'duration_label', 'other_conditions_label', 'closed_day_label', 'menu_loop_reserve_button_label', 'menu_loop_detail_button_label' ) as $key ) {
+				$fields = $xpath->query( '//tr[contains(@class,"vkbm-provider-settings__tab-notation")]//*[@name="vkbm_provider_settings[' . $key . ']"]' );
+				$this->assertSame( 1, $fields->length, $case['test_condition_name'] . '：' . $key . ' は表記設定に属する' );
+			}
+			// リソースと指名の呼称は機能が有効な場合に同じタブで編集できる。
+			foreach ( array( 'resource_label_singular', 'resource_label_menu', 'no_nomination_label', 'nomination_fee_label' ) as $key ) {
+				$fields   = $xpath->query( '//tr[contains(@class,"vkbm-provider-settings__tab-notation")]//*[@name="vkbm_provider_settings[' . $key . ']"]' );
+				$enabled  = in_array( $key, array( 'resource_label_singular', 'resource_label_menu' ), true ) ? Staff_Editor::is_enabled() : Staff_Editor::is_nomination_enabled();
+				$expected = $enabled ? 1 : 0;
+				$this->assertSame( $expected, $fields->length, $case['test_condition_name'] . '：' . $key . ' の所属' );
+			}
+			// 表記タブだけが編集欄を持ち、別タブは保存済みの値を hidden で送る。
+			foreach ( array(
+				'currency_symbol' => '€',
+				'tax_label_text'  => '(税込)',
+			) as $key => $value ) {
+				$name    = 'vkbm_provider_settings[' . $key . ']';
+				$visible = $xpath->query( '//tr[contains(@class,"vkbm-provider-settings__tab-notation")]//input[@name="' . $name . '"]' );
+				$hidden  = $xpath->query( '//input[@type="hidden" and @name="' . $name . '"]' );
+				$this->assertSame( $case['expected_visible'] ? 1 : 0, $visible->length, $case['test_condition_name'] . '：' . $key );
+				$this->assertSame( $case['expected_hidden'] ? 1 : 0, $hidden->length, $case['test_condition_name'] . '：' . $key );
+				$field = $case['expected_visible'] ? $visible : $hidden;
+				$this->assertSame( $value, $field->item( 0 )->getAttribute( 'value' ), $case['test_condition_name'] . '：保存済みの値' );
+			}
 		}
 	}
 

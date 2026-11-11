@@ -826,18 +826,20 @@ class Auth_Shortcodes {
 		ob_start();
 		// phpcs:disable WordPress.WP.I18n.MissingTranslatorsComment -- 各プレースホルダーには同じ行で名簿名、対象者名または上限値を渡す。
 		?>
-		<div class="vkbm-auth-form vkbm-attendee-roster">
-			<h2><?php echo esc_html( $label ); ?></h2>
+		<div class="vkbm-auth-card vkbm-attendee-roster">
+			<h2 class="vkbm-auth-card__title"><?php echo esc_html( $label ); ?></h2>
+			<?php if ( '' !== $notice || '' !== $error_notice ) : ?>
 			<div aria-live="polite">
-			<?php
-			if ( '' !== $notice ) :
-				?>
-				<div id="vkbm-roster-notice" class="vkbm-alert vkbm-alert__success" role="status" tabindex="-1"><?php echo esc_html( $notice ); ?></div><?php endif; ?>
-			<?php
-			if ( '' !== $error_notice ) :
-				?>
-				<div id="vkbm-roster-notice" class="vkbm-alert vkbm-alert__danger" role="alert" tabindex="-1"><?php echo esc_html( $error_notice ); ?></div><?php endif; ?>
+				<?php
+				if ( '' !== $notice ) :
+					?>
+					<div id="vkbm-roster-notice" class="vkbm-alert vkbm-alert__success" role="status" tabindex="-1"><?php echo esc_html( $notice ); ?></div><?php endif; ?>
+				<?php
+				if ( '' !== $error_notice ) :
+					?>
+					<div id="vkbm-roster-notice" class="vkbm-alert vkbm-alert__danger" role="alert" tabindex="-1"><?php echo esc_html( $error_notice ); ?></div><?php endif; ?>
 			</div>
+			<?php endif; ?>
 			<?php
 			if ( 1 === count( $rows ) ) :
 				?>
@@ -845,6 +847,7 @@ class Auth_Shortcodes {
 			<?php foreach ( $rows as $row ) : ?>
 			<form method="post" class="vkbm-attendee-roster__row">
 				<fieldset><legend><?php echo esc_html( $row['name'] ); ?></legend>
+				<div class="vkbm-attendee-roster__fields">
 				<input type="hidden" name="attendee_id" value="<?php echo esc_attr( $row['id'] ); ?>">
 				<label><?php esc_html_e( 'Name', 'vk-booking-manager' ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_name" value="<?php echo esc_attr( $row['name'] ); ?>" required <?php wp_readonly( 'self' === $row['id'] ); ?>></label>
 				<?php
@@ -854,7 +857,7 @@ class Auth_Shortcodes {
 				<?php
 				if ( ! empty( $settings['attendee_number_enabled'] ) ) :
 					?>
-					<label><?php echo esc_html( '' !== (string) $settings['attendee_number_label'] ? (string) $settings['attendee_number_label'] : __( 'Customer number', 'vk-booking-manager' ) ); ?>
+					<div class="vkbm-attendee-roster__number"><label><?php echo esc_html( '' !== (string) $settings['attendee_number_label'] ? (string) $settings['attendee_number_label'] : __( 'Customer number', 'vk-booking-manager' ) ); ?>
 					<?php
 					if ( '' !== $row['number'] ) :
 						?>
@@ -862,29 +865,30 @@ class Auth_Shortcodes {
 						<?php
 else :
 	?>
-						<span class="vkbm-attendee-roster__unregistered"><?php esc_html_e( 'Not registered', 'vk-booking-manager' ); ?></span><?php endif; ?></label><p class="vkbm-auth-form__note"><?php esc_html_e( 'The store registers customer numbers. Please contact the store if needed.', 'vk-booking-manager' ); ?></p><?php endif; ?>
+						<span class="vkbm-attendee-roster__unregistered"><?php esc_html_e( 'Not registered', 'vk-booking-manager' ); ?></span><?php endif; ?></label><p class="vkbm-auth-form__note"><?php esc_html_e( 'The store registers customer numbers. Please contact the store if needed.', 'vk-booking-manager' ); ?></p></div><?php endif; ?>
 				<?php
 				if ( 'self' !== $row['id'] ) :
 					?>
-					<div class="vkbm-attendee-roster__actions"><button class="vkbm-button vkbm-button__sm vkbm-button__secondary" aria-label="<?php echo esc_attr( sprintf( __( 'Save %s', 'vk-booking-manager' ), $row['name'] ) ); ?>" name="attendee_action" value="save" type="submit"><?php esc_html_e( 'Save', 'vk-booking-manager' ); ?></button><button class="vkbm-button vkbm-button__sm vkbm-button__link" aria-label="<?php echo esc_attr( sprintf( __( 'Delete %s', 'vk-booking-manager' ), $row['name'] ) ); ?>" name="attendee_action" value="delete" type="submit" onclick="return confirm('<?php echo esc_js( sprintf( __( 'Delete “%s” from the list? Past reservation records will remain unchanged.', 'vk-booking-manager' ), $row['name'] ) ); ?>');"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button></div>
+					<div class="vkbm-attendee-roster__actions"><button class="vkbm-button vkbm-button__md vkbm-button__primary" aria-label="<?php echo esc_attr( sprintf( __( 'Save %s', 'vk-booking-manager' ), $row['name'] ) ); ?>" name="attendee_action" value="save" type="submit"><?php esc_html_e( 'Save', 'vk-booking-manager' ); ?></button><button class="vkbm-button vkbm-button__sm vkbm-button__link" aria-label="<?php echo esc_attr( sprintf( __( 'Delete %s', 'vk-booking-manager' ), $row['name'] ) ); ?>" name="attendee_action" value="delete" type="submit" onclick="return confirm('<?php echo esc_js( sprintf( __( 'Delete “%s” from the list? Past reservation records will remain unchanged.', 'vk-booking-manager' ), $row['name'] ) ); ?>');"><?php esc_html_e( 'Delete', 'vk-booking-manager' ); ?></button></div>
 					<?php
 					else :
 						?>
 																																					<p class="vkbm-auth-form__note"><?php esc_html_e( 'Edit your name and furigana in the user information form above.', 'vk-booking-manager' ); ?></p><?php endif; ?>
+				</div>
 				<?php wp_nonce_field( 'vkbm_attendee_roster', 'vkbm_attendee_roster_nonce' ); ?>
 				<input type="hidden" name="vkbm_attendee_roster_form" value="1"><input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>"></fieldset>
 			</form>
 			<?php endforeach; ?>
 			<?php if ( count( $rows ) - 1 < Attendee_Roster::MAX_ATTENDEES ) : ?>
-			<form method="post" class="vkbm-attendee-roster__row"><fieldset><legend><?php esc_html_e( 'Add an entry', 'vk-booking-manager' ); ?></legend><label><?php esc_html_e( 'Name', 'vk-booking-manager' ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_name" required></label>
+			<form method="post" class="vkbm-attendee-roster__row"><fieldset><legend><?php esc_html_e( 'Add an entry', 'vk-booking-manager' ); ?></legend><div class="vkbm-attendee-roster__fields"><label><?php esc_html_e( 'Name', 'vk-booking-manager' ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_name" required></label>
 				<?php
 				if ( ! empty( $settings['attendee_roster_kana_enabled'] ) ) :
 					?>
-				<label><?php echo esc_html( '' !== (string) $settings['attendee_roster_kana_label'] ? (string) $settings['attendee_roster_kana_label'] : __( 'Furigana', 'vk-booking-manager' ) ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_kana"></label><?php endif; ?><button class="vkbm-button vkbm-button__md vkbm-button__primary" name="attendee_action" value="add" type="submit"><?php esc_html_e( 'Add', 'vk-booking-manager' ); ?></button><?php wp_nonce_field( 'vkbm_attendee_roster', 'vkbm_attendee_roster_nonce' ); ?><input type="hidden" name="vkbm_attendee_roster_form" value="1"><input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>"></fieldset></form>
+				<label><?php echo esc_html( '' !== (string) $settings['attendee_roster_kana_label'] ? (string) $settings['attendee_roster_kana_label'] : __( 'Furigana', 'vk-booking-manager' ) ); ?><input class="vkbm-auth-form__input" type="text" name="attendee_kana"></label><?php endif; ?><button class="vkbm-button vkbm-button__md vkbm-button__primary" name="attendee_action" value="add" type="submit"><?php esc_html_e( 'Add', 'vk-booking-manager' ); ?></button></div><?php wp_nonce_field( 'vkbm_attendee_roster', 'vkbm_attendee_roster_nonce' ); ?><input type="hidden" name="vkbm_attendee_roster_form" value="1"><input type="hidden" name="redirect_to" value="<?php echo esc_attr( $redirect_to ); ?>"></fieldset></form>
 				<?php
 			else :
 				?>
-				<p id="vkbm-attendee-limit"><?php printf( esc_html__( 'You have reached the maximum of %d registered entries.', 'vk-booking-manager' ), esc_html( (string) Attendee_Roster::MAX_ATTENDEES ) ); ?></p><button class="vkbm-button" disabled aria-describedby="vkbm-attendee-limit"><?php esc_html_e( 'Add', 'vk-booking-manager' ); ?></button><?php endif; ?>
+				<p id="vkbm-attendee-limit"><?php printf( esc_html__( 'You have reached the maximum of %d registered entries.', 'vk-booking-manager' ), esc_html( (string) Attendee_Roster::MAX_ATTENDEES ) ); ?></p><button class="vkbm-button vkbm-button__md vkbm-button__primary" disabled aria-describedby="vkbm-attendee-limit"><?php esc_html_e( 'Add', 'vk-booking-manager' ); ?></button><?php endif; ?>
 		</div>
 		<?php
 		// phpcs:enable WordPress.WP.I18n.MissingTranslatorsComment

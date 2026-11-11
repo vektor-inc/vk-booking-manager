@@ -337,7 +337,7 @@ class Provider_Settings_Page {
 		}
 
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
-		$allowed_tabs = array( 'store', 'system', 'attendees', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		$allowed_tabs = array( 'store', 'system', 'notation', 'attendees', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $this->show_integration_tab() ) {
 			$allowed_tabs[] = 'integration';
 		}
@@ -462,7 +462,7 @@ class Provider_Settings_Page {
 					'industryPresets'                   => Industry_Presets::get_presets( $default_settings ),
 					'industryDefaults'                  => array_intersect_key( $default_settings, array_flip( Industry_Presets::FIELD_KEYS ) ),
 					/* translators: %d: Number of automatically configured fields. */
-					'industrySummaryTemplate'           => __( 'Items automatically configured in "System settings" for this industry (%d)', 'vk-booking-manager' ),
+					'industrySummaryTemplate'           => __( 'Items automatically configured in "System settings" and "Notation settings" for this industry (%d)', 'vk-booking-manager' ),
 					'industryAppliedMessage'            => __( 'The industry preset default value has been applied.', 'vk-booking-manager' ),
 					'industryCustomMessage'             => __( 'Switched back to Custom. Values have not been changed.', 'vk-booking-manager' ),
 
@@ -941,7 +941,7 @@ class Provider_Settings_Page {
 			$reservation_menu_list_display_mode = 'card';
 		}
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
-		$allowed_tabs = array( 'store', 'system', 'attendees', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		$allowed_tabs = array( 'store', 'system', 'notation', 'attendees', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $show_integration_tab ) {
 			$allowed_tabs[] = 'integration';
 		}
@@ -1037,7 +1037,7 @@ class Provider_Settings_Page {
 											</option>
 										<?php endforeach; ?>
 									</select>
-									<p class="description"><?php esc_html_e( 'When you select an industry, only the items commonly used in that industry are displayed, with representative values entered in advance.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Other items are configured automatically in "System settings".', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Save the industry preset to apply the changes to "System settings".', 'vk-booking-manager' ); ?></p>
+									<p class="description"><?php esc_html_e( 'When you select an industry, only the items commonly used in that industry are displayed, with representative values entered in advance.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Other items are configured automatically in "System settings" and "Notation settings".', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Save the industry preset to apply the changes to "System settings" and "Notation settings".', 'vk-booking-manager' ); ?></p>
 									<p class="description"><?php esc_html_e( 'Select "Custom" to configure all items individually (initial state).', 'vk-booking-manager' ); ?></p>
 									<p class="description"><?php esc_html_e( 'If you select "Lodging", you can create plans by the night in service menus, and customers choose a check-in date, check-out date, and room on the reservation screen.', 'vk-booking-manager' ); ?></p>
 									<p class="description"><?php esc_html_e( 'If you switch from "Lodging" to another industry, plans set by the night are handled as time slot plans.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Days that were set as sale days in "Lodging" have no time slots, so no vacancies appear for time slot plans until you set the time slots in the shift of each month.', 'vk-booking-manager' ); ?></p>
@@ -1045,7 +1045,7 @@ class Provider_Settings_Page {
 										<button type="button" class="button-link vkbm-industry-preset-summary__toggle" aria-expanded="false" aria-controls="vkbm-industry-preset-summary-content"></button>
 										<div id="vkbm-industry-preset-summary-content" class="vkbm-industry-preset-summary__content" hidden>
 											<dl class="vkbm-industry-preset-summary__list"></dl>
-											<p class="description"><?php esc_html_e( 'These items are automatically saved with these values and cannot be changed individually in "System settings".', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Select "Custom" to configure them individually.', 'vk-booking-manager' ); ?></p>
+											<p class="description"><?php esc_html_e( 'These items are automatically saved with these values and cannot be changed individually in "System settings" or "Notation settings".', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Select "Custom" to configure them individually.', 'vk-booking-manager' ); ?></p>
 										</div>
 									</div>
 									<div class="screen-reader-text" id="vkbm-industry-preset-live" aria-live="polite" aria-atomic="true"></div>
@@ -1673,8 +1673,8 @@ class Provider_Settings_Page {
 									</tr>
 								<?php endif; ?>
 
-								<?php if ( 'system' === $active_tab ) : ?>
-									<tr class="vkbm-provider-settings__tab-system" id="vkbm-currency-symbol-row">
+								<?php if ( 'notation' === $active_tab ) : ?>
+									<tr class="vkbm-provider-settings__tab-notation" id="vkbm-currency-symbol-row">
 										<th scope="row">
 											<label for="vkbm-currency-symbol"><?php esc_html_e( 'Currency symbol', 'vk-booking-manager' ); ?></label>
 										</th>
@@ -1692,8 +1692,8 @@ class Provider_Settings_Page {
 									</tr>
 								<?php endif; ?>
 
-								<?php if ( 'system' === $active_tab ) : ?>
-									<tr class="vkbm-provider-settings__tab-system" id="vkbm-tax-label-text-row">
+								<?php if ( 'notation' === $active_tab ) : ?>
+									<tr class="vkbm-provider-settings__tab-notation" id="vkbm-tax-label-text-row">
 										<th scope="row">
 											<label for="vkbm-tax-label-text"><?php esc_html_e( 'Tax label text', 'vk-booking-manager' ); ?></label>
 										</th>
@@ -2409,7 +2409,7 @@ class Provider_Settings_Page {
 								<p class="description">
 									<?php esc_html_e( 'When disabled, the staff nomination selection and nomination fee will be hidden from the booking form. Staff assignment and shift management features remain available.', 'vk-booking-manager' ); ?>
 									<?php if ( ! Pro_Upsell::is_free_edition() ) : ?>
-										<?php // ここから続く9項目（〜「指名料ラベル」）は業種プリセットの対象（#387・植草案）。 ?>
+										<?php // 指名機能と表記設定の呼称は業種プリセットの対象（#387・植草案）。 ?>
 										<?php esc_html_e( 'This field is affected by the industry preset selected above.', 'vk-booking-manager' ); ?>
 									<?php endif; ?>
 								</p>
@@ -2476,8 +2476,135 @@ class Provider_Settings_Page {
 							</td>
 						</tr>
 
+						<tr class="vkbm-provider-settings__tab-notation">
+							<th scope="row">
+								<label for="vkbm-duration-label"><?php esc_html_e( 'Duration label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-duration-label"
+									name="vkbm_provider_settings[duration_label]"
+									value="<?php echo esc_attr( $duration_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Replaces the "Time" notation for service duration in the menu card and notification emails.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-notation">
+							<th scope="row">
+								<label for="vkbm-other-conditions-label"><?php esc_html_e( 'Other conditions label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-other-conditions-label"
+									name="vkbm_provider_settings[other_conditions_label]"
+									value="<?php echo esc_attr( $other_conditions_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Replaces the "Other conditions" notation in the menu card and notification emails.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-notation">
+							<th scope="row">
+								<label for="vkbm-closed-day-label"><?php esc_html_e( 'Closed day label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-closed-day-label"
+									name="vkbm_provider_settings[closed_day_label]"
+									value="<?php echo esc_attr( $settings['closed_day_label'] ?? '' ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Label text displayed on closed days in the calendar.', 'vk-booking-manager' ); ?>
+									<?php esc_html_e( 'If left empty, the default label will be used.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-notation">
+							<th scope="row">
+								<label for="vkbm-menu-loop-reserve-button-label"><?php esc_html_e( 'Reservation button text', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-menu-loop-reserve-button-label"
+									name="vkbm_provider_settings[menu_loop_reserve_button_label]"
+									value="<?php echo esc_attr( $settings['menu_loop_reserve_button_label'] ?? '' ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Display text for the button that proceeds to the reservation page from the menu loop.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-notation">
+							<th scope="row">
+								<label for="vkbm-menu-loop-detail-button-label"><?php esc_html_e( 'Detail button text', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-menu-loop-detail-button-label"
+									name="vkbm_provider_settings[menu_loop_detail_button_label]"
+									value="<?php echo esc_attr( $settings['menu_loop_detail_button_label'] ?? '' ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Display text for the button that proceeds to the service detail page from the menu loop.', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+						<tr class="vkbm-provider-settings__tab-notation" data-industry-field="guests_count_label" data-industry-label="<?php echo esc_attr__( 'Quantity label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_count_label' ) ); ?>>
+							<th scope="row">
+								<label for="vkbm-guests-count-label"><?php esc_html_e( 'Quantity label', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-guests-count-label"
+									name="vkbm_provider_settings[guests_count_label]"
+									value="<?php echo esc_attr( $guests_count_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'Replaces the "Number of guests" heading shown for multi-guest bookings on the reservation form, confirmation screen, and notification emails.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'If left empty, the default heading "Number of guests" is shown.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'The reservation target is not necessarily people (e.g. seats, rooms, items).', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
+
+						<tr class="vkbm-provider-settings__tab-notation" data-industry-field="guests_unit_label" data-industry-label="<?php echo esc_attr__( 'Quantity unit', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_unit_label' ) ); ?>>
+							<th scope="row">
+								<label for="vkbm-guests-unit-label"><?php esc_html_e( 'Quantity unit', 'vk-booking-manager' ); ?></label>
+							</th>
+							<td>
+								<input
+									type="text"
+									class="regular-text"
+									id="vkbm-guests-unit-label"
+									name="vkbm_provider_settings[guests_unit_label]"
+									value="<?php echo esc_attr( $guests_unit_label ); ?>"
+								/>
+								<p class="description">
+									<?php esc_html_e( 'The unit shown after the quantity on the reservation form, confirmation screen, and notification emails. Examples: 名 / 台 / 室 / seats.', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'If left empty, no unit is shown. To restore the default "guests", enter "guests".', 'vk-booking-manager' ); ?><br>
+									<?php esc_html_e( 'A space is inserted between the number and the unit only when the unit begins with a single-byte letter (e.g. "5 seats"). Full-width units are placed directly after the number (e.g. "5名").', 'vk-booking-manager' ); ?>
+								</p>
+							</td>
+						</tr>
 						<?php if ( Staff_Editor::is_enabled() ) : ?>
-							<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_label_singular" data-industry-label="<?php echo esc_attr__( 'Resource name (singular)', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_singular' ) ); ?>>
+							<tr class="vkbm-provider-settings__tab-notation" data-industry-field="resource_label_singular" data-industry-label="<?php echo esc_attr__( 'Resource name (singular)', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_singular' ) ); ?>>
 								<th scope="row">
 									<label for="vkbm-resource-label-singular"><?php esc_html_e( 'Resource name (singular)', 'vk-booking-manager' ); ?></label>
 								</th>
@@ -2551,7 +2678,7 @@ class Provider_Settings_Page {
 								</td>
 							</tr>
 
-							<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_label_menu" data-industry-label="<?php echo esc_attr__( 'resource label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_menu' ) ); ?>>
+							<tr class="vkbm-provider-settings__tab-notation" data-industry-field="resource_label_menu" data-industry-label="<?php echo esc_attr__( 'resource label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_menu' ) ); ?>>
 								<th scope="row">
 									<label for="vkbm-resource-label-menu"><?php esc_html_e( 'resource label', 'vk-booking-manager' ); ?></label>
 								</th>
@@ -2574,7 +2701,7 @@ class Provider_Settings_Page {
 							</tr>
 
 							<?php if ( $has_plural_forms_in_locale ) : ?>
-								<tr class="vkbm-provider-settings__tab-system" data-industry-field="resource_label_plural" data-industry-label="<?php echo esc_attr__( 'Resource name (multiple)', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_plural' ) ); ?>>
+								<tr class="vkbm-provider-settings__tab-notation" data-industry-field="resource_label_plural" data-industry-label="<?php echo esc_attr__( 'Resource name (multiple)', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'resource_label_plural' ) ); ?>>
 									<th scope="row">
 										<label for="vkbm-resource-label-plural"><?php esc_html_e( 'Resource name (multiple)', 'vk-booking-manager' ); ?></label>
 									</th>
@@ -2594,7 +2721,7 @@ class Provider_Settings_Page {
 							<?php endif; ?>
 						<?php elseif ( null !== $free_resource_label_notice ) : ?>
 							<?php // 無料版には呼び方の入力欄が無いため、Pro 版で設定済みの呼び方があるときだけ、入力欄の位置に理由を常時表示する（閉じられない）。 ?>
-							<tr class="vkbm-provider-settings__tab-system">
+							<tr class="vkbm-provider-settings__tab-notation">
 								<th scope="row"><?php esc_html_e( 'Resource name (singular)', 'vk-booking-manager' ); ?></th>
 								<td>
 									<p class="description">
@@ -2624,25 +2751,6 @@ class Provider_Settings_Page {
 							</tr>
 						<?php endif; ?>
 
-						<tr class="vkbm-provider-settings__tab-system" data-industry-field="guests_unit_label" data-industry-label="<?php echo esc_attr__( 'Quantity unit', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_unit_label' ) ); ?>>
-							<th scope="row">
-								<label for="vkbm-guests-unit-label"><?php esc_html_e( 'Quantity unit', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-guests-unit-label"
-									name="vkbm_provider_settings[guests_unit_label]"
-									value="<?php echo esc_attr( $guests_unit_label ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'The unit shown after the quantity on the reservation form, confirmation screen, and notification emails. Examples: 名 / 台 / 室 / seats.', 'vk-booking-manager' ); ?><br>
-									<?php esc_html_e( 'If left empty, no unit is shown. To restore the default "guests", enter "guests".', 'vk-booking-manager' ); ?><br>
-									<?php esc_html_e( 'A space is inserted between the number and the unit only when the unit begins with a single-byte letter (e.g. "5 seats"). Full-width units are placed directly after the number (e.g. "5名").', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
 
 						<?php
 						// #391: この設定は基本設定（サイト全体）画面であり、メニューという文脈が存在しない。
@@ -2650,7 +2758,7 @@ class Provider_Settings_Page {
 						// 従来どおりサイト全体の指名機能スイッチのみで表示可否を判定する。
 						?>
 						<?php if ( Staff_Editor::is_nomination_enabled() ) : ?>
-							<tr class="vkbm-provider-settings__tab-system" data-industry-field="no_nomination_label" data-industry-label="<?php echo esc_attr( Industry_Presets::supports( 'lodging' ) ? __( 'No selection label', 'vk-booking-manager' ) : __( 'No nomination label', 'vk-booking-manager' ) ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'no_nomination_label' ) ); ?>>
+							<tr class="vkbm-provider-settings__tab-notation" data-industry-field="no_nomination_label" data-industry-label="<?php echo esc_attr( Industry_Presets::supports( 'lodging' ) ? __( 'No selection label', 'vk-booking-manager' ) : __( 'No nomination label', 'vk-booking-manager' ) ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'no_nomination_label' ) ); ?>>
 									<th scope="row">
 										<label for="vkbm-no-nomination-label"><?php echo esc_html( Industry_Presets::supports( 'lodging' ) ? __( 'No selection label', 'vk-booking-manager' ) : __( 'No nomination label', 'vk-booking-manager' ) ); ?></label>
 									</th>
@@ -2672,7 +2780,7 @@ class Provider_Settings_Page {
 									</td>
 								</tr>
 
-								<tr class="vkbm-provider-settings__tab-system" data-industry-field="nomination_fee_label" data-industry-label="<?php echo esc_attr__( 'Nomination fee label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'nomination_fee_label' ) ); ?>>
+								<tr class="vkbm-provider-settings__tab-notation" data-industry-field="nomination_fee_label" data-industry-label="<?php echo esc_attr__( 'Nomination fee label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'nomination_fee_label' ) ); ?>>
 									<th scope="row">
 										<label for="vkbm-nomination-fee-label"><?php esc_html_e( 'Nomination fee label', 'vk-booking-manager' ); ?></label>
 									</th>
@@ -2720,114 +2828,6 @@ class Provider_Settings_Page {
 								</tr>
 						<?php endif; ?>
 
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-duration-label"><?php esc_html_e( 'Duration label', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-duration-label"
-									name="vkbm_provider_settings[duration_label]"
-									value="<?php echo esc_attr( $duration_label ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'Replaces the "Time" notation for service duration in the menu card and notification emails.', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
-
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-other-conditions-label"><?php esc_html_e( 'Other conditions label', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-other-conditions-label"
-									name="vkbm_provider_settings[other_conditions_label]"
-									value="<?php echo esc_attr( $other_conditions_label ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'Replaces the "Other conditions" notation in the menu card and notification emails.', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
-
-						<tr class="vkbm-provider-settings__tab-system" data-industry-field="guests_count_label" data-industry-label="<?php echo esc_attr__( 'Quantity label', 'vk-booking-manager' ); ?>" <?php echo esc_attr( self::industry_row_hidden_attr( $industry_hidden_fields, 'guests_count_label' ) ); ?>>
-							<th scope="row">
-								<label for="vkbm-guests-count-label"><?php esc_html_e( 'Quantity label', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-guests-count-label"
-									name="vkbm_provider_settings[guests_count_label]"
-									value="<?php echo esc_attr( $guests_count_label ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'Replaces the "Number of guests" heading shown for multi-guest bookings on the reservation form, confirmation screen, and notification emails.', 'vk-booking-manager' ); ?><br>
-									<?php esc_html_e( 'If left empty, the default heading "Number of guests" is shown.', 'vk-booking-manager' ); ?><br>
-									<?php esc_html_e( 'The reservation target is not necessarily people (e.g. seats, rooms, items).', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
-
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-closed-day-label"><?php esc_html_e( 'Closed day label', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-closed-day-label"
-									name="vkbm_provider_settings[closed_day_label]"
-									value="<?php echo esc_attr( $settings['closed_day_label'] ?? '' ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'Label text displayed on closed days in the calendar.', 'vk-booking-manager' ); ?>
-									<?php esc_html_e( 'If left empty, the default label will be used.', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-menu-loop-reserve-button-label"><?php esc_html_e( 'Reservation button text', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-menu-loop-reserve-button-label"
-									name="vkbm_provider_settings[menu_loop_reserve_button_label]"
-									value="<?php echo esc_attr( $settings['menu_loop_reserve_button_label'] ?? '' ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'Display text for the button that proceeds to the reservation page from the menu loop.', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
-						<tr class="vkbm-provider-settings__tab-system">
-							<th scope="row">
-								<label for="vkbm-menu-loop-detail-button-label"><?php esc_html_e( 'Detail button text', 'vk-booking-manager' ); ?></label>
-							</th>
-							<td>
-								<input
-									type="text"
-									class="regular-text"
-									id="vkbm-menu-loop-detail-button-label"
-									name="vkbm_provider_settings[menu_loop_detail_button_label]"
-									value="<?php echo esc_attr( $settings['menu_loop_detail_button_label'] ?? '' ); ?>"
-								/>
-								<p class="description">
-									<?php esc_html_e( 'Display text for the button that proceeds to the service detail page from the menu loop.', 'vk-booking-manager' ); ?>
-								</p>
-							</td>
-						</tr>
 						<tr class="vkbm-provider-settings__tab-design">
 							<th scope="row">
 								<label for="vkbm-design-primary-color"><?php esc_html_e( 'primary color', 'vk-booking-manager' ); ?></label>
@@ -3430,9 +3430,9 @@ class Provider_Settings_Page {
 				</table>
 
 				<?php
-				// サービスメニューの表示方法・通貨記号・税表記の入力欄は「システム」タブのときだけ描画される。
+				// サービスメニューの表示方法は「システム」、通貨記号・税表記は「表記設定」のタブだけで描画される。
 				// 保存時、送信されなかった項目は初期値で埋められるため、ほかのタブ（ライセンスタブを含む）で
-				// 保存したときも 3 項目が初期値に戻らないよう、現在値を hidden で一緒に送る（issue #556）。
+				// 保存したときも値が初期値に戻らないよう、現在値を hidden で一緒に送る（issue #556）。
 				?>
 				<?php
 				// 送信元メールアドレスの入力欄は「メール設定」タブの行にあるため、ほかのタブで保存しても
@@ -3445,6 +3445,9 @@ class Provider_Settings_Page {
 					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_image_aspect_ratio]" value="<?php echo esc_attr( $reservation_menu_list_image_aspect_ratio ); ?>" />
 					<input type="hidden" name="vkbm_provider_settings[reservation_menu_list_display_mode]" value="<?php echo esc_attr( $reservation_menu_list_display_mode ); ?>" />
 					<input type="hidden" name="vkbm_provider_settings[service_menu_detail_display_mode]" value="<?php echo esc_attr( $service_menu_detail_display_mode ); ?>" />
+				<?php endif; ?>
+
+				<?php if ( 'notation' !== $active_tab ) : ?>
 					<input type="hidden" name="vkbm_provider_settings[currency_symbol]" value="<?php echo esc_attr( $currency_symbol ); ?>" />
 					<input type="hidden" name="vkbm_provider_settings[tax_label_text]" value="<?php echo esc_attr( $tax_label_text ); ?>" />
 				<?php endif; ?>

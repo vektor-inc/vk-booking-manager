@@ -37,12 +37,65 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	 * 「連携」タブは保存フォームの外に描画され、設定項目を持たないため対象外。
 	 * 「ライセンス」タブは無料版では存在せず、既定の「店舗」タブとして描画される。
 	 */
-	private const FORM_TABS = array( 'store', 'system', 'email', 'registration', 'consent', 'design', 'advanced', 'faq', 'license' );
+	private const FORM_TABS = array( 'store', 'system', 'notation', 'email', 'registration', 'consent', 'design', 'advanced', 'faq', 'license' );
 
 	/**
 	 * 入力欄が「システム」タブのときだけ描画される設定項目。
 	 */
-	private const SYSTEM_TAB_ONLY_KEYS = array( 'reservation_menu_list_display_mode', 'currency_symbol', 'tax_label_text' );
+	private const SYSTEM_TAB_ONLY_KEYS = array( 'reservation_menu_list_display_mode' );
+
+	/**
+	 * 入力欄が「表記設定」タブのときだけ描画される設定項目。
+	 */
+	private const NOTATION_TAB_ONLY_KEYS = array( 'currency_symbol', 'tax_label_text' );
+
+	/** 表記設定では常設項目の後に数量の見出しと単位をまとめる。 */
+	public function test_render_page_notation_field_order(): void {
+		$expected   = array(
+			'currency_symbol',
+			'tax_label_text',
+			'duration_label',
+			'other_conditions_label',
+			'closed_day_label',
+			'menu_loop_reserve_button_label',
+			'menu_loop_detail_button_label',
+			'guests_count_label',
+			'guests_unit_label',
+		);
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'カスタムでは常設項目の後に数量表記を連続配置',
+				'preset'              => 'custom',
+			),
+			array(
+				'test_condition_name' => 'サロンでも数量表記を分断しない',
+				'preset'              => 'salon',
+			),
+			array(
+				'test_condition_name' => '未登録の業種でも常設項目と数量表記の順を維持',
+				'preset'              => 'unknown',
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			// 業種による表示切り替えがあっても、設定行の所属と並びを確認する。
+			update_option( Settings_Repository::OPTION_KEY, array( 'industry_preset' => $case['preset'] ) );
+			$html   = $this->render_tab( $this->create_page(), 'notation' );
+			$dom    = new DOMDocument();
+			$loaded = @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- テスト用 HTML のパース警告を抑制。
+			$this->assertTrue( $loaded, $case['test_condition_name'] );
+			$xpath  = new DOMXPath( $dom );
+			$fields = $xpath->query( '//tr[contains(concat(" ", normalize-space(@class), " "), " vkbm-provider-settings__tab-notation ")]//input[@type="text"]' );
+			$actual = array();
+			foreach ( $fields as $field ) {
+				preg_match( '/^vkbm_provider_settings\[([a-z0-9_]+)\]$/', $field->getAttribute( 'name' ), $matches );
+				$actual[] = $matches[1] ?? '';
+			}
+			$this->assertSame( $expected, array_slice( $actual, 0, count( $expected ) ), $case['test_condition_name'] );
+			// リソース名称群と指名表記群も、数量表記より後ろで連続させる。
+			$conditional = array( 'resource_label_singular', 'resource_label_menu', 'resource_label_plural', 'no_nomination_label', 'nomination_fee_label' );
+			$this->assertSame( array_values( array_intersect( $conditional, $actual ) ), array_slice( $actual, count( $expected ) ), $case['test_condition_name'] );
+		}
+	}
 
 	/** どのタブから保存してもカード背景を保持し、デザインタブで変更できる。 */
 	public function test_menu_card_background_across_tabs(): void {
@@ -262,8 +315,9 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 		}
 		$all_form_keys = array_values( array_unique( $all_form_keys ) );
 		$this->assertNotEmpty( $all_form_keys, '前提: フォームから設定項目を取得できる' );
-		// 前提: システムタブだけで描画される 3 項目が、全設定項目に含まれている。
-		$this->assertSame( array(), array_values( array_diff( self::SYSTEM_TAB_ONLY_KEYS, $all_form_keys ) ), '前提: 全設定項目に 3 項目が含まれる' );
+		// 前提: タブ専用の入力欄を持つ 3 項目が、全設定項目に含まれている。
+		$tab_only_keys = array_merge( self::SYSTEM_TAB_ONLY_KEYS, self::NOTATION_TAB_ONLY_KEYS );
+		$this->assertSame( array(), array_values( array_diff( $tab_only_keys, $all_form_keys ) ), '前提: 全設定項目に 3 項目が含まれる' );
 
 		$test_cases = array(
 			array(
@@ -271,8 +325,12 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 				'tab'                 => 'store',
 			),
 			array(
-				'test_condition_name' => '「システム」タブで描画 => 全設定項目が含まれ、3 項目は入力欄の 1 つずつ（hidden と二重にならない）',
+				'test_condition_name' => '「システム」タブで描画 => 全設定項目が含まれ、3 項目は 1 つずつ',
 				'tab'                 => 'system',
+			),
+			array(
+				'test_condition_name' => '「表記設定」タブで描画 => 通貨記号・税表記は入力欄だけで hidden と重複しない',
+				'tab'                 => 'notation',
 			),
 			array(
 				'test_condition_name' => '「メール設定」タブで描画 => 全設定項目が含まれ、3 項目は 1 つずつ',
@@ -325,11 +383,17 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 
 			// 3 項目が二重に出力されていないこと（入力欄と hidden の両方が出ると、どちらの値で保存されるかが曖昧になる）。
 			$counts = array();
-			foreach ( self::SYSTEM_TAB_ONLY_KEYS as $key ) {
+			foreach ( $tab_only_keys as $key ) {
 				$counts[ $key ] = substr_count( $html, 'name="vkbm_provider_settings[' . $key . ']"' );
+				$owner_tab      = in_array( $key, self::SYSTEM_TAB_ONLY_KEYS, true ) ? 'system' : 'notation';
+				$this->assertSame(
+					$case['tab'] === $owner_tab ? 0 : 1,
+					substr_count( $html, 'type="hidden" name="vkbm_provider_settings[' . $key . ']"' ),
+					$case['test_condition_name'] . '（' . $key . ' の hidden 出力数）'
+				);
 			}
 			$this->assertSame(
-				array_fill_keys( self::SYSTEM_TAB_ONLY_KEYS, 1 ),
+				array_fill_keys( $tab_only_keys, 1 ),
 				$counts,
 				$case['test_condition_name'] . '（3 項目の出力数）'
 			);
@@ -498,6 +562,12 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 
 		$test_cases = array(
 			array(
+				'test_condition_name' => '3 項目を変更済みで「表記設定」タブから保存 => 変更済みの値のまま',
+				'saved'               => $custom_values,
+				'tab'                 => 'notation',
+				'expected'            => $custom_values,
+			),
+			array(
 				'test_condition_name' => '3 項目を変更済みで「事業者情報」タブから保存 => 変更済みの値のまま',
 				'saved'               => $custom_values,
 				'tab'                 => 'store',
@@ -522,7 +592,7 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 				'expected'            => $custom_values,
 			),
 			array(
-				'test_condition_name' => '3 項目を変更済みで「システム」タブから保存 => 入力欄の値（変更済みの値）のまま',
+				'test_condition_name' => '3 項目を変更済みで「システム」タブから保存 => 変更済みの値のまま',
 				'saved'               => $custom_values,
 				'tab'                 => 'system',
 				'expected'            => $custom_values,

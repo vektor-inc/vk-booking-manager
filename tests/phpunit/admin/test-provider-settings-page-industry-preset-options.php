@@ -84,9 +84,9 @@ class Provider_Settings_Page_Industry_Preset_Options_Test extends WP_UnitTestCas
 		);
 
 		// 移動後も自動設定の対象はシステム設定タブであり、保存後に反映されることを案内する。
-		$this->assertStringContainsString( esc_html__( 'Other items are configured automatically in "System settings".', 'vk-booking-manager' ), $html );
-		$this->assertStringContainsString( esc_html__( 'Save the industry preset to apply the changes to "System settings".', 'vk-booking-manager' ), $html );
-		$this->assertStringContainsString( esc_html__( 'These items are automatically saved with these values and cannot be changed individually in "System settings".', 'vk-booking-manager' ), $html );
+		$this->assertStringContainsString( esc_html__( 'Other items are configured automatically in "System settings" and "Notation settings".', 'vk-booking-manager' ), $html );
+		$this->assertStringContainsString( esc_html__( 'Save the industry preset to apply the changes to "System settings" and "Notation settings".', 'vk-booking-manager' ), $html );
+		$this->assertStringContainsString( esc_html__( 'These items are automatically saved with these values and cannot be changed individually in "System settings" or "Notation settings".', 'vk-booking-manager' ), $html );
 	}
 
 	/**

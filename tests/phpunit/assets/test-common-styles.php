@@ -479,7 +479,7 @@ class Common_Styles_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 予約ボタンの文字色が通常時に 4.5:1 を満たし、白を優先することを検証する。
+	 * 予約ボタンの文字色が白を基本とし、白で 3:1 未満の明るい色だけ黒になることを検証する。
 	 */
 	public function test_get_reservation_text_color(): void {
 		// 白の優先条件と、通常時の比による黒への切り替えを確認する。
@@ -500,28 +500,33 @@ class Common_Styles_Test extends WP_UnitTestCase {
 				'expected'            => '#000000',
 			),
 			array(
-				'test_condition_name' => '白が約 4.54 で黒より低くても白を優先',
-				'background'          => '#767676',
+				'test_condition_name' => '白が 4.5 未満の中間色でも白のまま',
+				'background'          => '#777777',
 				'expected'            => '#ffffff',
 			),
 			array(
-				'test_condition_name' => '通常時の白が 4.5 未満の境界 => 黒',
-				'background'          => '#777777',
+				'test_condition_name' => '赤（白が約 4.00）は白のまま',
+				'background'          => '#ff0000',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => 'くすんだ中間色（白が約 3.02）は白のまま',
+				'background'          => '#7f9b8a',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => '白が 3 以上の境界 => 白',
+				'background'          => '#949494',
+				'expected'            => '#ffffff',
+			),
+			array(
+				'test_condition_name' => '白が 3 未満の境界 => 黒',
+				'background'          => '#959595',
 				'expected'            => '#000000',
 			),
 			array(
-				'test_condition_name' => '3 桁の境界色も通常時の比で選ぶ => 黒',
-				'background'          => '#777',
-				'expected'            => '#000000',
-			),
-			array(
-				'test_condition_name' => '通常時の白が 4.5 未満の中間色 => 黒',
-				'background'          => '#858585',
-				'expected'            => '#000000',
-			),
-			array(
-				'test_condition_name' => '通常時の黒が基準を満たす中間色 => 黒',
-				'background'          => '#878787',
+				'test_condition_name' => '3 桁の色も通常時の比で選ぶ => 黒',
+				'background'          => '#999',
 				'expected'            => '#000000',
 			),
 		);
@@ -530,7 +535,10 @@ class Common_Styles_Test extends WP_UnitTestCase {
 			$actual = Common_Styles::get_reservation_text_color( $case['background'] );
 
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
-			$this->assertGreaterThanOrEqual( 4.5, Common_Styles::get_contrast_ratio( $actual, $case['background'] ), $case['test_condition_name'] );
+
+			// 白は 3:1 以上、黒に切り替えたときは 4.5:1 以上あることを確認する。
+			$minimum_ratio = '#ffffff' === $actual ? 3.0 : 4.5;
+			$this->assertGreaterThanOrEqual( $minimum_ratio, Common_Styles::get_contrast_ratio( $actual, $case['background'] ), $case['test_condition_name'] );
 		}
 	}
 
@@ -541,23 +549,23 @@ class Common_Styles_Test extends WP_UnitTestCase {
 		$test_cases = array(
 			array(
 				'test_condition_name' => '白文字の境界色はホバー変数なし',
-				'background'          => '#767676',
+				'background'          => '#949494',
 				'expected'            => '',
 			),
 			array(
-				'test_condition_name' => '黒文字の境界色は最小限暗くする',
-				'background'          => '#777777',
+				'test_condition_name' => '黒文字の境界色は比を保てる範囲で暗くする',
+				'background'          => '#959595',
 				'expected'            => '#757575',
 			),
 			array(
 				'test_condition_name' => '中間色も比を保つ',
-				'background'          => '#858585',
+				'background'          => '#999999',
 				'expected'            => '#757575',
 			),
 			array(
 				'test_condition_name' => '明るい中間色も比を保つ',
-				'background'          => '#878787',
-				'expected'            => '#757575',
+				'background'          => '#a0a0a0',
+				'expected'            => '#787878',
 			),
 			array(
 				'test_condition_name' => '白背景は上限まで暗くする',
@@ -576,7 +584,7 @@ class Common_Styles_Test extends WP_UnitTestCase {
 			),
 			array(
 				'test_condition_name' => '3桁色を6桁へ展開する',
-				'background'          => '#777',
+				'background'          => '#999',
 				'expected'            => '#757575',
 			),
 			array(

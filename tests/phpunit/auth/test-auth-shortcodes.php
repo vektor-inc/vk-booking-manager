@@ -2307,6 +2307,100 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 名簿の件数によらず、プロフィールと独立したカード内で各フォームを操作できる。
+	 *
+	 * @return void
+	 */
+	public function test_render_profile_form(): void {
+		$user_id = $this->factory()->user->create( array( 'display_name' => '申込者' ) );
+		wp_set_current_user( $user_id );
+		$repository                               = new Settings_Repository();
+		$settings                                 = $repository->get_settings();
+		$settings['attendee_roster_enabled']      = true;
+		$settings['attendee_roster_label']        = 'ペット';
+		$settings['attendee_roster_kana_enabled'] = true;
+		$settings['attendee_number_enabled']      = true;
+		$settings['attendee_number_label']        = '診察券番号';
+		$repository->update_settings( $settings );
+		$shortcodes = new Auth_Shortcodes( new Settings_Service( $repository, new Settings_Sanitizer() ) );
+		$roster     = new Attendee_Roster();
+		$cases      = array(
+			array(
+				'test_condition_name' => '登録0件',
+				'count'               => 0,
+				'forms'               => 2,
+				'add'                 => 1,
+				'disabled'            => 0,
+				'unregistered'        => 1,
+			),
+			array(
+				'test_condition_name' => '登録1件',
+				'count'               => 1,
+				'forms'               => 3,
+				'add'                 => 1,
+				'disabled'            => 0,
+				'unregistered'        => 1,
+			),
+			array(
+				'test_condition_name' => '登録複数件',
+				'count'               => 3,
+				'forms'               => 5,
+				'add'                 => 1,
+				'disabled'            => 0,
+				'unregistered'        => 3,
+			),
+			array(
+				'test_condition_name' => '登録上限20件',
+				'count'               => 20,
+				'forms'               => 21,
+				'add'                 => 0,
+				'disabled'            => 1,
+				'unregistered'        => 20,
+			),
+		);
+
+		foreach ( $cases as $case ) {
+			// 保存済み番号と未登録番号を混ぜ、件数ごとの表示を再現する。
+			$rows = array(
+				array(
+					'id'     => 'self',
+					'name'   => '申込者',
+					'kana'   => '',
+					'number' => '',
+				),
+			);
+			for ( $index = 0; $index < $case['count']; ++$index ) {
+				$rows[] = array(
+					'id'     => wp_generate_uuid4(),
+					'name'   => 'ペット' . $index,
+					'kana'   => '',
+					'number' => 0 === $index ? 'A-001' : '',
+				);
+			}
+			$this->assertTrue( $roster->save( $user_id, $rows ), $case['test_condition_name'] );
+			$html = $shortcodes->render_profile_form();
+			$dom  = new \DOMDocument();
+			$dom->loadHTML( '<?xml encoding="UTF-8"><main>' . $html . '</main>', LIBXML_NOERROR | LIBXML_NOWARNING );
+			$xpath = new \DOMXPath( $dom );
+			$card  = '//div[contains(@class,"vkbm-attendee-roster")]';
+
+			// カードが兄弟として隣接し、タイトル・フォーム・nonce が独立していることを確認する。
+			$this->assertSame( 1, $xpath->query( '//div[contains(@class,"vkbm-auth-card--profile")]/following-sibling::*[1][contains(@class,"vkbm-auth-card") and contains(@class,"vkbm-attendee-roster")]' )->length, $case['test_condition_name'] );
+			$this->assertSame( 'ペット', $xpath->query( $card . '/h2[@class="vkbm-auth-card__title"]' )->item( 0 )->textContent, $case['test_condition_name'] );
+			$this->assertSame( $case['forms'], $xpath->query( $card . '/form' )->length, $case['test_condition_name'] );
+			$this->assertSame( 0, $xpath->query( '//form//form' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['forms'], $xpath->query( $card . '//input[@name="vkbm_attendee_roster_nonce"]' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['count'], $xpath->query( $card . '//button[@value="save" and contains(@class,"vkbm-button__md") and contains(@class,"vkbm-button__primary")]' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['add'], $xpath->query( $card . '//button[@value="add" and contains(@class,"vkbm-button__md") and contains(@class,"vkbm-button__primary")]' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['disabled'], $xpath->query( $card . '//button[@disabled and contains(@class,"vkbm-button__md") and contains(@class,"vkbm-button__primary")]' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['count'], $xpath->query( $card . '//button[@value="delete" and contains(@class,"vkbm-button__link")]' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['forms'], $xpath->query( $card . '//div[@class="vkbm-attendee-roster__fields"]/label/input[@name="attendee_kana"]' )->length, $case['test_condition_name'] );
+			$this->assertSame( $case['unregistered'], $xpath->query( $card . '//label/span[@class="vkbm-attendee-roster__unregistered"]' )->length, $case['test_condition_name'] );
+			$this->assertSame( min( 1, $case['count'] ), $xpath->query( $card . '//input[@value="A-001" and @readonly]' )->length, $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * 名簿保存エラーを原因別の案内へ変換することを確認する。
 	 *
 	 * @return void

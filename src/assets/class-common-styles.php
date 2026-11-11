@@ -45,6 +45,14 @@ class Common_Styles {
 	public const RESERVATION_HOVER_COLOR_WEIGHT = 0.75;
 
 	/**
+	 * 予約ボタンを白文字にするコントラスト比の下限。
+	 * 3.12 まで常に白文字だったため、中間色は白のまま残し、白では読めない明るい色だけ黒文字にする。
+	 * WCAG では大きな文字向けの基準で、標準サイズの文字では AA 未満の色も白になる。
+	 * 4.5 に上げると中間色のボタンが黒文字に変わる不具合（#1076）が再発するため、変えないこと。
+	 */
+	public const RESERVATION_WHITE_TEXT_MIN_CONTRAST_RATIO = 3.0;
+
+	/**
 	 * 文字色に求めるコントラスト比の下限（WCAG 2.1 AA の本文の基準）。
 	 */
 	public const MIN_TEXT_CONTRAST_RATIO = 4.5;
@@ -380,7 +388,7 @@ class Common_Styles {
 	/**
 	 * 予約ボタンの背景色に対して読みやすい文字色を返す。
 	 *
-	 * 通常時に白で 4.5:1 以上なら白を使い、届かなければ黒を使う。
+	 * 通常時に白で 3:1 以上なら白を使い、届かなければ黒を使う。
 	 *
 	 * @param string $background_color 背景色（sanitize_hex_color() を通した #rgb / #rrggbb）。
 	 * @return string 文字色（#rrggbb）。
@@ -388,7 +396,7 @@ class Common_Styles {
 	public static function get_reservation_text_color( string $background_color ): string {
 		$white_ratio = self::get_contrast_ratio( self::RESERVATION_TEXT_COLOR_PREFERRED, $background_color );
 
-		return $white_ratio >= self::MIN_TEXT_CONTRAST_RATIO ? self::RESERVATION_TEXT_COLOR_PREFERRED : '#000000';
+		return $white_ratio >= self::RESERVATION_WHITE_TEXT_MIN_CONTRAST_RATIO ? self::RESERVATION_TEXT_COLOR_PREFERRED : '#000000';
 	}
 
 	/**

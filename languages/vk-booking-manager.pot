@@ -226,6 +226,10 @@ msgid "System settings"
 msgstr ""
 
 #: src/admin/class-provider-settings-navigation.php:126
+msgid "Notation settings"
+msgstr ""
+
+#: src/admin/class-provider-settings-navigation.php:126
 #: src/admin/class-provider-settings-page.php:3158
 msgid "Email settings"
 msgstr ""
@@ -361,7 +365,7 @@ msgstr ""
 
 #. translators: %d: Number of automatically configured fields.
 #: src/admin/class-provider-settings-page.php:465
-msgid "Items automatically configured in \"System settings\" for this industry (%d)"
+msgid "Items automatically configured in \"System settings\" and \"Notation settings\" for this industry (%d)"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:466
@@ -568,11 +572,11 @@ msgid "When you select an industry, only the items commonly used in that industr
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1040
-msgid "Other items are configured automatically in \"System settings\"."
+msgid "Other items are configured automatically in \"System settings\" and \"Notation settings\"."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1040
-msgid "Save the industry preset to apply the changes to \"System settings\"."
+msgid "Save the industry preset to apply the changes to \"System settings\" and \"Notation settings\"."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1041
@@ -592,7 +596,7 @@ msgid "Days that were set as sale days in \"Lodging\" have no time slots, so no 
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1048
-msgid "These items are automatically saved with these values and cannot be changed individually in \"System settings\"."
+msgid "These items are automatically saved with these values and cannot be changed individually in \"System settings\" or \"Notation settings\"."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1048

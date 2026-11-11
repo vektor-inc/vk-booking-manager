@@ -240,6 +240,10 @@ msgid "System settings"
 msgstr "システム設定"
 
 #: src/admin/class-provider-settings-navigation.php:126
+msgid "Notation settings"
+msgstr "表記設定"
+
+#: src/admin/class-provider-settings-navigation.php:126
 #: src/admin/class-provider-settings-page.php:3158
 msgid "Email settings"
 msgstr "メール設定"
@@ -385,9 +389,8 @@ msgstr ""
 
 #. translators: %d: Number of automatically configured fields.
 #: src/admin/class-provider-settings-page.php:465
-msgid ""
-"Items automatically configured in \"System settings\" for this industry (%d)"
-msgstr "この業種では「システム設定」で自動的に設定される項目（%d件）"
+msgid "Items automatically configured in \"System settings\" and \"Notation settings\" for this industry (%d)"
+msgstr "この業種では「システム設定」と「表記設定」で自動的に設定される項目（%d件）"
 
 #: src/admin/class-provider-settings-page.php:466
 msgid "The industry preset default value has been applied."
@@ -629,12 +632,12 @@ msgstr ""
 "力されます。"
 
 #: src/admin/class-provider-settings-page.php:1040
-msgid "Other items are configured automatically in \"System settings\"."
-msgstr "それ以外の項目は「システム設定」で自動的に設定されます。"
+msgid "Other items are configured automatically in \"System settings\" and \"Notation settings\"."
+msgstr "それ以外の項目は「システム設定」と「表記設定」で自動的に設定されます。"
 
 #: src/admin/class-provider-settings-page.php:1040
-msgid "Save the industry preset to apply the changes to \"System settings\"."
-msgstr "業種プリセットを保存すると、「システム設定」に変更が反映されます。"
+msgid "Save the industry preset to apply the changes to \"System settings\" and \"Notation settings\"."
+msgstr "業種プリセットを保存すると、「システム設定」と「表記設定」に変更が反映されます。"
 
 #: src/admin/class-provider-settings-page.php:1041
 msgid "Select \"Custom\" to configure all items individually (initial state)."
@@ -667,12 +670,8 @@ msgstr ""
 "直すまで、時間枠のプランに空きは表示されません。"
 
 #: src/admin/class-provider-settings-page.php:1048
-msgid ""
-"These items are automatically saved with these values and cannot be changed "
-"individually in \"System settings\"."
-msgstr ""
-"これらの項目は保存時にこの内容で自動的に登録され、「システム設定」では個別に"
-"変更できません。"
+msgid "These items are automatically saved with these values and cannot be changed individually in \"System settings\" or \"Notation settings\"."
+msgstr "これらの項目は保存時にこの内容で自動的に登録され、「システム設定」と「表記設定」では個別に変更できません。"
 
 #: src/admin/class-provider-settings-page.php:1048
 msgid "Select \"Custom\" to configure them individually."

@@ -112,8 +112,22 @@ test.describe( '指名機能の使用 設定トグルテスト（PR #141）', ()
 		const selectedValue = await staffEnabledSelect.inputValue();
 		expect( selectedValue ).toBe( '0' );
 
+		// @check システム設定ではリソース名称とメニュー表示用の名称の欄は表示されない
+		await expect(
+			page.locator( '#vkbm-resource-label-singular' )
+		).not.toBeVisible();
+		await expect(
+			page.locator( '#vkbm-resource-label-menu' )
+		).not.toBeVisible();
+
+		// @step 「表記設定」タブを開く
+		await page.goto(
+			'/wp-admin/admin.php?page=vkbm-provider-settings&tab=notation'
+		);
+		await page.waitForLoadState( 'domcontentloaded' );
+
 		// リソース名称（singular）は指名無効でも表示される（リソース機能は常に有効）
-		// @check リソースの名称（単数形）とメニュー表示用の名称の欄は表示される
+		// @check 表記設定にリソースの名称（単数形）とメニュー表示用の名称の欄は表示される
 		const resourceLabelSingular = page.locator(
 			'#vkbm-resource-label-singular'
 		);

@@ -13,6 +13,8 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Resources;
 
+use DOMDocument;
+use DOMXPath;
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -461,11 +463,11 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 基本設定の画面（システムタブ）を描画して返す。
+	 * 基本設定の画面（表記設定タブ）を描画して返す。
 	 *
 	 * @return string 描画結果。
 	 */
-	private function render_system_tab(): string {
+	private function render_notation_tab(): string {
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
 		$page = new Provider_Settings_Page(
 			new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ),
@@ -473,7 +475,7 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 			''
 		);
 
-		$_GET['tab'] = 'system';
+		$_GET['tab'] = 'notation';
 
 		ob_start();
 		$page->render_page();
@@ -482,7 +484,7 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * 無料版の基本設定画面に出る、呼び方の案内を検証する。
+	 * 無料版の表記設定タブに出る、呼び方の案内を検証する。
 	 */
 	public function test_render_page_free_notice(): void {
 		$this->skip_unless_free();
@@ -512,7 +514,14 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 
 		foreach ( $test_cases as $case ) {
 			$this->save_labels( $case['conditions'] );
-			$html = $this->render_system_tab();
+			$html = $this->render_notation_tab();
+			$dom  = new DOMDocument();
+			$dom->loadHTML( '<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING );
+			$xpath = new DOMXPath( $dom );
+
+			// 案内が表記設定の行に所属することも確認する。
+			$notice_rows = $xpath->query( '//tr[contains(concat(" ", normalize-space(@class), " "), " vkbm-provider-settings__tab-notation ")][.//p[contains(., "The resource name ")]]' );
+			$this->assertSame( null === $case['expected'] ? 0 : 1, $notice_rows->length, $case['test_condition_name'] . '（表記設定の案内行）' );
 
 			if ( null === $case['expected'] ) {
 				$this->assertStringNotContainsString( 'The resource name ', $html, $case['test_condition_name'] );
@@ -524,13 +533,22 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Pro 版の基本設定画面は今までどおり入力欄が出て、案内は出ない。
+	 * Pro 版の表記設定タブには入力欄が出て、案内は出ない。
 	 */
 	public function test_render_page_pro_input(): void {
 		$this->skip_if_free();
 
 		$this->save_labels( array( 'singular' => '客室' ) );
-		$html = $this->render_system_tab();
+		$html = $this->render_notation_tab();
+		$dom  = new DOMDocument();
+		$dom->loadHTML( '<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING );
+		$xpath = new DOMXPath( $dom );
+
+		// リソース名称の入力欄が表記設定の行に所属することを確認する。
+		foreach ( array( 'singular', 'plural', 'menu' ) as $label ) {
+			$inputs = $xpath->query( '//tr[contains(concat(" ", normalize-space(@class), " "), " vkbm-provider-settings__tab-notation ")]//input[@name="vkbm_provider_settings[resource_label_' . $label . ']"]' );
+			$this->assertSame( 1, $inputs->length, $label . ' の入力欄は表記設定に1件だけ出る' );
+		}
 
 		$this->assertStringContainsString( 'name="vkbm_provider_settings[resource_label_singular]"', $html, '入力欄が出る' );
 		$this->assertStringNotContainsString( 'The resource name ', $html, '案内は出ない' );
