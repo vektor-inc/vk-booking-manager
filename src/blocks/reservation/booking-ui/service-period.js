@@ -145,3 +145,27 @@ export const createLatestRequestGuard = () => {
 		},
 	};
 };
+
+/**
+ * 1日のみのメニューで初期選択する開催日を返す。
+ *
+ * @param {Object} menu メニュー。
+ * @return {string} 開催日。対象外なら空文字。
+ */
+export const getSingleEventDate = ( menu ) =>
+	menu?.meta?._vkbm_service_period_mode === 'single' && ! menu?.vkbm_lodging
+		? getServicePeriod( menu ).start
+		: '';
+
+/**
+ * 開催日に予約可能な時間枠が1つだけなら、その枠を返す。
+ *
+ * @param {Array} slots 時間枠。
+ * @return {Object|null} 選択する枠。
+ */
+export const getOnlyBookableSlot = ( slots ) => {
+	const bookable = slots.filter(
+		( slot ) => slot.remaining > 0 && ! slot.exclusive_closed
+	);
+	return bookable.length === 1 ? bookable[ 0 ] : null;
+};

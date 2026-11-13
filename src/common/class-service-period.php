@@ -50,6 +50,36 @@ class Service_Period {
 	public const META_END = '_vkbm_service_period_end';
 
 	/**
+	 * 提供期間モードの投稿メタキー。
+	 *
+	 * @var string
+	 */
+	public const META_MODE = '_vkbm_service_period_mode';
+
+	/**
+	 * メニューの有効な提供期間モードを返す。
+	 *
+	 * @param int $menu_id メニューID。
+	 * @return string range または single。
+	 */
+	public static function get_mode( int $menu_id ): string {
+		if ( \VKBookingManager\PostTypes\Service_Menu_Post_Type::is_night_unit( $menu_id ) ) {
+			return 'range';
+		}
+		return 'single' === get_post_meta( $menu_id, self::META_MODE, true ) ? 'single' : 'range';
+	}
+
+	/**
+	 * 提供期間モードの保存値を正規化する。
+	 *
+	 * @param mixed $value 保存値。
+	 * @return string range または single。
+	 */
+	public static function sanitize_mode( $value ): string {
+		return 'single' === $value ? 'single' : 'range';
+	}
+
+	/**
 	 * 値を、実在する Y-m-d の日付文字列へ整える。
 	 *
 	 * 日付として読めない値（空・不正な書式・存在しない日付）は空文字（無期限）にする。
@@ -161,6 +191,25 @@ class Service_Period {
 				'type'    => 'CHAR',
 			),
 		);
+	}
+
+	/**
+	 * 開催日を曜日付きで表示する。
+	 *
+	 * @param string $date 開催日。
+	 * @param bool   $short 年を省くか。
+	 * @return string 表示用の日付。
+	 */
+	public static function format_single_date( string $date, bool $short = false ): string {
+		if ( '' === self::sanitize_date( $date ) ) {
+			return '';
+		}
+		$datetime = DateTimeImmutable::createFromFormat( '!Y-m-d', $date, wp_timezone() );
+		if ( ! $datetime ) {
+			return '';
+		}
+		$format = $short ? _x( 'M j (D)', 'short event date format', 'vk-booking-manager' ) : _x( 'M j, Y (D)', 'event date format', 'vk-booking-manager' );
+		return wp_date( $format, $datetime->getTimestamp() );
 	}
 
 	/**

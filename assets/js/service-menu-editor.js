@@ -1229,9 +1229,36 @@
 			window.vkbmServiceMenuEditor.servicePeriodToday
 				? String( window.vkbmServiceMenuEditor.servicePeriodToday )
 				: '';
-		const isReversed = start !== '' && end !== '' && start > end;
+		const isNight =
+			$(
+				'input[name="vkbm_service_menu[booking_unit]"]:checked'
+			).val() === 'night';
+		const isSingle =
+			! isNight &&
+			$(
+				'input[name="vkbm_service_menu[service_period_mode]"]:checked'
+			).val() === 'single';
+		$( '#vkbm-service-period-mode' ).prop( 'hidden', isNight );
+		$( '#vkbm-service-period-range-help' ).prop( 'hidden', isSingle );
+		$( '.vkbm-service-period-end-group' ).prop( 'hidden', isSingle );
+		$(
+			'#vkbm-service-period-single-help, #vkbm-reservation-day-field'
+		).each( function () {
+			$( this ).prop(
+				'hidden',
+				this.id === 'vkbm-reservation-day-field' ? isSingle : ! isSingle
+			);
+		} );
+		$start.attr(
+			'aria-label',
+			isSingle
+				? $start.data( 'single-label' )
+				: $start.data( 'range-label' )
+		);
+		const isReversed =
+			! isSingle && start !== '' && end !== '' && start > end;
 
-		if ( start !== '' ) {
+		if ( ! isSingle && start !== '' ) {
 			$end.attr( 'min', start );
 		} else {
 			$end.removeAttr( 'min' );
@@ -1247,15 +1274,24 @@
 			$start.add( $end ).removeAttr( 'aria-invalid aria-describedby' );
 		}
 
+		$( '#vkbm-service-period-ended-label' ).text(
+			isSingle
+				? $( '#vkbm-service-period-ended' ).data( 'single-text' )
+				: $( '#vkbm-service-period-ended' ).data( 'range-text' )
+		);
 		$( '#vkbm-service-period-ended' ).prop(
 			'hidden',
-			! ( end !== '' && today !== '' && end < today )
+			! (
+				( isSingle ? start : end ) !== '' &&
+				today !== '' &&
+				( isSingle ? start : end ) < today
+			)
 		);
 	}
 
 	$( document ).on(
 		'input change',
-		'#vkbm_service_menu_service_period_start, #vkbm_service_menu_service_period_end',
+		'#vkbm_service_menu_service_period_start, #vkbm_service_menu_service_period_end, input[name="vkbm_service_menu[service_period_mode]"], input[name="vkbm_service_menu[booking_unit]"]',
 		syncServicePeriod
 	);
 	$( syncServicePeriod );

@@ -233,11 +233,11 @@ class Service_Menu_Post_Type {
 		add_action( 'init', array( $this, 'register_taxonomy' ) );
 		add_action( 'init', array( $this, 'register_meta' ) );
 		// REST 経由で開始日が終了日より後の提供期間が保存されたときに、前回の値へ戻す。
-		// リビジョン復元でも、逆転した提供期間は戻さない（復元前の値を保つ）。メタの復元（優先度10）の前後で挟む。
+		// リビジョン復元では泊の単日モードを期間へ固定し、不正な単日や逆転した期間は復元前の値を保つ。メタの復元（優先度10）の前後で挟む。
 		add_action( 'wp_restore_post_revision', array( $this, 'remember_service_period_before_revision_restore' ), 5, 2 );
-		add_action( 'wp_restore_post_revision', array( $this, 'restore_reversed_service_period_after_revision_restore' ), 20, 2 );
+		add_action( 'wp_restore_post_revision', array( $this, 'normalize_service_period_after_revision_restore' ), 20, 2 );
 		add_filter( 'rest_pre_insert_' . self::POST_TYPE, array( $this, 'remember_service_period_before_rest_save' ), 10, 2 );
-		add_action( 'rest_after_insert_' . self::POST_TYPE, array( $this, 'restore_reversed_service_period_after_rest_save' ), 10, 2 );
+		add_action( 'rest_after_insert_' . self::POST_TYPE, array( $this, 'normalize_service_period_after_rest_save' ), 10, 2 );
 		add_filter( 'rest_' . self::POST_TYPE . '_query', array( $this, 'filter_rest_collection_query' ), 10, 2 );
 		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
 		// カスタムメタもリビジョンに保存・復元できるよう、対象メタキーを登録する。
@@ -646,8 +646,10 @@ class Service_Menu_Post_Type {
 			case 'vkbm_reservation_day_type':
 				// 上段に提供期間、下段に予約可能日を出す。指定のない側は出さず、両方なければダッシュにする。
 				$service_period       = Service_Period::get_period( $post_id );
-				$service_period_label = Service_Period::format_label_html( $service_period['start'], $service_period['end'] );
-				$day_type_label       = '' === $reservation_day_type ? '' : Reservation_Day::label( $reservation_day_type );
+				$is_single_period     = 'single' === Service_Period::get_mode( $post_id );
+				$single_date          = $is_single_period ? Service_Period::format_single_date( $service_period['start'], true ) : '';
+				$service_period_label = $is_single_period ? ( '' !== $single_date ? esc_html__( 'Event date', 'vk-booking-manager' ) . ' ' . sprintf( '<span class="vkbm-service-period__date">%s</span>', esc_html( $single_date ) ) : '' ) : Service_Period::format_label_html( $service_period['start'], $service_period['end'] );
+				$day_type_label       = $is_single_period || '' === $reservation_day_type ? '' : Reservation_Day::label( $reservation_day_type );
 
 				if ( '' === $service_period_label && '' === $day_type_label ) {
 					echo esc_html( '—' );
@@ -658,7 +660,7 @@ class Service_Menu_Post_Type {
 					// 開始日と終了日の両方があるときだけ、終了日の直前（区切りの後）で改行して2行に分ける。
 					// 片側だけのときは強制改行を入れず、折り返しはブラウザに任せる（「から」「まで」と日付の境目でだけ折れる）。
 					// 日付以外の文言（区切り・「から」など）の span や翻訳文言の有無に左右されないよう、最後の日付の要素を目印にする。
-					if ( '' !== $service_period['start'] && '' !== $service_period['end'] ) {
+					if ( ! $is_single_period && '' !== $service_period['start'] && '' !== $service_period['end'] ) {
 						$service_period_label = (string) preg_replace( '#^(.*)(<span class="vkbm-service-period__date">)#us', '$1<br>$2', $service_period_label, 1 );
 					}
 					// format_label_html() はエスケープ済み。日付の要素（span）と改行だけを許可して出力する。
@@ -1596,14 +1598,14 @@ class Service_Menu_Post_Type {
 	/**
 	 * REST での保存前の提供期間を、投稿 ID ごとに覚えておく。
 	 *
-	 * @var array<int, array{start: string, end: string}>
+	 * @var array<int, array{start: string, end: string, mode: string}>
 	 */
 	private array $service_period_before_rest_save = array();
 
 	/**
-	 * リビジョン復元の前の提供期間（投稿 ID => 開始日・終了日）。復元後に逆転していたら戻すために使う。
+	 * リビジョン復元前の提供期間（投稿 ID => 開始日・終了日・モード）。復元後の検証に使う。
 	 *
-	 * @var array<int, array{start: string, end: string}>
+	 * @var array<int, array{start: string, end: string, mode: string}>
 	 */
 	private array $service_period_before_revision_restore = array();
 
@@ -1616,23 +1618,38 @@ class Service_Menu_Post_Type {
 	 */
 	public function remember_service_period_before_rest_save( $prepared_post, $request ) {
 		if ( $prepared_post instanceof \stdClass && ! empty( $prepared_post->ID ) ) {
-			$this->service_period_before_rest_save[ (int) $prepared_post->ID ] = Service_Period::get_period( (int) $prepared_post->ID );
+			$this->service_period_before_rest_save[ (int) $prepared_post->ID ] = Service_Period::get_period( (int) $prepared_post->ID ) + array( 'mode' => Service_Period::get_mode( (int) $prepared_post->ID ) );
 		}
 
 		return $prepared_post;
 	}
 
 	/**
-	 * REST での保存後に、開始日が終了日より後の提供期間なら前回の値へ戻す（`rest_after_insert_vkbm_service_menu` アクション）。
+	 * REST 保存後に提供期間のモードと日付を正規化する（`rest_after_insert_vkbm_service_menu` アクション）。
 	 *
-	 * 管理画面の保存と同じく、逆転した入力は保存しない。新規作成で前回の値が無いときは、両方とも無期限（メタ削除）に戻す。
+	 * 泊のモードを期間へ固定し、単日では両端を一致させる。不正な日付や逆転した入力は前回値へ戻す。
+	 * 新規作成で前回値が無い場合は無期限へ戻す。
 	 *
 	 * @param \WP_Post         $post    保存された投稿。
 	 * @param \WP_REST_Request $request リクエスト。
 	 */
-	public function restore_reversed_service_period_after_rest_save( $post, $request ): void {
-		$saved = Service_Period::get_period( (int) $post->ID );
-		if ( ! Service_Period::is_reversed( $saved['start'], $saved['end'] ) ) {
+	public function normalize_service_period_after_rest_save( $post, $request ): void {
+		if ( self::is_night_unit( (int) $post->ID ) && 'single' === get_post_meta( $post->ID, Service_Period::META_MODE, true ) ) {
+			update_post_meta( $post->ID, Service_Period::META_MODE, 'range' );
+		}
+		$saved          = Service_Period::get_period( (int) $post->ID );
+		$requested_meta = $request->get_param( 'meta' );
+		$raw_start      = is_array( $requested_meta ) ? ( $requested_meta[ Service_Period::META_START ] ?? null ) : null;
+		if ( 'single' === Service_Period::get_mode( (int) $post->ID ) && null !== $raw_start && '' !== Service_Period::sanitize_date( $raw_start ) ) {
+			$saved['start'] = Service_Period::sanitize_date( $raw_start );
+			$saved['end']   = $saved['start'];
+			update_post_meta( $post->ID, Service_Period::META_END, $saved['end'] );
+		}
+		// 単日では開始日が実在し、保存後の両端が一致している必要がある。
+		$is_single_mode = 'single' === Service_Period::get_mode( (int) $post->ID );
+		$invalid_start  = null !== $raw_start && '' === Service_Period::sanitize_date( $raw_start );
+		$single_invalid = $is_single_mode && ( $invalid_start || '' === $saved['start'] || $saved['start'] !== $saved['end'] );
+		if ( ! $single_invalid && ! Service_Period::is_reversed( $saved['start'], $saved['end'] ) ) {
 			unset( $this->service_period_before_rest_save[ (int) $post->ID ] );
 			return;
 		}
@@ -1646,6 +1663,7 @@ class Service_Menu_Post_Type {
 		foreach ( array(
 			Service_Period::META_START => $previous['start'],
 			Service_Period::META_END   => $previous['end'],
+			Service_Period::META_MODE  => $previous['mode'] ?? 'range',
 		) as $meta_key => $value ) {
 			if ( '' === $value ) {
 				delete_post_meta( $post->ID, $meta_key );
@@ -1669,18 +1687,18 @@ class Service_Menu_Post_Type {
 			return;
 		}
 
-		$this->service_period_before_revision_restore[ (int) $post_id ] = Service_Period::get_period( (int) $post_id );
+		$this->service_period_before_revision_restore[ (int) $post_id ] = Service_Period::get_period( (int) $post_id ) + array( 'mode' => Service_Period::get_mode( (int) $post_id ) );
 	}
 
 	/**
-	 * リビジョン復元の後に、開始日が終了日より後の提供期間なら復元前の値へ戻す（`wp_restore_post_revision` アクション）。
+	 * リビジョン復元後に提供期間のモードと日付を検証する（`wp_restore_post_revision` アクション）。
 	 *
-	 * 管理画面・REST の保存と同じく、逆転した期間は保存しない。逆転していない期間はそのまま復元される。
+	 * 泊のモードを期間へ固定し、不正な単日や逆転した期間は復元前の値へ戻す。
 	 *
 	 * @param int $post_id     復元先の投稿 ID。
 	 * @param int $revision_id 復元したリビジョンの ID。
 	 */
-	public function restore_reversed_service_period_after_revision_restore( $post_id, $revision_id ): void {
+	public function normalize_service_period_after_revision_restore( $post_id, $revision_id ): void {
 		$post_id = (int) $post_id;
 		if ( ! isset( $this->service_period_before_revision_restore[ $post_id ] ) ) {
 			return;
@@ -1690,13 +1708,17 @@ class Service_Menu_Post_Type {
 		unset( $this->service_period_before_revision_restore[ $post_id ] );
 
 		$restored = Service_Period::get_period( $post_id );
-		if ( ! Service_Period::is_reversed( $restored['start'], $restored['end'] ) ) {
+		if ( self::is_night_unit( $post_id ) && 'single' === get_post_meta( $post_id, Service_Period::META_MODE, true ) ) {
+			update_post_meta( $post_id, Service_Period::META_MODE, 'range' );
+		}
+		if ( ! ( 'single' === Service_Period::get_mode( $post_id ) && ( '' === $restored['start'] || $restored['start'] !== $restored['end'] ) ) && ! Service_Period::is_reversed( $restored['start'], $restored['end'] ) ) {
 			return;
 		}
 
 		foreach ( array(
 			Service_Period::META_START => $previous['start'],
 			Service_Period::META_END   => $previous['end'],
+			Service_Period::META_MODE  => $previous['mode'] ?? 'range',
 		) as $meta_key => $value ) {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $meta_key );
@@ -1727,6 +1749,26 @@ class Service_Menu_Post_Type {
 				)
 			);
 		}
+
+		register_post_meta(
+			self::POST_TYPE,
+			Service_Period::META_MODE,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'default'           => 'range',
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type' => 'string',
+						'enum' => array( 'range', 'single' ),
+					),
+				),
+				'sanitize_callback' => array( Service_Period::class, 'sanitize_mode' ),
+				'auth_callback'     => static function ( $allowed, $meta_key, $post_id ) {
+					return current_user_can( 'edit_post', $post_id );
+				},
+			)
+		);
 
 		register_post_meta(
 			self::POST_TYPE,
@@ -2610,6 +2652,7 @@ class Service_Menu_Post_Type {
 			self::META_RESERVATION_DAY_TYPE,
 			Service_Period::META_START,
 			Service_Period::META_END,
+			Service_Period::META_MODE,
 			'_vkbm_online_unavailable',
 			'_vkbm_is_archived',
 			'_vkbm_use_detail_page',

@@ -1556,16 +1556,18 @@ class Menu_Loop_Block {
 		// 提供期間が設定されていれば、予約可能日の前に表示する。
 		$service_period = Service_Period::get_period( $post->ID );
 		// 日付ごとに折り返さない塊にした HTML（エスケープ済み）で出す（幅が狭いときに日付の途中で改行しないため）。
-		$service_period_label = Service_Period::format_label_html( $service_period['start'], $service_period['end'] );
+		$is_single_period     = 'single' === Service_Period::get_mode( $post->ID );
+		$single_date          = $is_single_period ? Service_Period::format_single_date( $service_period['start'] ) : '';
+		$service_period_label = $is_single_period ? ( '' !== $single_date ? '<span class="vkbm-service-period__date">' . esc_html( $single_date ) . '</span>' : '' ) : Service_Period::format_label_html( $service_period['start'], $service_period['end'] );
 		if ( '' !== $service_period_label ) {
 			$items[] = sprintf(
 				'<div class="vkbm-menu-loop__card-meta-item"><dt>%1$s</dt><dd>%2$s</dd></div>',
-				esc_html__( 'Service period', 'vk-booking-manager' ),
+				( $is_single_period ? esc_html__( 'Event date', 'vk-booking-manager' ) : esc_html__( 'Service period', 'vk-booking-manager' ) ),
 				$service_period_label
 			);
 		}
 
-		if ( '' !== $reservation_day_type ) {
+		if ( ! $is_single_period && '' !== $reservation_day_type ) {
 			// 種別→ラベルの写像は共有ヘルパーに集約している。
 			$reservation_day_label = Reservation_Day::label( $reservation_day_type );
 

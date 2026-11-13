@@ -127,6 +127,7 @@ export const DailySlotList = ( {
 						type="button"
 						key={ slot.slot_id }
 						disabled={ isDisabled }
+						aria-pressed={ selectedSlotId === slot.slot_id }
 						className={ [
 							'vkbm-slot-list__item',
 							selectedSlotId === slot.slot_id && 'is-selected',

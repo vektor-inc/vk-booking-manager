@@ -9,8 +9,11 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Common;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Common\Service_Period;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Query;
 use WP_UnitTestCase;
 
@@ -513,11 +516,94 @@ class Service_Period_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * リビジョン復元で不正な単日は復元前の値へ戻し、泊の単日モードは期間へ直す。
+	 */
+	public function test_restore_revision_normalizes_single_day_and_night_mode(): void {
+		$test_cases = array(
+			array(
+				'name'           => '単日の開始日と終了日が異なる',
+				'revision_start' => '2027-09-01',
+				'revision_end'   => '2027-09-02',
+				'booking_unit'   => '',
+				'expected_mode'  => 'range',
+				'expected_start' => '2027-07-01',
+				'expected_end'   => '2027-07-31',
+			),
+			array(
+				'name'           => '単日の開催日が空',
+				'revision_start' => '',
+				'revision_end'   => '',
+				'booking_unit'   => '',
+				'expected_mode'  => 'range',
+				'expected_start' => '2027-07-01',
+				'expected_end'   => '2027-07-31',
+			),
+			array(
+				'name'           => '泊の単日モード',
+				'revision_start' => '2027-09-01',
+				'revision_end'   => '2027-09-01',
+				'booking_unit'   => Service_Menu_Post_Type::BOOKING_UNIT_NIGHT,
+				'expected_mode'  => 'range',
+				'expected_start' => '2027-09-01',
+				'expected_end'   => '2027-09-01',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 宿泊（泊単位）は Pro 版限定のため、無料版では泊のケースを検証しない。
+			if ( '' !== $case['booking_unit'] && Pro_Upsell::is_free_edition() ) {
+				continue;
+			}
+			$menu_id = (int) $this->factory()->post->create( array( 'post_type' => Service_Menu_Post_Type::POST_TYPE ) );
+			update_post_meta( $menu_id, Service_Period::META_START, '2027-07-01' );
+			update_post_meta( $menu_id, Service_Period::META_END, '2027-07-31' );
+			if ( '' !== $case['booking_unit'] ) {
+				update_option( Settings_Repository::OPTION_KEY, array_merge( ( new Settings_Repository() )->get_default_settings(), array( 'industry_preset' => 'lodging' ) ) );
+				Industry_Presets::clear_cache();
+				update_post_meta( $menu_id, Service_Menu_Post_Type::META_BOOKING_UNIT, $case['booking_unit'] );
+			}
+			$revision_id = (int) wp_insert_post(
+				array(
+					'post_type'   => 'revision',
+					'post_status' => 'inherit',
+					'post_parent' => $menu_id,
+					'post_name'   => $menu_id . '-revision-v1',
+					'post_title'  => 'revision',
+				)
+			);
+			if ( '' !== $case['revision_start'] ) {
+				update_metadata( 'post', $revision_id, Service_Period::META_START, $case['revision_start'] );
+			}
+			if ( '' !== $case['revision_end'] ) {
+				update_metadata( 'post', $revision_id, Service_Period::META_END, $case['revision_end'] );
+			}
+			update_metadata( 'post', $revision_id, Service_Period::META_MODE, 'single' );
+			if ( '' !== $case['booking_unit'] ) {
+				update_metadata( 'post', $revision_id, Service_Menu_Post_Type::META_BOOKING_UNIT, $case['booking_unit'] );
+			}
+
+			wp_restore_post_revision( $revision_id );
+			$this->assertSame( $case['expected_mode'], Service_Period::get_mode( $menu_id ), $case['name'] );
+			$this->assertSame( $case['expected_mode'], get_post_meta( $menu_id, Service_Period::META_MODE, true ), $case['name'] . ' の保存値' );
+			$this->assertSame(
+				array(
+					'start' => $case['expected_start'],
+					'end'   => $case['expected_end'],
+				),
+				Service_Period::get_period( $menu_id ),
+				$case['name']
+			);
+		}
+		Industry_Presets::clear_cache();
+	}
+
+	/**
 	 * 提供期間のメタが REST に公開され、リビジョン対象になっている。
 	 */
 	public function test_meta_is_registered_for_rest_and_revisions(): void {
 		( new Service_Menu_Post_Type() )->register_meta();
 		$registered = get_registered_meta_keys( 'post', Service_Menu_Post_Type::POST_TYPE );
+		$this->assertSame( array( 'range', 'single' ), $registered[ Service_Period::META_MODE ]['show_in_rest']['schema']['enum'] );
 		foreach ( array( Service_Period::META_START, Service_Period::META_END ) as $meta_key ) {
 			$this->assertArrayHasKey( $meta_key, $registered, $meta_key . ' は登録されている' );
 			$this->assertNotEmpty( $registered[ $meta_key ]['show_in_rest'], $meta_key . ' は REST に公開される' );
@@ -612,6 +698,83 @@ class Service_Period_Test extends WP_UnitTestCase {
 			),
 			Service_Period::get_period( (int) $response->get_data()['id'] ),
 			'新規作成で逆転した期間 => 無期限'
+		);
+	}
+	/** モードの既定値と開催日の曜日表記を検証する。 */
+	public function test_single_day_mode_and_label(): void {
+		$menu_id = (int) $this->factory()->post->create( array( 'post_type' => Service_Menu_Post_Type::POST_TYPE ) );
+		$this->assertSame( 'range', Service_Period::get_mode( $menu_id ) );
+		update_post_meta( $menu_id, Service_Period::META_MODE, 'single' );
+		$this->assertSame( 'single', Service_Period::get_mode( $menu_id ) );
+		$this->assertSame( 'Dec 5, 2026 (Sat)', Service_Period::format_single_date( '2026-12-05' ) );
+		$this->assertSame( 'Dec 5 (Sat)', Service_Period::format_single_date( '2026-12-05', true ) );
+		$this->assertSame( 'range', Service_Period::sanitize_mode( 'invalid' ) );
+	}
+
+	/** 期間から単日へ切り替える REST 要求で日付が無効なら、モードも期間も戻す。 */
+	public function test_rest_save_invalid_single_switch_restores_mode(): void {
+		( new Service_Menu_Post_Type() )->register_meta();
+		wp_set_current_user( $this->factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$menu_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		update_post_meta( $menu_id, Service_Period::META_START, '2027-12-01' );
+		update_post_meta( $menu_id, Service_Period::META_END, '2027-12-10' );
+		foreach ( array( null, 'invalid' ) as $start ) {
+			$meta = array( Service_Period::META_MODE => 'single' );
+			if ( null !== $start ) {
+				$meta[ Service_Period::META_START ] = $start;
+			}
+			$request = new \WP_REST_Request( 'POST', '/wp/v2/vkbm_service_menu/' . $menu_id );
+			$request->set_body_params( array( 'meta' => $meta ) );
+			$this->assertSame( 200, rest_do_request( $request )->get_status() );
+			$this->assertSame( 'range', Service_Period::get_mode( $menu_id ) );
+			$this->assertSame(
+				array(
+					'start' => '2027-12-01',
+					'end'   => '2027-12-10',
+				),
+				Service_Period::get_period( $menu_id )
+			);
+		}
+	}
+
+	/** REST で無効な開催日を送っても前回値を保つ。 */
+	public function test_rest_save_single_day_invalid_date_restores_previous(): void {
+		( new Service_Menu_Post_Type() )->register_meta();
+		wp_set_current_user( $this->factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$menu_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		update_post_meta( $menu_id, Service_Period::META_START, '2027-12-05' );
+		update_post_meta( $menu_id, Service_Period::META_END, '2027-12-05' );
+		update_post_meta( $menu_id, Service_Period::META_MODE, 'single' );
+		$request = new \WP_REST_Request( 'POST', '/wp/v2/vkbm_service_menu/' . $menu_id );
+		$request->set_body_params( array( 'meta' => array( Service_Period::META_START => '2027-12-06' ) ) );
+		$this->assertSame( 200, rest_do_request( $request )->get_status() );
+		$this->assertSame(
+			array(
+				'start' => '2027-12-06',
+				'end'   => '2027-12-06',
+			),
+			Service_Period::get_period( $menu_id )
+		);
+		$request = new \WP_REST_Request( 'POST', '/wp/v2/vkbm_service_menu/' . $menu_id );
+		$request->set_body_params( array( 'meta' => array( Service_Period::META_START => '' ) ) );
+		$response = rest_do_request( $request );
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame(
+			array(
+				'start' => '2027-12-06',
+				'end'   => '2027-12-06',
+			),
+			Service_Period::get_period( $menu_id )
 		);
 	}
 }

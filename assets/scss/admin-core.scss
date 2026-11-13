@@ -219,6 +219,11 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 	gap: 8px;
 }
 
+// hidden 属性が inline-flex より優先されるようにする.
+.vkbm-service-period-end-group[hidden] {
+	display: none;
+}
+
 @container (max-width: 25rem) {
 
 	.vkbm-service-period-inputs {

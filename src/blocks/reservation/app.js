@@ -43,6 +43,8 @@ import {
 	advanceToServicePeriodStart,
 	getCalendarServicePeriodStartMonth,
 	getUpcomingStartMonth,
+	getSingleEventDate,
+	getOnlyBookableSlot,
 } from './booking-ui/service-period';
 import { formatReservationDate } from './date-format';
 import {
@@ -2628,6 +2630,14 @@ export const ReservationApp = ( {
 
 				setSlotBusy( false );
 				setSlotData( decoratedSlots );
+				if (
+					currentMenu?.meta?._vkbm_service_period_mode === 'single'
+				) {
+					const onlySlot = getOnlyBookableSlot( decoratedSlots );
+					if ( onlySlot ) {
+						setSelectedSlot( ( previous ) => previous || onlySlot );
+					}
+				}
 				setSlotBookingRange( response?.booking_range ?? null );
 			} )
 			.catch( ( error ) => {
@@ -2662,6 +2672,7 @@ export const ReservationApp = ( {
 		effectiveResourceTagIds,
 		selectedDate,
 		currentStaff,
+		currentMenu,
 		canManageReservations,
 		isLodgingMenu,
 		availabilityRetry,
@@ -2724,6 +2735,14 @@ export const ReservationApp = ( {
 				: current
 		);
 	}, [ currentMenu, isLodgingMenu ] );
+
+	// URL などからメニューが先に選ばれた場合も、取得後に開催日を選ぶ。
+	const currentEventDate = getSingleEventDate( currentMenu );
+	useEffect( () => {
+		if ( currentEventDate ) {
+			setSelectedDate( currentEventDate );
+		}
+	}, [ menuId, currentEventDate ] );
 
 	// 提供期間の開始日が先の日付のメニューを選んだときは、カレンダーを開始日の月から表示する。
 	// すでに開始日の月以降を表示しているとき（URL の日付など）は動かさない。
@@ -2861,8 +2880,9 @@ export const ReservationApp = ( {
 
 		setMenuId( nextMenuId );
 		setDetailNoticeMessage( '' );
-		setSelectedDate( carried.date );
-		setCarriedDate( carried.date );
+		const eventDate = getSingleEventDate( nextMenu );
+		setSelectedDate( eventDate || carried.date );
+		setCarriedDate( eventDate ? '' : carried.date );
 		setSelectedSlot( null );
 		setGuests( 1 );
 		// メニュー変更時は料金区分の人数もリセットする（区分構成が変わるため）。

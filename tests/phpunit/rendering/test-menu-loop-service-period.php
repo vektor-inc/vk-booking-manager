@@ -197,4 +197,19 @@ class Menu_Loop_Service_Period_Test extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'data-menu-id="' . $ongoing . '"', $html, '期間中は出る' );
 		$this->assertStringNotContainsString( 'data-menu-id="' . $ended . '"', $html, '終了済みは出ない' );
 	}
+	/** 1日のみは開催日を曜日付きで表示する。 */
+	public function test_render_menu_card_single_day(): void {
+		$menu_id = $this->create_menu( 'セミナー', '2027-12-05', '2027-12-05' );
+		update_post_meta( $menu_id, Service_Period::META_MODE, 'single' );
+		$html = $this->block->render_menu_card( $menu_id );
+		$this->assertStringContainsString( '<dt>' . esc_html__( 'Event date', 'vk-booking-manager' ) . '</dt>', $html );
+		$this->assertStringContainsString( '<span class="vkbm-service-period__date">' . esc_html( Service_Period::format_single_date( '2027-12-05' ) ) . '</span>', $html );
+
+		// メタを直接変更した場合も、日付が無効なら開催日の行を出さない。
+		foreach ( array( '', '2027-02-30' ) as $invalid_date ) {
+			update_post_meta( $menu_id, Service_Period::META_START, $invalid_date );
+			$html = $this->block->render_menu_card( $menu_id );
+			$this->assertStringNotContainsString( '<dt>' . esc_html__( 'Event date', 'vk-booking-manager' ) . '</dt>', $html, '無効な開始日: ' . $invalid_date );
+		}
+	}
 }

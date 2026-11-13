@@ -2614,7 +2614,7 @@ class Availability_Service {
 			'total_duration'              => $total_block,
 			'deadline_hours'              => max( 0, $deadline ),
 			'max_advance_days'            => max( 0, $max_advance_days ),
-			'reservation_day_type'        => $reservation_day_type,
+			'reservation_day_type'        => 'single' === Service_Period::get_mode( $menu_post->ID ) ? '' : $reservation_day_type,
 			'reservation_custom_weekdays' => $reservation_custom_weekdays,
 			'reservation_custom_dates'    => $reservation_custom_dates,
 			'service_period_start'        => $service_period['start'],

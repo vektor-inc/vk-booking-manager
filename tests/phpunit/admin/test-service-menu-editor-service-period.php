@@ -309,6 +309,13 @@ class Service_Menu_Editor_Service_Period_Test extends WP_UnitTestCase {
 				'end'                 => '',
 				'ended_visible'       => false,
 			),
+			array(
+				'test_condition_name' => '終了した1日のみ => 開催日の終了案内が表示される',
+				'start'               => $this->date_after( -1 ),
+				'end'                 => $this->date_after( -1 ),
+				'mode'                => 'single',
+				'ended_visible'       => true,
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
@@ -318,6 +325,9 @@ class Service_Menu_Editor_Service_Period_Test extends WP_UnitTestCase {
 			}
 			if ( '' !== $case['end'] ) {
 				update_post_meta( $menu_id, Service_Period::META_END, $case['end'] );
+			}
+			if ( isset( $case['mode'] ) ) {
+				update_post_meta( $menu_id, Service_Period::META_MODE, $case['mode'] );
 			}
 
 			ob_start();
@@ -339,8 +349,17 @@ class Service_Menu_Editor_Service_Period_Test extends WP_UnitTestCase {
 				$this->assertStringContainsString( 'min="' . $case['start'] . '"', $html, $case['test_condition_name'] . '（終了日の min が開始日に連動）' );
 			}
 
-			$ended_markup = '<p id="vkbm-service-period-ended" class="description vkbm-service-period-ended" ' . ( $case['ended_visible'] ? '>' : 'hidden>' );
-			$this->assertStringContainsString( $ended_markup, $html, $case['test_condition_name'] . '（終了済みの案内）' );
+			$this->assertSame( 1, preg_match( '/<p\b[^>]*\bid="vkbm-service-period-ended"[^>]*>/', $html, $ended_match ), $case['test_condition_name'] );
+			$this->assertSame( ! $case['ended_visible'], (bool) preg_match( '/\shidden(?:\s|=|>)/', $ended_match[0] ), $case['test_condition_name'] . '（終了済みの案内）' );
+			if ( 'single' === ( $case['mode'] ?? 'range' ) ) {
+				$this->assertStringContainsString( __( 'This event date has ended.', 'vk-booking-manager' ), $html );
+			}
+			$ended_label = 'single' === ( $case['mode'] ?? 'range' ) ? __( 'This event date has ended.', 'vk-booking-manager' ) : __( 'This period has ended.', 'vk-booking-manager' );
+			$this->assertStringContainsString(
+				'<span id="vkbm-service-period-ended-label">' . esc_html( $ended_label ) . '</span>' . substr( \VKBookingManager\Common\Nomination_Min_Guests_Message::join_sentences( $ended_label, __( 'The menu is not shown in the menu list on the reservation page.', 'vk-booking-manager' ) ), strlen( $ended_label ) ),
+				$html,
+				$case['test_condition_name'] . '（文の区切り）'
+			);
 		}
 	}
 
@@ -380,6 +399,17 @@ class Service_Menu_Editor_Service_Period_Test extends WP_UnitTestCase {
 		restore_previous_locale();
 		$this->assertStringContainsString( 'vkbm-service-period-list', $english_html );
 		$this->assertStringNotContainsString( 'vkbm-service-period-list--nowrap', $english_html, '英語は空白で折り返せるようにする' );
+
+		$single = $this->create_menu();
+		update_post_meta( $single, Service_Period::META_MODE, 'single' );
+		update_post_meta( $single, Service_Period::META_START, '2027-12-05' );
+		update_post_meta( $single, Service_Period::META_END, '2027-12-05' );
+		$this->assertStringContainsString( esc_html__( 'Event date', 'vk-booking-manager' ) . ' <span class="vkbm-service-period__date">' . esc_html( Service_Period::format_single_date( '2027-12-05', true ) ) . '</span>', $render( $single ) );
+		// メタを直接変更した場合も、日付が無効なら列はダッシュだけにする。
+		foreach ( array( '', '2027-02-30' ) as $invalid_date ) {
+			update_post_meta( $single, Service_Period::META_START, $invalid_date );
+			$this->assertSame( '—', $render( $single ), '無効な開始日: ' . $invalid_date );
+		}
 
 		$both = $this->create_menu();
 		update_post_meta( $both, Service_Period::META_END, $this->date_after( 0 ) );
@@ -438,6 +468,71 @@ class Service_Menu_Editor_Service_Period_Test extends WP_UnitTestCase {
 		$this->assertSame(
 			esc_html__( 'Service period', 'vk-booking-manager' ) . ' <br>' . esc_html__( 'Reservation date', 'vk-booking-manager' ),
 			$columns['vkbm_reservation_day_type']
+		);
+	}
+	/** 1日のみは開始日を両端に保存し、無効な日付では前回値を保つ。 */
+	public function test_save_post_single_day_preserves_previous_on_invalid_date(): void {
+		$menu_id = $this->create_menu();
+		$this->submit(
+			$menu_id,
+			array(
+				'service_period_mode'  => 'single',
+				'service_period_start' => '2027-12-05',
+				'service_period_end'   => '2027-12-06',
+			)
+		);
+		$this->assertSame( 'single', Service_Period::get_mode( $menu_id ) );
+		$this->assertSame(
+			array(
+				'start' => '2027-12-05',
+				'end'   => '2027-12-05',
+			),
+			Service_Period::get_period( $menu_id )
+		);
+		foreach ( array( '', '2027-02-30' ) as $invalid_date ) {
+			$this->submit(
+				$menu_id,
+				array(
+					'service_period_mode'  => 'single',
+					'service_period_start' => $invalid_date,
+					'service_period_end'   => '',
+				)
+			);
+			$this->assertSame(
+				array(
+					'start' => '2027-12-05',
+					'end'   => '2027-12-05',
+				),
+				Service_Period::get_period( $menu_id )
+			);
+			$this->assertNotFalse( get_transient( 'vkbm_reservation_day_notice_' . get_current_user_id() ) );
+		}
+	}
+	/** 期間から単日への切り替えで日付が不正なら、モードも期間のまま残す。 */
+	public function test_invalid_single_switch_keeps_range_mode(): void {
+		$range_menu = $this->create_menu();
+		$this->submit(
+			$range_menu,
+			array(
+				'service_period_start' => '2027-12-01',
+				'service_period_end'   => '2027-12-10',
+			)
+		);
+		$this->submit(
+			$range_menu,
+			array(
+				'service_period_mode'  => 'single',
+				'service_period_start' => 'invalid',
+				'service_period_end'   => '',
+			)
+		);
+		$this->assertSame( 'range', Service_Period::get_mode( $range_menu ) );
+		$this->assertSame(
+			array(
+				'start' => '2027-12-01',
+				'end'   => '2027-12-10',
+			),
+			Service_Period::get_period( $range_menu )
 		);
 	}
 }

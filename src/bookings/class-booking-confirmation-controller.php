@@ -1471,7 +1471,7 @@ class Booking_Confirmation_Controller {
 		// 後段の再検証で開始が空き枠と時刻として一致することを確かめるため、ここでの判定結果は
 		// 取り直した空き枠の開始で判定した場合と同じになる（#528）。
 		$reservation_day_type = (string) get_post_meta( $menu_id, self::MENU_META_RESERVATION_DAY_TYPE, true );
-		if ( ! $is_lodging_draft && '' !== $reservation_day_type && ! $this->is_reservation_day_allowed( $reservation_day_type, $start_at, $menu_id ) ) {
+		if ( ! $is_lodging_draft && 'single' !== Service_Period::get_mode( $menu_id ) && '' !== $reservation_day_type && ! $this->is_reservation_day_allowed( $reservation_day_type, $start_at, $menu_id ) ) {
 			return new WP_Error(
 				'invalid_reservation_day',
 				__( 'The selected date cannot be reserved. Please choose another date.', 'vk-booking-manager' ),

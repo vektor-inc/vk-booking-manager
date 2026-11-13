@@ -12,6 +12,7 @@ namespace VKBookingManager\Tests\PostTypes;
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Bookings\Lodging_Booking;
 use VKBookingManager\Common\Lodging_Price_Display;
+use VKBookingManager\Common\Service_Period;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
@@ -110,6 +111,20 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 		}
 
 		return $menu_id;
+	}
+
+	/** 泊プランに単日メタが残っても期間として扱い、REST 保存時に正規化する。 */
+	public function test_night_menu_forces_range_service_period(): void {
+		$this->set_site( 'lodging' );
+		$menu_id = $this->create_menu( true );
+		update_post_meta( $menu_id, Service_Period::META_MODE, 'single' );
+		$this->assertSame( 'range', Service_Period::get_mode( $menu_id ) );
+		( new Service_Menu_Post_Type() )->register_meta();
+		wp_set_current_user( $this->factory()->user->create( array( 'role' => 'administrator' ) ) );
+		$request = new \WP_REST_Request( 'POST', '/wp/v2/vkbm_service_menu/' . $menu_id );
+		$request->set_body_params( array( 'meta' => array( Service_Period::META_MODE => 'single' ) ) );
+		$this->assertSame( 200, rest_do_request( $request )->get_status() );
+		$this->assertSame( 'range', get_post_meta( $menu_id, Service_Period::META_MODE, true ) );
 	}
 
 	/**
@@ -252,7 +267,7 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 	 */
 	public function test_get_lodging_rest_field_extra_guest_fee(): void {
 		$this->set_site( 'lodging' );
-		$tiers     = array(
+		$tiers    = array(
 			array(
 				'label' => '大人',
 				'price' => 3000,
@@ -262,12 +277,12 @@ class Service_Menu_Lodging_Rest_Field_Test extends WP_UnitTestCase {
 				'price' => 2000,
 			),
 		);
-		$per_room  = array(
+		$per_room = array(
 			Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
 			'_vkbm_base_price'                            => 20000,
 			'_vkbm_max_capacity'                          => '6',
 		);
-		$extra_on  = array(
+		$extra_on = array(
 			Service_Menu_Post_Type::META_NIGHT_EXTRA_GUEST_ENABLED => '1',
 			Service_Menu_Post_Type::META_NIGHT_INCLUDED_GUESTS => 4,
 			'_vkbm_price_tiers' => $tiers,

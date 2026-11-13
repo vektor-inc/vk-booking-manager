@@ -401,6 +401,26 @@ class Booking_Confirmation_Slot_Times_Test extends WP_UnitTestCase {
 				),
 			),
 			array(
+				'test_condition_name' => '1日のみなら平日のみ指定でも土曜の開催日に予約できる',
+				'conditions'          => array(
+					'reservation_day_type' => 'weekday',
+					'service_period_mode'  => 'single',
+					'service_period_start' => '2026-10-03',
+					'service_period_end'   => '2026-10-03',
+					'server_slot'          => self::SATURDAY_SLOT,
+					'draft_slot'           => self::SATURDAY_SLOT,
+				),
+				'expected'            => array(
+					'revalidates_slots' => true,
+					'error_code'        => '',
+					'start'             => '2026-10-03 10:00:00',
+					'service_end'       => '2026-10-03 11:00:00',
+					'total_end'         => '2026-10-03 11:30:00',
+					'title_suffix'      => ' / 2026.10.3 10:00',
+					'response_keys'     => array( 'booking_id', 'status' ),
+				),
+			),
+			array(
 				'test_condition_name' => '平日のみのメニューで土曜の空き枠を予約 => 400 invalid_reservation_day（予約できる日の判定は引き続き行う）',
 				'conditions'          => array(
 					'reservation_day_type' => 'weekday',
@@ -504,6 +524,9 @@ class Booking_Confirmation_Slot_Times_Test extends WP_UnitTestCase {
 			$staff_id = $this->create_staff();
 			if ( isset( $case['conditions']['reservation_day_type'] ) ) {
 				update_post_meta( $menu_id, '_vkbm_reservation_day_type', $case['conditions']['reservation_day_type'] );
+			}
+			if ( isset( $case['conditions']['service_period_mode'] ) ) {
+				update_post_meta( $menu_id, '_vkbm_service_period_mode', $case['conditions']['service_period_mode'] );
 			}
 			// 提供期間（開始日・終了日）。
 			foreach ( array(

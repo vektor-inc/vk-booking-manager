@@ -1078,40 +1078,44 @@ class Service_Menu_Editor {
 	 * @param bool    $is_night_unit 予約の単位が「泊」か。
 	 */
 	private function render_service_period_field( WP_Post $post, bool $is_night_unit ): void {
-		$period     = Service_Period::get_period( $post->ID );
-		$is_ended   = Service_Period::is_ended( $period['end'], Service_Period::get_today() );
-		$label_id   = 'vkbm-service-period-label';
-		$error_id   = 'vkbm-service-period-error';
-		$end_id     = 'vkbm-service-period-ended';
-		$start_name = 'vkbm_service_menu[service_period_start]';
-		$end_name   = 'vkbm_service_menu[service_period_end]';
+		$period      = Service_Period::get_period( $post->ID );
+		$mode        = $is_night_unit ? 'range' : Service_Period::get_mode( $post->ID );
+		$is_ended    = Service_Period::is_ended( $period['end'], Service_Period::get_today() );
+		$label_id    = 'vkbm-service-period-label';
+		$error_id    = 'vkbm-service-period-error';
+		$end_id      = 'vkbm-service-period-ended';
+		$ended_label = 'single' === $mode ? __( 'This event date has ended.', 'vk-booking-manager' ) : __( 'This period has ended.', 'vk-booking-manager' );
+		$start_name  = 'vkbm_service_menu[service_period_start]';
+		$end_name    = 'vkbm_service_menu[service_period_end]';
 		?>
 		<tr id="vkbm-service-period-field">
 			<th scope="row">
 				<label id="<?php echo esc_attr( $label_id ); ?>" for="vkbm_service_menu_service_period_start"><?php esc_html_e( 'Service period', 'vk-booking-manager' ); ?></label>
 			</th>
 			<td>
+				<fieldset id="vkbm-service-period-mode" <?php echo $is_night_unit ? 'hidden' : ''; ?>>
+					<legend class="screen-reader-text"><?php esc_html_e( 'Service period', 'vk-booking-manager' ); ?></legend>
+					<label><input type="radio" name="vkbm_service_menu[service_period_mode]" value="range" <?php checked( $mode, 'range' ); ?> /><?php esc_html_e( 'Range (start to end)', 'vk-booking-manager' ); ?></label>
+					&nbsp;
+					<label><input type="radio" name="vkbm_service_menu[service_period_mode]" value="single" <?php checked( $mode, 'single' ); ?> /><?php esc_html_e( 'One day only', 'vk-booking-manager' ); ?></label>
+				</fieldset>
 				<div class="vkbm-service-period-inputs-wrap">
 					<div class="vkbm-service-period-inputs" role="group" aria-labelledby="<?php echo esc_attr( $label_id ); ?>">
-						<input type="date" id="vkbm_service_menu_service_period_start" name="<?php echo esc_attr( $start_name ); ?>" value="<?php echo esc_attr( $period['start'] ); ?>" aria-label="<?php esc_attr_e( 'Start date', 'vk-booking-manager' ); ?>" />
-						<span class="vkbm-service-period-end-group">
+						<input type="date" id="vkbm_service_menu_service_period_start" name="<?php echo esc_attr( $start_name ); ?>" value="<?php echo esc_attr( $period['start'] ); ?>" aria-label="<?php esc_attr_e( 'Start date', 'vk-booking-manager' ); ?>" data-range-label="<?php esc_attr_e( 'Start date', 'vk-booking-manager' ); ?>" data-single-label="<?php esc_attr_e( 'Event date', 'vk-booking-manager' ); ?>" />
+						<span class="vkbm-service-period-end-group" <?php echo 'single' === $mode ? 'hidden' : ''; ?>>
 							<span class="vkbm-service-period-delimiter" aria-hidden="true"><?php echo esc_html_x( '~', 'separator between the start date and the end date of the service period', 'vk-booking-manager' ); ?></span>
 							<input type="date" id="vkbm_service_menu_service_period_end" name="<?php echo esc_attr( $end_name ); ?>" value="<?php echo esc_attr( $period['end'] ); ?>" <?php echo '' !== $period['start'] ? 'min="' . esc_attr( $period['start'] ) . '"' : ''; ?> aria-label="<?php esc_attr_e( 'End date', 'vk-booking-manager' ); ?>" />
 						</span>
 					</div>
 				</div>
 				<p id="<?php echo esc_attr( $error_id ); ?>" class="vkbm-service-period-error" role="alert" hidden><?php esc_html_e( 'Choose an end date that is the same as or later than the start date.', 'vk-booking-manager' ); ?></p>
-				<p id="<?php echo esc_attr( $end_id ); ?>" class="description vkbm-service-period-ended" <?php echo $is_ended ? '' : 'hidden'; ?>>
+				<p id="<?php echo esc_attr( $end_id ); ?>" class="description vkbm-service-period-ended" data-range-text="<?php echo esc_attr( __( 'This period has ended.', 'vk-booking-manager' ) ); ?>" data-single-text="<?php echo esc_attr( __( 'This event date has ended.', 'vk-booking-manager' ) ); ?>" <?php echo $is_ended ? '' : 'hidden'; ?>>
 					<?php
-					echo esc_html(
-						Nomination_Min_Guests_Message::join_sentences(
-							__( 'This period has ended.', 'vk-booking-manager' ),
-							__( 'The menu is not shown in the menu list on the reservation page.', 'vk-booking-manager' )
-						)
-					);
+					echo '<span id="vkbm-service-period-ended-label">' . esc_html( $ended_label ) . '</span>' . ( preg_match( '/[\x00-\x7F]$/', $ended_label ) ? ' ' : '' );
+					echo esc_html__( 'The menu is not shown in the menu list on the reservation page.', 'vk-booking-manager' );
 					?>
 				</p>
-				<p class="description">
+				<p id="vkbm-service-period-range-help" class="description" <?php echo 'single' === $mode ? 'hidden' : ''; ?>>
 					<?php
 					echo esc_html(
 						Nomination_Min_Guests_Message::join_sentences(
@@ -1121,6 +1125,7 @@ class Service_Menu_Editor {
 					);
 					?>
 				</p>
+				<p id="vkbm-service-period-single-help" class="description" <?php echo 'single' === $mode ? '' : 'hidden'; ?>><a href="#vkbm-fixed-start-times-field"><?php esc_html_e( 'Set the event time in Fixed start times.', 'vk-booking-manager' ); ?></a></p>
 				<p class="description vkbm-booking-unit-night-only" <?php echo $is_night_unit ? '' : 'hidden'; ?>><?php esc_html_e( 'For a plan billed per night, a reservation can be made when the check-in date is within this range.', 'vk-booking-manager' ); ?></p>
 			</td>
 		</tr>
@@ -1157,7 +1162,7 @@ class Service_Menu_Editor {
 		$weekday_panel_id   = 'vkbm-reservation-custom-weekday-panel';
 		$date_panel_id      = 'vkbm-reservation-custom-date-panel';
 		?>
-		<tr>
+		<tr id="vkbm-reservation-day-field" <?php echo 'single' === Service_Period::get_mode( $post->ID ) ? 'hidden' : ''; ?>>
 			<th scope="row">
 				<label for="vkbm_service_menu_reservation_day_type"><?php esc_html_e( 'Reservation date', 'vk-booking-manager' ); ?></label>
 			</th>
@@ -1510,7 +1515,7 @@ class Service_Menu_Editor {
 	}
 
 	/**
-	 * 提供期間（開始日・終了日）を保存する。
+	 * 提供期間（モード・開始日・終了日）を保存する。
 	 *
 	 * フォームに欄が含まれているときだけ保存し、それ以外の送信では既存の値に触れない。
 	 * 日付として読めない値は無期限（空欄）として扱い、空の側はメタを削除する。
@@ -1525,8 +1530,16 @@ class Service_Menu_Editor {
 			return;
 		}
 
+		$mode          = isset( $data['service_period_mode'] ) ? Service_Period::sanitize_mode( $data['service_period_mode'] ) : Service_Period::get_mode( $post_id );
+		$is_night_unit = isset( $data['booking_unit'] ) ? Service_Menu_Post_Type::BOOKING_UNIT_NIGHT === $data['booking_unit'] : Service_Menu_Post_Type::is_night_unit( $post_id );
+		// 泊のプランに切り替えた保存では、単日指定を期間に戻す。
+		$mode  = $is_night_unit ? 'range' : $mode;
 		$start = Service_Period::sanitize_date( $data['service_period_start'] );
-		$end   = Service_Period::sanitize_date( $data['service_period_end'] );
+		$end   = 'single' === $mode ? $start : Service_Period::sanitize_date( $data['service_period_end'] );
+		if ( 'single' === $mode && '' === $start ) {
+			$this->add_admin_notice( __( 'Enter a valid event date and save again. The previous service period was kept.', 'vk-booking-manager' ) );
+			return;
+		}
 
 		if ( Service_Period::is_reversed( $start, $end ) ) {
 			$this->add_admin_notice(
@@ -1540,6 +1553,7 @@ class Service_Menu_Editor {
 
 		$this->update_meta_value( $post_id, Service_Period::META_START, $start );
 		$this->update_meta_value( $post_id, Service_Period::META_END, $end );
+		$this->update_meta_value( $post_id, Service_Period::META_MODE, $mode );
 	}
 
 	/**

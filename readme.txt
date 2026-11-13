@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 6.9
 Requires PHP: 8.3
-Stable tag: 3.14.0
+Stable tag: 3.15.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,6 +130,9 @@ Small adjustments preserve the button height. Keep the value close to 0px: large
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.15.0 =
+* [ 機能追加 ] サービスメニューの提供期間に「1日のみ」を追加し、開催日の表示と予約画面の日付・時間枠の自動選択に対応
 
 = 3.14.0 =
 * [ 仕様変更 ] BM設定の「システム設定」にあったリソース名・数量・指名・時間・その他条件・休業日・ボタン文言・通貨記号・税表記の各ラベル設定を、新設した「表記設定」へ移動

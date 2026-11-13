@@ -177,4 +177,17 @@ class Is_Date_Allowed_For_Menu_Test extends WP_UnitTestCase {
 			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
 		}
 	}
+	/** 1日のみは曜日制限を無視し、期間に戻すと再び適用する。 */
+	public function test_get_menu_settings_ignores_reservation_day_for_single_mode(): void {
+		$menu_id = (int) $this->factory()->post->create( array( 'post_type' => 'vkbm_service_menu' ) );
+		update_post_meta( $menu_id, '_vkbm_reservation_day_type', 'weekday' );
+		$service = new Availability_Service();
+		$menu = get_post( $menu_id );
+		$this->assertSame( 'weekday', $service->get_menu_settings( $menu )['reservation_day_type'] );
+		update_post_meta( $menu_id, '_vkbm_service_period_mode', 'single' );
+		$this->assertSame( '', $service->get_menu_settings( $menu )['reservation_day_type'] );
+		update_post_meta( $menu_id, '_vkbm_service_period_mode', 'range' );
+		$this->assertSame( 'weekday', $service->get_menu_settings( $menu )['reservation_day_type'] );
+	}
+
 }
