@@ -1,7 +1,8 @@
 import { registerBlockType } from '@wordpress/blocks';
 import metadata from './block.json';
-import edit from './edit';
+import edit, { FIELD_TEMPLATE } from './edit';
 import { vkBookingManagerCategoryIcon } from '../../block-category';
+import { getBlockTypeTemplateSettings } from '../shared/inner-blocks-template';
 import './style.scss';
 import './editor.scss';
 
@@ -12,4 +13,5 @@ registerBlockType( metadata, {
 	save() {
 		return null;
 	},
+	...getBlockTypeTemplateSettings( FIELD_TEMPLATE ),
 } );

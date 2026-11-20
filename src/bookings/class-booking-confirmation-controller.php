@@ -677,8 +677,8 @@ class Booking_Confirmation_Controller {
 			}
 
 			// 取得したロック（ロック名＋所有者トークン）は予約投稿の作成・メタ保存まで保持し、後段で必ず解放する。
-			$slot_lock_name  = (string) $capacity_check['name'];
-			$slot_lock_token = (string) $capacity_check['token'];
+			// （メニュー＋枠のロックと担当スタッフのロックを合わせた一覧。解放は取得の逆順）
+			$slot_locks = $capacity_check['locks'];
 
 			// ロック取得後の再確認・スタッフ確定・料金計算・決済の確認・予約投稿の作成・メタ保存の途中で
 			// 例外が発生してもロックが残らないよう、ロック取得直後から全メタ保存までを try/finally で囲み、finally で必ず解放する。
@@ -957,7 +957,7 @@ class Booking_Confirmation_Controller {
 			} finally {
 				// すべての予約メタを保存し終えた（または途中で離脱した）のでロックを解放する。
 				// 以降の通知処理はロック不要。
-				$this->release_slot_mutex( $slot_lock_name, $slot_lock_token );
+				$this->release_slot_mutexes( $slot_locks );
 			}
 		} finally {
 			$this->release_slot_mutex( $user_lock_name, $user_lock_token );
@@ -1575,7 +1575,7 @@ class Booking_Confirmation_Controller {
 		if ( is_wp_error( $lock ) ) {
 			return $lock;
 		}
-		$this->release_slot_mutex( $lock['name'], $lock['token'] );
+		$this->release_slot_mutexes( $lock['locks'] );
 
 		$draft['slot']        = array_merge( $draft['slot'] ?? array(), $slot );
 		$draft['guests']      = $counts['guests'];
@@ -2226,7 +2226,7 @@ class Booking_Confirmation_Controller {
 	 * @param array<int> $assignable_staff   自動割当時の候補スタッフID（指名予約では空配列）。
 	 * @param bool       $user_exclusive     ユーザーが貸し切りを指定したか（#305）。true の場合、ロック保持下で
 	 *                                       「その枠に既に他の予約があれば貸し切り不可」を再判定する。
-	 * @return array{name:string,token:string,staff_id:int}|WP_Error Lock handle + 確定スタッフID。caller は release_slot_mutex() で解放する。WP_Error on failure.
+	 * @return array{locks:array<int,array{name:string,token:string}>,staff_id:int}|WP_Error 取得した全ロック（取得順）+ 確定スタッフID。caller は release_slot_mutexes() で解放する。WP_Error on failure.
 	 */
 	private function check_capacity_with_mutex( int $menu_id, int $staff_id, string $start_at, string $end_at, int $guests = 1, bool $is_staff_preferred = false, array $assignable_staff = array(), bool $user_exclusive = false ) {
 		$max_capacity = $this->get_menu_max_capacity( $menu_id );
@@ -2234,15 +2234,19 @@ class Booking_Confirmation_Controller {
 
 		// ミューテックスキーを生成。メニューIDとスロット開始時刻で一意にする。
 		// Generate mutex key unique to menu ID and slot start time.
-		$mutex_key = sprintf( 'vkbm_booking_mutex_%d_%s', $menu_id, md5( $start_at . '|' . $end_at ) );
+		$mutex_keys = array( sprintf( 'vkbm_booking_mutex_%d_%s', $menu_id, md5( $start_at . '|' . $end_at ) ) );
+
+		// 同じスタッフへの確定は、別メニュー・一部だけ重なる枠でも1件ずつ処理するため、担当スタッフ単位のロックも取る。
+		// 取る順番は「メニュー＋枠 → スタッフIDの小さい順」に固定する（順番がそろっていないと互いに片方ずつ握って両方失敗しうる）。
+		foreach ( $this->collect_staff_lock_ids( $staff_id, $is_staff_preferred, $assignable_staff ) as $lock_staff_id ) {
+			$mutex_keys[] = sprintf( 'vkbm_booking_mutex_staff_%d', $lock_staff_id );
+		}
 
 		// DBレベルの排他制御: INSERT IGNORE でアトミックにロックを取得する。
-		$lock = $this->acquire_mutex_lock( $mutex_key );
-		if ( is_wp_error( $lock ) ) {
-			return $lock;
+		$locks = $this->acquire_mutex_locks( $mutex_keys );
+		if ( is_wp_error( $locks ) ) {
+			return $locks;
 		}
-		$option_name = $lock['name'];
-		$lock_token  = $lock['token'];
 
 		// 指名を使うメニューでは、貸切の排他を「メニュー全体」ではなく「担当スタッフ単位」で判定する
 		// （#392の「担当ごとに並行して予約できる」と整合させる。指名を使わないメニューの動きは
@@ -2262,7 +2266,7 @@ class Booking_Confirmation_Controller {
 		if ( $can_check_exclusive_guard_now ) {
 			$exclusive_guard_staff_id = $is_nomination_menu ? $staff_id : 0;
 			if ( $this->slot_has_exclusive_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
+				$this->release_slot_mutexes( $locks );
 				return new WP_Error(
 					'capacity_exceeded',
 					Nomination_Min_Guests_Message::join_sentences( __( 'Reservations are closed for this time slot because it has been reserved exclusively.', 'vk-booking-manager' ), __( 'Please choose another time slot.', 'vk-booking-manager' ) ),
@@ -2276,7 +2280,7 @@ class Booking_Confirmation_Controller {
 			// 自動割当（担当スタッフ未確定）の場合の扱いは上の $can_check_exclusive_guard_now と同じ理由で、
 			// has_staff_conflict() に委ねて重複させない。
 			if ( $user_exclusive && $this->slot_has_any_active_booking_for_menu( $menu_id, $start_at, $end_at, $exclusive_guard_staff_id ) ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
+				$this->release_slot_mutexes( $locks );
 				return new WP_Error(
 					'exclusive_unavailable',
 					__( 'This slot cannot be reserved exclusively because it already has a booking.', 'vk-booking-manager' ),
@@ -2288,7 +2292,7 @@ class Booking_Confirmation_Controller {
 		if ( $is_staff_preferred ) {
 			// 指名予約（1対1）：ロック取得後にスタッフの競合を再チェックして二重割り当てを防止する。
 			if ( $staff_id > 0 && $this->has_staff_conflict( $staff_id, $start_at, $end_at ) ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
+				$this->release_slot_mutexes( $locks );
 				return new WP_Error(
 					'staff_unavailable',
 					Nomination_Min_Guests_Message::join_sentences( __( 'The selected staff member is no longer available at this date and time.', 'vk-booking-manager' ), __( 'Please choose another date and time or another staff member.', 'vk-booking-manager' ) ),
@@ -2331,7 +2335,7 @@ class Booking_Confirmation_Controller {
 
 			$assigned_staff_id = $this->select_best_fit_staff( $candidates, $loads, $guests, $max_capacity );
 			if ( $assigned_staff_id <= 0 ) {
-				$this->release_slot_mutex( $option_name, $lock_token );
+				$this->release_slot_mutexes( $locks );
 				return new WP_Error(
 					'capacity_exceeded',
 					__( 'This time slot is fully booked. Please choose another time.', 'vk-booking-manager' ),
@@ -2343,10 +2347,78 @@ class Booking_Confirmation_Controller {
 		// 成功時はロックを解放せず、ロック名・トークンと確定スタッフIDを呼び出し側へ返す。
 		// 予約投稿の作成とメタ保存まで同じロックを保持し、確定直前の競合（同時挿入による超過予約）を防ぐ。
 		return array(
-			'name'     => $option_name,
-			'token'    => $lock_token,
+			'locks'    => $locks,
 			'staff_id' => $assigned_staff_id,
 		);
+	}
+
+	/**
+	 * スタッフ単位のロックを取る対象のスタッフ ID を、小さい順に並べて返す。
+	 *
+	 * 指名予約は担当スタッフ1人、自動割当は割り当て候補の全員が対象。スタッフ ID が 0 以下（スタッフを使わないメニュー）は含めない。
+	 * 重複は除き、必ず昇順にする（ロックの取得順をそろえて、互いに片方ずつ握ったまま両方失敗するのを防ぐため）。
+	 *
+	 * @param int        $staff_id           担当スタッフ ID（指名予約）。自動割当では 0 のことがある。
+	 * @param bool       $is_staff_preferred 指名予約かどうか。
+	 * @param array<int> $assignable_staff   自動割当時の候補スタッフ ID（指名予約では空配列）。
+	 * @return array<int> ロックを取るスタッフ ID（昇順・重複なし）。
+	 */
+	private function collect_staff_lock_ids( int $staff_id, bool $is_staff_preferred, array $assignable_staff ): array {
+		if ( $is_staff_preferred ) {
+			$ids = array( $staff_id );
+		} elseif ( ! empty( $assignable_staff ) ) {
+			$ids = array_map( 'intval', $assignable_staff );
+		} else {
+			$ids = array( $staff_id );
+		}
+
+		$ids = array_values(
+			array_unique(
+				array_filter(
+					$ids,
+					static function ( $id ): bool {
+						return $id > 0;
+					}
+				)
+			)
+		);
+		sort( $ids, SORT_NUMERIC );
+
+		return $ids;
+	}
+
+	/**
+	 * 複数のミューテックスロックを、渡された順に取得する。
+	 *
+	 * 途中で取れなかったときは、それまでに取った分を取得の逆順で解放してから 409 のエラーを返す。
+	 * 取得できた場合、呼び出し側が release_slot_mutexes() で必ず解放する。
+	 *
+	 * @param array<int,string> $mutex_keys ロックのキー（取得したい順）。
+	 * @return array<int,array{name:string,token:string}>|WP_Error 取得したロックの一覧（取得順）。取れなければ 409 のエラー。
+	 */
+	private function acquire_mutex_locks( array $mutex_keys ) {
+		$locks = array();
+		foreach ( $mutex_keys as $mutex_key ) {
+			$lock = $this->acquire_mutex_lock( (string) $mutex_key );
+			if ( is_wp_error( $lock ) ) {
+				$this->release_slot_mutexes( $locks );
+				return $lock;
+			}
+			$locks[] = $lock;
+		}
+
+		return $locks;
+	}
+
+	/**
+	 * 複数のミューテックスロックを、取得の逆順で解放する。
+	 *
+	 * @param array<int,array{name:string,token:string}> $locks 取得順のロック一覧。
+	 */
+	private function release_slot_mutexes( array $locks ): void {
+		foreach ( array_reverse( $locks ) as $lock ) {
+			$this->release_slot_mutex( (string) ( $lock['name'] ?? '' ), (string) ( $lock['token'] ?? '' ) );
+		}
 	}
 
 	/**
@@ -2430,10 +2502,10 @@ class Booking_Confirmation_Controller {
 	 *
 	 * 時間枠のロックは「メニュー＋開始・終了の日時」単位のため、同じ客室でも別プラン・一部だけ重なる期間は別のロックになり、
 	 * 同時に確定すると両方が通りうる。泊の予約は客室 ID だけでロック名を決め、どのプランからの確定も1件ずつ処理する。
-	 * ロックを取得できた場合は解放せずに返す（予約の保存まで保持し、呼び出し側が release_slot_mutex() で解放する）。
+	 * ロックを取得できた場合は解放せずに返す（予約の保存まで保持し、呼び出し側が release_slot_mutexes() で解放する）。
 	 *
 	 * @param array<string, mixed> $lodging_stay Lodging_Booking::prepare() が返した検証済みの滞在の情報。
-	 * @return array{name:string,token:string,staff_id:int}|WP_Error ロックの情報と客室 ID。重なり・販売日の問題があれば 409 のエラー。
+	 * @return array{locks:array<int,array{name:string,token:string}>,staff_id:int}|WP_Error 取得したロックの一覧と客室 ID。重なり・販売日の問題があれば 409 のエラー。
 	 */
 	private function check_lodging_room_with_mutex( array $lodging_stay ) {
 		$room_id = (int) $lodging_stay['room_id'];
@@ -2464,8 +2536,7 @@ class Booking_Confirmation_Controller {
 		}
 
 		return array(
-			'name'     => $lock['name'],
-			'token'    => $lock['token'],
+			'locks'    => array( $lock ),
 			'staff_id' => $room_id,
 		);
 	}

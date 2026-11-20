@@ -23,6 +23,7 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Rate_Limit_Trait;
+use VKBookingManager\Common\Site_Url;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\ProviderSettings\Provider_Display_Name;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -2494,7 +2495,8 @@ else :
 			return $base;
 		}
 
-		return home_url( $request_uri );
+		// REQUEST_URI はサイトのパスを含むため、home_url() に渡すとサブディレクトリ設置でパスが二重になる（認証メール再送のリンクが 404 になった不具合の対応）。
+		return Site_Url::from_request_uri( $request_uri );
 	}
 
 	/**

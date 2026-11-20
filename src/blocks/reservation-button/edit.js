@@ -8,7 +8,9 @@ import {
 	Button,
 } from '@wordpress/components';
 import { useSelect } from '@wordpress/data';
+import { useMemo } from '@wordpress/element';
 import ServerSideRender from '@wordpress/server-side-render';
+import { sortMenusByMenuOrder } from '../../common/sort-menus-by-menu-order';
 import metadata from './block.json';
 
 const SERVICE_MENU_POST_TYPE = 'vkbm_service_menu';
@@ -28,18 +30,24 @@ const EditComponent = ( { attributes, setAttributes } ) => {
 	const { menuId, label } = attributes;
 
 	// エディタの現在の投稿タイプと、選択肢にするサービスメニュー一覧を取得する。
-	const { currentPostType, serviceMenus } = useSelect( ( select ) => {
+	const { currentPostType, fetchedMenus } = useSelect( ( select ) => {
 		const editor = select( 'core/editor' );
 		const menus = select( 'core' ).getEntityRecords(
 			'postType',
 			SERVICE_MENU_POST_TYPE,
-			{ per_page: -1, orderby: 'menu_order', order: 'asc' }
+			{ per_page: -1 }
 		);
 		return {
 			currentPostType: editor ? editor.getCurrentPostType() : '',
-			serviceMenus: Array.isArray( menus ) ? menus : [],
+			fetchedMenus: menus,
 		};
 	}, [] );
+
+	// REST は menu_order での並べ替えを受け付けないため、取得後に並べる。
+	const serviceMenus = useMemo(
+		() => sortMenusByMenuOrder( fetchedMenus ),
+		[ fetchedMenus ]
+	);
 
 	// プラン詳細ページ（サービスメニュー投稿の編集画面）かどうか。
 	const isOnServiceMenu = currentPostType === SERVICE_MENU_POST_TYPE;

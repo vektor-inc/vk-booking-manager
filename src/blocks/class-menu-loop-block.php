@@ -17,6 +17,7 @@ use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Booking_Price_Display;
+use VKBookingManager\Common\Public_Price_Display;
 use VKBookingManager\Common\Lodging_Price_Display;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\Reservation_Day;
@@ -753,7 +754,13 @@ class Menu_Loop_Block {
 		} elseif ( is_numeric( $price ) && (int) $price >= 0 ) {
 			// 1ツアーあたりのメニューだけ「¥30,000 / 1ツアー」と単位を付ける（1名あたりは金額だけの表示のまま）。
 			$price_text   = Service_Menu_Post_Type::is_price_per_booking( $post->ID )
-				? $this->append_tax_label( Booking_Price_Display::format_price_with_unit_html( (int) $price ) )
+				? $this->append_tax_label(
+					Public_Price_Display::format_price_with_unit_html(
+						(int) $price,
+						false,
+						Booking_Price_Display::get_unit_label()
+					)
+				)
 				: $this->format_price_display( (int) $price );
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__text-price">%s</div>',
@@ -1686,8 +1693,12 @@ class Menu_Loop_Block {
 			// 1ツアーあたりのメニューだけ「¥30,000 / 1ツアー」と単位を付ける（1名あたりは金額だけの表示のまま）。
 			// 「◯名まで」は自動で出さない。
 			$price_html   = Service_Menu_Post_Type::is_price_per_booking( $post->ID )
-				? Booking_Price_Display::format_price_with_unit_html( (int) $price )
-				: esc_html( VKBM_Helper::format_currency( (int) $price ) );
+				? Public_Price_Display::format_price_with_unit_html(
+					(int) $price,
+					false,
+					Booking_Price_Display::get_unit_label()
+				)
+				: esc_html( Public_Price_Display::format_currency( (int) $price ) );
 			$price_markup = sprintf(
 				'<div class="vkbm-menu-loop__card-price">%s</div>%s',
 				wp_kses_post( $price_html ),
@@ -1844,7 +1855,11 @@ class Menu_Loop_Block {
 		$price_unit = Service_Menu_Post_Type::get_night_price_unit( $menu_id );
 		$parts      = array();
 		foreach ( $rows as $row ) {
-			$text = Lodging_Price_Display::format_price_with_unit_html( $row['price'], $row['is_from'], $price_unit );
+			$text = Public_Price_Display::format_lodging_price_with_unit_html(
+				$row['price'],
+				$row['is_from'],
+				Lodging_Price_Display::format_unit_label( $price_unit )
+			);
 			if ( '' !== $row['label'] ) {
 				$text = esc_html( $row['label'] ) . ' ' . $text;
 			}
@@ -1867,7 +1882,11 @@ class Menu_Loop_Block {
 		$price_unit = Service_Menu_Post_Type::get_night_price_unit( $menu_id );
 		$texts      = array();
 		foreach ( $rows as $row ) {
-			$texts[] = Lodging_Price_Display::format_price_with_unit_html( $row['price'], $row['is_from'], $price_unit );
+			$texts[] = Public_Price_Display::format_lodging_price_with_unit_html(
+				$row['price'],
+				$row['is_from'],
+				Lodging_Price_Display::format_unit_label( $price_unit )
+			);
 		}
 
 		// 料金区分が無い（基本料金の 1 行だけ）ときは、今の単一料金と同じ見た目にする。
@@ -1930,7 +1949,7 @@ class Menu_Loop_Block {
 	 * @return string
 	 */
 	private function format_price_display( int $base_price ): string {
-		return $this->append_tax_label( esc_html( VKBM_Helper::format_currency( $base_price ) ) );
+		return $this->append_tax_label( esc_html( Public_Price_Display::format_currency( $base_price ) ) );
 	}
 
 	/**
@@ -1954,7 +1973,7 @@ class Menu_Loop_Block {
 			// ラベル・料金はいずれも正規化済みだが、出力時に改めてエスケープする。
 			$label = isset( $tier['label'] ) ? (string) $tier['label'] : '';
 			$price = isset( $tier['price'] ) ? (int) $tier['price'] : 0;
-			$text  = $price_texts[ $index ] ?? esc_html( VKBM_Helper::format_currency( $price ) );
+			$text  = $price_texts[ $index ] ?? esc_html( Public_Price_Display::format_currency( $price ) );
 
 			$rows[] = sprintf(
 				'<div class="vkbm-menu-loop__card-prices-row"><dt class="vkbm-menu-loop__card-prices-label">%1$s</dt><dd class="vkbm-menu-loop__card-prices-value">%2$s</dd></div>',

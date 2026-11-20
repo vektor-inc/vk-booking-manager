@@ -73,6 +73,9 @@
 			"This time slot cannot accept the minimum of %d guests required for this menu.": [
 				"この時間帯は、このメニューの最低申し込み人数（%d名）を受け付けられません。"
 			],
+			"Couldn't load temporary reservation data. Please try again from the reservation page.": [
+				"仮予約データを読み込めませんでした。予約ページから再度お試しください。"
+			],
 			"There are no service menus available for the selected dates.": [
 				"選んだ日程で予約できるサービスメニューはありません。"
 			],
@@ -186,6 +189,12 @@
 			],
 			"Loading service menu…": [
 				"サービスメニューを読み込み中"
+			],
+			"The time slot you had selected is no longer available.": [
+				"選んでいた時間枠は現在空きがありません。"
+			],
+			"Please select another date or time.": [
+				"別の日時を選んでください。"
 			],
 			"The date you had selected has passed.": [
 				"選んでいた日付は過ぎています。"
@@ -874,9 +883,6 @@
 			"The URL does not include a temporary reservation data parameter. Please try again from the reservation page.": [
 				"URLに一時予約データパラメータが含まれていません。予約ページからもう一度お試しください。"
 			],
-			"Couldn't load temporary reservation data. Please try again from the reservation page.": [
-				"仮予約データを読み込めませんでした。予約ページから再度お試しください。"
-			],
 			"Could not add to favorites.": [
 				"お気に入りに登録できませんでした。"
 			],
@@ -946,8 +952,17 @@
 			"Reserve with this content": [
 				"この内容で予約する"
 			],
+			"Reselect date and time": [
+				"日時を選び直す"
+			],
 			"Added to favorites.": [
 				"お気に入りに登録しました。"
+			],
+			"Free": [
+				"無料"
+			],
+			"$%s": [
+				"¥%s"
 			],
 			"Open permalink settings": [
 				"パーマリンク設定を開く"

@@ -73,7 +73,7 @@
 	},
 	"devDependencies": {
 		"@babel/core": "^7.29.13",
-		"@babel/preset-env": "^7.28.5",
+		"@babel/preset-env": "^7.29.14",
 		"@babel/preset-react": "^7.28.5",
 		"@jest/globals": "^30.5.2",
 		"@playwright/test": "^1.65.0",
@@ -99,7 +99,7 @@
 		"react": "^19.3.1",
 		"react-dom": "^19.3.1",
 		"rimraf": "^6.1.4",
-		"sass": "^1.107.1"
+		"sass": "^1.108.2"
 	},
 	"overrides": {
 		"@wordpress/e2e-test-utils-playwright": "$@wordpress/e2e-test-utils-playwright",

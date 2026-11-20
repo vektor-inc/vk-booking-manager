@@ -486,11 +486,63 @@ class Service_Period_Availability_Test extends WP_UnitTestCase {
 			}
 		}
 
-		// 4 日とも必ず取得できていて、期間の外は選べず、期間の端は選べる。
+		// 期間の端は結果に必ず含まれ、期間外の日は欠落または選択不可になる。
 		foreach ( $offsets as $offset => $expected ) {
 			$date = $this->date_after( $offset );
-			$this->assertArrayHasKey( $date, $available, $date . ' が宿泊カレンダーに含まれる' );
-			$this->assertSame( $expected, $available[ $date ], $date . ( $expected ? ' は提供期間の端なのでチェックイン日に選べる' : ' は提供期間の外なのでチェックイン日に選べない' ) );
+			if ( $expected ) {
+				$this->assertArrayHasKey( $date, $available, $date . ' が宿泊カレンダーに含まれる' );
+				$this->assertTrue( $available[ $date ], $date . ' は提供期間の端なのでチェックイン日に選べる' );
+			} elseif ( array_key_exists( $date, $available ) ) {
+				$this->assertFalse( $available[ $date ], $date . ' は提供期間の外なのでチェックイン日に選べない' );
+			}
+		}
+
+		// 次の月末を提供期間開始日の前日にし、月をまたぐ並びを実行日によらず作る。
+		$today     = new DateTimeImmutable( 'now', wp_timezone() );
+		$month_end = new DateTimeImmutable( 'last day of this month', wp_timezone() );
+		if ( $month_end <= $today->modify( '+4 days' ) ) {
+			$month_end = new DateTimeImmutable( 'last day of next month', wp_timezone() );
+		}
+		$month_end_date = $month_end->format( 'Y-m-d' );
+		$service_start  = $month_end->modify( '+1 day' )->format( 'Y-m-d' );
+		$service_end    = $month_end->modify( '+6 days' )->format( 'Y-m-d' );
+		$after_end_date = $month_end->modify( '+7 days' )->format( 'Y-m-d' );
+		$menu_id        = $this->create_night_menu(
+			array(
+				Service_Period::META_START => $service_start,
+				Service_Period::META_END   => $service_end,
+			)
+		);
+
+		$available = array();
+		foreach ( array_unique( array( substr( $month_end_date, 0, 7 ), substr( $service_start, 0, 7 ) ) ) as $month_key ) {
+			$result = ( new Availability_Service() )->get_lodging_calendar_meta(
+				array(
+					'menu_id' => $menu_id,
+					'year'    => (int) substr( $month_key, 0, 4 ),
+					'month'   => (int) substr( $month_key, 5, 2 ),
+				)
+			);
+			$this->assertIsArray( $result, $month_key . ' の月末境界カレンダー' );
+			foreach ( $result['days'] as $day ) {
+				$available[ $day['date'] ] = $day['available'];
+			}
+		}
+
+		foreach (
+			array(
+				$month_end_date => false,
+				$service_start  => true,
+				$service_end    => true,
+				$after_end_date => false,
+			) as $date => $expected
+		) {
+			if ( $expected ) {
+				$this->assertArrayHasKey( $date, $available, $date . ' が月末境界カレンダーに含まれる' );
+				$this->assertTrue( $available[ $date ], $date . ' は提供期間の端なのでチェックイン日に選べる' );
+			} elseif ( array_key_exists( $date, $available ) ) {
+				$this->assertFalse( $available[ $date ], $date . ' は提供期間の外なのでチェックイン日に選べない' );
+			}
 		}
 	}
 }

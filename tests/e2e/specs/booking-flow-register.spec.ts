@@ -2,6 +2,7 @@
 import { test, expect } from '@playwright/test';
 import { wpCliArgs, getServiceMenuId } from '../utils/helpers';
 import { checkConfirmConsents } from '../utils/consent-helpers';
+import { selectAvailableCalendarDay } from '../utils/calendar-helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 const E2E_DEBUG =
@@ -218,6 +219,10 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 
 		// 適切なタイムアウトでサービスメニューボタンを探す
 		// @step 「Service Menu 1」の「予約する」ボタンを押す
+		const calendarMetaResponse = page.waitForResponse(
+			( response ) => response.url().includes( 'calendar-meta' ),
+			{ timeout: 15000 }
+		);
 		try {
 			// まず新しいボタンスタイルを試す
 			const reserveSelector = `.vkbm-menu-loop__item[data-menu-id="${ menuId }"] .vkbm-menu-loop__button--reserve`;
@@ -274,40 +279,10 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 			timeout: 10000,
 		} );
 
-		// 4. 利用可能な日付を選択（無効化されていない最初の日付）
+		// 4. 空き枠データの読み込みを待ち、空きのある日付を選択する。
 		console.log( 'Selecting an available date...' );
-		// @step カレンダーで選べる最初の日を選ぶ
-		const enabledCalendarDays = page.locator(
-			'.vkbm-calendar__day:not(:disabled):not([aria-disabled="true"]):not(.vkbm-calendar__day--disabled)'
-		);
-		await expect
-			.poll( async () => enabledCalendarDays.count(), { timeout: 10000 } )
-			.toBeGreaterThan( 0 );
-
-		let dateSelected = false;
-		for ( let attempt = 0; attempt < 5; attempt++ ) {
-			const availableDate = enabledCalendarDays.first();
-			try {
-				await expect( availableDate ).toBeVisible( { timeout: 2000 } );
-				await expect( availableDate ).toBeEnabled( { timeout: 2000 } );
-				await availableDate.click( { timeout: 3000 } );
-				dateSelected = true;
-				break;
-			} catch ( error ) {
-				console.warn(
-					`Available date click attempt ${
-						attempt + 1
-					} failed. Retrying...`
-				);
-				await page.waitForTimeout( 300 );
-			}
-		}
-
-		if ( ! dateSelected ) {
-			throw new Error(
-				'Failed to click an enabled calendar day after retries.'
-			);
-		}
+		// @step カレンダーで空き枠のある日を選ぶ
+		await selectAvailableCalendarDay( page, calendarMetaResponse );
 
 		// 5. ランダムな時間枠を選択
 		// 日付クリック後にスロット一覧が描画されるまで待つ（固定待ちの代わり）。
@@ -752,7 +727,10 @@ test.describe( 'Booking Flow with New User Registration (No Email Verification)'
 				const loginButton = page
 					.getByRole( 'button', { name: 'ログイン', exact: false } )
 					.or(
-						page.getByRole( 'button', { name: 'Log in', exact: false } )
+						page.getByRole( 'button', {
+							name: 'Log in',
+							exact: false,
+						} )
 					);
 
 				// goto 直後は描画前のことがあるため、表示を待ってから判定する。

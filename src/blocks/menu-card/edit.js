@@ -8,25 +8,31 @@ import {
 } from '@wordpress/components';
 import ServerSideRender from '@wordpress/server-side-render';
 import { useSelect } from '@wordpress/data';
+import { useMemo } from '@wordpress/element';
+import { sortMenusByMenuOrder } from '../../common/sort-menus-by-menu-order';
 import metadata from './block.json';
 
 const EditComponent = ( { attributes, setAttributes } ) => {
 	const blockProps = useBlockProps();
 
 	// サービスメニュー（vkbm_service_menu）の一覧を取得し、手動指定用の選択肢を作る。
-	const serviceMenus = useSelect( ( select ) => {
+	const fetchedMenus = useSelect( ( select ) => {
 		const records = select( 'core' ).getEntityRecords(
 			'postType',
 			'vkbm_service_menu',
 			{
 				per_page: -1,
-				orderby: 'menu_order',
-				order: 'asc',
 				status: 'publish,private',
 			}
 		);
-		return Array.isArray( records ) ? records : [];
+		return records;
 	}, [] );
+
+	// REST は menu_order での並べ替えを受け付けないため、取得後に並べる。
+	const serviceMenus = useMemo(
+		() => sortMenusByMenuOrder( fetchedMenus ),
+		[ fetchedMenus ]
+	);
 
 	const selectedMenuId = Number( attributes.selectedMenuId ) || 0;
 	const isAutoMode = selectedMenuId === 0;

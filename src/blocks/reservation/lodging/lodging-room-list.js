@@ -10,6 +10,7 @@ import { formatCurrency } from '../../shared/pricing';
  *
  * @param {Object}   props
  * @param {boolean}  props.hideHeading       見出しを省くか。
+ * @param {boolean}  props.isRoomLost        選んでいた客室が選べなくなったことを、見出しの直下で伝えるか。
  * @param {string}   props.status            問い合わせの状態（idle / loading / done / error）。
  * @param {Array}    props.rooms             空いている客室（id / name / total_price）。
  * @param {string}   props.error             取得に失敗したときのメッセージ。
@@ -23,6 +24,7 @@ import { formatCurrency } from '../../shared/pricing';
 export const LodgingRoomList = ( {
 	status,
 	hideHeading = false,
+	isRoomLost = false,
 	rooms,
 	error,
 	nights,
@@ -114,6 +116,15 @@ export const LodgingRoomList = ( {
 				<h3 className="vkbm-lodging__heading">
 					{ __( 'Available rooms', 'vk-booking-manager' ) }
 				</h3>
+			) }
+			{ /* 読み上げは常設の role=status（.vkbm-lodging__live）が担うため、ここは見た目の案内だけを置く。 */ }
+			{ isRoomLost && (
+				<p className="vkbm-alert vkbm-alert__warning vkbm-alert--compact vkbm-lodging__room-lost">
+					{ __(
+						'The room you selected is no longer available. Please select again.',
+						'vk-booking-manager'
+					) }
+				</p>
 			) }
 			{ body }
 		</section>

@@ -13,8 +13,10 @@ import {
 	sanitizeIdentifier,
 	usePostSavingLock,
 } from '../shared/utils';
+import { getInnerBlocksTemplate } from '../shared/inner-blocks-template';
 
-const FIELD_TEMPLATE = [
+// 新しく置いたときに最初に並べる子ブロック（渡し先は ../shared/inner-blocks-template.js の判定で InnerBlocks か index.js のブロックの設定に切り替わる）
+export const FIELD_TEMPLATE = [
 	[ 'vk-booking-manager/menu-search-field-staff' ],
 	[ 'vk-booking-manager/menu-search-field-category' ],
 	[ 'vk-booking-manager/menu-search-field-keyword' ],
@@ -143,7 +145,7 @@ const EditComponent = ( { attributes, setAttributes } ) => {
 				<div className="vkbm-menu-search__fields">
 					<InnerBlocks
 						allowedBlocks={ ALLOWED_BLOCKS }
-						template={ FIELD_TEMPLATE }
+						template={ getInnerBlocksTemplate( FIELD_TEMPLATE ) }
 						templateLock={ false }
 						renderAppender={ InnerBlocks.ButtonBlockAppender }
 					/>

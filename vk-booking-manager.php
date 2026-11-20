@@ -3,7 +3,8 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.15.0
+ * Version:     3.16.0
+ * Requires at least: 6.8
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
  * Author URI:  https://vektor-inc.co.jp/
@@ -71,6 +72,7 @@ require_once __DIR__ . '/src/bookings/class-booking-draft-controller.php';
 require_once __DIR__ . '/src/bookings/class-my-bookings-controller.php';
 require_once __DIR__ . '/src/bookings/class-user-favorites-controller.php';
 require_once __DIR__ . '/src/common/class-vkbm-helpers.php';
+require_once __DIR__ . '/src/common/class-public-price-display.php';
 require_once __DIR__ . '/src/common/class-attendee-name.php';
 require_once __DIR__ . '/src/common/class-mail-from.php';
 require_once __DIR__ . '/src/common/class-site-url.php';
@@ -90,6 +92,7 @@ require_once __DIR__ . '/src/term-order/class-term-order-manager.php';
 require_once __DIR__ . '/src/blocks/class-block-category.php';
 require_once __DIR__ . '/src/blocks/class-block-asset-version.php';
 require_once __DIR__ . '/src/blocks/shared/class-reservation-button-renderer.php';
+require_once __DIR__ . '/src/blocks/shared/class-inner-blocks-template.php';
 require_once __DIR__ . '/src/blocks/class-menu-search-block.php';
 require_once __DIR__ . '/src/blocks/class-menu-loop-block.php';
 require_once __DIR__ . '/src/blocks/class-menu-card-block.php';

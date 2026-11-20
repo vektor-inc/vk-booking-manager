@@ -93,9 +93,12 @@ $vkbm-plan-summary-control-height: 44px;
 }
 
 // 引き継いだ日付で予約できなかった案内は、2列のうち片方に入らないよう行いっぱいに広げる。
+// 案内はカレンダー・時間枠と同じ「日時の選択」のまとまりに見せるため、上の料金の箱との間を下のカレンダーとの間より広げる。
+// 間隔はルート文字サイズ 16px のとき上 32px・下 24px で、rem により文字サイズに連動する。
 // 案内が無いときは、領域（読み上げ用）だけ残してレイアウトの間隔を作らない。
 .vkbm-reservation-content__carry-notice {
 	grid-column: 1 / -1;
+	margin-top: var(--vkbm--spacing--xs);
 }
 
 .vkbm-reservation-content__carry-notice:empty {
@@ -700,7 +703,7 @@ $vkbm-plan-summary-control-height: 44px;
 	min-width: 4rem;
 	padding: 0.35rem 0.5rem;
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
-	border-radius: var(--vkbm--radius--md, 8px);
+	border-radius: var(--vkbm--radius--sm, 4px);
 	// iPhone は 16px 未満の入力欄をタップすると画面を拡大するため、ルートの文字サイズが小さいテーマでも 16px を下回らせない（#549）
 	font-size: max(16px, 0.95rem);
 }
@@ -1628,6 +1631,17 @@ $vkbm-plan-summary-control-height: 44px;
 		gap: 0.5rem;
 	}
 
+	// 確定ボタンの下に、押し間違えにくい文字リンクとして配置する。
+	// 確定ボタンとの間を空け、押せる範囲は上下の padding で高さ 24px 以上にする（文字の位置は変えない）。
+	.vkbm-confirm__reselect.vkbm-button__link {
+		align-self: center;
+		width: auto;
+		margin-top: 0.5rem;
+		padding-block: 0.25rem;
+		color: var(--vkbm--color--text-secondary, #666);
+		line-height: 1.3;
+	}
+
 	.vkbm-confirm__links {
 		display: flex;
 		gap: 1rem;
@@ -1700,7 +1714,7 @@ $vkbm-plan-summary-control-height: 44px;
 	.vkbm-confirm__address-field input {
 		box-sizing: border-box;
 		width: 100%;
-		border-radius: var(--vkbm--radius--md, 8px);
+		border-radius: var(--vkbm--radius--sm, 4px);
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		padding: 0.5rem 0.75rem;
 		font-size: 0.95rem;
@@ -1895,23 +1909,77 @@ $vkbm-plan-summary-control-height: 44px;
 		line-height: 1.6;
 	}
 
-	// 送信後の画面。メールアドレスは長くなりやすいので、溢れる前に折る。
-	.vkbm-confirm__guest-sent .vkbm-confirm__complete-message {
-		overflow-wrap: anywhere;
-	}
+	/* 確認メール送信後の案内
+	   ========================================================================== */
+	.vkbm-confirm__guest-sent {
+		padding: 1.75rem;
 
-	.vkbm-confirm__guest-sent-subtitle {
-		margin: 1rem 0 0.25rem;
-		padding: 0;
-		border: 0;
-		background: none;
-		font-size: 0.95rem;
-		font-weight: 600;
-		line-height: 1.4;
-	}
+		// 共通アラートの子孫セレクタより優先し、見出しと宛先を離す。
+		&.vkbm-alert .vkbm-confirm__complete-title {
+			margin: 0 0 0.75rem;
+			line-height: 1.4;
+		}
 
-	.vkbm-confirm__guest-sent .vkbm-buttons {
-		margin-top: 0.75rem;
+		.vkbm-confirm__guest-sent-meta {
+			display: grid;
+			row-gap: 0.5rem;
+
+			.vkbm-confirm__complete-message {
+				margin: 0;
+				line-height: 1.6;
+			}
+		}
+
+		// メールアドレスが長い場合も枠からはみ出さないようにする。
+		.vkbm-confirm__complete-message {
+			overflow-wrap: anywhere;
+		}
+
+		.vkbm-confirm__guest-sent-notice {
+			margin: 0.75rem 0 0;
+		}
+
+		.vkbm-confirm__guest-sent-help {
+			margin-top: 1.1875rem;
+
+			.vkbm-confirm__guest-sent-subtitle {
+				margin: 0 0 0.5rem;
+				padding: 0;
+				border: 0;
+				background: none;
+				font-size: 0.95rem;
+				font-weight: 600;
+				line-height: 1.4;
+			}
+
+			.vkbm-confirm__complete-message {
+				margin: 0;
+			}
+
+			.vkbm-buttons {
+				margin-top: 0.75rem;
+			}
+		}
+
+		// info アラート上でも再送ボタンの文字と枠を読み取りやすくする。
+		.vkbm-button-outline.vkbm-button-outline__primary {
+			color: var(--vkbm--color--info-text, #055160);
+
+			&:hover,
+			&:focus-visible {
+				background: var(--vkbm--color--info-text, #055160);
+				border-color: var(--vkbm--color--info-text, #055160);
+				color: var(--vkbm--color--info-bg, #cff4fc);
+			}
+		}
+
+		@include vkbm-bp-down($vkbm-bp-front-sm) {
+			padding: 1.5rem;
+
+			.vkbm-confirm__guest-sent-help {
+				margin-top: 0.9375rem;
+			}
+		}
 	}
 
 	// 「メールアドレスを修正して送り直す」は文字が長く、ボタンの nowrap のままだと狭い幅で

@@ -228,11 +228,16 @@ export const useAttendeeOptions = ( { enabled, isProxy, customerPhone } ) => {
  * ご利用になる方の選択状態を管理する。
  *
  * @param {Object}      args
- * @param {Object|null} args.options サーバーが返した選択肢。
- * @param {boolean}     args.isProxy 代理予約か。
+ * @param {Object|null} args.options  サーバーが返した選択肢。
+ * @param {boolean}     args.isProxy  代理予約か。
+ * @param {Object|null} args.restored 保存済みの選択内容。
  * @return {Object} 選択状態と操作。
  */
-export const useAttendeeSelection = ( { options, isProxy } ) => {
+export const useAttendeeSelection = ( {
+	options,
+	isProxy,
+	restored = null,
+} ) => {
 	const [ selection, setSelection ] = useState( '' );
 	const [ manual, setManual ] = useState( {
 		name: '',
@@ -241,6 +246,8 @@ export const useAttendeeSelection = ( { options, isProxy } ) => {
 	} );
 	// 会員自身の予約は保存を既定でオンにし、代理予約は他人の名簿を変えるためオフにする。
 	const [ save, setSave ] = useState( ! isProxy );
+	// 保存済みの選択内容は、選択肢が届いた最初の1回だけ戻す。
+	const restoredAppliedRef = useRef( false );
 	const [ newId ] = useState( generateUuid );
 	const [ problem, setProblem ] = useState( '' );
 	const [ focusRequest, setFocusRequest ] = useState( 0 );
@@ -265,13 +272,37 @@ export const useAttendeeSelection = ( { options, isProxy } ) => {
 		setProblem( '' );
 	}, [ options ] );
 
+	// 選択肢の既定値を入れたあとに上書きするため、上の effect より後に置く。
+	useEffect( () => {
+		if ( ! restored || ! options || restoredAppliedRef.current ) {
+			return;
+		}
+		restoredAppliedRef.current = true;
+		const items = Array.isArray( options.items ) ? options.items : [];
+		const restoredId = restored.selection;
+		if (
+			restoredId === MANUAL_ID ||
+			items.some( ( item ) => item.id === restoredId )
+		) {
+			setSelection( restoredId );
+		}
+		if ( restored.manual ) {
+			setManual( restored.manual );
+		}
+		if ( typeof restored.save === 'boolean' ) {
+			setSave( restored.save );
+		}
+	}, [ options, restored ] );
+
 	const selectAfterRefresh = useCallback( ( id ) => {
 		pendingSelectionRef.current = id;
 	}, [] );
 
 	// 権限が後から確定した場合も、既定値を権限に合わせる。
 	useEffect( () => {
-		setSave( ! isProxy );
+		if ( ! restoredAppliedRef.current ) {
+			setSave( ! isProxy );
+		}
 	}, [ isProxy ] );
 
 	const selectOption = useCallback( ( id ) => {

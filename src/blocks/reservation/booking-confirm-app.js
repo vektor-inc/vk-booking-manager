@@ -66,6 +66,12 @@ import {
 } from './guest-booking';
 import { AttendeeSelector } from './components/attendee-selector';
 import { useAttendeeOptions, useAttendeeSelection } from './attendee-selection';
+import {
+	buildDatetimeReselectUrl,
+	clearConfirmFields,
+	loadConfirmFields,
+	saveConfirmFields,
+} from './draft-reselect';
 
 // 宿泊予約の確認画面のサマリは別チャンクに分け、宿泊の予約を確認するときだけ読み込む。
 const LodgingConfirmSummary = lazy( () =>
@@ -158,6 +164,9 @@ export const BookingConfirmApp = ( {
 		return window.vkbmCurrentUserBootstrap || null;
 	}, [] );
 	const draftToken = useMemo( () => getQueryParam( 'draft' ), [] );
+	// 日時を選び直す前に退避した入力値。下書きのメニューと照合してから、最初の取得で1回だけ戻す。
+	const [ savedFields, setSavedFields ] = useState( null );
+	const savedFieldsStateRef = useRef( 'pending' );
 	const [ draft, setDraft ] = useState( null );
 	const [ menu, setMenu ] = useState( null );
 	// #391: このメニューで指名機能を使うか。サーバ（Booking_Draft_Controller::get_draft）が
@@ -196,14 +205,17 @@ export const BookingConfirmApp = ( {
 	const [ customerPhone, setCustomerPhone ] = useState( '' );
 	const [ currentUser, setCurrentUser ] = useState( null );
 	const currentUserRequest = useRef( null );
-	const { address: customerAddress, setAddress: setCustomerAddress } =
-		useCustomerAddress( {
-			enabled:
-				resolveLoginState( { userBootstrap, isEditor } ) &&
-				Boolean( draft?.lodging ),
-			isProxy: Boolean( currentUser?.can_manage_reservations ),
-			currentUser,
-		} );
+	const {
+		address: customerAddress,
+		setAddress: setCustomerAddress,
+		isEdited: isCustomerAddressEdited,
+	} = useCustomerAddress( {
+		enabled:
+			resolveLoginState( { userBootstrap, isEditor } ) &&
+			Boolean( draft?.lodging ),
+		isProxy: Boolean( currentUser?.can_manage_reservations ),
+		currentUser,
+	} );
 	const addressRef = useRef( null );
 	const [ addressError, setAddressError ] = useState( '' );
 	const [ addressRequired, setAddressRequired ] = useState( true );
@@ -294,6 +306,7 @@ export const BookingConfirmApp = ( {
 	const attendee = useAttendeeSelection( {
 		options: attendeeOptions,
 		isProxy: canManageReservations,
+		restored: savedFields?.attendee,
 	} );
 
 	const queryDefaults = useMemo( () => parseQueryParams(), [] );
@@ -545,8 +558,42 @@ export const BookingConfirmApp = ( {
 		apiFetch( { path: `/vkbm/v1/drafts/${ draftToken }` } )
 			.then( ( data ) => {
 				setDraft( data );
-				setMemo( data?.memo || '' );
-				setAttendeeName( '' );
+				// 退避した入力値は、最初の取得で下書きのメニューと照合できたときだけ戻す。
+				let saved = null;
+				if ( savedFieldsStateRef.current === 'pending' ) {
+					try {
+						saved = loadConfirmFields(
+							window.sessionStorage,
+							draftToken,
+							data?.menu_id
+						);
+					} catch ( error ) {
+						saved = null;
+					}
+					savedFieldsStateRef.current = saved ? 'restored' : 'none';
+				}
+				if ( saved ) {
+					setMemo( saved.memo );
+					setAttendeeName( saved.attendeeName );
+					// 利用者が編集した住所だけを戻し、空欄にした場合もプロフィール住所で上書きさせない。
+					// 編集していなければ、ログイン後などにプロフィール住所の自動入力に任せる。
+					if ( saved.customerAddressEdited ) {
+						setCustomerAddress( saved.customerAddress );
+					}
+					setGuestContact( saved.guestContact );
+					setCustomerName( saved.customerName );
+					setCustomerPhone( saved.customerPhone );
+					setProviderNote( saved.providerNote );
+					if ( saved.paymentMethod ) {
+						setPaymentMethod( saved.paymentMethod );
+					}
+					setFavoriteOptIn( saved.favoriteOptIn );
+					setSavedFields( saved );
+				} else if ( savedFieldsStateRef.current !== 'restored' ) {
+					// 権限の確定による再取得で、戻した入力値を消さない。
+					setMemo( data?.memo || '' );
+					setAttendeeName( '' );
+				}
 				const agreedAll = Boolean( data?.agree_terms );
 				setAgreeCancellationPolicy(
 					data?.agree_cancellation_policy !== undefined
@@ -850,12 +897,15 @@ export const BookingConfirmApp = ( {
 		}
 	}, [ canManageReservations, authMode ] );
 
+	// 代理予約の権限が外れたときだけ顧客情報を消す（後から権限が確定しても、戻した入力値は残す）。
+	const previousCanManageRef = useRef( canManageReservations );
 	useEffect( () => {
-		if ( ! canManageReservations ) {
+		if ( previousCanManageRef.current && ! canManageReservations ) {
 			setCustomerName( '' );
 			setCustomerPhone( '' );
 			setProviderNote( '' );
 		}
+		previousCanManageRef.current = canManageReservations;
 	}, [ canManageReservations ] );
 
 	const getCurrentUrl = () => {
@@ -1320,6 +1370,11 @@ export const BookingConfirmApp = ( {
 				email: response?.email || guestContact.email.trim(),
 				expiresAt: response?.expires_at || '',
 			} );
+			try {
+				clearConfirmFields( window.sessionStorage, draftToken );
+			} catch ( error ) {
+				// 保存領域が使えない環境では削除を省く。
+			}
 		} catch ( error ) {
 			// メールアドレスの誤りは、該当の欄の直下に出して戻る。
 			if ( error?.code === 'guest_email_invalid' ) {
@@ -1352,6 +1407,37 @@ export const BookingConfirmApp = ( {
 		setGuestSent( null );
 		setSubmitError( '' );
 		setGuestEmailFocusRequest( ( request ) => request + 1 );
+	};
+
+	// 日時を選び直す前に、確認画面だけが持つ入力値を同じタブへ退避する。
+	const handleReselectDatetime = () => {
+		try {
+			// 規約への同意は、選び直した内容で改めて確認してもらうため退避しない。
+			saveConfirmFields(
+				window.sessionStorage,
+				draftToken,
+				draft?.menu_id,
+				{
+					memo,
+					attendeeName,
+					customerAddress,
+					customerAddressEdited: isCustomerAddressEdited(),
+					guestContact,
+					customerName,
+					customerPhone,
+					providerNote,
+					paymentMethod,
+					favoriteOptIn,
+					attendee: {
+						selection: attendee.selection,
+						manual: attendee.manual,
+						save: attendee.save,
+					},
+				}
+			);
+		} catch ( error ) {
+			// 保存できない環境でも日時の選び直しは妨げない。
+		}
 	};
 
 	const handleConfirm = async () => {
@@ -1551,6 +1637,11 @@ export const BookingConfirmApp = ( {
 
 				setCreatedStatus( parsed?.status || '' );
 				setSuccess( true );
+				try {
+					clearConfirmFields( window.sessionStorage, draftToken );
+				} catch ( error ) {
+					// 保存領域が使えない環境では削除を省く。
+				}
 
 				// 完了後のリダイレクト処理。
 				const navigate = () => {
@@ -2177,6 +2268,9 @@ export const BookingConfirmApp = ( {
 		typeof resolvedReservationPageUrl === 'string'
 			? resolvedReservationPageUrl.trim()
 			: '';
+	const reselectUrl = draft
+		? buildDatetimeReselectUrl( window.location.href, draft, draftToken )
+		: '';
 	const brandLogoAlt = shouldShowName
 		? providerName
 		: __( 'Logo image', 'vk-booking-manager' );
@@ -3038,6 +3132,21 @@ export const BookingConfirmApp = ( {
 									  ) }
 							</button>
 						) }
+						{ ! success &&
+							! guestSent &&
+							! submitting &&
+							reselectUrl && (
+								<a
+									href={ reselectUrl }
+									className="vkbm-button vkbm-button__sm vkbm-button__link vkbm-confirm__reselect"
+									onClick={ handleReselectDatetime }
+								>
+									{ __(
+										'Reselect date and time',
+										'vk-booking-manager'
+									) }
+								</a>
+							) }
 						{ guestSent && (
 							<GuestVerificationSent
 								email={ guestSent.email }

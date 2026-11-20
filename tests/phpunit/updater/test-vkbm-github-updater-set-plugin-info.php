@@ -33,6 +33,27 @@ class Test_VKBM_GitHub_Updater_Set_Plugin_Info extends WP_UnitTestCase {
 	private $stub_success = true;
 
 	/**
+	 * タグ時点の readme.txt へのリクエスト回数。
+	 *
+	 * @var int
+	 */
+	private $readme_request_count = 0;
+
+	/**
+	 * スタブが返すタグ時点の readme.txt の本文（null なら取得失敗の WP_Error を返す）。
+	 *
+	 * @var string|null
+	 */
+	private $stub_readme_body = null;
+
+	/**
+	 * テスト前の WordPress のバージョン（グローバル変数 $wp_version）。tear_down で戻す。
+	 *
+	 * @var string
+	 */
+	private $original_wp_version = '';
+
+	/**
 	 * セットアップ処理。
 	 */
 	public function set_up() {
@@ -40,11 +61,15 @@ class Test_VKBM_GitHub_Updater_Set_Plugin_Info extends WP_UnitTestCase {
 
 		require_once dirname( __DIR__, 3 ) . '/class-vkbm-github-updater.php';
 
-		$this->request_count = 0;
-		$this->stub_url      = 'https://github.com/vektor-inc/vk-booking-manager/releases/download/99.0.0/vk-booking-manager.zip';
-		$this->stub_success  = true;
+		$this->request_count        = 0;
+		$this->stub_url             = 'https://github.com/vektor-inc/vk-booking-manager/releases/download/99.0.0/vk-booking-manager.zip';
+		$this->stub_success         = true;
+		$this->readme_request_count = 0;
+		$this->stub_readme_body     = "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\nStable tag: 99.0.0\n";
+		$this->original_wp_version  = $GLOBALS['wp_version'];
 
 		delete_site_transient( 'vkbm_github_updater_release' );
+		delete_site_transient( 'update_core' );
 		add_filter( 'pre_http_request', array( $this, 'filter_pre_http_request' ), 10, 3 );
 	}
 
@@ -54,12 +79,13 @@ class Test_VKBM_GitHub_Updater_Set_Plugin_Info extends WP_UnitTestCase {
 	public function tear_down() {
 		remove_filter( 'pre_http_request', array( $this, 'filter_pre_http_request' ), 10 );
 		delete_site_transient( 'vkbm_github_updater_release' );
+		$GLOBALS['wp_version'] = $this->original_wp_version; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テストで書き換えた値を戻す。
 
 		parent::tear_down();
 	}
 
 	/**
-	 * GitHub API へのリクエストを数えてスタブに差し替える。
+	 * GitHub API とタグ時点の readme.txt へのリクエストを数えてスタブに差し替える。
 	 *
 	 * @param false|array|WP_Error $preempt 既定のプリエンプト値。
 	 * @param array                $args    リクエスト引数。
@@ -67,6 +93,26 @@ class Test_VKBM_GitHub_Updater_Set_Plugin_Info extends WP_UnitTestCase {
 	 * @return false|array|WP_Error スタブレスポンス、または既定動作（false）。
 	 */
 	public function filter_pre_http_request( $preempt, $args, $url ) {
+		// タグ時点の readme.txt（無料版リポジトリの raw ファイル）。
+		if ( 0 === strpos( $url, 'https://raw.githubusercontent.com/vektor-inc/vk-booking-manager/' ) ) {
+			++$this->readme_request_count;
+
+			if ( null === $this->stub_readme_body ) {
+				return new WP_Error( 'http_request_failed', 'stubbed failure' );
+			}
+
+			return array(
+				'headers'  => array(),
+				'body'     => $this->stub_readme_body,
+				'response' => array(
+					'code'    => 200,
+					'message' => 'OK',
+				),
+				'cookies'  => array(),
+				'filename' => null,
+			);
+		}
+
 		if ( false === strpos( $url, 'api.github.com/repos/vektor-inc/vk-booking-manager/releases' ) ) {
 			return $preempt;
 		}
@@ -108,6 +154,217 @@ class Test_VKBM_GitHub_Updater_Set_Plugin_Info extends WP_UnitTestCase {
 	 */
 	private function get_plugin_file(): string {
 		return dirname( __DIR__, 3 ) . '/vk-booking-manager.php';
+	}
+
+	/**
+	 * set_plugin_info() が、詳細ポップアップに新しいバージョンの対応バージョン
+	 * （tested・requires_php・requires）を入れることを、保存済みのリリース情報の形ごとに検証する。
+	 *
+	 * 詳細ポップアップを開くたびに readme.txt を取りに行かないこと（保存済みの値を使うこと）と、
+	 * 更新前のバージョンが保存した形の値を読んでも警告を出さないことも確かめる。
+	 */
+	public function test_set_plugin_info() {
+		$release_values = array(
+			'tested'       => '7.1',
+			'requires_php' => '8.3',
+			'requires'     => '6.8',
+		);
+		$empty_values   = array(
+			'tested'       => '',
+			'requires_php' => '',
+			'requires'     => '',
+		);
+
+		// 更新前のバージョンが保存したリリース情報（対応バージョンの項目が無い形）。
+		$legacy_cache               = new stdClass();
+		$legacy_cache->tag_name     = '98.0.0';
+		$legacy_cache->published_at = '';
+		$legacy_cache->assets       = array();
+
+		// 取得済みの対応バージョンを保存したリリース情報。
+		$saved_cache               = clone $legacy_cache;
+		$saved_cache->requirements = array(
+			'tested'       => '7.0',
+			'requires_php' => '8.2',
+			'requires'     => '6.7',
+		);
+
+		// readme.txt の取得に失敗した状態を保存したリリース情報。
+		$failed_cache               = clone $legacy_cache;
+		$failed_cache->requirements = null;
+
+		// 対応バージョンに形式の合わない値が入ったリリース情報。
+		$invalid_values_cache               = clone $legacy_cache;
+		$invalid_values_cache->requirements = array(
+			'tested'       => '<script>',
+			'requires_php' => array( '8.3' ),
+			'requires'     => '6.8',
+		);
+
+		// 対応バージョンの項目が配列でない、壊れたリリース情報。
+		$broken_cache               = clone $legacy_cache;
+		$broken_cache->requirements = 'broken';
+
+		// Tested up to が 7.1・6.9 の対応バージョンを保存したリリース情報。
+		$tested_71_cache               = clone $legacy_cache;
+		$tested_71_cache->requirements = array(
+			'tested'       => '7.1',
+			'requires_php' => '8.3',
+			'requires'     => '6.8',
+		);
+		$tested_69_cache               = clone $legacy_cache;
+		$tested_69_cache->requirements = array(
+			'tested'       => '6.9',
+			'requires_php' => '8.3',
+			'requires'     => '6.8',
+		);
+
+		// ケースで wp_version を指定しないときの WordPress のバージョン。
+		// 各ケースの Tested up to（7.1・7.0）とは系列が違い、パッチ番号は補われない。
+		$default_wp_version = '7.2.1';
+
+		$test_cases = array(
+			array(
+				'test_condition_name'         => 'リリース情報を保存していない場合 => GitHub API とタグ時点の readme.txt を 1 回ずつ取り、新しいバージョンの対応バージョンを入れる',
+				'cached_release'              => null,
+				'stub_success'                => true,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '99.0.0',
+				'expect_requirements'         => $release_values,
+				'expect_request_count'        => 1,
+				'expect_readme_request_count' => 1,
+			),
+			array(
+				'test_condition_name'         => '対応バージョンを保存済みの場合 => どこにも問い合わせず、保存済みの値を入れる',
+				'cached_release'              => $saved_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '98.0.0',
+				'expect_requirements'         => $saved_cache->requirements,
+				'expect_request_count'        => 0,
+				'expect_readme_request_count' => 0,
+			),
+			array(
+				'test_condition_name'         => '更新前のバージョンが保存したリリース情報（対応バージョンの項目なし）の場合 => 警告を出さず、問い合わせもせず、値なし（空）にする',
+				'cached_release'              => $legacy_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '98.0.0',
+				'expect_requirements'         => $empty_values,
+				'expect_request_count'        => 0,
+				'expect_readme_request_count' => 0,
+			),
+			array(
+				'test_condition_name'         => 'readme.txt の取得に失敗した状態を保存している場合 => 詳細ポップアップでは取り直さず、値なし（空）にする',
+				'cached_release'              => $failed_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '98.0.0',
+				'expect_requirements'         => $empty_values,
+				'expect_request_count'        => 0,
+				'expect_readme_request_count' => 0,
+			),
+			array(
+				'test_condition_name'         => '保存済みの対応バージョンに形式の合わない値が混ざる場合 => 形式に合う値だけを入れる',
+				'cached_release'              => $invalid_values_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '98.0.0',
+				'expect_requirements'         => array(
+					'tested'       => '',
+					'requires_php' => '',
+					'requires'     => '6.8',
+				),
+				'expect_request_count'        => 0,
+				'expect_readme_request_count' => 0,
+			),
+			array(
+				'test_condition_name'         => '保存済みの対応バージョンが配列でない（壊れた値の）場合 => 保存値を使わず問い合わせ直し、新しい値を入れる',
+				'cached_release'              => $broken_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '99.0.0',
+				'expect_requirements'         => $release_values,
+				'expect_request_count'        => 1,
+				'expect_readme_request_count' => 1,
+			),
+			array(
+				'test_condition_name'         => 'GitHub API の取得に失敗する場合 => readme.txt は取りに行かず、値なし（空）にする',
+				'cached_release'              => null,
+				'stub_success'                => false,
+				'stub_readme_body'            => "=== VK Booking Manager ===\nRequires at least: 6.8\nTested up to: 7.1\nRequires PHP: 8.3\n",
+				'expect_version'              => '',
+				'expect_requirements'         => $empty_values,
+				'expect_request_count'        => 1,
+				'expect_readme_request_count' => 0,
+			),
+			array(
+				'test_condition_name'         => 'タグ時点の readme.txt の取得に失敗する場合 => バージョンは表示し、対応バージョンは値なし（空）にする',
+				'cached_release'              => null,
+				'stub_success'                => true,
+				'stub_readme_body'            => null,
+				'expect_version'              => '99.0.0',
+				'expect_requirements'         => $empty_values,
+				'expect_request_count'        => 1,
+				'expect_readme_request_count' => 1,
+			),
+			array(
+				'test_condition_name'         => '保存済みの Tested up to が 7.1、WordPress が 7.1.4 の場合 => 詳細ポップアップにも 7.1.4 を入れる',
+				'cached_release'              => $tested_71_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => null,
+				'wp_version'                  => '7.1.4',
+				'expect_version'              => '98.0.0',
+				'expect_requirements'         => array(
+					'tested'       => '7.1.4',
+					'requires_php' => '8.3',
+					'requires'     => '6.8',
+				),
+				'expect_request_count'        => 0,
+				'expect_readme_request_count' => 0,
+			),
+			array(
+				'test_condition_name'         => '保存済みの Tested up to が 6.9、WordPress が 7.1.4（系列が違う）場合 => 6.9 のまま入れる',
+				'cached_release'              => $tested_69_cache,
+				'stub_success'                => true,
+				'stub_readme_body'            => null,
+				'wp_version'                  => '7.1.4',
+				'expect_version'              => '98.0.0',
+				'expect_requirements'         => $tested_69_cache->requirements,
+				'expect_request_count'        => 0,
+				'expect_readme_request_count' => 0,
+			),
+		);
+
+		$plugin_file = $this->get_plugin_file();
+
+		foreach ( $test_cases as $case ) {
+			// ケースごとにスタブと保存済みのリリース情報を整える。
+			$this->request_count        = 0;
+			$this->readme_request_count = 0;
+			$this->stub_success         = $case['stub_success'];
+			$this->stub_readme_body     = $case['stub_readme_body'];
+			$GLOBALS['wp_version']      = $case['wp_version'] ?? $default_wp_version; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テストの条件として書き換え、tear_down で戻す。
+			delete_site_transient( 'vkbm_github_updater_release' );
+			if ( null !== $case['cached_release'] ) {
+				set_site_transient( 'vkbm_github_updater_release', clone $case['cached_release'], HOUR_IN_SECONDS );
+			}
+
+			$updater        = new VKBM_GitHub_Updater( $plugin_file );
+			$response       = new stdClass();
+			$response->slug = plugin_basename( $plugin_file );
+			$result         = $updater->set_plugin_info( false, 'plugin_information', $response );
+
+			$this->assertSame( $case['expect_version'], $result->version, $case['test_condition_name'] . '（バージョン）' );
+
+			$actual_values = array();
+			foreach ( array_keys( $case['expect_requirements'] ) as $key ) {
+				$actual_values[ $key ] = isset( $result->{$key} ) ? $result->{$key} : null;
+			}
+			$this->assertSame( $case['expect_requirements'], $actual_values, $case['test_condition_name'] . '（対応バージョン）' );
+			$this->assertSame( $case['expect_request_count'], $this->request_count, $case['test_condition_name'] . '（GitHub API への問い合わせ回数）' );
+			$this->assertSame( $case['expect_readme_request_count'], $this->readme_request_count, $case['test_condition_name'] . '（readme.txt を取りに行った回数）' );
+		}
 	}
 
 	/**
@@ -257,7 +514,7 @@ class Test_VKBM_GitHub_Updater_Set_Plugin_Info extends WP_UnitTestCase {
 		$updater->set_plugin_info( false, 'plugin_information', $response );
 
 		$cached = get_site_transient( 'vkbm_github_updater_release' );
-		$this->assertSame( array( 'tag_name', 'published_at', 'assets' ), array_keys( get_object_vars( $cached ) ), '必要な項目だけを保存する' );
+		$this->assertSame( array( 'tag_name', 'published_at', 'assets', 'requirements' ), array_keys( get_object_vars( $cached ) ), '必要な項目だけを保存する' );
 		$this->assertCount( 1, $cached->assets );
 		$this->assertSame( array( 'name', 'browser_download_url' ), array_keys( get_object_vars( $cached->assets[0] ) ) );
 

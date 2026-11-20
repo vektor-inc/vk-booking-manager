@@ -1836,6 +1836,116 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 再送処理: サブディレクトリ設置・ドメイン直下のどちらでも、再送メールの認証リンクと
+	 * 再送後の戻り先にサイトのパスが1回だけ入ること（パス二重で 404 になった不具合の再発防止）。
+	 */
+	public function test_process_resend_verification_request(): void {
+		global $wp;
+
+		$test_cases = array(
+			array(
+				'test_condition_name'  => 'サブディレクトリ設置 => パスが1回だけのURL',
+				'home'                 => 'https://example.com/sub',
+				'request_uri'          => '/sub/?draft=abc&vkbm_auth=login',
+				'expected_link_prefix' => 'https://example.com/sub/?draft=abc&vkbm_auth=login&vkbm_verify_email=',
+				'expected_redirect'    => 'https://example.com/sub/?draft=abc&vkbm_auth=login',
+			),
+			array(
+				'test_condition_name'  => 'ドメイン直下設置 => これまでと同じURL',
+				'home'                 => 'https://example.com',
+				'request_uri'          => '/?draft=abc&vkbm_auth=login',
+				'expected_link_prefix' => 'https://example.com/?draft=abc&vkbm_auth=login&vkbm_verify_email=',
+				'expected_redirect'    => 'https://example.com/?draft=abc&vkbm_auth=login',
+			),
+			array(
+				'test_condition_name'  => 'サブディレクトリ設置でクエリなし => パスが1回だけのURL',
+				'home'                 => 'https://example.com/sub',
+				'request_uri'          => '/sub/reserve/',
+				'expected_link_prefix' => 'https://example.com/sub/reserve/?vkbm_verify_email=',
+				'expected_redirect'    => 'https://example.com/sub/reserve/?vkbm_auth=login',
+			),
+		);
+
+		$previous_post_data = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- テスト後に元へ戻すための退避。
+		$previous_server    = $_SERVER;
+		$previous_cookie    = $_COOKIE;
+		$previous_post      = isset( $GLOBALS['post'] ) ? $GLOBALS['post'] : null;
+		$previous_request   = isset( $wp->request ) ? $wp->request : '';
+
+		// 送信されたメール本文を記録し、実際には送らない。
+		$sent_message = '';
+		$mail_filter  = static function ( $return, $atts ) use ( &$sent_message ) {
+			$sent_message = (string) $atts['message'];
+			return true;
+		};
+
+		$home_filter = null;
+
+		try {
+			add_filter( 'pre_wp_mail', $mail_filter, 10, 2 );
+
+			// 再送は init で処理されるため、投稿・リクエストパスがまだ決まっていない状態を再現する。
+			$GLOBALS['post'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- init 時点（投稿が未決定）を再現するため。
+			$wp->request     = '';
+
+			$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+			foreach ( $test_cases as $index => $case ) {
+				// サイトアドレスを差し替える。
+				$home_filter = static function () use ( $case ) {
+					return $case['home'];
+				};
+				add_filter( 'pre_option_home', $home_filter );
+
+				// 未認証の利用者と、再送の使い捨て許可を用意する。
+				$user_id = $this->factory()->user->create(
+					array(
+						'user_login' => 'resend_url_user_' . $index,
+						'user_email' => 'resend_url_user_' . $index . '@example.com',
+					)
+				);
+				update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+				$grant_token = 'resend-url-grant-' . $index;
+				set_transient( 'vkbm_resend_grant_' . hash( 'sha256', $grant_token ), $user_id, 600 );
+
+				$_SERVER['REQUEST_METHOD']    = 'POST';
+				$_SERVER['REQUEST_URI']       = $case['request_uri'];
+				$_COOKIE['vkbm_resend_grant'] = $grant_token;
+				$_POST                        = array(
+					'vkbm_resend_verification_form'  => '1',
+					'vkbm_resend_verification_nonce' => wp_create_nonce( 'vkbm_resend_verification_form' ),
+				);
+
+				// 再送を実行する。
+				$sent_message = '';
+				$shortcodes   = new Testable_Auth_Shortcodes( $service );
+				$shortcodes->handle_form_submission();
+
+				// メール本文から認証リンクを取り出して確認する。
+				$this->assertSame( 1, preg_match( '#https?://\S+vkbm_verify_email=\S+#', $sent_message, $matches ), $case['test_condition_name'] . '（認証リンクが本文にあること）' );
+				$this->assertStringStartsWith( $case['expected_link_prefix'], $matches[0], $case['test_condition_name'] . '（認証リンク）' );
+
+				// 再送後の戻り先を確認する。
+				$this->assertSame( $case['expected_redirect'], $shortcodes->last_redirect_url, $case['test_condition_name'] . '（再送後の戻り先）' );
+
+				remove_filter( 'pre_option_home', $home_filter );
+				$home_filter = null;
+				wp_delete_user( $user_id );
+			}
+		} finally {
+			if ( null !== $home_filter ) {
+				remove_filter( 'pre_option_home', $home_filter );
+			}
+			remove_filter( 'pre_wp_mail', $mail_filter, 10 );
+			$_POST           = $previous_post_data;
+			$_SERVER         = $previous_server;
+			$_COOKIE         = $previous_cookie;
+			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の値に戻す。
+			$wp->request     = $previous_request;
+		}
+	}
+
+	/**
 	 * 安藤さんレビュー指摘（issue #507 PR）: 再送許可を再発行する際、直前の許可の
 	 * transient は無効化されること（古い許可の使い回し防止）。
 	 */

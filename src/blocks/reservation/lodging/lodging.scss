@@ -133,6 +133,18 @@
 	line-height: 1.4;
 }
 
+// 選べなくなった客室の案内は、見出しの直下で客室一覧と同じまとまりに見せるため、
+// 下の一覧との間を見出しとの間と同じだけ詰め、上の日程の行より近づける。
+// 客室一覧側の追加余白はルート文字サイズ 16px のとき 8px で、rem により文字サイズに連動する。
+.vkbm-lodging__room-lost {
+	margin-bottom: var(--vkbm--spacing--xs, 0.5rem);
+}
+
+// 客室一覧に出る翻訳済みの案内は、日本語の文節で折り返す。auto-phrase 未対応のブラウザ（Safari・Firefox など）では従来の折り返しになる。
+.vkbm-lodging__rooms-section > .vkbm-alert {
+	word-break: auto-phrase;
+}
+
 // 客室名と料金の見た目の間隔は 4px 前後（行の高さ 1.3 のハーフレディングだけで作り、gap は 0）。
 // 内側の余白は、客室名・料金の字面と枠線の距離が上下 12px・左右 16px になるようにする。
 // .vkbm-slot-list__item は他の予約画面と共通のため、ここ（.vkbm-lodging__room）だけで上書きする。

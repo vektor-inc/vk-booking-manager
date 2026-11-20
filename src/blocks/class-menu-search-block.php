@@ -73,6 +73,7 @@ class Menu_Search_Block {
 	 */
 	public function register(): void {
 		add_action( 'init', array( $this, 'register_blocks' ) );
+		add_action( 'enqueue_block_editor_assets', array( $this, 'localize_editor_script' ) );
 	}
 
 	/**
@@ -104,6 +105,17 @@ class Menu_Search_Block {
 		}
 
 		self::$blocks_registered = true;
+	}
+
+	/**
+	 * InnerBlocks の template の渡し先の判定（設定の template をエディタが読むか）を、エディタ用スクリプトへ渡す。
+	 *
+	 * 処理は Inner_Blocks_Template::localize_editor_script() に任せる。
+	 *
+	 * @return void
+	 */
+	public function localize_editor_script(): void {
+		Inner_Blocks_Template::localize_editor_script( $this->resolve_script_handle( 'vk-booking-manager/menu-search', 'editorScript' ) );
 	}
 
 	/**

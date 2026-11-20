@@ -2,14 +2,14 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: VK Booking Manager Pro 3.14.0\n"
+"Project-Id-Version: VK Booking Manager Pro 3.15.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-manager\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-13T12:31:36+00:00\n"
+"POT-Creation-Date: 2026-11-14T03:56:39+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.10.0\n"
 "X-Domain: vk-booking-manager\n"
@@ -338,8 +338,8 @@ msgstr ""
 #: src/bookings/class-booking-anonymize-bulk-action.php:338
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:465
 #: src/resources/class-resource-delete-guard.php:668
-#: src/blocks/reservation/app.js:3663
-#: src/blocks/reservation/booking-confirm-app.js:2395
+#: src/blocks/reservation/app.js:3794
+#: src/blocks/reservation/booking-confirm-app.js:2489
 msgid "Cancel"
 msgstr ""
 
@@ -493,12 +493,12 @@ msgstr ""
 #: src/resources/resource-labels.php:107
 #: src/rest/class-provider-settings-controller.php:92
 #: src/rest/class-provider-settings-controller.php:93
-#: src/blocks/reservation/app.js:559
-#: src/blocks/reservation/app.js:560
-#: src/blocks/reservation/app.js:1073
-#: src/blocks/reservation/app.js:1082
-#: src/blocks/reservation/booking-confirm-app.js:252
-#: src/blocks/reservation/booking-confirm-app.js:595
+#: src/blocks/reservation/app.js:613
+#: src/blocks/reservation/app.js:614
+#: src/blocks/reservation/app.js:1131
+#: src/blocks/reservation/app.js:1140
+#: src/blocks/reservation/booking-confirm-app.js:264
+#: src/blocks/reservation/booking-confirm-app.js:642
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:530
 #: src/blocks/reservation/components/booking-summary-items.js:28
 #: src/blocks/reservation/components/guest-result-frame.js:141
@@ -520,9 +520,9 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:836
 #: src/provider-settings/class-settings-repository.php:139
 #: src/resources/resource-labels.php:323
-#: src/blocks/reservation/app.js:562
-#: src/blocks/reservation/app.js:1089
-#: src/blocks/reservation/booking-confirm-app.js:255
+#: src/blocks/reservation/app.js:616
+#: src/blocks/reservation/app.js:1147
+#: src/blocks/reservation/booking-confirm-app.js:267
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:153
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:741
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:757
@@ -534,9 +534,9 @@ msgstr ""
 #: src/resources/resource-labels.php:336
 #: src/staff/class-staff-editor-pro.php:336
 #: src/staff/class-staff-editor.php:347
-#: src/blocks/reservation/app.js:563
-#: src/blocks/reservation/app.js:1094
-#: src/blocks/reservation/booking-confirm-app.js:258
+#: src/blocks/reservation/app.js:617
+#: src/blocks/reservation/app.js:1152
+#: src/blocks/reservation/booking-confirm-app.js:270
 msgid "Nomination fee"
 msgstr ""
 
@@ -551,9 +551,9 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:3932
 #: src/provider-settings/class-settings-repository.php:142
 #: src/resources/resource-labels.php:364
-#: src/blocks/reservation/app.js:579
-#: src/blocks/reservation/app.js:1123
-#: src/blocks/reservation/booking-confirm-app.js:261
+#: src/blocks/reservation/app.js:633
+#: src/blocks/reservation/app.js:1181
+#: src/blocks/reservation/booking-confirm-app.js:273
 #: src/blocks/reservation/components/booking-summary-items.js:223
 msgid "Other conditions"
 msgstr ""
@@ -667,17 +667,17 @@ msgid "No regular holidays"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1167
-#: src/admin/class-service-menu-editor.php:1184
+#: src/admin/class-service-menu-editor.php:1185
 msgid "period"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1168
-#: src/admin/class-service-menu-editor.php:1185
+#: src/admin/class-service-menu-editor.php:1186
 msgid "day of week"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1169
-#: src/admin/class-service-menu-editor.php:1186
+#: src/admin/class-service-menu-editor.php:1187
 msgid "operation"
 msgstr ""
 
@@ -863,15 +863,15 @@ msgid "Service menu display mode"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1595
-#: src/post-types/class-service-menu-post-type.php:1528
-#: src/post-types/class-service-menu-post-type.php:1556
+#: src/post-types/class-service-menu-post-type.php:1529
+#: src/post-types/class-service-menu-post-type.php:1557
 #: src/blocks/menu-loop/edit.js:31
 msgid "card"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1598
-#: src/post-types/class-service-menu-post-type.php:1527
-#: src/post-types/class-service-menu-post-type.php:1555
+#: src/post-types/class-service-menu-post-type.php:1528
+#: src/post-types/class-service-menu-post-type.php:1556
 #: src/blocks/menu-loop/edit.js:32
 msgid "text"
 msgstr ""
@@ -1060,13 +1060,13 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1810
 #: src/post-types/class-service-menu-post-type.php:435
-#: src/post-types/class-service-menu-post-type.php:901
+#: src/post-types/class-service-menu-post-type.php:902
 msgid "Post-service buffer"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1821
-#: src/post-types/class-service-menu-post-type.php:891
-#: src/post-types/class-service-menu-post-type.php:903
+#: src/post-types/class-service-menu-post-type.php:892
+#: src/post-types/class-service-menu-post-type.php:904
 msgid "minutes"
 msgstr ""
 
@@ -1084,13 +1084,13 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:1832
 #: src/admin/class-service-menu-editor.php:548
 #: src/post-types/class-service-menu-post-type.php:434
-#: src/post-types/class-service-menu-post-type.php:895
+#: src/post-types/class-service-menu-post-type.php:896
 msgid "Reservation deadline"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:1843
 #: src/admin/class-service-menu-editor.php:551
-#: src/post-types/class-service-menu-post-type.php:897
+#: src/post-types/class-service-menu-post-type.php:898
 msgid "hours ago"
 msgstr ""
 
@@ -1313,7 +1313,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2069
 #: src/common/class-attendee-name.php:42
-#: src/blocks/reservation/booking-confirm-app.js:175
+#: src/blocks/reservation/booking-confirm-app.js:184
 msgid "Name of the person receiving the service"
 msgstr ""
 
@@ -1446,7 +1446,7 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:2186
 #: src/auth/class-auth-shortcodes.php:637
 #: src/auth/class-auth-shortcodes.php:639
-#: src/blocks/reservation/booking-confirm-app.js:2756
+#: src/blocks/reservation/booking-confirm-app.js:2850
 #: src/blocks/reservation/components/reservation-header-nav.js:94
 msgid "Log in"
 msgstr ""
@@ -1489,8 +1489,8 @@ msgid "If you access wp-login.php, you will be directed to the login screen of t
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2250
-#: src/blocks/reservation/app.js:3498
-#: src/blocks/reservation/booking-confirm-app.js:2182
+#: src/blocks/reservation/app.js:3629
+#: src/blocks/reservation/booking-confirm-app.js:2276
 #: src/blocks/reservation/components/guest-result-frame.js:109
 msgid "Logo image"
 msgstr ""
@@ -1508,7 +1508,7 @@ msgid "Select a logo image from your Media Library (optional)."
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2282
-#: src/blocks/reservation/booking-confirm-app.js:1942
+#: src/blocks/reservation/booking-confirm-app.js:2033
 #: src/blocks/reservation/components/footer-model.js:103
 msgid "Cancellation policy"
 msgstr ""
@@ -1519,7 +1519,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2297
 #: src/auth/class-auth-shortcodes.php:1166
-#: src/blocks/reservation/booking-confirm-app.js:1974
+#: src/blocks/reservation/booking-confirm-app.js:2065
 #: src/blocks/reservation/components/footer-model.js:112
 msgid "System Terms of Use"
 msgstr ""
@@ -2411,7 +2411,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:4302
 #: src/admin/class-provider-settings-page.php:4481
-#: src/admin/class-service-menu-editor.php:1274
+#: src/admin/class-service-menu-editor.php:1275
 #: src/bookings/class-booking-admin.php:1256
 #: src/bookings/class-booking-admin.php:1271
 #: src/common/class-weekday-rule.php:180
@@ -2446,14 +2446,14 @@ msgid "Remove time slot for %s"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:4650
-#: src/admin/class-service-menu-editor.php:1103
-#: src/admin/class-service-menu-editor.php:1270
+#: src/admin/class-service-menu-editor.php:1104
+#: src/admin/class-service-menu-editor.php:1271
 msgid "Start date"
 msgstr ""
 
 #: src/admin/class-provider-settings-page.php:4659
-#: src/admin/class-service-menu-editor.php:1106
-#: src/admin/class-service-menu-editor.php:1272
+#: src/admin/class-service-menu-editor.php:1107
+#: src/admin/class-service-menu-editor.php:1273
 msgid "End date"
 msgstr ""
 
@@ -2468,8 +2468,8 @@ msgstr ""
 #. Translators: Button label to remove a fixed start time row. / 固定開始時刻の行を削除するボタンのラベル.
 #: src/admin/class-provider-settings-page.php:4679
 #: src/admin/class-service-menu-editor.php:336
-#: src/admin/class-service-menu-editor.php:1926
-#: src/admin/class-service-menu-editor.php:2354
+#: src/admin/class-service-menu-editor.php:1927
+#: src/admin/class-service-menu-editor.php:2355
 #: src/attendees/class-attendee-roster-user-profile.php:109
 #: src/attendees/class-attendee-roster-user-profile.php:133
 #: src/attendees/class-attendee-roster-user-profile.php:141
@@ -2577,26 +2577,26 @@ msgstr ""
 
 #. Translators: Placeholder for the price category name input. / 料金区分名の入力プレースホルダー.
 #: src/admin/class-service-menu-editor.php:338
-#: src/admin/class-service-menu-editor.php:2309
+#: src/admin/class-service-menu-editor.php:2310
 msgid "Category name (e.g. Adult)"
 msgstr ""
 
 #. Translators: aria-label for the price category name input. / 料金区分名入力の aria-label.
 #: src/admin/class-service-menu-editor.php:340
-#: src/admin/class-service-menu-editor.php:2272
+#: src/admin/class-service-menu-editor.php:2273
 msgid "Price category name"
 msgstr ""
 
 #. Translators: aria-label for the price input. / 料金入力の aria-label.
 #: src/admin/class-service-menu-editor.php:342
 #: src/admin/class-service-menu-editor.php:372
-#: src/admin/class-service-menu-editor.php:2275
+#: src/admin/class-service-menu-editor.php:2276
 msgid "Price"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:345
 #: src/admin/class-service-menu-editor.php:959
-#: src/blocks/class-menu-loop-block.php:1666
+#: src/blocks/class-menu-loop-block.php:1667
 msgid "Minimum participants to confirm"
 msgstr ""
 
@@ -2652,43 +2652,43 @@ msgid "Maximum number of guests that can be booked together in a single reservat
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:367
-#: src/admin/class-service-menu-editor.php:2171
-#: src/admin/class-service-menu-editor.php:2315
+#: src/admin/class-service-menu-editor.php:2172
+#: src/admin/class-service-menu-editor.php:2316
 #: src/blocks/reservation/lodging/night-rates.js:42
 msgid "Regular"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:368
-#: src/admin/class-service-menu-editor.php:2143
-#: src/admin/class-service-menu-editor.php:2383
+#: src/admin/class-service-menu-editor.php:2144
+#: src/admin/class-service-menu-editor.php:2384
 #: src/blocks/reservation/lodging/night-rates.js:39
 msgid "Pre-holiday"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:369
-#: src/admin/class-service-menu-editor.php:2149
-#: src/admin/class-service-menu-editor.php:2387
+#: src/admin/class-service-menu-editor.php:2150
+#: src/admin/class-service-menu-editor.php:2388
 #: src/blocks/reservation/lodging/night-rates.js:35
 msgid "Special date"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:370
-#: src/admin/class-service-menu-editor.php:2384
+#: src/admin/class-service-menu-editor.php:2385
 msgid "Price (pre-holiday)"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:371
-#: src/admin/class-service-menu-editor.php:2388
+#: src/admin/class-service-menu-editor.php:2389
 msgid "Price (special date)"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:373
-#: src/admin/class-service-menu-editor.php:2287
+#: src/admin/class-service-menu-editor.php:2288
 msgid "Price (per guest, per night)"
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:375
-#: src/admin/class-service-menu-editor.php:2283
+#: src/admin/class-service-menu-editor.php:2284
 msgid "Additional fee per extra guest, per night"
 msgstr ""
 
@@ -2701,7 +2701,7 @@ msgstr ""
 
 #: src/admin/class-service-menu-editor.php:381
 #: src/admin/class-service-menu-editor.php:918
-#: src/blocks/class-menu-loop-block.php:1651
+#: src/blocks/class-menu-loop-block.php:1652
 msgid "Maximum guests per tour"
 msgstr ""
 
@@ -2724,7 +2724,7 @@ msgid "The price does not change even if the number of guests is entered."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:386
-#: src/admin/class-service-menu-editor.php:2285
+#: src/admin/class-service-menu-editor.php:2286
 msgid "Additional fee per extra guest"
 msgstr ""
 
@@ -2744,7 +2744,7 @@ msgstr ""
 #: src/admin/class-service-menu-editor.php:849
 #: src/admin/class-service-menu-editor.php:920
 #: src/admin/class-service-menu-editor.php:1050
-#: src/blocks/class-menu-loop-block.php:1652
+#: src/blocks/class-menu-loop-block.php:1653
 msgid "Time slot capacity"
 msgstr ""
 
@@ -2813,7 +2813,7 @@ msgid "The time slot capacity and multi-guest booking settings below are shown r
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:729
-#: src/post-types/class-service-menu-post-type.php:877
+#: src/post-types/class-service-menu-post-type.php:878
 msgid "Disable for this service menu"
 msgstr ""
 
@@ -2836,12 +2836,12 @@ msgstr ""
 
 #. translators: %s: link to the post-service buffer setting on the provider settings page.
 #: src/admin/class-service-menu-editor.php:798
-#: src/post-types/class-service-menu-post-type.php:919
+#: src/post-types/class-service-menu-post-type.php:920
 msgid "If it is left blank, the information entered on %s will be reflected."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:802
-#: src/post-types/class-service-menu-post-type.php:923
+#: src/post-types/class-service-menu-post-type.php:924
 msgid "Post-service buffer on the General Settings page"
 msgstr ""
 
@@ -2874,560 +2874,560 @@ msgstr ""
 msgid "Setting the time slot capacity and staff auto-assignment are available in the Pro edition."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1092
-#: src/admin/class-service-menu-editor.php:1096
-#: src/blocks/class-menu-loop-block.php:1564
+#: src/admin/class-service-menu-editor.php:1087
+#: src/admin/class-service-menu-editor.php:1112
+msgid "This event date has ended."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:1087
+#: src/admin/class-service-menu-editor.php:1112
+msgid "This period has ended."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:1093
+#: src/admin/class-service-menu-editor.php:1097
+#: src/blocks/class-menu-loop-block.php:1565
 #: src/post-types/class-service-menu-post-type.php:448
 msgid "Service period"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1097
+#: src/admin/class-service-menu-editor.php:1098
 msgid "Range (start to end)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1099
+#: src/admin/class-service-menu-editor.php:1100
 msgid "One day only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1103
-#: src/blocks/class-menu-loop-block.php:1564
-#: src/post-types/class-service-menu-post-type.php:650
+#: src/admin/class-service-menu-editor.php:1104
+#: src/blocks/class-menu-loop-block.php:1565
+#: src/post-types/class-service-menu-post-type.php:651
 msgid "Event date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1105
+#: src/admin/class-service-menu-editor.php:1106
 msgctxt "separator between the start date and the end date of the service period"
 msgid "~"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1110
+#: src/admin/class-service-menu-editor.php:1111
 msgid "Choose an end date that is the same as or later than the start date."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1111
-#: src/admin/class-service-menu-editor.php:1113
-msgid "This period has ended."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:1111
-#: src/admin/class-service-menu-editor.php:1113
-msgid "This event date has ended."
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:1114
+#: src/admin/class-service-menu-editor.php:1115
 msgid "The menu is not shown in the menu list on the reservation page."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1121
+#: src/admin/class-service-menu-editor.php:1122
 msgid "Only dates within this period can be booked."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1122
+#: src/admin/class-service-menu-editor.php:1123
 msgid "If a date is left blank, that side of the period is not limited."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1127
+#: src/admin/class-service-menu-editor.php:1128
 msgid "Set the event time in Fixed start times."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1128
+#: src/admin/class-service-menu-editor.php:1129
 msgid "For a plan billed per night, a reservation can be made when the check-in date is within this range."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1166
-#: src/blocks/class-menu-loop-block.php:1576
+#: src/admin/class-service-menu-editor.php:1167
+#: src/blocks/class-menu-loop-block.php:1577
 #: src/bookings/class-booking-admin.php:738
 #: src/post-types/class-service-menu-post-type.php:448
-#: src/post-types/class-service-menu-post-type.php:976
+#: src/post-types/class-service-menu-post-type.php:977
 msgid "Reservation date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1170
-#: src/post-types/class-service-menu-post-type.php:979
+#: src/admin/class-service-menu-editor.php:1171
+#: src/post-types/class-service-menu-post-type.php:980
 msgid "Not specified"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1171
+#: src/admin/class-service-menu-editor.php:1172
 #: src/common/class-reservation-day.php:321
-#: src/post-types/class-service-menu-post-type.php:980
+#: src/post-types/class-service-menu-post-type.php:981
 msgid "Saturdays and Sundays only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1172
+#: src/admin/class-service-menu-editor.php:1173
 #: src/common/class-reservation-day.php:325
-#: src/post-types/class-service-menu-post-type.php:981
+#: src/post-types/class-service-menu-post-type.php:982
 msgid "Weekdays only"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1173
+#: src/admin/class-service-menu-editor.php:1174
 #: src/common/class-reservation-day.php:329
-#: src/post-types/class-service-menu-post-type.php:989
+#: src/post-types/class-service-menu-post-type.php:990
 msgid "Specified days of the week"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1174
+#: src/admin/class-service-menu-editor.php:1175
 #: src/common/class-reservation-day.php:333
-#: src/post-types/class-service-menu-post-type.php:990
+#: src/post-types/class-service-menu-post-type.php:991
 msgid "Specified dates"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1176
+#: src/admin/class-service-menu-editor.php:1177
 msgid "If not specified, reservations are accepted on all days of the week (within the range where shifts exist)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1180
+#: src/admin/class-service-menu-editor.php:1181
 msgid "Specify the days of the week when reservations are accepted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1198
+#: src/admin/class-service-menu-editor.php:1199
 msgid "+ Add day of the week"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1199
+#: src/admin/class-service-menu-editor.php:1200
 msgid "Combine \"every week\" or \"1st to 5th\" with a day of the week. Reservations are accepted only on the specified days of the week (within the range where shifts exist)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1211
+#: src/admin/class-service-menu-editor.php:1212
 msgid "Specify the dates when reservations are accepted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1220
+#: src/admin/class-service-menu-editor.php:1221
 msgid "+ Add date"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1221
+#: src/admin/class-service-menu-editor.php:1222
 msgid "Choose \"Single day\" or a \"Range\" (start to end) per row. Reservations are accepted only on the specified dates (within the range where shifts exist)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1262
+#: src/admin/class-service-menu-editor.php:1263
 msgid "Date specification type"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1263
+#: src/admin/class-service-menu-editor.php:1264
 msgid "Single day"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1264
+#: src/admin/class-service-menu-editor.php:1265
 msgid "Range"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1267
+#: src/admin/class-service-menu-editor.php:1268
 #: src/shifts/class-shift-lodging-editor.php:228
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:93
 msgid "Date"
 msgstr ""
 
 #. translators: %d: maximum number of guests per tour (the number of guests included in the basic price was reduced to this value).
-#: src/admin/class-service-menu-editor.php:1401
+#: src/admin/class-service-menu-editor.php:1402
 msgid "The number of guests included in the basic price exceeded the maximum guests per tour, so it was reduced to %d."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1415
-#: src/admin/class-service-menu-editor.php:1510
+#: src/admin/class-service-menu-editor.php:1416
+#: src/admin/class-service-menu-editor.php:1511
 msgid "No price category is entered, so the extra guest fee is not added to the price. Enter at least one price category to charge the extra guest fee."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1449
+#: src/admin/class-service-menu-editor.php:1450
 msgid "The price unit is \"Per tour\", so the price categories were deleted."
 msgstr ""
 
 #. translators: %d: maximum number of guests per room (the number of guests included in the basic price was reduced to this value).
-#: src/admin/class-service-menu-editor.php:1496
+#: src/admin/class-service-menu-editor.php:1497
 msgid "The number of guests included in the basic price exceeded the maximum guests per room, so it was reduced to %d."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1539
+#: src/admin/class-service-menu-editor.php:1540
 msgid "Enter a valid event date and save again. The previous service period was kept."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1546
+#: src/admin/class-service-menu-editor.php:1547
 msgid "The start of the service period was later than its end, so the service period was saved with its previous values."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1547
+#: src/admin/class-service-menu-editor.php:1548
 msgid "Check the dates and save again."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1635
-#: src/admin/class-service-menu-editor.php:1638
-#: src/admin/class-service-menu-editor.php:1848
+#: src/admin/class-service-menu-editor.php:1636
+#: src/admin/class-service-menu-editor.php:1639
+#: src/admin/class-service-menu-editor.php:1849
 msgid "Booking unit"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1641
+#: src/admin/class-service-menu-editor.php:1642
 msgid "Time slot"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1646
+#: src/admin/class-service-menu-editor.php:1647
 msgid "Nights"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1650
+#: src/admin/class-service-menu-editor.php:1651
 msgid "If you choose \"Nights\", bookings are accepted by check-in date and check-out date."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1651
+#: src/admin/class-service-menu-editor.php:1652
 msgid "If you choose \"Nights\" and save, the private booking by customer settings are deleted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1652
+#: src/admin/class-service-menu-editor.php:1653
 msgid "If you choose \"Nights\", the time required, post-service buffer, and fixed start times fields are not used, so they are hidden."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1657
-#: src/admin/class-service-menu-editor.php:1659
+#: src/admin/class-service-menu-editor.php:1658
+#: src/admin/class-service-menu-editor.php:1660
 msgid "Check-in time"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1663
+#: src/admin/class-service-menu-editor.php:1664
 msgid "Check-out time (departure day)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1665
+#: src/admin/class-service-menu-editor.php:1666
 msgid "Check-out time"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1667
+#: src/admin/class-service-menu-editor.php:1668
 msgid "This is the time on the day after the last night of the stay."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1684
+#: src/admin/class-service-menu-editor.php:1685
 msgid "/ 1 tour"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1687
+#: src/admin/class-service-menu-editor.php:1688
 msgid "/ 1 guest"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1711
-#: src/admin/class-service-menu-editor.php:1714
-#: src/admin/class-service-menu-editor.php:1797
-#: src/admin/class-service-menu-editor.php:1800
+#: src/admin/class-service-menu-editor.php:1712
+#: src/admin/class-service-menu-editor.php:1715
+#: src/admin/class-service-menu-editor.php:1798
+#: src/admin/class-service-menu-editor.php:1801
 msgid "Price unit"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1717
+#: src/admin/class-service-menu-editor.php:1718
 msgid "Per guest"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1722
+#: src/admin/class-service-menu-editor.php:1723
 msgid "Per tour"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1726
+#: src/admin/class-service-menu-editor.php:1727
 msgid "If you choose \"Per tour\", the basic price is the price of one tour regardless of the number of guests."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1727
+#: src/admin/class-service-menu-editor.php:1728
 msgid "If you choose \"Per tour\" and save, private booking is turned on automatically, and the private booking by customer settings are deleted."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1732
+#: src/admin/class-service-menu-editor.php:1733
 msgid "Price categories can be used with \"Per tour\" only when the additional fee for exceeding the specified number is enabled."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1733
-#: src/admin/class-service-menu-editor.php:1814
+#: src/admin/class-service-menu-editor.php:1734
+#: src/admin/class-service-menu-editor.php:1815
 msgid "If it is not enabled, price categories you have already set are deleted when you save."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1742
-#: src/admin/class-service-menu-editor.php:1820
+#: src/admin/class-service-menu-editor.php:1743
+#: src/admin/class-service-menu-editor.php:1821
 msgid "An additional fee applies, depending on the number of guests, when the specified number is exceeded"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1745
-#: src/admin/class-service-menu-editor.php:1823
+#: src/admin/class-service-menu-editor.php:1746
+#: src/admin/class-service-menu-editor.php:1824
 msgid "Guests included in the basic price"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1748
-#: src/admin/class-service-menu-editor.php:1826
+#: src/admin/class-service-menu-editor.php:1749
+#: src/admin/class-service-menu-editor.php:1827
 msgid "guests or fewer"
-msgstr ""
-
-#: src/admin/class-service-menu-editor.php:1751
-#: src/admin/class-service-menu-editor.php:1829
-msgid "Enter the specified number of guests (the number included in the basic price) as 1 or more."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:1752
 #: src/admin/class-service-menu-editor.php:1830
-msgid "Set the basic price in the \"Basic price\" field below."
+msgid "Enter the specified number of guests (the number included in the basic price) as 1 or more."
 msgstr ""
 
 #: src/admin/class-service-menu-editor.php:1753
+#: src/admin/class-service-menu-editor.php:1831
+msgid "Set the basic price in the \"Basic price\" field below."
+msgstr ""
+
+#: src/admin/class-service-menu-editor.php:1754
 msgid "Values above the maximum guests per tour are reduced to that maximum."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1770
+#: src/admin/class-service-menu-editor.php:1771
 msgid "/ per room, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1773
+#: src/admin/class-service-menu-editor.php:1774
 msgid "/ per guest, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1803
+#: src/admin/class-service-menu-editor.php:1804
 msgid "Per guest, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1808
+#: src/admin/class-service-menu-editor.php:1809
 msgid "Per room, per night"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1812
+#: src/admin/class-service-menu-editor.php:1813
 msgid "If you choose \"Per room, per night\", enter the price of one room per night as the basic price. It is not multiplied by the number of guests."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1813
+#: src/admin/class-service-menu-editor.php:1814
 msgid "Price categories can be used with \"Per room, per night\" only when the additional fee for exceeding the specified number is enabled."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1815
+#: src/admin/class-service-menu-editor.php:1816
 msgid "When you switch between \"Per room, per night\" with the additional fee and \"Per guest, per night\", review the amounts in the price categories."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1831
+#: src/admin/class-service-menu-editor.php:1832
 msgid "Values above the maximum guests per room are reduced to that maximum."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1851
+#: src/admin/class-service-menu-editor.php:1852
 msgid "This menu is saved with the \"Nights\" booking unit. Because the industry preset is not \"Lodging\", it is currently handled as a time-slot menu."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1852
+#: src/admin/class-service-menu-editor.php:1853
 msgid "To switch back to \"Lodging\", change the industry preset to \"Lodging\" at the link below."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1853
+#: src/admin/class-service-menu-editor.php:1854
 msgid "Industry preset on the General Settings page"
 msgstr ""
 
 #. translators: %s: field name such as "Check-in time".
-#: src/admin/class-service-menu-editor.php:1877
+#: src/admin/class-service-menu-editor.php:1878
 msgid "%s (hour)"
 msgstr ""
 
 #. translators: %s: field name such as "Check-in time".
-#: src/admin/class-service-menu-editor.php:1879
+#: src/admin/class-service-menu-editor.php:1880
 msgid "%s (minute)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1906
+#: src/admin/class-service-menu-editor.php:1907
 msgid "Fixed start times"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1930
+#: src/admin/class-service-menu-editor.php:1931
 msgid "+ Add time"
 msgstr ""
 
 #. translators: %s: link to the reservation slot time setting on the provider settings page.
-#: src/admin/class-service-menu-editor.php:1936
+#: src/admin/class-service-menu-editor.php:1937
 msgid "If not set, reservation slots are based on the interval specified in %s."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1940
+#: src/admin/class-service-menu-editor.php:1941
 msgid "Reservation slot time on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1947
+#: src/admin/class-service-menu-editor.php:1948
 msgid "If set, only the specified times are available for booking."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1976
-#: src/blocks/reservation/booking-confirm-app.js:2670
+#: src/admin/class-service-menu-editor.php:1977
+#: src/blocks/reservation/booking-confirm-app.js:2764
 msgid "Private booking"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1980
+#: src/admin/class-service-menu-editor.php:1981
 msgid "Make the slot private once a booking is placed"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1983
+#: src/admin/class-service-menu-editor.php:1984
 msgid "When enabled, once even a single booking is placed in a time slot, other users can no longer book that slot even if seats remain."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:1990
+#: src/admin/class-service-menu-editor.php:1991
 msgid "This is intended for tours where strangers should not share the same slot (e.g. SUP, diving)."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2022
+#: src/admin/class-service-menu-editor.php:2023
 msgid "Private booking by customer"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2026
+#: src/admin/class-service-menu-editor.php:2027
 msgid "Accept private booking requests from customers"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2029
+#: src/admin/class-service-menu-editor.php:2030
 msgid "Only the first person to book the same date and time can choose this."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2046
+#: src/admin/class-service-menu-editor.php:2047
 msgid "This setting cannot be used together with \"Private booking\" for this menu."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2047
+#: src/admin/class-service-menu-editor.php:2048
 msgid "While \"Private booking\" is on, this setting is ignored."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2052
-#: src/blocks/reservation/app.js:2278
-#: src/blocks/reservation/app.js:4767
-#: src/blocks/reservation/booking-confirm-app.js:2647
+#: src/admin/class-service-menu-editor.php:2053
+#: src/blocks/reservation/app.js:2336
+#: src/blocks/reservation/app.js:4911
+#: src/blocks/reservation/booking-confirm-app.js:2741
 msgid "Private booking fee"
 msgstr ""
 
 #. translators: per one guest unit suffix shown after the private booking fee input.
-#: src/admin/class-service-menu-editor.php:2056
+#: src/admin/class-service-menu-editor.php:2057
 msgid "/ per guest"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2061
+#: src/admin/class-service-menu-editor.php:2062
 msgid "The private booking fee is added per guest."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2064
+#: src/admin/class-service-menu-editor.php:2065
 msgid "Number of guests that exempts the private booking fee"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2069
+#: src/admin/class-service-menu-editor.php:2070
 msgid "The private booking fee is not added when the number of guests is this value or more."
 msgstr ""
 
 #. translators: the numbers are an example threshold. Keep the second number one less than the first.
-#: src/admin/class-service-menu-editor.php:2072
+#: src/admin/class-service-menu-editor.php:2073
 msgid "Example: if you enter 5, the fee is added for up to 4 guests and not added for 5 or more."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2075
+#: src/admin/class-service-menu-editor.php:2076
 msgid "If left blank or set to 0, the private booking fee is always added regardless of the number of guests."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2144
+#: src/admin/class-service-menu-editor.php:2145
 msgid "Basic price (pre-holiday)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2150
+#: src/admin/class-service-menu-editor.php:2151
 msgid "Basic price (special date)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2159
-#: src/post-types/class-service-menu-post-type.php:817
+#: src/admin/class-service-menu-editor.php:2160
+#: src/post-types/class-service-menu-post-type.php:818
 msgid "Basic price"
 msgstr ""
 
 #. translators: %s: link to the pre-holiday and special date settings on the provider settings page.
-#: src/admin/class-service-menu-editor.php:2233
+#: src/admin/class-service-menu-editor.php:2234
 msgid "If the pre-holiday price is empty, the regular price is used. If the special date price is empty, the night is priced as a pre-holiday or regular night. Set the days of the week and dates in %s."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2237
+#: src/admin/class-service-menu-editor.php:2238
 msgid "Pre-holidays and special dates on the General Settings page"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2247
+#: src/admin/class-service-menu-editor.php:2248
 msgid "Price categories are set, so the basic price is not used."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2273
+#: src/admin/class-service-menu-editor.php:2274
 msgid "Price (regular)"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2274
+#: src/admin/class-service-menu-editor.php:2275
 msgid "Category name"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2293
+#: src/admin/class-service-menu-editor.php:2294
 #: src/post-types/class-service-menu-post-type.php:536
 msgid "Price categories"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2358
+#: src/admin/class-service-menu-editor.php:2359
 msgid "+ Add price category"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2359
+#: src/admin/class-service-menu-editor.php:2360
 msgid "Define categories such as \"Adult\" and \"Child\", each with its own price."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2361
+#: src/admin/class-service-menu-editor.php:2362
 msgid "When one or more categories are defined, the basic price is ignored and the price is calculated from the categories."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2362
+#: src/admin/class-service-menu-editor.php:2363
 msgid "If no category is defined, the basic price multiplied by the number of guests is used."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2363
+#: src/admin/class-service-menu-editor.php:2364
 msgid "Enter the fee added for each guest over the number included in the basic price, per night."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2364
-#: src/admin/class-service-menu-editor.php:2367
+#: src/admin/class-service-menu-editor.php:2365
+#: src/admin/class-service-menu-editor.php:2368
 msgid "Guests in the highest-priced categories are included in the basic price first, and the remaining guests are charged."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2366
+#: src/admin/class-service-menu-editor.php:2367
 msgid "Enter the fee added for each guest over the number included in the basic price."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2447
+#: src/admin/class-service-menu-editor.php:2448
 msgid "%s added later will also be able to handle this menu automatically."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2470
+#: src/admin/class-service-menu-editor.php:2471
 msgid "After adding %s, check them here so they can be in charge."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2486
+#: src/admin/class-service-menu-editor.php:2487
 msgid "No %s are registered."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
 #. translators: %s: resource label (singular), e.g. "room".
 #. translators: %s: Resource label (singular).
-#: src/admin/class-service-menu-editor.php:2494
+#: src/admin/class-service-menu-editor.php:2495
 #: src/admin/class-setup-notices.php:461
 #: src/post-types/class-resource-post-type.php:52
 msgid "Add %s"
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/admin/class-service-menu-editor.php:2544
+#: src/admin/class-service-menu-editor.php:2545
 msgid "No %s have been selected to be in charge."
 msgstr ""
 
 #. translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option.
-#: src/admin/class-service-menu-editor.php:2548
+#: src/admin/class-service-menu-editor.php:2549
 msgid "Check the %1$s, or select \"%2$s\"."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2575
+#: src/admin/class-service-menu-editor.php:2576
 msgid "Disable online reservations"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2581
+#: src/admin/class-service-menu-editor.php:2582
 msgid "Mark as archived"
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2643
+#: src/admin/class-service-menu-editor.php:2644
 msgid "No valid day-of-week rows were found, so the reservation date was reset to \"Not specified\"."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2646
+#: src/admin/class-service-menu-editor.php:2647
 msgid "No valid date rows were found, so the reservation date was reset to \"Not specified\"."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2650
+#: src/admin/class-service-menu-editor.php:2651
 msgid "Some invalid day-of-week rows were not saved."
 msgstr ""
 
-#: src/admin/class-service-menu-editor.php:2654
+#: src/admin/class-service-menu-editor.php:2655
 msgid "Some invalid dates (past dates, or start after end) were not saved."
 msgstr ""
 
@@ -3906,7 +3906,7 @@ msgstr ""
 #: src/notifications/class-booking-notification-service.php:1298
 #: src/notifications/class-booking-notification-service.php:1299
 #: src/notifications/class-booking-notification-service.php:1334
-#: src/blocks/reservation/app.js:3618
+#: src/blocks/reservation/app.js:3749
 msgid "Pending"
 msgstr ""
 
@@ -4083,8 +4083,8 @@ msgstr ""
 #: src/bookings/class-booking-admin.php:2923
 #: src/notifications/class-booking-notification-service.php:1327
 #: src/notifications/class-booking-notification-service.php:1538
-#: src/blocks/reservation/app.js:3623
-#: src/blocks/reservation/booking-confirm-app.js:2341
+#: src/blocks/reservation/app.js:3754
+#: src/blocks/reservation/booking-confirm-app.js:2435
 msgid "Cancelled"
 msgstr ""
 
@@ -4324,7 +4324,7 @@ msgstr ""
 
 #. translators: %s: Attendee name field label.
 #: src/attendees/class-booking-attendee-resolver.php:294
-#: src/blocks/reservation/booking-confirm-app.js:1385
+#: src/blocks/reservation/booking-confirm-app.js:1471
 #: src/blocks/reservation/components/attendee-selector.js:303
 msgid "Please enter %s."
 msgstr ""
@@ -4516,12 +4516,12 @@ msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:1142
 #: src/customers/class-customer-flag-meta-box.php:429
-#: src/blocks/reservation/booking-confirm-app.js:2894
+#: src/blocks/reservation/booking-confirm-app.js:2988
 msgid "Telephone number"
 msgstr ""
 
 #: src/auth/class-auth-shortcodes.php:1180
-#: src/blocks/reservation/app.js:3546
+#: src/blocks/reservation/app.js:3677
 msgid "I agree to the terms of use"
 msgstr ""
 
@@ -4643,7 +4643,7 @@ msgstr ""
 #: src/auth/class-auth-shortcodes.php:2079
 #: src/bookings/class-booking-confirmation-controller.php:601
 #: src/bookings/class-guest-booking-controller.php:574
-#: src/blocks/reservation/booking-confirm-app.js:1410
+#: src/blocks/reservation/booking-confirm-app.js:1496
 msgid "You must agree to the terms of use."
 msgstr ""
 
@@ -5049,14 +5049,14 @@ msgstr ""
 
 #: src/blocks/class-menu-loop-block.php:1433
 #: src/blocks/reservation/components/booking-stay-datetime.js:21
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1402
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1495
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:87
 msgid "Check-in"
 msgstr ""
 
 #: src/blocks/class-menu-loop-block.php:1438
 #: src/blocks/reservation/components/booking-stay-datetime.js:24
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1415
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1508
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:97
 msgid "Check-out"
 msgstr ""
@@ -5076,19 +5076,19 @@ msgstr ""
 msgid "Start time"
 msgstr ""
 
-#: src/blocks/class-menu-loop-block.php:1649
+#: src/blocks/class-menu-loop-block.php:1650
 msgid "Maximum group size"
 msgstr ""
 
-#: src/blocks/class-menu-loop-block.php:1766
+#: src/blocks/class-menu-loop-block.php:1767
 msgid "View details"
 msgstr ""
 
-#: src/blocks/class-menu-loop-block.php:1971
+#: src/blocks/class-menu-loop-block.php:1972
 msgid "Prices"
 msgstr ""
 
-#: src/blocks/class-menu-loop-block.php:2031
+#: src/blocks/class-menu-loop-block.php:2032
 msgid "Edit"
 msgstr ""
 
@@ -5123,9 +5123,9 @@ msgid "all"
 msgstr ""
 
 #: src/blocks/class-reservation-block.php:748
-#: src/blocks/reservation/app.js:3803
-#: src/blocks/reservation/booking-confirm-app.js:2232
-#: src/blocks/reservation/booking-confirm-app.js:2793
+#: src/blocks/reservation/app.js:3934
+#: src/blocks/reservation/booking-confirm-app.js:2326
+#: src/blocks/reservation/booking-confirm-app.js:2887
 msgid "Loading form…"
 msgstr ""
 
@@ -5141,8 +5141,8 @@ msgstr ""
 
 #: src/blocks/shared/class-reservation-button-renderer.php:147
 #: src/blocks/reservation-button/edit.js:127
-#: src/blocks/reservation/app.js:4816
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1575
+#: src/blocks/reservation/app.js:4960
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1668
 msgid "Proceed to Reservation"
 msgstr ""
 
@@ -5339,7 +5339,7 @@ msgstr ""
 
 #: src/bookings/class-booking-admin.php:1062
 #: src/bookings/class-booking-admin.php:1634
-#: src/blocks/reservation/booking-confirm-app.js:2530
+#: src/blocks/reservation/booking-confirm-app.js:2624
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:600
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:717
 #: src/blocks/reservation/components/booking-summary-items.js:71
@@ -5380,8 +5380,8 @@ msgid "This is the fee for the guests over the %d included in the basic price. (
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:1137
-#: src/blocks/reservation/app.js:2290
-#: src/blocks/reservation/booking-confirm-app.js:2682
+#: src/blocks/reservation/app.js:2348
+#: src/blocks/reservation/booking-confirm-app.js:2776
 #: src/blocks/reservation/components/booking-summary-items.js:207
 msgid "Total basic fee"
 msgstr ""
@@ -5465,7 +5465,7 @@ msgstr ""
 #: src/bookings/class-booking-admin.php:1303
 #: src/bookings/class-booking-admin.php:1312
 #: src/bookings/class-booking-anonymizer.php:209
-#: src/blocks/reservation/booking-confirm-app.js:2977
+#: src/blocks/reservation/booking-confirm-app.js:3071
 msgid "Management memo"
 msgstr ""
 
@@ -5478,8 +5478,8 @@ msgid "Reserved name"
 msgstr ""
 
 #: src/bookings/class-booking-admin.php:1633
-#: src/blocks/reservation/booking-confirm-app.js:2334
-#: src/blocks/reservation/booking-confirm-app.js:2508
+#: src/blocks/reservation/booking-confirm-app.js:2428
+#: src/blocks/reservation/booking-confirm-app.js:2602
 #: src/blocks/reservation/components/guest-verify-result.js:297
 msgid "Reservation date and time"
 msgstr ""
@@ -5830,13 +5830,13 @@ msgid "Please enter your name and email address."
 msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:529
-#: src/blocks/reservation/booking-confirm-app.js:1436
+#: src/blocks/reservation/booking-confirm-app.js:1522
 msgid "Please enter the customer name."
 msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:593
 #: src/bookings/class-guest-booking-controller.php:567
-#: src/blocks/reservation/booking-confirm-app.js:1400
+#: src/blocks/reservation/booking-confirm-app.js:1486
 msgid "You must agree to the cancellation policy."
 msgstr ""
 
@@ -5855,7 +5855,7 @@ msgid "You already have a reservation at the same date and time with this email 
 msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:1156
-#: src/blocks/reservation/booking-confirm-app.js:1604
+#: src/blocks/reservation/booking-confirm-app.js:1695
 msgid "A reservation for the same date and time already exists. Please change the date and time."
 msgstr ""
 
@@ -5884,8 +5884,8 @@ msgstr ""
 #: src/bookings/class-booking-draft-controller.php:543
 #: src/bookings/class-booking-draft-controller.php:877
 #: src/bookings/class-lodging-booking.php:316
-#: src/blocks/reservation/app.js:3306
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1074
+#: src/blocks/reservation/app.js:3436
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1167
 msgid "Please select at least one guest."
 msgstr ""
 
@@ -5920,7 +5920,7 @@ msgstr ""
 
 #: src/bookings/class-booking-confirmation-controller.php:2268
 #: src/bookings/class-booking-draft-controller.php:450
-#: src/blocks/reservation/app.js:373
+#: src/blocks/reservation/app.js:380
 msgid "Please choose another time slot."
 msgstr ""
 
@@ -6325,8 +6325,8 @@ msgstr ""
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:409
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:481
 #: src/blocks/reservation/components/booking-summary-items.js:132
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1232
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1434
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1325
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1527
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:110
 msgid "%d night"
 msgid_plural "%d nights"
@@ -6456,7 +6456,7 @@ msgstr ""
 
 #. translators: %s: the lowest price (e.g. ¥7,000). The price differs by day, so it is shown as "from".
 #: src/common/class-lodging-price-display.php:223
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1137
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1230
 msgid "%s~"
 msgstr ""
 
@@ -6467,13 +6467,13 @@ msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:47
-#: src/blocks/reservation/app.js:316
+#: src/blocks/reservation/app.js:323
 msgid "This menu accepts bookings from %d guests."
 msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
 #: src/common/class-nomination-min-guests-message.php:52
-#: src/blocks/reservation/app.js:324
+#: src/blocks/reservation/app.js:331
 msgid "Please set the number of guests to %d or more."
 msgstr ""
 
@@ -7216,9 +7216,9 @@ msgstr ""
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:390
 #: src/resources/resource-labels.php:379
-#: src/blocks/reservation/app.js:581
-#: src/blocks/reservation/app.js:1129
-#: src/blocks/reservation/booking-confirm-app.js:265
+#: src/blocks/reservation/app.js:635
+#: src/blocks/reservation/app.js:1187
+#: src/blocks/reservation/booking-confirm-app.js:277
 #: src/blocks/reservation/components/booking-summary-items.js:149
 #: src/blocks/reservation/components/guest-result-frame.js:146
 msgid "Number of guests"
@@ -7530,7 +7530,7 @@ msgstr ""
 #: src/notifications/class-booking-notification-service.php:1197
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:380
 #: src/blocks/reservation/components/booking-summary-items.js:127
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1428
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1521
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:107
 msgid "Number of nights"
 msgstr ""
@@ -7900,7 +7900,7 @@ msgstr ""
 #. translators: %s: Resource label (plural).
 #. translators: %s: resource label (plural), e.g. "Staff".
 #: src/post-types/class-resource-post-type.php:66
-#: src/post-types/class-service-menu-post-type.php:1357
+#: src/post-types/class-service-menu-post-type.php:1358
 msgid "All %s"
 msgstr ""
 
@@ -7994,156 +7994,156 @@ msgstr ""
 msgid "%s hours ago"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:680
+#: src/post-types/class-service-menu-post-type.php:681
 msgid "Ended"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:861
+#: src/post-types/class-service-menu-post-type.php:862
 msgid "This menu uses price categories, so the basic price is not used for bookings."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:862
+#: src/post-types/class-service-menu-post-type.php:863
 msgid "Edit price categories"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:884
+#: src/post-types/class-service-menu-post-type.php:885
 msgid "Ignored if this service menu does not use staff nomination."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:987
+#: src/post-types/class-service-menu-post-type.php:988
 msgid "This option requires detailed settings. Edit it in the full service menu editor."
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/post-types/class-service-menu-post-type.php:1372
+#: src/post-types/class-service-menu-post-type.php:1373
 msgid "Available %s"
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/post-types/class-service-menu-post-type.php:1387
+#: src/post-types/class-service-menu-post-type.php:1388
 msgid "All %s can be in charge"
 msgstr ""
 
 #. translators: %s: resource label (plural), e.g. "Staff".
-#: src/post-types/class-service-menu-post-type.php:1402
+#: src/post-types/class-service-menu-post-type.php:1403
 msgid "Choose which %s can be in charge"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1444
 #: src/post-types/class-service-menu-post-type.php:1445
-#: src/post-types/class-service-menu-post-type.php:1454
+#: src/post-types/class-service-menu-post-type.php:1446
+#: src/post-types/class-service-menu-post-type.php:1455
 msgid "Service Tag"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1446
+#: src/post-types/class-service-menu-post-type.php:1447
 msgid "Find your service tag"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1447
+#: src/post-types/class-service-menu-post-type.php:1448
 msgid "All service tags"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1448
+#: src/post-types/class-service-menu-post-type.php:1449
 msgid "Parent service tag"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1449
+#: src/post-types/class-service-menu-post-type.php:1450
 msgid "Parent service tag:"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1450
+#: src/post-types/class-service-menu-post-type.php:1451
 msgid "Edit service tag"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1451
+#: src/post-types/class-service-menu-post-type.php:1452
 msgid "Update service tag"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1452
+#: src/post-types/class-service-menu-post-type.php:1453
 msgid "Add service tag"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1453
+#: src/post-types/class-service-menu-post-type.php:1454
 msgid "New Service Tag Name"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1481
 #: src/post-types/class-service-menu-post-type.php:1482
+#: src/post-types/class-service-menu-post-type.php:1483
 msgid "Service Menu Group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1483
+#: src/post-types/class-service-menu-post-type.php:1484
 msgid "Search service menu group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1484
+#: src/post-types/class-service-menu-post-type.php:1485
 msgid "All service menu groups"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1485
+#: src/post-types/class-service-menu-post-type.php:1486
 msgid "Parent service menu group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1486
+#: src/post-types/class-service-menu-post-type.php:1487
 msgid "Parent service menu group:"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1487
+#: src/post-types/class-service-menu-post-type.php:1488
 msgid "Edit service menu group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1488
+#: src/post-types/class-service-menu-post-type.php:1489
 msgid "Update service menu group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1489
+#: src/post-types/class-service-menu-post-type.php:1490
 msgid "Add service menu group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1490
+#: src/post-types/class-service-menu-post-type.php:1491
 msgid "New Service Menu Group Name"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1491
+#: src/post-types/class-service-menu-post-type.php:1492
 msgid "Service Group"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1524
-#: src/post-types/class-service-menu-post-type.php:1551
+#: src/post-types/class-service-menu-post-type.php:1525
+#: src/post-types/class-service-menu-post-type.php:1552
 msgid "Display mode when displaying all items"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1526
-#: src/post-types/class-service-menu-post-type.php:1554
+#: src/post-types/class-service-menu-post-type.php:1527
+#: src/post-types/class-service-menu-post-type.php:1555
 msgid "Use common settings"
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:1530
-#: src/post-types/class-service-menu-post-type.php:1558
+#: src/post-types/class-service-menu-post-type.php:1531
+#: src/post-types/class-service-menu-post-type.php:1559
 msgid "Applies only when the menu loop displays all groups."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2704
+#: src/post-types/class-service-menu-post-type.php:2705
 msgid "Primary service menu group information."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2728
+#: src/post-types/class-service-menu-post-type.php:2729
 msgid "Minimum number of guests required to book this menu when staff nomination is used (0 = no restriction)."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2746
+#: src/post-types/class-service-menu-post-type.php:2747
 msgid "Price unit of the menu that is in effect on this site (per_guest or per_booking)."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2764
+#: src/post-types/class-service-menu-post-type.php:2765
 msgid "Extra guest fee of the per-tour menu that is in effect on this site (enabled and the number of guests included in the basic price)."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2783
+#: src/post-types/class-service-menu-post-type.php:2784
 msgid "Reservation screen settings for a plan billed per night (null when the menu is not billed per night)."
 msgstr ""
 
-#: src/post-types/class-service-menu-post-type.php:2802
+#: src/post-types/class-service-menu-post-type.php:2803
 msgid "IDs of the resources (staff) that can be in charge of this menu, with \"all resources\" expanded to the published resources."
 msgstr ""
 
@@ -8384,7 +8384,7 @@ msgid "(tax included)"
 msgstr ""
 
 #: src/provider-settings/class-settings-repository.php:445
-#: src/blocks/reservation/booking-confirm-app.js:1747
+#: src/blocks/reservation/booking-confirm-app.js:1838
 #: src/blocks/reservation/components/guest-verify-result.js:75
 msgid "We will check the details and email you once your reservation is confirmed. Please wait for that email. You can close this page."
 msgstr ""
@@ -9061,13 +9061,13 @@ msgid "Loading the default days on sale."
 msgstr ""
 
 #: src/shifts/class-shift-lodging-editor.php:279
-#: src/blocks/reservation/app.js:3743
-#: src/blocks/reservation/app.js:3930
-#: src/blocks/reservation/app.js:4106
-#: src/blocks/reservation/booking-confirm-app.js:1883
-#: src/blocks/reservation/booking-confirm-app.js:1890
-#: src/blocks/reservation/booking-confirm-app.js:2261
-#: src/blocks/reservation/booking-confirm-app.js:2440
+#: src/blocks/reservation/app.js:3874
+#: src/blocks/reservation/app.js:4061
+#: src/blocks/reservation/app.js:4237
+#: src/blocks/reservation/booking-confirm-app.js:1974
+#: src/blocks/reservation/booking-confirm-app.js:1981
+#: src/blocks/reservation/booking-confirm-app.js:2355
+#: src/blocks/reservation/booking-confirm-app.js:2534
 #: src/blocks/reservation/booking-ui/availability-notice.js:122
 #: src/blocks/reservation/booking-ui/calendar-grid.js:178
 #: src/blocks/reservation/lodging/lodging-range-calendar.js:254
@@ -9393,371 +9393,384 @@ msgid "Proceed to Reservation Button Block"
 msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:346
+#: src/blocks/reservation/app.js:353
 msgid "This menu requires a minimum of %d guests."
 msgstr ""
 
 #. translators: %d: minimum number of guests required to book this menu.
-#: src/blocks/reservation/app.js:367
+#: src/blocks/reservation/app.js:374
 msgid "This time slot cannot accept the minimum of %d guests required for this menu."
 msgstr ""
 
-#: src/blocks/reservation/app.js:842
+#: src/blocks/reservation/app.js:569
+#: src/blocks/reservation/booking-confirm-app.js:613
+#: src/blocks/reservation/booking-confirm-app.js:1708
+msgid "Couldn't load temporary reservation data. Please try again from the reservation page."
+msgstr ""
+
+#: src/blocks/reservation/app.js:896
 msgid "There are no service menus available for the selected dates."
 msgstr ""
 
-#: src/blocks/reservation/app.js:846
+#: src/blocks/reservation/app.js:900
 msgid "Change the dates or clear the dates to show all service menus."
 msgstr ""
 
-#: src/blocks/reservation/app.js:852
+#: src/blocks/reservation/app.js:906
 msgid "There are no service menus available on the selected date."
 msgstr ""
 
-#: src/blocks/reservation/app.js:856
+#: src/blocks/reservation/app.js:910
 msgid "Change the date or clear the date to show all service menus."
 msgstr ""
 
 #. translators: %s: resource label (e.g. "Staff"), customizable via basic settings.
-#: src/blocks/reservation/app.js:865
+#: src/blocks/reservation/app.js:919
 msgid "There are no service menus available for the selected %s."
 msgstr ""
 
 #. translators: %s: "No preference" label, customizable via basic settings.
-#: src/blocks/reservation/app.js:875
+#: src/blocks/reservation/app.js:929
 msgid "Choose %s to show all service menus."
 msgstr ""
 
-#: src/blocks/reservation/app.js:885
+#: src/blocks/reservation/app.js:939
 msgid "There are no service menus to display."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1282
+#: src/blocks/reservation/app.js:1340
 msgid "Could not get menu list."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1491
-#: src/blocks/reservation/booking-confirm-app.js:1050
+#: src/blocks/reservation/app.js:1549
+#: src/blocks/reservation/booking-confirm-app.js:1100
 msgid "The form could not be displayed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1537
-#: src/blocks/reservation/booking-confirm-app.js:1093
+#: src/blocks/reservation/app.js:1595
+#: src/blocks/reservation/booking-confirm-app.js:1143
 msgid "Do you want to cancel this reservation?"
 msgstr ""
 
-#: src/blocks/reservation/app.js:1566
-#: src/blocks/reservation/booking-confirm-app.js:1122
+#: src/blocks/reservation/app.js:1624
+#: src/blocks/reservation/booking-confirm-app.js:1172
 msgid "I was unable to cancel my reservation."
 msgstr ""
 
-#: src/blocks/reservation/app.js:1648
-#: src/blocks/reservation/booking-confirm-app.js:1182
+#: src/blocks/reservation/app.js:1706
+#: src/blocks/reservation/booking-confirm-app.js:1232
 msgid "The reservation list could not be loaded."
 msgstr ""
 
-#: src/blocks/reservation/app.js:2376
+#: src/blocks/reservation/app.js:2434
 msgid "Failed to retrieve menu information."
 msgstr ""
 
 #. translators: %s: 診断理由の本文。
-#: src/blocks/reservation/app.js:2464
+#: src/blocks/reservation/app.js:2522
 msgid "[Administrator diagnostic] %s"
 msgstr ""
 
-#: src/blocks/reservation/app.js:2543
+#: src/blocks/reservation/app.js:2601
 msgid "Failed to load calendar."
 msgstr ""
 
-#: src/blocks/reservation/app.js:2652
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:407
+#: src/blocks/reservation/app.js:2719
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:416
 msgid "Failed to read free space."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3079
+#: src/blocks/reservation/app.js:3152
 msgid "Could not delete the favorite."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3210
+#: src/blocks/reservation/app.js:3283
 msgid "The details of the specified service menu cannot be displayed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3254
-#: src/blocks/reservation/app.js:3428
+#: src/blocks/reservation/app.js:3383
+#: src/blocks/reservation/app.js:3558
 msgid "Temporary reservation data save failed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3276
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:837
+#: src/blocks/reservation/app.js:3406
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:930
 msgid "The editor does not transition to the confirmation page."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3286
+#: src/blocks/reservation/app.js:3416
 msgid "Please select your menu and reservation slot before proceeding."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3298
+#: src/blocks/reservation/app.js:3428
 msgid "Please select the quantity."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3448
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:871
+#: src/blocks/reservation/app.js:3579
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:964
 msgid "Failed to save reservation details. Please try again later."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3499
-#: src/blocks/reservation/booking-confirm-app.js:2183
+#: src/blocks/reservation/app.js:3630
+#: src/blocks/reservation/booking-confirm-app.js:2277
 msgid "Reservation block navigation"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3504
+#: src/blocks/reservation/app.js:3635
 #: src/blocks/reservation/components/reservation-header-nav.js:84
 msgid "Return"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3505
+#: src/blocks/reservation/app.js:3636
 msgid "return"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3538
+#: src/blocks/reservation/app.js:3669
 #: src/blocks/reservation/components/reservation-header-nav.js:118
 msgid "Back to the list"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3550
+#: src/blocks/reservation/app.js:3681
 msgid "Please check our cancellation policy before booking."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3554
+#: src/blocks/reservation/app.js:3685
 msgid "Your reservation has been completed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3659
-#: src/blocks/reservation/app.js:4812
-#: src/blocks/reservation/booking-confirm-app.js:2391
-#: src/blocks/reservation/booking-confirm-app.js:3029
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1574
+#: src/blocks/reservation/app.js:3790
+#: src/blocks/reservation/app.js:4956
+#: src/blocks/reservation/booking-confirm-app.js:2485
+#: src/blocks/reservation/booking-confirm-app.js:3123
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1667
 msgid "Processing…"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3671
+#: src/blocks/reservation/app.js:3802
 msgid "Book the same again"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3762
-#: src/blocks/reservation/booking-confirm-app.js:2279
+#: src/blocks/reservation/app.js:3893
+#: src/blocks/reservation/booking-confirm-app.js:2373
 msgid "There are no reservations to display."
 msgstr ""
 
-#: src/blocks/reservation/app.js:3772
+#: src/blocks/reservation/app.js:3903
 msgid "Upcoming reservations"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3787
+#: src/blocks/reservation/app.js:3918
 msgid "Past reservations"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3878
+#: src/blocks/reservation/app.js:4009
 msgid "Favorites"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3884
+#: src/blocks/reservation/app.js:4015
 msgid "Your usual"
 msgstr ""
 
-#: src/blocks/reservation/app.js:3908
+#: src/blocks/reservation/app.js:4039
 msgid "Delete favorite"
 msgstr ""
 
-#: src/blocks/reservation/app.js:4064
+#: src/blocks/reservation/app.js:4195
 msgid "Loading service menu…"
 msgstr ""
 
-#: src/blocks/reservation/app.js:4183
+#: src/blocks/reservation/app.js:4316
+msgid "The time slot you had selected is no longer available."
+msgstr ""
+
+#: src/blocks/reservation/app.js:4320
+msgid "Please select another date or time."
+msgstr ""
+
+#: src/blocks/reservation/app.js:4327
 msgid "The date you had selected has passed."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4187
+#: src/blocks/reservation/app.js:4331
 msgid "Please select the date again."
 msgstr ""
 
 #. translators: %s: the date that was carried over and cannot be booked.
-#: src/blocks/reservation/app.js:4195
+#: src/blocks/reservation/app.js:4339
 msgid "The date you selected (%s) cannot be booked for this menu."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4204
+#: src/blocks/reservation/app.js:4348
 msgid "Please select another date."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4334
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1454
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1473
+#: src/blocks/reservation/app.js:4478
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1547
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1566
 msgid "Not selected"
 msgstr ""
 
 #. translators: %s: total price.
-#: src/blocks/reservation/app.js:4484
+#: src/blocks/reservation/app.js:4628
 msgid "Total: %s"
 msgstr ""
 
 #. translators: %d: number of remaining bookable guests.
-#: src/blocks/reservation/app.js:4506
+#: src/blocks/reservation/app.js:4650
 msgid "You can book up to %d more."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4676
+#: src/blocks/reservation/app.js:4820
 msgid "Make this staff member's time slot private (no other bookings for that staff member will be accepted)"
 msgstr ""
 
-#: src/blocks/reservation/app.js:4680
+#: src/blocks/reservation/app.js:4824
 msgid "Make this time slot private (no other bookings will be accepted)"
 msgstr ""
 
-#: src/blocks/reservation/app.js:4689
+#: src/blocks/reservation/app.js:4833
 msgid "This slot already has a booking, so a private booking cannot be specified."
 msgstr ""
 
 #. translators: %d: minimum number of guests required for a private booking.
-#: src/blocks/reservation/app.js:4701
+#: src/blocks/reservation/app.js:4845
 msgid "A private booking requires at least %d guests."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4711
+#: src/blocks/reservation/app.js:4855
 msgid "Making it private means no one else can book this staff member for this time slot."
 msgstr ""
 
-#: src/blocks/reservation/app.js:4715
+#: src/blocks/reservation/app.js:4859
 msgid "Making it private means no one else can book this time slot."
 msgstr ""
 
 #. translators: %d: number of guests at or above which the private booking fee is not charged.
-#: src/blocks/reservation/app.js:4725
-#: src/blocks/reservation/app.js:4782
+#: src/blocks/reservation/app.js:4869
+#: src/blocks/reservation/app.js:4926
 msgid "No private booking fee applies because there are %d or more guests."
 msgstr ""
 
 #. translators: %s: private booking fee per guest.
-#: src/blocks/reservation/app.js:4736
+#: src/blocks/reservation/app.js:4880
 msgid "A private booking fee of %s per guest will be added."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:534
+#: src/blocks/reservation/booking-confirm-app.js:547
 msgid "The URL does not include a temporary reservation data parameter. Please try again from the reservation page."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:566
-#: src/blocks/reservation/booking-confirm-app.js:1617
-msgid "Couldn't load temporary reservation data. Please try again from the reservation page."
-msgstr ""
-
-#: src/blocks/reservation/booking-confirm-app.js:1236
+#: src/blocks/reservation/booking-confirm-app.js:1286
 msgid "Could not add to favorites."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1337
+#: src/blocks/reservation/booking-confirm-app.js:1392
 msgid "The confirmation email could not be sent."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1486
+#: src/blocks/reservation/booking-confirm-app.js:1572
 msgid "An error occurred during payment processing."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1628
+#: src/blocks/reservation/booking-confirm-app.js:1719
 msgid "Confirmation of reservation failed. Please try again later."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1710
+#: src/blocks/reservation/booking-confirm-app.js:1801
 msgid "Loading temporary reservation data…"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1740
+#: src/blocks/reservation/booking-confirm-app.js:1831
 #: src/blocks/reservation/components/guest-verify-result.js:68
 msgid "Your tentative reservation has been received"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1831
+#: src/blocks/reservation/booking-confirm-app.js:1922
 msgid "No entry"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:1962
+#: src/blocks/reservation/booking-confirm-app.js:2053
 msgid "I agree to the cancellation policy"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2006
-#: src/blocks/reservation/booking-confirm-app.js:2926
+#: src/blocks/reservation/booking-confirm-app.js:2097
+#: src/blocks/reservation/booking-confirm-app.js:3020
 msgid "Payment method"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2036
-#: src/blocks/reservation/booking-confirm-app.js:2949
+#: src/blocks/reservation/booking-confirm-app.js:2127
+#: src/blocks/reservation/booking-confirm-app.js:3043
 msgid "On-site payment"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2054
-#: src/blocks/reservation/booking-confirm-app.js:2967
+#: src/blocks/reservation/booking-confirm-app.js:2145
+#: src/blocks/reservation/booking-confirm-app.js:3061
 msgid "Card payment (Stripe)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2091
+#: src/blocks/reservation/booking-confirm-app.js:2182
 msgid "Save these details so you can quickly book the same thing again next time (add to favorites)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2674
+#: src/blocks/reservation/booking-confirm-app.js:2768
 msgid "Private (exclusive use of this slot)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2735
+#: src/blocks/reservation/booking-confirm-app.js:2829
 msgid "Members can log in to make a reservation."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2739
+#: src/blocks/reservation/booking-confirm-app.js:2833
 msgid "You must log in to confirm your reservation."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2772
+#: src/blocks/reservation/booking-confirm-app.js:2866
 #: src/blocks/reservation/components/guest-contact-fields.js:35
 #: src/blocks/reservation/components/reservation-header-nav.js:102
 msgid "Sign up"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2835
+#: src/blocks/reservation/booking-confirm-app.js:2929
 msgid "Requests/Notes"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2844
+#: src/blocks/reservation/booking-confirm-app.js:2938
 msgid "Reserved name (required)"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2868
+#: src/blocks/reservation/booking-confirm-app.js:2962
 msgid "Please enter customer name."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2886
+#: src/blocks/reservation/booking-confirm-app.js:2980
 msgid "If the customer name is unknown, enter \"Unknown\" or a similar placeholder."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:2906
+#: src/blocks/reservation/booking-confirm-app.js:3000
 msgid "Please enter your contact phone number."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:3001
+#: src/blocks/reservation/booking-confirm-app.js:3095
 msgid "If the minimum number of participants is not reached, the session may not take place."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:3010
+#: src/blocks/reservation/booking-confirm-app.js:3104
 msgid "We will send you a confirmation email after you submit. Your reservation will be completed when you open the link in the email."
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:3031
+#: src/blocks/reservation/booking-confirm-app.js:3125
 msgid "Send confirmation email"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:3035
+#: src/blocks/reservation/booking-confirm-app.js:3129
 msgid "Reserve with this content"
 msgstr ""
 
-#: src/blocks/reservation/booking-confirm-app.js:3062
+#: src/blocks/reservation/booking-confirm-app.js:3144
+msgid "Reselect date and time"
+msgstr ""
+
+#: src/blocks/reservation/booking-confirm-app.js:3171
 msgid "Added to favorites."
 msgstr ""
 
@@ -9945,7 +9958,7 @@ msgstr ""
 
 #: src/blocks/reservation/components/booking-summary-items.js:113
 #: src/blocks/reservation/components/guest-verify-result.js:276
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1508
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1601
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:92
 msgid "Estimated check-in time"
 msgstr ""
@@ -10215,146 +10228,146 @@ msgid "Please enter your email address."
 msgstr ""
 
 #. translators: 1: 更新後の泊数、2: 更新後の宿泊合計金額。
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:527
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:617
 msgid "Price updated: %1$d night, total %2$s."
 msgid_plural "Price updated: %1$d nights, total %2$s."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: unavailable check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:696
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:788
 msgid "%s cannot be selected as the check-out date because it exceeds the maximum number of nights."
 msgstr ""
 
 #. translators: %s: unavailable check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:705
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:797
 msgid "%s cannot be selected as the check-out date because the stay includes an unavailable night."
 msgstr ""
 
 #. translators: %s: unavailable date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:713
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:805
 msgid "%s is not available. Please choose another date."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:894
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:987
 msgid "Select the check-in date."
 msgstr ""
 
 #. translators: %s: check-in date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:907
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1000
 msgid "Check-in: %s. Next, select the check-out date."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:914
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1007
 msgid "No stay is available from this check-in date. Please choose another date."
 msgstr ""
 
 #. translators: 1: check-in date, 2: latest check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:921
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1014
 msgid "Check-in: %1$s. Next, select the check-out date (up to %2$s)."
 msgstr ""
 
 #. translators: 1: check-in date, 2: check-out date, 3: label for a room (e.g. room).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:932
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1025
 msgid "Check-in: %1$s, check-out: %2$s. Next, select an available %3$s from the list. Select a date to choose again."
 msgstr ""
 
 #. translators: 1: check-in date, 2: check-out date.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:943
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1036
 msgid "Check-in: %1$s, check-out: %2$s. Select a date to choose again."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:955
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1048
 #: src/blocks/reservation/lodging/lodging-room-list.js:48
 msgid "Checking available rooms…"
 msgstr ""
 
 #. translators: %s: 確定した客室名。
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:962
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1055
 msgid "%s is available; you can proceed to reservation."
 msgstr ""
 
 #. translators: %d: number of available rooms.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:971
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1064
 msgid "%d room is available."
 msgid_plural "%d rooms are available."
 msgstr[0] ""
 msgstr[1] ""
 
 #. translators: 1: minimum number of guests with unit (e.g. 1), 2: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:990
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1083
 msgid "The number of guests can be from %1$s to %2$s."
 msgstr ""
 
 #. translators: %s: maximum number of guests with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1064
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1157
 msgid "The number of guests can be up to %s."
 msgstr ""
 
 #. translators: 1: base price per room per night, 2: number of guests included in the base price with unit (e.g. 4).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1146
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1239
 msgid "The rate is %1$s per room per night, which includes up to %2$s."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1153
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1246
 msgid "Guests beyond the included number are charged the additional fee shown for each guest category, per extra guest, per night."
 msgstr ""
 
 #. translators: %s: plan price per room per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1163
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1256
 msgid "The rate is %s per room per night. It does not change with the number of guests."
 msgstr ""
 
 #. translators: %s: plan price per guest per night.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1171
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1264
 msgid "The rate is %s per guest per night."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1186
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1279
 msgid "However, the rate varies by day, such as pre-holidays and special dates."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1191
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1284
 msgid "Select your dates to see the rate for each night."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1195
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1288
 msgid "Select your dates and a room to see the rate for each night."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1211
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1304
 msgid "The dates you had selected have passed."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1215
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1241
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1308
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1334
 msgid "Please select your dates again."
 msgstr ""
 
 #. translators: 1: check-in date, 2: number of nights.
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1225
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1318
 msgid "The dates you selected (%1$s, %2$s) cannot be booked for this plan because no rooms are available or they are outside the booking period."
 msgstr ""
 
 #. translators: %s: label for a room (e.g. room).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1315
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1408
 msgid "Could not load availability. Select your dates to check whether a %s is available."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1321
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1414
 msgid "× : Not available for check-in (fully booked, etc.). Within the selectable range, it can still be your check-out date."
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1337
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1430
 msgid "Reselect dates"
 msgstr ""
 
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1349
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1442
 msgid "The room you selected is no longer available. Please select again."
 msgstr ""
 
 #. translators: %d: 泊数。
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1486
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1579
 #: src/blocks/reservation/lodging/lodging-confirm-summary.js:135
 #: src/blocks/reservation/lodging/night-rates.js:291
 msgid "Total for %d night"
@@ -10363,12 +10376,12 @@ msgstr[0] ""
 msgstr[1] ""
 
 #. translators: %s: プランのチェックイン開始時刻（HH:MM）。
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1534
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1627
 msgid "Enter your estimated check-in time (%s or later)."
 msgstr ""
 
 #. translators: %s: label for a room (e.g. room).
-#: src/blocks/reservation/lodging/lodging-booking-panel.js:1550
+#: src/blocks/reservation/lodging/lodging-booking-panel.js:1643
 msgid "Select a %s to proceed to reservation."
 msgstr ""
 

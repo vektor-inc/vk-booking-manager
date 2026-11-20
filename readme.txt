@@ -2,9 +2,9 @@
 Contributors: vektor-inc,kurudrive
 Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
-Tested up to: 6.9
+Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 3.15.0
+Stable tag: 3.16.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,6 +130,19 @@ Small adjustments preserve the button height. Keep the value close to 0px: large
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.16.0 =
+* [ 機能追加 ][ 予約ブロック ] 予約確認画面に「日時を選び直す」リンクを追加し、選んだメニュー・日時・入力内容を残したまま日時選択の画面へ戻れるよう対応
+* [ 仕様変更 ] 公開側で 0 円の料金を「無料」と表示するよう変更
+* [ 不具合修正 ] worktree 上で Pro 版の PHPUnit を実行できない問題を修正
+* [ 不具合修正 ] 同じスタッフへの予約がほぼ同時に確定されたとき、別メニューや時間が一部重なる予約が両方確定して二重予約になることがある不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] 「角丸の基本サイズ」を大きくすると予約確認画面の入力欄だけ丸くなりすぎる不具合を修正し、入力欄とエラー表示の角丸をユーザー情報編集フォームと同じ大きさに統一
+* [ 不具合修正 ] 無料版の更新画面で WordPress との互換性が常に「未確認」と表示され、必要な PHP のバージョンを満たさないサイトにも更新が案内される不具合を修正
+* [ 不具合修正 ][ サービスカードブロック・予約に進むボタンブロック ] エディタでサービスメニューの一覧を取得できず、メニューを選ぶ欄が空になる不具合を修正
+* [ 不具合修正 ][ サービスメニュー検索ブロック ] WordPress 7.2 のブロックエディタで、ブラウザのコンソールに非推奨の警告が表示される不具合を修正
+* [ 不具合修正 ] サブディレクトリに設置したサイトで、認証メールを再送すると、メール内のリンクと再送後の画面の URL にサイトのパスが二重に入り 404 になる不具合を修正
+* [ デザイン不具合修正 ][ 予約ブロック ] 確認メール送信後の画面で宛先・有効期限・注意書きの間隔が揃い、案内のまとまりが分かりにくい表示を修正
+* [ その他 ][ 7.1 対応 ] 動作確認済みの WordPress を 7.1 に更新し、本体ファイルのヘッダーにも必要な WordPress の最低バージョン 6.8 を明記
 
 = 3.15.0 =
 * [ 機能追加 ] サービスメニューの提供期間に「1日のみ」を追加し、開催日の表示と予約画面の日付・時間枠の自動選択に対応

@@ -27,6 +27,7 @@ class Reservation_Block_App_Js_Translations_Test extends WP_UnitTestCase {
 	 */
 	public function provide_bundled_messages(): array {
 		return array(
+			'pricing.js の無料表示'                  => array( 'Free' ),
 			'guest-booking.js の名前の入力チェック'  => array( 'Please enter your name.' ),
 			'guest-booking.js のメールの入力チェック' => array( 'Please enter your email address.' ),
 			'guest-booking.js の電話番号の入力チェック' => array( 'Please enter your phone number.' ),
@@ -45,5 +46,16 @@ class Reservation_Block_App_Js_Translations_Test extends WP_UnitTestCase {
 
 		$messages = $data['locale_data']['messages'] ?? array();
 		$this->assertArrayHasKey( $message, $messages );
+		if ( 'Free' === $message ) {
+			$this->assertSame( array( '無料' ), $messages[ $message ] );
+		}
+	}
+
+	/**
+	 * PHP 用の日本語カタログにも Free の翻訳がある。
+	 */
+	public function test_php_translation_catalog_contains_free(): void {
+		$catalog = require dirname( __DIR__, 3 ) . '/languages/vk-booking-manager-ja.l10n.php';
+		$this->assertSame( '無料', $catalog['messages']['Free'] ?? null );
 	}
 }

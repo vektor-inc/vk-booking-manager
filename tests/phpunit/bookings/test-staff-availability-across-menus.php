@@ -444,7 +444,7 @@ class Staff_Availability_Across_Menus_Test extends WP_UnitTestCase {
 		);
 		$method     = new ReflectionMethod( Booking_Confirmation_Controller::class, 'check_capacity_with_mutex' );
 		$method->setAccessible( true );
-		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutex' );
+		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutexes' );
 		$release->setAccessible( true );
 
 		foreach ( $this->get_scenarios() as $case ) {
@@ -468,8 +468,109 @@ class Staff_Availability_Across_Menus_Test extends WP_UnitTestCase {
 			}
 			$expected_staff_id = 'first' === $case['expected_staff'] ? $staff_s : $staff_t;
 			$this->assertSame( $expected_staff_id, $result['staff_id'], $case['test_condition_name'] );
-			$release->invoke( $controller, $result['name'], $result['token'] );
+			$release->invoke( $controller, $result['locks'] );
 		}
+
+		// スタッフ単位のロック: 別メニュー・一部重なる枠でも同じスタッフの確定は1件ずつ処理する。
+		// 本当の同時実行は再現できないため、別リクエストが握っているロックを先に作っておく。
+		global $wpdb;
+		$menus    = $this->create_menus();
+		$staff_a  = $this->create_staff();
+		$staff_b  = $this->create_staff();
+		$staff_c  = $this->create_staff();
+		$prefix   = '_transient_vkbm_booking_mutex_';
+		$slot_key = $prefix . $menus['a'] . '_' . md5( $start . '|' . $end );
+		$this->create_booking_post( $staff_c, $menus['b'], $day . ' 10:00:00', $day . ' 11:00:00' );
+		$lock_cases = array(
+			array(
+				'test_condition_name' => '指名・ロックなし => 「メニュー＋枠 → スタッフ」の順に取れ、解放後は1件も残らない',
+				'conditions'          => array( 'staff_id' => $staff_a, 'preferred' => true, 'candidates' => array(), 'preheld' => array() ),
+				'expected'            => array( 'error_code' => null, 'lock_names' => array( $slot_key, $prefix . 'staff_' . $staff_a ), 'rows_after_failure' => 0 ),
+			),
+			array(
+				'test_condition_name' => '自動割当・候補が降順で渡る => スタッフのロックは ID の小さい順に取る',
+				'conditions'          => array( 'staff_id' => 0, 'preferred' => false, 'candidates' => array( $staff_b, $staff_a ), 'preheld' => array() ),
+				'expected'            => array( 'error_code' => null, 'lock_names' => array( $slot_key, $prefix . 'staff_' . $staff_a, $prefix . 'staff_' . $staff_b ), 'rows_after_failure' => 0 ),
+			),
+			array(
+				'test_condition_name' => 'スタッフを使わない（スタッフ ID 0・候補なし）=> メニュー＋枠のロックだけ取る',
+				'conditions'          => array( 'staff_id' => 0, 'preferred' => false, 'candidates' => array(), 'preheld' => array() ),
+				'expected'            => array( 'error_code' => 'capacity_exceeded', 'lock_names' => array( $slot_key ), 'rows_after_failure' => 0 ),
+			),
+			array(
+				'test_condition_name' => '別メニューの確定がスタッフ A のロックを持っている => 409 で、メニュー＋枠のロックは解放される',
+				'conditions'          => array( 'staff_id' => $staff_a, 'preferred' => true, 'candidates' => array(), 'preheld' => array( $staff_a ) ),
+				'expected'            => array( 'error_code' => 'booking_busy', 'lock_names' => array( $slot_key, $prefix . 'staff_' . $staff_a ), 'rows_after_failure' => 1 ),
+			),
+			array(
+				'test_condition_name' => '自動割当で候補のうち後ろの1人が使用中 => 409 で、先に取った分も解放される',
+				'conditions'          => array( 'staff_id' => 0, 'preferred' => false, 'candidates' => array( $staff_b, $staff_a ), 'preheld' => array( $staff_b ) ),
+				'expected'            => array( 'error_code' => 'booking_busy', 'lock_names' => array( $slot_key, $prefix . 'staff_' . $staff_a, $prefix . 'staff_' . $staff_b ), 'rows_after_failure' => 1 ),
+			),
+			array(
+				'test_condition_name' => '自動割当で候補が別メニューの予約で埋まっている（定員超過）=> 断った後にロックは1件も残らない',
+				'conditions'          => array( 'staff_id' => 0, 'preferred' => false, 'candidates' => array( $staff_c ), 'preheld' => array() ),
+				'expected'            => array( 'error_code' => 'capacity_exceeded', 'lock_names' => array( $slot_key, $prefix . 'staff_' . $staff_c ), 'rows_after_failure' => 0 ),
+			),
+		);
+		foreach ( $lock_cases as $case ) {
+			$conditions = $case['conditions'];
+			$expected   = $case['expected'];
+			foreach ( $conditions['preheld'] as $held_staff_id ) {
+				$wpdb->insert(
+					$wpdb->options,
+					array(
+						'option_name'  => $prefix . 'staff_' . $held_staff_id,
+						'option_value' => 'othertoken|' . time(),
+						'autoload'     => 'no',
+					)
+				);
+			}
+
+			// 取りにいったロック名を、取得を試みた順に記録する。
+			$attempted    = array();
+			$record_query = static function ( $query ) use ( &$attempted, $prefix ) {
+				if ( false !== strpos( $query, 'INSERT IGNORE' ) && 1 === preg_match( '/' . preg_quote( $prefix, '/' ) . '[0-9a-z_]+/', $query, $m ) ) {
+					$attempted[] = $m[0];
+				}
+				return $query;
+			};
+			add_filter( 'query', $record_query );
+			$result = $method->invoke( $controller, $menus['a'], $conditions['staff_id'], $start, $end, 1, $conditions['preferred'], $conditions['candidates'], false );
+			remove_filter( 'query', $record_query );
+
+			$label = $case['test_condition_name'];
+			$this->assertSame( $expected['lock_names'], array_values( array_unique( $attempted ) ), $label . '（ロックを取りにいった順）' );
+			if ( null === $expected['error_code'] ) {
+				$this->assertIsArray( $result, $label );
+				$this->assertSame( $expected['lock_names'], array_column( $result['locks'], 'name' ), $label . '（返したロック）' );
+				$release->invoke( $controller, $result['locks'] );
+				$this->assertSame( 0, $this->count_mutex_rows(), $label . '（解放後に残るロック）' );
+			} else {
+				$this->assertInstanceOf( WP_Error::class, $result, $label );
+				$this->assertSame( $expected['error_code'], $result->get_error_code(), $label );
+				$this->assertSame( $expected['rows_after_failure'], $this->count_mutex_rows(), $label . '（断った後に残るロック。事前に用意した分だけ）' );
+			}
+
+			// 事前に用意したロックを消して、次のケースへ影響させない。
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( $prefix ) . '%' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- テストでロック行を片付けるため。
+		}
+	}
+
+	/**
+	 * 予約確定のロック行（options テーブルの _transient_vkbm_booking_mutex_*）の件数を数える。
+	 *
+	 * @return int ロック行の件数。
+	 */
+	private function count_mutex_rows(): int {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- テストでロック行の有無を DB から直接確かめるため。
+		return (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE %s",
+				$wpdb->esc_like( '_transient_vkbm_booking_mutex_' ) . '%'
+			)
+		);
 	}
 
 	/**

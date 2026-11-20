@@ -221,7 +221,7 @@ class Nomination_Staff_Scoped_Exclusive_Booking_Test extends WP_UnitTestCase {
 		);
 		$method = new ReflectionMethod( Booking_Confirmation_Controller::class, 'check_capacity_with_mutex' );
 		$method->setAccessible( true );
-		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutex' );
+		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutexes' );
 		$release->setAccessible( true );
 
 		// ガイドAを指名 => 既にAの貸切予約があるため拒否（担当スタッフ単位のガードが機能）。
@@ -239,7 +239,7 @@ class Nomination_Staff_Scoped_Exclusive_Booking_Test extends WP_UnitTestCase {
 			$this->fail( '指名したガイドBは空いているため成立するべきだが WP_Error になった: ' . $result_b->get_error_message() );
 		}
 		$this->assertSame( $staff_b, $result_b['staff_id'], 'ガイドBへ指名どおり割り当てられるべき' );
-		$release->invoke( $controller, $result_b['name'], $result_b['token'] );
+		$release->invoke( $controller, $result_b['locks'] );
 	}
 
 	/**
@@ -272,7 +272,7 @@ class Nomination_Staff_Scoped_Exclusive_Booking_Test extends WP_UnitTestCase {
 		);
 		$method = new ReflectionMethod( Booking_Confirmation_Controller::class, 'check_capacity_with_mutex' );
 		$method->setAccessible( true );
-		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutex' );
+		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutexes' );
 		$release->setAccessible( true );
 
 		// 指名なし（自動割当）・候補 [A, B]。担当スタッフはこの時点では未確定のため、
@@ -287,7 +287,7 @@ class Nomination_Staff_Scoped_Exclusive_Booking_Test extends WP_UnitTestCase {
 			$result['staff_id'],
 			'貸切予約で埋まっているガイドAではなく、空いているガイドBへ自動割当されるべき'
 		);
-		$release->invoke( $controller, $result['name'], $result['token'] );
+		$release->invoke( $controller, $result['locks'] );
 	}
 
 	/**

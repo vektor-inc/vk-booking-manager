@@ -103,6 +103,8 @@ const DateTimeValue = ( date, time ) => (
  * @param {boolean}                        props.isEditor                ブロックエディターの中か。
  * @param {string}                         props.initialCheckIn          最初から選んでおくチェックイン日（YYYY-MM-DD。絞り込み検索で選んだ日程の引き継ぎ。空文字は引き継ぎなし）。
  * @param {string}                         props.initialCheckOut         最初から選んでおくチェックアウト日（YYYY-MM-DD。空文字は引き継ぎなし）。
+ * @param {Object|null}                    props.restoredDraft           確認画面から戻ったときの所有者確認済み下書き。
+ * @param {() => void}                     props.onDraftRestored         下書きの人数・客室を戻し終えたときに呼ぶ関数。
  * @param {boolean}                        props.isCarriedDatePast       URL で受け取った日程が過ぎていて引き継げなかったか（日程選択の直上で案内する）。
  * @param {Function}                       props.onSubmitDraft           下書きの内容を渡して保存・確認画面へ移動する関数（Promise を返す）。
  * @return {JSX.Element} 宿泊用の予約画面。
@@ -122,6 +124,8 @@ const LodgingBookingPanel = ( {
 	isEditor,
 	initialCheckIn = '',
 	initialCheckOut = '',
+	restoredDraft = null,
+	onDraftRestored,
 	isCarriedDatePast = false,
 	onSubmitDraft,
 } ) => {
@@ -220,6 +224,11 @@ const LodgingBookingPanel = ( {
 	const unavailableNoticeFrameRef = useRef( null );
 	const [ availabilityRetry, setAvailabilityRetry ] = useState( 0 );
 	const [ selectedRoomId, setSelectedRoomId ] = useState( 0 );
+	// 確認画面から戻ったときの復元は、人数と客室をそれぞれ1回だけ行う。
+	const restoredInputsRef = useRef( false );
+	const restoredRoomRef = useRef( false );
+	// 復元した人数（客室の復元は、この人数で問い合わせた空室結果だけを使う）。null は人数を問わない。
+	const restoredGuestCountRef = useRef( null );
 	const [ isRoomLost, setIsRoomLost ] = useState( false );
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
 	const [ submitError, setSubmitError ] = useState( '' );
@@ -488,9 +497,90 @@ const LodgingBookingPanel = ( {
 	const checkOutTime =
 		availability.data?.check_out_time || lodging?.check_out_time || '';
 	const [ estimatedCheckInTime, setEstimatedCheckInTime ] = useState( null );
+	// 下書きの人数を復元してから、同じ条件で空室を問い合わせる。別のプランの下書きは使わない。
+	useEffect( () => {
+		if (
+			! restoredDraft ||
+			restoredInputsRef.current ||
+			Number( restoredDraft.menu_id ) !== menuId
+		) {
+			return;
+		}
+		restoredInputsRef.current = true;
+		const restoredGuests = Math.max(
+			1,
+			Math.floor( Number( restoredDraft.guests ) ) || 1
+		);
+		setGuestsInput( String( restoredGuests ) );
+		restoredGuestCountRef.current = hasTiers ? null : restoredGuests;
+		// 予約者区分の構成が下書きと同じときだけ、区分ごとの人数を戻す。
+		if (
+			hasTiers &&
+			Array.isArray( restoredDraft.guest_tiers ) &&
+			restoredDraft.guest_tiers.length === tiers.length
+		) {
+			const restoredCounts = restoredDraft.guest_tiers.map(
+				( tier ) => Number( tier?.count ) || 0
+			);
+			setTierCounts( restoredCounts );
+			restoredGuestCountRef.current = restoredCounts.reduce(
+				( total, count ) => total + count,
+				0
+			);
+		}
+		setEstimatedCheckInTime(
+			restoredDraft.lodging?.estimated_check_in_time || null
+		);
+	}, [ restoredDraft, menuId, hasTiers, tiers ] );
+	// 今も選べる客室だけを、復元した人数で問い合わせた空室応答から戻す。
+	useEffect( () => {
+		if (
+			! restoredDraft ||
+			! restoredInputsRef.current ||
+			restoredRoomRef.current ||
+			! isCurrentAvailability
+		) {
+			return;
+		}
+		const expectedGuestCount = restoredGuestCountRef.current;
+		if (
+			expectedGuestCount !== null &&
+			guestCount !== expectedGuestCount
+		) {
+			return;
+		}
+		restoredRoomRef.current = true;
+		const restoredRoomId = Number( restoredDraft.resource_id ) || 0;
+		const room = rooms.find( ( item ) => item.id === restoredRoomId );
+		if ( room ) {
+			setSelectedRoomId( room.id );
+		} else if ( restoredRoomId > 0 && ! isSingleRoomPlan && rooms.length ) {
+			// 選んでいた客室が埋まっていたことを、客室一覧の上の案内で一度だけ伝える。
+			// 空室が1件も無いときは、引き継いだ日程の案内（carryNotice）が出る。
+			setIsRoomLost( true );
+		}
+		if ( onDraftRestored ) {
+			onDraftRestored();
+		}
+	}, [
+		restoredDraft,
+		isCurrentAvailability,
+		rooms,
+		guestCount,
+		isSingleRoomPlan,
+		onDraftRestored,
+	] );
 	const estimatedCheckInTimeRef = useRef( null );
 	const selectedEstimatedCheckInTime = estimatedCheckInTime ?? checkInTime;
-	useEffect( () => setEstimatedCheckInTime( null ), [ menuId ] );
+	// プランが変わったときだけ到着予定時刻を戻す。表示直後（確認画面から戻した時刻を含む）には消さない。
+	const checkInTimeMenuIdRef = useRef( menuId );
+	useEffect( () => {
+		if ( checkInTimeMenuIdRef.current === menuId ) {
+			return;
+		}
+		checkInTimeMenuIdRef.current = menuId;
+		setEstimatedCheckInTime( null );
+	}, [ menuId ] );
 
 	// 即時応答ではloadingの描画が省略されるため、描画状態の遷移ではなく新しい取得結果を判定する。
 	// 初回取得・客室選択では通知せず、再取得成功時（客室選択済みならその客室、未選択なら泊ごとの料金）だけ短い合計を知らせる。
@@ -661,6 +751,8 @@ const LodgingBookingPanel = ( {
 	const handleSelectDate = useCallback(
 		( iso ) => {
 			carriedRangeRef.current = null;
+			// 利用者が日程を選び直したら、確認画面から戻ったときの客室の復元は打ち切る。
+			restoredRoomRef.current = true;
 			cancelUnavailableNoticeFrame();
 			setCarryNotice( null );
 			setSelectedRoomId( 0 );
@@ -757,6 +849,7 @@ const LodgingBookingPanel = ( {
 
 	const handleResetRange = () => {
 		carriedRangeRef.current = null;
+		restoredRoomRef.current = true;
 		cancelUnavailableNoticeFrame();
 		setCarryNotice( null );
 		setSelectedRoomId( 0 );
@@ -1339,18 +1432,19 @@ const LodgingBookingPanel = ( {
 				) }
 			</div>
 
-			{ /* 結果の件数・読み込み中・選べなくなった客室の案内。領域は常設し、中身だけを入れ替える。 */ }
+			{ /* 結果の件数・読み込み中・選べなくなった客室の読み上げ。領域は常設し、中身だけを入れ替える。
+			     選べなくなった客室の見た目の案内は、客室一覧と同じまとまりに見えるよう一覧の見出しの直下に出す。 */ }
 			<div role="status" className="vkbm-lodging__live">
 				<span className="vkbm-lodging__sr-only">
 					{ roomsStatusText }
 				</span>
 				{ ! isSingleRoomPlan && isRoomLost && (
-					<p className="vkbm-alert vkbm-alert__warning vkbm-alert--compact">
+					<span className="vkbm-lodging__sr-only">
 						{ __(
 							'The room you selected is no longer available. Please select again.',
 							'vk-booking-manager'
 						) }
-					</p>
+					</span>
 				) }
 			</div>
 
@@ -1381,6 +1475,7 @@ const LodgingBookingPanel = ( {
 								: availability.status
 						}
 						hideHeading={ isSingleRoomPlan }
+						isRoomLost={ ! isSingleRoomPlan && isRoomLost }
 						rooms={ rooms }
 						error={ availability.error }
 						nights={ nights }

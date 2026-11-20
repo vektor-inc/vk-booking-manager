@@ -93,6 +93,14 @@ import {
 	extractFooterSettings,
 } from './components/footer-model';
 import { sanitizeDraftToken } from '../shared/draft-token';
+import {
+	buildSlotRequestKey,
+	clearSlotLostNotice,
+	clearAllConfirmFields,
+	findRestorableSlot,
+	isSameIdSet,
+	shouldSkipOnlySlotAutoSelect,
+} from './draft-reselect';
 import { sortTermsByOrder } from '../shared/term-order';
 import { resolveResourceTagEmptyMessage } from './resource-tag-empty-message';
 // 宿泊用の予約画面は別ファイル（別チャンク）に分け、泊単位のプランを選んだときだけ読み込む。
@@ -124,6 +132,7 @@ const parseQueryParams = () => {
 			checkOutDate: params.get( 'check_out_date' ) || '',
 			auth: params.get( 'vkbm_auth' ) || '',
 			draft: sanitizeDraftToken( params.get( 'draft' ) || '' ),
+			reselect: params.get( 'vkbm_reselect' ) === '1',
 		};
 	} catch ( error ) {
 		return {};
@@ -513,10 +522,14 @@ export const ReservationApp = ( {
 	const [ hasIncomingPastDate, setHasIncomingPastDate ] =
 		useState( initialIsPastDate );
 	// 引き継いだ日付で予約できなかったときの案内。時間枠のサイトでカレンダーの直上に出す。
-	// kind は 'unavailable'（選べない日だった）か 'past'（過ぎていた）、date は選べなかった日付。
+	// kind は 'unavailable'（選べない日だった）・'past'（過ぎていた）・'slotLost'（確認画面から戻ったとき、選んでいた枠が埋まっていた）、
+	// date は選べなかった日付。
 	const [ carryNotice, setCarryNotice ] = useState(
 		initialMenuId && initialIsPastDate ? { kind: 'past', date: '' } : null
 	);
+	// 空き枠の取得結果を受け取る時点で、埋まっていた案内を出しているかを最新の値で判定するために持つ。
+	const carryNoticeRef = useRef( null );
+	carryNoticeRef.current = carryNotice;
 	// 泊のプランを選んだときに、宿泊の日程選択（LodgingBookingPanel）へ初期値として渡す日程。
 	// menu_id と日程が付いた直リンクで開いたときは、その日程を最初から渡す。
 	const [ carriedStay, setCarriedStay ] = useState(
@@ -525,6 +538,55 @@ export const ReservationApp = ( {
 	// 日付で絞り込んだ結果の、表示するメニューの ID（menu-loop の応答）。日付未指定・未取得は null。
 	const [ dateMenuIds, setDateMenuIds ] = useState( null );
 	const [ selectedSlot, setSelectedSlot ] = useState( null );
+	const [ reselectDraft, setReselectDraft ] = useState( null );
+	// 空き枠の取得結果を受け取る時点で、下書きの枠を戻す途中かを最新の値で判定するために持つ。
+	const reselectDraftRef = useRef( null );
+	reselectDraftRef.current = reselectDraft;
+	// 確認画面から戻ったときだけ、所有者確認済みの下書きを取得する。
+	useEffect( () => {
+		if ( ! queryDefaults.reselect && ! queryDefaults.draft ) {
+			// 通常の予約画面では、前の予約の確認画面で退避した入力値を残さない。
+			try {
+				clearAllConfirmFields( window.sessionStorage );
+			} catch ( error ) {
+				// 保存領域が使えない環境では削除を省く。
+			}
+			return;
+		}
+		if ( ! queryDefaults.reselect || ! queryDefaults.draft ) {
+			return;
+		}
+		let active = true;
+		apiFetch( { path: `/vkbm/v1/drafts/${ queryDefaults.draft }` } )
+			.then( ( data ) => {
+				// URL のメニューと違う下書きは、人数・枠・客室を取り違えるため使わない。
+				if (
+					! active ||
+					Number( data?.menu_id ) !== Number( queryDefaults.menuId )
+				) {
+					return;
+				}
+				setReselectDraft( data );
+				setSelectedTagIds( data.resource_tag_ids || [] );
+			} )
+			.catch( ( error ) => {
+				if ( active ) {
+					setSubmitError(
+						resolveApiErrorMessage(
+							error,
+							__(
+								"Couldn't load temporary reservation data. Please try again from the reservation page.",
+								'vk-booking-manager'
+							),
+							canManageReservations
+						)
+					);
+				}
+			} );
+		return () => {
+			active = false;
+		};
+	}, [ queryDefaults.reselect, queryDefaults.draft ] ); // eslint-disable-line react-hooks/exhaustive-deps
 	// 予約人数（複数人一括予約）。複数人一括予約に対応したメニューでのみ使用する。既定は1。
 	const [ guests, setGuests ] = useState( 1 );
 	// 料金区分ごとの人数（区分インデックス => 人数）。料金区分が定義されたメニューでのみ使用する。
@@ -953,7 +1015,9 @@ export const ReservationApp = ( {
 	const [ favorites, setFavorites ] = useState( [] );
 	const [ favoritesError, setFavoritesError ] = useState( '' );
 	const isLoggedIn = resolveLoginState( { userBootstrap, isEditor } );
-	const confirmDraftToken = queryDefaults.draft || '';
+	// 予約確認画面を表示しているか。確認画面から日時を選び直しに戻った画面（vkbm_reselect=1）は日時選択の画面として扱う。
+	const isConfirmScreen =
+		Boolean( queryDefaults.draft ) && ! queryDefaults.reselect;
 	const handleAuthLink = ( mode ) => {
 		if ( typeof window === 'undefined' ) {
 			return;
@@ -994,6 +1058,8 @@ export const ReservationApp = ( {
 		useState( null );
 
 	const [ slotData, setSlotData ] = useState( [] );
+	// slotData をどの条件で問い合わせた結果か（buildSlotRequestKey の値）。古い条件の結果で枠を復元しないために使う。
+	const [ slotDataKey, setSlotDataKey ] = useState( '' );
 	const [ slotLoading, setSlotLoading ] = useState( false );
 	const [ slotError, setSlotError ] = useState( null );
 	const [ isSubmitting, setIsSubmitting ] = useState( false );
@@ -1374,8 +1440,8 @@ export const ReservationApp = ( {
 	}, [ canManageReservations, authMode ] );
 
 	useEffect( () => {
-		// issue #516 安藤さんレビュー指摘（HIGH）: 予約確認画面（confirmDraftToken あり）
-		// では、この親コンポーネントの JSX（下記 `if ( confirmDraftToken )` 分岐）は
+		// issue #516 安藤さんレビュー指摘（HIGH）: 予約確認画面（isConfirmScreen）
+		// では、この親コンポーネントの JSX（下記 `if ( isConfirmScreen )` 分岐）は
 		// authFormHtml を一切描画しない（BookingConfirmApp が単独で auth-form を
 		// 取得・描画する）にもかかわらず、この effect は authMode の変化にだけ反応して
 		// 実行されてしまう。すると親・子の両方が同じ使い捨ての
@@ -1383,7 +1449,7 @@ export const ReservationApp = ( {
 		// transient の復元に成功し、後着の側（多くの場合これから表示される確認画面）は
 		// 復元できずフォームが空になる競合が起きる。確認画面では親側の auth-form 取得
 		// 自体を行わないことで、鍵の消費を子（BookingConfirmApp）だけに一本化する。
-		if ( confirmDraftToken ) {
+		if ( isConfirmScreen ) {
 			setAuthFormHtml( '' );
 			return;
 		}
@@ -1500,7 +1566,7 @@ export const ReservationApp = ( {
 				setAuthLoading( false );
 			} );
 	}, [
-		confirmDraftToken,
+		isConfirmScreen,
 		authMode,
 		isLoggedIn,
 		canManageReservations,
@@ -2577,10 +2643,17 @@ export const ReservationApp = ( {
 			setSlotBookingRange( null );
 			setSlotLoading( false );
 			setSlotData( [] );
+			setSlotDataKey( '' );
 			return;
 		}
 
 		let active = true;
+		const requestKey = buildSlotRequestKey( {
+			menuId,
+			date: selectedDate,
+			resourceId: effectiveResourceId,
+			tagIds: effectiveResourceTagIds,
+		} );
 		setSlotLoading( true );
 		setSlotError( null );
 		setSlotBookingRange( null );
@@ -2630,11 +2703,22 @@ export const ReservationApp = ( {
 
 				setSlotBusy( false );
 				setSlotData( decoratedSlots );
+				setSlotDataKey( requestKey );
 				if (
 					currentMenu?.meta?._vkbm_service_period_mode === 'single'
 				) {
 					const onlySlot = getOnlyBookableSlot( decoratedSlots );
-					if ( onlySlot ) {
+					// 確認画面から戻って選んでいた枠を戻す途中と、埋まっていた案内を出しているあいだは、
+					// 別の枠を自動で選ばない（メニュー・スタッフの到着や再取得で、もう一度問い合わせた場合も含む）。
+					if (
+						onlySlot &&
+						! shouldSkipOnlySlotAutoSelect( {
+							draft: reselectDraftRef.current,
+							carryNoticeKind: carryNoticeRef.current?.kind,
+							menuId,
+							date: selectedDate,
+						} )
+					) {
 						setSelectedSlot( ( previous ) => previous || onlySlot );
 					}
 				}
@@ -2646,6 +2730,7 @@ export const ReservationApp = ( {
 				}
 				setSlotBusy( error?.code === 'rate_limited' );
 				setSlotData( [] );
+				setSlotDataKey( '' );
 				setSlotError(
 					resolveApiErrorMessage(
 						error,
@@ -2802,6 +2887,8 @@ export const ReservationApp = ( {
 		setSelectedSlot( null );
 		// 日付を選び直したら、引き継げなかった案内は消す。
 		setCarryNotice( null );
+		// 利用者が選び直したら、確認画面から戻ったときの復元は打ち切る。
+		setReselectDraft( null );
 	};
 
 	const handleMenuChange = ( nextMenuId ) => {
@@ -2880,6 +2967,8 @@ export const ReservationApp = ( {
 
 		setMenuId( nextMenuId );
 		setDetailNoticeMessage( '' );
+		// 確認画面から戻ったときの下書きは、元のメニューにだけ復元する。
+		setReselectDraft( null );
 		const eventDate = getSingleEventDate( nextMenu );
 		setSelectedDate( eventDate || carried.date );
 		setCarriedDate( eventDate ? '' : carried.date );
@@ -2954,6 +3043,9 @@ export const ReservationApp = ( {
 	const handleStaffChange = ( nextStaffId ) => {
 		setStaffId( nextStaffId );
 		setSelectedSlot( null );
+		// 指名を変えたら、前の条件で枠が埋まっていた案内を消す。
+		setCarryNotice( clearSlotLostNotice );
+		setReselectDraft( null );
 	};
 
 	// #431: リソースタグ検索のチェックボックスを切り替える。
@@ -2969,6 +3061,9 @@ export const ReservationApp = ( {
 			return current.filter( ( id ) => id !== tagId );
 		} );
 		setSelectedSlot( null );
+		// 絞り込みを変えたら、前の条件で枠が埋まっていた案内を消す。
+		setCarryNotice( clearSlotLostNotice );
+		setReselectDraft( null );
 	};
 
 	// #431: タグ絞り込みで選択中のスタッフ・メニューが対象外になった場合、選択をリセットする
@@ -3240,6 +3335,64 @@ export const ReservationApp = ( {
 				currentGuestCount >= nominationMinGuests
 		);
 
+	// 空き枠の最新応答で同じ枠が見つかった場合だけ、選択と人数を復元する。
+	// メニュー情報（貸し切り指定の可否）と、下書きと同じ条件で問い合わせた空き枠がそろうまで待つ。
+	const currentSlotRequestKey = buildSlotRequestKey( {
+		menuId,
+		date: selectedDate,
+		resourceId: effectiveResourceId,
+		tagIds: effectiveResourceTagIds,
+	} );
+	useEffect( () => {
+		if (
+			! reselectDraft ||
+			isLodgingMenu ||
+			! currentMenu ||
+			Number( reselectDraft.menu_id ) !== menuId ||
+			selectedDate !== reselectDraft.date ||
+			! isSameIdSet( selectedTagIds, reselectDraft.resource_tag_ids ) ||
+			slotLoading ||
+			slotDataKey !== currentSlotRequestKey
+		) {
+			return;
+		}
+		const matchingSlot = findRestorableSlot( slotData, reselectDraft );
+		if ( matchingSlot ) {
+			setSelectedSlot( matchingSlot );
+			setGuests( Number( reselectDraft.guests ) || 1 );
+			setGuestTierCounts(
+				Array.isArray( reselectDraft.guest_tiers )
+					? reselectDraft.guest_tiers.map(
+							( tier ) => Number( tier.count ) || 0
+					  )
+					: []
+			);
+			setUserExclusive( Boolean( reselectDraft.user_exclusive ) );
+		} else if ( reselectDraft.slot?.slot_id ) {
+			// 選んでいた枠が埋まっていたことを、カレンダーの直上で一度だけ伝える。
+			// 下書きの取得より先に空き枠が届き、枠が1つしかない自動選択で別の枠が選ばれていた場合も、案内と食い違わないよう外す。
+			setSelectedSlot( null );
+			setCarryNotice( { kind: 'slotLost', date: '' } );
+		}
+		setReselectDraft( null );
+	}, [
+		reselectDraft,
+		isLodgingMenu,
+		currentMenu,
+		menuId,
+		selectedDate,
+		selectedTagIds,
+		slotLoading,
+		slotData,
+		slotDataKey,
+		currentSlotRequestKey,
+	] );
+
+	// 宿泊用の画面が下書きの人数・客室を戻し終えたら、同じ下書きを再び使わない。
+	const handleLodgingDraftRestored = useCallback( () => {
+		setReselectDraft( null );
+	}, [] );
+
 	// 宿泊用の画面（#575）が組み立てた下書きの内容を保存し、確認画面へ移動する。
 	// 失敗時は reject し、エラーメッセージの表示は呼び出し側（宿泊用の画面）が行う。
 	const submitLodgingDraft = useCallback(
@@ -3264,6 +3417,7 @@ export const ReservationApp = ( {
 					const url = new URL( window.location.href );
 					url.searchParams.delete( 'vkbm_auth' );
 					url.searchParams.set( 'draft', token );
+					url.searchParams.delete( 'vkbm_reselect' );
 					window.location.href = url.toString();
 				}
 			} ),
@@ -3438,6 +3592,7 @@ export const ReservationApp = ( {
 					const url = new URL( window.location.href );
 					url.searchParams.delete( 'vkbm_auth' );
 					url.searchParams.set( 'draft', token );
+					url.searchParams.delete( 'vkbm_reselect' );
 					window.location.href = url.toString();
 				}
 			} )
@@ -3538,7 +3693,7 @@ export const ReservationApp = ( {
 		listReturnLabel: __( 'Back to the list', 'vk-booking-manager' ),
 	};
 
-	if ( confirmDraftToken ) {
+	if ( isConfirmScreen ) {
 		return (
 			<div className="vkbm-reservation-content vkbm-reservation-content--confirm">
 				<BookingConfirmApp
@@ -4138,6 +4293,8 @@ export const ReservationApp = ( {
 								isEditor={ isEditor }
 								initialCheckIn={ carriedStay.checkIn }
 								initialCheckOut={ carriedStay.checkOut }
+								restoredDraft={ reselectDraft }
+								onDraftRestored={ handleLodgingDraftRestored }
 								isCarriedDatePast={ hasIncomingPastDate }
 								onSubmitDraft={ submitLodgingDraft }
 							/>
@@ -4178,7 +4335,18 @@ export const ReservationApp = ( {
 							>
 								{ carryNotice && (
 									<p className="vkbm-alert vkbm-alert__warning vkbm-alert--compact">
-										{ carryNotice.kind === 'past'
+										{ carryNotice.kind === 'slotLost'
+											? joinSentences(
+													__(
+														'The time slot you had selected is no longer available.',
+														'vk-booking-manager'
+													),
+													__(
+														'Please select another date or time.',
+														'vk-booking-manager'
+													)
+											  )
+											: carryNotice.kind === 'past'
 											? joinSentences(
 													__(
 														'The date you had selected has passed.',
@@ -4266,9 +4434,14 @@ export const ReservationApp = ( {
 										<DailySlotList
 											slots={ slotData }
 											selectedDate={ selectedDate }
-											onSelectSlot={ ( slot ) =>
-												setSelectedSlot( slot )
-											}
+											onSelectSlot={ ( slot ) => {
+												setSelectedSlot( slot );
+												setCarryNotice(
+													clearSlotLostNotice
+												);
+												// 利用者が自分で枠を選んだら、確認画面から戻ったときの復元は打ち切る（選んだ枠を外さないため）。
+												setReselectDraft( null );
+											} }
 											selectedSlotId={
 												selectedSlot?.slot_id
 											}

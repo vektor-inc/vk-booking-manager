@@ -105,6 +105,8 @@ if (
 	// app.js にバンドルされる全ての翻訳を app.js の JSON に集約しておく必要がある。
 	const reservationBundledFiles = [
 		'src/blocks/reservation/booking-confirm-app.js',
+		// 予約料金の「Free」表示（app.js にバンドルされる）。
+		'src/blocks/shared/pricing.js',
 		// invalid_json エラー文言（resolveApiErrorMessage）。app.js / booking-confirm-app.js の
 		// 両方から import され app.js にバンドルされるため、他の shared/ 配下ファイルと違い
 		// ここに含める必要がある（安藤レビュー指摘 HIGH-1）。

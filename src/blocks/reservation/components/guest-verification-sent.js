@@ -35,45 +35,55 @@ export const GuestVerificationSent = ( {
 					'vk-booking-manager'
 				) }
 			</h3>
-			<p className="vkbm-confirm__complete-message">
-				{ sprintf(
-					/* translators: %s: email address the confirmation email was sent to. */
-					__( 'Sent to: %s', 'vk-booking-manager' ),
-					email
-				) }
-			</p>
-			{ expiresLabel && (
+			<div className="vkbm-confirm__guest-sent-meta">
 				<p className="vkbm-confirm__complete-message">
 					{ sprintf(
-						/* translators: %s: date and time until which the confirmation link is valid. */
-						__( 'Valid until: %s', 'vk-booking-manager' ),
-						expiresLabel
+						/* translators: %s: email address the confirmation email was sent to. */
+						__( 'Sent to: %s', 'vk-booking-manager' ),
+						email
 					) }
 				</p>
-			) }
-			<p className="vkbm-confirm__complete-message">
+				{ expiresLabel && (
+					<p className="vkbm-confirm__complete-message">
+						{ sprintf(
+							/* translators: %s: date and time until which the confirmation link is valid. */
+							__( 'Valid until: %s', 'vk-booking-manager' ),
+							expiresLabel
+						) }
+					</p>
+				) }
+			</div>
+			<p className="vkbm-confirm__complete-message vkbm-confirm__guest-sent-notice">
 				{ __(
 					'Your reservation is not confirmed until you open the link.',
 					'vk-booking-manager'
 				) }
 			</p>
-			<h4 className="vkbm-confirm__guest-sent-subtitle">
-				{ __( 'If the email does not arrive', 'vk-booking-manager' ) }
-			</h4>
-			<p className="vkbm-confirm__complete-message">
-				{ __( 'Please check your spam folder.', 'vk-booking-manager' ) }
-			</p>
-			<div className="vkbm-buttons vkbm-buttons__center">
-				<button
-					type="button"
-					className="vkbm-button vkbm-button__md vkbm-button-outline vkbm-button-outline__primary"
-					onClick={ onResend }
-				>
+			<div className="vkbm-confirm__guest-sent-help">
+				<h4 className="vkbm-confirm__guest-sent-subtitle">
 					{ __(
-						'Correct the email address and send again',
+						'If the email does not arrive',
 						'vk-booking-manager'
 					) }
-				</button>
+				</h4>
+				<p className="vkbm-confirm__complete-message">
+					{ __(
+						'Please check your spam folder.',
+						'vk-booking-manager'
+					) }
+				</p>
+				<div className="vkbm-buttons vkbm-buttons__center">
+					<button
+						type="button"
+						className="vkbm-button vkbm-button__md vkbm-button-outline vkbm-button-outline__primary"
+						onClick={ onResend }
+					>
+						{ __(
+							'Correct the email address and send again',
+							'vk-booking-manager'
+						) }
+					</button>
+				</div>
 			</div>
 		</div>
 	);

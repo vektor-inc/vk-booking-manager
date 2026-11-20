@@ -985,9 +985,9 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 		);
 
 		// メソッドの契約どおり、呼び出し側でロックを解放する。
-		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutex' );
+		$release = new ReflectionMethod( Booking_Confirmation_Controller::class, 'release_slot_mutexes' );
 		$release->setAccessible( true );
-		$release->invoke( $controller, $result['name'], $result['token'] );
+		$release->invoke( $controller, $result['locks'] );
 	}
 
 	/**
@@ -2982,7 +2982,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'fired_count'               => 1,
-					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_insert'       => 2, // メニュー＋枠のロックと担当スタッフのロックの2件
 					'lock_rows_at_hook'         => 0,
 					'base_total_price_at_hook'  => 1000,
 					'draft_exists_at_hook'      => true,
@@ -3003,7 +3003,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'fired_count'               => 1,
-					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_insert'       => 2,
 					'lock_rows_at_hook'         => 0,
 					'base_total_price_at_hook'  => 1000,
 					'draft_exists_at_hook'      => true,
@@ -3024,7 +3024,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'fired_count'               => 1,
-					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_insert'       => 2,
 					'lock_rows_at_hook'         => 0,
 					'base_total_price_at_hook'  => 1000,
 					'draft_exists_at_hook'      => true,
@@ -3045,7 +3045,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				),
 				'expected'            => array(
 					'fired_count'               => 1,
-					'lock_rows_at_insert'       => 1,
+					'lock_rows_at_insert'       => 2,
 					'lock_rows_at_hook'         => 0,
 					'base_total_price_at_hook'  => 1000,
 					'draft_exists_at_hook'      => true,

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from '@wordpress/element';
  * @param {boolean} options.enabled     ログイン中の宿泊予約か。
  * @param {boolean} options.isProxy     代理予約か。
  * @param {Object}  options.currentUser 共有された REST の本人情報。
- * @return {Object} 住所と利用者入力の更新関数。
+ * @return {Object} 住所、利用者入力の更新関数、利用者が編集したかを返す関数。
  */
 export const useCustomerAddress = ( { enabled, isProxy, currentUser } ) => {
 	const [ address, setAddressValue ] = useState( '' );
@@ -30,5 +30,7 @@ export const useCustomerAddress = ( { enabled, isProxy, currentUser } ) => {
 			edited.current = true;
 			setAddressValue( value );
 		},
+		// 空の住所が利用者の編集か、自動入力前の初期値かを見分けるために使う。
+		isEdited: () => edited.current,
 	};
 };

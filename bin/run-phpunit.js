@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require( 'child_process' );
+const path = require( 'path' );
 
 /**
  * 引数に free 指定があるかを判定する。
@@ -45,6 +46,31 @@ function buildPassthroughArgs( argv ) {
 }
 
 /**
+ * 実行モードと作業ディレクトリから wp-env 内のプラグインパスを作る。
+ *
+ * @param {boolean} freeMode 無料版を実行する場合は true。
+ * @param {string}  cwd      作業ディレクトリ。
+ * @return {string} wp-env 内のプラグインディレクトリ。
+ */
+function buildEnvCwd( freeMode, cwd ) {
+	if ( freeMode ) {
+		return 'wp-content/plugins/vk-booking-manager';
+	}
+
+	const pluginDirectory = path.basename( cwd || process.cwd() );
+	if (
+		! /^[A-Za-z0-9._-]+$/.test( pluginDirectory ) ||
+		[ '.', '..' ].includes( pluginDirectory )
+	) {
+		throw new Error(
+			'作業ディレクトリ名を wp-env のプラグインパスに使用できません。'
+		);
+	}
+
+	return `wp-content/plugins/${ pluginDirectory }`;
+}
+
+/**
  * i18n テストスキップの有効化状態を判定する。
  *
  * @return {boolean} スキップする場合は true。
@@ -63,9 +89,7 @@ function shouldSkipI18nTests() {
  */
 function runPhpunit() {
 	const freeMode = isFreeMode();
-	const envCwd = freeMode
-		? 'wp-content/plugins/vk-booking-manager'
-		: 'wp-content/plugins/vk-booking-manager-pro';
+	const envCwd = buildEnvCwd( freeMode, process.cwd() );
 
 	const skipI18n = shouldSkipI18nTests();
 	const i18nEnvPrefix = skipI18n
@@ -121,7 +145,7 @@ function runPhpunit() {
 }
 
 // 引数組み立てロジックをテストから検証できるよう公開する。
-module.exports = { buildPassthroughArgs, shellQuote };
+module.exports = { buildEnvCwd, buildPassthroughArgs, shellQuote };
 
 // このファイルが直接実行された場合のみ phpunit を走らせる。
 // require されたとき（テスト時）は副作用を起こさない。

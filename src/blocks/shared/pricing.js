@@ -49,6 +49,9 @@ export const formatCurrency = ( value, currencySymbol = null ) => {
 	if ( normalized === null ) {
 		return '';
 	}
+	if ( normalized === 0 ) {
+		return __( 'Free', 'vk-booking-manager' );
+	}
 
 	let formatter;
 	try {
