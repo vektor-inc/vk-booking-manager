@@ -30,6 +30,7 @@ use VKBookingManager\Common\Service_Period;
 use VKBookingManager\Common\Staff_Load_Calculator;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Attendee_Name;
+use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -72,6 +73,7 @@ use function update_post_meta;
 use function wp_date;
 use function strtotime;
 use function wp_unslash;
+use function vkbm_get_menu_label_text;
 
 /**
  * REST controller that finalizes reservation drafts into confirmed bookings.
@@ -212,6 +214,10 @@ class Booking_Confirmation_Controller {
 					),
 					'attendee_save_to_roster' => array(
 						'type' => 'boolean',
+					),
+					// 予約時の入力項目の回答（項目 ID => 値）。中身の検証は create_booking_from_draft() で行う。
+					'custom_fields'           => array(
+						'type' => 'object',
 					),
 				),
 				// Booking creation requires an authenticated user.
@@ -626,6 +632,27 @@ class Booking_Confirmation_Controller {
 			return $attendee;
 		}
 
+		// 予約時の入力項目（#1147）。確定時点の設定を正とし、設定に無い項目の値は保存しない。
+		// 会員自身の予約では必須と文字数を確かめ、代理予約では必須を強制しない。
+		// ゲスト予約は申し込みの時点で確かめ済みのため、ここでは上限に切り詰めるだけにする（確認リンクを開いた後に失敗させない）。
+		$custom_field_definitions = Booking_Custom_Fields::get_definitions( $settings );
+		$custom_field_values      = Booking_Custom_Fields::sanitize_values(
+			$request->has_param( Booking_Custom_Fields::REQUEST_PARAM ) ? $request->get_param( Booking_Custom_Fields::REQUEST_PARAM ) : ( $draft[ Booking_Custom_Fields::REQUEST_PARAM ] ?? array() ),
+			$custom_field_definitions
+		);
+		if ( ! $is_guest ) {
+			$custom_field_error = Booking_Custom_Fields::create_error(
+				Booking_Custom_Fields::validate_values( $custom_field_values, $custom_field_definitions, ! $can_override_contact )
+			);
+			if ( null !== $custom_field_error ) {
+				return $custom_field_error;
+			}
+		}
+		$custom_field_snapshot = Booking_Custom_Fields::build_snapshot(
+			Booking_Custom_Fields::truncate_values( $custom_field_values, $custom_field_definitions ),
+			$custom_field_definitions
+		);
+
 		// ロック取得前の早期拒否。同時リクエスト対策の本判定は、ロック取得後に行う（下記）。
 		if ( $this->has_booking_user_conflict( $can_override_contact, $acting_id, $matched_user_id, $start_at, $end_at, $guest_email ) ) {
 			return $this->create_user_conflict_error( $is_guest );
@@ -938,6 +965,10 @@ class Booking_Confirmation_Controller {
 
 				// 基本料金合計を予約確定時に数値で確定保存する（wp_insert_post 前に計算済みの値を使用）。
 				update_post_meta( $booking_id, self::META_BASE_TOTAL_PRICE, $base_total_price );
+				// 予約時の入力項目の回答は、回答した時点の項目名・種類と一緒に残す。
+				if ( array() !== $custom_field_snapshot ) {
+					update_post_meta( $booking_id, Booking_Custom_Fields::META_KEY, wp_slash( $custom_field_snapshot ) );
+				}
 				if ( '' !== $memo ) {
 					update_post_meta( $booking_id, self::META_NOTE, wp_slash( $memo ) );
 				}
@@ -1483,7 +1514,14 @@ class Booking_Confirmation_Controller {
 		if ( ! $is_lodging_draft && ! $this->is_start_within_service_period( $menu_id, $start_at ) ) {
 			return new WP_Error(
 				'service_period_out_of_range',
-				__( 'The selected date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
+				vkbm_get_menu_label_text(
+					__( 'The selected date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
+					Nomination_Min_Guests_Message::join_sentences(
+						/* translators: %s: menu term set in the settings (e.g. Plan). */
+						__( 'The selected date is outside the service period of this %s.', 'vk-booking-manager' ),
+						__( 'Please choose another date.', 'vk-booking-manager' )
+					)
+				),
 				array( 'status' => 400 )
 			);
 		}

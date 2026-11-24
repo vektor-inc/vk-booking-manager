@@ -86,6 +86,8 @@ function seedMenu(): string {
 			return;
 		}
 		update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
+		// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+		update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 		update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
 		update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
 		update_post_meta( $menu_id, '_vkbm_min_capacity', 2 );
@@ -465,6 +467,8 @@ test.describe( '複数人予約系設定の表示制御（指名を使うメニ�
 				return;
 			}
 			update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
+			// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+			update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 			update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', ${
 				allowMultipleGuests ? 'true' : 'false'
 			} );

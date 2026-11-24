@@ -524,6 +524,11 @@ test.describe
 			`¥${ expectedMaxTotal.toLocaleString( 'en-US' ) }`,
 			{ timeout: 15000 }
 		);
+		// チェックイン予定時刻は選択が必須（#1125）。先頭の選択肢（チェックイン時刻）を選ぶ。
+		// @step チェックイン予定時刻で「15:00」を選ぶ
+		await page
+			.getByLabel( 'チェックイン予定時刻', { exact: true } )
+			.selectOption( '15:00' );
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
 

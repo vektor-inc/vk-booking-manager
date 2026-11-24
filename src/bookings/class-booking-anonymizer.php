@@ -201,6 +201,11 @@ class Booking_Anonymizer {
 				'label' => __( 'email address', 'vk-booking-manager' ),
 				'value' => '',
 			),
+			// 予約時の入力項目（#1147）の回答。自由に入力できる欄のため、項目の内容によらず匿名化の対象に含める。
+			'_vkbm_booking_custom_fields'           => array(
+				'label' => __( 'answers to booking input items', 'vk-booking-manager' ),
+				'value' => '',
+			),
 			'_vkbm_booking_note'                    => array(
 				'label' => __( 'memo', 'vk-booking-manager' ),
 				'value' => '',

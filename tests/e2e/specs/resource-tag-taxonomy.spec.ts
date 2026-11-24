@@ -149,10 +149,10 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 	test( '6. REST API に resource_tags フィールドが含まれる', async ( {
 		request,
 	} ) => {
-		// @step スタッフにリソースタグ「male」を付けて、そのスタッフの公開データ（REST API）を開く
+		// @step スタッフにリソースタグ「male」を付けて、そのスタッフの、予約画面が読む公開データ（REST API）を開く
 		setResourceTags( staffId, [ 'male' ] );
 		const response = await request.get(
-			`/wp-json/wp/v2/vkbm_resource/${ staffId }`
+			`/wp-json/vkbm/v1/resources/${ staffId }`
 		);
 		// @check 公開データにリソースタグの項目があり、「Male」が入っている
 		expect( response.ok() ).toBeTruthy();
@@ -166,10 +166,10 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 	test( '7. REST API でタグ未設定時に resource_tags が空配列', async ( {
 		request,
 	} ) => {
-		// @step スタッフのリソースタグをすべて外して、そのスタッフの公開データ（REST API）を開く
+		// @step スタッフのリソースタグをすべて外して、そのスタッフの、予約画面が読む公開データ（REST API）を開く
 		clearResourceTags( staffId );
 		const response = await request.get(
-			`/wp-json/wp/v2/vkbm_resource/${ staffId }`
+			`/wp-json/vkbm/v1/resources/${ staffId }`
 		);
 		// @check 公開データのリソースタグの項目が空になっている
 		expect( response.ok() ).toBeTruthy();
@@ -187,9 +187,9 @@ test.describe( 'リソースタグタクソノミー機能', () => {
 		// 「表示」設定をOFFにしても resource_tag_ids は絞り込み専用のため空にならないことを確認する。
 		setTagDisplayEnabled( false );
 
-		// @step そのスタッフの公開データ（REST API）を開く
+		// @step そのスタッフの、予約画面が読む公開データ（REST API）を開く
 		const response = await request.get(
-			`/wp-json/wp/v2/vkbm_resource/${ staffId }`
+			`/wp-json/vkbm/v1/resources/${ staffId }`
 		);
 		// @check 表示を無効にしていても、公開データに絞り込み用のタグ ID の項目があり、数値の ID が入っている
 		expect( response.ok() ).toBeTruthy();

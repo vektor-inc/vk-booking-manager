@@ -689,7 +689,7 @@ test.describe
 		test( 'メニュー一覧の取得完了を待たずに「予約に進む」を押しても、日程選択に入力済みで開く', async ( {
 			page,
 		} ) => {
-			// 予約画面がメニュー種別（泊のプランか）を判定する元の REST（/wp/v2/vkbm_service_menu）の応答を、
+			// 予約画面がメニュー種別（泊のプランか）を判定する元の REST（/vkbm/v1/service-menus）の応答を、
 			// 「予約に進む」を押すまで保留し、種別が未確定の状態で押せるようにする。
 			// 種別が未確定のあいだは、引き継いだ日程を捨ててはいけない。
 			// @step 通信が遅く、予約画面がメニューの情報をまだ読み込み終えていない状態にする
@@ -697,13 +697,10 @@ test.describe
 			const menusGate = new Promise< void >( ( resolve ) => {
 				releaseMenus = resolve;
 			} );
-			await page.route(
-				'**/wp/v2/vkbm_service_menu**',
-				async ( route ) => {
-					await menusGate;
-					await route.continue();
-				}
-			);
+			await page.route( '**/vkbm/v1/service-menus**', async ( route ) => {
+				await menusGate;
+				await route.continue();
+			} );
 			// @step チェックイン日とチェックアウト日を付けた、泊のプランの詳細表示の URL を開く
 			const { checkIn, checkOut } = tokyoStayInOneMonth( 3, 2 );
 			await page.goto(

@@ -58,6 +58,10 @@ import {
 	resolveApiErrorMessage,
 } from '../shared/rest-error-message';
 import { BookingConfirmApp } from './booking-confirm-app';
+import {
+	findFavoriteMenu,
+	useFavoriteMenuSupplement,
+} from './hooks/use-favorite-menu-supplement';
 import { isLodgingReservation } from '../shared/reservation-config';
 import {
 	buildExtraGuestFeeRows,
@@ -77,7 +81,10 @@ import {
 	BookingStayDatetime,
 	isStayBooking,
 } from './components/booking-stay-datetime';
-import { ReservationHeader } from './components/reservation-header';
+import {
+	getBrandLogoAlt,
+	ReservationHeader,
+} from './components/reservation-header';
 import { ReservationFooter } from './components/reservation-footer';
 import { ServiceMenuDetail } from './components/service-menu-detail';
 import {
@@ -103,6 +110,12 @@ import {
 } from './draft-reselect';
 import { sortTermsByOrder } from '../shared/term-order';
 import { resolveResourceTagEmptyMessage } from './resource-tag-empty-message';
+import { readGuestAuthSettings, resolveGuestAuthLinks } from './guest-booking';
+import {
+	menuLabelText,
+	readMenuLabelsFromConfig,
+	resolveMenuLabels,
+} from './components/menu-label';
 // 宿泊用の予約画面は別ファイル（別チャンク）に分け、泊単位のプランを選んだときだけ読み込む。
 // 宿泊を使わないサイトの予約ブロックが読み込む JavaScript・CSS を増やさないため。
 const LodgingBookingPanel = lazy( () =>
@@ -316,18 +329,29 @@ const buildRebookUrl = ( booking, reservationPageUrl = '' ) => {
  * を使う。
  *
  * @param {number} minGuests 最低申し込み人数。
+ * @param {string} menuLabel メニューの呼び方（既定のままなら空文字）。
  * @return {string} エラー・警告文言。
  */
-const buildNominationMinGuestsMessage = ( minGuests ) =>
+const buildNominationMinGuestsMessage = ( minGuests, menuLabel = '' ) =>
 	joinSentences(
-		sprintf(
-			/* translators: %d: minimum number of guests required to book this menu. */
-			__(
-				'This menu accepts bookings from %d guests.',
-				'vk-booking-manager'
-			),
-			minGuests
-		),
+		menuLabel
+			? sprintf(
+					/* translators: 1: menu term set in the settings (e.g. Plan), 2: minimum number of guests required to book it. */
+					__(
+						'This %1$s accepts bookings from %2$d guests.',
+						'vk-booking-manager'
+					),
+					menuLabel,
+					minGuests
+			  )
+			: sprintf(
+					/* translators: %d: minimum number of guests required to book this menu. */
+					__(
+						'This menu accepts bookings from %d guests.',
+						'vk-booking-manager'
+					),
+					minGuests
+			  ),
 		sprintf(
 			/* translators: %d: minimum number of guests required to book this menu. */
 			__(
@@ -347,17 +371,28 @@ const buildNominationMinGuestsMessage = ( minGuests ) =>
  * 不自然になるため、状態に依存しない中立の文言を別に用意する（植草レビュー指摘）。
  *
  * @param {number} minGuests 最低申し込み人数。
+ * @param {string} menuLabel メニューの呼び方（既定のままなら空文字）。
  * @return {string} 常時案内文。
  */
-const buildNominationMinGuestsHint = ( minGuests ) =>
-	sprintf(
-		/* translators: %d: minimum number of guests required to book this menu. */
-		__(
-			'This menu requires a minimum of %d guests.',
-			'vk-booking-manager'
-		),
-		minGuests
-	);
+const buildNominationMinGuestsHint = ( minGuests, menuLabel = '' ) =>
+	menuLabel
+		? sprintf(
+				/* translators: 1: menu term set in the settings (e.g. Plan), 2: minimum number of guests required to book it. */
+				__(
+					'This %1$s requires a minimum of %2$d guests.',
+					'vk-booking-manager'
+				),
+				menuLabel,
+				minGuests
+		  )
+		: sprintf(
+				/* translators: %d: minimum number of guests required to book this menu. */
+				__(
+					'This menu requires a minimum of %d guests.',
+					'vk-booking-manager'
+				),
+				minGuests
+		  );
 
 /**
  * 選択中スロットの残り人数が指名を使うメニューの最低申し込み人数に満たない場合の
@@ -367,18 +402,32 @@ const buildNominationMinGuestsHint = ( minGuests ) =>
  * この案内が無いのは不揃い）。
  *
  * @param {number} minGuests 最低申し込み人数。
+ * @param {string} menuLabel メニューの呼び方（既定のままなら空文字）。
  * @return {string} 案内文。
  */
-const buildSlotBelowNominationMinGuestsMessage = ( minGuests ) =>
+const buildSlotBelowNominationMinGuestsMessage = (
+	minGuests,
+	menuLabel = ''
+) =>
 	joinSentences(
-		sprintf(
-			/* translators: %d: minimum number of guests required to book this menu. */
-			__(
-				'This time slot cannot accept the minimum of %d guests required for this menu.',
-				'vk-booking-manager'
-			),
-			minGuests
-		),
+		menuLabel
+			? sprintf(
+					/* translators: 1: menu term set in the settings (e.g. Plan), 2: minimum number of guests required to book it. */
+					__(
+						'This time slot cannot accept the minimum of %2$d guests required for this %1$s.',
+						'vk-booking-manager'
+					),
+					menuLabel,
+					minGuests
+			  )
+			: sprintf(
+					/* translators: %d: minimum number of guests required to book this menu. */
+					__(
+						'This time slot cannot accept the minimum of %d guests required for this menu.',
+						'vk-booking-manager'
+					),
+					minGuests
+			  ),
 		__( 'Please choose another time slot.', 'vk-booking-manager' )
 	);
 
@@ -454,6 +503,11 @@ export const ReservationApp = ( {
 		return window.vkbmCurrentUserBootstrap || null;
 	}, [] );
 	const queryDefaults = useMemo( () => parseQueryParams(), [] );
+	// 未ログインのお客様のヘッダーナビに「ログイン」「新規登録」を出すか（#1121）。ページ埋め込みの設定で初回描画から決める。
+	const guestAuthLinks = useMemo(
+		() => resolveGuestAuthLinks( readGuestAuthSettings() ),
+		[]
+	);
 	// #635: 詳細表示の URL（menu_id + vkbm_view=detail）で開いたときは、menu_id は
 	// 詳細に出すメニューを指すだけで、予約画面のメニュー選択には使わない。
 	const initialMenuId = initialDetail
@@ -643,6 +697,9 @@ export const ReservationApp = ( {
 		guestsCountLabel: __( 'Number of guests', 'vk-booking-manager' ),
 		// 数量の単位。REST が実効値（null はロケール既定に解決済み）を返す。空文字は単位なし。
 		guestsUnitLabel: '',
+		// メニューの呼び方（menuLabel / menuLabelPlural。既定のままなら空文字）。
+		// REST を待たずに最初の描画から出すため、ページに埋め込まれた値を初期値にする。
+		...readMenuLabelsFromConfig(),
 	} );
 
 	// 現在選択中のメニュー（メタ情報を含む）。以降の指名可否判定などに使うため早い段階で確定する。
@@ -758,10 +815,10 @@ export const ReservationApp = ( {
 	// - メニュー単位で指名を使わない設定（_vkbm_disable_nomination）のメニューは、
 	//   スタッフ選択が有効なときのみ除外する（#431: タグのみでの絞り込みは指名の有無と無関係に
 	//   自動割当へ効くため、この除外は適用しない）。
-	// - 対応スタッフ（_vkbm_staff_ids）が未登録のメニューは残す（スタッフ絞り込みのみが有効なとき）。
-	// - 対応スタッフが設定されている場合は、その中に staffId が含まれるメニューだけ残す（スタッフ絞り込み）。
+	// - 対応スタッフの中に staffId が含まれるメニューだけ残す（スタッフ絞り込み）。
+	//   対応スタッフ（_vkbm_staff_ids）が未登録のメニューは残さない（#1144）。
 	// - #431: タグ絞り込みが有効な場合、選択したタグを「すべて」持つリソースが1件も無いときは
-	//   対応スタッフ未登録のメニューも含めて全て除外する（issue #431 完了条件）。1件以上あるときは
+	//   全て除外する（issue #431 完了条件）。1件以上あるときは
 	//   対応スタッフの中にタグを持つリソースが1人でも含まれるメニューだけ残す（AND条件）。
 	//   いずれもサーバー側 Menu_Loop_Block::is_menu_visible_for_tag_filter() と同じ判定に揃える。
 	const staffActive = staffFilterAllowed && staffFilterId > 0;
@@ -792,23 +849,20 @@ export const ReservationApp = ( {
 
 			if (
 				staffActive &&
-				assignableStaffIds.length &&
 				! assignableStaffIds.includes( staffFilterId )
 			) {
 				return false;
 			}
 
 			if ( tagFilterActive ) {
-				// 選択したタグを「すべて」持つリソースが1件も無いときは、対応スタッフ
-				// 未登録のメニューも含めて全て除外する（サーバー側 is_menu_visible_for_tag_filter()
-				// と同じ判定。issue #431 完了条件「該当するリソースが0件になった場合は
-				// メニュー一覧を空にする」）。
+				// 選択したタグを「すべて」持つリソースが1件も無いときは、全て除外する
+				// （サーバー側 is_menu_visible_for_tag_filter() と同じ判定。issue #431 完了条件
+				// 「該当するリソースが0件になった場合はメニュー一覧を空にする」）。
 				if ( resourceIdsForTagFilter.length === 0 ) {
 					return false;
 				}
 
 				if (
-					assignableStaffIds.length &&
 					! assignableStaffIds.some( ( id ) =>
 						resourceIdsForTagFilter.includes( id )
 					)
@@ -884,6 +938,8 @@ export const ReservationApp = ( {
 	// 案内文を1文追加する。「指名なし」の表示名は基本設定
 	// （providerSettings.noNominationLabel。未設定時は既定の "No preference"）で変わるため、
 	// 固定文言にせずその設定値を使う。2文の結合は joinSentences()（#393）に揃える。
+	// 一覧が空のときの案内に差し込むメニューの呼び方（複数形。既定のままなら空文字）。
+	const menuLabelPlural = providerSettings.menuLabelPlural;
 	const menuListEmptyMessage = useMemo( () => {
 		// #431: 選択したタグを「すべて」持つリソースが1件も無い場合は、リソース名称の設定値を
 		// 使った専用メッセージを優先する（issue #431 完了条件：「条件に該当する○○がいません」）。
@@ -901,23 +957,55 @@ export const ReservationApp = ( {
 		if ( dateFilterActive && staffTagFilteredMenus.length > 0 ) {
 			return stayFilterMode
 				? joinSentences(
-						__(
-							'There are no service menus available for the selected dates.',
-							'vk-booking-manager'
+						menuLabelText(
+							menuLabelPlural,
+							__(
+								'There are no service menus available for the selected dates.',
+								'vk-booking-manager'
+							),
+							/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+							__(
+								'There are no %s available for the selected dates.',
+								'vk-booking-manager'
+							)
 						),
-						__(
-							'Change the dates or clear the dates to show all service menus.',
-							'vk-booking-manager'
+						menuLabelText(
+							menuLabelPlural,
+							__(
+								'Change the dates or clear the dates to show all service menus.',
+								'vk-booking-manager'
+							),
+							/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+							__(
+								'Change the dates or clear the dates to show all %s.',
+								'vk-booking-manager'
+							)
 						)
 				  )
 				: joinSentences(
-						__(
-							'There are no service menus available on the selected date.',
-							'vk-booking-manager'
+						menuLabelText(
+							menuLabelPlural,
+							__(
+								'There are no service menus available on the selected date.',
+								'vk-booking-manager'
+							),
+							/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+							__(
+								'There are no %s available on the selected date.',
+								'vk-booking-manager'
+							)
 						),
-						__(
-							'Change the date or clear the date to show all service menus.',
-							'vk-booking-manager'
+						menuLabelText(
+							menuLabelPlural,
+							__(
+								'Change the date or clear the date to show all service menus.',
+								'vk-booking-manager'
+							),
+							/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+							__(
+								'Change the date or clear the date to show all %s.',
+								'vk-booking-manager'
+							)
 						)
 				  );
 		}
@@ -928,11 +1016,10 @@ export const ReservationApp = ( {
 				'There are no service menus available for the selected %s.',
 				'vk-booking-manager'
 			);
-			const baseMessage = message.includes( '%s' )
+			let baseMessage = message.includes( '%s' )
 				? sprintf( message, providerSettings.resourceLabelSingular )
 				: message;
-
-			const hintMessage = sprintf(
+			let hintMessage = sprintf(
 				/* translators: %s: "No preference" label, customizable via basic settings. */
 				__(
 					'Choose %s to show all service menus.',
@@ -940,15 +1027,39 @@ export const ReservationApp = ( {
 				),
 				providerSettings.noNominationLabel
 			);
+			// メニューの呼び方を変えているときだけ、呼び方を差し込む文に替える。
+			if ( menuLabelPlural ) {
+				baseMessage = sprintf(
+					/* translators: 1: menu term set in the settings, plural (e.g. Plans), 2: resource label (e.g. "Staff"), customizable via basic settings. */
+					__(
+						'There are no %1$s available for the selected %2$s.',
+						'vk-booking-manager'
+					),
+					menuLabelPlural,
+					providerSettings.resourceLabelSingular
+				);
+				hintMessage = sprintf(
+					/* translators: 1: menu term set in the settings, plural (e.g. Plans), 2: "No preference" label, customizable via basic settings. */
+					__( 'Choose %2$s to show all %1$s.', 'vk-booking-manager' ),
+					menuLabelPlural,
+					providerSettings.noNominationLabel
+				);
+			}
 
 			return joinSentences( baseMessage, hintMessage );
 		}
 
-		return __(
-			'There are no service menus to display.',
-			'vk-booking-manager'
+		return menuLabelText(
+			menuLabelPlural,
+			__(
+				'There are no service menus to display.',
+				'vk-booking-manager'
+			),
+			/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+			__( 'There are no %s to display.', 'vk-booking-manager' )
 		);
 	}, [
+		menuLabelPlural,
 		shouldShowMenuSearch,
 		staffFilterAllowed,
 		providerSettings.resourceLabelSingular,
@@ -1199,6 +1310,8 @@ export const ReservationApp = ( {
 						typeof settings?.guests_unit_label === 'string'
 							? settings.guests_unit_label
 							: '',
+					// メニューの呼び方（既定のままなら空文字）。
+					...resolveMenuLabels( settings ),
 				} );
 			} )
 			.catch( () => {
@@ -1345,7 +1458,18 @@ export const ReservationApp = ( {
 					isLoading: false,
 					error: resolveApiErrorMessage(
 						error,
-						__( 'Could not get menu list.', 'vk-booking-manager' ),
+						menuLabelText(
+							providerSettings.menuLabelPlural,
+							__(
+								'Could not get menu list.',
+								'vk-booking-manager'
+							),
+							/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+							__(
+								'Could not get the list of %s.',
+								'vk-booking-manager'
+							)
+						),
 						canManageReservations
 					),
 				} );
@@ -1357,6 +1481,7 @@ export const ReservationApp = ( {
 	}, [
 		providerSettingsLoaded,
 		providerSettings.showMenuList,
+		providerSettings.menuLabelPlural,
 		menuId,
 		isDetailView,
 		menuListStaffId,
@@ -2005,7 +2130,8 @@ export const ReservationApp = ( {
 		}
 
 		// 無料版、またはこのメニューで指名機能OFFのときは選択可能スタッフの制限を解除する（#391）。
-		if ( menuNominationEnabled && assignableStaffIds.length > 0 ) {
+		// 担当できるスタッフがいないメニューでは、どのスタッフも選べない（#1144）。
+		if ( menuNominationEnabled && currentMenu ) {
 			const allowedIds = new Set( assignableStaffIds );
 			options = options.filter( ( staff ) => allowedIds.has( staff.id ) );
 		}
@@ -2054,7 +2180,8 @@ export const ReservationApp = ( {
 			return;
 		}
 
-		if ( ! menuId || assignableStaffIds.length === 0 ) {
+		// メニュー一覧の読み込み前（currentMenu が未確定）は、URL などで渡された指名を外さない。
+		if ( ! menuId || ! currentMenu ) {
 			return;
 		}
 
@@ -2069,7 +2196,13 @@ export const ReservationApp = ( {
 		if ( staffId && ! assignableStaffIds.includes( staffId ) ) {
 			setStaffId( 0 );
 		}
-	}, [ menuId, assignableStaffIds, staffId, menuNominationEnabled ] );
+	}, [
+		menuId,
+		currentMenu,
+		assignableStaffIds,
+		staffId,
+		menuNominationEnabled,
+	] );
 	const isNominationFeeDisabled = useMemo( () => {
 		const meta = currentMenu?.meta;
 		if ( ! meta ) {
@@ -2384,18 +2517,45 @@ export const ReservationApp = ( {
 		menuNominationEnabled,
 	] );
 
-	const menuCollectionPath = useMemo(
-		() =>
-			buildApiPath( '/wp/v2/vkbm_service_menu', {
+	// メニュー一覧の REST パスを作る。includeIds を渡すと、そのメニューだけを取り寄せる。
+	const buildMenuCollectionPath = useCallback(
+		( includeIds = [] ) =>
+			buildApiPath( '/vkbm/v1/service-menus', {
 				per_page: 100,
 				_fields:
 					'id,title,meta,menu_order,vkbm_menu_group,vkbm_nomination_min_guests,vkbm_assignable_staff_ids,vkbm_lodging,vkbm_price_unit,vkbm_extra_guest_fee',
 				status: canViewPrivateMenus ? 'publish,private' : undefined,
+				include:
+					includeIds.length > 0 ? includeIds.join( ',' ) : undefined,
 			} ),
 		[ canViewPrivateMenus ]
 	);
+	const menuCollectionPath = useMemo(
+		() => buildMenuCollectionPath(),
+		[ buildMenuCollectionPath ]
+	);
 
-	useCollection( menuCollectionPath, setMenus );
+	// どの経路の一覧を取得し終えたかを持ち、経路が変わったら取得し終えるまで「未取得」として扱う。
+	const [ loadedMenuCollectionPath, setLoadedMenuCollectionPath ] =
+		useState( '' );
+	const handleMenuCollection = useCallback(
+		( result ) => {
+			setMenus( result );
+			setLoadedMenuCollectionPath( menuCollectionPath );
+		},
+		[ menuCollectionPath ]
+	);
+	useCollection( menuCollectionPath, handleMenuCollection );
+
+	// 一覧は1ページ（100件）分だけ取得するため、範囲外のメニューを指すお気に入りは
+	// メニューを取り寄せて一覧に足し、適用できるようにする（#1144）。
+	useFavoriteMenuSupplement( {
+		favorites,
+		menus,
+		menusLoaded: loadedMenuCollectionPath === menuCollectionPath,
+		buildPath: buildMenuCollectionPath,
+		setMenus,
+	} );
 
 	useEffect( () => {
 		let isMounted = true;
@@ -2439,9 +2599,17 @@ export const ReservationApp = ( {
 					isLoading: false,
 					error: resolveApiErrorMessage(
 						error,
-						__(
-							'Failed to retrieve menu information.',
-							'vk-booking-manager'
+						menuLabelText(
+							providerSettings.menuLabel,
+							__(
+								'Failed to retrieve menu information.',
+								'vk-booking-manager'
+							),
+							/* translators: %s: menu term set in the settings (e.g. Plan). */
+							__(
+								'Failed to retrieve %s information.',
+								'vk-booking-manager'
+							)
 						),
 						canManageReservations
 					),
@@ -2451,7 +2619,7 @@ export const ReservationApp = ( {
 		return () => {
 			isMounted = false;
 		};
-	}, [ menuId, canManageReservations ] );
+	}, [ menuId, canManageReservations, providerSettings.menuLabel ] );
 	// #391: このコレクションはサイト全体のスタッフ一覧であり、特定のメニューに紐づかない
 	// （お気に入り・マイ予約タブなど、他メニューの過去の指名スタッフ名を表示する場面もある）。
 	// そのためここは意図的にメニュー単位（menuNominationEnabled）ではなくサイト全体の
@@ -2469,7 +2637,7 @@ export const ReservationApp = ( {
 			return '';
 		}
 		// resource_tag_ids: #431 の絞り込み判定に使うタームID配列（タグ名ではなくIDで照合する）。
-		return '/wp/v2/vkbm_resource?per_page=100&_fields=id,title,meta,nomination_fee,resource_tags,resource_tag_ids';
+		return '/vkbm/v1/resources?per_page=100&_fields=id,title,meta,nomination_fee,resource_tags,resource_tag_ids';
 	}, [
 		providerSettingsLoaded,
 		providerSettings.staffEnabled,
@@ -2494,7 +2662,7 @@ export const ReservationApp = ( {
 		}
 		// order: 管理画面で保存した並び順（Term_Order_Manager が REST に足すフィールド）。
 		// 取得後に sortTermsByOrder() で並べ替える（#463。REST クエリ自体は名前順のまま）。
-		return '/wp/v2/vkbm_resource_tag?per_page=100&hide_empty=true&_fields=id,name,count,order';
+		return '/vkbm/v1/resource-tags?per_page=100&hide_empty=true&_fields=id,name,count,order';
 	}, [ providerSettingsLoaded, providerSettings.resourceTagSearchEnabled ] );
 	// #463: REST から取得したタグは名前順で返るため、管理画面で保存した並び順
 	// （order フィールド）で並べ替えてから state へ反映する。
@@ -2910,13 +3078,9 @@ export const ReservationApp = ( {
 			if ( nextAssignableStaffIds.length === 1 ) {
 				setStaffId( nextAssignableStaffIds[ 0 ] );
 			} else if (
-				// #429 安藤レビュー指摘（MEDIUM）: 対応スタッフ未登録
-				// （nextAssignableStaffIds.length === 0）のメニューは、
-				// applyFavorite・対応スタッフの useEffect（1339行目付近）・
-				// PHP側 Availability_Service::resolve_staff_ids() と同じく
-				// 「指名スタッフでそのまま受け付ける」ため、staffId を外してはいけない。
+				// 対応スタッフ未登録のメニューは、PHP側 Availability_Service::resolve_staff_ids() と
+				// 同じく指名を受け付けないため、staffId を外す（#1144）。
 				staffId &&
-				nextAssignableStaffIds.length > 0 &&
 				! nextAssignableStaffIds.includes( staffId )
 			) {
 				setStaffId( 0 );
@@ -3087,9 +3251,10 @@ export const ReservationApp = ( {
 
 		if ( menuId ) {
 			const assignable = extractAssignableStaffIds( currentMenu );
+			// メニュー一覧の読み込み前（currentMenu が未確定）は、選択中のメニューを外さない。
 			const menuStillMatches =
 				resourceIdsForTagFilter.length > 0 &&
-				( assignable.length === 0 ||
+				( ! currentMenu ||
 					assignable.some( ( id ) =>
 						resourceIdsForTagFilter.includes( id )
 					) );
@@ -3114,14 +3279,18 @@ export const ReservationApp = ( {
 			return;
 		}
 
+		// お気に入りがメニュー一覧より先に届いた場合、メニュー未取得のまま適用すると
+		// 対応スタッフが空と判定されて保存済みの指名が失われるため、取得するまで適用しない（#1144）。
+		const favoriteMenu = findFavoriteMenu( favorite, menus );
+		if ( ! favoriteMenu ) {
+			return;
+		}
+
 		// メニュー変更（指名・日時・人数のリセットを含む）。
 		handleMenuChange( favoriteMenuId );
 
 		// handleMenuChange が指名を再計算するため、お気に入りの指名はその後に上書きする。
 		const favoriteResourceId = Number( favorite?.resource_id ) || 0;
-		const favoriteMenu = menus.find(
-			( menu ) => menu.id === favoriteMenuId
-		);
 		// #391: お気に入り先のメニュー自身の指名可否で判定する。
 		const favoriteMenuNominationEnabled =
 			providerSettings.staffEnabled &&
@@ -3129,11 +3298,8 @@ export const ReservationApp = ( {
 		if ( favoriteMenuNominationEnabled ) {
 			if ( favoriteResourceId > 0 ) {
 				const assignable = extractAssignableStaffIds( favoriteMenu );
-				// 対応スタッフ未設定のメニュー、または対応スタッフに含まれる場合のみ指名する。
-				if (
-					assignable.length === 0 ||
-					assignable.includes( favoriteResourceId )
-				) {
+				// 対応スタッフに含まれる場合のみ指名する（対応スタッフ未設定のメニューでは指名しない。#1144）。
+				if ( assignable.includes( favoriteResourceId ) ) {
 					setStaffId( favoriteResourceId );
 				}
 			} else {
@@ -3302,13 +3468,21 @@ export const ReservationApp = ( {
 	useEffect( () => {
 		if ( initialDetail?.status === DETAIL_STATUS_UNAVAILABLE ) {
 			setDetailNoticeMessage(
-				__(
-					'The details of the specified service menu cannot be displayed.',
-					'vk-booking-manager'
+				menuLabelText(
+					providerSettings.menuLabel,
+					__(
+						'The details of the specified service menu cannot be displayed.',
+						'vk-booking-manager'
+					),
+					/* translators: %s: menu term set in the settings (e.g. Plan). */
+					__(
+						'The details of the specified %s cannot be displayed.',
+						'vk-booking-manager'
+					)
 				)
 			);
 		}
-	}, [ initialDetail ] );
+	}, [ initialDetail, providerSettings.menuLabel ] );
 
 	// 複数人一括予約メニューで満枠（選択可能人数が0）のスロットは予約へ進めない。
 	// 料金区分メニューは合計人数が 1〜選択可能上限の範囲にある場合のみ進める。
@@ -3437,9 +3611,17 @@ export const ReservationApp = ( {
 
 		if ( ! selectedSlot || ! menuId ) {
 			setSubmitError(
-				__(
-					'Please select your menu and reservation slot before proceeding.',
-					'vk-booking-manager'
+				menuLabelText(
+					providerSettings.menuLabel,
+					__(
+						'Please select your menu and reservation slot before proceeding.',
+						'vk-booking-manager'
+					),
+					/* translators: %s: menu term set in the settings (e.g. Plan). */
+					__(
+						'Select %s and reservation slot before proceeding.',
+						'vk-booking-manager'
+					)
 				)
 			);
 			return;
@@ -3469,7 +3651,10 @@ export const ReservationApp = ( {
 			currentGuestCount < nominationMinGuests
 		) {
 			setSubmitError(
-				buildNominationMinGuestsMessage( nominationMinGuests )
+				buildNominationMinGuestsMessage(
+					nominationMinGuests,
+					providerSettings.menuLabel
+				)
 			);
 			return;
 		}
@@ -3648,16 +3833,18 @@ export const ReservationApp = ( {
 			? providerSettings.reservationPageUrl
 			: '';
 	const brandLinkHref = reservationPageUrl.trim();
-	const brandLogoAlt = shouldShowName
-		? providerSettings.providerName
-		: __( 'Logo image', 'vk-booking-manager' );
+	const brandLogoAlt = getBrandLogoAlt(
+		providerSettings.providerName,
+		brandLinkHref
+	);
 	const navAriaLabel = __(
 		'Reservation block navigation',
 		'vk-booking-manager'
 	);
-	const returnLabel = shouldShowBrand
-		? __( 'Return', 'vk-booking-manager' )
-		: __( 'return', 'vk-booking-manager' );
+	const returnLabel = __(
+		'Back to the reservation page',
+		'vk-booking-manager'
+	);
 	const navVariant = shouldShowUserSection
 		? 'return'
 		: isLoggedIn && canManageReservations
@@ -3683,6 +3870,8 @@ export const ReservationApp = ( {
 		isLoginActive: authMode === 'login',
 		onRegister: () => handleAuthLink( 'register' ),
 		isRegisterActive: authMode === 'register',
+		showLogin: guestAuthLinks.showLogin,
+		showRegister: guestAuthLinks.showRegister,
 		// #635: 詳細表示中は、ナビゲーションに「一覧に戻る」（予約ページの最初の状態）を足す。
 		listReturnHref: shouldShowDetail
 			? buildListReturnUrl(
@@ -3834,6 +4023,7 @@ export const ReservationApp = ( {
 				) }
 				<BookingSummaryItems
 					booking={ booking }
+					menuLabel={ providerSettings.menuLabel }
 					resourceLabel={ providerSettings.resourceLabelSingular }
 					otherConditionsLabel={
 						providerSettings.otherConditionsLabel
@@ -4051,7 +4241,11 @@ export const ReservationApp = ( {
 													applyFavorite( favorite )
 												}
 												disabled={
-													! favorite.available
+													! favorite.available ||
+													! findFavoriteMenu(
+														favorite,
+														menus
+													)
 												}
 											>
 												{ favorite.label ||
@@ -4095,6 +4289,10 @@ export const ReservationApp = ( {
 						<>
 							{ ( menuId || shouldShowMenuSearch ) && (
 								<SelectedPlanSummary
+									menuLabel={ providerSettings.menuLabel }
+									menuLabelPlural={
+										providerSettings.menuLabelPlural
+									}
 									// デザイン設定のデザイン（枠で囲うなど）は、「絞り込み検索」の ON/OFF に関係なく、
 									// この検索欄が表示されているすべての画面（メニュー選択後を含む）へ同じように当てる（#787）。
 									menuCardBackground={
@@ -4216,9 +4414,17 @@ export const ReservationApp = ( {
 												className="vkbm-alert vkbm-alert__info"
 												role="status"
 											>
-												{ __(
-													'Loading service menu…',
-													'vk-booking-manager'
+												{ menuLabelText(
+													providerSettings.menuLabelPlural,
+													__(
+														'Loading service menu…',
+														'vk-booking-manager'
+													),
+													/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+													__(
+														'Loading %s…',
+														'vk-booking-manager'
+													)
 												) }
 											</p>
 										) }
@@ -4358,17 +4564,30 @@ export const ReservationApp = ( {
 													)
 											  )
 											: joinSentences(
-													sprintf(
-														/* translators: %s: the date that was carried over and cannot be booked. */
-														__(
-															'The date you selected (%s) cannot be booked for this menu.',
-															'vk-booking-manager'
-														),
-														formatReservationDate(
-															carryNotice.date,
-															userBootstrap?.locale
-														)
-													),
+													providerSettings.menuLabel
+														? sprintf(
+																/* translators: 1: the date that was carried over and cannot be booked, 2: menu term set in the settings (e.g. Plan). */
+																__(
+																	'The date you selected (%1$s) cannot be booked for this %2$s.',
+																	'vk-booking-manager'
+																),
+																formatReservationDate(
+																	carryNotice.date,
+																	userBootstrap?.locale
+																),
+																providerSettings.menuLabel
+														  )
+														: sprintf(
+																/* translators: %s: the date that was carried over and cannot be booked. */
+																__(
+																	'The date you selected (%s) cannot be booked for this menu.',
+																	'vk-booking-manager'
+																),
+																formatReservationDate(
+																	carryNotice.date,
+																	userBootstrap?.locale
+																)
+														  ),
 													__(
 														'Please select another date.',
 														'vk-booking-manager'
@@ -4522,7 +4741,8 @@ export const ReservationApp = ( {
 									<div className="vkbm-plan-summary__guest-tiers">
 										<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
 											{ buildSlotBelowNominationMinGuestsMessage(
-												nominationMinGuests
+												nominationMinGuests,
+												providerSettings.menuLabel
 											) }
 										</p>
 									</div>
@@ -4691,7 +4911,8 @@ export const ReservationApp = ( {
 												nominationMinGuests && (
 												<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
 													{ buildNominationMinGuestsMessage(
-														nominationMinGuests
+														nominationMinGuests,
+														providerSettings.menuLabel
 													) }
 												</p>
 											) }
@@ -4707,7 +4928,8 @@ export const ReservationApp = ( {
 									<div className="vkbm-plan-summary__guests">
 										<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
 											{ buildSlotBelowNominationMinGuestsMessage(
-												nominationMinGuests
+												nominationMinGuests,
+												providerSettings.menuLabel
 											) }
 										</p>
 									</div>
@@ -4789,7 +5011,8 @@ export const ReservationApp = ( {
 												id="vkbm-reservation-guests-hint"
 											>
 												{ buildNominationMinGuestsHint(
-													nominationMinGuests
+													nominationMinGuests,
+													providerSettings.menuLabel
 												) }
 											</p>
 										) }

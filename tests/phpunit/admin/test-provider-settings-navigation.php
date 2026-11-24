@@ -135,7 +135,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'conditions'          => array( false, false, false ),
 				'expected'            => array(
 					'service'  => array( 'store', 'system', 'notation', 'email', 'design' ),
-					'customer' => array( 'attendees', 'registration', 'consent' ),
+					'customer' => array( 'attendees', 'booking-fields', 'registration', 'consent' ),
 					'admin'    => array( 'advanced' ),
 					'help'     => array( 'faq' ),
 				),
@@ -145,7 +145,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'conditions'          => array( true, true, false ),
 				'expected'            => array(
 					'service'   => array( 'store', 'system', 'notation', 'email', 'design' ),
-					'customer'  => array( 'attendees', 'registration', 'consent' ),
+					'customer'  => array( 'attendees', 'booking-fields', 'registration', 'consent' ),
 					'extension' => array( 'integration' ),
 					'admin'     => array( 'advanced', 'license' ),
 					'help'      => array( 'faq' ),
@@ -156,7 +156,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'conditions'          => array( false, false, true ),
 				'expected'            => array(
 					'service'   => array( 'store', 'system', 'notation', 'email', 'design' ),
-					'customer'  => array( 'attendees', 'registration', 'consent' ),
+					'customer'  => array( 'attendees', 'booking-fields', 'registration', 'consent' ),
 					'extension' => array(),
 					'admin'     => array( 'advanced' ),
 					'help'      => array( 'faq' ),

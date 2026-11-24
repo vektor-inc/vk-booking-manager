@@ -14,7 +14,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Bookings\Customer_Booking_Limit;
+use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\Common\Lodging_Rate;
+use VKBookingManager\Common\Page_Reference;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Uninstall\Uninstaller;
 use function __;
@@ -150,6 +153,12 @@ class Settings_Sanitizer {
 	/** 利用者名入力欄の見出しの最大文字数。 */
 	public const BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH = 200;
 
+	/** 基本設定画面の「最終チェックイン時刻（宿泊プラン）」の「時」のプルダウンの送信名（#1136）。 */
+	public const LODGING_LATEST_CHECK_IN_HOUR_FIELD = 'lodging_latest_check_in_hour';
+
+	/** 基本設定画面の「最終チェックイン時刻（宿泊プラン）」の「分」のプルダウンの送信名（#1136）。 */
+	public const LODGING_LATEST_CHECK_IN_MINUTE_FIELD = 'lodging_latest_check_in_minute';
+
 	private const HOLIDAY_FREQUENCIES = array(
 		'weekly',
 		'nth-1',
@@ -245,7 +254,10 @@ class Settings_Sanitizer {
 		// 数量の見出しは既存ラベル群と同じく sanitize_text_field を適用する（空ならデフォルトへフォールバックは表示側ヘルパーが担当）。
 		$data['guests_count_label'] = sanitize_text_field( (string) ( $data['guests_count_label'] ?? '' ) );
 		// 数量の単位は null（未設定）/ ''（単位なし）を区別して保持する。
-		$data['guests_unit_label']                              = $this->sanitize_guests_unit_label( $input, $data );
+		$data['guests_unit_label'] = $this->sanitize_guests_unit_label( $input, $data );
+		// メニューの呼び方は空欄のまま保持する（表示側ヘルパーが「メニュー」へフォールバックする）。
+		$data['menu_label']                                     = sanitize_text_field( (string) ( $data['menu_label'] ?? '' ) );
+		$data['menu_label_plural']                              = sanitize_text_field( (string) ( $data['menu_label_plural'] ?? '' ) );
 			$data['provider_business_hours']                    = sanitize_textarea_field( $data['provider_business_hours'] );
 			$data['provider_reservation_deadline_hours']        = $this->sanitize_non_negative_int(
 				$input['provider_reservation_deadline_hours'] ?? ( $data['provider_reservation_deadline_hours'] ?? 0 )
@@ -279,6 +291,7 @@ class Settings_Sanitizer {
 		$data['booking_attendee_name_mode']                = in_array( $attendee_name_mode, array( 'disabled', 'optional', 'required' ), true ) ? $attendee_name_mode : 'disabled';
 		$attendee_name_label                               = sanitize_text_field( (string) ( $input['booking_attendee_name_label'] ?? ( $data['booking_attendee_name_label'] ?? '' ) ) );
 		$data['booking_attendee_name_label']               = mb_strlen( $attendee_name_label ) > self::BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH ? mb_substr( $attendee_name_label, 0, self::BOOKING_ATTENDEE_NAME_LABEL_MAX_LENGTH ) : $attendee_name_label;
+		$data['booking_custom_fields']                     = $this->sanitize_booking_custom_fields( $input, $data );
 		$data['attendee_roster_enabled']                   = ! empty( $input['attendee_roster_enabled'] );
 		$data['attendee_roster_label']                     = sanitize_text_field( (string) ( $input['attendee_roster_label'] ?? '' ) );
 		$data['attendee_roster_show_self']                 = ! empty( $input['attendee_roster_show_self'] );
@@ -288,6 +301,15 @@ class Settings_Sanitizer {
 		$data['attendee_number_label']                     = sanitize_text_field( (string) ( $input['attendee_number_label'] ?? '' ) );
 			$data['provider_website_url']                  = $this->sanitize_url( $data['provider_website_url'] );
 			$data['reservation_page_url']                  = $this->sanitize_url( $data['reservation_page_url'] );
+		// 予約時の入力項目の印（booking_custom_fields_submitted）は判定にだけ使い、保存しない。
+		unset( $data[ Booking_Custom_Fields::SETTINGS_SUBMITTED_KEY ] );
+		// 予約ページの固定ページ（#1050）。存在する固定ページの ID だけを通し、「その他」（other）や削除済みの ID は 0 にする。
+		$data['reservation_page_id'] = Page_Reference::sanitize_page_id( $data['reservation_page_id'] ?? 0 );
+		// プルダウンで「選択してください」（空文字）を選んで保存したときは、残っていた URL も消して未設定に戻す。
+		// 0 や未送信（プログラムからの保存・旧バージョンの保存形式）では URL をそのまま残す。
+		if ( array_key_exists( 'reservation_page_id', $input ) && '' === (string) $input['reservation_page_id'] ) {
+			$data['reservation_page_url'] = '';
+		}
 		// #427: 「絞り込み検索」チェックボックス。未送信＝チェック無しとして扱う（他のチェックボックス項目と同様）。
 		$data['reservation_show_menu_search'] = ! empty( $input['reservation_show_menu_search'] );
 		// #431: 「リソースタグ検索」チェックボックス。「絞り込み検索」の子項目のため、
@@ -473,6 +495,10 @@ class Settings_Sanitizer {
 			$input['lodging_special_dates'] ?? ( $data['lodging_special_dates'] ?? array() )
 		);
 
+		// 宿泊プランの最終チェックイン時刻の既定値（#1136）。画面の「時」「分」の2つのプルダウンを1つの値にまとめ、プルダウンの送信値は保存しない。
+		$data[ Settings_Repository::KEY_LODGING_LATEST_CHECK_IN_TIME ] = self::sanitize_lodging_latest_check_in_time( $input, $data );
+		unset( $data[ self::LODGING_LATEST_CHECK_IN_HOUR_FIELD ], $data[ self::LODGING_LATEST_CHECK_IN_MINUTE_FIELD ] );
+
 		$data['email_log_enabled'] = ! empty( $input['email_log_enabled'] );
 
 		$retention_raw = $input['email_log_retention_days'] ?? ( $data['email_log_retention_days'] ?? 1 );
@@ -482,6 +508,34 @@ class Settings_Sanitizer {
 		$data['email_log_retention_days'] = max( 1, $this->sanitize_non_negative_int( $retention_raw ) );
 
 		return $data;
+	}
+
+	/**
+	 * 宿泊プランの最終チェックイン時刻の既定値（#1136）を保存用の値（HH:MM または空文字）にする。
+	 *
+	 * - 基本設定画面からの保存: 「時」のプルダウン（LODGING_LATEST_CHECK_IN_HOUR_FIELD）が送られていれば、それを優先する。
+	 *   「時」が「設定しない」（空文字）なら未設定にする。「分」は「設定しない」の間は無効で送られないため、無いときは 00 分とする。
+	 * - それ以外（REST などで HH:MM を直接渡す、別タブの保存で保存済みの値を引き継ぐ）: KEY_LODGING_LATEST_CHECK_IN_TIME の値を検証する。
+	 * - 不正な値は未設定（空文字）にする。
+	 *
+	 * @param array<string, mixed> $input 送信された値。
+	 * @param array<string, mixed> $data  既定値と送信値をまとめた値。
+	 * @return string HH:MM。未設定・不正値は空文字。
+	 */
+	public static function sanitize_lodging_latest_check_in_time( array $input, array $data ): string {
+		if ( array_key_exists( self::LODGING_LATEST_CHECK_IN_HOUR_FIELD, $input ) ) {
+			$hour = is_scalar( $input[ self::LODGING_LATEST_CHECK_IN_HOUR_FIELD ] ) ? (string) $input[ self::LODGING_LATEST_CHECK_IN_HOUR_FIELD ] : '';
+			if ( '' === $hour ) {
+				return '';
+			}
+			$minute = isset( $input[ self::LODGING_LATEST_CHECK_IN_MINUTE_FIELD ] ) && is_scalar( $input[ self::LODGING_LATEST_CHECK_IN_MINUTE_FIELD ] )
+				? (string) $input[ self::LODGING_LATEST_CHECK_IN_MINUTE_FIELD ]
+				: '00';
+
+			return Service_Menu_Post_Type::sanitize_time_value( $hour . ':' . $minute );
+		}
+
+		return Service_Menu_Post_Type::sanitize_time_value( $data[ Settings_Repository::KEY_LODGING_LATEST_CHECK_IN_TIME ] ?? '' );
 	}
 
 	/**
@@ -533,6 +587,38 @@ class Settings_Sanitizer {
 		}
 
 		return Lodging_Rate::normalize_special_periods( $valid_rows );
+	}
+
+	/**
+	 * 予約時の入力項目（#1147）の定義を検証して保存用の配列にする。
+	 *
+	 * - 設定画面の欄が送られた保存（行が 0 件でも印 booking_custom_fields_submitted が届く）では、送られた行で置き換える。
+	 * - 欄が送られなかった保存（REST の部分更新など）では、保存済みの値（$data）を正規化して保つ。
+	 * - 項目名が空の行・上限を超えた件数はエラーにし、field_errors['booking_custom_fields'][行の番号] に入れる。
+	 *
+	 * @param array<string, mixed> $input 送信された値。
+	 * @param array<string, mixed> $data  既定値と送信値をまとめた値。
+	 * @return array<int, array{id: string, label: string, type: string, required: bool}> 保存用の定義。
+	 */
+	private function sanitize_booking_custom_fields( array $input, array $data ): array {
+		$submitted = array_key_exists( Booking_Custom_Fields::SETTINGS_KEY, $input ) || ! empty( $input[ Booking_Custom_Fields::SETTINGS_SUBMITTED_KEY ] );
+		if ( ! $submitted ) {
+			return Booking_Custom_Fields::normalize_definitions( $data[ Booking_Custom_Fields::SETTINGS_KEY ] ?? array() );
+		}
+
+		$result = Booking_Custom_Fields::sanitize_definitions_input( $input[ Booking_Custom_Fields::SETTINGS_KEY ] ?? array() );
+		foreach ( $result['errors'] as $index => $message ) {
+			$this->errors[] = $message;
+			if ( ! isset( $this->field_errors[ Booking_Custom_Fields::SETTINGS_KEY ] ) || ! is_array( $this->field_errors[ Booking_Custom_Fields::SETTINGS_KEY ] ) ) {
+				$this->field_errors[ Booking_Custom_Fields::SETTINGS_KEY ] = array();
+			}
+			$this->field_errors[ Booking_Custom_Fields::SETTINGS_KEY ][ (string) $index ] = $message;
+			if ( isset( $result['error_fields'][ (string) $index ] ) ) {
+				$this->field_errors[ Booking_Custom_Fields::SETTINGS_KEY . '_error_fields' ][ (string) $index ] = $result['error_fields'][ (string) $index ];
+			}
+		}
+
+		return $result['definitions'];
 	}
 
 	/**

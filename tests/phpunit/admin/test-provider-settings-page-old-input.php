@@ -61,6 +61,18 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 	 * （項目を追加したときの入れ忘れを検出するため）。
 	 */
 	public function test_sanitize_old_input(): void {
+		$published_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$draft_page_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+			)
+		);
 		// リソースタグ検索は Pro 版限定のため、無料版では保存時と同じく常に OFF になる。
 		$resource_tag_search_when_checked = ! Pro_Upsell::is_free_edition();
 
@@ -69,6 +81,43 @@ class Provider_Settings_Page_Old_Input_Test extends WP_UnitTestCase {
 				'test_condition_name' => '白いカード背景の送信値を復元する',
 				'input' => array( 'design_menu_card_background' => 'white' ),
 				'expected' => array( 'design_menu_card_background' => 'white' ),
+			),
+			array(
+				'test_condition_name' => '予約ページに公開中の固定ページの ID（文字列）を送信 => 整数で復元する（#1050）',
+				'input'               => array( 'reservation_page_id' => (string) $published_page_id ),
+				'expected'            => array( 'reservation_page_id' => $published_page_id ),
+			),
+			array(
+				'test_condition_name' => '予約ページに公開中でない固定ページの ID を送信 => 保存時と同じく 0 で復元する（選べるのは公開中のページだけ）',
+				'input'               => array( 'reservation_page_id' => (string) $draft_page_id ),
+				'expected'            => array( 'reservation_page_id' => 0 ),
+			),
+			array(
+				'test_condition_name' => '予約ページで「その他（URL を入力）」を送信 => ID は 0 で復元する',
+				'input'               => array( 'reservation_page_id' => 'other' ),
+				'expected'            => array( 'reservation_page_id' => 0 ),
+			),
+			array(
+				'test_condition_name' => '予約ページで「選択してください」（空文字）と残っていた URL を送信 => 保存時と同じく URL も空で復元する（再表示で「その他」にしない）',
+				'input'               => array(
+					'reservation_page_id'  => '',
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
+				'expected'            => array(
+					'reservation_page_id'  => 0,
+					'reservation_page_url' => '',
+				),
+			),
+			array(
+				'test_condition_name' => '予約ページで「その他（URL を入力）」と URL を送信 => URL を復元する',
+				'input'               => array(
+					'reservation_page_id'  => 'other',
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
+				'expected'            => array(
+					'reservation_page_id'  => 0,
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
 			),
 			array(
 				'test_condition_name' => '絞り込み検索 ON でリソースタグ検索 ON・自動登録 2ヶ月先まで => 送信値が復元される（無料版ではリソースタグ検索は OFF）',

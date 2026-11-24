@@ -1,26 +1,34 @@
 import { __ } from '@wordpress/i18n';
 
-export const ReservationHeaderNav = ( {
-	variant = '',
-	screen = '',
-	ariaLabel = '',
-	staffDashboardHref = '',
-	staffSettingsHref = '',
-	logoutHref = '',
-	onReturn = null,
-	returnLabel = '',
-	onBookings = null,
-	isBookingsActive = false,
-	onProfile = null,
-	isProfileActive = false,
-	onLogin = null,
-	isLoginActive = false,
-	onRegister = null,
-	isRegisterActive = false,
-	listReturnHref = '',
-	listReturnLabel = '',
-	isLodging = false,
-} ) => {
+/**
+ * ヘッダーナビに並べる項目を、ナビの種類と状態から組み立てる。
+ * リンクの行き先が空の項目は除く。
+ *
+ * @param {Object} props ReservationHeaderNav と同じプロパティ。
+ * @return {Array<Object>} 表示する項目。0 件ならナビを出さない。
+ */
+export const buildReservationHeaderNavItems = ( props ) => {
+	const {
+		variant = '',
+		staffDashboardHref = '',
+		staffSettingsHref = '',
+		logoutHref = '',
+		onReturn = null,
+		returnLabel = '',
+		onBookings = null,
+		isBookingsActive = false,
+		onProfile = null,
+		isProfileActive = false,
+		onLogin = null,
+		isLoginActive = false,
+		onRegister = null,
+		isRegisterActive = false,
+		showLogin = true,
+		showRegister = true,
+		listReturnHref = '',
+		listReturnLabel = '',
+		isLodging = false,
+	} = props;
 	let navItems = [];
 	if ( variant === 'staff' ) {
 		// 店舗スタッフ用ナビゲーション
@@ -86,9 +94,9 @@ export const ReservationHeaderNav = ( {
 			},
 		];
 	} else if ( variant === 'guest' ) {
-		// ゲスト用ナビゲーション
+		// ゲスト用ナビゲーション。受付方法・ユーザー登録の可否で出さない項目がある（#1121）。
 		navItems = [
-			{
+			showLogin && {
 				key: 'login',
 				type: 'button',
 				label: __( 'Log in', 'vk-booking-manager' ),
@@ -96,7 +104,7 @@ export const ReservationHeaderNav = ( {
 				ariaPressed: isLoginActive,
 				isActive: isLoginActive,
 			},
-			{
+			showRegister && {
 				key: 'register',
 				type: 'button',
 				label: __( 'Sign up', 'vk-booking-manager' ),
@@ -104,7 +112,7 @@ export const ReservationHeaderNav = ( {
 				ariaPressed: isRegisterActive,
 				isActive: isRegisterActive,
 			},
-		];
+		].filter( Boolean );
 	}
 
 	// #635: サービスメニューの詳細表示中は、先頭に「一覧に戻る」を足す（既存のナビはそのまま残す）。
@@ -122,11 +130,22 @@ export const ReservationHeaderNav = ( {
 		];
 	}
 
-	const resolvedItems = navItems.filter(
+	return navItems.filter(
 		( item ) =>
 			item.type !== 'link' ||
 			( typeof item.href === 'string' && item.href.trim() !== '' )
 	);
+};
+
+/**
+ * 予約ブロックのヘッダーナビ。表示する項目が無ければ何も出さない。
+ *
+ * @param {Object} props プロパティ（項目の組み立ては buildReservationHeaderNavItems を参照）。
+ * @return {JSX.Element|null} ナビ。
+ */
+export const ReservationHeaderNav = ( props ) => {
+	const { screen = '', ariaLabel = '', variant = '' } = props;
+	const resolvedItems = buildReservationHeaderNavItems( props );
 
 	if ( ! resolvedItems.length ) {
 		return null;

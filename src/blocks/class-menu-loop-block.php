@@ -41,6 +41,7 @@ use function wp_localize_script;
 use function wp_register_script;
 use function sanitize_key;
 use function wp_set_script_translations;
+use function vkbm_get_menu_label_text;
 
 /**
  * Registers and renders the service menu loop block.
@@ -205,7 +206,13 @@ class Menu_Loop_Block {
 		if ( ! $query->have_posts() ) {
 			$message = trim( (string) ( $attributes['emptyMessage'] ?? '' ) );
 			if ( '' === $message ) {
-				$message = __( 'No service menus matching the criteria were found.', 'vk-booking-manager' );
+				$message = vkbm_get_menu_label_text(
+					__( 'No service menus matching the criteria were found.', 'vk-booking-manager' ),
+					/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+					__( 'No %s matching the criteria were found.', 'vk-booking-manager' ),
+					array(),
+					true
+				);
 			}
 
 			return $this->render_empty_state( $message, $loop_id, $attributes );
@@ -517,7 +524,7 @@ class Menu_Loop_Block {
 		if ( $filters['staff'] > 0 ) {
 			// 個別選択（_vkbm_staff_ids のシリアライズ値の部分一致）に加え、#485 で追加した
 			// 「すべてのリソースが担当できる」（_vkbm_staff_all が真）のメニューも該当させる。
-			// 対応リソース未設定（空）のメニューを除外する既存の挙動はここでは変えない。
+			// 対応リソース未設定（空）のメニューは該当しない（is_menu_visible_for_staff_filter() と同じ。#1144）。
 			$staff_meta_query = array(
 				'relation' => 'OR',
 				array(
@@ -554,6 +561,9 @@ class Menu_Loop_Block {
 			// 「公開日」などブロックで指定した並び順を、Post_Order_Manager に手動並び順へ書き換えさせない。
 			'vkbm_force_menu_order' => false,
 		);
+
+		// 担当できるリソースがいないメニューは予約できないため、一覧に出さない（#1144）。
+		$args = Service_Menu_Post_Type::exclude_unassigned_menus_from_query_args( $args );
 
 		$tax_query = array();
 
@@ -932,17 +942,20 @@ class Menu_Loop_Block {
 		$resource_ids_for_tags = empty( $tag_ids ) ? null : Resource_Tag_Taxonomy::get_resource_ids_for_tags( $tag_ids );
 
 		$query = new WP_Query(
-			array(
-				'post_type'           => Service_Menu_Post_Type::POST_TYPE,
-				'post_status'         => $this->get_menu_post_statuses(),
-				'posts_per_page'      => -1,
-				'orderby'             => array(
-					'menu_order' => 'ASC',
-					'title'      => 'ASC',
-				),
-				'order'               => 'ASC',
-				'ignore_sticky_posts' => true,
-				'meta_query'          => Service_Menu_Post_Type::build_public_listing_meta_query(),
+			// 担当できるリソースがいないメニューは予約できないため、一覧に出さない（#1144）。
+			Service_Menu_Post_Type::exclude_unassigned_menus_from_query_args(
+				array(
+					'post_type'           => Service_Menu_Post_Type::POST_TYPE,
+					'post_status'         => $this->get_menu_post_statuses(),
+					'posts_per_page'      => -1,
+					'orderby'             => array(
+						'menu_order' => 'ASC',
+						'title'      => 'ASC',
+					),
+					'order'               => 'ASC',
+					'ignore_sticky_posts' => true,
+					'meta_query'          => Service_Menu_Post_Type::build_public_listing_meta_query(),
+				)
 			)
 		);
 
@@ -1018,9 +1031,9 @@ class Menu_Loop_Block {
 	 *   （無料版、または基本設定でOFF）のときは、絞り込みを行わず常に表示する（staff パラメータを無視する）。
 	 * - メニュー単位で指名を使わない設定（Staff_Editor::is_nomination_enabled_for_menu() が false）の
 	 *   メニューは、スタッフ選択中は一覧から外す（そのメニューはそもそも指名という概念を持たないため）。
-	 * - メニューの対応スタッフ（_vkbm_staff_ids）が未登録（空）のメニューは表示する
+	 * - メニューの対応スタッフ（_vkbm_staff_ids）が未登録（空）のメニューは表示しない
 	 *   （Availability_Service::resolve_staff_ids() が対応スタッフ未設定のメニューを
-	 *   指名スタッフでそのまま受け付ける仕様と一致させるため）。
+	 *   指名の有無に関わらず受け付けない仕様と一致させるため。#1144）。
 	 * - 対応スタッフが設定されている場合は、その中に $staff_id が含まれるときだけ表示する。
 	 *
 	 * @param WP_Post $post      サービスメニュー投稿。
@@ -1044,15 +1057,8 @@ class Menu_Loop_Block {
 		}
 
 		// #485: 「すべてのリソースが担当できる」は公開中の全リソースへ展開済み（Service_Menu_Post_Type::get_assignable_staff_ids()）。
-		$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID );
-
-		// 対応スタッフが未登録のメニューは、指名スタッフでそのまま受け付ける
-		// （Availability_Service::resolve_staff_ids() と同じ扱い）。
-		if ( empty( $staff_ids ) ) {
-			return true;
-		}
-
-		return in_array( $staff_id, $staff_ids, true );
+		// 対応スタッフが未登録のメニューは、どのスタッフを選んでも該当しない（#1144）。
+		return in_array( $staff_id, Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID ), true );
 	}
 
 	/**
@@ -1067,10 +1073,9 @@ class Menu_Loop_Block {
 	 * 2. $resource_ids_for_tags が空配列（選択したタグを「すべて」持つリソースが1件も無い）の
 	 *    ときは、対応スタッフ未登録のメニューを含め、どのメニューも表示しない
 	 *    （issue #431 完了条件「該当するリソースが0件になった場合はメニュー一覧を空にする」）。
-	 * 3. ここまでに該当せず（＝該当リソースが1件以上ある）、かつメニューの対応スタッフ
-	 *    （_vkbm_staff_ids）が未登録（空）のときは表示する
-	 *    （is_menu_visible_for_staff_filter() と判定基準を揃える）。
-	 * 4. 対応スタッフが設定されている場合は、その中にタグを持つリソースが1人でも含まれるときだけ表示する。
+	 * 3. 対応スタッフの中にタグを持つリソースが1人でも含まれるときだけ表示する。対応スタッフ
+	 *    （_vkbm_staff_ids）が未登録（空）のメニューは表示しない
+	 *    （is_menu_visible_for_staff_filter() と判定基準を揃える。#1144）。
 	 *
 	 * @param WP_Post         $post                  サービスメニュー投稿。
 	 * @param array<int>|null $resource_ids_for_tags  選択中のタグを「すべて」持つリソースの投稿ID配列。
@@ -1089,13 +1094,6 @@ class Menu_Loop_Block {
 		// #485: 「すべてのリソースが担当できる」は公開中の全リソースへ展開済み（Service_Menu_Post_Type::get_assignable_staff_ids()）。
 		$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $post->ID );
 
-		// ここに到達するのは該当リソースが1件以上あるときだけ（0件は直前のreturn falseで
-		// 抜けている）。対応スタッフが未登録のメニューは、is_menu_visible_for_staff_filter()
-		// と同じく表示する。
-		if ( empty( $staff_ids ) ) {
-			return true;
-		}
-
 		return ! empty( array_intersect( $staff_ids, $resource_ids_for_tags ) );
 	}
 
@@ -1110,6 +1108,45 @@ class Menu_Loop_Block {
 		}
 
 		return array( 'publish' );
+	}
+
+	/**
+	 * カードに表示する説明文（抜粋）を取得する。
+	 *
+	 * 抜粋を取る間だけ、対象のメニューを「いま表示中の投稿」（グローバル $post と関連する投稿データ）にし、
+	 * 取得後は呼び出し前の状態へ戻す。
+	 * テーマや他プラグインの抜粋フィルターがグローバル $post を参照すると、
+	 * 抜粋が空のメニューで全カードがページ側の投稿の文になるため（#1110）。
+	 *
+	 * @param WP_Post $post サービスメニューの投稿。
+	 * @return string 抜粋（出力用の安全化はしていない）。
+	 */
+	private function get_card_excerpt( WP_Post $post ): string {
+		// setup_postdata() が書き換えるグローバル変数を退避する。
+		$global_names = array( 'post', 'id', 'authordata', 'currentday', 'currentmonth', 'page', 'pages', 'multipage', 'more', 'numpages' );
+		$saved        = array();
+		foreach ( $global_names as $name ) {
+			if ( array_key_exists( $name, $GLOBALS ) ) {
+				$saved[ $name ] = $GLOBALS[ $name ];
+			}
+		}
+
+		try {
+			// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- 抜粋フィルターが参照する表示中の投稿を一時的に差し替え、finally で戻す。
+			$GLOBALS['post'] = $post;
+			setup_postdata( $post );
+
+			return (string) get_the_excerpt( $post );
+		} finally {
+			// 退避したグローバル変数を戻し、元々無かったものは消す。
+			foreach ( $global_names as $name ) {
+				if ( array_key_exists( $name, $saved ) ) {
+					$GLOBALS[ $name ] = $saved[ $name ]; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- コアのグローバル変数を退避した値へ戻す。
+				} else {
+					unset( $GLOBALS[ $name ] );
+				}
+			}
+		}
 	}
 
 	/**
@@ -1156,7 +1193,7 @@ class Menu_Loop_Block {
 		}
 
 		if ( ! empty( $attributes['showExcerpt'] ) ) {
-			$excerpt = get_the_excerpt( $post );
+			$excerpt = $this->get_card_excerpt( $post );
 			if ( '' !== trim( (string) $excerpt ) ) {
 				$segments[] = sprintf(
 					'<div class="vkbm-menu-loop__card-excerpt">%s</div>',

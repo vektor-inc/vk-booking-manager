@@ -28,6 +28,34 @@ class Booking_Anonymizer_Test extends WP_UnitTestCase {
 		$this->assertSame( '', $fields['_vkbm_booking_attendee_name']['value'] );
 	}
 
+	/**
+	 * 予約時の入力項目（#1147）の回答は、項目の内容によらず匿名化の対象に含め、空にする。
+	 */
+	public function test_get_meta_fields(): void {
+		$fields     = Booking_Anonymizer::get_meta_fields();
+		$test_cases = array(
+			array(
+				'test_condition_name' => '予約時の入力項目の回答 => 対象に含め、空にする',
+				'meta_key'            => '_vkbm_booking_custom_fields',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => 'メモ => 対象に含め、空にする',
+				'meta_key'            => '_vkbm_booking_note',
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '顧客名 => 「（削除済み）」に置き換える',
+				'meta_key'            => '_vkbm_booking_customer_name',
+				'expected'            => Booking_Anonymizer::get_deleted_label(),
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$this->assertArrayHasKey( $case['meta_key'], $fields, $case['test_condition_name'] );
+			$this->assertSame( $case['expected'], $fields[ $case['meta_key'] ]['value'], $case['test_condition_name'] );
+		}
+	}
+
 	/** ご利用になる方の ID と番号の写しも匿名化対象に含める。 */
 	public function test_attendee_id_and_number_are_anonymized(): void {
 		$fields = Booking_Anonymizer::get_meta_fields();
@@ -292,6 +320,19 @@ class Booking_Anonymizer_Test extends WP_UnitTestCase {
 		$customer_id = $this->factory()->user->create( array( 'role' => 'subscriber' ) );
 		$booking_id  = $this->create_booking( array(), $customer_id );
 		$start       = (string) get_post_meta( $booking_id, '_vkbm_booking_service_start', true );
+		// 予約時の入力項目（#1147）の回答も個人情報として消える。
+		update_post_meta(
+			$booking_id,
+			'_vkbm_booking_custom_fields',
+			array(
+				array(
+					'id'    => 'cf_allergy',
+					'label' => 'アレルギー',
+					'type'  => 'textarea',
+					'value' => 'えび',
+				),
+			)
+		);
 
 		$before_kept = array();
 		$kept_keys   = array(
@@ -320,6 +361,7 @@ class Booking_Anonymizer_Test extends WP_UnitTestCase {
 			'_vkbm_booking_customer_address_full' => '',
 			'_vkbm_booking_note'           => '',
 			'_vkbm_booking_internal_note'  => '',
+			'_vkbm_booking_custom_fields'  => '',
 		);
 		foreach ( $replaced as $key => $expected ) {
 			$this->assertSame( $expected, get_post_meta( $booking_id, $key, true ), $key . ' が置き換わる' );

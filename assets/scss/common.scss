@@ -71,7 +71,8 @@ $vkbm-admin-component-roots: (
 	".vkbm-service-menu-staff",
 	".vkbm-setting-table",
 	".vkbm-shift-bulk-create",
-	".vkbm-shift-days"
+	".vkbm-shift-days",
+	".vkbm-time-selects"
 );
 
 $vkbm-box-roots: list.join(list.join($vkbm-front-roots, $vkbm-admin-page-roots), $vkbm-admin-component-roots);

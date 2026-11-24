@@ -60,6 +60,29 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 	/** @var array<string, mixed> */
 	private array $cookie_backup = [];
 
+	/**
+	 * 通常の下書き保存で未回答のキーを作らず、明示的な空文字は保持する。
+	 */
+	public function test_save_draft_preserves_missing_custom_field_keys(): void {
+		$menu_id  = $this->create_menu();
+		$owner_id = $this->factory()->user->create();
+		wp_set_current_user( $owner_id );
+		$settings = ( new Settings_Repository() )->get_settings();
+		$settings['booking_custom_fields'] = array(
+			array( 'id' => 'cf_age', 'label' => 'Age', 'type' => 'number', 'default_value' => '12' ),
+		);
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+		$controller = new Booking_Draft_Controller();
+		$payload    = $this->build_payload( $menu_id, '2024-02-01T10:00:00+09:00' );
+		$token      = $this->save_draft( $controller, $payload );
+		$this->assertSame( array(), get_transient( self::TRANSIENT_PREFIX . $token )['custom_fields'] );
+
+		// 利用者が既定値を消して保存した場合は、空文字のキーが残る。
+		$payload['custom_fields'] = array( 'cf_age' => '' );
+		$empty_token = $this->save_draft( $controller, $payload );
+		$this->assertSame( array( 'cf_age' => '' ), get_transient( self::TRANSIENT_PREFIX . $empty_token )['custom_fields'] );
+	}
+
 	protected function setUp(): void {
 		parent::setUp();
 		$this->cookie_backup = $_COOKIE;
@@ -1004,6 +1027,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				)
 			);
 			update_post_meta( $staff_id, Staff_Editor::META_NOMINATION_FEE, 1000 );
+			update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 
 			if ( $case['menu_disable_nomination'] ) {
 				update_post_meta( $menu_id, '_vkbm_disable_nomination', true );
@@ -1079,6 +1103,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 			)
 		);
 		update_post_meta( $staff_id, Staff_Editor::META_NOMINATION_FEE, 1000 );
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
 
 		$owner_id = $this->factory()->user->create();
 		wp_set_current_user( $owner_id );
@@ -2931,7 +2956,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 				'expected'            => 'ok',
 			),
 			array(
-				'test_condition_name' => '担当の指定がないメニューで、公開中のスタッフを指名 => 保存できる',
+				'test_condition_name' => '担当の指定がないメニューで、公開中のスタッフを指名 => 担当がいないので invalid_resource（#1144）',
 				'pro_only'            => true,
 				'site'                => array( 'custom', true ),
 				'user'                => 'guest',
@@ -2940,7 +2965,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 					'resource_id'        => $fx['other_staff'],
 					'is_staff_preferred' => true,
 				),
-				'expected'            => 'ok',
+				'expected'            => 'invalid_resource',
 			),
 			array(
 				'test_condition_name' => '担当を個別選択したメニューで、選んだスタッフを指名 => 保存できる',

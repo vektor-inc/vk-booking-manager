@@ -35,10 +35,8 @@ class OEmbed_Override {
 	 * @return array<string, mixed>
 	 */
 	public function override_response( array $data, $post ): array {
-		$repository = new Settings_Repository();
-		$settings   = $repository->get_settings();
-		$raw_url    = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		$target_url = Reservation_Page_Url::resolve_usable( $raw_url );
+		$settings   = ( new Settings_Repository() )->get_settings();
+		$target_url = Reservation_Page_Url::get_url( $settings );
 
 		if ( '' === $target_url ) {
 			return $data;

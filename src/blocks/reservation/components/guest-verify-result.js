@@ -1,6 +1,7 @@
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { formatBookingDateTimeParts } from '../format-wp-date';
 import { formatGuestsCount } from '../../shared/guests';
+import { getMenuHeading } from './menu-label';
 
 /** 確認リンクを開いた結果（Guest_Booking_Controller の RESULT_*）。 */
 export const GUEST_VERIFY_RESULT = {
@@ -252,6 +253,7 @@ export const getGuestVerifyResultView = (
  * @param {string} props.resourceLabel   担当の見出し（基本設定の実効値）。
  * @param {string} props.guestsLabel     人数の見出し（基本設定の実効値）。
  * @param {string} props.guestsUnitLabel 人数の単位。
+ * @param {string} props.menuLabel       メニューの呼び方（既定のままなら空文字）。
  * @return {JSX.Element|null} 予約内容。予約内容が無ければ null。
  */
 export const GuestVerifyBookingSummary = ( {
@@ -259,6 +261,7 @@ export const GuestVerifyBookingSummary = ( {
 	resourceLabel,
 	guestsLabel,
 	guestsUnitLabel,
+	menuLabel = '',
 } ) => {
 	if ( ! booking ) {
 		return null;
@@ -270,7 +273,7 @@ export const GuestVerifyBookingSummary = ( {
 		booking.timezone || ''
 	);
 	const rows = [
-		{ label: __( 'Menu', 'vk-booking-manager' ), value: booking.menuName },
+		{ label: getMenuHeading( menuLabel ), value: booking.menuName },
 		{ label: resourceLabel, value: booking.resourceName },
 		{
 			label: __( 'Estimated check-in time', 'vk-booking-manager' ),
@@ -340,6 +343,7 @@ export const GuestVerifyBookingSummary = ( {
  * @param {string} props.resourceLabel      担当の見出し。
  * @param {string} props.guestsLabel        人数の見出し。
  * @param {string} props.guestsUnitLabel    人数の単位。
+ * @param {string} props.menuLabel          メニューの呼び方（既定のままなら空文字）。
  * @param {Object} props.containerRef       フォーカス制御用に呼び出し側が保持する ref。
  * @return {JSX.Element} 結果画面。
  */
@@ -350,6 +354,7 @@ export const GuestVerifyResult = ( {
 	resourceLabel = '',
 	guestsLabel = '',
 	guestsUnitLabel = '',
+	menuLabel = '',
 	containerRef = null,
 } ) => {
 	const view = getGuestVerifyResultView( result, { pendingMessage } );
@@ -378,6 +383,7 @@ export const GuestVerifyResult = ( {
 					resourceLabel={ resourceLabel }
 					guestsLabel={ guestsLabel }
 					guestsUnitLabel={ guestsUnitLabel }
+					menuLabel={ menuLabel }
 				/>
 			) }
 			{ view.buttonLabel && reservationPageUrl && (

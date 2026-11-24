@@ -64,6 +64,7 @@ use function wp_specialchars_decode;
 use function wp_strip_all_tags;
 use function wp_mail;
 use function update_post_meta;
+use function vkbm_get_menu_label_text;
 
 /**
  * Handles booking-related email notifications.
@@ -339,6 +340,8 @@ class Booking_Notification_Service {
 			'attendee_name_label'     => \VKBookingManager\Common\Attendee_Name::get_label( $settings ),
 			'duration_label'          => $duration,
 			'guests'                  => $guests,
+			// #1126: 複数人予約を受け付けるメニューは、1 名でも人数の行を出す。
+			'multi_guest_enabled'     => $this->is_multi_guest_booking_accepted( $menu_id ),
 			'guest_tiers'             => $guest_tiers,
 			'guest_composition'       => Booking_Price::is_per_booking( Service_Menu_Post_Type::get_price_unit( $menu_id ) ) ? Booking_Price_Display::format_guest_composition( $guests, $guest_tiers ) : '',
 			'price_label'             => $price_label,
@@ -1232,6 +1235,8 @@ class Booking_Notification_Service {
 			'attendee_name_label'          => \VKBookingManager\Common\Attendee_Name::get_label( $settings ),
 			'duration_label'               => $duration,
 			'guests'                       => $guests,
+			// #1126: 複数人予約を受け付けるメニューは、1 名でも人数の行を出す。
+			'multi_guest_enabled'          => $this->is_multi_guest_booking_accepted( $menu_id ),
 			'guest_tiers'                  => $guest_tiers,
 			'guest_composition'            => Booking_Price::is_per_booking( $price_unit ) ? Booking_Price_Display::format_guest_composition( $guests, $guest_tiers ) : '',
 			'price_label'                  => $price_label,
@@ -1241,6 +1246,8 @@ class Booking_Notification_Service {
 			'customer_email'               => $customer_email,
 			'customer_tel'                 => $customer_tel,
 			'memo'                         => '' !== $memo ? $memo : __( '(none)', 'vk-booking-manager' ),
+			// 予約時の入力項目の回答（#1147）。回答した時点の項目名で出す。
+			'custom_fields'                => \VKBookingManager\Common\Booking_Custom_Fields::get_booking_snapshot( $booking_id ),
 			'status'                       => $status,
 			'provider_email'               => sanitize_email( (string) ( $settings['provider_email'] ?? '' ) ),
 			'provider_name'                => isset( $settings['provider_name'] ) && '' !== $settings['provider_name'] ? $settings['provider_name'] : wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
@@ -1358,8 +1365,14 @@ class Booking_Notification_Service {
 			/* translators: %s: Booking status label. */
 			$lines[] = sprintf( __( 'Status: %s', 'vk-booking-manager' ), $status_label );
 		}
-		/* translators: %s: Menu title. */
-		$lines[] = sprintf( __( 'Menu: %s', 'vk-booking-manager' ), $payload['menu_title'] );
+		// メニューの行は、送信する時点の「メニューの呼び方」を見出しにする（客室の行と同じ組み方）。
+		$lines[] = vkbm_get_menu_label_text(
+			/* translators: %s: Menu title. */
+			sprintf( __( 'Menu: %s', 'vk-booking-manager' ), $payload['menu_title'] ),
+			/* translators: 1: menu term set in the settings (e.g. Plan), 2: Menu title. */
+			__( '%1$s: %2$s', 'vk-booking-manager' ),
+			array( $payload['menu_title'] )
+		);
 		// 指名機能が有効な場合のみスタッフ行を出力する。
 		if ( ! empty( $payload['staff_enabled'] ) ) {
 			/* translators: 1: Resource label, 2: Staff name. */
@@ -1390,16 +1403,19 @@ class Booking_Notification_Service {
 				(string) $payload['attendee_name']
 			);
 		}
-		// 複数人予約の場合のみ数量行を出力する。
+		// 人数の行は、2 名以上の予約と、複数人予約を受け付けるメニューの予約（1 名でも）に出力する（#1126）。
+		// 1 人ずつしか予約できないメニューの 1 名の予約には出さない。
 		// 見出し・単位は基本設定でカスタマイズ可能（単位が空なら数値のみ）。
 		// 1ツアーあたりの予約は、人数の行に区分ごとの構成を添え、区分ごとの行は重ねて出さない（#1003）。
-		$guest_composition = isset( $payload['guest_composition'] ) ? (string) $payload['guest_composition'] : '';
-		if ( isset( $payload['guests'] ) && (int) $payload['guests'] > 1 ) {
+		$guest_composition   = isset( $payload['guest_composition'] ) ? (string) $payload['guest_composition'] : '';
+		$guests_count        = isset( $payload['guests'] ) ? (int) $payload['guests'] : 0;
+		$multi_guest_enabled = ! empty( $payload['multi_guest_enabled'] );
+		if ( $guests_count > 1 || ( $multi_guest_enabled && 1 === $guests_count ) ) {
 			$lines[] = sprintf(
 				/* translators: 1: Quantity label heading, 2: Quantity value (with unit). */
 				__( '%1$s: %2$s', 'vk-booking-manager' ),
 				vkbm_get_guests_count_label(),
-				'' !== $guest_composition ? $guest_composition : vkbm_format_guests_count( (int) $payload['guests'] )
+				'' !== $guest_composition ? $guest_composition : vkbm_format_guests_count( $guests_count )
 			);
 		}
 		// 料金区分が定義されている予約は、区分ごとの人数内訳を出力する（0名の区分は省略する）。
@@ -1468,6 +1484,7 @@ class Booking_Notification_Service {
 		$customer_tel = isset( $payload['customer_tel'] ) && '' !== $payload['customer_tel'] ? $payload['customer_tel'] : __( 'Not provided', 'vk-booking-manager' );
 		/* translators: %s: Customer contact value. */
 		$lines[] = sprintf( __( 'Contact: %s', 'vk-booking-manager' ), $customer_tel );
+		$lines   = array_merge( $lines, \VKBookingManager\Common\Booking_Custom_Fields::build_email_lines( is_array( $payload['custom_fields'] ?? null ) ? $payload['custom_fields'] : array() ) );
 		$lines[] = __( 'Request contents/memo:', 'vk-booking-manager' );
 		$lines[] = $payload['memo'];
 		$lines[] = '';
@@ -1557,6 +1574,7 @@ class Booking_Notification_Service {
 		$lines[] = sprintf( __( 'Email: %s', 'vk-booking-manager' ), $customer_email );
 		/* translators: %s: Customer phone number. */
 		$lines[] = sprintf( __( 'Phone number: %s', 'vk-booking-manager' ), $customer_tel );
+		$lines   = array_merge( $lines, \VKBookingManager\Common\Booking_Custom_Fields::build_email_lines( is_array( $payload['custom_fields'] ?? null ) ? $payload['custom_fields'] : array() ) );
 		$lines[] = __( 'Note:', 'vk-booking-manager' );
 		$lines[] = $payload['memo'];
 		if ( '' !== $cancellation_policy ) {
@@ -1761,6 +1779,23 @@ class Booking_Notification_Service {
 	 */
 	private function get_booking_guests( int $booking_id ): int {
 		return max( 1, (int) get_post_meta( $booking_id, self::META_GUESTS, true ) );
+	}
+
+	/**
+	 * このメニューが複数人の予約を受け付けるか（#1126）。
+	 *
+	 * 予約画面で人数を入力できるかの判定（Booking_Draft_Controller / Booking_Confirmation_Controller の人数の上限）と揃え、
+	 * Pro 版で予約枠の定員機能が有効、かつメニューの複数人一括予約が有効（1室1泊あたりのプラン・1ツアーあたりのメニューを含む）のときに true。
+	 *
+	 * @param int $menu_id Menu post ID.
+	 * @return bool 複数人の予約を受け付けるなら true。
+	 */
+	private function is_multi_guest_booking_accepted( int $menu_id ): bool {
+		if ( $menu_id <= 0 || ! Staff_Editor::is_multi_guest_available_for_menu( $menu_id ) ) {
+			return false;
+		}
+
+		return Service_Menu_Post_Type::is_multi_guest_booking_enabled( $menu_id );
 	}
 
 	/**

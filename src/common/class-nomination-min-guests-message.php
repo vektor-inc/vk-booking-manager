@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use function __;
 use function preg_match;
 use function sprintf;
+use function vkbm_get_menu_label_text;
 
 /**
  * 最低申し込み人数（受付制限）の不足エラーメッセージ組み立てをまとめたユーティリティクラス。
@@ -42,10 +43,15 @@ class Nomination_Min_Guests_Message {
 	 * @return string エラーメッセージ。
 	 */
 	public static function build_message( int $min_guests ): string {
-		$sentence_a = sprintf(
-			/* translators: %d: minimum number of guests required to book this menu. */
-			__( 'This menu accepts bookings from %d guests.', 'vk-booking-manager' ),
-			$min_guests
+		$sentence_a = vkbm_get_menu_label_text(
+			sprintf(
+				/* translators: %d: minimum number of guests required to book this menu. */
+				__( 'This menu accepts bookings from %d guests.', 'vk-booking-manager' ),
+				$min_guests
+			),
+			/* translators: 1: menu term set in the settings (e.g. Plan), 2: minimum number of guests required to book it. */
+			__( 'This %1$s accepts bookings from %2$d guests.', 'vk-booking-manager' ),
+			array( $min_guests )
 		);
 		$sentence_b = sprintf(
 			/* translators: %d: minimum number of guests required to book this menu. */

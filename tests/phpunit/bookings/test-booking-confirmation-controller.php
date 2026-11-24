@@ -1225,6 +1225,160 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 予約時の入力項目（#1147）の回答を、確定時点の設定で検証して予約メタへ保存することを検証する。
+	 */
+	public function test_create_booking(): void {
+		$repository = new Settings_Repository();
+		$menu_id    = $this->create_menu();
+		$staff_id   = $this->create_staff();
+		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $staff_id ) );
+
+		$definitions = array(
+			array(
+				'id'       => 'cf_course',
+				'label'    => '夕食のコース',
+				'type'     => 'text',
+				'required' => true,
+			),
+			array(
+				'id'       => 'cf_allergy',
+				'label'    => 'アレルギー',
+				'type'     => 'textarea',
+				'required' => false,
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '会員・必須に回答あり => 項目名・種類と一緒に保存し、定義に無い ID の値は捨てる',
+				'manager'             => false,
+				'draft_values'        => null,
+				'request_values'      => array(
+					'cf_course'  => '和食',
+					'cf_allergy' => "えび\nかに",
+					'cf_removed' => '消えた項目への回答',
+				),
+				'expected'            => array(
+					array(
+						'id'    => 'cf_course',
+						'label' => '夕食のコース',
+						'type'  => 'text',
+						'value' => '和食',
+					),
+					array(
+						'id'    => 'cf_allergy',
+						'label' => 'アレルギー',
+						'type'  => 'textarea',
+						'value' => "えび\nかに",
+					),
+				),
+				'error'               => '',
+			),
+			array(
+				'test_condition_name' => '会員・必須が空 => 「<項目名>を入力してください。」で断る',
+				'manager'             => false,
+				'draft_values'        => null,
+				'request_values'      => array( 'cf_allergy' => 'なし' ),
+				'expected'            => null,
+				'error'               => 'vkbm_custom_field_invalid',
+			),
+			array(
+				'test_condition_name' => '会員・1 行の項目が 201 文字 => 文字数で断る',
+				'manager'             => false,
+				'draft_values'        => null,
+				'request_values'      => array( 'cf_course' => str_repeat( 'あ', 201 ) ),
+				'expected'            => null,
+				'error'               => 'vkbm_custom_field_invalid',
+			),
+			array(
+				'test_condition_name' => '代理予約・必須が空 => 必須を強制せず空の回答を保存する',
+				'manager'             => true,
+				'draft_values'        => null,
+				'request_values'      => array(),
+				'expected'            => array(
+					array(
+						'id'    => 'cf_course',
+						'label' => '夕食のコース',
+						'type'  => 'text',
+						'value' => '',
+					),
+					array(
+						'id'    => 'cf_allergy',
+						'label' => 'アレルギー',
+						'type'  => 'textarea',
+						'value' => '',
+					),
+				),
+				'error'               => '',
+			),
+			array(
+				'test_condition_name' => 'リクエストに回答が無い => 下書きの回答を使う',
+				'manager'             => false,
+				'draft_values'        => array( 'cf_course' => '洋食' ),
+				'request_values'      => null,
+				'expected'            => array(
+					array(
+						'id'    => 'cf_course',
+						'label' => '夕食のコース',
+						'type'  => 'text',
+						'value' => '洋食',
+					),
+					array(
+						'id'    => 'cf_allergy',
+						'label' => 'アレルギー',
+						'type'  => 'textarea',
+						'value' => '',
+					),
+				),
+				'error'               => '',
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			// 確定時点の設定として項目を登録する。
+			$settings                          = $repository->get_settings();
+			$settings['booking_custom_fields'] = $definitions;
+			update_option( Settings_Repository::OPTION_KEY, $settings );
+			$user_id = $case['manager'] ? $this->create_admin_user() : $this->factory()->user->create();
+			wp_set_current_user( $user_id );
+
+			// 日付をずらして、同じ利用者の重複予約にならないようにする。
+			$day   = 10 + $index;
+			$start = sprintf( '2027-02-%02dT10:00:00+09:00', $day );
+			$end   = sprintf( '2027-02-%02dT10:30:00+09:00', $day );
+			$token = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
+
+			$draft                  = get_transient( self::TRANSIENT_PREFIX . $token );
+			$draft['owner_user_id'] = $user_id;
+			if ( null !== $case['draft_values'] ) {
+				$draft['custom_fields'] = $case['draft_values'];
+			}
+			set_transient( self::TRANSIENT_PREFIX . $token, $draft );
+
+			// 予約を確定する。
+			$request = new WP_REST_Request( 'POST', '/vkbm/v1/bookings' );
+			$request->set_param( 'token', $token );
+			$request->set_param( 'agree_terms', true );
+			if ( $case['manager'] ) {
+				$request->set_param( 'customer_name', '代理予約のお客様' );
+			}
+			if ( null !== $case['request_values'] ) {
+				$request->set_param( 'custom_fields', $case['request_values'] );
+			}
+			$response = $this->build_controller( $staff_id, $start, $end )->create_booking( $request );
+
+			if ( '' !== $case['error'] ) {
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['error'], $response->get_error_code(), $case['test_condition_name'] );
+				continue;
+			}
+			$this->assertInstanceOf( WP_REST_Response::class, $response, $case['test_condition_name'] . ( is_wp_error( $response ) ? ': ' . $response->get_error_code() : '' ) );
+			$booking_id = (int) $response->get_data()['booking_id'];
+			$this->assertSame( $case['expected'], get_post_meta( $booking_id, '_vkbm_booking_custom_fields', true ), $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * 名簿機能を有効にした設定を保存する。
 	 *
 	 * @param array<string,mixed> $override 上書きする設定。

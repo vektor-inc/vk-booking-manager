@@ -145,6 +145,10 @@ class Provider_Settings_Navigation {
 						'label' => __( 'People receiving the service', 'vk-booking-manager' ),
 					),
 					array(
+						'slug'  => 'booking-fields',
+						'label' => __( 'Booking input items', 'vk-booking-manager' ),
+					),
+					array(
 						'slug'  => 'registration',
 						'label' => __( 'User registration settings', 'vk-booking-manager' ),
 					),

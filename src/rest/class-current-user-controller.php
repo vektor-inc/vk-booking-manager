@@ -158,9 +158,6 @@ class Current_User_Controller extends WP_REST_Controller {
 	 * @return string
 	 */
 	private function get_reservation_page_redirect(): string {
-		$settings = $this->settings_service->get_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		return Reservation_Page_Url::resolve_usable( $url );
+		return Reservation_Page_Url::get_url( $this->settings_service->get_settings() );
 	}
 }

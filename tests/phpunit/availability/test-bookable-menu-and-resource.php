@@ -168,7 +168,7 @@ class Bookable_Menu_And_Resource_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * is_resource_assignable_to_menu(): 担当の指定があればその中、未指定なら公開中のリソースだけを担当できるとする。
+	 * is_resource_assignable_to_menu(): 担当の指定の中の公開中のリソースだけを担当できるとする。担当が未設定のメニューでは、どのリソースも担当できない（#1144）。
 	 *
 	 * 同じ条件で resolve_staff_ids() に指名を渡した結果（エラーかどうか）と一致することも確かめる。
 	 */
@@ -219,10 +219,10 @@ class Bookable_Menu_And_Resource_Test extends WP_UnitTestCase {
 				'expected'            => false,
 			),
 			array(
-				'test_condition_name' => '担当が未設定のメニューで、公開中のスタッフ => true',
+				'test_condition_name' => '担当が未設定のメニューで、公開中のスタッフ => false（#1144）',
 				'menu_id'             => $menu_pub,
 				'resource_id'         => $staff_b,
-				'expected'            => true,
+				'expected'            => false,
 			),
 			array(
 				'test_condition_name' => '担当が未設定のメニューで、下書きのスタッフ => false',

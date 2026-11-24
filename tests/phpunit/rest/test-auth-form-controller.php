@@ -17,6 +17,33 @@ use WP_UnitTestCase;
  */
 class Auth_Form_Controller_Test extends WP_UnitTestCase {
 	/**
+	 * 予約ブロックから取得したログインフォームの送信先に予約トークンを残す。
+	 *
+	 * @return void
+	 */
+	public function test_get_form_keeps_redirect_draft_in_login_action(): void {
+		$previous_get = $_GET;
+
+		try {
+			$_GET = array();
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$controller = new Auth_Form_Controller( new Auth_Shortcodes( $service ) );
+			$request    = new WP_REST_Request( 'GET', '/vkbm/v1/auth-form' );
+			$request->set_param( 'type', 'login' );
+			$request->set_param( 'redirect', home_url( '/reserve/?draft=abc123' ) );
+
+			$response = $controller->get_form( $request );
+			$html     = html_entity_decode( (string) ( $response->get_data()['html'] ?? '' ), ENT_QUOTES );
+
+			$this->assertSame( 200, $response->get_status() );
+			$this->assertMatchesRegularExpression( '#class="vkbm-auth-form"[^>]*action="[^"]*draft=abc123#', $html );
+		} finally {
+			$_GET = $previous_get;
+		}
+	}
+
+	/**
 	 * issue #516: `vkbm_registration_errors` Cookie の廃止に伴い、会員登録エラーは
 	 * サーバー側 transient と、REST の `registration_error_key` パラメータ（同一
 	 * リクエスト内で発行されたランダムトークン）で受け渡す。

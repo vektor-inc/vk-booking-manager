@@ -95,19 +95,6 @@ class Service_Menu_Detail_Link {
 	}
 
 	/**
-	 * 入力された予約ページURLを、リンク先・リダイレクト先に使える形に直す。
-	 *
-	 * 設定画面の注意文の判定と、詳細表示の有効判定で共用する。
-	 *
-	 * @param string $raw_url 設定された予約ページURL。
-	 * @return string 自サイトのURLとして使えるときは正規化済みURL、未設定・自サイト外のときは空文字。
-	 */
-	public static function resolve_usable_reservation_page_url( string $raw_url ): string {
-		// 自サイトのURLでないものは、リンク先にもリダイレクト先にも使わない（判定は共通処理に集約）。
-		return Reservation_Page_Url::resolve_usable( $raw_url );
-	}
-
-	/**
 	 * 詳細ページを予約ブロック内で表示する状態かどうかを返す。
 	 *
 	 * @return bool 表示方法が block で、予約ページURLが自サイトのURLとして使えるなら true。
@@ -211,6 +198,7 @@ class Service_Menu_Detail_Link {
 			return '';
 		}
 
-		return self::resolve_usable_reservation_page_url( isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '' );
+		// 使えない予約ページ（未公開のページ・自サイト外の URL）は、リンク先にもリダイレクト先にも使わない（判定は共通処理に集約）。
+		return Reservation_Page_Url::get_url( $settings );
 	}
 }

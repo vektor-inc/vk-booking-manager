@@ -8,11 +8,9 @@
  *
  * 判定基準（issue #431 完了条件・実装メモ）:
  * - 複数タグ選択時は AND 条件（選択したタグを「すべて」持つリソースだけが対象）
- * - 該当するリソースが1件も無い場合 => 対応リソース未登録のメニューを含め、
- *   どのメニューも表示しない（この条件が最優先。以下の「対応リソース未登録は表示する」
- *   扱いより先に評価される）
- * - 該当するリソースが1件以上あるとき、メニューの対応リソース（_vkbm_staff_ids）が
- *   未登録（空）のメニュー => 表示する（スタッフ絞り込み #429 と判定基準を揃える）
+ * - 該当するリソースが1件も無い場合 => どのメニューも表示しない
+ * - メニューの対応リソース（_vkbm_staff_ids）が未登録（空）のメニュー => タグの選択に関わらず表示しない
+ *   （担当できるリソースがいないメニューは予約できないため。スタッフ絞り込み #429 と判定基準を揃える。#1144）
  * - 該当するリソースが1件以上あるとき、タグを持つリソースが対応リソースに1人でも
  *   含まれるメニュー => 表示する
  * - このタグ絞り込みは指名機能（staff_enabled）の ON/OFF に関係なく機能する
@@ -169,22 +167,22 @@ class Menu_Loop_Selection_List_Tag_Filter_Test extends WP_UnitTestCase {
 
 		$test_cases = array(
 			array(
-				'test_condition_name' => 'タグ未選択（空配列） => 絞り込みを行わず全メニュー表示',
+				'test_condition_name' => 'タグ未選択（空配列） => タグの絞り込みは行わず、対応リソース未登録のメニューだけ外す（#1144）',
 				'tag_ids'             => array(),
-				'expected_visible'    => array( $menu_matches_both, $menu_matches_female, $menu_no_match, $menu_unassigned ),
-				'expected_hidden'     => array(),
+				'expected_visible'    => array( $menu_matches_both, $menu_matches_female, $menu_no_match ),
+				'expected_hidden'     => array( $menu_unassigned ),
 			),
 			array(
-				'test_condition_name' => '「女性」タグ選択 => 「女性」を持つリソースが対応するメニューと対応リソース未登録のメニューを表示',
+				'test_condition_name' => '「女性」タグ選択 => 「女性」を持つリソースが対応するメニューだけ表示（対応リソース未登録は出さない。#1144）',
 				'tag_ids'             => array( $tag_female ),
-				'expected_visible'    => array( $menu_matches_both, $menu_matches_female, $menu_unassigned ),
-				'expected_hidden'     => array( $menu_no_match ),
+				'expected_visible'    => array( $menu_matches_both, $menu_matches_female ),
+				'expected_hidden'     => array( $menu_no_match, $menu_unassigned ),
 			),
 			array(
 				'test_condition_name' => '「女性」「ベテラン」両方選択（AND） => 両方持つリソースが対応するメニューのみ表示',
 				'tag_ids'             => array( $tag_female, $tag_veteran ),
-				'expected_visible'    => array( $menu_matches_both, $menu_unassigned ),
-				'expected_hidden'     => array( $menu_matches_female, $menu_no_match ),
+				'expected_visible'    => array( $menu_matches_both ),
+				'expected_hidden'     => array( $menu_matches_female, $menu_no_match, $menu_unassigned ),
 			),
 		);
 
@@ -232,12 +230,8 @@ class Menu_Loop_Selection_List_Tag_Filter_Test extends WP_UnitTestCase {
 
 	/**
 	 * 該当リソースが0件のとき、対応リソース未登録（_vkbm_staff_ids が空）のメニューも
-	 * 例外にせず非表示にすることを確認する（issue #431 完了条件「該当するリソースが0件に
-	 * なった場合はメニュー一覧を空にする」）。
-	 *
-	 * #429（スタッフ絞り込み）では対応リソース未登録のメニューは常に表示するが、
-	 * タグ絞り込みで該当0件のときは、この「対応リソース未登録は表示する」扱いを
-	 * 適用しない（is_menu_visible_for_tag_filter() の判定順序による）。
+	 * 非表示にすることを確認する（issue #431 完了条件「該当するリソースが0件に
+	 * なった場合はメニュー一覧を空にする」。対応リソース未登録のメニューは #1144 以降、常に表示しない）。
 	 */
 	public function test_render_menu_selection_list_hides_unassigned_menu_when_no_resource_matches_all_tags(): void {
 		if ( Pro_Upsell::is_free_edition() ) {

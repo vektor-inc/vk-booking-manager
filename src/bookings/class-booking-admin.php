@@ -235,9 +235,7 @@ class Booking_Admin {
 	 * Register a "Reservation Page" submenu under the booking post type.
 	 */
 	public function register_reservation_page_menu(): void {
-		$settings = ( new Settings_Repository() )->get_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		$url      = Reservation_Page_Url::resolve_usable( $url );
+		$url = Reservation_Page_Url::get_url( ( new Settings_Repository() )->get_settings() );
 
 		if ( '' === $url ) {
 			$url = admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-reservation-page-url' );
@@ -1298,6 +1296,7 @@ class Booking_Admin {
 							</div>
 						</td>
 					</tr>
+					<?php $this->render_custom_field_rows( $post->ID, $is_anonymized ); ?>
 					<?php if ( $is_anonymized ) : ?>
 						<?php $this->render_readonly_row( __( 'memo', 'vk-booking-manager' ), $note ); ?>
 						<?php $this->render_readonly_row( __( 'Management memo', 'vk-booking-manager' ), $internal_note ); ?>
@@ -1601,6 +1600,10 @@ class Booking_Admin {
 		if ( ! $is_anonymized ) {
 			$this->update_meta_value( $post_id, self::META_NOTE, $note );
 			$this->update_meta_value( $post_id, self::META_INTERNAL_NOTE, $internal_note );
+		}
+		// 予約時の入力項目（#1147）の回答。欄が送られた保存だけ更新する（匿名化済みの予約は読み取り専用）。
+		if ( ! $is_anonymized && array_key_exists( 'custom_fields', $raw ) ) {
+			self::update_custom_fields_meta( $post_id, $raw['custom_fields'] );
 		}
 		// #828: 泊の予約は編集画面に指名区分を出さないため、欄が送られない。保存済みの泊数で判定し、
 		// 保存済みの指名区分を保つ（空の値を渡すとメタが削除されてしまう）。
@@ -3024,15 +3027,73 @@ class Booking_Admin {
 	}
 
 	/**
+	 * 予約時の入力項目（#1147）の回答の行を出力する（「メモ」の行の直前）。
+	 *
+	 * 予約に保存した記録の項目を回答した時点の項目名で並べ、記録に無い今の設定の項目を空欄で足す
+	 * （Booking_Custom_Fields::merge_snapshot_with_definitions()）。匿名化済みの予約は読み取り専用で、今の設定の項目は足さない。
+	 *
+	 * @param int  $post_id       予約の投稿 ID。
+	 * @param bool $is_anonymized 匿名化済みか。
+	 */
+	private function render_custom_field_rows( int $post_id, bool $is_anonymized ): void {
+		$snapshot = \VKBookingManager\Common\Booking_Custom_Fields::get_booking_snapshot( $post_id );
+		if ( $is_anonymized ) {
+			foreach ( $snapshot as $row ) {
+				$this->render_readonly_row( $row['label'], $row['value'], true );
+			}
+			return;
+		}
+
+		$rows = \VKBookingManager\Common\Booking_Custom_Fields::merge_snapshot_with_definitions( $snapshot, \VKBookingManager\Common\Booking_Custom_Fields::get_definitions() );
+		foreach ( $rows as $row ) {
+			$field_id   = 'vkbm-booking-custom-field-' . $row['id'];
+			$field_name = 'vkbm_booking[custom_fields][' . $row['id'] . ']';
+			$max_length = \VKBookingManager\Common\Booking_Custom_Fields::get_max_length( $row['type'] );
+			?>
+			<tr>
+				<th scope="row" class="vkbm-booking-meta__user-label"><label for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html( $row['label'] ); ?></label></th>
+				<td>
+					<?php if ( \VKBookingManager\Common\Booking_Custom_Fields::TYPE_TEXTAREA === $row['type'] ) : ?>
+						<textarea id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>" rows="3" class="large-text" maxlength="<?php echo esc_attr( (string) $max_length ); ?>"><?php echo esc_textarea( $row['value'] ); ?></textarea>
+					<?php else : ?>
+						<input type="<?php echo esc_attr( \VKBookingManager\Common\Booking_Custom_Fields::TYPE_NUMBER === $row['type'] && ( '' === $row['value'] || \VKBookingManager\Common\Booking_Custom_Fields::is_valid_number( $row['value'] ) ) ? 'number' : 'text' ); ?>" <?php echo \VKBookingManager\Common\Booking_Custom_Fields::TYPE_NUMBER === $row['type'] ? 'step="any"' : ''; ?> id="<?php echo esc_attr( $field_id ); ?>" name="<?php echo esc_attr( $field_name ); ?>" value="<?php echo esc_attr( $row['value'] ); ?>" class="regular-text" maxlength="<?php echo esc_attr( (string) $max_length ); ?>" />
+					<?php endif; ?>
+				</td>
+			</tr>
+			<?php
+		}
+	}
+
+	/**
+	 * 予約の編集画面から送られた、予約時の入力項目の回答を保存する。
+	 *
+	 * 記録が無い予約で回答がすべて空のときは、空の記録を作らない。
+	 *
+	 * @param int   $post_id 予約の投稿 ID。
+	 * @param mixed $raw     送られた回答（項目 ID => 値）。
+	 */
+	public static function update_custom_fields_meta( int $post_id, $raw ): void {
+		$snapshot = \VKBookingManager\Common\Booking_Custom_Fields::get_booking_snapshot( $post_id );
+		$updated  = \VKBookingManager\Common\Booking_Custom_Fields::apply_admin_input( $snapshot, \VKBookingManager\Common\Booking_Custom_Fields::get_definitions(), $raw );
+		if ( array() === $snapshot && ! \VKBookingManager\Common\Booking_Custom_Fields::has_any_value( $updated ) ) {
+			return;
+		}
+
+		update_post_meta( $post_id, \VKBookingManager\Common\Booking_Custom_Fields::META_KEY, wp_slash( $updated ) );
+	}
+
+	/**
 	 * 個人情報の欄を、編集できない文字だけの1行として出力する（匿名化済みの予約用。issue #870）。
 	 *
-	 * @param string $label 欄名。
-	 * @param string $value 表示する値。空のときは「—」を表示する。
+	 * @param string $label         欄名。
+	 * @param string $value         表示する値。空のときは「—」を表示する。
+	 * @param bool   $is_user_label 欄名が利用者の設定で決まる（長さが決まらない）か。true のときは見出しを折り返す。
 	 */
-	private function render_readonly_row( string $label, string $value ): void {
+	private function render_readonly_row( string $label, string $value, bool $is_user_label = false ): void {
+		$th_class = $is_user_label ? 'vkbm-booking-meta__user-label' : '';
 		?>
 		<tr>
-			<th scope="row"><?php echo esc_html( $label ); ?></th>
+			<th scope="row"<?php echo '' !== $th_class ? ' class="' . esc_attr( $th_class ) . '"' : ''; ?>><?php echo esc_html( $label ); ?></th>
 			<td><?php echo '' !== $value ? nl2br( esc_html( $value ) ) : '&mdash;'; ?></td>
 		</tr>
 		<?php

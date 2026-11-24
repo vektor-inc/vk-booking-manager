@@ -4,6 +4,7 @@ import { ReservationApp } from './app';
 import { GuestVerifyResultScreen } from './guest-verify-result-screen';
 import { GuestCancelScreen } from './guest-cancel-screen';
 import { registerRestFallbackMiddleware } from '../shared/rest-fallback';
+import { registerAccessDeniedLogger } from '../shared/rest-access-denied';
 import { readDetailSource } from './components/service-menu-detail-source';
 
 const bootstrap = () => {
@@ -12,6 +13,8 @@ const bootstrap = () => {
 	// Reservation_Block::maybe_enqueue_reservation_config() が他のインラインスクリプトと
 	// 同じタイミングで出力しているため、domReady のこのタイミングでは読み込み済み。
 	registerRestFallbackMiddleware();
+	// お客様の通信が止められたとき、通信先とステータスを開発者向けにコンソールへ出す（#1154）。
+	registerAccessDeniedLogger();
 
 	const nodes = document.querySelectorAll(
 		'.wp-block-vk-booking-manager-reservation'

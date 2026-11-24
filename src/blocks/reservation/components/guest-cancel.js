@@ -160,6 +160,7 @@ export const getGuestCancelView = (
  * @param {string} props.resourceLabel      担当の見出し。
  * @param {string} props.guestsLabel        人数の見出し。
  * @param {string} props.guestsUnitLabel    人数の単位。
+ * @param {string} props.menuLabel          メニューの呼び方（既定のままなら空文字）。
  * @param {Object} props.containerRef       フォーカス制御用に呼び出し側が保持する ref。
  * @return {JSX.Element} キャンセル用リンクの画面。
  */
@@ -170,6 +171,7 @@ export const GuestCancel = ( {
 	resourceLabel = '',
 	guestsLabel = '',
 	guestsUnitLabel = '',
+	menuLabel = '',
 	containerRef = null,
 } ) => {
 	const [ state, setState ] = useState( view?.state || '' );
@@ -277,6 +279,7 @@ export const GuestCancel = ( {
 					resourceLabel={ resourceLabel }
 					guestsLabel={ guestsLabel }
 					guestsUnitLabel={ guestsUnitLabel }
+					menuLabel={ menuLabel }
 				/>
 			) }
 			{ errorMessage && (

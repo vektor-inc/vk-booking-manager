@@ -319,8 +319,7 @@ class Guest_Cancel_Controller {
 	 * @return string `{予約ページ URL}?vkbm_guest_cancel=<トークン>&booking=<予約ID>`。
 	 */
 	public static function build_cancel_url( int $booking_id, string $raw_token, array $settings ): string {
-		$base = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-		$base = Reservation_Page_Url::resolve_usable( $base );
+		$base = Reservation_Page_Url::get_url( $settings );
 		if ( '' === $base ) {
 			$base = home_url( '/' );
 		}

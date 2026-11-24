@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 3.16.0
+Stable tag: 3.17.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -121,6 +121,16 @@ Measured starting values are 0.5px for Noto Sans JP, Noto Serif JP, and Zen Kaku
 
 Small adjustments preserve the button height. Keep the value close to 0px: large values can change the height when the top or bottom padding reaches zero. Text links without vertical padding are excluded.
 
+= Menus are not displayed on the reservation page when I am logged out. What should I check? =
+
+Security plugins such as SiteGuard WP Plugin may block REST API requests from people who are not logged in. The reservation page loads menus and staff through the REST API, so customers who are not logged in cannot make reservations, while the page looks normal to a logged-in administrator. When SiteGuard WP Plugin blocks these requests, a notice is shown in the admin screens.
+
+If you use SiteGuard WP Plugin, open SiteGuard > Block Author Query, add the following line to "Excluded REST API Namespaces", and save the settings:
+
+`vkbm/v1`
+
+Do not add `wp/v2` to the exclusion list: it also opens the list of user names that "Block Author Query" protects. If you use another security plugin, allow REST API requests to `vkbm/v1` in the same way.
+
 == Screenshots ==
 
 1. Booking form - User-friendly reservation interface with menu and staff selection
@@ -130,6 +140,34 @@ Small adjustments preserve the button height. Keep the value close to 0px: large
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.17.0 =
+* [ 機能追加 ][ 予約ブロック ] 予約時の入力項目に選択式・ラジオボタン・数値を追加し、選択肢と数値の既定値を設定できるよう対応
+* [ 機能追加 ][ 予約ブロック ] 宿泊プランに「最終チェックイン時刻」の設定を追加し、予約画面のチェックイン予定時刻をチェックイン時刻からその時刻までの間で選べるよう対応
+* [ 機能追加 ] BM 設定の「表記」タブに、「メニュー」を「プラン」などの呼び方に変えるための「サービスメニューの呼び方」欄を追加
+* [ 機能追加 ][ 予約ブロック ] BM 設定の「サービスメニューの呼び方」を、予約画面・予約内容の確認画面・会員登録なしの予約の確認リンクを開いた画面の「メニュー」「サービスメニュー」の表記に反映
+* [ 機能追加 ][ メニューループブロック / 予約に進むボタンブロック ] BM 設定の「サービスメニューの呼び方」を、通知メール・予約時のエラー文・予約に進むボタン・メニューループブロックの「メニュー」「サービスメニュー」の表記に反映
+* [ 機能追加 ] BM 設定の「システム設定」タブに宿泊プランの「最終チェックイン時刻」を追加し、プランの編集画面で設定していない宿泊プランすべてにまとめて適用できるよう対応
+* [ 機能追加 ][ 予約ブロック ] BM 設定に「予約時の入力項目」タブを追加し、施設ごとに決めた項目（1 行・複数行のテキスト、必須・任意）を予約内容の確認画面で入力してもらい、予約の編集画面と通知メールで確認できるよう対応
+* [ 機能追加 ] SiteGuard WP Plugin の「ユーザー名漏えい防御」がログインしていないお客様の予約画面の通信を止めているときに、除外に書く行（`vkbm/v1`）と直し方を管理画面のお知らせで案内し、BM 設定の「よくある質問」に手順を追加
+* [ 仕様変更 ] 複数人予約を受け付けるメニューでは、通知メールの予約内容に 1 名の予約でも人数を表示するように変更
+* [ 仕様変更 ][ 予約ブロック ] 予約内容の確認画面の「ご利用になる方のお名前」の必須の表示を「*」から、ほかの欄と同じ「（必須）」に変更
+* [ 仕様変更 ][ 予約ブロック ] 新規登録の送信後、スマホでは画面外に出て気づけなかった確認メールの案内へ自動で移動し、送信先と予約確定までの手順を表示するように変更
+* [ 仕様変更 ][ 予約ブロック ] 宿泊プランのチェックイン予定時刻を 1 分刻みの入力から 30 分おきの選択（選択必須）に変更し、最終チェックイン時刻が未設定のときの選べる終わりを 23:59 から 23:30 に、プラン編集画面のチェックイン時刻の分を 00・30 からの選択に変更
+* [ 仕様変更 ][ 予約ブロック ] 宿泊のプランの予約画面のカレンダーで、チェックインできる日とチェックアウトに選べる日に「○」を表示し、凡例を「○」「×」の 2 行に変更
+* [ 仕様変更 ][ 予約ブロック ] 確認メールのリンクを別のブラウザで開いたときや保存期間が過ぎてから開いたときに、日時の選び直しの案内と「予約画面に戻る」ボタンを表示し、ログイン画面などのナビの「戻る」を「予約画面に戻る」に変更
+* [ 仕様変更 ][ BM設定 ] 予約ページを固定ページの一覧から選ぶ方式に変更し、サイトのドメインを変更しても予約ページの設定をし直さなくて済むように改善（このサイトの固定ページのURLが設定済みなら自動で切り替え）
+* [ 仕様変更 ] 新規サービスメニューの「担当できるスタッフ」の初期値を「すべて」に変更し、「選ぶ」でスタッフを 1 人も選ばずに保存できないようにしたうえで、担当できるスタッフがいないメニューを管理画面のお知らせで案内
+* [ 仕様変更 ][ 予約ブロック ] 予約画面の通信先を当プラグイン専用の REST API（`vkbm/v1`）にまとめ、SiteGuard WP Plugin の「ユーザー名漏えい防御」の除外に `vkbm/v1` の 1 行を書くだけで、ログインしていないお客様の予約画面にプランやスタッフが表示されるように変更
+* [ 仕様変更 ][ 予約ブロック ] ログインしていないお客様の予約画面の通信がセキュリティ系プラグインに止められたとき、プラグインの英文のエラーではなく、オンライン予約を受け付けられないことと電話での問い合わせ先を表示するように変更
+* [ 不具合修正 ][ メニューループブロック / サービスカードブロック (Pro) / 予約ブロック ] サービスメニューの抜粋が空のとき、お使いのテーマなどによっては、すべてのカードの説明文が表示中のページの文と同じになることがある不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] 予約内容の確認画面で予約の一時データを読み込めないとき、ロゴ・事業者名とメニューが表示されず、予約ページへ戻れなくなる不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] 事業者名を表示しない設定で、ロゴのリンクが画面の読み上げソフトに「Logo image」と読み上げられ、行き先が分からない不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] 予約の受付方法が「ゲストのみ」でも、ログインしていないお客様の予約画面に「ログイン｜新規登録」が表示される不具合と、ユーザー登録を受け付けていなくても「新規登録」が表示される不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] 予約日時・メニューを選んで新規登録したあと、メール認証や認証メールの再送をすると選択内容が失われ、予約を最初からやり直す必要がある不具合を修正
+* [ 不具合修正 ][ 予約ブロック / メニューループブロック ] 担当スタッフを選んでいないサービスメニューで、スタッフ「指定なし」では日付が選べないのに、スタッフを指名すると誰でも予約できてしまう不具合を修正し、担当できるスタッフがいないメニューは一覧・予約画面に表示しないよう変更
+* [ 不具合修正 ][ 予約ブロック ] 予約内容の確認画面で、システム利用規約が未入力だとキャンセルポリシーの有無を見ずに案内文を出していたため、キャンセルポリシー本文を表示しているのに「予約前にキャンセルポリシーをご確認ください。」も重ねて表示される不具合を修正
+* [ 不具合修正 ][ 予約ブロック ] SiteGuard WP Plugin のログイン画面の画像認証が有効なサイトで、予約ページのログインフォームに画像認証の欄が無いため、お客様も管理者もログインできない不具合を修正し、wp-login.php から転送されてログインに失敗したときは標準のログイン画面への案内を表示
 
 = 3.16.0 =
 * [ 機能追加 ][ 予約ブロック ] 予約確認画面に「日時を選び直す」リンクを追加し、選んだメニュー・日時・入力内容を残したまま日時選択の画面へ戻れるよう対応

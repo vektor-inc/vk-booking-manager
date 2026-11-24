@@ -17,6 +17,7 @@ import {
 	validateStay,
 } from './date-filter';
 import { joinSentences } from './join-sentences';
+import { getMenuHeading, menuLabelText } from '../components/menu-label';
 
 const SelectField = ( {
 	label,
@@ -57,12 +58,19 @@ const SelectField = ( {
  * 欄の下に、説明文と日付の指定を外すボタンを同じ行に置く（選んだ日付は読み上げ用にだけ残す）。
  *
  * @param {Object}                  props
- * @param {string}                  props.value    絞り込みに使っている日付（YYYY-MM-DD。未指定は空文字）。
- * @param {string}                  props.min      選べる最初の日付（今日）。
- * @param {(value: string) => void} props.onChange 絞り込みに使う日付が変わったときのコールバック（YYYY-MM-DD。外すときは空文字）。
- * @param {string}                  props.locale   WordPress のロケール（日付表示用）。
+ * @param {string}                  props.value           絞り込みに使っている日付（YYYY-MM-DD。未指定は空文字）。
+ * @param {string}                  props.min             選べる最初の日付（今日）。
+ * @param {(value: string) => void} props.onChange        絞り込みに使う日付が変わったときのコールバック（YYYY-MM-DD。外すときは空文字）。
+ * @param {string}                  props.locale          WordPress のロケール（日付表示用）。
+ * @param {string}                  props.menuLabelPlural メニューの呼び方（複数形。既定のままなら空文字）。
  */
-const DateFilterField = ( { value, min, onChange, locale } ) => {
+const DateFilterField = ( {
+	value,
+	min,
+	onChange,
+	locale,
+	menuLabelPlural = '',
+} ) => {
 	const idSuffix = useId();
 	const inputId = `vkbm-plan-summary-date-${ idSuffix }`;
 	const helpId = `${ inputId }-help`;
@@ -142,9 +150,17 @@ const DateFilterField = ( { value, min, onChange, locale } ) => {
 			) }
 			<div className="vkbm-plan-summary__date-note">
 				<p id={ helpId } className="vkbm-plan-summary__date-help">
-					{ __(
-						'Only the service menus that can be booked on the selected date are shown.',
-						'vk-booking-manager'
+					{ menuLabelText(
+						menuLabelPlural,
+						__(
+							'Only the service menus that can be booked on the selected date are shown.',
+							'vk-booking-manager'
+						),
+						/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+						__(
+							'Only the %s that can be booked on the selected date are shown.',
+							'vk-booking-manager'
+						)
 					) }
 				</p>
 				{ value && (
@@ -192,12 +208,13 @@ const DateFilterField = ( { value, min, onChange, locale } ) => {
  * date-filter.js の純関数に任せる。矛盾しているときは、欄の直下にエラーを出し、絞り込みは呼び出し側（app.js）が実行しない。
  *
  * @param {Object}                                              props
- * @param {string}                                              props.checkIn   絞り込みに使うチェックイン日（YYYY-MM-DD。未指定は空文字）。
- * @param {string}                                              props.checkOut  絞り込みに使うチェックアウト日（YYYY-MM-DD。未指定は空文字）。
- * @param {string}                                              props.min       チェックイン日で選べる最初の日付（今日）。
- * @param {number}                                              props.maxNights 1 回に予約できる最大泊数。
- * @param {(stay: {checkIn: string, checkOut: string}) => void} props.onChange  日程が変わったときのコールバック。
- * @param {string}                                              props.locale    WordPress のロケール（日付表示用）。
+ * @param {string}                                              props.checkIn         絞り込みに使うチェックイン日（YYYY-MM-DD。未指定は空文字）。
+ * @param {string}                                              props.checkOut        絞り込みに使うチェックアウト日（YYYY-MM-DD。未指定は空文字）。
+ * @param {string}                                              props.min             チェックイン日で選べる最初の日付（今日）。
+ * @param {number}                                              props.maxNights       1 回に予約できる最大泊数。
+ * @param {(stay: {checkIn: string, checkOut: string}) => void} props.onChange        日程が変わったときのコールバック。
+ * @param {string}                                              props.locale          WordPress のロケール（日付表示用）。
+ * @param {string}                                              props.menuLabelPlural メニューの呼び方（複数形。既定のままなら空文字）。
  */
 const StayFilterField = ( {
 	checkIn,
@@ -206,6 +223,7 @@ const StayFilterField = ( {
 	maxNights,
 	onChange,
 	locale,
+	menuLabelPlural = '',
 } ) => {
 	const idSuffix = useId();
 	const baseId = `vkbm-plan-summary-stay-${ idSuffix }`;
@@ -274,9 +292,17 @@ const StayFilterField = ( {
 		);
 	}
 
-	const helpText = __(
-		'Select dates to see only the service menus that can be booked for those dates.',
-		'vk-booking-manager'
+	const helpText = menuLabelText(
+		menuLabelPlural,
+		__(
+			'Select dates to see only the service menus that can be booked for those dates.',
+			'vk-booking-manager'
+		),
+		/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+		__(
+			'Select dates to see only the %s that can be booked for those dates.',
+			'vk-booking-manager'
+		)
 	);
 	const checkInDescribedBy = showPastError
 		? `${ helpId } ${ pastErrorId }`
@@ -511,6 +537,31 @@ const ReadOnlyField = ( { label, value, placeholder } ) => (
 	</div>
 );
 
+/**
+ * メニューのプルダウンの未選択時に出す案内文を返す。
+ *
+ * 呼び方を変えていれば、呼び方を差し込む文を使う。
+ * 呼び方を変えていなければ今ある文言を使い、その訳文に %s があれば Menu の訳を差し込む。
+ *
+ * @param {string} menuLabel メニューの呼び方（既定のままなら空文字）。
+ * @return {string} 案内文。
+ */
+export const getMenuSelectionMessage = ( menuLabel ) => {
+	if ( menuLabel ) {
+		return sprintf(
+			/* translators: %s: menu term set in the settings (e.g. Plan). */
+			__( 'Select %s.', 'vk-booking-manager' ),
+			menuLabel
+		);
+	}
+	// 翻訳プラグインなどで訳文を「%sを選択してください」のように差し替えたサイトで、%s がそのまま出ないようにする。
+	const message = __( 'Please select a menu.', 'vk-booking-manager' );
+	if ( message.includes( '%s' ) ) {
+		return sprintf( message, __( 'Menu', 'vk-booking-manager' ) );
+	}
+	return message;
+};
+
 export const SelectedPlanSummary = ( {
 	// 絞り込み検索のデザイン（plain / framed など）。plain 以外は修飾クラスを付ける。
 	searchStyle = 'plain',
@@ -584,6 +635,9 @@ export const SelectedPlanSummary = ( {
 	onStayChange = () => {},
 	// 1 回に予約できる最大泊数。
 	stayMaxNights = STAY_MAX_NIGHTS,
+	// メニューの呼び方（単数形・複数形。既定のままなら空文字で、今ある文言をそのまま出す）。
+	menuLabel = '',
+	menuLabelPlural = '',
 } ) => {
 	// #429 安藤レビュー指摘（低・再レビュー）: 同じページに予約ブロックが複数あっても
 	// id が衝突しないよう、固定文字列ではなくコンポーネントの描画ごとに一意な id を作る
@@ -594,13 +648,7 @@ export const SelectedPlanSummary = ( {
 	// もの。readme.txt の Requires at least 6.8 で利用可能）へ差し替えた。
 	const menuUnavailableMessageIdSuffix = useId();
 	const menuUnavailableMessageId = `vkbm-plan-summary-menu-unavailable-${ menuUnavailableMessageIdSuffix }`;
-	const menuSelectionMessage = ( () => {
-		const message = __( 'Please select a menu.', 'vk-booking-manager' );
-		if ( message.includes( '%s' ) ) {
-			return sprintf( message, __( 'Menu', 'vk-booking-manager' ) );
-		}
-		return message;
-	} )();
+	const menuSelectionMessage = getMenuSelectionMessage( menuLabel );
 	const menuOptions = [ ...menus ]
 		.sort( ( a, b ) => {
 			const groupA = a?.vkbm_menu_group || null;
@@ -701,6 +749,7 @@ export const SelectedPlanSummary = ( {
 						maxNights={ stayMaxNights }
 						onChange={ onStayChange }
 						locale={ locale }
+						menuLabelPlural={ menuLabelPlural }
 					/>
 				) }
 				{ /* 日付欄は、プルダウンと横並びにせず、プルダウンの行より上の独立した行に置く（宿泊のサイトと同じ）。 */ }
@@ -710,19 +759,22 @@ export const SelectedPlanSummary = ( {
 						min={ filterDateMin }
 						onChange={ onFilterDateChange }
 						locale={ locale }
+						menuLabelPlural={ menuLabelPlural }
 					/>
 				) }
 				<div className="vkbm-plan-summary__selectors">
 					<SelectField
-						label={ __( 'Menu', 'vk-booking-manager' ) }
+						label={ getMenuHeading( menuLabel ) }
 						options={ menuOptions }
 						value={ menuId }
 						onChange={ ( value ) =>
 							onMenuChange( Number( value ) || 0 )
 						}
-						placeholder={ __(
-							'Select menu',
-							'vk-booking-manager'
+						placeholder={ menuLabelText(
+							menuLabel,
+							__( 'Select menu', 'vk-booking-manager' ),
+							/* translators: %s: menu term set in the settings (e.g. Plan). */
+							__( 'Select %s', 'vk-booking-manager' )
 						) }
 						disabled={ ! menuOptions.length }
 						describedBy={ menuSelectDescribedBy }
@@ -823,9 +875,17 @@ export const SelectedPlanSummary = ( {
 				<div className="vkbm-plan-summary__menu-preview vkbm-reservation__menu-preview">
 					{ menuPreviewLoading && (
 						<p className="vkbm-reservation__menu-preview-notice">
-							{ __(
-								'Loading menu information…',
-								'vk-booking-manager'
+							{ menuLabelText(
+								menuLabel,
+								__(
+									'Loading menu information…',
+									'vk-booking-manager'
+								),
+								/* translators: %s: menu term set in the settings (e.g. Plan). */
+								__(
+									'Loading %s information…',
+									'vk-booking-manager'
+								)
 							) }
 						</p>
 					) }

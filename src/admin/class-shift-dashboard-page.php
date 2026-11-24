@@ -2911,10 +2911,7 @@ class Shift_Dashboard_Page {
 	 * @return string
 	 */
 	private function get_reservation_page_url(): string {
-		$settings = ( new Settings_Repository() )->get_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		return Reservation_Page_Url::resolve_usable( $url );
+		return Reservation_Page_Url::get_url( ( new Settings_Repository() )->get_settings() );
 	}
 
 	/**

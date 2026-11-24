@@ -22,6 +22,7 @@ use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Site_Url;
 use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use VKBookingManager\ProviderSettings\Industry_Presets;
+use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_HTML_Tag_Processor;
 use WP_Post;
 use function add_filter;
@@ -33,6 +34,7 @@ use function esc_html;
 use function esc_html__;
 use function esc_url;
 use function esc_url_raw;
+use function get_option;
 use function get_queried_object;
 use function generate_block_asset_handle;
 use function get_rest_url;
@@ -41,6 +43,8 @@ use function is_user_logged_in;
 use function sanitize_key;
 use function sanitize_text_field;
 use function trailingslashit;
+use function vkbm_get_menu_label;
+use function vkbm_get_menu_label_plural;
 use function wp_get_inline_script_tag;
 use function wp_json_encode;
 use function wp_kses;
@@ -374,6 +378,16 @@ class Reservation_Block {
 			// Permalink settings screen URL, linked from the admin-facing invalid_json error
 			// message. The front-end renders it as a real <a> element (not dangerouslySetInnerHTML).
 			'permalinkSettingsUrl' => esc_url_raw( admin_url( 'options-permalink.php' ) ),
+			// 予約の受付方法（member / guest / both）と、ユーザー登録を受け付けているか（#1121）。
+			// 未ログインのお客様のヘッダーナビ（ログイン・新規登録）を初回描画から出し分けるため、REST ではなくページに埋め込む。
+			'bookingCustomerMode'  => $this->get_booking_customer_mode(),
+			'usersCanRegister'     => (bool) get_option( 'users_can_register' ),
+			// メニューの呼び方（#1128）。REST の応答を待つ間に「メニュー」と出てから切り替わらないよう、ページに埋め込む。
+			'menuLabel'            => vkbm_get_menu_label(),
+			'menuLabelPlural'      => vkbm_get_menu_label_plural(),
+			// 事業者の電話番号（#1154）。お客様の通信がセキュリティ系プラグインに止められたときの案内に添える。
+			// 止められると provider-settings の REST も読めないため、REST ではなくページに埋め込む。
+			'providerPhone'        => $this->get_provider_phone(),
 		);
 
 		// 会員登録なしの予約の確認リンクを開いたリクエストでは、結果画面に出す値を渡す（code・message は含めない）。
@@ -391,6 +405,30 @@ class Reservation_Block {
 		$inline = 'window.vkbmReservationConfig = ' . wp_json_encode( $config ) . ';';
 		wp_add_inline_script( self::RESERVATION_CONFIG_HANDLE, $inline, 'before' );
 		wp_enqueue_script( self::RESERVATION_CONFIG_HANDLE );
+	}
+
+	/**
+	 * BM 設定の事業者の電話番号を返す。
+	 *
+	 * @return string 電話番号（前後の空白を除く）。未設定なら空文字。
+	 */
+	private function get_provider_phone(): string {
+		$settings = ( new Settings_Repository() )->get_settings();
+
+		return trim( sanitize_text_field( (string) ( $settings['provider_phone'] ?? '' ) ) );
+	}
+
+	/**
+	 * 基本設定の「予約の受付方法」を、検査済みの値（member / guest / both）で返す。
+	 *
+	 * 未保存・許可外の値は Settings_Repository::get_settings() が member に倒す。
+	 *
+	 * @return string 'member' / 'guest' / 'both' のいずれか。
+	 */
+	private function get_booking_customer_mode(): string {
+		$settings = ( new Settings_Repository() )->get_settings();
+
+		return Settings_Repository::normalize_booking_customer_mode( $settings[ Settings_Repository::KEY_BOOKING_CUSTOMER_MODE ] ?? null );
 	}
 
 	/**
@@ -757,7 +795,7 @@ class Reservation_Block {
 		}
 
 		$hint_id   = wp_unique_id( 'vkbm-reservation-fallback-hint-' );
-		$login_url = $this->get_native_login_fallback_url();
+		$login_url = $this->auth_shortcodes->get_native_login_url();
 
 		/* translators: %1$s: opening <a> tag to the native WordPress login page, %2$s: closing </a> tag. */
 		$hint_template = __( 'If the login form does not appear, please log in from the %1$salternate login page%2$s.', 'vk-booking-manager' );
@@ -775,20 +813,6 @@ class Reservation_Block {
 		);
 
 		return self::FALLBACK_MARKUP_MARKER . $loading . $error_html . $hint . $this->get_fallback_reveal_script( $hint_id );
-	}
-
-	/**
-	 * Returns the WordPress default login screen URL for the fallback link, with the
-	 * `vkbm_native_login` bypass query so `Auth_Shortcodes::redirect_wp_login_to_vkbm()`
-	 * does not redirect it straight back to this same reservation page (issue #512).
-	 *
-	 * @return string
-	 */
-	private function get_native_login_fallback_url(): string {
-		$reservation_url = $this->auth_shortcodes->get_reservation_page_url();
-		$login_url       = wp_login_url( $reservation_url );
-
-		return add_query_arg( 'vkbm_native_login', '1', $login_url );
 	}
 
 	/**

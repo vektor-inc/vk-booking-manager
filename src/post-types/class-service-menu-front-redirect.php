@@ -157,7 +157,7 @@ class Service_Menu_Front_Redirect {
 		}
 
 		// resolve_redirect_url() の2経路のうち、予約ページ側は wp_validate_redirect() も通るが、
-		// 詳細ページ（予約ブロック内表示）側は Reservation_Page_Url::resolve_usable() の検証だけを通る。
+		// 詳細ページ（予約ブロック内表示）側は Reservation_Page_Url::get_url() の検証（公開中の固定ページ、または自サイトの URL）だけを通る。
 		// wp_safe_redirect() は www の有無が違うURLを弾いて管理画面（ログイン画面）へ送ってしまうため、
 		// 自サイトのURLとして検証済みの値に限って wp_redirect() を使う（この検証を外さないこと）.
 		wp_redirect( $redirect_url, 302 ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect -- 自サイトのURLとして検証済み。
@@ -256,13 +256,10 @@ class Service_Menu_Front_Redirect {
 	 *
 	 * `menu_id` などのクエリは付与しない（予約ページのトップへ移動させる仕様のため）。
 	 *
-	 * @return string 設定済みなら正規化済みURL、未設定なら空文字。
+	 * @return string 設定済みで使えるなら予約ページのURL、未設定・使えないなら空文字。
 	 */
 	private function get_reservation_page_url(): string {
-		$settings = $this->settings_repository->get_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		return Reservation_Page_Url::resolve_usable( $url );
+		return Reservation_Page_Url::get_url( $this->settings_repository->get_settings() );
 	}
 
 	/**

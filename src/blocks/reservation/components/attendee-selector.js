@@ -1,6 +1,7 @@
 import { __, sprintf } from '@wordpress/i18n';
 import { useEffect } from '@wordpress/element';
 import { MANUAL_ID } from '../attendee-selection';
+import { RequiredLabelText } from './required-label-text';
 
 /**
  * 予約確認画面で「ご利用になる方」を選ぶ欄。
@@ -175,8 +176,10 @@ export const AttendeeSelector = ( {
 			}
 		>
 			<legend className="vkbm-confirm__attendee-legend">
-				{ options.label }
-				{ required && <span aria-hidden="true"> *</span> }
+				<RequiredLabelText
+					label={ options.label }
+					required={ required }
+				/>
 			</legend>
 			{ helpTexts.length > 0 && (
 				<p className="vkbm-confirm__attendee-help" id={ helpId }>
@@ -232,8 +235,10 @@ export const AttendeeSelector = ( {
 				<div className="vkbm-confirm__attendee-manual">
 					<div className="vkbm-confirm__attendee-field">
 						<label htmlFor="vkbm-confirm-attendee-name">
-							{ nameLabel }
-							{ required && <span aria-hidden="true"> *</span> }
+							<RequiredLabelText
+								label={ nameLabel }
+								required={ required }
+							/>
 						</label>
 						<input
 							ref={ nameRef }

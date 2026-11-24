@@ -9,9 +9,9 @@
  *
  * 判定基準（issue #429 decision-record）:
  * - メニューの対応スタッフ（_vkbm_staff_ids）にそのスタッフが含まれる => 表示する
- * - 対応スタッフが未登録（空）のメニュー => 表示する
+ * - 対応スタッフが未登録（空）のメニュー => 表示しない（スタッフ選択の有無に関わらず。#1144）
  *   （Availability_Service::resolve_staff_ids() が対応スタッフ未設定のメニューを
- *   指名スタッフでそのまま受け付ける仕様と一致させるため）
+ *   指名の有無に関わらず受け付けない仕様と一致させるため）
  * - メニュー単位で指名無効（_vkbm_disable_nomination）のメニュー => スタッフ選択中は非表示にする
  * - スタッフ機能自体が無効（無料版、または基本設定でOFF）のとき => staff パラメータを無視し、
  *   絞り込みを行わない（安全側のフォールバック）
@@ -127,9 +127,19 @@ class Menu_Loop_Selection_List_Staff_Filter_Test extends WP_UnitTestCase {
 	public function test_render_menu_selection_list_filters_by_staff(): void {
 		$is_free = Pro_Upsell::is_free_edition();
 
-		// 対応スタッフID（テスト用に固定の投稿IDを使う。リソース投稿の実在は判定条件に含まれないため作成不要）。
-		$target_staff_id = 9001;
-		$other_staff_id  = 9002;
+		// 対応スタッフ（担当できる公開中のスタッフがいないメニューは一覧に出ない（#1144）ため、実在する公開中のスタッフを使う）。
+		$target_staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		$other_staff_id  = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 
 		// 対応スタッフに指定スタッフを含むメニュー（指名は使う）。
 		$menu_assigned = $this->create_menu( 'メニューA（対応スタッフに含む）', array( $target_staff_id ) );
@@ -139,37 +149,43 @@ class Menu_Loop_Selection_List_Staff_Filter_Test extends WP_UnitTestCase {
 		$menu_unset = $this->create_menu( 'メニューC（対応スタッフ未登録）', array() );
 		// 対応スタッフに指定スタッフを含むが、メニュー単位で指名を無効化しているメニュー。
 		$menu_disabled = $this->create_menu( 'メニューD（指名無効）', array( $target_staff_id ), true );
-		// #429 安藤レビュー指摘（LOW）: 「指名無効」かつ「対応スタッフ未登録」の組み合わせ。
-		// 対応スタッフが空でも、指名無効チェックが先に効いてスタッフ選択中は非表示になることを確認する
-		// （is_menu_visible_for_staff_filter() 内で disable_nomination の判定が
-		// 「対応スタッフ空なら表示」より先に評価される順序に依存するケース）。
+		// 「指名無効」かつ「対応スタッフ未登録」の組み合わせ。担当できるスタッフがいないため、
+		// 指名の設定に関わらず一覧に出ない（#1144）。
 		$menu_disabled_unassigned = $this->create_menu( 'メニューF（指名無効・対応スタッフ未登録）', array(), true );
 
 		$test_cases = array(
 			array(
-				'test_condition_name' => 'サイト全体ONかつ staff_id=0（指名なし）の場合 => 絞り込みを行わず全メニュー表示',
+				'test_condition_name' => 'サイト全体ONかつ staff_id=0（指名なし）の場合 => スタッフの絞り込みは行わず、担当のいないメニューだけ外す（Free版は全件表示）',
 				'site_wide'           => true,
 				'staff_id'            => 0,
-				'expected_visible'    => array( $menu_assigned, $menu_other, $menu_unset, $menu_disabled, $menu_disabled_unassigned ),
-				'expected_hidden'     => array(),
+				'expected_visible'    => $is_free
+					? array( $menu_assigned, $menu_other, $menu_unset, $menu_disabled, $menu_disabled_unassigned )
+					: array( $menu_assigned, $menu_other, $menu_disabled ),
+				'expected_hidden'     => $is_free
+					? array()
+					: array( $menu_unset, $menu_disabled_unassigned ),
 			),
 			array(
-				'test_condition_name' => 'サイト全体ONかつ staff_id=対象スタッフの場合 => 対応スタッフに含む・未登録のメニューのみ表示（Free版は絞り込み自体が無効なため全件表示）',
+				'test_condition_name' => 'サイト全体ONかつ staff_id=対象スタッフの場合 => 対応スタッフに含むメニューのみ表示（Free版は絞り込み自体が無効なため全件表示）',
 				'site_wide'           => true,
 				'staff_id'            => $target_staff_id,
 				'expected_visible'    => $is_free
 					? array( $menu_assigned, $menu_other, $menu_unset, $menu_disabled, $menu_disabled_unassigned )
-					: array( $menu_assigned, $menu_unset ),
+					: array( $menu_assigned ),
 				'expected_hidden'     => $is_free
 					? array()
-					: array( $menu_other, $menu_disabled, $menu_disabled_unassigned ),
+					: array( $menu_other, $menu_unset, $menu_disabled, $menu_disabled_unassigned ),
 			),
 			array(
-				'test_condition_name' => 'サイト全体OFF（スタッフ機能オフ）の場合 => staff_id が指定されていても絞り込みを無視して全メニュー表示（安全側フォールバック）',
+				'test_condition_name' => 'サイト全体OFF（スタッフ機能オフ）の場合 => staff_id が指定されていてもスタッフの絞り込みは無視し、担当のいないメニューだけ外す（Free版は全件表示）',
 				'site_wide'           => false,
 				'staff_id'            => $target_staff_id,
-				'expected_visible'    => array( $menu_assigned, $menu_other, $menu_unset, $menu_disabled, $menu_disabled_unassigned ),
-				'expected_hidden'     => array(),
+				'expected_visible'    => $is_free
+					? array( $menu_assigned, $menu_other, $menu_unset, $menu_disabled, $menu_disabled_unassigned )
+					: array( $menu_assigned, $menu_other, $menu_disabled ),
+				'expected_hidden'     => $is_free
+					? array()
+					: array( $menu_unset, $menu_disabled_unassigned ),
 			),
 		);
 
@@ -209,15 +225,31 @@ class Menu_Loop_Selection_List_Staff_Filter_Test extends WP_UnitTestCase {
 
 		$this->set_site_wide_nomination( true );
 
-		$target_staff_id = 9101;
-		$other_staff_id  = 9102;
+		// 担当できる公開中のスタッフがいないメニューは一覧に出ない（#1144）ため、スタッフ絞り込みで
+		// 0件になったことを確かめられるよう、実在する公開中のスタッフを使う。
+		$target_staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		$other_staff_id  = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		Service_Menu_Post_Type::clear_published_resource_ids_cache();
 
 		// 対象スタッフが対応スタッフに含まれないメニューのみを用意する。
-		$this->create_menu( 'メニューE（対応スタッフが別）', array( $other_staff_id ) );
+		$menu_title = 'メニューE（対応スタッフが別）';
+		$this->create_menu( $menu_title, array( $other_staff_id ) );
 
-		$output = $this->block->render_menu_selection_list( $target_staff_id );
+		// 対照: スタッフを選ばなければ、同じメニューは一覧に出る（担当のいないメニューとして外れていない）。
+		$this->assertStringContainsString( $menu_title, $this->block->render_menu_selection_list( 0 ) );
 
-		$this->assertSame( '', $output );
+		// 対象スタッフで絞り込むと、表示するメニューが無くなり空文字になる。
+		$this->assertSame( '', $this->block->render_menu_selection_list( $target_staff_id ) );
 	}
 
 	/**

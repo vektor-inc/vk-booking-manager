@@ -177,9 +177,9 @@ test.describe( 'リソースタグ追加テスト（PR #119 追加確認項目�
 		// 表示をOFFにする
 		setTagDisplayEnabled( false );
 
-		// @step ログアウトした状態で、スタッフの公開データ（REST API のスタッフ情報）を開く
+		// @step ログアウトした状態で、予約画面が読むスタッフの公開データ（REST API のスタッフ情報）を開く
 		const response = await request.get(
-			`/wp-json/wp/v2/vkbm_resource/${ staffId }`
+			`/wp-json/vkbm/v1/resources/${ staffId }`
 		);
 		// @check スタッフ情報が取得でき、リソースタグは空で返る（タグ名が外に出ない）
 		expect( response.ok() ).toBeTruthy();

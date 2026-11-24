@@ -43,14 +43,16 @@ class Service_Menu_Detail_Link_Test extends WP_UnitTestCase {
 	/**
 	 * 基本設定を保存する。
 	 *
-	 * @param string $mode            詳細ページの表示方法（block / template）。
-	 * @param string $reservation_url 予約ページURL。
+	 * @param string $mode                詳細ページの表示方法（block / template）。
+	 * @param string $reservation_url     予約ページURL。
+	 * @param int    $reservation_page_id 予約ページの固定ページ ID（0 なら URL を使う）。
 	 */
-	private function save_settings( string $mode, string $reservation_url ): void {
+	private function save_settings( string $mode, string $reservation_url, int $reservation_page_id = 0 ): void {
 		update_option(
 			Settings_Repository::OPTION_KEY,
 			array(
 				'service_menu_detail_display_mode' => $mode,
+				'reservation_page_id'              => $reservation_page_id,
 				'reservation_page_url'             => $reservation_url,
 			)
 		);
@@ -319,34 +321,64 @@ class Service_Menu_Detail_Link_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * resolve_usable_reservation_page_url() の判定を検証する。
+	 * get_block_display_page_url() が、予約ページの固定ページ ID と URL のどちらの設定でも使える URL だけを返すことを検証する（#1050）。
 	 */
-	public function test_resolve_usable_reservation_page_url(): void {
+	public function test_get_block_display_page_url(): void {
+		$published_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$trash_page_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'trash',
+			)
+		);
+
 		$test_cases = array(
 			array(
-				'test_condition_name' => '空文字 => 空文字',
-				'raw_url'             => '',
+				'test_condition_name' => 'block・URL が自サイト => その URL',
+				'mode'                => 'block',
+				'reservation_url'     => home_url( '/booking/' ),
+				'reservation_page_id' => 0,
+				'expected'            => home_url( '/booking/' ),
+			),
+			array(
+				'test_condition_name' => 'block・URL が自サイト外 => 空文字',
+				'mode'                => 'block',
+				'reservation_url'     => 'https://other.example.org/booking/',
+				'reservation_page_id' => 0,
 				'expected'            => '',
 			),
 			array(
-				'test_condition_name' => '自サイトの絶対URL => そのまま',
-				'raw_url'             => home_url( '/booking/' ),
-				'expected'            => home_url( '/booking/' ),
+				'test_condition_name' => 'block・公開中の固定ページを選択 => そのページのパーマリンク',
+				'mode'                => 'block',
+				'reservation_url'     => '',
+				'reservation_page_id' => $published_page_id,
+				'expected'            => get_permalink( $published_page_id ),
 			),
 			array(
-				'test_condition_name' => '相対パス => 自サイトのURLに正規化',
-				'raw_url'             => '/booking/',
-				'expected'            => home_url( '/booking/' ),
+				'test_condition_name' => 'block・ゴミ箱の固定ページを選択（URL は自サイト） => 空文字（URL へフォールバックしない）',
+				'mode'                => 'block',
+				'reservation_url'     => home_url( '/booking/' ),
+				'reservation_page_id' => $trash_page_id,
+				'expected'            => '',
 			),
 			array(
-				'test_condition_name' => '自サイト外のURL => 空文字',
-				'raw_url'             => 'https://other.example.org/booking/',
+				'test_condition_name' => 'template・公開中の固定ページを選択 => 空文字（ブロック内表示ではない）',
+				'mode'                => 'template',
+				'reservation_url'     => '',
+				'reservation_page_id' => $published_page_id,
 				'expected'            => '',
 			),
 		);
 
 		foreach ( $test_cases as $case ) {
-			$this->assertSame( $case['expected'], Service_Menu_Detail_Link::resolve_usable_reservation_page_url( $case['raw_url'] ), $case['test_condition_name'] );
+			$this->save_settings( $case['mode'], $case['reservation_url'], $case['reservation_page_id'] );
+
+			$this->assertSame( $case['expected'], ( new Service_Menu_Detail_Link( new Settings_Repository() ) )->get_block_display_page_url(), $case['test_condition_name'] );
 		}
 	}
 

@@ -13,11 +13,11 @@
 			"Service Card Block": [
 				"サービスカードブロック"
 			],
-			"Auto (the service being displayed)": [
-				"自動（表示中のサービス）"
-			],
 			"(no title)": [
 				"（タイトルなし）"
+			],
+			"Auto (the service being displayed)": [
+				"自動（表示中のサービス）"
 			],
 			"Service to display": [
 				"表示するサービス"

@@ -7,11 +7,14 @@ import {
 	buildServiceBasicFeeRow,
 } from '../pricing-breakdown';
 import { PricingRowLabel } from './pricing-row-label';
+import { getMenuHeading } from './menu-label';
 
 export const BookingSummaryItems = ( {
 	booking,
 	resourceLabel,
 	otherConditionsLabel,
+	// メニューの呼び方（既定のままなら空文字で、見出しは「メニュー」）。
+	menuLabel = '',
 	// 数量の見出し（複数人予約）。空のときは翻訳デフォルトへフォールバックする。
 	guestsCountLabel = '',
 	// 数量の単位（実効値。空文字は単位なし）。
@@ -68,7 +71,7 @@ export const BookingSummaryItems = ( {
 		<>
 			<dl className="vkbm-confirm__summary-item">
 				<dt className="vkbm-confirm__summary-item-title">
-					{ __( 'Menu', 'vk-booking-manager' ) }
+					{ getMenuHeading( menuLabel ) }
 				</dt>
 				<dd className="vkbm-confirm__summary-item-value">
 					{ menuName }

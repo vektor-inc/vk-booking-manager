@@ -286,19 +286,22 @@ class Lodging_Availability_Test extends WP_UnitTestCase {
 					'_vkbm_max_capacity'          => '4',
 				),
 				'guests'              => 2,
+				'latest_time'         => '',
 				'expected'            => array(
 					$room_a => array( 20000, 0, 20000, 40000, 'per_guest' ),
 					$room_b => array( 20000, 0, 20000, 40000, 'per_guest' ),
 				),
 			),
 			array(
-				'test_condition_name' => '1室1泊あたり・人数は無視・2泊: 10000 × 2（追加料金は 0 円）',
+				'test_condition_name' => '1室1泊あたり・人数は無視・2泊: 10000 × 2（追加料金は 0 円）。最終チェックイン時刻 19:00 を返す',
 				'meta'                => array(
 					Service_Menu_Post_Type::META_NIGHT_PRICE_UNIT => Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM,
 					'_vkbm_allow_multiple_guests' => '1',
 					'_vkbm_max_capacity'          => '4',
+					Service_Menu_Post_Type::META_LATEST_CHECK_IN_TIME => '19:00',
 				),
 				'guests'              => 4,
+				'latest_time'         => '19:00',
 				'expected'            => array(
 					$room_a => array( 10000, 0, 10000, 20000, 'per_room' ),
 					$room_b => array( 10000, 0, 10000, 20000, 'per_room' ),
@@ -320,6 +323,7 @@ class Lodging_Availability_Test extends WP_UnitTestCase {
 			$this->assertIsArray( $result, $case['test_condition_name'] );
 			$this->assertSame( 2, $result['nights'], $case['test_condition_name'] );
 			$this->assertSame( '15:00', $result['check_in_time'], $case['test_condition_name'] );
+			$this->assertSame( $case['latest_time'], $result['latest_check_in_time'], $case['test_condition_name'] . '（最終チェックイン時刻。#1125）' );
 			$this->assertSame( '10:00', $result['check_out_time'], $case['test_condition_name'] );
 			$this->assertSame( 'Asia/Tokyo', $result['timezone'], $case['test_condition_name'] );
 			$this->assertCount( 2, $result['rooms'], $case['test_condition_name'] );

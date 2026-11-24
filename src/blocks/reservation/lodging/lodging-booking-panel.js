@@ -27,6 +27,13 @@ import { LodgingRangeCalendar } from './lodging-range-calendar';
 import { LodgingRoomList } from './lodging-room-list';
 import { NightRates, getNightPrice } from './night-rates';
 import {
+	CHECK_IN_TIME_STEP_MINUTES,
+	addCheckInTimeOption,
+	buildCheckInTimeOptions,
+	hasLatestCheckInTime,
+	isCheckInTimeInRange,
+} from './check-in-time-options';
+import {
 	addDays,
 	applyDateClick,
 	countNights,
@@ -494,9 +501,16 @@ const LodgingBookingPanel = ( {
 	);
 	const checkInTime =
 		availability.data?.check_in_time || lodging?.check_in_time || '';
+	// 最終チェックイン時刻は空文字（未設定）も有効な値のため、|| ではなく ?? でたどる。
+	const latestCheckInTime =
+		availability.data?.latest_check_in_time ??
+		lodging?.latest_check_in_time ??
+		'';
 	const checkOutTime =
 		availability.data?.check_out_time || lodging?.check_out_time || '';
 	const [ estimatedCheckInTime, setEstimatedCheckInTime ] = useState( null );
+	// 到着予定時刻を選ばずに進もうとしたときに、欄の直下へエラーを出す。
+	const [ isCheckInTimeMissing, setIsCheckInTimeMissing ] = useState( false );
 	// 下書きの人数を復元してから、同じ条件で空室を問い合わせる。別のプランの下書きは使わない。
 	useEffect( () => {
 		if (
@@ -571,7 +585,29 @@ const LodgingBookingPanel = ( {
 		onDraftRestored,
 	] );
 	const estimatedCheckInTimeRef = useRef( null );
-	const selectedEstimatedCheckInTime = estimatedCheckInTime ?? checkInTime;
+	// 選んだ時刻（下書きから戻した時刻を含む）は、今の受付時間の範囲内のときだけ使う。範囲外なら未選択に戻す。
+	const selectedEstimatedCheckInTime =
+		estimatedCheckInTime &&
+		isCheckInTimeInRange(
+			estimatedCheckInTime,
+			checkInTime,
+			latestCheckInTime
+		)
+			? estimatedCheckInTime
+			: '';
+	// 範囲内でも区切りでない時刻（この変更の前に作られた下書きの 16:45 など）は、選択肢に加えて残す。
+	const checkInTimeOptions = useMemo(
+		() =>
+			addCheckInTimeOption(
+				buildCheckInTimeOptions(
+					checkInTime,
+					latestCheckInTime,
+					CHECK_IN_TIME_STEP_MINUTES
+				),
+				selectedEstimatedCheckInTime
+			),
+		[ checkInTime, latestCheckInTime, selectedEstimatedCheckInTime ]
+	);
 	// プランが変わったときだけ到着予定時刻を戻す。表示直後（確認画面から戻した時刻を含む）には消さない。
 	const checkInTimeMenuIdRef = useRef( menuId );
 	useEffect( () => {
@@ -580,6 +616,7 @@ const LodgingBookingPanel = ( {
 		}
 		checkInTimeMenuIdRef.current = menuId;
 		setEstimatedCheckInTime( null );
+		setIsCheckInTimeMissing( false );
 	}, [ menuId ] );
 
 	// 即時応答ではloadingの描画が省略されるため、描画状態の遷移ではなく新しい取得結果を判定する。
@@ -938,7 +975,10 @@ const LodgingBookingPanel = ( {
 			return;
 		}
 
-		if ( ! estimatedCheckInTimeRef.current?.reportValidity() ) {
+		// 到着予定時刻は選択が必須。未選択なら欄の直下にエラーを出し、欄へ移動する。
+		if ( ! selectedEstimatedCheckInTime ) {
+			setIsCheckInTimeMissing( true );
+			estimatedCheckInTimeRef.current?.focus();
 			return;
 		}
 
@@ -1401,21 +1441,64 @@ const LodgingBookingPanel = ( {
 				}
 				maxNights={ checkoutAvailability.maxNights }
 			/>
-			<p className="vkbm-lodging__availability-legend">
-				{ calendarAvailability.status === 'error' && ! availabilityBusy
-					? sprintf(
-							/* translators: %s: label for a room (e.g. room). */
-							__(
-								'Could not load availability. Select your dates to check whether a %s is available.',
-								'vk-booking-manager'
-							),
-							resourceLabelSingular
-					  )
-					: __(
-							'× : Not available for check-in (fully booked, etc.). Within the selectable range, it can still be your check-out date.',
+			{ /* 凡例。今の段階で使う空き状況（チェックアウト日を選ぶ段階では候補の空き状況も）を読み込めなかったときはエラーの案内に替え、
+			     それ以外は今の段階の ○ / × の意味を出す。 */ }
+			{ ( calendarAvailability.status === 'error' ||
+				( range.checkIn &&
+					! range.checkOut &&
+					checkoutAvailability.status === 'error' ) ) &&
+			! availabilityBusy ? (
+				<p className="vkbm-lodging__availability-legend">
+					{ sprintf(
+						/* translators: %s: label for a room (e.g. room). */
+						__(
+							'Could not load availability. Select your dates to check whether a %s is available.',
 							'vk-booking-manager'
-					  ) }
-			</p>
+						),
+						resourceLabelSingular
+					) }
+				</p>
+			) : (
+				<ul className="vkbm-lodging__availability-legend">
+					{ range.checkIn && ! range.checkOut ? (
+						<>
+							<li>
+								{ __(
+									'○ : Available as check-out date',
+									'vk-booking-manager'
+								) }
+							</li>
+							<li>
+								{ __(
+									'× : Not available for check-in (fully booked, etc.)',
+									'vk-booking-manager'
+								) }
+							</li>
+						</>
+					) : (
+						<>
+							<li>
+								{ __(
+									'○ : Available for check-in',
+									'vk-booking-manager'
+								) }
+							</li>
+							<li>
+								{ joinSentences(
+									__(
+										'× : Not available for check-in (fully booked, etc.).',
+										'vk-booking-manager'
+									),
+									__(
+										'If it can be your check-out date, it changes to ○ after you select a check-in date.',
+										'vk-booking-manager'
+									)
+								) }
+							</li>
+						</>
+					) }
+				</ul>
+			) }
 
 			<div className="vkbm-lodging__guide-row">
 				<p id={ guideId } className="vkbm-lodging__guide" role="status">
@@ -1605,33 +1688,75 @@ const LodgingBookingPanel = ( {
 								'vk-booking-manager'
 							) }
 						</label>
-						<input
+						<select
 							ref={ estimatedCheckInTimeRef }
 							id={ `${ idPrefix }-check-in-time` }
-							className="vkbm-plan-summary__date-input"
-							type="time"
 							required
-							min={ checkInTime }
-							max="23:59"
-							step="60"
 							value={ selectedEstimatedCheckInTime }
-							onChange={ ( event ) =>
-								setEstimatedCheckInTime( event.target.value )
+							onChange={ ( event ) => {
+								setEstimatedCheckInTime(
+									event.target.value || null
+								);
+								// 時刻を選んだらエラーを外す（「選択してください」へ戻したときはそのまま）。
+								if ( event.target.value ) {
+									setIsCheckInTimeMissing( false );
+								}
+							} }
+							aria-invalid={
+								isCheckInTimeMissing ? 'true' : undefined
 							}
-							aria-describedby={ `${ idPrefix }-check-in-time-hint` }
-						/>
+							aria-describedby={
+								isCheckInTimeMissing
+									? `${ idPrefix }-check-in-time-error ${ idPrefix }-check-in-time-hint`
+									: `${ idPrefix }-check-in-time-hint`
+							}
+						>
+							<option value="">
+								{ __( 'Please select', 'vk-booking-manager' ) }
+							</option>
+							{ checkInTimeOptions.map( ( time ) => (
+								<option key={ time } value={ time }>
+									{ time }
+								</option>
+							) ) }
+						</select>
+						{ isCheckInTimeMissing && (
+							<p
+								id={ `${ idPrefix }-check-in-time-error` }
+								className="vkbm-plan-summary__date-error"
+								role="alert"
+							>
+								{ __(
+									'Please select your estimated check-in time.',
+									'vk-booking-manager'
+								) }
+							</p>
+						) }
 						<p
 							className="vkbm-plan-summary__hint"
 							id={ `${ idPrefix }-check-in-time-hint` }
 						>
-							{ sprintf(
-								/* translators: %s: プランのチェックイン開始時刻（HH:MM）。 */
-								__(
-									'Enter your estimated check-in time (%s or later).',
-									'vk-booking-manager'
-								),
-								checkInTime
-							) }
+							{ hasLatestCheckInTime(
+								checkInTime,
+								latestCheckInTime
+							)
+								? sprintf(
+										/* translators: 1: プランのチェックイン時刻（HH:MM）。 2: プランの最終チェックイン時刻（HH:MM）。 */
+										__(
+											'Please choose a time between %1$s and %2$s.',
+											'vk-booking-manager'
+										),
+										checkInTime,
+										latestCheckInTime
+								  )
+								: sprintf(
+										/* translators: %s: プランのチェックイン時刻（HH:MM）。 */
+										__(
+											'Please choose a time at or after %s.',
+											'vk-booking-manager'
+										),
+										checkInTime
+								  ) }
 						</p>
 					</div>
 					<div className="vkbm-plan-summary__actions">

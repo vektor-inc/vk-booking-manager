@@ -24,6 +24,7 @@ use function add_query_arg;
 use function esc_attr;
 use function esc_html;
 use function esc_url;
+use function vkbm_get_menu_label_text;
 
 /**
  * 予約ボタンの共通描画ヘルパー。
@@ -39,11 +40,6 @@ class Reservation_Button_Renderer {
 	 * 予約ボタンの既定ラベルを参照する基本設定のキー。
 	 */
 	public const SETTING_RESERVE_LABEL = 'menu_loop_reserve_button_label';
-
-	/**
-	 * 予約ページURLを参照する基本設定のキー。
-	 */
-	public const SETTING_RESERVATION_PAGE_URL = 'reservation_page_url';
 
 	/**
 	 * ボタンサイズ: 極小サイズ（vkbm-button__xs）。
@@ -96,13 +92,10 @@ class Reservation_Button_Renderer {
 	/**
 	 * 予約ページのURL（クエリなし）を取得する。
 	 *
-	 * @return string 設定済みなら正規化済みURL、未設定なら空文字。
+	 * @return string 設定済みで使えるなら予約ページのURL、未設定・使えないなら空文字。
 	 */
 	public function get_reservation_page_url(): string {
-		$settings = $this->get_provider_settings();
-		$url      = isset( $settings[ self::SETTING_RESERVATION_PAGE_URL ] ) ? (string) $settings[ self::SETTING_RESERVATION_PAGE_URL ] : '';
-
-		return Reservation_Page_Url::resolve_usable( $url );
+		return Reservation_Page_Url::get_url( $this->get_provider_settings() );
 	}
 
 	/**
@@ -221,7 +214,11 @@ class Reservation_Button_Renderer {
 			$disabled_label = __( 'Online reservation unavailable', 'vk-booking-manager' );
 
 			// 無効理由（ホバー時の補助として title に残す）。
-			$disabled_reason = __( 'This menu does not accept online reservations.', 'vk-booking-manager' );
+			$disabled_reason = vkbm_get_menu_label_text(
+				__( 'This menu does not accept online reservations.', 'vk-booking-manager' ),
+				/* translators: %s: menu term set in the settings (e.g. Plan). */
+				__( 'This %s does not accept online reservations.', 'vk-booking-manager' )
+			);
 
 			// 読み上げ用の隠しテキスト（screen-reader-text）にはプラン名のみを含める。
 			// 可視ラベル自体が「ウェブ予約不可」＝無効理由を表すようになったため、

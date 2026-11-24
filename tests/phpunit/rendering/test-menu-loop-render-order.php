@@ -14,6 +14,7 @@ namespace VKBookingManager\Tests\Frontend;
 
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\PostOrder\Post_Order_Manager;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_UnitTestCase;
 
@@ -38,6 +39,13 @@ class Menu_Loop_Render_Order_Test extends WP_UnitTestCase {
 		parent::set_up();
 		$this->post_order_manager = new Post_Order_Manager( array( Service_Menu_Post_Type::POST_TYPE ) );
 		add_action( 'pre_get_posts', array( $this->post_order_manager, 'apply_default_order' ) );
+		// 担当できるスタッフがいないメニューは一覧に出ない（#1144）ため、「すべて」で担当できる公開中のスタッフを用意する。
+		$this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 	}
 
 	/**
@@ -66,6 +74,7 @@ class Menu_Loop_Render_Order_Test extends WP_UnitTestCase {
 				'menu_order'  => $menu_order,
 			)
 		);
+		update_post_meta( $post_id, Service_Menu_Post_Type::META_STAFF_ALL, '1' );
 
 		if ( ! empty( $term_ids ) ) {
 			wp_set_object_terms( $post_id, $term_ids, Service_Menu_Post_Type::TAXONOMY_GROUP );

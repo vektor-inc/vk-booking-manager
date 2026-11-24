@@ -57,6 +57,8 @@ function seedMenu(): string {
 		update_post_meta( $menu_id, '_vkbm_max_capacity', 3 );
 		update_post_meta( $menu_id, '_vkbm_min_capacity', 2 );
 		update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+		// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+		update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 		echo $menu_id;
 	`;
 	const result = wpEvalPhp( phpCode ).trim();

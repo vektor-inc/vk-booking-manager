@@ -44,7 +44,39 @@ class Provider_Settings_Page_Detail_Display_Mode_Notice_Test extends WP_UnitTest
 	 * システムタブを描画し、注意文の有無・hidden の有無・導線を検証する。
 	 */
 	public function test_render_page(): void {
+		$published_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$trash_page_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'trash',
+			)
+		);
+
 		$test_cases = array(
+			array(
+				'test_condition_name' => 'block 選択・公開中の固定ページを選択 => 注意文なし（#1050）',
+				'settings'            => array(
+					'service_menu_detail_display_mode' => 'block',
+					'reservation_page_id'              => $published_page_id,
+				),
+				'expected_exists'     => false,
+				'expected_hidden'     => false,
+			),
+			array(
+				'test_condition_name' => 'block 選択・ゴミ箱の固定ページを選択 => 注意文を表示（URL が残っていてもフォールバックしない）',
+				'settings'            => array(
+					'service_menu_detail_display_mode' => 'block',
+					'reservation_page_id'              => $trash_page_id,
+					'reservation_page_url'             => home_url( '/booking/' ),
+				),
+				'expected_exists'     => true,
+				'expected_hidden'     => false,
+			),
 			array(
 				'test_condition_name' => 'block 選択・予約ページURL未設定 => 注意文を表示（hidden なし）',
 				'settings'            => array( 'service_menu_detail_display_mode' => 'block' ),

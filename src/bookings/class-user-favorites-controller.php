@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\Staff\Staff_Editor;
 use WP_Error;
 use WP_Post;
 use WP_REST_Request;
@@ -37,6 +38,7 @@ use function sanitize_text_field;
 use function update_user_meta;
 use function wp_generate_uuid4;
 use function wp_slash;
+use function vkbm_get_menu_label_text;
 
 /**
  * 「いつもの」機能。よく使うメニューとスタッフの組み合わせをユーザーごとに保存する。
@@ -167,12 +169,20 @@ class User_Favorites_Controller {
 		// メニューの存在チェック。公開済みのサービスメニューのみ受け付ける。
 		$menu = get_post( $menu_id );
 		if ( ! $menu instanceof WP_Post || Service_Menu_Post_Type::POST_TYPE !== $menu->post_type || 'publish' !== $menu->post_status ) {
-			return new WP_Error( 'invalid_menu', __( 'The selected service menu is invalid.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			return new WP_Error(
+				'invalid_menu',
+				vkbm_get_menu_label_text(
+					__( 'The selected service menu is invalid.', 'vk-booking-manager' ),
+					/* translators: %s: menu term set in the settings (e.g. Plan). */
+					__( 'The selected %s is invalid.', 'vk-booking-manager' )
+				),
+				array( 'status' => 400 )
+			);
 		}
 
 		// スタッフ指名がある場合、そのメニューで指名可能なスタッフかを検証する。
 		if ( $resource_id > 0 && ! $this->is_resource_assignable( $menu_id, $resource_id ) ) {
-			return new WP_Error( 'invalid_resource', __( 'The selected staff member cannot be assigned to this service menu.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			return new WP_Error( 'invalid_resource', Draft_Reference_Validator::get_resource_not_assignable_message(), array( 'status' => 400 ) );
 		}
 
 		$favorites = $this->read_favorites( $user_id );
@@ -357,8 +367,9 @@ class User_Favorites_Controller {
 	/**
 	 * 指定スタッフがそのメニューで指名可能かを判定する。
 	 *
-	 * メニューに対応スタッフ（_vkbm_staff_ids、または「すべてのリソースが担当できる」の展開結果）が
-	 * 設定されている場合はその中に含まれること、未設定の場合は公開済みリソースであることを条件とする。
+	 * 公開済みリソースで、メニューの対応スタッフ（_vkbm_staff_ids、または「すべてのリソースが担当できる」の展開結果）に
+	 * 含まれることを条件とする。対応スタッフが未設定のメニューでは、どのスタッフも指名できない（#1144）。
+	 * 無料版はメニュー側の担当設定を使わないため、公開済みリソースであれば指名可能とする。
 	 *
 	 * @param int $menu_id     メニューID。
 	 * @param int $resource_id スタッフID。
@@ -370,15 +381,11 @@ class User_Favorites_Controller {
 			return false;
 		}
 
-		// #485: 担当できるリソースの解決は Service_Menu_Post_Type::get_assignable_staff_ids() に集約。
-		$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id );
-
-		// メニューに対応スタッフ指定がある場合は、その中に含まれることを必須とする。
-		if ( ! empty( $staff_ids ) ) {
-			return in_array( $resource_id, $staff_ids, true );
+		if ( ! Staff_Editor::is_enabled() ) {
+			return true;
 		}
 
-		// 対応スタッフ未指定のメニューは、公開済みリソースであれば許可する。
-		return true;
+		// #485: 担当できるリソースの解決は Service_Menu_Post_Type::get_assignable_staff_ids() に集約。
+		return in_array( $resource_id, Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id ), true );
 	}
 }

@@ -82,8 +82,8 @@ const isResponseLike = ( value ) =>
  * - それ以外（apiFetch の通信エラー `{ code, message }`、Error など）: 持っている値をそのまま使う。
  *
  * @param {*} error apiFetch が reject した値、または予約作成処理で throw された値。
- * @return {Promise<{status: number, code: string, message: string}>} そろえた失敗内容。
- *         status は HTTP ステータス（不明な場合は 0）。
+ * @return {Promise<{status: number, code: string, message: string, fields: Object<string, string>}>} そろえた失敗内容。
+ *         status は HTTP ステータス（不明な場合は 0）。fields は data.fields（項目ごとのエラー。無ければ空のオブジェクト）。
  */
 export const normalizeBookingError = async ( error ) => {
 	if ( isResponseLike( error ) ) {
@@ -105,6 +105,7 @@ export const normalizeBookingError = async ( error ) => {
 			status: error.status,
 			code: typeof parsed?.code === 'string' ? parsed.code : '',
 			message: typeof parsed?.message === 'string' ? parsed.message : '',
+			fields: extractFieldErrors( parsed?.data ),
 		};
 	}
 
@@ -114,7 +115,28 @@ export const normalizeBookingError = async ( error ) => {
 		status: Number.isFinite( status ) ? status : 0,
 		code: typeof error?.code === 'string' ? error.code : '',
 		message: typeof error?.message === 'string' ? error.message : '',
+		fields: extractFieldErrors( error?.data ),
 	};
+};
+
+/**
+ * REST のエラーの data.fields（項目ごとのエラー）から、文字列の値だけを取り出す。
+ *
+ * @param {unknown} data エラーの data。
+ * @return {Object<string, string>} 項目 ID => エラーメッセージ。無ければ空のオブジェクト。
+ */
+const extractFieldErrors = ( data ) => {
+	const fields = {};
+	const raw = data?.fields;
+	if ( ! raw || typeof raw !== 'object' || Array.isArray( raw ) ) {
+		return fields;
+	}
+	Object.keys( raw ).forEach( ( key ) => {
+		if ( typeof raw[ key ] === 'string' ) {
+			fields[ key ] = raw[ key ];
+		}
+	} );
+	return fields;
 };
 
 /**

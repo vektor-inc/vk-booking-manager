@@ -201,6 +201,49 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * オンライン予約不可のプランの無効理由（title）に「メニューの呼び方」を差し込む（#1129）。
+	 *
+	 * 空欄・「メニュー」なら今までどおりの文にする。期待値は翻訳の読み込み状態によらないよう、本番と同じ翻訳関数から組み立てる。
+	 */
+	public function test_render_button(): void {
+		$default_reason = esc_attr( __( 'This menu does not accept online reservations.', 'vk-booking-manager' ) );
+		$plan_reason    = esc_attr( sprintf( __( 'This %s does not accept online reservations.', 'vk-booking-manager' ), 'プラン' ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '呼び方が未保存の場合 => 今までどおりの無効理由',
+				'settings'            => array(),
+				'expected'            => 'title="' . $default_reason . '"',
+			),
+			array(
+				'test_condition_name' => '呼び方に メニュー と入力した場合 => 今までどおりの無効理由',
+				'settings'            => array( 'menu_label' => 'メニュー' ),
+				'expected'            => 'title="' . $default_reason . '"',
+			),
+			array(
+				'test_condition_name' => '呼び方が プラン の場合 => プラン を差し込んだ無効理由',
+				'settings'            => array( 'menu_label' => 'プラン' ),
+				'expected'            => 'title="' . $plan_reason . '"',
+			),
+		);
+
+		$post = $this->create_menu_post(
+			array(
+				Reservation_Button_Renderer::META_ONLINE_UNAVAILABLE => '1',
+			)
+		);
+
+		foreach ( $test_cases as $case ) {
+			// 予約ページの URL と呼び方を保存してから描画する。
+			$this->set_settings( array_merge( array( 'reservation_page_url' => home_url( '/reserve/' ) ), $case['settings'] ) );
+
+			$html = $this->make_renderer()->render_button( $post );
+
+			$this->assertStringContainsString( $case['expected'], $html, $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * ブロック属性で独自ラベル（label 引数）が指定されていても、
 	 * オンライン予約不可のメニューでは「ウェブ予約不可」の表示を優先する（issue #451）。
 	 */
@@ -325,6 +368,19 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 	 * get_reservation_page_url() / render_button() が、自サイトのURLだけを使い、旧ドメインのURLは使わないことを検証する（issue #1049）。
 	 */
 	public function test_get_reservation_page_url(): void {
+		$published_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$trash_page_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'trash',
+			)
+		);
+
 		$test_cases = array(
 			array(
 				'test_condition_name'  => '自サイトの絶対URL => そのまま使う',
@@ -350,10 +406,29 @@ class Reservation_Button_Renderer_Test extends WP_UnitTestCase {
 				'expected'             => '',
 				'expect_button'        => false,
 			),
+			array(
+				'test_condition_name'  => '公開中の固定ページを選択（URL は旧ドメインのまま） => ページのパーマリンクを使う（#1050）',
+				'reservation_page_id'  => $published_page_id,
+				'reservation_page_url' => 'https://old.example.com/booking/',
+				'expected'             => get_permalink( $published_page_id ),
+				'expect_button'        => true,
+			),
+			array(
+				'test_condition_name'  => 'ゴミ箱の固定ページを選択（URL は自サイト） => 使わない（URL へフォールバックせずボタンも出さない）',
+				'reservation_page_id'  => $trash_page_id,
+				'reservation_page_url' => home_url( '/booking/' ),
+				'expected'             => '',
+				'expect_button'        => false,
+			),
 		);
 
 		foreach ( $test_cases as $case ) {
-			$this->set_settings( array( 'reservation_page_url' => $case['reservation_page_url'] ) );
+			$this->set_settings(
+				array(
+					'reservation_page_id'  => $case['reservation_page_id'] ?? 0,
+					'reservation_page_url' => $case['reservation_page_url'],
+				)
+			);
 			$renderer = $this->make_renderer();
 
 			$this->assertSame( $case['expected'], $renderer->get_reservation_page_url(), $case['test_condition_name'] );

@@ -92,6 +92,12 @@ class Settings_Repository {
 	public const BOOKING_CUSTOMER_MODES = array( self::BOOKING_CUSTOMER_MODE_MEMBER, self::BOOKING_CUSTOMER_MODE_GUEST, self::BOOKING_CUSTOMER_MODE_BOTH );
 
 	/**
+	 * 宿泊プランの最終チェックイン時刻の既定値（HH:MM。未設定は空文字）の設定キー（#1136）。
+	 * プラン側（_vkbm_latest_check_in_time）が未設定のときに使う。
+	 */
+	public const KEY_LODGING_LATEST_CHECK_IN_TIME = 'lodging_latest_check_in_time';
+
+	/**
 	 * Option key used for persistence.
 	 *
 	 * @var string
@@ -145,6 +151,9 @@ class Settings_Repository {
 			// 数量の単位。null（未設定）はロケール既定（日本語「名」/英語「guests」相当）を意味し、
 			// 従来挙動を維持する。空文字はユーザーが意図的に単位なしにした状態を表す。
 			'guests_unit_label'                          => null,
+			// メニューの呼び方（単数・複数形）。空文字の場合は「メニュー」へフォールバックする。
+			'menu_label'                                 => '',
+			'menu_label_plural'                          => '',
 			'provider_business_hours'                    => '',
 			'provider_reservation_deadline_hours'        => 3,
 			'provider_max_advance_booking_days'          => self::DEFAULT_MAX_ADVANCE_BOOKING_DAYS,
@@ -161,6 +170,8 @@ class Settings_Repository {
 			'provider_allow_staff_overlap_admin'         => false,
 			'booking_attendee_name_mode'                 => 'disabled',
 			'booking_attendee_name_label'                => '',
+			// 予約時の入力項目（#1147）。項目ごとに id・label・type（text / textarea）・required を持つ。
+			'booking_custom_fields'                      => array(),
 			'attendee_roster_enabled'                    => false,
 			'attendee_roster_label'                      => '',
 			'attendee_roster_show_self'                  => true,
@@ -273,6 +284,9 @@ Disclosure/Correction/Deletion: If there is a request from the person in questio
 Contact us: Please contact our store.",
 					'vk-booking-manager'
 				),
+			// 予約ページ（#1050）。固定ページを選んだときは reservation_page_id（0 は未選択）、
+			// 「その他（URL を入力）」のときは reservation_page_url を使う。両方あるときは ID を優先する。
+			'reservation_page_id'                        => 0,
 			'reservation_page_url'                       => '',
 			// #427: 「絞り込み検索」（メニュー／スタッフのプルダウン選択 UI）の表示設定。
 			// 既定は false。未保存の既存サイトでも、これまでどおり「サービスメニュー一覧」の
@@ -318,6 +332,8 @@ Contact us: Please contact our store.",
 			// 宿泊以外の業種へ切り替えても値は消さず、料金の計算に使わないだけにする（#570 の方針）。
 			'lodging_pre_holiday_weekdays'               => array( 'sat' ),
 			'lodging_special_dates'                      => array(),
+			// #1136: 宿泊プランの最終チェックイン時刻の既定値。業種プリセット「宿泊」でも初期値は入れない（未設定のまま）。
+			self::KEY_LODGING_LATEST_CHECK_IN_TIME       => '',
 		);
 	}
 

@@ -1,4 +1,5 @@
 import { sanitizeDraftToken } from '../shared/draft-token';
+import { normalizeCustomFieldValues } from './components/booking-custom-fields';
 
 const FORM_KEY_PREFIX = 'vkbm-confirm-form:';
 
@@ -46,6 +47,29 @@ export const buildDatetimeReselectUrl = ( currentUrl, draft, token ) => {
 };
 
 /**
+ * 読み込めない下書きから、選択内容を引き継がず予約画面へ戻る URL を作る。
+ *
+ * @param {string} reservationPageUrl 設定済みの予約ページ URL。
+ * @param {string} currentUrl         現在の URL。予約ページ URL がない場合の代替。
+ * @return {string} 予約を最初から選ぶ画面の URL。
+ */
+export const buildReservationStartUrl = ( reservationPageUrl, currentUrl ) => {
+	const url = new URL( reservationPageUrl || currentUrl, currentUrl );
+	// 下書きだけでなく選択済みのメニュー・日時も外し、最初の選択画面を開く。
+	[
+		'draft',
+		'vkbm_auth',
+		'vkbm_view',
+		'vkbm_reselect',
+		'menu_id',
+		'resource_id',
+		'date',
+		'check_out_date',
+	].forEach( ( key ) => url.searchParams.delete( key ) );
+	return url.toString();
+};
+
+/**
  * 文字列だけを取り出す（それ以外は空文字）。
  *
  * @param {unknown} value 値。
@@ -76,6 +100,7 @@ export const normalizeConfirmFields = ( fields ) => {
 	return {
 		memo: toText( source.memo ),
 		attendeeName: toText( source.attendeeName ),
+		customFields: normalizeCustomFieldValues( source.customFields ),
 		customerAddress: toText( source.customerAddress ),
 		customerAddressEdited: source.customerAddressEdited === true,
 		guestContact: {

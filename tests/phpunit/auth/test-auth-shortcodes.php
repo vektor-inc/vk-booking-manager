@@ -1294,6 +1294,116 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 送信直後だけ警告色と一度きりの送信先を表示し、認証完了は緑のままにする。
+	 *
+	 * @return void
+	 */
+	public function test_registration_sent_notice_uses_one_time_email_and_other_notices_stay_green(): void {
+		$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+		$set_notice = new \ReflectionMethod( Auth_Shortcodes::class, 'set_verification_notice' );
+		$previous_cookies = $_COOKIE;
+
+		try {
+			// 送信直後の通知はランダムな鍵だけを Cookie に持たせる。
+			$set_notice->invoke( $shortcodes, 'Email sent', 'sent', 'recipient@example.com' );
+			$token = $shortcodes->notice_cookies['vkbm_registration_sent_key'];
+			$this->assertMatchesRegularExpression( '/^[A-Za-z0-9]{32}$/', $token );
+			$this->assertStringNotContainsString( 'recipient@example.com', implode( '', $shortcodes->notice_cookies ) );
+			$_COOKIE = array_map( 'rawurlencode', $shortcodes->notice_cookies );
+			$html = $shortcodes->render_login_form();
+			$this->assertStringContainsString( 'vkbm-alert__warning', $html );
+			$this->assertStringContainsString( 'vkbm-alert__warning vkbm-registration-sent', $html );
+			$this->assertStringContainsString( 'role="status" aria-live="off"', $html );
+			$this->assertStringContainsString( 'class="vkbm-registration-sent__email" id="vkbm-registration-sent-email"', $html );
+			$this->assertStringContainsString( 'recipient@example.com', $html );
+			$this->assertStringContainsString( 'id="vkbm-registration-sent" tabindex="-1" aria-describedby=', $html );
+			$this->assertStringContainsString( 'メール認証を完了してください', $html );
+			$this->assertStringContainsString( 'メール認証後にログインしてください', $html );
+			$this->assertStringNotContainsString( '予約はまだ確定していません', $html );
+			$this->assertStringContainsString( '<details', $html );
+			// 「メールが届かない場合」の案内は問い合わせ案内の1行だけにし、見出しの説明の参照先もその行に付ける。
+			$this->assertSame( 1, substr_count( $html, '迷惑メールフォルダ' ) );
+			$this->assertSame( 1, substr_count( $html, 'id="vkbm-registration-sent-help"' ) );
+			$this->assertMatchesRegularExpression( '/<div class="vkbm-registration-sent__contact">\s*<p id="vkbm-registration-sent-help">[^<]*迷惑メールフォルダ[^<]*<\/p>/u', $html );
+			$this->assertFalse( get_transient( 'vkbm_registration_sent_' . hash( 'sha256', $token ) ) );
+
+			// 同じ鍵を戻してもメールは再表示できない。
+			$_COOKIE = array_map( 'rawurlencode', $shortcodes->notice_cookies );
+			$this->assertStringNotContainsString( 'recipient@example.com', $shortcodes->render_login_form() );
+
+			// 予約ドラフトを引き継ぐ経路だけ予約の手順を表示する。
+			$shortcodes->notice_cookies = array();
+			$set_notice->invoke( $shortcodes, 'Email sent', 'sent', 'recipient@example.com' );
+			$_COOKIE    = array_map( 'rawurlencode', $shortcodes->notice_cookies );
+			$booking_html = $shortcodes->render_login_form( array( 'redirect' => home_url( '/reserve/?draft=abc123' ) ) );
+			$this->assertStringContainsString( '予約はまだ確定していません', $booking_html );
+			$this->assertStringContainsString( 'ログインして予約を確定してください', $booking_html );
+			$this->assertStringNotContainsString( 'メール認証を完了してください', $booking_html );
+
+			// 認証完了など既存の通知色は変えない。
+			$shortcodes->notice_cookies = array();
+			$set_notice->invoke( $shortcodes, 'Email verified' );
+			$_COOKIE = array_map( 'rawurlencode', $shortcodes->notice_cookies );
+			$verified_html = $shortcodes->render_login_form();
+			$this->assertStringContainsString( 'vkbm-alert__success', $verified_html );
+			$this->assertStringNotContainsString( 'id="vkbm-registration-sent"', $verified_html );
+		} finally {
+			$_COOKIE = $previous_cookies;
+		}
+	}
+
+	/**
+	 * 認証後は同じブラウザでも別ブラウザの許可でも再送案内を表示しない。
+	 *
+	 * @return void
+	 */
+	public function test_verified_user_does_not_see_resend_grant(): void {
+		$previous_get     = $_GET;
+		$previous_cookie  = $_COOKIE;
+		$previous_server  = $_SERVER;
+		$user_id          = $this->factory()->user->create();
+		$token            = 'verification-grant-token';
+		$grant_token      = 'verification-resend-grant';
+		$grant_key        = 'vkbm_resend_grant_' . hash( 'sha256', $grant_token );
+		$shortcodes       = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+
+		try {
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', $token ) );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + HOUR_IN_SECONDS );
+			set_transient( $grant_key, $user_id, 600 );
+			$_COOKIE['vkbm_resend_grant'] = $grant_token;
+			$this->assertTrue( $shortcodes->has_resend_grant() );
+
+			// 別ブラウザで認証した場合は、残る許可を状態判定で隠す。
+			Email_Verification::mark_verified( $user_id );
+			$this->assertFalse( $shortcodes->has_resend_grant() );
+			$this->assertStringNotContainsString( 'vkbm-auth-form__resend', $shortcodes->render_login_form() );
+
+			// 元の状態に戻し、同じブラウザの認証リンクで許可を破棄する。
+			Email_Verification::mark_unverified( $user_id );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', $token ) );
+			update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + HOUR_IN_SECONDS );
+			$_GET['vkbm_verify_email'] = $token;
+			$_SERVER['REQUEST_URI']    = '/?vkbm_verify_email=' . $token;
+			$shortcodes->handle_email_verification();
+			$this->assertFalse( get_transient( $grant_key ) );
+			$this->assertArrayNotHasKey( 'vkbm_resend_grant', $_COOKIE );
+			$this->assertFalse( $shortcodes->has_resend_grant() );
+			$_COOKIE = array_map( 'rawurlencode', $shortcodes->notice_cookies );
+			$html = $shortcodes->render_login_form();
+			$this->assertStringContainsString( 'vkbm-alert__success', $html );
+			$this->assertStringNotContainsString( 'vkbm-auth-form__resend', $html );
+			$this->assertStringNotContainsString( 'メール認証がまだ完了していません', $html );
+		} finally {
+			delete_transient( $grant_key );
+			$_GET    = $previous_get;
+			$_COOKIE = $previous_cookie;
+			$_SERVER = $previous_server;
+		}
+	}
+
+	/**
 	 * Test that the registration flow stores the email verification token as a SHA-256 hash and never in plain text.
 	 * 登録フロー経由でメール認証トークンが SHA-256 ハッシュとして保存され、平文では保存されないことを確認する。
 	 */
@@ -1336,6 +1446,7 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 				'user_pass'               => 'password123',
 				'user_pass_confirm'       => 'password123',
 				'kana_name'               => 'たろう',
+				'redirect_to'             => home_url( '/reserve/?draft=abc123#old-place' ),
 				'phone_number'            => '090-0000-0000',
 				// Default settings ship with a non-empty terms of service, so the
 				// registration handler requires explicit agreement to succeed.
@@ -1359,6 +1470,13 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 
 			// A redirect to the login page should have been requested. / ログインページへのリダイレクトが要求されているはず。
 			$this->assertNotNull( $shortcodes->last_redirect_url );
+			$this->assertStringEndsWith( '#vkbm-registration-sent', $shortcodes->last_redirect_url );
+			$this->assertStringContainsString( 'draft=abc123', $shortcodes->last_redirect_url );
+			$this->assertStringNotContainsString( '#old-place', $shortcodes->last_redirect_url );
+			$this->assertStringNotContainsString( $user_email, $shortcodes->last_redirect_url );
+			$this->assertSame( 'sent', $shortcodes->notice_cookies['vkbm_verification_notice_type'] );
+			$this->assertStringNotContainsString( $user_email, implode( '', $shortcodes->notice_cookies ) );
+			$this->assertTrue( $shortcodes->has_resend_grant() );
 
 			// The hash meta must be a 64-char lowercase hex SHA-256 digest.
 			// ハッシュメタが 64 文字の小文字 hex で保存されていることを確認する。
@@ -1559,6 +1677,335 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		// Restore globals. / グローバルを復元する。
 		$_GET    = $previous_get;
 		$_SERVER = $previous_server;
+	}
+
+	/**
+	 * 固定ページでメール認証した後も、予約の一時データへの参照を保持する。
+	 *
+	 * @return void
+	 */
+	public function test_handle_email_verification_keeps_draft_on_page(): void {
+		$previous_get    = $_GET;
+		$previous_server = $_SERVER;
+		$previous_post   = $GLOBALS['post'] ?? null;
+
+		try {
+			$page_id = $this->factory()->post->create(
+				array(
+					'post_type' => 'page',
+					'post_name' => 'reserve',
+				)
+			);
+			$this->go_to( get_permalink( $page_id ) );
+			$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+			$test_cases = array(
+				array(
+					'name'     => '予約の一時データあり',
+					'draft'    => 'abc123',
+					'expected' => 'abc123',
+				),
+				array(
+					'name'     => '予約の一時データなし',
+					'draft'    => null,
+					'expected' => null,
+				),
+				array(
+					'name'     => '不正な予約トークン',
+					'draft'    => 'abc/123',
+					'expected' => null,
+				),
+				array(
+					'name'     => '末尾改行のある予約トークン',
+					'draft'    => "abc123\n",
+					'expected' => null,
+				),
+			);
+
+			foreach ( $test_cases as $index => $case ) {
+				// 認証待ちの利用者と有効なリンクを用意する。
+				$user_id = $this->factory()->user->create( array( 'user_login' => 'draft_verify_' . $index ) );
+				$token   = 'draft-verify-' . $index;
+				update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+				update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', $token ) );
+				update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + DAY_IN_SECONDS );
+
+				$_GET = array(
+					'vkbm_verify_email' => $token,
+					'unrelated'         => 'discard',
+				);
+				if ( null !== $case['draft'] ) {
+					$_GET['draft'] = $case['draft'];
+				}
+				$_SERVER['REQUEST_URI'] = '/reserve/?' . http_build_query( $_GET );
+
+				// 認証後の移動先に必要な値だけが残ることを確認する。
+				$shortcodes = new Testable_Auth_Shortcodes( $service );
+				$shortcodes->handle_email_verification();
+				$query = array();
+				parse_str( (string) wp_parse_url( $shortcodes->last_redirect_url, PHP_URL_QUERY ), $query );
+				$this->assertSame( '1', (string) get_user_meta( $user_id, Email_Verification::META_STATUS, true ), $case['name'] );
+				$this->assertSame( $case['expected'], $query['draft'] ?? null, $case['name'] );
+				$this->assertSame( 'login', $query['vkbm_auth'] ?? null, $case['name'] );
+				$this->assertArrayNotHasKey( 'unrelated', $query, $case['name'] );
+				if ( null === $case['draft'] ) {
+					$this->assertSame( add_query_arg( 'vkbm_auth', 'login', get_permalink( $page_id ) ), $shortcodes->last_redirect_url, $case['name'] );
+				}
+			}
+		} finally {
+			$_GET            = $previous_get;
+			$_SERVER         = $previous_server;
+			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の固定ページに戻す。
+		}
+	}
+
+	/**
+	 * 固定ページのログイン・再送フォームの送信先に予約トークンを残す。
+	 *
+	 * @return void
+	 */
+	public function test_render_login_form_keeps_draft_in_action(): void {
+		$previous_get    = $_GET;
+		$previous_post   = $GLOBALS['post'] ?? null;
+		$previous_server = $_SERVER;
+		$previous_cookie = $_COOKIE;
+
+		try {
+			$page_id = $this->factory()->post->create(
+				array(
+					'post_type' => 'page',
+					'post_name' => 'reserve',
+				)
+			);
+			$this->go_to( get_permalink( $page_id ) );
+			$_GET                   = array( 'draft' => 'abc123' );
+			$_SERVER['REQUEST_URI'] = '/reserve/?draft=abc123';
+			$_COOKIE['vkbm_resend_grant'] = 'form-action-grant';
+			$user_id = $this->factory()->user->create();
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', 'form-action-grant' ), $user_id, 600 );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+			$html       = html_entity_decode( $shortcodes->render_login_form(), ENT_QUOTES );
+
+			// 両フォームが同じ送信先を使い、予約トークンを落とさないことを確認する。
+			$this->assertMatchesRegularExpression( '#class="vkbm-auth-form__resend"[^>]*action="[^"]*draft=abc123#', $html );
+			$this->assertMatchesRegularExpression( '#class="vkbm-auth-form"[^>]*action="[^"]*draft=abc123#', $html );
+		} finally {
+			$_GET            = $previous_get;
+			$_SERVER         = $previous_server;
+			$_COOKIE         = $previous_cookie;
+			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の固定ページに戻す。
+		}
+	}
+
+	/**
+	 * 固定ページのログインフォームで、既定の移動先に有効な予約トークンだけを残す。
+	 *
+	 * @return void
+	 */
+	public function test_render_login_form_keeps_draft_in_default_redirect(): void {
+		$previous_get    = $_GET;
+		$previous_post   = $GLOBALS['post'] ?? null;
+		$previous_server = $_SERVER;
+
+		try {
+			$page_id = $this->factory()->post->create( array( 'post_type' => 'page' ) );
+			$this->go_to( get_permalink( $page_id ) );
+			$page_url = get_permalink( $page_id );
+			$service  = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+			$test_cases = array(
+				array(
+					'name'     => '既定値と有効な予約トークン',
+					'draft'    => 'abc123',
+					'atts'     => array(),
+					'expected' => add_query_arg( 'draft', 'abc123', $page_url ),
+				),
+				array(
+					'name'     => '明示した移動先',
+					'draft'    => 'abc123',
+					'atts'     => array( 'redirect' => home_url( '/chosen/' ) ),
+					'expected' => home_url( '/chosen/' ),
+				),
+				array(
+					'name'     => '予約トークンなし',
+					'draft'    => null,
+					'atts'     => array(),
+					'expected' => $page_url,
+				),
+				array(
+					'name'     => '不正な予約トークン',
+					'draft'    => 'abc/123',
+					'atts'     => array(),
+					'expected' => $page_url,
+				),
+				array(
+					'name'     => '末尾改行のある予約トークン',
+					'draft'    => "abc123\n",
+					'atts'     => array(),
+					'expected' => $page_url,
+				),
+			);
+
+			foreach ( $test_cases as $case ) {
+				// 固定ページのパーマリンクにクエリがない状態でフォームを描画する。
+				$_GET                   = null === $case['draft'] ? array() : array( 'draft' => $case['draft'] );
+				$_SERVER['REQUEST_URI'] = '/reserve/?' . http_build_query( $_GET );
+				$shortcodes             = new Testable_Auth_Shortcodes( $service );
+				$html                   = html_entity_decode( $shortcodes->render_login_form( $case['atts'] ), ENT_QUOTES );
+
+				$this->assertStringContainsString( 'name="redirect_to" value="' . $case['expected'] . '"', $html, $case['name'] );
+			}
+		} finally {
+			$_GET            = $previous_get;
+			$_SERVER         = $previous_server;
+			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の固定ページに戻す。
+		}
+	}
+
+	/**
+	 * 固定ページの登録フォームで、既定の移動先に有効な予約トークンだけを残す。
+	 *
+	 * @return void
+	 */
+	public function test_render_registration_form_keeps_draft_in_default_redirect(): void {
+		$previous_get    = $_GET;
+		$previous_post   = $GLOBALS['post'] ?? null;
+		$previous_server = $_SERVER;
+
+		try {
+			update_option( 'users_can_register', 1 );
+			$page_id = $this->factory()->post->create( array( 'post_type' => 'page' ) );
+			$this->go_to( get_permalink( $page_id ) );
+			$page_url = get_permalink( $page_id );
+			$service  = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+			$test_cases = array(
+				array(
+					'name'     => '既定値と有効な予約トークン',
+					'draft'    => 'abc123',
+					'atts'     => array(),
+					'expected' => add_query_arg( 'draft', 'abc123', $page_url ),
+				),
+				array(
+					'name'     => '明示した移動先',
+					'draft'    => 'abc123',
+					'atts'     => array( 'redirect' => home_url( '/chosen/' ) ),
+					'expected' => home_url( '/chosen/' ),
+				),
+				array(
+					'name'     => '予約トークンなし',
+					'draft'    => null,
+					'atts'     => array(),
+					'expected' => $page_url,
+				),
+				array(
+					'name'     => '不正な予約トークン',
+					'draft'    => 'abc/123',
+					'atts'     => array(),
+					'expected' => $page_url,
+				),
+			);
+
+			foreach ( $test_cases as $case ) {
+				// 固定ページのパーマリンクにクエリがない状態でフォームを描画する。
+				$_GET                   = null === $case['draft'] ? array() : array( 'draft' => $case['draft'] );
+				$_SERVER['REQUEST_URI'] = '/reserve/?' . http_build_query( $_GET );
+				$shortcodes             = new Testable_Auth_Shortcodes( $service );
+				$html                   = html_entity_decode( $shortcodes->render_registration_form( $case['atts'] ), ENT_QUOTES );
+
+				$this->assertStringContainsString( 'name="redirect_to" value="' . $case['expected'] . '"', $html, $case['name'] );
+			}
+		} finally {
+			$_GET            = $previous_get;
+			$_SERVER         = $previous_server;
+			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の固定ページに戻す。
+		}
+	}
+
+	/**
+	 * 固定ページの登録フォームで、有効な予約トークンだけを送信先に残す。
+	 *
+	 * @return void
+	 */
+	public function test_render_registration_form_keeps_draft_in_action(): void {
+		$previous_get    = $_GET;
+		$previous_post   = $GLOBALS['post'] ?? null;
+		$previous_server = $_SERVER;
+
+		try {
+			update_option( 'users_can_register', 1 );
+			$page_id = $this->factory()->post->create( array( 'post_type' => 'page' ) );
+			$this->go_to( get_permalink( $page_id ) );
+			$page_url = get_permalink( $page_id );
+			$service  = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+
+			$test_cases = array(
+				array(
+					'name'     => '有効な予約トークン',
+					'draft'    => 'abc123',
+					'expected' => add_query_arg( 'draft', 'abc123', add_query_arg( 'vkbm_auth', 'register', $page_url ) ),
+				),
+				array(
+					'name'     => '予約トークンなし',
+					'draft'    => null,
+					'expected' => add_query_arg( 'vkbm_auth', 'register', $page_url ),
+				),
+				array(
+					'name'     => '不正な予約トークン',
+					'draft'    => 'abc/123',
+					'expected' => add_query_arg( 'vkbm_auth', 'register', $page_url ),
+				),
+			);
+
+			foreach ( $test_cases as $case ) {
+				// POST 後の再描画で参照する送信先を、リクエストの予約トークンごとに検証する。
+				$_GET                   = null === $case['draft'] ? array() : array( 'draft' => $case['draft'] );
+				$_SERVER['REQUEST_URI'] = '/reserve/?' . http_build_query( $_GET );
+				$shortcodes             = new Testable_Auth_Shortcodes( $service );
+				$html                   = html_entity_decode( $shortcodes->render_registration_form(), ENT_QUOTES );
+
+				$this->assertStringContainsString( 'id="vkbm-provider-register-form" class="vkbm-auth-form" method="post" action="' . $case['expected'] . '"', $html, $case['name'] );
+			}
+		} finally {
+			$_GET            = $previous_get;
+			$_SERVER         = $previous_server;
+			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の固定ページに戻す。
+		}
+	}
+
+	/**
+	 * REST 描画時はリクエストの GET に予約トークンがなくても、渡された送信先から保持する。
+	 *
+	 * @return void
+	 */
+	public function test_render_login_form_keeps_action_url_draft_without_request_draft(): void {
+		$previous_get    = $_GET;
+		$previous_cookie = $_COOKIE;
+
+		try {
+			$_GET = array();
+			$_COOKIE['vkbm_resend_grant'] = 'rest-form-grant';
+			$user_id = $this->factory()->user->create();
+			update_user_meta( $user_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+			set_transient( 'vkbm_resend_grant_' . hash( 'sha256', 'rest-form-grant' ), $user_id, 600 );
+
+			$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$shortcodes = new Testable_Auth_Shortcodes( $service );
+			$html       = html_entity_decode(
+				$shortcodes->render_login_form( array( 'action_url' => home_url( '/reserve/?draft=abc123' ) ) ),
+				ENT_QUOTES
+			);
+
+			// ログインと再送が同じ予約ページへ戻ることを確かめる。
+			$this->assertMatchesRegularExpression( '#class="vkbm-auth-form__resend"[^>]*action="[^"]*draft=abc123#', $html );
+			$this->assertMatchesRegularExpression( '#class="vkbm-auth-form"[^>]*action="[^"]*draft=abc123#', $html );
+		} finally {
+			$_GET    = $previous_get;
+			$_COOKIE = $previous_cookie;
+		}
 	}
 
 	/**
@@ -1864,9 +2311,16 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 				'expected_link_prefix' => 'https://example.com/sub/reserve/?vkbm_verify_email=',
 				'expected_redirect'    => 'https://example.com/sub/reserve/?vkbm_auth=login',
 			),
+			array(
+				'test_condition_name' => '固定ページで予約の一時データあり',
+				'home'                => 'https://example.com',
+				'request_uri'         => '/reserve/?draft=abc123&vkbm_auth=login',
+				'page'                => true,
+			),
 		);
 
 		$previous_post_data = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- テスト後に元へ戻すための退避。
+		$previous_get       = $_GET;
 		$previous_server    = $_SERVER;
 		$previous_cookie    = $_COOKIE;
 		$previous_post      = isset( $GLOBALS['post'] ) ? $GLOBALS['post'] : null;
@@ -1889,6 +2343,12 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			$wp->request     = '';
 
 			$service = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+			$page_id = $this->factory()->post->create(
+				array(
+					'post_type' => 'page',
+					'post_name' => 'reserve',
+				)
+			);
 
 			foreach ( $test_cases as $index => $case ) {
 				// サイトアドレスを差し替える。
@@ -1896,6 +2356,7 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 					return $case['home'];
 				};
 				add_filter( 'pre_option_home', $home_filter );
+				$GLOBALS['post'] = ! empty( $case['page'] ) ? get_post( $page_id ) : null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- 固定ページと init 時点を切り替える。
 
 				// 未認証の利用者と、再送の使い捨て許可を用意する。
 				$user_id = $this->factory()->user->create(
@@ -1910,6 +2371,8 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 
 				$_SERVER['REQUEST_METHOD']    = 'POST';
 				$_SERVER['REQUEST_URI']       = $case['request_uri'];
+				$_GET                         = array();
+				parse_str( (string) wp_parse_url( $case['request_uri'], PHP_URL_QUERY ), $_GET );
 				$_COOKIE['vkbm_resend_grant'] = $grant_token;
 				$_POST                        = array(
 					'vkbm_resend_verification_form'  => '1',
@@ -1920,13 +2383,25 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 				$sent_message = '';
 				$shortcodes   = new Testable_Auth_Shortcodes( $service );
 				$shortcodes->handle_form_submission();
+				$expected_link_prefix = ! empty( $case['page'] )
+					? add_query_arg( 'draft', 'abc123', get_permalink( $page_id ) ) . '&vkbm_verify_email='
+					: $case['expected_link_prefix'];
+				$expected_redirect = ! empty( $case['page'] )
+					? add_query_arg(
+						array(
+							'vkbm_auth' => 'login',
+							'draft'     => 'abc123',
+						),
+						get_permalink( $page_id )
+					)
+					: $case['expected_redirect'];
 
 				// メール本文から認証リンクを取り出して確認する。
 				$this->assertSame( 1, preg_match( '#https?://\S+vkbm_verify_email=\S+#', $sent_message, $matches ), $case['test_condition_name'] . '（認証リンクが本文にあること）' );
-				$this->assertStringStartsWith( $case['expected_link_prefix'], $matches[0], $case['test_condition_name'] . '（認証リンク）' );
+				$this->assertStringStartsWith( $expected_link_prefix, $matches[0], $case['test_condition_name'] . '（認証リンク）' );
 
 				// 再送後の戻り先を確認する。
-				$this->assertSame( $case['expected_redirect'], $shortcodes->last_redirect_url, $case['test_condition_name'] . '（再送後の戻り先）' );
+				$this->assertSame( $expected_redirect, $shortcodes->last_redirect_url, $case['test_condition_name'] . '（再送後の戻り先）' );
 
 				remove_filter( 'pre_option_home', $home_filter );
 				$home_filter = null;
@@ -1938,6 +2413,7 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			}
 			remove_filter( 'pre_wp_mail', $mail_filter, 10 );
 			$_POST           = $previous_post_data;
+			$_GET            = $previous_get;
 			$_SERVER         = $previous_server;
 			$_COOKIE         = $previous_cookie;
 			$GLOBALS['post'] = $previous_post; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- テスト前の値に戻す。
@@ -3395,5 +3871,57 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		} finally {
 			$_GET = $previous_get;
 		}
+	}
+
+	/**
+	 * #1121: render_login_form() の「新規登録はこちら」のリンクを、ユーザー登録の設定と
+	 * 渡されたリンク先に応じて出し分けること（登録を受け付けていなければ、指定があっても出さない）。
+	 */
+	public function test_render_login_form(): void {
+		$service    = new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() );
+		$shortcodes = new Auth_Shortcodes( $service );
+		$original   = get_option( 'users_can_register' );
+
+		$test_cases = [
+			[
+				'test_condition_name' => '登録あり・リンク先の指定あり => 指定したリンク先を出す',
+				'users_can_register'  => '1',
+				'register_url'        => 'https://example.com/booking/?vkbm_auth=register',
+				'expected_href'       => 'https://example.com/booking/?vkbm_auth=register',
+			],
+			[
+				'test_condition_name' => '登録あり・リンク先の指定なし => コアの登録画面へのリンクを出す',
+				'users_can_register'  => '1',
+				'register_url'        => '',
+				'expected_href'       => wp_registration_url(),
+			],
+			[
+				'test_condition_name' => '登録なし・リンク先の指定あり => リンクを出さない',
+				'users_can_register'  => '0',
+				'register_url'        => 'https://example.com/booking/?vkbm_auth=register',
+				'expected_href'       => null,
+			],
+			[
+				'test_condition_name' => '登録なし・リンク先の指定なし => リンクを出さない',
+				'users_can_register'  => '0',
+				'register_url'        => '',
+				'expected_href'       => null,
+			],
+		];
+
+		foreach ( $test_cases as $case ) {
+			// ユーザー登録の設定を切り替えてからフォームを描画する。
+			update_option( 'users_can_register', $case['users_can_register'] );
+			$html = $shortcodes->render_login_form( [ 'register_url' => $case['register_url'] ] );
+
+			if ( null === $case['expected_href'] ) {
+				$this->assertStringNotContainsString( 'vkbm-auth-form__footer--register-link', $html, $case['test_condition_name'] );
+			} else {
+				$this->assertStringContainsString( 'vkbm-auth-form__footer--register-link', $html, $case['test_condition_name'] );
+				$this->assertStringContainsString( 'href="' . esc_url( $case['expected_href'] ) . '"', $html, $case['test_condition_name'] );
+			}
+		}
+
+		update_option( 'users_can_register', $original );
 	}
 }

@@ -26,6 +26,7 @@ use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\Resource_Tag_Id_List;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Attendee_Name;
+use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Staff\Staff_Editor;
@@ -196,6 +197,9 @@ class Booking_Draft_Controller {
 					'attendee_name'           => array(
 						'type'      => 'string',
 						'maxLength' => Attendee_Name::MAX_LENGTH,
+					),
+					'custom_fields'           => array(
+						'type' => 'object',
 					),
 				),
 			)
@@ -617,8 +621,9 @@ class Booking_Draft_Controller {
 			// メニューがユーザー貸し切り指定を受け付けない設定なら user_exclusive=false のまま（フラグは無視）。
 		}
 
-		$attendee_name_mode = Attendee_Name::get_mode( $this->settings_repository->get_settings() );
-		$payload            = array(
+		$attendee_name_mode       = Attendee_Name::get_mode( $this->settings_repository->get_settings() );
+		$custom_field_definitions = Booking_Custom_Fields::get_definitions( $this->settings_repository->get_settings() );
+		$payload                  = array(
 			'menu_id'                   => $menu_id,
 			'resource_id'               => $resource_id,
 			// #431: リソースタグ絞り込み（ターム ID配列・AND条件）。予約確定時の再検証・
@@ -657,6 +662,8 @@ class Booking_Draft_Controller {
 			'nomination_fee'            => $nomination_fee,
 			'owner_user_id'             => (int) get_current_user_id(),
 			'attendee_name'             => 'disabled' === $attendee_name_mode ? '' : Attendee_Name::sanitize( $params['attendee_name'] ?? '' ),
+			// 予約時の入力項目の回答（#1147）。今の設定にある項目だけを、上限に切り詰めて持つ。確定時に確定時点の設定で選び直す。
+			'custom_fields'             => Booking_Custom_Fields::truncate_values( Booking_Custom_Fields::sanitize_values( $params['custom_fields'] ?? array(), $custom_field_definitions, true ), $custom_field_definitions ),
 		);
 
 		if ( null !== $lodging_stay ) {

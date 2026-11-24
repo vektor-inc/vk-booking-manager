@@ -5,12 +5,17 @@ import { createInterpolateElement } from '@wordpress/element';
  * 「どちらでも」のときにだけ、ゲストの入力欄の上へ出す案内。
  * 会員登録済みのお客様が、ログイン・新規登録の欄へ切り替えるための導線。
  *
- * @param {Object}   props            プロパティ。
- * @param {Function} props.onLogin    [ログイン] を押したときの処理。
- * @param {Function} props.onRegister [新規登録] を押したときの処理。
+ * @param {Object}   props                     プロパティ。
+ * @param {Function} props.onLogin             [ログイン] を押したときの処理。
+ * @param {Function} props.onRegister          [新規登録] を押したときの処理。
+ * @param {boolean}  [props.showRegister=true] [新規登録] を出すか（ユーザー登録を受け付けていないときは false。#1121）。
  * @return {JSX.Element} 案内の段落。
  */
-export const GuestLoginPrompt = ( { onLogin, onRegister } ) => (
+export const GuestLoginPrompt = ( {
+	onLogin,
+	onRegister,
+	showRegister = true,
+} ) => (
 	<p className="vkbm-confirm__guest-login-prompt">
 		{ createInterpolateElement(
 			__(
@@ -26,14 +31,19 @@ export const GuestLoginPrompt = ( { onLogin, onRegister } ) => (
 					/>
 				),
 			}
-		) }{ ' ' }
-		<button
-			type="button"
-			className="vkbm-confirm__link-button"
-			onClick={ onRegister }
-		>
-			{ __( 'Sign up', 'vk-booking-manager' ) }
-		</button>
+		) }
+		{ showRegister && (
+			<>
+				{ ' ' }
+				<button
+					type="button"
+					className="vkbm-confirm__link-button"
+					onClick={ onRegister }
+				>
+					{ __( 'Sign up', 'vk-booking-manager' ) }
+				</button>
+			</>
+		) }
 	</p>
 );
 

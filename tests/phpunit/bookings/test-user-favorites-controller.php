@@ -86,6 +86,8 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 
 	/**
 	 * メニューに紐づかないスタッフを指名すると拒否されることを検証する。
+	 *
+	 * 無料版はメニュー側の担当設定を使わないため（#1144）、公開中のスタッフであれば登録できる。
 	 */
 	public function test_create_with_unassignable_resource_is_rejected(): void {
 		$user_id = $this->factory()->user->create();
@@ -99,6 +101,12 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 
 		$controller = new User_Favorites_Controller();
 		$response   = $controller->create_favorite( $this->build_create_request( $menu_id, $not_assignable ) );
+
+		if ( ! Staff_Editor::is_enabled() ) {
+			$this->assertInstanceOf( WP_REST_Response::class, $response );
+			$this->assertSame( 201, $response->get_status() );
+			return;
+		}
 
 		$this->assertInstanceOf( WP_Error::class, $response );
 		$this->assertSame( 'invalid_resource', $response->get_error_code() );
@@ -127,7 +135,7 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 	 * 「すべてのリソースが担当できる」（_vkbm_staff_all、#485）のメニューでは、個別チェックに
 	 * 含まれない公開中スタッフでもお気に入りに登録できることを検証する。
 	 *
-	 * 無料版では「すべて」フラグを無視するため、個別選択に含まれないスタッフは従来どおり拒否される。
+	 * 無料版はメニュー側の担当設定（「すべて」フラグ・個別選択）を使わないため（#1144）、公開中のスタッフであれば登録できる。
 	 * 下書き（非公開）のスタッフは Pro / Free とも拒否される。
 	 */
 	public function test_create_with_all_staff_menu(): void {
@@ -144,7 +152,6 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 				'post_status' => 'draft',
 			)
 		);
-		$is_pro        = Staff_Editor::is_enabled();
 
 		// 個別チェックは $checked_staff のみだが、「すべて」を選んでいる。
 		update_post_meta( $menu_id, '_vkbm_staff_ids', array( $checked_staff ) );
@@ -157,9 +164,9 @@ class User_Favorites_Controller_Test extends WP_UnitTestCase {
 				'expected_code'       => null,
 			),
 			array(
-				'test_condition_name' => '個別チェックの無い公開中スタッフ => Pro版は「すべて」で登録できる、Free版はフラグを無視して invalid_resource',
+				'test_condition_name' => '個別チェックの無い公開中スタッフ => Pro版は「すべて」で登録できる、Free版は担当設定を使わないので登録できる',
 				'resource_id'         => $other_staff,
-				'expected_code'       => $is_pro ? null : 'invalid_resource',
+				'expected_code'       => null,
 			),
 			array(
 				'test_condition_name' => '下書き（非公開）のスタッフ => 「すべて」でも invalid_resource（異常系）',

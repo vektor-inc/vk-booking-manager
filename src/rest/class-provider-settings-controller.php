@@ -17,6 +17,7 @@ use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Attendee_Name;
+use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\Staff\Staff_Editor;
@@ -98,9 +99,7 @@ class Provider_Settings_Controller {
 		$nomination_fee_label = vkbm_get_nomination_fee_label();
 		$provider_name        = isset( $settings['provider_name'] ) ? (string) $settings['provider_name'] : '';
 		$provider_logo_id     = isset( $settings['provider_logo_id'] ) ? (int) $settings['provider_logo_id'] : 0;
-		$reservation          = Reservation_Page_Url::resolve_usable(
-			isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : ''
-		);
+		$reservation          = Reservation_Page_Url::get_url( $settings ); // 選んだ固定ページ、または「その他」の URL の使える URL（JS 側の受け取り方は変えない）。
 		$show_menu_search     = ! empty( $settings['reservation_show_menu_search'] );
 		// #431: 「リソースタグ検索」。タクソノミー自体が Pro 版でしか登録されないため、
 		// 万一 Free 版で設定値が残っていても taxonomy_exists() で実効的に無効化する。
@@ -204,8 +203,13 @@ class Provider_Settings_Controller {
 			// 数量の見出し（実効値）と単位（実効値。null はロケール既定に解決済み）。
 			'guests_count_label'                 => $guests_count_label,
 			'guests_unit_label'                  => $guests_unit_label,
+			// メニューの呼び方（実効値。空欄なら「メニュー」に解決済み）と複数形（空欄なら単数形に解決済み）。
+			'menu_label'                         => vkbm_get_menu_label(),
+			'menu_label_plural'                  => vkbm_get_menu_label_plural(),
 			'booking_attendee_name_mode'         => Attendee_Name::get_mode( $settings ),
 			'booking_attendee_name_label'        => Attendee_Name::get_label( $settings ),
+			// 予約時の入力項目（#1147）。確認画面が設定した順に入力欄を並べるために読む。
+			'booking_custom_fields'              => Booking_Custom_Fields::get_public_definitions( $settings ),
 			// 宿泊予約の住所入力を必須にするか。
 			'lodging_address_required'           => (bool) ( $settings['lodging_address_required'] ?? true ),
 			// お客様の電話番号を必須にするか。会員登録・プロフィール編集・ゲスト予約の入力チェックが読む。
@@ -256,7 +260,7 @@ class Provider_Settings_Controller {
 
 		$website_url = self::resolve_footer_website_url(
 			$read_text( 'provider_website_url' ),
-			$read_text( 'reservation_page_url' )
+			Reservation_Page_Url::get_configured_url( $settings )
 		);
 
 		return array(
@@ -298,7 +302,7 @@ class Provider_Settings_Controller {
 	 * 同じページへのリンクになるため空文字を返す。予約ページURLが未入力なら表示する。
 	 *
 	 * @param string $website_url          BM設定のウェブサイトURL。
-	 * @param string $reservation_page_url BM設定の予約ページURL（未正規化）。
+	 * @param string $reservation_page_url 設定上の予約ページURL（Reservation_Page_Url::get_configured_url()。未入力なら空文字）。
 	 * @return string 表示するウェブサイトURL。表示しないときは空文字。
 	 */
 	private static function resolve_footer_website_url( string $website_url, string $reservation_page_url ): string {

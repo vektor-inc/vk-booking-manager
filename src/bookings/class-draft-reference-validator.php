@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Availability\Availability_Service;
 use WP_Error;
 use function __;
+use function vkbm_get_menu_label_text;
 
 /**
  * 予約メニュー・担当の ID が、予約できる投稿を指していることを確かめるクラス。
@@ -55,7 +56,22 @@ class Draft_Reference_Validator {
 			return null;
 		}
 
-		return new WP_Error( 'invalid_resource', __( 'The selected staff member cannot be assigned to this service menu.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+		return new WP_Error( 'invalid_resource', self::get_resource_not_assignable_message(), array( 'status' => 400 ) );
+	}
+
+	/**
+	 * 選んだ担当（スタッフ・客室）がそのメニューに割り当てられないときのエラー文を返す。
+	 *
+	 * お気に入りの登録（User_Favorites_Controller）でも同じ文を使う。
+	 *
+	 * @return string エラー文。メニューの呼び方を変えていれば、その呼び方を差し込む。
+	 */
+	public static function get_resource_not_assignable_message(): string {
+		return vkbm_get_menu_label_text(
+			__( 'The selected staff member cannot be assigned to this service menu.', 'vk-booking-manager' ),
+			/* translators: %s: menu term set in the settings (e.g. Plan). */
+			__( 'The selected staff member cannot be assigned to this %s.', 'vk-booking-manager' )
+		);
 	}
 
 	/**

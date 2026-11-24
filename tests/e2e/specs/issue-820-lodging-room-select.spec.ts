@@ -355,6 +355,11 @@ test.describe.serial( 'issue #820: 宿泊の客室を選ぶ導線', () => {
 		await expect( page.locator( '.vkbm-lodging__live' ) ).toContainText(
 			`${ PREFIX } Room Aの空きを確認しましたので、予約に進めます。`
 		);
+		// チェックイン予定時刻は選択が必須（#1125）。先頭の選択肢（チェックイン時刻）を選ぶ。
+		// @step チェックイン予定時刻で「15:00」を選ぶ
+		await page
+			.getByLabel( 'チェックイン予定時刻', { exact: true } )
+			.selectOption( '15:00' );
 		// @step 客室を操作せず「予約に進む」を押す
 		const draftRequest = page.waitForRequest(
 			( request ) =>

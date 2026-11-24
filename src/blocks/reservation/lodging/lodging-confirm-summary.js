@@ -1,5 +1,6 @@
 import { __, _n, sprintf } from '@wordpress/i18n';
 import { NightBreakdown } from './night-rates';
+import { getMenuHeading } from '../components/menu-label';
 import './lodging.scss';
 
 /**
@@ -47,6 +48,7 @@ const DateTimeValue = ( { dateTime } ) => (
  *
  * @param {Object}  props
  * @param {string}  props.menuName             プラン名。
+ * @param {string}  props.menuLabel            メニューの呼び方（既定のままなら空文字）。
  * @param {string}  props.roomLabel            客室の呼び方（見出し）。
  * @param {string}  props.roomName             客室名。
  * @param {Object}  props.checkIn              チェックイン（date / time を整形済みの文字列で持つ）。
@@ -66,6 +68,7 @@ const DateTimeValue = ( { dateTime } ) => (
  */
 const LodgingConfirmSummary = ( {
 	menuName,
+	menuLabel = '',
 	roomLabel,
 	roomName,
 	checkIn,
@@ -97,10 +100,7 @@ const LodgingConfirmSummary = ( {
 			label={ __( 'Check-out', 'vk-booking-manager' ) }
 			value={ <DateTimeValue dateTime={ checkOut } /> }
 		/>
-		<SummaryRow
-			label={ __( 'Menu', 'vk-booking-manager' ) }
-			value={ menuName }
-		/>
+		<SummaryRow label={ getMenuHeading( menuLabel ) } value={ menuName } />
 		<SummaryRow label={ roomLabel } value={ roomName } />
 		<SummaryRow label={ guestsLabel } value={ guestsText } />
 		<SummaryRow

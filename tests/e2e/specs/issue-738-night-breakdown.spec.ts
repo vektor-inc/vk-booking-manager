@@ -349,6 +349,11 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		await expect( summaryBox ).toContainText( '¥25,000' );
 
 		// 「予約に進む」で確認画面へ。
+		// チェックイン予定時刻は選択が必須（#1125）。先頭の選択肢（チェックイン時刻）を選ぶ。
+		// @step チェックイン予定時刻で「15:00」を選ぶ
+		await page
+			.getByLabel( 'チェックイン予定時刻', { exact: true } )
+			.selectOption( '15:00' );
 		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );
@@ -410,6 +415,11 @@ test.describe.serial( '宿泊プランの泊ごとの内訳の表示（#738）',
 		);
 
 		// 確認画面は従来どおり「1泊あたりの料金」の行で、泊ごとの内訳は出ない。
+		// チェックイン予定時刻は選択が必須（#1125）。先頭の選択肢（チェックイン時刻）を選ぶ。
+		// @step チェックイン予定時刻で「15:00」を選ぶ
+		await page
+			.getByLabel( 'チェックイン予定時刻', { exact: true } )
+			.selectOption( '15:00' );
 		// @step 「予約に進む」ボタンを押して確認画面へ進む
 		await page.locator( '.vkbm-plan-summary__action' ).first().click();
 		await page.waitForLoadState( 'networkidle', { timeout: 15000 } );

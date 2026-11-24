@@ -32,6 +32,56 @@ use WP_UnitTestCase;
 class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 
 	/**
+	 * 予約項目のエラーを実際の入力へ結び、子設定を必須設定の後に置く。
+	 */
+	public function test_booking_custom_field_error_targets_and_order(): void {
+		$page   = $this->create_page();
+		$method = new \ReflectionMethod( Provider_Settings_Page::class, 'render_booking_custom_field_row' );
+		foreach ( array( 'label', 'choices', 'default_value' ) as $target ) {
+			$html = $method->invoke(
+				$page,
+				'0',
+				array(
+					'id' => 'cf_age',
+					'label' => 'Age',
+					'type' => 'choices' === $target ? 'select' : 'number',
+					'required' => true,
+					'choices' => '',
+					'default_value' => '+1',
+				),
+				'Invalid',
+				$target
+			);
+			$dom = new DOMDocument();
+			@$dom->loadHTML( '<?xml encoding="UTF-8">' . $html ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- テスト用 HTML。
+			$xpath = new DOMXPath( $dom );
+			$this->assertSame( 1, $xpath->query( '//*[@aria-invalid="true" and contains(@name, "[' . $target . ']")]' )->length );
+			$this->assertSame( 1, $xpath->query( '//*[@aria-invalid="true" and @aria-describedby="vkbm-booking-custom-field-0-error"]' )->length );
+			// エラーは対象入力の直後に一度だけ置き、同じ ID を別の場所で使わない。
+			$this->assertSame( 1, $xpath->query( '//*[@id="vkbm-booking-custom-field-0-error"]' )->length );
+			$this->assertSame( 1, $xpath->query( '//*[@id="vkbm-booking-custom-field-0-error" and @role="alert" and text()="Invalid" and preceding-sibling::*[1][@aria-invalid="true" and contains(@name, "[' . $target . ']")]]' )->length );
+			$this->assertSame( 0, $xpath->query( '//*[contains(@class, "vkbm-booking-custom-field-row__actions")]/following-sibling::*[@role="alert"]' )->length );
+			$this->assertSame( 1, $xpath->query( '//fieldset[contains(@class, "vkbm-booking-custom-field-row__type-options")]' )->length );
+			$this->assertSame( 1, $xpath->query( '//select[contains(@name, "[type]")]/preceding-sibling::label[text()="Input field type"]' )->length );
+			$this->assertSame( 1, $xpath->query( '//fieldset[contains(@class, "vkbm-booking-custom-field-row__type-options")]/legend[text()="Type-specific settings"]' )->length );
+			$this->assertLessThan( strpos( $html, '<fieldset' ), strpos( $html, '[required]' ) );
+			$this->assertSame( 1, $xpath->query( '//input[contains(@name, "[default_value]") and @type="text" and @value="+1"]' )->length );
+		}
+		// エラーが無ければ参照先と属性を出さず、別の行には別の ID を使う。
+		$base_value = array(
+			'id'            => 'cf_age',
+			'label'         => 'Age',
+			'type'          => 'number',
+			'required'      => true,
+			'choices'       => '',
+			'default_value' => '1',
+		);
+		$this->assertStringNotContainsString( 'aria-invalid', $method->invoke( $page, '0', $base_value, '' ) );
+		$this->assertStringNotContainsString( '-error"', $method->invoke( $page, '0', $base_value, '' ) );
+		$this->assertStringContainsString( 'id="vkbm-booking-custom-field-1-error"', $method->invoke( $page, '1', $base_value, 'Invalid', 'label' ) );
+	}
+
+	/**
 	 * render_page() のタブ定義の全タブ（保存フォームを持つもの）。
 	 *
 	 * 「連携」タブは保存フォームの外に描画され、設定項目を持たないため対象外。
@@ -49,8 +99,9 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	 */
 	private const NOTATION_TAB_ONLY_KEYS = array( 'currency_symbol', 'tax_label_text' );
 
-	/** 表記設定では常設項目の後に数量の見出しと単位をまとめる。 */
+	/** 表記設定では常設項目（メニューの呼び方を含む）の後に数量の見出しと単位をまとめる。 */
 	public function test_render_page_notation_field_order(): void {
+		// 日本語の画面に固定するため、メニューの呼び方（複数形）の欄は出ない。
 		$expected   = array(
 			'currency_symbol',
 			'tax_label_text',
@@ -59,6 +110,7 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 			'closed_day_label',
 			'menu_loop_reserve_button_label',
 			'menu_loop_detail_button_label',
+			'menu_label',
 			'guests_count_label',
 			'guests_unit_label',
 		);
@@ -76,24 +128,76 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 				'preset'              => 'unknown',
 			),
 		);
-		foreach ( $test_cases as $case ) {
-			// 業種による表示切り替えがあっても、設定行の所属と並びを確認する。
-			update_option( Settings_Repository::OPTION_KEY, array( 'industry_preset' => $case['preset'] ) );
-			$html   = $this->render_tab( $this->create_page(), 'notation' );
-			$dom    = new DOMDocument();
-			$loaded = @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- テスト用 HTML のパース警告を抑制。
-			$this->assertTrue( $loaded, $case['test_condition_name'] );
-			$xpath  = new DOMXPath( $dom );
-			$fields = $xpath->query( '//tr[contains(concat(" ", normalize-space(@class), " "), " vkbm-provider-settings__tab-notation ")]//input[@type="text"]' );
-			$actual = array();
-			foreach ( $fields as $field ) {
-				preg_match( '/^vkbm_provider_settings\[([a-z0-9_]+)\]$/', $field->getAttribute( 'name' ), $matches );
-				$actual[] = $matches[1] ?? '';
+		// 先に走るテストのロケールに左右されないよう、日本語の画面に固定する。
+		$locale_filter = static function () {
+			return 'ja';
+		};
+		add_filter( 'locale', $locale_filter );
+		try {
+			foreach ( $test_cases as $case ) {
+				// 業種による表示切り替えがあっても、設定行の所属と並びを確認する。
+				update_option( Settings_Repository::OPTION_KEY, array( 'industry_preset' => $case['preset'] ) );
+				$html   = $this->render_tab( $this->create_page(), 'notation' );
+				$dom    = new DOMDocument();
+				$loaded = @$dom->loadHTML( '<?xml encoding="UTF-8">' . $html ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- テスト用 HTML のパース警告を抑制。
+				$this->assertTrue( $loaded, $case['test_condition_name'] );
+				$xpath  = new DOMXPath( $dom );
+				$fields = $xpath->query( '//tr[contains(concat(" ", normalize-space(@class), " "), " vkbm-provider-settings__tab-notation ")]//input[@type="text"]' );
+				$actual = array();
+				foreach ( $fields as $field ) {
+					preg_match( '/^vkbm_provider_settings\[([a-z0-9_]+)\]$/', $field->getAttribute( 'name' ), $matches );
+					$actual[] = $matches[1] ?? '';
+				}
+				$this->assertSame( $expected, array_slice( $actual, 0, count( $expected ) ), $case['test_condition_name'] );
+				// リソース名称群と指名表記群も、数量表記より後ろで連続させる。
+				$conditional = array( 'resource_label_singular', 'resource_label_menu', 'resource_label_plural', 'no_nomination_label', 'nomination_fee_label' );
+				$this->assertSame( array_values( array_intersect( $conditional, $actual ) ), array_slice( $actual, count( $expected ) ), $case['test_condition_name'] );
 			}
-			$this->assertSame( $expected, array_slice( $actual, 0, count( $expected ) ), $case['test_condition_name'] );
-			// リソース名称群と指名表記群も、数量表記より後ろで連続させる。
-			$conditional = array( 'resource_label_singular', 'resource_label_menu', 'resource_label_plural', 'no_nomination_label', 'nomination_fee_label' );
-			$this->assertSame( array_values( array_intersect( $conditional, $actual ) ), array_slice( $actual, count( $expected ) ), $case['test_condition_name'] );
+		} finally {
+			remove_filter( 'locale', $locale_filter );
+		}
+	}
+
+	/** 表記設定の「サービスメニューの呼び方」欄は、欄名に「サービス」を含める（#1140）。 */
+	public function test_render_page_notation_service_menu_term_labels(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '複数形のある言語では単数形と複数形の欄名に「Service menu term」を出す',
+				'locale'              => 'en_US',
+				'expected'            => array(
+					'vkbm-menu-label'        => __( 'Service menu term', 'vk-booking-manager' ),
+					'vkbm-menu-label-plural' => __( 'Service menu term (plural)', 'vk-booking-manager' ),
+				),
+			),
+			array(
+				'test_condition_name' => '日本語の画面では単数形の欄だけ出す',
+				'locale'              => 'ja',
+				'expected'            => array(
+					'vkbm-menu-label' => __( 'Service menu term', 'vk-booking-manager' ),
+				),
+			),
+		);
+		foreach ( $test_cases as $case ) {
+			$locale_filter = static function () use ( $case ) {
+				return $case['locale'];
+			};
+			add_filter( 'locale', $locale_filter );
+			try {
+				$html = $this->render_tab( $this->create_page(), 'notation' );
+			} finally {
+				remove_filter( 'locale', $locale_filter );
+			}
+			foreach ( $case['expected'] as $for_id => $label ) {
+				$this->assertStringContainsString( '<label for="' . $for_id . '">' . esc_html( $label ) . '</label>', $html, $case['test_condition_name'] );
+			}
+			if ( 'en_US' === $case['locale'] ) {
+				$this->assertSame( 'Service menu term', $case['expected']['vkbm-menu-label'], $case['test_condition_name'] );
+				$this->assertSame( 'Service menu term (plural)', $case['expected']['vkbm-menu-label-plural'], $case['test_condition_name'] );
+			} else {
+				$this->assertStringNotContainsString( 'vkbm-menu-label-plural', $html, $case['test_condition_name'] );
+			}
+			// 欄名の変更は表示だけで、保存キーは変えない。
+			$this->assertStringContainsString( 'name="vkbm_provider_settings[menu_label]"', $html, $case['test_condition_name'] );
 		}
 	}
 

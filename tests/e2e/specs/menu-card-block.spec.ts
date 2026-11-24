@@ -56,6 +56,8 @@ function createRichServiceMenu(): string {
 		// 料金・所要時間メタ（render_meta_information が読む）。
 		update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
 		update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+		// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+		update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 
 		// サービスタグ（タクソノミー vkbm_service_menu_tag）。
 		wp_set_object_terms( $menu_id, array( 'カードテストタグ' ), 'vkbm_service_menu_tag', false );

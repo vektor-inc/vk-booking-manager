@@ -34,6 +34,7 @@ use function get_post_meta;
 use function in_array;
 use function sprintf;
 use function vkbm_get_resource_label_singular;
+use function vkbm_get_menu_label_text;
 
 /**
  * チェックイン日・チェックアウト日・客室を受け取る泊の経路の、下書き・確定で共通の処理をまとめたクラス。
@@ -179,7 +180,11 @@ class Lodging_Booking {
 		// 対処方法を別の文として案内する（1翻訳関数につき1文）。結合は文末が非ASCIIかで区切りを切り替える join_sentences() に任せる。
 		$message = Nomination_Min_Guests_Message::join_sentences(
 			__( 'We are not currently accepting reservations for this content.', 'vk-booking-manager' ),
-			__( 'Please choose a different menu, or contact the site administrator for assistance.', 'vk-booking-manager' )
+			vkbm_get_menu_label_text(
+				__( 'Please choose a different menu, or contact the site administrator for assistance.', 'vk-booking-manager' ),
+				/* translators: %s: menu term set in the settings (e.g. Plan). */
+				__( 'Please choose a different %s, or contact the site administrator for assistance.', 'vk-booking-manager' )
+			)
 		);
 
 		return new WP_Error( 'reservation_unavailable', $message, array( 'status' => 400 ) );
@@ -193,6 +198,51 @@ class Lodging_Booking {
 	 */
 	public static function is_requested( array $params ): bool {
 		return array_key_exists( 'check_in_date', $params ) || array_key_exists( 'check_out_date', $params );
+	}
+
+	/**
+	 * 到着予定時刻がプランの受付時間内かを判定する（#1125）。
+	 *
+	 * チェックイン時刻より前、または最終チェックイン時刻より後なら範囲外。最終チェックイン時刻が未設定（空文字）なら 23:59 まで受け付ける。
+	 * 30 分の区切りかどうかは判定しない（区切りは予約画面の選びやすさのための仕様で、作りかけの下書きにある 16:45 などを拒否しないため）。
+	 *
+	 * @param string $estimated_check_in_time 到着予定時刻（検証済みの HH:MM。不正値は空文字）。
+	 * @param string $check_in_time           プランのチェックイン時刻（HH:MM）。
+	 * @param string $latest_check_in_time    プランの最終チェックイン時刻（HH:MM）。未設定なら空文字。
+	 * @return bool 範囲内なら true。
+	 */
+	public static function is_estimated_check_in_time_in_range( string $estimated_check_in_time, string $check_in_time, string $latest_check_in_time ): bool {
+		if ( '' === $estimated_check_in_time || $estimated_check_in_time < $check_in_time ) {
+			return false;
+		}
+
+		return '' === $latest_check_in_time || $estimated_check_in_time <= $latest_check_in_time;
+	}
+
+	/**
+	 * 到着予定時刻が受付時間外のときのエラーを返す（#1125）。文言には選べる範囲を入れる。
+	 *
+	 * @param string $check_in_time        プランのチェックイン時刻（HH:MM）。
+	 * @param string $latest_check_in_time プランの最終チェックイン時刻（HH:MM）。未設定なら空文字。
+	 * @return WP_Error invalid_estimated_check_in_time（HTTP 400）。
+	 */
+	private static function invalid_estimated_check_in_time_error( string $check_in_time, string $latest_check_in_time ): WP_Error {
+		if ( '' !== $latest_check_in_time ) {
+			$message = sprintf(
+				/* translators: 1: check-in time (HH:MM), 2: latest check-in time (HH:MM). */
+				__( 'Please choose an estimated check-in time between %1$s and %2$s.', 'vk-booking-manager' ),
+				$check_in_time,
+				$latest_check_in_time
+			);
+		} else {
+			$message = sprintf(
+				/* translators: %s: check-in time (HH:MM). */
+				__( 'Please choose an estimated check-in time at or after %s.', 'vk-booking-manager' ),
+				$check_in_time
+			);
+		}
+
+		return new WP_Error( 'invalid_estimated_check_in_time', $message, array( 'status' => 400 ) );
 	}
 
 	/**
@@ -242,14 +292,11 @@ class Lodging_Booking {
 		// チェックイン・チェックアウトの日時（サイトのタイムゾーン）を作る。
 		$check_in_time  = Service_Menu_Post_Type::get_check_in_time( $menu_id );
 		$check_out_time = Service_Menu_Post_Type::get_check_out_time( $menu_id );
-		// 到着予定時刻を検証する。空室・締切の判定にはプランの開始時刻を使う。
+		// 到着予定時刻を、チェックイン時刻から最終チェックイン時刻までの範囲で検証する。空室・締切の判定にはプランの開始時刻を使う。
+		$latest_check_in_time    = Service_Menu_Post_Type::get_latest_check_in_time( $menu_id );
 		$estimated_check_in_time = Service_Menu_Post_Type::sanitize_time_value( array_key_exists( 'estimated_check_in_time', $args ) ? $args['estimated_check_in_time'] : $check_in_time );
-		if ( '' === $estimated_check_in_time || $estimated_check_in_time < $check_in_time ) {
-			return new WP_Error(
-				'invalid_estimated_check_in_time',
-				__( 'Please enter a check-in time on or after the plan\'s check-in time.', 'vk-booking-manager' ),
-				array( 'status' => 400 )
-			);
+		if ( ! self::is_estimated_check_in_time_in_range( $estimated_check_in_time, $check_in_time, $latest_check_in_time ) ) {
+			return self::invalid_estimated_check_in_time_error( $check_in_time, $latest_check_in_time );
 		}
 		$check_in_at  = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $check_in_date . ' ' . $check_in_time, $timezone );
 		$check_out_at = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $check_out_date . ' ' . $check_out_time, $timezone );

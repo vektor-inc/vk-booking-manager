@@ -147,26 +147,49 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 	 * get_settings() の reservation_page_url が、自サイトのURLだけを返し、旧ドメインのURLは空文字にすることを検証する（issue #1049）。
 	 */
 	public function test_get_settings_reservation_page_url(): void {
+		$published_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$draft_page_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'draft',
+			)
+		);
+
 		$test_cases = array(
 			array(
-				'test_condition_name'  => '相対パス => 自サイトの絶対URL',
-				'reservation_page_url' => '/booking/',
-				'expected'             => home_url( '/booking/' ),
+				'test_condition_name' => '相対パス => 自サイトの絶対URL',
+				'settings'            => array( 'reservation_page_url' => '/booking/' ),
+				'expected'            => home_url( '/booking/' ),
 			),
 			array(
-				'test_condition_name'  => '旧ドメインのURL => 空文字（JS側で旧ドメインへのリンクを作らせない）',
-				'reservation_page_url' => 'https://old.example.com/booking/',
-				'expected'             => '',
+				'test_condition_name' => '旧ドメインのURL => 空文字（JS側で旧ドメインへのリンクを作らせない）',
+				'settings'            => array( 'reservation_page_url' => 'https://old.example.com/booking/' ),
+				'expected'            => '',
 			),
 			array(
-				'test_condition_name'  => '未設定 => 空文字',
-				'reservation_page_url' => '',
-				'expected'             => '',
+				'test_condition_name' => '未設定 => 空文字',
+				'settings'            => array( 'reservation_page_url' => '' ),
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '公開中の固定ページを選択 => そのページのパーマリンク（JS 側の受け取り方は変えない。#1050）',
+				'settings'            => array( 'reservation_page_id' => $published_page_id ),
+				'expected'            => get_permalink( $published_page_id ),
+			),
+			array(
+				'test_condition_name' => '下書きの固定ページを選択 => 空文字',
+				'settings'            => array( 'reservation_page_id' => $draft_page_id ),
+				'expected'            => '',
 			),
 		);
 
 		foreach ( $test_cases as $case ) {
-			update_option( Settings_Repository::OPTION_KEY, array( 'reservation_page_url' => $case['reservation_page_url'] ) );
+			update_option( Settings_Repository::OPTION_KEY, $case['settings'] );
 
 			$controller = new Provider_Settings_Controller( new Settings_Repository() );
 			$data       = $controller->get_settings()->get_data();
@@ -230,7 +253,32 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 	 * build_footer_data() の website_url が、予約ページURLと異なるときだけ返ることを検証する。
 	 */
 	public function test_build_footer_data_website_url(): void {
+		$page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+
 		$test_cases = array(
+			array(
+				'test_condition_name' => '固定ページを選択していて、ウェブサイトURLがそのページのURL => 空文字（#1050）',
+				'settings'            => array(
+					'provider_website_url' => get_permalink( $page_id ),
+					'reservation_page_id'  => $page_id,
+					'reservation_page_url' => '',
+				),
+				'expected'            => '',
+			),
+			array(
+				'test_condition_name' => '固定ページを選択していて、ウェブサイトURLが別のURL => ウェブサイトURLを返す',
+				'settings'            => array(
+					'provider_website_url' => 'https://example.com/',
+					'reservation_page_id'  => $page_id,
+					'reservation_page_url' => 'https://example.com/',
+				),
+				'expected'            => 'https://example.com/',
+			),
 			array(
 				'test_condition_name' => '予約ページURLと別のURL => ウェブサイトURLを返す',
 				'settings'            => array(

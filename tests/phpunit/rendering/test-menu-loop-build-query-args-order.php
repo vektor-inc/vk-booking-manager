@@ -15,6 +15,7 @@ namespace VKBookingManager\Tests\Frontend;
 use ReflectionMethod;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\PostOrder\Post_Order_Manager;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_Query;
 use WP_UnitTestCase;
@@ -41,6 +42,13 @@ class Menu_Loop_Build_Query_Args_Order_Test extends WP_UnitTestCase {
 		$this->post_order_manager = new Post_Order_Manager( array( Service_Menu_Post_Type::POST_TYPE ) );
 		// 本体の登録状況に依存しないよう明示的に登録する（本体の登録と二重になるが処理は冪等）。
 		add_action( 'pre_get_posts', array( $this->post_order_manager, 'apply_default_order' ) );
+		// 担当できるスタッフがいないメニューは一覧に出ない（#1144）ため、「すべて」で担当できる公開中のスタッフを用意する。
+		$this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 	}
 
 	/**
@@ -60,7 +68,7 @@ class Menu_Loop_Build_Query_Args_Order_Test extends WP_UnitTestCase {
 	 * @return int 作成したサービスメニューの投稿ID。
 	 */
 	private function create_menu( string $title, string $post_date, int $menu_order ): int {
-		return (int) $this->factory()->post->create(
+		$menu_id = (int) $this->factory()->post->create(
 			array(
 				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
 				'post_status' => 'publish',
@@ -69,6 +77,9 @@ class Menu_Loop_Build_Query_Args_Order_Test extends WP_UnitTestCase {
 				'menu_order'  => $menu_order,
 			)
 		);
+		update_post_meta( $menu_id, Service_Menu_Post_Type::META_STAFF_ALL, '1' );
+
+		return $menu_id;
 	}
 
 	/**

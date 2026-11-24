@@ -21,6 +21,7 @@ use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connect_Control
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Connection;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Event_Sync;
 use VKBookingManager\Integrations\GoogleCalendar\Google_Calendar_Relay_Client;
+use VKBookingManager\Integrations\SiteGuard\SiteGuard_Rest_Api_Check;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -90,19 +91,18 @@ class Setup_Notices {
 	private ?array $missing_shift_months_cache = null;
 
 	/**
-	 * 予約ページURLの警告情報のキャッシュ（同じリクエストで設定を読み直さないため）。
-	 * 判定済みかどうかは reservation_url_mismatch_loaded で持つ（結果が null の場合と区別するため）。
+	 * 予約ページが使えないときの警告用情報（Reservation_Page_Url::get_problem()）のリクエスト内キャッシュ。
 	 *
-	 * @var array{entered_host:string,site_host:string}|null
+	 * @var array{type:string,entered_host?:string,site_host?:string,page_title?:string}|null
 	 */
-	private ?array $reservation_url_mismatch_cache = null;
+	private ?array $reservation_page_problem_cache = null;
 
 	/**
-	 * 予約ページURLの警告情報を判定済みか。
+	 * 予約ページの警告用情報を判定済みかどうか（null は「警告なし」でもあるため、別に持つ）。
 	 *
 	 * @var bool
 	 */
-	private bool $reservation_url_mismatch_loaded = false;
+	private bool $reservation_page_problem_loaded = false;
 
 	/**
 	 * has_shift_for_month() の判定結果（'年-月' => bool）。transient の中身を 1 リクエスト内で保持する.
@@ -128,6 +128,22 @@ class Setup_Notices {
 	private bool $shift_exists_transient_deleted = false;
 
 	/**
+	 * SiteGuard が予約画面の通信を止めているかの判定（#1154）。
+	 *
+	 * @var SiteGuard_Rest_Api_Check
+	 */
+	private SiteGuard_Rest_Api_Check $siteguard_rest_api_check;
+
+	/**
+	 * コンストラクタ。
+	 *
+	 * @param SiteGuard_Rest_Api_Check|null $siteguard_rest_api_check SiteGuard の判定。null のときは実行中のサイトで判定する（テストで差し替えるための引数）。
+	 */
+	public function __construct( ?SiteGuard_Rest_Api_Check $siteguard_rest_api_check = null ) {
+		$this->siteguard_rest_api_check = $siteguard_rest_api_check ?? new SiteGuard_Rest_Api_Check();
+	}
+
+	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
@@ -135,7 +151,9 @@ class Setup_Notices {
 		add_action( 'admin_notices', array( $this, 'render_shift_auto_register_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_google_calendar_sync_broken_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_holiday_data_expiry_notice' ) );
-		add_action( 'admin_notices', array( $this, 'render_reservation_page_url_mismatch_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_reservation_page_problem_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_unassigned_menu_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_siteguard_rest_api_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_ajax_vkbm_dismiss_notice', array( $this, 'handle_dismiss' ) );
 		add_action( 'vkbm_shift_dashboard_notices', array( $this, 'render_shift_dashboard_notice' ) );
@@ -405,12 +423,12 @@ class Setup_Notices {
 				'action_style'    => 'link',
 			),
 			array(
-				'id'              => 'reservation_page_url',
+				'id'              => 'reservation_page',
 				'capability'      => Capabilities::MANAGE_PROVIDER_SETTINGS,
-				'is_missing'      => fn () => ! $this->has_reservation_page_url(),
+				'is_missing'      => fn () => ! $this->has_reservation_page(),
 				/* translators: %s: item name */
 				'message'         => __( 'Please register %s.', 'vk-booking-manager' ),
-				'primary_label'   => __( 'Reservation page URL', 'vk-booking-manager' ),
+				'primary_label'   => __( 'Reservation page', 'vk-booking-manager' ),
 				'primary_url'     => admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-reservation-page-url' ),
 				'secondary_label' => '',
 				'secondary_url'   => '',
@@ -852,8 +870,9 @@ class Setup_Notices {
 				continue;
 			}
 
-			// 旧ドメインのままの場合は、同じ原因を専用の通知（render_reservation_page_url_mismatch_notice）が案内するので、ここでは重ねて出さない。
-			if ( 'reservation_page_url' === ( $item['id'] ?? '' ) && null !== $this->get_reservation_page_url_mismatch() ) {
+			// 旧ドメインの URL のまま・選んだページが未公開や削除済みの場合は、同じ原因を専用の通知
+			// （render_reservation_page_problem_notice）が案内するので、ここでは重ねて出さない（予約ページの通知は常に1件）。
+			if ( 'reservation_page' === ( $item['id'] ?? '' ) && null !== $this->get_reservation_page_problem() ) {
 				continue;
 			}
 
@@ -952,17 +971,13 @@ class Setup_Notices {
 	}
 
 	/**
-	 * Check if a usable (this site's) reservation page URL is set.
+	 * 使える予約ページ（公開中の固定ページ、またはこのサイトの URL）が設定されているかを判定する。
 	 *
 	 * @return bool
 	 */
-	private function has_reservation_page_url(): bool {
-		$repository = new Settings_Repository();
-		$settings   = $repository->get_settings();
-		$url        = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		// 自サイトのURLでないもの（旧ドメインのまま等）は、未設定と同じ扱いにする。
-		return '' !== Reservation_Page_Url::resolve_usable( $url );
+	private function has_reservation_page(): bool {
+		// 使えないもの（旧ドメインの URL のまま・未公開や削除済みのページ）は、未設定と同じ扱いにする。
+		return '' !== Reservation_Page_Url::get_url( ( new Settings_Repository() )->get_settings() );
 	}
 
 	/**
@@ -1221,6 +1236,33 @@ class Setup_Notices {
 	}
 
 	/**
+	 * BM 設定（vkbm-provider-settings）のよくある質問タブを開いているかを判定する。
+	 *
+	 * @return bool
+	 */
+	private function is_faq_tab_screen(): bool {
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		$tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+
+		return 'vkbm-provider-settings' === $page && 'faq' === $tab;
+	}
+
+	/**
+	 * SiteGuard の「ユーザー名漏えい防御」の設定画面へ、設定を送信した表示かを判定する（#1154）。
+	 *
+	 * SiteGuard は送信された設定を画面の描画中（admin_notices より後）に保存するため、この表示で判定すると
+	 * 保存前の値を使い、直した直後にも警告が残る。値は読まず、送信の有無だけを見る。
+	 *
+	 * @return bool
+	 */
+	private function is_siteguard_settings_save_request(): bool {
+		$page   = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : '';
+
+		return SiteGuard_Rest_Api_Check::SETTINGS_PAGE_SLUG === $page && 'POST' === $method;
+	}
+
+	/**
 	 * Check if current screen is shift post type.
 	 *
 	 * @return bool
@@ -1298,28 +1340,26 @@ class Setup_Notices {
 	}
 
 	/**
-	 * 保存済みの予約ページURLについて、自サイトのURLでないときの警告用情報を返す。
+	 * 保存済みの予約ページについて、設定済みなのに使えないとき（旧ドメインの URL・未公開や削除済みのページ）の警告用情報を返す。
 	 *
-	 * @return array{entered_host:string,site_host:string}|null 警告が要るときだけ配列。
+	 * @return array{type:string,entered_host?:string,site_host?:string,page_title?:string}|null 警告が要るときだけ配列。
 	 */
-	private function get_reservation_page_url_mismatch(): ?array {
-		if ( ! $this->reservation_url_mismatch_loaded ) {
-			$settings = ( new Settings_Repository() )->get_settings();
-
-			$this->reservation_url_mismatch_cache  = Reservation_Page_Url::get_mismatch( isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '' );
-			$this->reservation_url_mismatch_loaded = true;
+	private function get_reservation_page_problem(): ?array {
+		if ( ! $this->reservation_page_problem_loaded ) {
+			$this->reservation_page_problem_cache  = Reservation_Page_Url::get_problem( ( new Settings_Repository() )->get_settings() );
+			$this->reservation_page_problem_loaded = true;
 		}
 
-		return $this->reservation_url_mismatch_cache;
+		return $this->reservation_page_problem_cache;
 	}
 
 	/**
-	 * 予約ページURLが自サイトのURLでないとき（サイトのドメインを移したあとに旧ドメインが残っている等）に警告する。
+	 * 予約ページが設定済みなのに使えないとき（旧ドメインの URL が残っている・選んだ固定ページが未公開やゴミ箱・削除済み）に警告する。
 	 *
 	 * 閉じるボタンは付けない（直すまで予約ボタン等が使えないため、出し続ける）。
-	 * 店舗設定の権限を持つユーザーにだけ、管理画面のどの画面でも表示する。
+	 * 店舗設定の権限を持つユーザーにだけ、管理画面のどの画面でも表示する。予約ページについての通知はこれ1件にまとめる。
 	 */
-	public function render_reservation_page_url_mismatch_notice(): void {
+	public function render_reservation_page_problem_notice(): void {
 		if ( ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
 			return;
 		}
@@ -1329,22 +1369,169 @@ class Setup_Notices {
 			return;
 		}
 
-		$mismatch = $this->get_reservation_page_url_mismatch();
-		if ( null === $mismatch ) {
+		$problem = $this->get_reservation_page_problem();
+		if ( null === $problem ) {
 			return;
 		}
 		?>
-		<div class="notice vkbm-notice vkbm-notice__warning">
-			<h3><?php echo esc_html__( 'Please check the reservation page URL', 'vk-booking-manager' ); ?></h3>
-			<p><?php echo wp_kses( Reservation_Page_Url::build_mismatch_message( $mismatch ), array( 'code' => array() ) ); ?></p>
-			<p><?php echo esc_html__( 'This URL is also used for the "Reservation page" link in the admin menu.', 'vk-booking-manager' ); ?></p>
+		<?php $action = Reservation_Page_Url::get_problem_action( $problem ); ?>
+		<div class="notice vkbm-notice vkbm-notice__warning" id="vkbm-reservation-page-problem-notice">
+			<h3><?php echo esc_html__( 'Please check the reservation page', 'vk-booking-manager' ); ?></h3>
+			<p><?php echo wp_kses( Reservation_Page_Url::build_problem_message( $problem ), array( 'code' => array() ) ); ?></p>
+			<?php // 文面は Booking_Admin::register_reservation_page_menu()（使えないときは BM 設定の予約ページ欄へ）の行き先に合わせている。 ?>
+			<p><?php echo esc_html__( 'Until then, the "Reservation page" item in the admin menu also opens the reservation page field in BM settings.', 'vk-booking-manager' ); ?></p>
 			<div class="vkbm-buttons">
-				<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-reservation-page-url' ) ); ?>">
-					<?php echo esc_html__( 'Set the reservation page URL', 'vk-booking-manager' ); ?>
+				<?php // 行き先は状態ごとに 1 つ（編集画面／ゴミ箱一覧／予約ページの設定欄）。 ?>
+				<a class="button button-primary" href="<?php echo esc_url( $action['url'] ); ?>">
+					<?php echo esc_html( $action['label'] ); ?>
 				</a>
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * SiteGuard WP Plugin の「ユーザー名漏えい防御」が予約画面の通信を止めているとき、除外に書く行と直し方を知らせる（#1154）。
+	 *
+	 * 管理者でログインしたままだと予約画面は正常に見えるため、全管理画面に出す。BM 設定を管理できる人にだけ出す。
+	 * 閉じるボタンは付けず、SiteGuard の設定を直すと出なくなる。同じ手順を載せたよくある質問タブを開いている間は出さない。
+	 */
+	public function render_siteguard_rest_api_notice(): void {
+		if ( ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			return;
+		}
+
+		if ( $this->is_faq_tab_screen() || $this->is_siteguard_settings_save_request() ) {
+			return;
+		}
+
+		if ( ! $this->siteguard_rest_api_check->is_blocking_reservation_requests() ) {
+			return;
+		}
+
+		// 除外に書く行のコピーボタンを動かすスクリプト。通知を出すときだけ読み込む。
+		wp_enqueue_script(
+			'vkbm-admin-copy-field',
+			VKBM_PLUGIN_DIR_URL . 'assets/js/admin-copy-field.js',
+			array(),
+			defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0',
+			true
+		);
+
+		$exclude_line = SiteGuard_Rest_Api_Check::get_required_exclude_line();
+		$field_id     = 'vkbm-siteguard-exclude-line';
+		?>
+		<div class="notice vkbm-notice vkbm-notice__warning" id="vkbm-siteguard-rest-api-notice">
+			<h3><?php echo esc_html__( 'Customers who are not logged in cannot make reservations', 'vk-booking-manager' ); ?></h3>
+			<p>
+				<?php echo esc_html__( 'The "Disable REST API" option of "Block Author Query" in SiteGuard WP Plugin is blocking the requests of the reservation page.', 'vk-booking-manager' ); ?>
+				<?php echo esc_html__( 'The reservation page looks normal while you are logged in as an administrator, but customers who are not logged in cannot see any menus.', 'vk-booking-manager' ); ?>
+			</p>
+			<p><?php echo esc_html__( 'Add the following line to "Excluded REST API Namespaces" in the SiteGuard settings, and save the settings.', 'vk-booking-manager' ); ?></p>
+			<div class="vkbm-copy-field">
+				<label class="screen-reader-text" for="<?php echo esc_attr( $field_id ); ?>"><?php echo esc_html__( 'Line to add to the excluded REST API namespaces', 'vk-booking-manager' ); ?></label>
+				<input type="text" class="vkbm-copy-field__input code" id="<?php echo esc_attr( $field_id ); ?>" value="<?php echo esc_attr( $exclude_line ); ?>" readonly />
+				<button
+					type="button"
+					class="button vkbm-copy-field__button"
+					data-vkbm-copy-target="<?php echo esc_attr( $field_id ); ?>"
+					data-vkbm-copied-message="<?php echo esc_attr__( 'Copied.', 'vk-booking-manager' ); ?>"
+					data-vkbm-copy-failed-message="<?php echo esc_attr__( 'Could not copy. Select the text and copy it.', 'vk-booking-manager' ); ?>"
+				>
+					<?php echo esc_html__( 'Copy', 'vk-booking-manager' ); ?>
+				</button>
+				<span class="vkbm-copy-field__status" aria-live="polite"></span>
+			</div>
+			<div class="vkbm-buttons">
+				<a class="button button-primary" href="<?php echo esc_url( SiteGuard_Rest_Api_Check::get_settings_url() ); ?>">
+					<?php echo esc_html__( 'Open SiteGuard settings', 'vk-booking-manager' ); ?>
+				</a>
+				<a href="<?php echo esc_url( SiteGuard_Rest_Api_Check::get_faq_url() ); ?>">
+					<?php echo esc_html__( 'Detailed steps', 'vk-booking-manager' ); ?>
+				</a>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * 担当できるリソースがいないサービスメニューがあるとき、該当メニューを編集画面へのリンク付きで知らせる（#1144）。
+	 *
+	 * 該当するメニューは予約を受け付けず、メニュー一覧・予約画面の選択肢にも出ないため、
+	 * 直すまで閉じられない形で出す。サービスメニューを編集できる人にだけ出す。
+	 * 無料版（担当は常に基本スタッフ1名）では出さない（判定は get_unassigned_listed_menu_ids()）。
+	 */
+	public function render_unassigned_menu_notice(): void {
+		if ( $this->is_shift_dashboard_screen() ) {
+			return;
+		}
+
+		if ( ! current_user_can( Capabilities::MANAGE_SERVICE_MENUS ) ) {
+			return;
+		}
+
+		$menu_ids = self::get_unassigned_listed_menu_ids();
+		if ( empty( $menu_ids ) ) {
+			return;
+		}
+
+		$resource_label = vkbm_get_resource_label_plural();
+		$heading        = vkbm_get_menu_label_text(
+			sprintf(
+				/* translators: %s: resource label (plural), e.g. "Staff". */
+				__( 'There are service menus with no %s set as in charge.', 'vk-booking-manager' ),
+				$resource_label
+			),
+			/* translators: 1: menu term set in the settings, plural (e.g. Plans). 2: resource label (plural), e.g. "Staff". */
+			__( 'There are %1$s with no %2$s set as in charge.', 'vk-booking-manager' ),
+			array( $resource_label ),
+			true
+		);
+		$instruction = vkbm_get_menu_label_text(
+			sprintf(
+				/* translators: %s: resource label (plural), e.g. "Staff". */
+				__( 'Open each service menu below and select the %s who can be in charge.', 'vk-booking-manager' ),
+				$resource_label
+			),
+			/* translators: 1: menu term set in the settings, plural (e.g. Plans). 2: resource label (plural), e.g. "Staff". */
+			__( 'Open each of the %1$s below and select the %2$s who can be in charge.', 'vk-booking-manager' ),
+			array( $resource_label ),
+			true
+		);
+		?>
+		<div class="notice vkbm-notice vkbm-notice__warning" id="vkbm-unassigned-menu-notice">
+			<h3><?php echo esc_html( $heading ); ?></h3>
+			<p><?php echo esc_html( $instruction ); ?></p>
+			<ul>
+				<?php foreach ( $menu_ids as $menu_id ) : ?>
+					<?php $menu_title = get_the_title( $menu_id ); ?>
+					<li>
+						<a href="<?php echo esc_url( (string) get_edit_post_link( $menu_id, 'raw' ) ); ?>">
+							<?php echo esc_html( '' !== $menu_title ? $menu_title : __( '(no title)', 'vk-booking-manager' ) ); ?>
+						</a>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
+		<?php
+	}
+
+	/**
+	 * お知らせに並べる、担当できるリソースがいないサービスメニューの投稿IDを返す（#1144）。
+	 *
+	 * 公開中・非公開・予約投稿のメニューのうち、アーカイブ済みを除いたものが対象（下書きは予約を受け付けないため含めない）。
+	 *
+	 * @return array<int> 該当するメニューの投稿ID（メニューの並び順）。
+	 */
+	public static function get_unassigned_listed_menu_ids(): array {
+		return array_values(
+			array_filter(
+				Service_Menu_Post_Type::get_menu_ids_without_assignable_staff( array( 'publish', 'private', 'future' ) ),
+				static function ( int $menu_id ): bool {
+					return '1' !== (string) get_post_meta( $menu_id, '_vkbm_is_archived', true );
+				}
+			)
+		);
 	}
 
 	/**

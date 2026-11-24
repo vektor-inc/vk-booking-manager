@@ -6,7 +6,7 @@
  * - 指名なし（resource_id = 0）の自動割当候補が公開中の全リソースになること
  * - 公開中のリソースなら個別チェックが無くても指名できること
  * - 下書き（非公開）のリソースは指名できないこと（staff_not_assigned）
- * - 「選ぶ」かつ個別選択が空のメニューは従来どおり staff_not_configured のままであること
+ * - 「選ぶ」かつ個別選択が空のメニューは、指名の有無に関わらず staff_not_configured になること（#1144）
  * - 「選ぶ」でも、非公開（下書き）のスタッフは自動割当・指名の候補にならないこと（#647）
  * - get_staff_snapshot() が非公開スタッフ・リソース以外の投稿の情報を返さないこと（#647）
  * を、private メソッドのため ReflectionMethod 経由で検証する。
@@ -149,18 +149,39 @@ class Resolve_Staff_Ids_All_Staff_Test extends WP_UnitTestCase {
 				'expected'            => 'staff_not_assigned',
 			),
 			array(
-				'test_condition_name' => '「選ぶ」で個別選択が空・下書きのスタッフを指名 => staff_not_assigned エラー（#647 異常系）',
+				'test_condition_name' => '「選ぶ」で個別選択が空・下書きのスタッフを指名 => 担当がいないので staff_not_configured（#1144 異常系）',
 				'staff_all'           => false,
 				'staff_ids'           => array(),
 				'preferred_staff'     => $draft_d,
-				'expected'            => 'staff_not_assigned',
+				'expected'            => 'staff_not_configured',
 			),
 			array(
-				'test_condition_name' => '「選ぶ」で個別選択が空・公開中のスタッフを指名 => その指名スタッフで受け付ける（#647 正常系・回帰）',
+				'test_condition_name' => '「選ぶ」で個別選択が空・公開中のスタッフを指名 => 指名しても受け付けず staff_not_configured（#1144 異常系）',
 				'staff_all'           => false,
 				'staff_ids'           => array(),
 				'preferred_staff'     => $staff_a,
-				'expected'            => array( $staff_a ),
+				'expected'            => 'staff_not_configured',
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択が下書きだけ・公開中の別スタッフを指名 => 担当がいないので staff_not_configured（#1144 境界値）',
+				'staff_all'           => false,
+				'staff_ids'           => array( $draft_d ),
+				'preferred_staff'     => $staff_a,
+				'expected'            => 'staff_not_configured',
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択あり・担当外の公開中スタッフを指名 => staff_not_assigned エラー（#1144 回帰）',
+				'staff_all'           => false,
+				'staff_ids'           => array( $staff_b ),
+				'preferred_staff'     => $staff_a,
+				'expected'            => 'staff_not_assigned',
+			),
+			array(
+				'test_condition_name' => '「選ぶ」で個別選択あり・担当のスタッフを指名 => その指名スタッフで受け付ける（#1144 正常系）',
+				'staff_all'           => false,
+				'staff_ids'           => array( $staff_a, $staff_b ),
+				'preferred_staff'     => $staff_b,
+				'expected'            => array( $staff_b ),
 			),
 			array(
 				'test_condition_name' => '「選ぶ」で個別選択が下書きだけ・指名なし => 候補が無いので staff_not_configured（#647 境界値）',

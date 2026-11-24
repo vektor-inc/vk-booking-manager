@@ -146,6 +146,8 @@ function seedMenu( title: string ): string {
 		update_post_meta( $menu_id, '_vkbm_allow_multiple_guests', true );
 		update_post_meta( $menu_id, '_vkbm_max_capacity', 2 );
 		delete_post_meta( $menu_id, '_vkbm_price_tiers' );
+		// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+		update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 		echo $menu_id;
 	`;
 	return assertSeededId( wpEvalPhp( phpCode ).trim(), `Menu (${ title })` );
@@ -170,6 +172,8 @@ function seedSimpleMenu( title: string ): string {
 			return;
 		}
 		update_post_meta( $menu_id, '_vkbm_base_price', 4500 );
+		// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+		update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 		echo $menu_id;
 	`;
 	return assertSeededId( wpEvalPhp( phpCode ).trim(), `Menu (${ title })` );

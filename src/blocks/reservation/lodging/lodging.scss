@@ -69,12 +69,15 @@
 	}
 }
 
+.vkbm-calendar__day-available-mark,
 .vkbm-calendar__day-unavailable-mark,
 .vkbm-calendar__day-badge {
 	min-height: 1rem;
 	line-height: 1;
 }
 
+// ○（選べる日）と ×（チェックインできない日）は同じ枠に出すため、大きさと太さをそろえる。
+.vkbm-calendar__day-available-mark,
 .vkbm-calendar__day-unavailable-mark {
 	font-weight: 700;
 }
@@ -89,6 +92,24 @@
 	margin: 0 0 var(--vkbm--spacing--xs, 0.5rem);
 	font-size: var(--vkbm--font-size--sm, 0.875rem);
 	color: inherit;
+}
+
+// 凡例は ○ / × の行を並べたリスト。行頭の印（○ / ×）が文の先頭にあるため、テーマのリスト記号と字下げを打ち消す。
+// テーマの ul の余白・字下げ（.entry-content ul など。詳細度 0,1,1）に負けないよう、親の .vkbm-lodging を付けて外側の余白もここで指定する。
+.vkbm-lodging ul.vkbm-lodging__availability-legend {
+	margin: 0 0 var(--vkbm--spacing--xs, 0.5rem);
+	padding: 0;
+	list-style: none;
+
+	li {
+		margin: 0;
+		padding: 0;
+	}
+
+	// 狭い幅で行が折り返したときに 2 つの項目が 1 つの段落に見えないよう、項目の間を字面の行間より広くする。
+	li + li {
+		margin-top: var(--vkbm--spacing--xs, 0.5rem);
+	}
 }
 
 // 端の日の小ラベル（IN / OUT）。
@@ -339,6 +360,16 @@
 .vkbm-lodging__breakdown :is(h3, h4),
 .vkbm-lodging__rooms-section > .vkbm-lodging__heading {
 	text-box: normal;
+}
+
+// チェックイン予定時刻の直下のエラー（#1125）。style.scss は text-box 非対応のブラウザ向けに、字面の上の余白の分だけ
+// 上の margin を負にしている。この枠の中は上で text-box を normal に戻しているため、その差し引きを打ち消し、
+// セレクト → エラーの見た目の間隔を、対応ブラウザと同じ（親の gap + 字面の上の余白）にする。
+@supports not (text-box: trim-both text) {
+
+	.vkbm-lodging__summary .vkbm-plan-summary__date-error {
+		margin-top: 0;
+	}
 }
 
 .vkbm-lodging__summary-list > .vkbm-lodging__summary-label {

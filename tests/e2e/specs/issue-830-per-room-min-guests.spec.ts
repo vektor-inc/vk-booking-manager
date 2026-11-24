@@ -31,6 +31,8 @@ test.describe( 'issue #830: 料金の単位と最低申し込み人数の表示�
 			update_post_meta( $id, '_vkbm_allow_multiple_guests', true );
 			update_post_meta( $id, '_vkbm_max_capacity', 3 );
 			update_post_meta( $id, '_vkbm_min_capacity', 2 );
+			// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+			update_post_meta( $id, '_vkbm_staff_all', '1' );
 			echo $id;
 		` ).trim();
 	} );

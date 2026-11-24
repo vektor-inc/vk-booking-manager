@@ -336,6 +336,30 @@
 		update( true );
 	}
 
+	/**
+	 * 「時」に「設定しない」（空の値）があるプルダウンで、それを選んでいる間は「分」を無効にする（#1136。最終チェックイン時刻）。
+	 * 無効にした「分」は送信されないため、保存側は「時」の空の値だけで未設定と判定する。
+	 */
+	function initUnsetTimeMinute() {
+		const sync = function ( hourSelect ) {
+			const minuteSelect = document.querySelector(
+				hourSelect.getAttribute( 'data-vkbm-minute-target' )
+			);
+			if ( minuteSelect ) {
+				minuteSelect.disabled = '' === hourSelect.value;
+			}
+		};
+
+		document
+			.querySelectorAll( 'select[data-vkbm-minute-target]' )
+			.forEach( function ( hourSelect ) {
+				sync( hourSelect );
+				hourSelect.addEventListener( 'change', function () {
+					sync( hourSelect );
+				} );
+			} );
+	}
+
 	// 詳細ページの表示方法で「予約ブロック内で表示」を選んでいるときだけ、予約ページURLの注意文を見せる。
 	function initServiceMenuDetailDisplayModeNotice() {
 		const select = document.getElementById(
@@ -351,6 +375,64 @@
 
 		select.addEventListener( 'change', function () {
 			notice.hidden = 'block' !== select.value;
+		} );
+	}
+
+	// 隠す入力欄に不正な値（相対パスなど）が残っていると、ブラウザの入力検証で保存が何も言わずに止まるため、
+	// 隠すときに不正なら読み込み時の値へ戻す。
+	function revertInvalidHiddenInput( input ) {
+		if ( input && ! input.checkValidity() ) {
+			input.value = input.defaultValue;
+		}
+	}
+
+	// 予約ページ（#1050）: 「その他（URL を入力）」を選んだときだけ URL 欄を見せる。
+	// 保存中のページの URL の行と警告は、そのページを選び直したときだけ見せ、見えているものだけを
+	// プルダウンの aria-describedby に並べる（別の選択肢に変えたら隠して参照からも外す）。
+	function initReservationPageSelect() {
+		const select = document.getElementById( 'vkbm-reservation-page-url' );
+		const urlField = document.getElementById(
+			'vkbm-reservation-page-url-field'
+		);
+
+		if ( ! select || ! urlField ) {
+			return;
+		}
+
+		const otherValue = select.dataset.otherValue || 'other';
+		const urlInput = document.getElementById(
+			'vkbm-reservation-page-url-input'
+		);
+		const description = document.getElementById(
+			'vkbm-reservation-page-description'
+		);
+		const savedPageElements = [
+			document.getElementById( 'vkbm-reservation-page-info' ),
+			document.getElementById( 'vkbm-reservation-page-problem' ),
+		].filter( Boolean );
+
+		// 削除済みページでは選択値が空になるため、ページ ID ではなく初期値へ戻ったかで判定する。
+		const initialValue = select.value;
+		select.addEventListener( 'change', function () {
+			const showUrlField = otherValue === select.value;
+			if ( ! showUrlField ) {
+				revertInvalidHiddenInput( urlInput );
+			}
+			urlField.hidden = ! showUrlField;
+
+			savedPageElements.forEach( function ( element ) {
+				element.hidden = initialValue !== select.value;
+			} );
+
+			const describedBy = savedPageElements
+				.filter( function ( element ) {
+					return ! element.hidden;
+				} )
+				.concat( description ? [ description ] : [] )
+				.map( function ( element ) {
+					return element.id;
+				} );
+			select.setAttribute( 'aria-describedby', describedBy.join( ' ' ) );
 		} );
 	}
 
@@ -472,6 +554,13 @@
 		const isContent = 'content' === mode;
 
 		if ( $urlField.length ) {
+			if ( ! isUrl ) {
+				revertInvalidHiddenInput(
+					document.getElementById(
+						'vkbm-provider-privacy-policy-url'
+					)
+				);
+			}
 			$urlField.prop( 'hidden', ! isUrl );
 		}
 
@@ -1298,6 +1387,8 @@
 		initAttendeeNameMode();
 		initIndustryPreset();
 		initServiceMenuDetailDisplayModeNotice();
+		initReservationPageSelect();
+		initUnsetTimeMinute();
 		initUnsavedChangesGuard();
 	} );
 } )( jQuery );

@@ -1332,6 +1332,43 @@ $vkbm-plan-summary-control-height: 44px;
 	gap: 1.25rem;
 }
 
+// 取得エラー時に追加されるヘッダーとエラー枠は別の情報グループなので、
+// モバイル幅でブランド名とメニューの見える間隔より広く離す。
+.vkbm-confirm > .vkbm-confirm__load-error {
+	margin-top: var(--vkbm--spacing--sm, 1rem);
+}
+
+// 選び直し案内だけ、狭い画面で日本語の語中に改行が入るのを防ぐ。
+.vkbm-confirm__load-error.vkbm-alert--compact {
+	line-break: strict;
+	word-break: auto-phrase;
+}
+
+// 通信を止められたときの問い合わせの案内（rest-error-message.js）が、
+// 「受け付けられませ／ん。」「お問い／合わせ」のように語の途中で改行されるのを防ぐ。
+// 文ごとに行を分け、1 行に収まらない狭い幅では文節の区切りで折り返す。共通の .vkbm-alert には当てず、この案内だけに絞る。
+// auto-phrase は html の lang="ja" が前提で、非対応ブラウザでは無視される。
+.vkbm-guest-access-denied {
+	line-break: strict;
+	word-break: auto-phrase;
+}
+
+// auto-phrase だけでは「お問い／合わせ」の位置でも折り返せるため、balance で行の長さをそろえ、
+// 「お手数ですが、お電話で／お問い合わせください。」のように文の中ほどの文節で折り返させる。
+.vkbm-guest-access-denied__line {
+	display: block;
+	text-wrap: balance;
+}
+
+// 下書きの選び直し案内と回復操作は1つのまとまりなので、間は段落どうしと同じ S の間隔にし、
+// 見出し・フッターとの間隔（親の gap 1.25rem）より狭くしてまとまりを保つ。
+.vkbm-confirm__load-error-recovery {
+	display: flex;
+	flex-direction: column;
+	gap: var(--vkbm--spacing--sm, 1rem);
+	margin-top: var(--vkbm--spacing--sm, 1rem);
+}
+
 .vkbm-confirm__summary {
 	border: 1px solid var(--vkbm--color--border, #e0e0e0);
 	border-radius: var(--vkbm--radius--md, 8px);
@@ -1708,6 +1745,7 @@ $vkbm-plan-summary-control-height: 44px;
 	// checkbox・radio を除き、テーマの強い input 指定より白い配色を優先する。
 	.vkbm-confirm__form input:not([type="checkbox"]):not([type="radio"]),
 	.vkbm-confirm__form textarea,
+	.vkbm-confirm__form select,
 	.vkbm-confirm__admin-field input:not([type="checkbox"]):not([type="radio"]),
 	.vkbm-confirm__admin-field textarea,
 	.vkbm-confirm__guest-field input:not([type="checkbox"]):not([type="radio"]),
@@ -1739,6 +1777,7 @@ $vkbm-plan-summary-control-height: 44px;
 
 	.vkbm-confirm__form input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 	.vkbm-confirm__form textarea:focus-visible,
+	.vkbm-confirm__form select:focus-visible,
 	.vkbm-confirm__admin-field input:not([type="checkbox"]):not([type="radio"]):focus-visible,
 	.vkbm-confirm__admin-field textarea:focus-visible,
 	.vkbm-confirm__guest-field input:not([type="checkbox"]):not([type="radio"]):focus-visible,
@@ -1749,6 +1788,33 @@ $vkbm-plan-summary-control-height: 44px;
 
 	.vkbm-confirm__form textarea {
 		min-height: 120px;
+	}
+
+	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])),
+	.vkbm-confirm__form select {
+		min-height: 42px;
+	}
+
+	// 選択肢
+	// -----------------------------------------------------------------------------
+	.vkbm-confirm__custom-radio {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+
+		label {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+		}
+	}
+
+	// 予約について施設への回答（追加した項目・ご要望・備考）のまとまり。
+	// 欄どうし（まとまりの中）は、前後のまとまりとの間隔（.vkbm-confirm の gap: 1.25rem）より狭くする。
+	.vkbm-confirm__answers {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
 	}
 
 	.vkbm-confirm__admin-fields,
@@ -1817,9 +1883,13 @@ $vkbm-plan-summary-control-height: 44px;
 		overflow-wrap: break-word;
 	}
 
-	// エラー箱と入力欄を、エラー文の字面の行間以上離す。
+	// 欄の直下のエラー箱と入力欄を、エラー文の字面の行間以上離す（エラー文が 2 行に折り返しても D ≥ G を保つ）。
+	// 箱の下はアラート既定の margin-bottom を持ち込まず、次の欄との間隔を親の gap だけで決める。
+	.vkbm-confirm__form > .vkbm-alert,
+	.vkbm-confirm__admin-field > .vkbm-alert,
+	.vkbm-confirm__guest-field > .vkbm-alert,
 	.vkbm-confirm__address-field > .vkbm-alert {
-		margin-top: 0.2rem;
+		margin: 0.2rem 0 0;
 	}
 
 	.vkbm-confirm__admin-field textarea {

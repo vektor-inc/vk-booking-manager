@@ -45,16 +45,60 @@
 	margin: 0.35rem 0;
 }
 
+// 狭い幅で見出し・説明文・一覧が「サ／ービス」「いな／い」のように語の途中や長音の前で改行されないようにする。
+// line-break: strict で長音・小書き文字・句読点の前の改行を禁じ、auto-phrase で日本語を文節の区切りで折り返す
+// （auto-phrase 非対応のブラウザは通常の折り返しのまま）。文言は翻訳されるため <br> では区切らない。
+// 1 行に収まらない長い語（英数字が続くメニュー名など）だけは overflow-wrap: anywhere で折り返し、通知の幅からはみ出さないようにする。
+.vkbm-notice :is(h2, h3, h4),
+.vkbm-notice p,
+.vkbm-notice li {
+	line-break: strict;
+	word-break: auto-phrase;
+	overflow-wrap: anywhere;
+}
+
 // 長いドメインが通知の幅からはみ出さず折り返せるようにする。
 .vkbm-notice code,
-.vkbm-reservation-page-url-warning code {
+.vkbm-reservation-page-warning code {
 	overflow-wrap: anywhere;
+}
+
+// 説明文・警告文の中に置く短い行き先リンク（「固定ページを編集する」など）が、語の途中で改行されないようにする。文の折り返し自体は変えない。
+.vkbm-link-nowrap {
+	white-space: nowrap;
 }
 
 // 入力欄の直下に置く警告箱。コアの inline 通知は上の余白が 5px で、警告文の行間より狭く入力欄に貼り付いて見えるため、8px にする。
 // （入力欄との間隔 < 警告箱と説明文の間隔、の大小は保つ。コアの `.wrap div.notice` より詳細度を上げている）
-.vkbm-provider-settings .vkbm-reservation-page-url-warning.notice {
+.vkbm-provider-settings .vkbm-reservation-page-warning.notice {
 	margin-top: 8px;
+}
+
+// 読み取り専用欄とコピーボタン（SiteGuard の除外に書く行など）
+// -----------------------------------------------------------------------------
+// 欄・ボタン・コピー結果を 1 行に並べ、下のボタン群（別のまとまり）とは、説明文どうしより広く離す。
+.vkbm-notice .vkbm-copy-field {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	margin: 0.5rem 0 0.9rem;
+}
+
+.vkbm-notice .vkbm-copy-field__input {
+	width: 12em;
+	max-width: 100%;
+	margin: 0;
+}
+
+// 狭い画面で WordPress の .button に付く margin-bottom（4px）のため、ボタンが欄より上にずれるのを防ぐ。
+.vkbm-notice .vkbm-copy-field__button {
+	margin: 0;
+}
+
+// 1 行のコピー結果が、狭い画面で WordPress の大きな行の高さ（1.75 倍）を引き継ぎ、下のボタン群との間隔が通知の内側の余白より広がるのを防ぐ。
+.vkbm-notice .vkbm-copy-field__status {
+	line-height: 1.4;
 }
 
 .vkbm-notice ul {

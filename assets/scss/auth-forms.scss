@@ -32,11 +32,90 @@
 	color: var(--vkbm--color--link, #1772a2);
 }
 
+// アラートの中のリンクは、上のカードのリンク色ではアラートの背景（エラーの #f8d7da など）に対して 4.5:1 に届かないため、
+// アラートの文字色に合わせたリンク色（alert.scss の --vkbm--alert-link-color）に戻す。上の指定より後に置くこと。
+.vkbm-auth-card .vkbm-alert a:where(:not(.vkbm-button)) {
+	color: var(--vkbm--alert-link-color, currentcolor);
+}
+
+/* ログイン失敗時の、標準のログイン画面への案内（#1111）
+   ========================================================================== */
+// 失敗メッセージ（ul）と案内は別のまとまりのため、案内文とリンクの間より広く空ける。
+.vkbm-auth-card .vkbm-auth-card__native-login-guide {
+	margin: 0.5rem 0 0;
+}
+
+.vkbm-auth-card .vkbm-auth-card__native-login-link {
+	margin: 0.25rem 0 0;
+}
+
 .vkbm-auth-card__description {
 	margin: 0 0 var(--vkbm--spacing--md);
 	font-size: 0.95rem;
 	color: #475569;
 	text-align: center;
+}
+
+// 新規登録後の次の手順と、認証後に使うログインフォーム
+// -----------------------------------------------------------------------------
+.vkbm-auth-card .vkbm-registration-sent {
+	// 箱の内側を見出しと宛先の字面間隔以上に保つ。
+	padding: var(--vkbm--spacing--md, 1.5rem);
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.vkbm-registration-sent__heading {
+	font-size: 1.15rem;
+	line-height: 1.35;
+	line-break: strict;
+	word-break: auto-phrase;
+	text-wrap: balance;
+}
+
+.vkbm-registration-sent__email {
+	// 長い宛先が折り返せず警告枠とページを横に広げるのを防ぐ。
+	overflow-wrap: anywhere;
+}
+
+.vkbm-auth-card .vkbm-alert ol {
+	margin: var(--vkbm--spacing--sm) 0;
+	padding-left: 1.5em;
+}
+
+// 手順と案内文は、狭い幅で語の途中や1文字だけが次の行に落ちにくいよう、語句の単位で折り返す。
+// auto-phrase に対応していないブラウザ（Safari など）でも、最後の行に1文字だけ残るのを text-wrap: pretty で減らす。
+.vkbm-registration-sent :where(li, p) {
+	line-break: strict;
+	word-break: auto-phrase;
+	text-wrap: pretty;
+}
+
+// 「メールが届かない場合」の案内・電話・メールを1つのまとまりにし、
+// まとまりの中の行間（手順の行どうしと同じ）を、手順や再送ボタンとの間より狭くする。
+.vkbm-registration-sent__contact {
+	margin-top: var(--vkbm--spacing--sm, 1rem);
+
+	p {
+		margin: 0;
+	}
+
+	p + p {
+		margin-top: 0.35rem;
+	}
+}
+
+.vkbm-auth-card__login-after-registration summary {
+	cursor: pointer;
+	color: var(--vkbm--color--link, #1772a2);
+	line-break: strict;
+	word-break: auto-phrase;
+	text-wrap: balance;
+}
+
+.vkbm-auth-card__login-after-registration[open] .vkbm-auth-form {
+	margin-top: var(--vkbm--spacing--md);
 }
 
 .vkbm-auth-form__field {
@@ -90,6 +169,38 @@
 .vkbm-auth-form__password-toggle-label {
 
 	@include vkbm-visually-hidden;
+}
+
+/* SiteGuard WP Plugin の画像認証欄（#1111）
+   ========================================================================== */
+// SiteGuard が出力する HTML（p・br・size 属性付きの入力欄）を、他の入力欄と同じ幅・ラベルと入力欄の間隔に揃える。
+.vkbm-auth-form__captcha {
+
+	p {
+		margin: 0;
+	}
+
+	img {
+		display: block;
+		max-width: 100%;
+		height: auto;
+	}
+
+	// ラベルと入力欄の間は br ではなく、他の欄と同じ間隔（.vkbm-auth-form__field の gap）で空ける。
+	br {
+		display: none;
+	}
+
+	// SiteGuard のラベルは文で長く、折り返さないとスマホ幅でカードからはみ出すため、ラベル共通の nowrap を外す。
+	.vkbm-auth-form__label {
+		margin-bottom: 0.35rem;
+		white-space: normal;
+	}
+
+	.vkbm-auth-form__input {
+		box-sizing: border-box;
+		width: 100%;
+	}
 }
 
 .vkbm-auth-form__field-group {
@@ -245,6 +356,15 @@
    ========================================================================== */
 .vkbm-auth-form__resend {
 	margin-top: 0.75rem;
+
+	.vkbm-button {
+		// テーマの横余白や共通ボタンの折り返し禁止で、狭い案内枠からはみ出さないようにする。
+		max-width: 100%;
+		box-sizing: border-box;
+		white-space: normal;
+		overflow-wrap: anywhere;
+		line-height: 1.3;
+	}
 }
 
 @include vkbm-bp-down($vkbm-bp-front-sm) {

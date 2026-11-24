@@ -49,6 +49,7 @@ use function current_user_can;
 use function get_current_user_id;
 use function is_user_logged_in;
 use function vkbm_get_resource_label_plural;
+use function vkbm_get_menu_label_text;
 use function vkbm_get_resource_label_singular;
 
 /**
@@ -1097,6 +1098,32 @@ class Availability_Service {
 	}
 
 	/**
+	 * 指名したスタッフがメニューを担当できないときのエラー文を返す。
+	 *
+	 * @return string エラー文。メニューの呼び方を変えていれば、その呼び方を差し込む。
+	 */
+	private static function get_staff_not_assigned_message(): string {
+		return vkbm_get_menu_label_text(
+			__( 'The specified staff member cannot be in charge of this menu.', 'vk-booking-manager' ),
+			/* translators: %s: menu term set in the settings (e.g. Plan). */
+			__( 'The specified staff member cannot be in charge of this %s.', 'vk-booking-manager' )
+		);
+	}
+
+	/**
+	 * 泊単位の料金ではないメニューで泊の予約を受けたときのエラー文を返す。
+	 *
+	 * @return string エラー文。メニューの呼び方を変えていれば、その呼び方を差し込む。
+	 */
+	private static function get_menu_not_night_unit_message(): string {
+		return vkbm_get_menu_label_text(
+			__( 'This menu is not a plan billed per night.', 'vk-booking-manager' ),
+			/* translators: %s: menu term set in the settings (e.g. Plan). */
+			__( 'This %s is not billed per night.', 'vk-booking-manager' )
+		);
+	}
+
+	/**
 	 * 予約メニューの投稿タイプで、予約できる公開状態の投稿を取得する。
 	 *
 	 * 公開中の投稿を対象にし、権限のあるログイン中のユーザー（can_book_private_menu()）は非公開の投稿も対象にする。
@@ -1108,11 +1135,25 @@ class Availability_Service {
 		$post = get_post( $menu_id );
 
 		if ( ! $post || 'vkbm_service_menu' !== $post->post_type ) {
-			return new WP_Error( 'menu_not_found', __( 'The specified menu was not found.', 'vk-booking-manager' ) );
+			return new WP_Error(
+				'menu_not_found',
+				vkbm_get_menu_label_text(
+					__( 'The specified menu was not found.', 'vk-booking-manager' ),
+					/* translators: %s: menu term set in the settings (e.g. Plan). */
+					__( 'The specified %s was not found.', 'vk-booking-manager' )
+				)
+			);
 		}
 
 		if ( 'publish' !== $post->post_status && ! $this->can_book_private_menu() ) {
-			return new WP_Error( 'menu_not_public', __( 'Menu has not been published.', 'vk-booking-manager' ) );
+			return new WP_Error(
+				'menu_not_public',
+				vkbm_get_menu_label_text(
+					__( 'Menu has not been published.', 'vk-booking-manager' ),
+					/* translators: %s: menu term set in the settings (e.g. Plan). */
+					__( 'The specified %s has not been published.', 'vk-booking-manager' )
+				)
+			);
 		}
 
 		return $post;
@@ -1141,7 +1182,8 @@ class Availability_Service {
 	 * リソース（スタッフ・客室）が、メニューで担当できる公開中のリソースかどうかを返す。
 	 *
 	 * 空き状況の確認（resolve_staff_ids() の指名の判定）と同じ基準で判定する。
-	 * メニューに担当が設定されていればその中に含まれること、担当が未設定なら公開中のリソースであることが条件。
+	 * 公開中のリソースで、メニューの担当に含まれることが条件。担当が未設定のメニューでは、どのリソースも担当できない（#1144）。
+	 * 無料版はメニュー側の担当設定を使わない（担当は常に基本スタッフ1名）ため、公開中のリソースであれば担当できるとする。
 	 *
 	 * @param int $menu_id     メニューの投稿 ID。
 	 * @param int $resource_id リソースの投稿 ID。
@@ -1152,8 +1194,7 @@ class Availability_Service {
 			return false;
 		}
 
-		$assignable = Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id );
-		if ( ! empty( $assignable ) && ! in_array( $resource_id, $assignable, true ) ) {
+		if ( Staff_Editor::is_enabled() && ! in_array( $resource_id, Service_Menu_Post_Type::get_assignable_staff_ids( $menu_id ), true ) ) {
 			return false;
 		}
 
@@ -1174,11 +1215,27 @@ class Availability_Service {
 		}
 
 		if ( '1' === get_post_meta( $post->ID, self::MENU_META_ARCHIVED, true ) ) {
-			return new WP_Error( 'menu_archived', __( 'Archived menus cannot be reserved.', 'vk-booking-manager' ) );
+			return new WP_Error(
+				'menu_archived',
+				vkbm_get_menu_label_text(
+					__( 'Archived menus cannot be reserved.', 'vk-booking-manager' ),
+					/* translators: %s: menu term set in the settings, plural (e.g. Plans). */
+					__( 'Archived %s cannot be reserved.', 'vk-booking-manager' ),
+					array(),
+					true
+				)
+			);
 		}
 
 		if ( '1' === get_post_meta( $post->ID, self::MENU_META_ONLINE_DISABLED, true ) ) {
-			return new WP_Error( 'menu_offline_only', __( 'This menu is not available for online reservation.', 'vk-booking-manager' ) );
+			return new WP_Error(
+				'menu_offline_only',
+				vkbm_get_menu_label_text(
+					__( 'This menu is not available for online reservation.', 'vk-booking-manager' ),
+					/* translators: %s: menu term set in the settings (e.g. Plan). */
+					__( 'This %s is not available for online reservation.', 'vk-booking-manager' )
+				)
+			);
 		}
 
 		// 提供期間が終了したメニューは選べない（直リンクで開かれたときの案内に使う）。
@@ -1186,8 +1243,16 @@ class Availability_Service {
 			return new WP_Error(
 				'menu_service_period_ended',
 				Nomination_Min_Guests_Message::join_sentences(
-					__( 'The service period of this menu has ended.', 'vk-booking-manager' ),
-					__( 'Please choose another menu.', 'vk-booking-manager' )
+					vkbm_get_menu_label_text(
+						__( 'The service period of this menu has ended.', 'vk-booking-manager' ),
+						/* translators: %s: menu term set in the settings (e.g. Plan). */
+						__( 'The service period of this %s has ended.', 'vk-booking-manager' )
+					),
+					vkbm_get_menu_label_text(
+						__( 'Please choose another menu.', 'vk-booking-manager' ),
+						/* translators: %s: menu term set in the settings (e.g. Plan). */
+						__( 'Please choose another %s.', 'vk-booking-manager' )
+					)
 				)
 			);
 		}
@@ -1243,28 +1308,19 @@ class Availability_Service {
 			$staff_ids        = $default_staff_id > 0 ? array( $default_staff_id ) : array();
 		} else {
 			// #485: 担当できるリソースの解決は Service_Menu_Post_Type::get_assignable_staff_ids() に集約
-			// （「すべてのリソースが担当できる」フラグは公開中の全リソースへ展開済み。個別選択が
-			// 空（未設定）のメニューは従来どおり空配列が返り、下の「指名あり→そのまま受け付ける／
-			// 指名なし→staff_not_configured」の扱いは変えない）。
-			$staff_ids = Service_Menu_Post_Type::get_assignable_staff_ids( $menu_post->ID );
-
-			if ( $preferred_staff > 0 ) {
-				if ( empty( $staff_ids ) ) {
-					$staff_ids = array( $preferred_staff );
-				} elseif ( ! in_array( $preferred_staff, $staff_ids, true ) ) {
-					return new WP_Error( 'staff_not_assigned', __( 'The specified staff member cannot be in charge of this menu.', 'vk-booking-manager' ) );
-				} else {
-					$staff_ids = array( $preferred_staff );
-				}
-			}
-
+			// （「すべてのリソースが担当できる」フラグは公開中の全リソースへ展開済み）。
 			// #647: 候補を公開済みのリソースだけに絞る。個別選択に残った非公開（下書き・非公開・
-			// ゴミ箱）のスタッフが自動割当や指名の候補になることと、「選ぶ」かつ個別選択が空の
-			// メニューで任意の ID を指名して非公開スタッフの情報を引き出せることの両方を防ぐ。
+			// ゴミ箱）のスタッフが自動割当や指名の候補になることを防ぐ。
 			// （無料版は上で基本スタッフ1名へ解決済みのため、この絞り込みの対象外）
-			$staff_ids = $this->filter_published_resource_ids( $staff_ids );
-			if ( $preferred_staff > 0 && empty( $staff_ids ) ) {
-				return new WP_Error( 'staff_not_assigned', __( 'The specified staff member cannot be in charge of this menu.', 'vk-booking-manager' ) );
+			$staff_ids = $this->filter_published_resource_ids( Service_Menu_Post_Type::get_assignable_staff_ids( $menu_post->ID ) );
+
+			// #1144: 担当できる公開中のリソースがいないメニューは、指名の有無に関わらず受け付けない
+			// （下の staff_not_configured を返す）。指名なしでは予約できないのに、指名すると誰でも予約できる食い違いを防ぐ。
+			if ( $preferred_staff > 0 && ! empty( $staff_ids ) ) {
+				if ( ! in_array( $preferred_staff, $staff_ids, true ) ) {
+					return new WP_Error( 'staff_not_assigned', self::get_staff_not_assigned_message() );
+				}
+				$staff_ids = array( $preferred_staff );
 			}
 		}
 
@@ -2806,17 +2862,19 @@ class Availability_Service {
 		}
 
 		$payload = array(
-			'check_in_date'      => $check_in_date,
-			'check_out_date'     => $check_out_date,
-			'nights'             => $nights,
-			'timezone'           => $timezone->getName(),
-			'check_in_time'      => $check_in_time,
-			'check_out_time'     => $check_out_time,
-			'rooms'              => $rooms,
+			'check_in_date'        => $check_in_date,
+			'check_out_date'       => $check_out_date,
+			'nights'               => $nights,
+			'timezone'             => $timezone->getName(),
+			'check_in_time'        => $check_in_time,
+			// 予約画面のチェックイン予定時刻の選択肢の終わり（#1125）。未設定なら空文字。
+			'latest_check_in_time' => Service_Menu_Post_Type::get_latest_check_in_time( $menu->ID ),
+			'check_out_time'       => $check_out_time,
+			'rooms'                => $rooms,
 			// 休前日・特定日の料金がある、または1名あたりで予約者区分があるプランで true（キー名は #738 当時のまま）。false のときは画面に区分も内訳も出さない。
-			'rate_tiers_enabled' => $stay_rates['enabled'],
-			'night_rates'        => $stay_rates['night_rates'],
-			'meta'               => array(
+			'rate_tiers_enabled'   => $stay_rates['enabled'],
+			'night_rates'          => $stay_rates['night_rates'],
+			'meta'                 => array(
 				'menu_id'      => $menu->ID,
 				'resource_id'  => $resource_id > 0 ? $resource_id : null,
 				'guests'       => $guests,
@@ -2842,7 +2900,7 @@ class Availability_Service {
 			return $menu;
 		}
 		if ( ! Lodging_Price::is_applicable( $menu->ID ) ) {
-			return new WP_Error( 'menu_not_night_unit', __( 'This menu is not a plan billed per night.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			return new WP_Error( 'menu_not_night_unit', self::get_menu_not_night_unit_message(), array( 'status' => 400 ) );
 		}
 
 		$year  = (int) ( $args['year'] ?? 0 );
@@ -3042,7 +3100,7 @@ class Availability_Service {
 
 		// 泊単位のメニューだけを受け付ける（時間枠のプランは拒否する）。
 		if ( ! Lodging_Price::is_applicable( $menu->ID ) ) {
-			return new WP_Error( 'menu_not_night_unit', __( 'This menu is not a plan billed per night.', 'vk-booking-manager' ), array( 'status' => 400 ) );
+			return new WP_Error( 'menu_not_night_unit', self::get_menu_not_night_unit_message(), array( 'status' => 400 ) );
 		}
 
 		$timezone = wp_timezone();
@@ -3132,7 +3190,14 @@ class Availability_Service {
 		if ( ! $this->is_within_service_period( $menu_settings, $check_in_date ) ) {
 			return new WP_Error(
 				'service_period_out_of_range',
-				__( 'The check-in date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
+				vkbm_get_menu_label_text(
+					__( 'The check-in date is outside the service period of this menu. Please choose another date.', 'vk-booking-manager' ),
+					Nomination_Min_Guests_Message::join_sentences(
+						/* translators: %s: menu term set in the settings (e.g. Plan). */
+						__( 'The check-in date is outside the service period of this %s.', 'vk-booking-manager' ),
+						__( 'Please choose another date.', 'vk-booking-manager' )
+					)
+				),
 				array( 'status' => 400 )
 			);
 		}
@@ -3221,10 +3286,15 @@ class Availability_Service {
 			if ( ! in_array( $resource_id, $assignable, true ) ) {
 				return new WP_Error(
 					'staff_not_assigned',
-					sprintf(
-					/* translators: %s: resource label (singular), e.g. "Room". */
-						__( 'The specified %s cannot be in charge of this menu.', 'vk-booking-manager' ),
-						vkbm_get_resource_label_singular()
+					vkbm_get_menu_label_text(
+						sprintf(
+							/* translators: %s: resource label (singular), e.g. "Room". */
+							__( 'The specified %s cannot be in charge of this menu.', 'vk-booking-manager' ),
+							vkbm_get_resource_label_singular()
+						),
+						/* translators: 1: menu term set in the settings (e.g. Plan), 2: resource label (singular), e.g. "Room". */
+						__( 'The specified %2$s cannot be in charge of this %1$s.', 'vk-booking-manager' ),
+						array( vkbm_get_resource_label_singular() )
 					),
 					array( 'status' => 400 )
 				);

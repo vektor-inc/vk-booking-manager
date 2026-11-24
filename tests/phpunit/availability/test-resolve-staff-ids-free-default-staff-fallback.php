@@ -245,11 +245,11 @@ class Resolve_Staff_Ids_Free_Default_Staff_Fallback_Test extends WP_UnitTestCase
 				'expected_ids'        => array( 'assigned' ),
 			),
 			array(
-				'test_condition_name' => '担当リストが空 + resource_id 明示指定 => 指定IDを使用（正常系・従来どおり）',
+				'test_condition_name' => '担当リストが空 + resource_id 明示指定 => 指名しても受け付けず staff_not_configured エラー（異常系・#1144）',
 				'menu_staff_ids'      => array(),
 				'preferred_staff'     => 'other',
-				'expected_is_error'   => false,
-				'expected_ids'        => array( 'other' ),
+				'expected_is_error'   => true,
+				'expected_code'       => 'staff_not_configured',
 			),
 			array(
 				'test_condition_name' => '担当リストに resource_id が含まれる場合 => そのIDを使用（正常系・従来どおり）',
@@ -263,6 +263,7 @@ class Resolve_Staff_Ids_Free_Default_Staff_Fallback_Test extends WP_UnitTestCase
 				'menu_staff_ids'      => array( 'assigned' ),
 				'preferred_staff'     => 'other',
 				'expected_is_error'   => true,
+				'expected_code'       => 'staff_not_assigned',
 			),
 		);
 
@@ -286,7 +287,7 @@ class Resolve_Staff_Ids_Free_Default_Staff_Fallback_Test extends WP_UnitTestCase
 
 			if ( $case['expected_is_error'] ) {
 				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );
-				$this->assertSame( 'staff_not_assigned', $result->get_error_code(), $case['test_condition_name'] );
+				$this->assertSame( $case['expected_code'], $result->get_error_code(), $case['test_condition_name'] );
 			} else {
 				$this->assertSame( array_map( $resolve, $case['expected_ids'] ), $result, $case['test_condition_name'] );
 			}

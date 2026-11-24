@@ -333,6 +333,8 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 	 * - スタッフ行   : 指名機能ON（staff_enabled=true）のときのみ出力。
 	 * - 人数行       : 複数人予約（guests>1）のときのみ出力。
 	 * - 所要時間/料金行: それぞれの値が空でないときのみ出力。
+	 * - メニュー行   : 「メニューの呼び方」（menu_label）を設定していれば、その呼び方を見出しにする。
+	 *                  空欄・「メニュー」なら今までどおり「Menu: %s」の行を出す（#1129）。
 	 * 1予約は単一スタッフに割り当てられるため、複数スタッフ配分の内訳行は存在しない。
 	 */
 	public function test_get_reservation_information_lines(): void {
@@ -343,6 +345,9 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 		// テストは ja ロケールで実行されるためラベルは翻訳される（例: 'Number of guests: %d' → '人数: %d名'）。
 		// そこで照合キーには「翻訳されるラベル」ではなく「payload に渡した値（センチネル）」を使い、ロケール非依存にする。
 		$status_sentinel = 'STATUS-SENTINEL-XYZ'; // ステータス行が出たときだけ本文に現れる一意な値。
+
+		// 呼び方を変えていないときのメニュー行（翻訳の読み込み状態によらず、本番と同じ翻訳から組み立てる）。
+		$default_menu_line = sprintf( __( 'Menu: %s', 'vk-booking-manager' ), 'メニュー値' );
 
 		// 全ケース共通のベース payload（各ケースで必要な項目だけ上書きする）。
 		// booking_id・日時はガード値（3 など）と重複しない値にして、人数の数値マーカーが他行と衝突しないようにする。
@@ -435,9 +440,39 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 				'contains'     => array( '所要時間値60', '料金値5000' ),
 				'not_contains' => array(),
 			),
+			array(
+				'name'         => 'メニューの呼び方にプランを設定 => プランを見出しにしたメニュー行を出力',
+				'overrides'    => array(),
+				'settings'     => array( 'menu_label' => 'プラン' ),
+				'status_label' => '',
+				'contains'     => array( 'プラン: メニュー値' ),
+				'not_contains' => array( $default_menu_line ),
+			),
+			array(
+				'name'         => 'メニューの呼び方が空欄 => 今までどおりのメニュー行を出力',
+				'overrides'    => array(),
+				'settings'     => array( 'menu_label' => '' ),
+				'status_label' => '',
+				'contains'     => array( $default_menu_line ),
+				'not_contains' => array( 'プラン: ' ),
+			),
+			array(
+				'name'         => 'メニューの呼び方にメニューと入力 => 今までどおりのメニュー行を出力',
+				'overrides'    => array(),
+				'settings'     => array( 'menu_label' => 'メニュー' ),
+				'status_label' => '',
+				'contains'     => array( $default_menu_line ),
+				'not_contains' => array(),
+			),
 		);
 
 		foreach ( $cases as $case ) {
+			// 呼び方を指定したケースだけ設定を保存し、それ以外は未保存にする。
+			delete_option( Settings_Repository::OPTION_KEY );
+			if ( isset( $case['settings'] ) ) {
+				update_option( Settings_Repository::OPTION_KEY, $case['settings'] );
+			}
+
 			$payload = array_merge( $base, $case['overrides'] );
 			$text    = implode( "\n", $method->invoke( $service, $payload, $case['status_label'] ) );
 
@@ -447,6 +482,109 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 			foreach ( $case['not_contains'] as $needle ) {
 				$this->assertStringNotContainsString( $needle, $text, $case['name'] . " => '{$needle}' を含まないべき" );
 			}
+		}
+	}
+
+	/**
+	 * お客様宛の本文で、予約時の入力項目（#1147）の回答が「ご要望・メモ:」の直前に並ぶことを検証する。
+	 */
+	public function test_render_customer_body(): void {
+		$this->assert_custom_field_lines_in_body( 'render_customer_body', 'Request contents/memo:' );
+	}
+
+	/**
+	 * 管理者宛の本文で、予約時の入力項目（#1147）の回答が「備考:」の直前に並ぶことを検証する。
+	 */
+	public function test_render_provider_body(): void {
+		$this->assert_custom_field_lines_in_body( 'render_provider_body', 'Note:' );
+	}
+
+	/**
+	 * 予約を作ってメール本文を組み立て、回答の行と位置を確かめる。
+	 *
+	 * @param string $method      本文を組み立てるメソッド名。
+	 * @param string $memo_header 回答の直後に来るメモの見出し。
+	 */
+	private function assert_custom_field_lines_in_body( string $method, string $memo_header ): void {
+		// 文言の検証は英語（原文）で行う。
+		switch_to_locale( 'en_US' );
+		unload_textdomain( 'vk-booking-manager', true );
+
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$payload = new ReflectionMethod( Booking_Notification_Service::class, 'build_booking_payload' );
+		$payload->setAccessible( true );
+		$render = new ReflectionMethod( Booking_Notification_Service::class, $method );
+		$render->setAccessible( true );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '1 行・複数行・未回答 => 「項目名: 値」、複数行は次の行から、未回答は（なし）',
+				'snapshot'            => array(
+					array(
+						'id'    => 'cf_course',
+						'label' => '夕食のコース',
+						'type'  => 'text',
+						'value' => '和食',
+					),
+					array(
+						'id'    => 'cf_allergy',
+						'label' => 'アレルギー',
+						'type'  => 'textarea',
+						'value' => "えび\nかに",
+					),
+					array(
+						'id'    => 'cf_age',
+						'label' => '代表者の年齢',
+						'type'  => 'text',
+						'value' => '',
+					),
+				),
+				'expected'            => array( '夕食のコース: 和食', 'アレルギー:', "えび\nかに", '代表者の年齢: (none)', $memo_header ),
+			),
+			array(
+				'test_condition_name' => '複数行の項目が未回答 => 同じ行に（なし）',
+				'snapshot'            => array(
+					array(
+						'id'    => 'cf_allergy',
+						'label' => 'アレルギー',
+						'type'  => 'textarea',
+						'value' => '',
+					),
+				),
+				'expected'            => array( 'アレルギー: (none)', $memo_header ),
+			),
+			array(
+				'test_condition_name' => '回答の記録が無い予約 => 行を足さずメモの見出しから続く',
+				'snapshot'            => null,
+				'expected'            => array( $memo_header ),
+			),
+		);
+
+		try {
+			foreach ( $test_cases as $case ) {
+				// 予約を作り、回答の記録を保存する。
+				$booking_id = (int) $this->factory()->post->create(
+					array(
+						'post_type'   => Booking_Post_Type::POST_TYPE,
+						'post_status' => 'publish',
+					)
+				);
+				update_post_meta( $booking_id, '_vkbm_booking_service_start', '2026-10-10 15:00:00' );
+				update_post_meta( $booking_id, '_vkbm_booking_service_end', '2026-10-10 16:00:00' );
+				update_post_meta( $booking_id, '_vkbm_booking_status', 'confirmed' );
+				if ( null !== $case['snapshot'] ) {
+					update_post_meta( $booking_id, '_vkbm_booking_custom_fields', wp_slash( $case['snapshot'] ) );
+				}
+
+				// 本文を組み立て、回答の行がメモの見出しの直前に連続して並ぶかを確かめる。
+				$args  = 'render_customer_body' === $method ? array( $payload->invoke( $service, $booking_id ), 'lead' ) : array( $payload->invoke( $service, $booking_id ), 'Reservation' );
+				$body  = (string) $render->invokeArgs( $service, $args );
+				$block = implode( "\n", $case['expected'] );
+				$this->assertStringContainsString( $block, $body, $case['test_condition_name'] );
+				$this->assertSame( 1, substr_count( $body, $memo_header ), $case['test_condition_name'] . '（メモの見出しは 1 つ）' );
+			}
+		} finally {
+			restore_previous_locale();
 		}
 	}
 

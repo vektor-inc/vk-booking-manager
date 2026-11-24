@@ -417,7 +417,7 @@ class Availability_Controller_Lodging_Test extends WP_UnitTestCase {
 		$this->assertSame( 200, $response->get_status() );
 		$data = $response->get_data();
 		$this->assertSame(
-			array( 'check_in_date', 'check_out_date', 'nights', 'timezone', 'check_in_time', 'check_out_time', 'rooms', 'rate_tiers_enabled', 'night_rates', 'meta' ),
+			array( 'check_in_date', 'check_out_date', 'nights', 'timezone', 'check_in_time', 'latest_check_in_time', 'check_out_time', 'rooms', 'rate_tiers_enabled', 'night_rates', 'meta' ),
 			array_keys( $data ),
 			'レスポンスのキー'
 		);

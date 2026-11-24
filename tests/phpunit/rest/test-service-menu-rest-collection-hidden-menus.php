@@ -14,6 +14,7 @@ declare( strict_types=1 );
 namespace VKBookingManager\Tests\REST;
 
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_REST_Request;
 use WP_UnitTestCase;
@@ -52,6 +53,14 @@ class Service_Menu_Rest_Collection_Hidden_Menus_Test extends WP_UnitTestCase {
 			)
 		);
 
+		// 担当できるスタッフがいないメニューは一覧に出ない（#1144）ため、「すべて」で担当できる公開中のスタッフを用意する。
+		update_post_meta( $menu_id, Service_Menu_Post_Type::META_STAFF_ALL, '1' );
+		$this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 		foreach ( $meta as $key => $value ) {
 			update_post_meta( $menu_id, $key, $value );
 		}

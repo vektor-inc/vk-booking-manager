@@ -131,6 +131,50 @@ class Current_User_Controller_Logout_Redirect_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 予約ページに固定ページを選んでいれば、そのページのパーマリンクを使う（#1050）。
+	 */
+	public function test_reservation_page_id_is_used_when_redirect_is_missing(): void {
+		$page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$this->set_reservation_page_url( 'https://old.example.com/reservation/' );
+		$this->set_reservation_page_id( $page_id );
+
+		$this->assertSame( $this->expected_logout_url( get_permalink( $page_id ) ), $this->fetch_logout_url( null ) );
+	}
+
+	/**
+	 * 選んだ固定ページがゴミ箱なら、残っている URL へ逃がさず home_url を使う（#1050）。
+	 */
+	public function test_trashed_reservation_page_is_not_used_for_logout_redirect(): void {
+		$page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'trash',
+			)
+		);
+		$this->set_reservation_page_url( home_url( '/reservation/' ) );
+		$this->set_reservation_page_id( $page_id );
+
+		$this->assertSame( $this->expected_logout_url( home_url() ), $this->fetch_logout_url( null ) );
+	}
+
+	/**
+	 * 予約ページの固定ページ ID を設定値へ保存する。
+	 *
+	 * @param int $page_id 固定ページ ID。
+	 */
+	private function set_reservation_page_id( int $page_id ): void {
+		$settings                        = get_option( Settings_Repository::OPTION_KEY, array() );
+		$settings                        = is_array( $settings ) ? $settings : array();
+		$settings['reservation_page_id'] = $page_id;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+	}
+
+	/**
 	 * 予約ページ URL を設定値へ保存する。
 	 *
 	 * @param string $url 予約ページ URL。

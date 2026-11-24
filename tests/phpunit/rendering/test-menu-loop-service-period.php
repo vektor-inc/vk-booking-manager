@@ -12,6 +12,7 @@ namespace VKBookingManager\Tests\Frontend;
 use DateTimeImmutable;
 use VKBookingManager\Blocks\Menu_Loop_Block;
 use VKBookingManager\Common\Service_Period;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use WP_UnitTestCase;
 
@@ -54,6 +55,13 @@ class Menu_Loop_Service_Period_Test extends WP_UnitTestCase {
 		$this->original_timezone_string = (string) get_option( 'timezone_string', '' );
 		update_option( 'date_format', 'Y年n月j日' );
 		update_option( 'timezone_string', 'Asia/Tokyo' );
+		// 担当できるスタッフがいないメニューは一覧に出ない（#1144）ため、「すべて」で担当できる公開中のスタッフを用意する。
+		$this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 	}
 
 	/**
@@ -93,6 +101,7 @@ class Menu_Loop_Service_Period_Test extends WP_UnitTestCase {
 		);
 		// 基本料金を設定しておく（カード自体が空にならないようにするため）。
 		update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
+		update_post_meta( $menu_id, Service_Menu_Post_Type::META_STAFF_ALL, '1' );
 		if ( '' !== $start ) {
 			update_post_meta( $menu_id, Service_Period::META_START, $start );
 		}

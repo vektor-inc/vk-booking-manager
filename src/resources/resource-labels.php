@@ -380,6 +380,86 @@ function vkbm_get_guests_count_label(): string {
 }
 
 /**
+ * メニューの呼び方を取得する（デフォルト: Menu / メニュー）。
+ *
+ * 数量の見出しと同じく、設定が空文字の場合は翻訳既定へフォールバックする。
+ * 無料版でも保存値をそのまま返す。
+ *
+ * @return string 保存された呼び方。未保存・空文字の場合は翻訳既定の「メニュー」。
+ */
+function vkbm_get_menu_label(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$label      = isset( $settings['menu_label'] ) ? trim( (string) $settings['menu_label'] ) : '';
+
+	return '' !== $label ? $label : __( 'Menu', 'vk-booking-manager' );
+}
+
+/**
+ * メニューの呼び方（複数形）を取得する。
+ *
+ * 複数形の欄は複数形のある言語の画面にしか出ないため、空文字の場合は
+ * 単数形の呼び方（vkbm_get_menu_label() の実効値）へフォールバックする。
+ *
+ * @return string 保存された複数形。未保存・空文字の場合は単数形の呼び方。
+ */
+function vkbm_get_menu_label_plural(): string {
+	$repository = new Settings_Repository();
+	$settings   = $repository->get_settings();
+	$label      = isset( $settings['menu_label_plural'] ) ? trim( (string) $settings['menu_label_plural'] ) : '';
+
+	return '' !== $label ? $label : vkbm_get_menu_label();
+}
+
+/**
+ * 文に差し込む「メニューの呼び方」を取得する。
+ *
+ * 空欄・「メニュー」（`Menu` / `メニュー` / 翻訳済みの `Menu`）のときは空文字を返す。
+ * 呼び出し側は空文字を見て、今ある文言をそのまま出す（設定を変えていないサイトの表示と、
+ * 追加プラグインでの文言の差し替えを変えないため）。判定は JS 側の
+ * `src/blocks/reservation/components/menu-label.js` の normalizeMenuLabel() と揃える。
+ *
+ * @return string 差し込む呼び方。既定のままなら空文字。
+ */
+function vkbm_get_custom_menu_label(): string {
+	$label          = vkbm_get_menu_label();
+	$default_labels = array( 'Menu', 'メニュー', __( 'Menu', 'vk-booking-manager' ) );
+
+	return in_array( $label, $default_labels, true ) ? '' : $label;
+}
+
+/**
+ * 文に差し込む「メニューの呼び方」（複数形）を取得する。
+ *
+ * 呼び方の要否は単数形で判定し、単数形が既定のままなら空文字を返す。
+ *
+ * @return string 差し込む複数形の呼び方。既定のままなら空文字。
+ */
+function vkbm_get_custom_menu_label_plural(): string {
+	return '' === vkbm_get_custom_menu_label() ? '' : vkbm_get_menu_label_plural();
+}
+
+/**
+ * 呼び方を変えていれば差し込み用の文に入れ、変えていなければ今ある文言を返す。
+ *
+ * 差し込み用の文では、呼び方を最初の引数（`%s` または `%1$s`）に、`$extra_args` をその後ろの引数に入れる。
+ *
+ * @param string $default_text     呼び方を変えていないときに出す、今ある文言（翻訳・sprintf 済み）。
+ * @param string $labeled_template 呼び方を差し込む文（翻訳済み）。
+ * @param array  $extra_args       呼び方の後ろに差し込む値。
+ * @param bool   $use_plural       複数形の呼び方を差し込むなら true。
+ * @return string 画面・メールに出す文言。
+ */
+function vkbm_get_menu_label_text( string $default_text, string $labeled_template, array $extra_args = array(), bool $use_plural = false ): string {
+	$label = $use_plural ? vkbm_get_custom_menu_label_plural() : vkbm_get_custom_menu_label();
+	if ( '' === $label ) {
+		return $default_text;
+	}
+
+	return sprintf( $labeled_template, $label, ...$extra_args );
+}
+
+/**
  * 数量の単位ラベルを取得する（実効値を返す）。
  *
  * 設定値の出し分け:

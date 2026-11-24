@@ -27,6 +27,56 @@ export const normalizeBookingCustomerMode = ( value ) =>
 		: BOOKING_CUSTOMER_MODE.MEMBER;
 
 /**
+ * ページに埋め込まれた予約ブロックの設定（window.vkbmReservationConfig）から、
+ * 未ログインのお客様へのログイン・新規登録の出し分けに使う値を読む（#1121）。
+ *
+ * 設定が無いときは今までの表示（会員のみ・ユーザー登録あり）に倒す。
+ *
+ * @return {{bookingCustomerMode: string, usersCanRegister: boolean}} 受付方法とユーザー登録の可否。
+ */
+export const readGuestAuthSettings = () => {
+	const config =
+		typeof window !== 'undefined' && window.vkbmReservationConfig
+			? window.vkbmReservationConfig
+			: {};
+
+	return {
+		bookingCustomerMode: normalizeBookingCustomerMode(
+			config.bookingCustomerMode
+		),
+		usersCanRegister:
+			typeof config.usersCanRegister === 'boolean'
+				? config.usersCanRegister
+				: true,
+	};
+};
+
+/**
+ * 未ログインのお客様に「ログイン」「新規登録」を出すかを決める（#1121）。
+ *
+ * - 受付方法が「会員登録なしのみ」（guest）なら、どちらも出さない。
+ * - それ以外は「ログイン」を出し、「新規登録」はユーザー登録を受け付けているときだけ出す。
+ *
+ * @param {Object}  settings                     出し分けに使う値。
+ * @param {string}  settings.bookingCustomerMode 予約の受付方法。
+ * @param {boolean} settings.usersCanRegister    ユーザー登録を受け付けているか。
+ * @return {{showLogin: boolean, showRegister: boolean}} 出すかどうか。
+ */
+export const resolveGuestAuthLinks = ( {
+	bookingCustomerMode,
+	usersCanRegister,
+} ) => {
+	if (
+		normalizeBookingCustomerMode( bookingCustomerMode ) ===
+		BOOKING_CUSTOMER_MODE.GUEST
+	) {
+		return { showLogin: false, showRegister: false };
+	}
+
+	return { showLogin: true, showRegister: Boolean( usersCanRegister ) };
+};
+
+/**
  * メールアドレスの形として明らかに誤っていないかを調べる（厳密な検証はサーバーが行う）。
  *
  * @param {string} email メールアドレス。
@@ -105,6 +155,7 @@ export const hasGuestContactErrors = ( errors ) =>
  * @param {string}  params.honeypot                隠し入力欄の値（人は入力しない）。
  * @param {string}  params.memo                    ご要望／備考。
  * @param {string}  params.attendeeName            ご利用になる方のお名前。
+ * @param {Object}  params.customFields            予約時の入力項目の回答（項目 ID => 値）。
  * @param {boolean} params.agreeCancellationPolicy キャンセルポリシーへの同意。
  * @param {boolean} params.agreeTermsOfService     利用規約への同意。
  * @param {boolean} params.agreeTerms              両方に同意したか。
@@ -117,6 +168,7 @@ export const buildGuestBookingPayload = ( {
 	honeypot = '',
 	memo = '',
 	attendeeName = '',
+	customFields = {},
 	agreeCancellationPolicy = false,
 	agreeTermsOfService = false,
 	agreeTerms = false,
@@ -131,6 +183,7 @@ export const buildGuestBookingPayload = ( {
 	vkbm_hp_email: honeypot,
 	memo,
 	attendee_name: attendeeName,
+	custom_fields: customFields,
 	agree_terms: agreeTerms,
 	agree_cancellation_policy: agreeCancellationPolicy,
 	agree_terms_of_service: agreeTermsOfService,

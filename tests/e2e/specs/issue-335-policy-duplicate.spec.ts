@@ -21,7 +21,8 @@
  *       本 spec は未ログイン（storageState 空）で予約確認画面まで到達して検証する。
  *
  * 修正後の期待:
- * - `p.vkbm-confirm__policy` の要素数はちょうど 1（renderAgreements() 内の 1 箇所に集約）。
+ * - キャンセルポリシーとシステム利用規約の両方の本文が空のときは、`p.vkbm-confirm__policy` の要素数はちょうど 1（renderAgreements() 内の 1 箇所に集約）。
+ * - キャンセルポリシー本文を設定しているときは、案内文を出さない（0 件。#1145）。
  *
  * 実行環境:
  * - playwright.config の baseURL（テスト用 wp-env）に対して実行する。
@@ -151,7 +152,7 @@ test.describe( 'issue #335: 予約確認画面のキャンセルポリシー案�
 		} );
 	} );
 
-	test( '回帰: キャンセルポリシーを設定すると本文＋同意チェックが表示され案内文は増えない', async ( {
+	test( '回帰: キャンセルポリシーを設定すると本文＋同意チェックが表示され案内文は出ない', async ( {
 		page,
 	} ) => {
 		// キャンセルポリシー本文を設定（利用規約は空のまま・決済方法あり）。
@@ -177,11 +178,11 @@ test.describe( 'issue #335: 予約確認画面のキャンセルポリシー案�
 			page.locator( '#vkbm-confirm-cancellation-policy' )
 		).toBeVisible();
 
-		// 案内文（p.vkbm-confirm__policy）はキャンセルポリシー設定時には出さない仕様。
-		// いずれにせよ二重表示（2 箇所以上）にならないことを担保する。
-		// @check 「予約前にキャンセルポリシーをご確認ください。」の案内文は多くても1箇所しか出ない
-		await expect(
-			page.locator( 'p.vkbm-confirm__policy' ).count()
-		).resolves.toBeLessThanOrEqual( 1 );
+		// 案内文（p.vkbm-confirm__policy）は、キャンセルポリシー本文を表示しているときは出さない（#1145）。
+		// 修正前はシステム利用規約が空だと案内文が本文と並んで 1 件出ていた。
+		// @check 「予約前にキャンセルポリシーをご確認ください。」の案内文は表示されない
+		await expect( page.locator( 'p.vkbm-confirm__policy' ) ).toHaveCount(
+			0
+		);
 	} );
 } );

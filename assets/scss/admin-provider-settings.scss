@@ -30,7 +30,9 @@
 	line-height: 20px;
 	text-decoration: none;
 	white-space: normal;
-	transition: background-color 0.15s, color 0.15s;
+	transition:
+		background-color 0.15s,
+		color 0.15s;
 
 	&:hover {
 		background: #f6f7f7;
@@ -68,11 +70,9 @@
 }
 
 .vkbm-provider-settings {
-
 	// 本文との並び
 	// -----------------------------------------------------------------------------
 	@include vkbm-bp-up($vkbm-bp-admin-lg) {
-
 		.vkbm-provider-settings__layout {
 			display: grid;
 			grid-template-columns: 220px minmax(0, 1fr);
@@ -102,7 +102,6 @@
 	}
 
 	@include vkbm-bp-up($vkbm-bp-admin-lg) {
-
 		.vkbm-provider-settings__nav--sidebar {
 			display: block;
 			position: sticky;
@@ -180,13 +179,11 @@
 	}
 
 	.vkbm-provider-settings__nav-link {
-
 		@include vkbm-provider-settings-nav-item;
 	}
 
 	// 拡張プラグインが出力する a.nav-tab。WordPress 本体の .nav-tab の指定より優先するため、詳細度を上げている
 	.vkbm-provider-settings__nav-extra .nav-tab {
-
 		@include vkbm-provider-settings-nav-item;
 
 		+ .nav-tab {
@@ -200,20 +197,18 @@
 // =============================================================================
 // 切り替えるタブの一覧。タブを足すときは、ここに名前を1つ足すだけで切替の CSS が揃う
 // （PHP 側は、そのタブの行に vkbm-provider-settings__tab-{名前} を付ける）。
-$vkbm-provider-settings-tabs: store, system, notation, attendees, email, registration, consent, design, advanced, faq, license;
+$vkbm-provider-settings-tabs: store, system, notation, attendees, booking-fields,
+	email, registration, consent, design, advanced, faq, license;
 
 .vkbm-provider-settings {
-
 	// タブの切り替え
 	// -----------------------------------------------------------------------------
 	// data-active-tab 以外のタブ用の行を隠す。
 	@each $active in $vkbm-provider-settings-tabs {
-
 		@each $other in $vkbm-provider-settings-tabs {
-
 			@if $active != $other {
-
-				&[data-active-tab="#{$active}"] .vkbm-provider-settings__tab-#{$other} {
+				&[data-active-tab="#{$active}"]
+					.vkbm-provider-settings__tab-#{$other} {
 					display: none;
 				}
 			}
@@ -351,13 +346,19 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, email, registr
 
 	// よくある質問タブ
 	// -----------------------------------------------------------------------------
+	// 質問・回答が「表示されな／い場合」「保存しま／す。」のように語の途中で改行されるのを防ぐ。
+	// auto-phrase は html の lang="ja" が前提で、非対応ブラウザでは無視される。
 	.vkbm-provider-settings__faq {
 		margin: 0 0 var(--vkbm--spacing--md);
 		padding-left: 25px;
+		line-break: strict;
+		word-break: auto-phrase;
 
+		// 質問の見出しは「場合」だけが次の行に残らないよう、balance で行の長さをそろえる。
 		dt {
 			font-weight: 600;
 			margin: 0 0 1em;
+			text-wrap: balance;
 		}
 
 		dt::before {
@@ -431,8 +432,15 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, email, registr
 		line-break: strict;
 	}
 
-	.vkbm-provider-settings__privacy-policy-field {
+	// 親のプルダウンの値で出し入れする子の入力欄（プライバシーポリシーの URL・本文、予約ページの「その他」の URL）。
+	.vkbm-provider-settings__privacy-policy-field,
+	.vkbm-provider-settings__reservation-page-url-field {
 		margin-top: 0.75rem;
+	}
+
+	// 予約ページに選んだ固定ページの URL の行。長い URL が欄の幅からはみ出さず折り返せるようにする。
+	.vkbm-reservation-page-info {
+		overflow-wrap: anywhere;
 	}
 
 	// 「予約ページの表示要素」の説明文リスト。p.description と同じ見た目で、項目ごとに disc の印を付ける。
@@ -527,6 +535,129 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, email, registr
 
 	.vkbm-lodging-special-date-row .vkbm-alert {
 		margin: var(--vkbm--spacing--xs) 0 0;
+	}
+
+	// 予約時の入力項目（#1147）
+	// -----------------------------------------------------------------------------
+	.vkbm-booking-custom-fields__description {
+		margin-top: 0;
+		margin-bottom: var(--vkbm--spacing--md);
+	}
+
+	.vkbm-booking-custom-fields {
+		display: flex;
+		flex-direction: column;
+		gap: var(--vkbm--spacing--md);
+		margin-bottom: var(--vkbm--spacing--md);
+
+		// 行が 0 件のときは PHP・JS が hidden を付ける。display: flex が hidden を打ち消さないようにする。
+		&[hidden] {
+			display: none;
+		}
+	}
+
+	.vkbm-booking-custom-fields__empty {
+		margin: 0 0 var(--vkbm--spacing--md);
+	}
+
+	// 1 項目を 1 つの行（枠）にまとめる。共通設定の後に種類固有の設定を置く。
+	.vkbm-booking-custom-field-row {
+		padding-bottom: var(--vkbm--spacing--md);
+		border-bottom: 1px solid #dcdcde;
+
+		.vkbm-alert {
+			margin: var(--vkbm--spacing--xs) 0 0;
+		}
+	}
+
+	.vkbm-booking-custom-field-row__fields {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		// 項目名の直下にエラーが増えても、同じ行の種類選択が下へずれないようにする。
+		align-items: start;
+		gap: 8px 12px;
+	}
+
+	.vkbm-booking-custom-field-row__field {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+
+		> label {
+			white-space: nowrap;
+		}
+	}
+
+	// 選択肢と既定値
+	// -----------------------------------------------------------------------------
+	.vkbm-booking-custom-field-row__choices,
+	.vkbm-booking-custom-field-row__default {
+		grid-column: 1 / -1;
+	}
+
+	.vkbm-booking-custom-field-row__type-options {
+		grid-column: 1 / -1;
+		min-width: 0;
+		margin: 0;
+		padding: var(--vkbm--spacing--xs);
+		border: 1px solid #dcdcde;
+
+		&[hidden] {
+			display: none;
+		}
+	}
+
+	.vkbm-booking-custom-field-row__field[hidden] {
+		display: none;
+	}
+
+	.vkbm-booking-custom-field-row__choices textarea {
+		width: 100%;
+	}
+
+	.vkbm-booking-custom-field-row__label input {
+		width: 100%;
+	}
+
+	// 項目名の入力欄（コアの min-height: 40px）と高さを揃える。コアは 782px 以下で select の line-height を
+	// 2.5（16px の文字で 40px）にし、枠線の分だけ 42px になるため、行の高さを枠線の内側の 38px に固定する。
+	.vkbm-booking-custom-field-row__field select {
+		box-sizing: border-box;
+		line-height: 38px;
+	}
+
+	// チェックボックスは入力欄の下端（ボタンと同じ高さの帯）の中央に揃える。
+	.vkbm-booking-custom-field-row__required {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		min-height: 30px;
+		white-space: nowrap;
+	}
+
+	.vkbm-booking-custom-field-row__actions {
+		display: flex;
+		justify-self: end;
+		gap: 6px;
+
+		.vkbm-button {
+			margin: 0;
+			white-space: nowrap;
+		}
+	}
+
+	@include vkbm-bp-down($vkbm-bp-admin-sm) {
+		.vkbm-booking-custom-field-row__fields {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.vkbm-booking-custom-field-row__actions {
+			justify-self: stretch;
+
+			.vkbm-button {
+				flex: 1 1 0;
+			}
+		}
 	}
 
 	// 親チェックボックス（例: 「絞り込み検索」）に属する子項目（例: 「リソースタグ検索」）を
@@ -668,7 +799,6 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, email, registr
 	// 「連携」タブ（Google カレンダー連携）。
 	// このタブだけは、他タブと共有している保存フォームの外に描画される。
 	.vkbm-google-calendar {
-
 		.notice {
 			margin: var(--vkbm--spacing--sm) 0;
 		}
@@ -688,6 +818,23 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, email, registr
 .vkbm-provider-settings .vkbm-provider-settings__strict-line-break {
 	text-box: normal;
 	line-break: strict;
+}
+
+// 「最終チェックイン時刻（宿泊プラン）」のように、補足のかっこ書きが付くラベルを語の途中で割らない（折り返すのは全角かっこの前か空白）。
+// 1 つの翻訳文のまま改行位置を決めるため、<br> や語ごとの nowrap ではなく keep-all を使う。
+.vkbm-provider-settings__label--keep-words {
+	word-break: keep-all;
+	line-break: strict;
+	overflow-wrap: anywhere;
+}
+
+// BM 設定の保存後に出る「最終チェックイン時刻が使われない宿泊プラン」の通知のリンク（「サービスメニューの一覧を開く」）を語の途中で割らない。
+// 通知は WordPress が画面上部へ移すため、.vkbm-provider-settings の外に出ても効くよう単独のクラスにする。
+// 1 つの翻訳文のまま改行位置を決めるため、<br> や語ごとの nowrap ではなく keep-all を使う。収まらない長さの言語では折り返せるよう overflow-wrap を残す。
+.vkbm-latest-check-in-time-ignored-notice__link {
+	word-break: keep-all;
+	line-break: strict;
+	overflow-wrap: anywhere;
 }
 
 // 長いラベルの末尾だけが次行に落ちることを防ぐ。

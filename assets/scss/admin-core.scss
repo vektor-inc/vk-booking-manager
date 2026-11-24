@@ -14,6 +14,24 @@
 			white-space: nowrap;
 		}
 
+		// 予約時の入力項目の項目名（利用者が決める。最大 100 文字）は長さが決まらず、
+		// nowrap のままだと表がメタボックスからはみ出すため、見出しの列の幅で折り返す。
+		// 長音・小書き文字・句読点を行頭に置かず、日本語は文節の区切りで、溢れる語だけは途中で折る。
+		// 列の幅は既存の nowrap の見出し（約 9 文字）まで縮むため、日本語の文節（12〜13 文字程度）が 1 行に入る幅を確保する。
+		// これより長い文節だけ overflow-wrap で字の単位に折る。
+		th.vkbm-booking-meta__user-label {
+			min-width: 13em;
+			white-space: normal;
+			line-break: strict;
+			word-break: auto-phrase;
+			overflow-wrap: anywhere;
+		}
+
+		// 見出しが何行にも折れる行で、入力欄が縦の中央に浮かないよう、見出しの先頭にそろえる。
+		th.vkbm-booking-meta__user-label + td {
+			vertical-align: top;
+		}
+
 		td {
 			width: 100%;
 
@@ -25,6 +43,17 @@
 			input[type="text"],
 			textarea {
 				min-width: 0 !important;
+			}
+
+			// regular-text（コアは width: 25em 固定）は、狭いメタボックスで表を押し広げてはみ出させる。
+			// 幅を割合で指定すると表の最小幅の計算に入らなくなるため、広いときは 25em、狭いときは列の幅まで縮める。
+			// 782px 以下はコアが入力欄を全幅にするため、25em の上限は 783px 以上だけにかける。
+			input.regular-text {
+				width: 100%;
+
+				@include vkbm-bp-up($vkbm-bp-admin-sm) {
+					max-width: 25em;
+				}
 			}
 		}
 
@@ -154,6 +183,41 @@ input[type="number"].vkbm-price-input.vkbm-base-price-overridden {
 	align-items: center;
 	gap: 8px;
 	margin-bottom: var(--vkbm--spacing--xs);
+}
+
+/**
+ * サービスメニュー編集：宿泊の時刻欄（チェックイン時刻・最終チェックイン時刻・チェックアウト時刻）の「時 : 分」。
+ */
+.vkbm-time-selects {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+// コアは幅 782px 以下で `.form-table td select`（詳細度 (0,1,2)）を幅 100% のブロックにして縦に積み、
+// 「:」だけが 1 行に残るため、詳細度 (0,2,0) で幅を中身に合わせ直して「時 : 分」を同じ行に保つ.
+.vkbm-time-selects > .vkbm-time-selects__hour,
+.vkbm-time-selects > .vkbm-time-selects__minute {
+	width: auto;
+}
+
+// 最終チェックイン時刻の「時」にだけある「設定しない」の幅に 3 行の「時」をそろえ、「:」と「分」の位置をそろえる.
+// 「設定しない」の文言を変えたら、この幅で収まるかを確かめること.
+.vkbm-time-selects > .vkbm-time-selects__hour {
+	min-width: 7.75em;
+}
+
+// 基本設定に値があると、最終チェックイン時刻の先頭の選択肢が「基本設定の値（20:00）」と長くなるため、同じ表の 3 行の「時」をその幅にそろえる.
+// 詳細度は上の規則と同じ (0,2,0) のため、ソース順の後勝ちで上書きする（この位置より上へ移動しないこと）.
+// 「基本設定の値（20:00）」の文言を変えたら、この幅で収まるかを確かめること.
+:where(.form-table:has(.vkbm-time-selects__hour--long-unset)) .vkbm-time-selects > .vkbm-time-selects__hour {
+	min-width: 13.75em;
+}
+
+// 最終チェックイン時刻が使われないことを知らせるプラン編集画面の注意枠.
+// 狭い幅で「チ／ェックイン」のように小書き文字が行頭に来ないよう、行頭禁則をブラウザに任せる.
+.vkbm-latest-check-in-time-notice {
+	line-break: strict;
 }
 
 /**

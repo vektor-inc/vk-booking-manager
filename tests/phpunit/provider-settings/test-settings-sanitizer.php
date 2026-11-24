@@ -1254,4 +1254,97 @@ class Settings_Sanitizer_Test extends WP_UnitTestCase {
 			$this->assertSame( $case['expected'], $result['reservation_date_search_enabled'], $case['test_condition_name'] );
 		}
 	}
+	/**
+	 * 予約ページの固定ページ ID と URL の組み合わせが、保存時に正しく整えられることを検証する（issue #1050）。
+	 */
+	public function test_sanitize_reservation_page_id(): void {
+		$sanitizer = new Settings_Sanitizer();
+		$defaults  = ( new Settings_Repository() )->get_default_settings();
+
+		$published_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'publish',
+			)
+		);
+		$trash_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_status' => 'trash',
+			)
+		);
+		$deleted_id   = self::factory()->post->create( array( 'post_type' => 'page' ) );
+		wp_delete_post( $deleted_id, true );
+		$post_id = self::factory()->post->create( array( 'post_type' => 'post' ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '公開中の固定ページの ID（文字列） => 整数の ID。URL はそのまま残す',
+				'input'               => array(
+					'reservation_page_id'  => (string) $published_id,
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
+				'expected_id'         => $published_id,
+				'expected_url'        => 'https://example.com/booking/',
+			),
+			array(
+				'test_condition_name' => 'ゴミ箱の固定ページの ID => そのまま（ゴミ箱から戻して公開し直せば、同じ選択のまま使える）',
+				'input'               => array( 'reservation_page_id' => $trash_id ),
+				'expected_id'         => $trash_id,
+				'expected_url'        => '',
+			),
+			array(
+				'test_condition_name' => '完全に削除された ID => 0',
+				'input'               => array( 'reservation_page_id' => $deleted_id ),
+				'expected_id'         => 0,
+				'expected_url'        => '',
+			),
+			array(
+				'test_condition_name' => '固定ページ以外（投稿）の ID => 0',
+				'input'               => array( 'reservation_page_id' => $post_id ),
+				'expected_id'         => 0,
+				'expected_url'        => '',
+			),
+			array(
+				'test_condition_name' => '「その他（URL を入力）」（other）と URL => ID は 0、URL を保存',
+				'input'               => array(
+					'reservation_page_id'  => 'other',
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
+				'expected_id'         => 0,
+				'expected_url'        => 'https://example.com/booking/',
+			),
+			array(
+				'test_condition_name' => '「選択してください」（空文字）と残っていた URL => ID は 0、URL も空にする（未設定に戻す）',
+				'input'               => array(
+					'reservation_page_id'  => '',
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
+				'expected_id'         => 0,
+				'expected_url'        => '',
+			),
+			array(
+				'test_condition_name' => 'ID に 0 と URL（プログラムからの保存） => ID は 0、URL は残す',
+				'input'               => array(
+					'reservation_page_id'  => 0,
+					'reservation_page_url' => 'https://example.com/booking/',
+				),
+				'expected_id'         => 0,
+				'expected_url'        => 'https://example.com/booking/',
+			),
+			array(
+				'test_condition_name' => 'ID のキーが無く URL だけ（旧バージョンの保存形式） => ID は 0、URL は残す',
+				'input'               => array( 'reservation_page_url' => 'https://example.com/booking/' ),
+				'expected_id'         => 0,
+				'expected_url'        => 'https://example.com/booking/',
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$result = $sanitizer->sanitize( $case['input'], $defaults );
+
+			$this->assertSame( $case['expected_id'], $result['reservation_page_id'], $case['test_condition_name'] . '（ID）' );
+			$this->assertSame( $case['expected_url'], $result['reservation_page_url'], $case['test_condition_name'] . '（URL）' );
+		}
+	}
 }

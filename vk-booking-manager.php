@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.16.0
+ * Version:     3.17.0
  * Requires at least: 6.8
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
@@ -109,6 +109,7 @@ require_once __DIR__ . '/src/rest/class-menu-preview-controller.php';
 require_once __DIR__ . '/src/rest/class-auth-form-controller.php';
 require_once __DIR__ . '/src/rest/class-provider-settings-controller.php';
 require_once __DIR__ . '/src/rest/class-current-user-controller.php';
+require_once __DIR__ . '/src/rest/class-reservation-content-routes.php';
 require_once __DIR__ . '/src/bookings/class-booking-confirmation-controller.php';
 require_once __DIR__ . '/src/bookings/class-guest-booking-controller.php';
 require_once __DIR__ . '/src/bookings/class-guest-cancel-controller.php';
@@ -117,6 +118,8 @@ require_once __DIR__ . '/src/post-types/class-resource-post-type.php';
 require_once __DIR__ . '/src/resources/class-resource-tag-taxonomy.php';
 require_once __DIR__ . '/src/notifications/class-booking-notification-service.php';
 require_once __DIR__ . '/src/integrations/class-booking-event-dispatcher.php';
+require_once __DIR__ . '/src/integrations/siteguard/class-siteguard-rest-api-check.php';
+require_once __DIR__ . '/src/integrations/siteguard/class-siteguard-login-captcha.php';
 // Pro 版専用のファイル。無料版のビルドでは下のマーカーの間を行ごと削除する
 // （除外対象の一覧は docs/specification-distribution.md を参照。ここに足したファイルは
 // 無料版のビルド時の除外処理にも足すこと）。
@@ -216,11 +219,13 @@ use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use VKBookingManager\PostTypes\Service_Menu_Front_Redirect;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Reservation_Page_Migration;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\REST\Availability_Controller;
 use VKBookingManager\REST\Menu_Preview_Controller;
+use VKBookingManager\REST\Reservation_Content_Routes;
 use VKBookingManager\REST\Provider_Settings_Controller;
 use VKBookingManager\Resources\Resource_Schedule_Meta_Box;
 use VKBookingManager\Resources\Resource_Schedule_Template_Repository;
@@ -409,6 +414,10 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 			( new Resource_Delete_Guard() )->register();
 		}
 
+		// 予約画面が読み込むメニュー・リソース・リソースタグの読み取り用ルートを vkbm/v1 に登録する（#1153）。
+		// Resource_Delete_Guard と同様、Plugin へ注入せずここで直接登録する。
+		( new Reservation_Content_Routes() )->register();
+
 		// シフト・サービスメニュー・スタッフ・システム設定の保存/削除で
 		// 空き状況キャッシュ（transient）の世代番号を進める（#410 / #412）。
 		Availability_Cache_Generation::register();
@@ -421,6 +430,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// Register development-only style guide page (menu appears only when docs/ui/style-guide.html exists).
 		$style_guide_page->register();
 		$setup_notices->register();
+		// 更新前に URL で保存されていた予約ページを、固定ページの選択へ一度だけ切り替える（#1050）。
+		( new Reservation_Page_Migration() )->register();
 		$email_log_page->register();
 		$attendee_roster_profile->register();
 
@@ -642,11 +653,7 @@ if ( ! function_exists( 'vkbm_get_reservation_page_logout_url' ) ) {
 			return $cached;
 		}
 
-		$repository = new Settings_Repository();
-		$settings   = $repository->get_settings();
-		$raw_url    = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		$cached = \VKBookingManager\Common\Reservation_Page_Url::resolve_usable( $raw_url );
+		$cached = \VKBookingManager\Common\Reservation_Page_Url::get_url( ( new Settings_Repository() )->get_settings() );
 
 		return $cached;
 	}

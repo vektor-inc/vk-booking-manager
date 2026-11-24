@@ -78,6 +78,54 @@ const describeDayState = (
 };
 
 /**
+ * 日付のマスの数字の下に出す印を決める。
+ *
+ * チェックイン日を選ぶ段階（両方選び終わった後も含む）は、チェックインできる日に ○、できない日に × を出す。
+ * チェックアウト日を選ぶ段階は、チェックアウトに選べる日を ○ にし（× より優先）、それ以外の × はそのまま出す。
+ * 印の元になる空き状況（チェックアウト日を選ぶ段階では、チェックアウト候補の空き状況も）の取得が済んでいないとき
+ * （取得前・取得中・取得エラー）は、前に取得したデータが残っていても ○ も × も出さない。
+ *
+ * @param {Object}  state                           日付の状態。
+ * @param {boolean} state.isMarkDataReady           印の元になる空き状況の取得が済んでいるか。
+ * @param {boolean} state.isEdge                    チェックイン日・チェックアウト日（IN / OUT を出す日）か。
+ * @param {boolean} state.isInteractionDisabled     回数制限または受付範囲外で操作を止めているか。
+ * @param {boolean} state.isSelectingCheckout       チェックアウト日を選ぶ段階か。
+ * @param {boolean} state.isPastDay                 過去の日付か。
+ * @param {boolean} state.isCheckInAvailable        月の空き状況で、その日が空きありか。
+ * @param {boolean} state.isCheckoutCandidate       チェックアウト日に選べるか。
+ * @param {boolean} state.isCheckoutDayAvailable    チェックアウト候補の空き状況で、その日が空きありか。
+ * @param {boolean} state.shouldShowUnavailableMark × を出す条件に当たるか。
+ * @return {'available'|'unavailable'|''} 出す印。印が無ければ空文字。
+ */
+export const resolveDayMark = ( {
+	isMarkDataReady,
+	isEdge,
+	isInteractionDisabled,
+	isSelectingCheckout,
+	isPastDay,
+	isCheckInAvailable,
+	isCheckoutCandidate,
+	isCheckoutDayAvailable,
+	shouldShowUnavailableMark,
+} ) => {
+	// 取得が済んでいないときと、IN / OUT のマス（同じ場所にバッジを出す）は印を出さない。
+	if ( ! isMarkDataReady || isEdge ) {
+		return '';
+	}
+
+	// 段階ごとに「次に押せる日」を ○ にする。
+	const isAvailable =
+		! isInteractionDisabled &&
+		( isSelectingCheckout
+			? isCheckoutCandidate && isCheckoutDayAvailable
+			: isCheckInAvailable && ! isPastDay );
+	if ( isAvailable ) {
+		return 'available';
+	}
+	return shouldShowUnavailableMark ? 'unavailable' : '';
+};
+
+/**
  * チェックイン日・チェックアウト日を同じカレンダーで 2 回押して選ぶ、宿泊用のカレンダー。
  *
  * キーボード操作は「Tab でカレンダーに入る（今フォーカスできる日は 1 つだけ）→ 矢印キーで日を移動
@@ -143,6 +191,19 @@ export const LodgingRangeCalendar = ( {
 			),
 		[ availability.days ]
 	);
+	const checkoutAvailabilityByDate = useMemo(
+		() =>
+			Object.fromEntries(
+				checkoutAvailability.days.map( ( day ) => [ day.date, day ] )
+			),
+		[ checkoutAvailability.days ]
+	);
+	// 印（○ / ×）は、今の段階で使う空き状況の取得が済んでいるときだけ出す。
+	const isMarkDataReady =
+		availability.status === 'done' &&
+		( ! range.checkIn ||
+			Boolean( range.checkOut ) ||
+			checkoutAvailability.status === 'done' );
 	const firstBlockedCheckout =
 		range.checkIn && ! range.checkOut
 			? checkoutAvailability.days.find( ( day ) => ! day.available )
@@ -338,6 +399,20 @@ export const LodgingRangeCalendar = ( {
 							);
 							const isEdge =
 								position === 'start' || position === 'end';
+							const dayMark = resolveDayMark( {
+								isMarkDataReady,
+								isEdge,
+								isInteractionDisabled,
+								isSelectingCheckout,
+								isPastDay,
+								isCheckInAvailable:
+									dayAvailability?.available === true,
+								isCheckoutCandidate,
+								isCheckoutDayAvailable:
+									checkoutAvailabilityByDate[ day.iso ]
+										?.available === true,
+								shouldShowUnavailableMark,
+							} );
 							const stateLabel = describeDayState(
 								position,
 								isPastDay,
@@ -406,22 +481,35 @@ export const LodgingRangeCalendar = ( {
 									<span className="vkbm-calendar__day-label">
 										{ day.label }
 									</span>
-									<span
-										className={
-											isEdge
-												? 'vkbm-calendar__day-badge'
-												: 'vkbm-calendar__day-unavailable-mark'
-										}
-										aria-hidden="true"
-									>
-										{ isEdge
-											? position === 'start'
+									{ /* 数字の下の 1 行に、IN / OUT のバッジか ○ / × の印を出す（読み上げは aria-label で伝える）。 */ }
+									{ isEdge && (
+										<span
+											className="vkbm-calendar__day-badge"
+											aria-hidden="true"
+										>
+											{ position === 'start'
 												? 'IN'
-												: 'OUT'
-											: shouldShowUnavailableMark
-											? '×'
-											: '' }
-									</span>
+												: 'OUT' }
+										</span>
+									) }
+									{ dayMark === 'available' && (
+										<span
+											className="vkbm-calendar__day-available-mark"
+											aria-hidden="true"
+										>
+											○
+										</span>
+									) }
+									{ ! isEdge && dayMark !== 'available' && (
+										<span
+											className="vkbm-calendar__day-unavailable-mark"
+											aria-hidden="true"
+										>
+											{ dayMark === 'unavailable'
+												? '×'
+												: '' }
+										</span>
+									) }
 								</button>
 							);
 						} ) }

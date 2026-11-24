@@ -1032,6 +1032,37 @@
 	// 初期表示時にも現在の選択へ揃える（PHP 側の初期 hidden・案内文と二重化しても無害）。
 	$( syncStaffAssignmentFields );
 
+	// 「選ぶ」でチェックが0件かを返す（#1144）。ラジオが無い（無料版など）ときは false。
+	function isStaffSelectionEmpty() {
+		const $choose = $( '#vkbm-service-menu-staff-choose' );
+		return (
+			$choose.length > 0 &&
+			$choose.prop( 'checked' ) &&
+			$( '.vkbm-service-menu-staff__checkbox:checked' ).length === 0
+		);
+	}
+
+	// ブロックエディタで「選ぶ」かつチェック0件のまま保存しようとしたら、保存を止めて案内する（#1144）。
+	// editor.preSavePost で例外を投げると、投稿もメタボックスも保存されず、
+	// エディタ上部に「更新に失敗しました。」に続けて案内文のエラー通知が出る。
+	// 自動保存（下書きの自動保存・プレビュー）は止めない（操作していないのにエラーが出ないように）。
+	if ( window.wp && window.wp.hooks && window.wp.hooks.addFilter ) {
+		window.wp.hooks.addFilter(
+			'editor.preSavePost',
+			'vk-booking-manager/service-menu-staff-selection',
+			function ( edits, options ) {
+				// プレビューは isAutosave なし・isPreview のみで来る経路（下書きのプレビュー）もあるため両方で判定する。
+				if ( options && ( options.isAutosave || options.isPreview ) ) {
+					return edits;
+				}
+				if ( isStaffSelectionEmpty() ) {
+					throw new Error( i18n.staffUnselectedNotice || '' );
+				}
+				return edits;
+			}
+		);
+	}
+
 	// 予約の単位（時間枠／泊）に合わせて行を hidden で出し分ける（#570）。
 	// 値は DOM に残すため、切り替えても入力は消えず、保存時にもそのまま送られる。
 	function syncBookingUnitFields() {
@@ -1295,4 +1326,23 @@
 		syncServicePeriod
 	);
 	$( syncServicePeriod );
+
+	// 「時」で「設定しない」（空の値）を選んでいる間は、対応する「分」を無効にする（#1125 最終チェックイン時刻）。
+	// 無効にした「分」は送信されないため、保存側は「時」の空の値だけで未設定と判定する。
+	function syncUnsetTimeMinute( hourSelect ) {
+		const $hour = $( hourSelect );
+		$( $hour.data( 'vkbm-minute-target' ) ).prop(
+			'disabled',
+			$hour.val() === ''
+		);
+	}
+
+	$( document ).on( 'change', 'select[data-vkbm-minute-target]', function () {
+		syncUnsetTimeMinute( this );
+	} );
+	$( function () {
+		$( 'select[data-vkbm-minute-target]' ).each( function () {
+			syncUnsetTimeMinute( this );
+		} );
+	} );
 } )( jQuery );

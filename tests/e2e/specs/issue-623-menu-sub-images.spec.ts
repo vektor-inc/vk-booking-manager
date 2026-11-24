@@ -44,6 +44,8 @@ function createMenuWithSubImages(): { menuId: number; imageIds: number[] } {
 		) );
 		update_post_meta( $menu_id, '_vkbm_base_price', 5000 );
 		update_post_meta( $menu_id, '_vkbm_duration_minutes', 60 );
+		// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+		update_post_meta( $menu_id, '_vkbm_staff_all', '1' );
 
 		require_once ABSPATH . 'wp-admin/includes/image.php';
 		$pngs = array(

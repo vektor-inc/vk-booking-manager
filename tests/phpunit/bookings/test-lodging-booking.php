@@ -1038,6 +1038,207 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 到着予定時刻が、チェックイン時刻〜最終チェックイン時刻（未設定なら 23:59）の範囲にあるかを判定する（#1125）。
+	 */
+	public function test_is_estimated_check_in_time_in_range(): void {
+		$test_cases = array(
+			array(
+				'test_condition_name' => '最終 19:00・チェックイン時刻ちょうど => 範囲内',
+				'time'                => '15:00',
+				'check_in'            => '15:00',
+				'latest'              => '19:00',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '最終 19:00・最終チェックイン時刻ちょうど => 範囲内',
+				'time'                => '19:00',
+				'check_in'            => '15:00',
+				'latest'              => '19:00',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '最終 19:00・区切りでない 16:45 => 範囲内（区切りは検査しない）',
+				'time'                => '16:45',
+				'check_in'            => '15:00',
+				'latest'              => '19:00',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '最終 19:00・19:01 => 範囲外',
+				'time'                => '19:01',
+				'check_in'            => '15:00',
+				'latest'              => '19:00',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '最終 19:00・14:59 => 範囲外',
+				'time'                => '14:59',
+				'check_in'            => '15:00',
+				'latest'              => '19:00',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '最終が未設定・23:59 => 範囲内',
+				'time'                => '23:59',
+				'check_in'            => '15:00',
+				'latest'              => '',
+				'expected'            => true,
+			),
+			array(
+				'test_condition_name' => '最終が未設定・14:59 => 範囲外',
+				'time'                => '14:59',
+				'check_in'            => '15:00',
+				'latest'              => '',
+				'expected'            => false,
+			),
+			array(
+				'test_condition_name' => '空文字（不正値） => 範囲外',
+				'time'                => '',
+				'check_in'            => '15:00',
+				'latest'              => '',
+				'expected'            => false,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$this->assertSame(
+				$case['expected'],
+				Lodging_Booking::is_estimated_check_in_time_in_range( $case['time'], $case['check_in'], $case['latest'] ),
+				$case['test_condition_name']
+			);
+		}
+	}
+
+	/**
+	 * 最終チェックイン時刻を、下書きの保存・予約の確定・ゲストの確認の 3 経路で同じように検査し、
+	 * 範囲外ならその範囲を示す文言で拒否する（#1125）。
+	 * プランが未設定なら基本設定の値で検査し、基本設定の値がチェックイン時刻より前なら上限なしにする（#1136）。
+	 */
+	public function test_prepare(): void {
+		$room       = $this->create_room();
+		$menu_id    = $this->create_menu( array( $room ) );
+		$test_cases = array(
+			array(
+				'test_condition_name' => '最終 19:00・19:00 => 3 経路とも受け付ける',
+				'latest'              => '19:00',
+				'time'                => '19:00',
+				'expected'            => 'ok',
+				'expected_message'    => '',
+			),
+			array(
+				'test_condition_name' => '最終 19:00・19:30 => 3 経路とも範囲を示して拒否する',
+				'latest'              => '19:00',
+				'time'                => '19:30',
+				'expected'            => 'invalid_estimated_check_in_time:400',
+				// 文言はサイトの言語で翻訳される（日本語: 「チェックイン予定時刻は 15:00〜19:00 の間でお選びください。」）。
+				'expected_message'    => sprintf( __( 'Please choose an estimated check-in time between %1$s and %2$s.', 'vk-booking-manager' ), '15:00', '19:00' ), // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment -- 期待値の組み立てのため。
+			),
+			array(
+				'test_condition_name' => '最終が未設定・14:30 => 3 経路とも開始時刻を示して拒否する',
+				'latest'              => '',
+				'time'                => '14:30',
+				'expected'            => 'invalid_estimated_check_in_time:400',
+				// 文言はサイトの言語で翻訳される（日本語: 「チェックイン予定時刻は 15:00 以降でお選びください。」）。
+				'expected_message'    => sprintf( __( 'Please choose an estimated check-in time at or after %s.', 'vk-booking-manager' ), '15:00' ), // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment -- 期待値の組み立てのため。
+			),
+			array(
+				'test_condition_name' => '最終が未設定・23:59 => 3 経路とも受け付ける',
+				'latest'              => '',
+				'time'                => '23:59',
+				'expected'            => 'ok',
+				'expected_message'    => '',
+			),
+			array(
+				'test_condition_name' => 'プランが未設定・基本設定 19:00・19:30 => 基本設定の範囲を示して拒否する（#1136）',
+				'latest'              => '',
+				'default'             => '19:00',
+				'time'                => '19:30',
+				'expected'            => 'invalid_estimated_check_in_time:400',
+				'expected_message'    => sprintf( __( 'Please choose an estimated check-in time between %1$s and %2$s.', 'vk-booking-manager' ), '15:00', '19:00' ), // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment -- 期待値の組み立てのため。
+			),
+			array(
+				'test_condition_name' => 'プラン 20:00・基本設定 19:00・19:30 => プランの値を優先して受け付ける（#1136）',
+				'latest'              => '20:00',
+				'default'             => '19:00',
+				'time'                => '19:30',
+				'expected'            => 'ok',
+				'expected_message'    => '',
+			),
+			array(
+				'test_condition_name' => 'プランが未設定・基本設定 14:00 がチェックイン時刻 15:00 より前・23:59 => 上限なしとして受け付ける（#1136）',
+				'latest'              => '',
+				'default'             => '14:00',
+				'time'                => '23:59',
+				'expected'            => 'ok',
+				'expected_message'    => '',
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			// 利用者ごとの予約上限が時刻の検証に干渉しないよう分離する。
+			wp_set_current_user( $this->factory()->user->create() );
+			update_post_meta( $menu_id, Service_Menu_Post_Type::META_CHECK_IN_TIME, '15:00' );
+			$this->set_latest_check_in_time( $menu_id, $case['latest'] );
+			$this->set_default_latest_check_in_time( $case['default'] ?? '' );
+			// 確定した予約どうしが重ならず、ケースが増えてもシフトを登録した範囲（2 か月後の月末まで）に収まる間隔にする。
+			$in_days = 20 + $index * 4;
+
+			// 下書きの保存。
+			$result = $this->post_draft( $this->lodging_payload( $menu_id, $room, $in_days, 1, array( 'estimated_check_in_time' => $case['time'] ) ) );
+			$this->assertSame( $case['expected'], $this->code_of( $result ), $case['test_condition_name'] . '（下書きの保存）' );
+			if ( $result instanceof WP_Error ) {
+				$this->assertSame( $case['expected_message'], $result->get_error_message(), $case['test_condition_name'] . '（下書きの保存の文言）' );
+			}
+
+			// 予約の確定・ゲストの確認: 受け付けられる時刻で下書きを作り、保存後に検査する時刻へ差し替える。
+			$token = $this->save_draft_token( $this->lodging_payload( $menu_id, $room, $in_days + 2, 1, array( 'estimated_check_in_time' => '15:00' ) ) );
+			$draft = get_transient( self::TRANSIENT_PREFIX . $token );
+
+			$draft['lodging']['estimated_check_in_time'] = $case['time'];
+			set_transient( self::TRANSIENT_PREFIX . $token, $draft, 1800 );
+
+			$controller = new Booking_Confirmation_Controller( new Booking_Notification_Service_Test_Double(), new Settings_Repository(), new Availability_Service() );
+			$guest      = $controller->prepare_guest_draft_for_verification( $draft );
+			$this->assertSame( $case['expected'], null === $guest ? 'ok' : $this->code_of( $guest ), $case['test_condition_name'] . '（ゲストの確認）' );
+
+			$confirmed = $this->confirm( $token );
+			$this->assertSame( $case['expected'], $this->code_of( $confirmed ), $case['test_condition_name'] . '（予約の確定）' );
+			if ( $confirmed instanceof WP_Error ) {
+				$this->assertSame( $case['expected_message'], $confirmed->get_error_message(), $case['test_condition_name'] . '（予約の確定の文言）' );
+			}
+		}
+		$this->set_latest_check_in_time( $menu_id, '' );
+		$this->set_default_latest_check_in_time( '' );
+	}
+
+	/**
+	 * 基本設定の最終チェックイン時刻を設定する（#1136。空文字なら未設定）。ほかの設定は変えない。
+	 *
+	 * @param string $time 最終チェックイン時刻（HH:MM）。空文字なら未設定。
+	 */
+	private function set_default_latest_check_in_time( string $time ): void {
+		$settings = get_option( Settings_Repository::OPTION_KEY, array() );
+		$settings = is_array( $settings ) ? $settings : array();
+		$settings[ Settings_Repository::KEY_LODGING_LATEST_CHECK_IN_TIME ] = $time;
+		update_option( Settings_Repository::OPTION_KEY, $settings );
+	}
+
+	/**
+	 * プランの最終チェックイン時刻を設定する（空文字なら削除して未設定にする）。
+	 *
+	 * @param int    $menu_id プランの投稿ID。
+	 * @param string $time    最終チェックイン時刻（HH:MM）。空文字なら未設定。
+	 */
+	private function set_latest_check_in_time( int $menu_id, string $time ): void {
+		if ( '' === $time ) {
+			delete_post_meta( $menu_id, Service_Menu_Post_Type::META_LATEST_CHECK_IN_TIME );
+			return;
+		}
+
+		update_post_meta( $menu_id, Service_Menu_Post_Type::META_LATEST_CHECK_IN_TIME, $time );
+	}
+
+	/**
 	 * 泊の確定: 保存される日時・泊数・金額（改ざんされた下書きの値は無視）と、宿泊が無効なサイトの拒否を検証する。
 	 */
 	public function test_create_booking(): void {

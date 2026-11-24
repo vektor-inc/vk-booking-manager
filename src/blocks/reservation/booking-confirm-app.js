@@ -25,6 +25,11 @@ import { sanitizeDraftToken } from '../shared/draft-token';
 import { formatGuestsCount } from '../shared/guests';
 import { BookingSummaryItems } from './components/booking-summary-items';
 import {
+	getMenuHeading,
+	readMenuLabelsFromConfig,
+	resolveMenuLabels,
+} from './components/menu-label';
+import {
 	BookingStayDatetime,
 	isStayBooking,
 } from './components/booking-stay-datetime';
@@ -37,7 +42,10 @@ import {
 	isMultiGuestFlatPricing,
 	sumPriceTierSubtotals,
 } from './pricing-breakdown';
-import { ReservationHeader } from './components/reservation-header';
+import {
+	getBrandLogoAlt,
+	ReservationHeader,
+} from './components/reservation-header';
 import { ReservationFooter } from './components/reservation-footer';
 import {
 	buildFooterModel,
@@ -62,16 +70,28 @@ import {
 	hasGuestContactErrors,
 	normalizeBookingCustomerMode,
 	postGuestBooking,
+	readGuestAuthSettings,
 	validateGuestContact,
 } from './guest-booking';
 import { AttendeeSelector } from './components/attendee-selector';
+import { RequiredLabelText } from './components/required-label-text';
+import BookingCustomFields, {
+	buildCustomFieldsPayload,
+	normalizeCustomFieldDefinitions,
+	normalizeCustomFieldValues,
+	validateCustomFieldValues,
+} from './components/booking-custom-fields';
 import { useAttendeeOptions, useAttendeeSelection } from './attendee-selection';
 import {
 	buildDatetimeReselectUrl,
+	buildReservationStartUrl,
 	clearConfirmFields,
 	loadConfirmFields,
 	saveConfirmFields,
 } from './draft-reselect';
+
+// 予約時の入力項目の検証エラー（サーバーの Booking_Custom_Fields::create_error() と揃える）。
+const CUSTOM_FIELD_INVALID_CODE = 'vkbm_custom_field_invalid';
 
 // 宿泊予約の確認画面のサマリは別チャンクに分け、宿泊の予約を確認するときだけ読み込む。
 const LodgingConfirmSummary = lazy( () =>
@@ -177,6 +197,7 @@ export const BookingConfirmApp = ( {
 	const [ staff, setStaff ] = useState( null );
 	const [ loading, setLoading ] = useState( true );
 	const [ loadError, setLoadError ] = useState( '' );
+	const [ loadErrorCode, setLoadErrorCode ] = useState( '' );
 	const [ memo, setMemo ] = useState( '' );
 	const [ attendeeName, setAttendeeName ] = useState( '' );
 	const [ attendeeNameMode, setAttendeeNameMode ] = useState( 'disabled' );
@@ -184,6 +205,15 @@ export const BookingConfirmApp = ( {
 		__( 'Name of the person receiving the service', 'vk-booking-manager' )
 	);
 	const [ attendeeNameError, setAttendeeNameError ] = useState( '' );
+	// 予約時の入力項目（#1147）の定義・入力値・項目ごとのエラー。
+	const [ customFieldDefinitions, setCustomFieldDefinitions ] = useState(
+		[]
+	);
+	const [ customFieldValues, setCustomFieldValues ] = useState( {} );
+	const [ customFieldErrors, setCustomFieldErrors ] = useState( {} );
+	// フォーカスを移す入力項目の ID。描画が終わってから移す（定義を取り直した直後は、まだ欄が無いため）。
+	const [ customFieldFocusRequest, setCustomFieldFocusRequest ] =
+		useState( null );
 	const attendeeNameRef = useRef( null );
 	const [ agreeCancellationPolicy, setAgreeCancellationPolicy ] =
 		useState( false );
@@ -278,6 +308,10 @@ export const BookingConfirmApp = ( {
 	);
 	// 数量の単位。REST が実効値（null はロケール既定に解決済み）を返す。空文字は単位なし。
 	const [ guestsUnitLabel, setGuestsUnitLabel ] = useState( '' );
+	// メニューの呼び方（既定のままなら空文字）。REST を待たずに最初の描画から出すため、ページに埋め込まれた値を初期値にする。
+	const [ menuLabel, setMenuLabel ] = useState(
+		() => readMenuLabelsFromConfig().menuLabel
+	);
 	const [ resolvedReservationPageUrl, setResolvedReservationPageUrl ] =
 		useState( reservationPageUrl || '' );
 	const [ taxLabelText, setTaxLabelText ] = useState( '' );
@@ -555,6 +589,7 @@ export const BookingConfirmApp = ( {
 
 		setLoading( true );
 		setLoadError( '' );
+		setLoadErrorCode( '' );
 		apiFetch( { path: `/vkbm/v1/drafts/${ draftToken }` } )
 			.then( ( data ) => {
 				setDraft( data );
@@ -575,6 +610,7 @@ export const BookingConfirmApp = ( {
 				if ( saved ) {
 					setMemo( saved.memo );
 					setAttendeeName( saved.attendeeName );
+					setCustomFieldValues( saved.customFields );
 					// 利用者が編集した住所だけを戻し、空欄にした場合もプロフィール住所で上書きさせない。
 					// 編集していなければ、ログイン後などにプロフィール住所の自動入力に任せる。
 					if ( saved.customerAddressEdited ) {
@@ -593,6 +629,10 @@ export const BookingConfirmApp = ( {
 					// 権限の確定による再取得で、戻した入力値を消さない。
 					setMemo( data?.memo || '' );
 					setAttendeeName( '' );
+					// 退避データが無いときは、下書きに保存した回答を初期値にする（#1147）。
+					setCustomFieldValues(
+						normalizeCustomFieldValues( data?.custom_fields )
+					);
 				}
 				const agreedAll = Boolean( data?.agree_terms );
 				setAgreeCancellationPolicy(
@@ -607,6 +647,15 @@ export const BookingConfirmApp = ( {
 				);
 			} )
 			.catch( ( error ) => {
+				// 所有者違いと期限切れは同じ選び直しが必要なので、同じ案内にする。
+				if (
+					error?.code === 'forbidden_draft' ||
+					error?.code === 'draft_not_found'
+				) {
+					setLoadErrorCode( error.code );
+					setLoadError( true );
+					return;
+				}
 				setLoadError(
 					resolveApiErrorMessage(
 						error,
@@ -665,6 +714,11 @@ export const BookingConfirmApp = ( {
 					)
 						? response.booking_attendee_name_mode
 						: 'disabled'
+				);
+				setCustomFieldDefinitions(
+					normalizeCustomFieldDefinitions(
+						response?.booking_custom_fields
+					)
 				);
 				if (
 					typeof response?.booking_attendee_name_label === 'string' &&
@@ -739,6 +793,8 @@ export const BookingConfirmApp = ( {
 				if ( typeof response?.guests_unit_label === 'string' ) {
 					setGuestsUnitLabel( response.guests_unit_label );
 				}
+				// メニューの呼び方（既定のままなら空文字）。
+				setMenuLabel( resolveMenuLabels( response ).menuLabel );
 
 				setTaxLabelText(
 					typeof response?.tax_label_text === 'string'
@@ -788,7 +844,7 @@ export const BookingConfirmApp = ( {
 			return;
 		}
 		apiFetch( {
-			path: `/wp/v2/vkbm_service_menu/${ draft.menu_id }?_fields=id,title,meta`,
+			path: `/vkbm/v1/service-menus/${ draft.menu_id }?_fields=id,title,meta`,
 		} )
 			.then( ( response ) => setMenu( response ) )
 			.catch( () => setMenu( null ) );
@@ -800,7 +856,7 @@ export const BookingConfirmApp = ( {
 			return;
 		}
 		apiFetch( {
-			path: `/wp/v2/vkbm_resource/${ draft.resource_id }?_fields=id,title,meta`,
+			path: `/vkbm/v1/resources/${ draft.resource_id }?_fields=id,title,meta`,
 		} )
 			.then( ( response ) => setStaff( response ) )
 			.catch( () => setStaff( null ) );
@@ -1297,6 +1353,9 @@ export const BookingConfirmApp = ( {
 	// 「どちらでも」では、ログイン・新規登録の欄へ切り替えている間だけ出さない。
 	const isGuestBookingAvailable =
 		! isLoggedIn && bookingCustomerMode !== BOOKING_CUSTOMER_MODE.MEMBER;
+	// 未ログインのお客様に出す [新規登録]（「どちらでも」の案内・ログイン／新規登録の切り替え）は、
+	// ユーザー登録を受け付けているときだけ出す（#1121。ヘッダーナビと同じ値を見る）。
+	const guestCanRegister = readGuestAuthSettings().usersCanRegister;
 	const showGuestForm =
 		isGuestBookingAvailable &&
 		( bookingCustomerMode === BOOKING_CUSTOMER_MODE.GUEST ||
@@ -1335,6 +1394,63 @@ export const BookingConfirmApp = ( {
 		return true;
 	};
 
+	/**
+	 * サーバーが返した予約時の入力項目のエラーを、該当の欄の直下に出す。
+	 *
+	 * 画面に無い項目のエラーが含まれるとき（確認画面を開いている間に項目が追加された場合など）は、
+	 * provider-settings を取り直して項目の定義を入れ替えてから出す。取り直しても出せない項目が残るときは、
+	 * 再読み込みを促す文言を送信エラーに出す。
+	 *
+	 * @param {Object<string, string>} fields 項目 ID => エラーメッセージ。
+	 * @return {Promise<boolean>} エラーを画面に出したら true（呼び出し側は汎用の送信エラーを出さない）。
+	 */
+	const applyServerCustomFieldErrors = async ( fields ) => {
+		const ids = Object.keys( normalizeCustomFieldValues( fields ) );
+		if ( ! ids.length ) {
+			return false;
+		}
+		const hasField = ( definitions, id ) =>
+			definitions.some( ( definition ) => definition.id === id );
+
+		// 項目の追加だけでなく選択肢の変更も反映するため、今の設定を取り直す。
+		let definitions = customFieldDefinitions;
+		if ( ids.length ) {
+			try {
+				const response = await apiFetch( {
+					path: '/vkbm/v1/provider-settings',
+				} );
+				definitions = normalizeCustomFieldDefinitions(
+					response?.booking_custom_fields
+				);
+				setCustomFieldDefinitions( definitions );
+			} catch ( refreshError ) {
+				// 取り直せないときは、下の再読み込みの案内に任せる。
+			}
+		}
+
+		if ( ids.some( ( id ) => ! hasField( definitions, id ) ) ) {
+			setSubmitError(
+				__(
+					'The booking input items have been changed. Please reload the page and enter them again.',
+					'vk-booking-manager'
+				)
+			);
+			return true;
+		}
+
+		const nextErrors = {};
+		ids.forEach( ( id ) => {
+			nextErrors[ id ] = fields[ id ];
+		} );
+		setCustomFieldErrors( nextErrors );
+		setSubmitError( '' );
+		const first = definitions.find(
+			( definition ) => nextErrors[ definition.id ]
+		);
+		setCustomFieldFocusRequest( { id: first.id } );
+		return true;
+	};
+
 	// 会員登録せずに予約する申し込みを送る。確認メールのリンクを開くまで、予約は作られない。
 	const handleGuestSubmit = async ( agreement ) => {
 		// 入力の検査（お名前・メールアドレスは必須。電話番号は設定で必須のときだけ必須）。
@@ -1363,6 +1479,10 @@ export const BookingConfirmApp = ( {
 					honeypot: guestHoneypot,
 					memo,
 					attendeeName,
+					customFields: buildCustomFieldsPayload(
+						customFieldDefinitions,
+						customFieldValues
+					),
 					...agreement,
 				} )
 			);
@@ -1377,7 +1497,12 @@ export const BookingConfirmApp = ( {
 			}
 		} catch ( error ) {
 			// メールアドレスの誤りは、該当の欄の直下に出して戻る。
-			if ( error?.code === 'guest_email_invalid' ) {
+			if (
+				error?.code === CUSTOM_FIELD_INVALID_CODE &&
+				( await applyServerCustomFieldErrors( error?.data?.fields ) )
+			) {
+				// 予約時の入力項目のエラーは、該当の欄の直下に出した。
+			} else if ( error?.code === 'guest_email_invalid' ) {
 				const emailErrors = {
 					name: '',
 					email: error.message,
@@ -1420,6 +1545,7 @@ export const BookingConfirmApp = ( {
 				{
 					memo,
 					attendeeName,
+					customFields: customFieldValues,
 					customerAddress,
 					customerAddressEdited: isCustomerAddressEdited(),
 					guestContact,
@@ -1476,6 +1602,23 @@ export const BookingConfirmApp = ( {
 			return;
 		}
 		setAttendeeNameError( '' );
+
+		// 予約時の入力項目。代理予約では必須を強制しない。エラーは全項目に出し、最初の欄へフォーカスを移す。
+		const nextCustomFieldErrors = validateCustomFieldValues(
+			customFieldDefinitions,
+			customFieldValues,
+			! canManageReservations
+		);
+		setCustomFieldErrors( nextCustomFieldErrors );
+		const firstCustomFieldError = customFieldDefinitions.find(
+			( definition ) => nextCustomFieldErrors[ definition.id ]
+		);
+		if ( firstCustomFieldError ) {
+			setCustomFieldFocusRequest( {
+				id: firstCustomFieldError.id,
+			} );
+			return;
+		}
 
 		if (
 			requiresAgreements &&
@@ -1537,6 +1680,14 @@ export const BookingConfirmApp = ( {
 			...( attendeeRosterActive
 				? attendee.buildPayload()
 				: { attendee_name: attendeeName } ),
+			...( customFieldDefinitions.length
+				? {
+						custom_fields: buildCustomFieldsPayload(
+							customFieldDefinitions,
+							customFieldValues
+						),
+				  }
+				: {} ),
 			agree_terms: agreedAll,
 			agree_cancellation_policy: requiresAgreements
 				? agreeCancellationPolicy
@@ -1687,6 +1838,14 @@ export const BookingConfirmApp = ( {
 					notifyBookingFailed( payload, failure );
 				}
 
+				// 予約時の入力項目のエラー（確認画面を開いている間に設定が変わった場合など）は、該当の欄の直下に出す。
+				if (
+					failure.code === CUSTOM_FIELD_INVALID_CODE &&
+					( await applyServerCustomFieldErrors( failure.fields ) )
+				) {
+					return;
+				}
+
 				// 「同じ日時の予約があります」は、エラーコード booking_time_conflict のときだけ表示する。
 				// 409 はほかの理由（空き枠の変化・リソースタグの不一致・決済の二重使用など）でも返るため、
 				// それ以外は REST のエラーメッセージをそのまま表示する。
@@ -1792,6 +1951,73 @@ export const BookingConfirmApp = ( {
 		}
 	}, [ guestEmailFocusRequest ] );
 
+	// 下書きの取得に失敗しても、通常画面と同じブランドとメニューで予約ページへ戻れるようにする。
+	const shouldShowLogo =
+		showProviderLogo &&
+		typeof providerLogoUrl === 'string' &&
+		providerLogoUrl.trim() !== '';
+	const shouldShowName =
+		showProviderName &&
+		typeof providerName === 'string' &&
+		providerName.trim() !== '';
+	const shouldShowBrand = shouldShowLogo || shouldShowName;
+	const brandLinkHref =
+		typeof resolvedReservationPageUrl === 'string'
+			? resolvedReservationPageUrl.trim()
+			: '';
+	const brandLogoAlt = getBrandLogoAlt( providerName, brandLinkHref );
+	const reservationStartUrl =
+		typeof window !== 'undefined'
+			? buildReservationStartUrl( brandLinkHref, window.location.href )
+			: '';
+	const navAriaLabel = __(
+		'Reservation block navigation',
+		'vk-booking-manager'
+	);
+	const logoutHref = logoutUrl || buildLogoutFallbackUrl();
+	const showSuccessMessage = success && ! redirectUrl;
+	const navVariant =
+		isLoggedIn && canManageReservations
+			? 'staff'
+			: isLoggedIn && ! canManageReservations && showSuccessMessage
+			? 'return'
+			: isLoggedIn && ! canManageReservations
+			? 'member'
+			: '';
+	const navProps = navVariant
+		? {
+				isLodging: isLodgingReservation(),
+				screen: 'booking-confirm',
+				variant: navVariant,
+				ariaLabel: navAriaLabel,
+				staffDashboardHref: shiftDashboardUrl || '',
+				staffSettingsHref: settingsUrl || '',
+				logoutHref,
+				onReturn: handleBackClick,
+				returnLabel: __(
+					'Back to the reservation page',
+					'vk-booking-manager'
+				),
+				onBookings: handleBookingsClick,
+				isBookingsActive: authMode === 'bookings',
+				onProfile: handleProfileClick,
+				isProfileActive: authMode === 'profile',
+		  }
+		: null;
+	const reservationHeader = (
+		<ReservationHeader
+			showBrand={ shouldShowBrand }
+			brandLinkHref={ brandLinkHref }
+			showLogo={ shouldShowLogo }
+			logoUrl={ providerLogoUrl }
+			logoWidth={ providerLogoWidth }
+			logoAlt={ brandLogoAlt }
+			showName={ shouldShowName }
+			brandName={ providerName }
+			nav={ navProps }
+		/>
+	);
+
 	// 未ログインのお客様には、受付方法（基本設定）が決まるまで読み込み中の表示を続ける。
 	// 決まる前に会員向けの画面を見せてから、お客様情報欄へ切り替わるのを避けるため。
 	if ( loading || ( ! isLoggedIn && ! providerSettingsSettled ) ) {
@@ -1808,11 +2034,59 @@ export const BookingConfirmApp = ( {
 	}
 
 	if ( loadError ) {
+		// 日本語の句点の後には空白を挟まず、英語の文間には空白を残す。
+		const reselectMessage = loadErrorCode
+			? [
+					__(
+						'The reservation you selected cannot be displayed in this browser.',
+						'vk-booking-manager'
+					),
+					__(
+						'You may have opened the link in a different browser, or the temporary reservation data may have expired.',
+						'vk-booking-manager'
+					),
+					__(
+						'Please select a date and time again.',
+						'vk-booking-manager'
+					),
+			  ].reduce(
+					( message, sentence ) =>
+						`${ message }${
+							/[。！？]$/.test( message ) ? '' : ' '
+						}${ sentence }`
+			  )
+			: loadError;
+		const loadErrorAlert = (
+			<div
+				className={ `vkbm-alert vkbm-alert__danger vkbm-confirm__load-error${
+					loadErrorCode ? ' vkbm-alert--compact' : ''
+				}` }
+				role="alert"
+			>
+				{ reselectMessage }
+			</div>
+		);
 		return (
 			<div className="vkbm-confirm">
-				<div className="vkbm-alert vkbm-alert__danger" role="alert">
-					{ loadError }
-				</div>
+				{ reservationHeader }
+				{ loadErrorCode && reservationStartUrl && (
+					<div className="vkbm-confirm__load-error-recovery">
+						{ loadErrorAlert }
+						<div className="vkbm-buttons vkbm-buttons__center">
+							<a
+								className="vkbm-button vkbm-button__md vkbm-button__primary"
+								href={ reservationStartUrl }
+							>
+								{ __(
+									'Back to the reservation page',
+									'vk-booking-manager'
+								) }
+							</a>
+						</div>
+					</div>
+				) }
+				{ ( ! loadErrorCode || ! reservationStartUrl ) &&
+					loadErrorAlert }
 				{ /* 設定を取得済みのときだけ出す（未取得なら model が null で何も出ない）。 */ }
 				<ReservationFooter
 					model={ buildFooterModel( footerSettings ) }
@@ -1857,8 +2131,6 @@ export const BookingConfirmApp = ( {
 		staff?.name ||
 		noNominationLabel;
 
-	const logoutHref = logoutUrl || buildLogoutFallbackUrl();
-	const showSuccessMessage = success && ! redirectUrl;
 	// 予約の完了後、または確認メールの送信後は、入力欄を読み取り専用にする。
 	const isFormLocked = showSuccessMessage || Boolean( guestSent );
 
@@ -1934,8 +2206,10 @@ export const BookingConfirmApp = ( {
 		return (
 			<div className="vkbm-confirm__form">
 				<label htmlFor="vkbm-confirm-attendee-name">
-					{ attendeeNameLabel }
-					{ required && <span aria-hidden="true"> *</span> }
+					<RequiredLabelText
+						label={ attendeeNameLabel }
+						required={ required }
+					/>
 				</label>
 				<input
 					ref={ attendeeNameRef }
@@ -1953,6 +2227,11 @@ export const BookingConfirmApp = ( {
 					aria-invalid={ Boolean( attendeeNameError ) }
 					aria-describedby={ attendeeNameError ? errorId : undefined }
 					readOnly={ isFormLocked }
+					placeholder={
+						isFormLocked
+							? __( 'No entry', 'vk-booking-manager' )
+							: undefined
+					}
 				/>
 				{ attendeeNameError && (
 					<p
@@ -2163,9 +2442,12 @@ export const BookingConfirmApp = ( {
 					</div>
 				) }
 
-				{ ! termsOfServiceText && policyText && (
-					<p className="vkbm-confirm__policy">{ policyText }</p>
-				) }
+				{ /* キャンセルポリシー本文が表示されているのに「ご確認ください」と重ねて出さないよう、どちらの本文も無いときだけ出す（#1145）。 */ }
+				{ ! cancellationPolicyText &&
+					! termsOfServiceText &&
+					policyText && (
+						<p className="vkbm-confirm__policy">{ policyText }</p>
+					) }
 
 				{ /* ログインユーザーには、今回の内容を「いつもの」として登録するチェックを表示する。 */ }
 				{ isLoggedIn && Number( draft?.menu_id ) > 0 && (
@@ -2255,67 +2537,13 @@ export const BookingConfirmApp = ( {
 		minCapacityForSlot > 0 &&
 		bookedGuestsForSlot + draftGuestsForSlot < minCapacityForSlot;
 
-	const shouldShowLogo =
-		showProviderLogo &&
-		typeof providerLogoUrl === 'string' &&
-		providerLogoUrl.trim() !== '';
-	const shouldShowName =
-		showProviderName &&
-		typeof providerName === 'string' &&
-		providerName.trim() !== '';
-	const shouldShowBrand = shouldShowLogo || shouldShowName;
-	const brandLinkHref =
-		typeof resolvedReservationPageUrl === 'string'
-			? resolvedReservationPageUrl.trim()
-			: '';
 	const reselectUrl = draft
 		? buildDatetimeReselectUrl( window.location.href, draft, draftToken )
 		: '';
-	const brandLogoAlt = shouldShowName
-		? providerName
-		: __( 'Logo image', 'vk-booking-manager' );
-	const navAriaLabel = __(
-		'Reservation block navigation',
-		'vk-booking-manager'
-	);
-	const navVariant =
-		isLoggedIn && canManageReservations
-			? 'staff'
-			: isLoggedIn && ! canManageReservations && showSuccessMessage
-			? 'return'
-			: isLoggedIn && ! canManageReservations
-			? 'member'
-			: '';
-	const navProps = navVariant
-		? {
-				isLodging: isLodgingReservation(),
-				screen: 'booking-confirm',
-				variant: navVariant,
-				ariaLabel: navAriaLabel,
-				staffDashboardHref: shiftDashboardUrl || '',
-				staffSettingsHref: settingsUrl || '',
-				logoutHref,
-				onReturn: handleBackClick,
-				onBookings: handleBookingsClick,
-				isBookingsActive: authMode === 'bookings',
-				onProfile: handleProfileClick,
-				isProfileActive: authMode === 'profile',
-		  }
-		: null;
 
 	return (
 		<div className="vkbm-confirm">
-			<ReservationHeader
-				showBrand={ shouldShowBrand }
-				brandLinkHref={ brandLinkHref }
-				showLogo={ shouldShowLogo }
-				logoUrl={ providerLogoUrl }
-				logoWidth={ providerLogoWidth }
-				logoAlt={ brandLogoAlt }
-				showName={ shouldShowName }
-				brandName={ providerName }
-				nav={ navProps }
-			/>
+			{ reservationHeader }
 			{ isLoggedIn && authMode === 'profile' && (
 				<div className="vkbm-confirm__auth-panel">
 					{ authLoading && (
@@ -2496,6 +2724,7 @@ export const BookingConfirmApp = ( {
 										) }
 										<BookingSummaryItems
 											booking={ booking }
+											menuLabel={ menuLabel }
 											resourceLabel={
 												resourceLabelSingular
 											}
@@ -2540,6 +2769,7 @@ export const BookingConfirmApp = ( {
 							>
 								<LodgingConfirmSummary
 									menuName={ menuName }
+									menuLabel={ menuLabel }
 									roomLabel={ resourceLabelSingular }
 									roomName={ staffName }
 									checkIn={ lodgingCheckIn }
@@ -2621,7 +2851,7 @@ export const BookingConfirmApp = ( {
 									</div>
 								) }
 								<SummaryRow
-									label={ __( 'Menu', 'vk-booking-manager' ) }
+									label={ getMenuHeading( menuLabel ) }
 									value={ menuName }
 								/>
 								{ /* 料金区分メニュー: 区分ごとに「区分名（単価 × 人数）」と小計を表示する（0名の区分は省略）。 */ }
@@ -2793,6 +3023,7 @@ export const BookingConfirmApp = ( {
 							{ bookingCustomerMode ===
 								BOOKING_CUSTOMER_MODE.BOTH && (
 								<GuestLoginPrompt
+									showRegister={ guestCanRegister }
 									onLogin={ () => {
 										setAuthFocusPending( true );
 										toggleAuthMode( 'login' );
@@ -2849,22 +3080,29 @@ export const BookingConfirmApp = ( {
 								>
 									{ __( 'Log in', 'vk-booking-manager' ) }
 								</button>
-								<button
-									type="button"
-									className={ [
-										'vkbm-button',
-										'vkbm-button-outline',
-										'vkbm-button-outline__primary',
-										authMode === 'register' && 'is-active',
-									]
-										.filter( Boolean )
-										.join( ' ' ) }
-									onClick={ () =>
-										toggleAuthMode( 'register' )
-									}
-								>
-									{ __( 'Sign up', 'vk-booking-manager' ) }
-								</button>
+								{ /* ユーザー登録を受け付けていないときは [新規登録] を出さない（#1121。ヘッダーナビと同じ値を見る）。 */ }
+								{ guestCanRegister && (
+									<button
+										type="button"
+										className={ [
+											'vkbm-button',
+											'vkbm-button-outline',
+											'vkbm-button-outline__primary',
+											authMode === 'register' &&
+												'is-active',
+										]
+											.filter( Boolean )
+											.join( ' ' ) }
+										onClick={ () =>
+											toggleAuthMode( 'register' )
+										}
+									>
+										{ __(
+											'Sign up',
+											'vk-booking-manager'
+										) }
+									</button>
+								) }
 							</div>
 							{ /* 「どちらでも」のときは、会員登録せずに予約する入力欄へ戻る導線を 1 つ置く（入力途中の内容は消えない）。 */ }
 							{ isGuestBookingAvailable && (
@@ -2924,11 +3162,33 @@ export const BookingConfirmApp = ( {
 						! canManageReservations &&
 						renderCustomerAddressField() }
 
-					<div className="vkbm-confirm__form">
-						<label htmlFor="vkbm-confirm-memo">
-							{ __( 'Requests/Notes', 'vk-booking-manager' ) }
-						</label>
-						{ renderMemoField() }
+					{ /* 予約について施設への回答（追加した項目・ご要望・備考）を 1 つのまとまりにする。欄どうしは前後のまとまりとの間隔より狭くする。 */ }
+					<div className="vkbm-confirm__answers">
+						<BookingCustomFields
+							definitions={ customFieldDefinitions }
+							values={ customFieldValues }
+							errors={ customFieldErrors }
+							enforceRequired={ ! canManageReservations }
+							readOnly={ isFormLocked }
+							focusRequest={ customFieldFocusRequest }
+							onChange={ ( id, value ) => {
+								setCustomFieldValues( ( current ) => ( {
+									...current,
+									[ id ]: value,
+								} ) );
+								setCustomFieldErrors( ( current ) => ( {
+									...current,
+									[ id ]: '',
+								} ) );
+							} }
+						/>
+
+						<div className="vkbm-confirm__form">
+							<label htmlFor="vkbm-confirm-memo">
+								{ __( 'Requests/Notes', 'vk-booking-manager' ) }
+							</label>
+							{ renderMemoField() }
+						</div>
 					</div>
 
 					{ canManageReservations && (

@@ -64,7 +64,8 @@ class Service_Menu_Post_Type {
 	 * META_STAFF_IDS の個別選択を使う。個別選択の配列は「すべて」選択中も
 	 * 消さずに保持する（「選ぶ」へ戻したときに以前の選択を復元できるようにするため。
 	 * #391・#412 の「親スイッチ OFF 時も子設定を残す」方針と同じ）。
-	 * 空配列（未設定）の意味は変えない（「すべて」とは別）。
+	 * 空配列（未設定）の意味は変えない（「すべて」とは別）。「選ぶ」で個別選択が空のメニューは
+	 * 担当できるリソースがいないため、指名の有無に関わらず予約を受け付けない（#1144）。
 	 *
 	 * Service_Menu_Editor など他クラスからも参照するため public にしている。
 	 */
@@ -177,6 +178,16 @@ class Service_Menu_Post_Type {
 	public const META_CHECK_OUT_TIME = '_vkbm_check_out_time';
 
 	/**
+	 * 最終チェックイン時刻（予約画面で選べるチェックイン予定時刻の終わり）のメタキー（HH:MM）。未設定は空（#1125）。
+	 */
+	public const META_LATEST_CHECK_IN_TIME = '_vkbm_latest_check_in_time';
+
+	/**
+	 * count_night_plans_ignoring_default_latest_check_in_time() で、プランのメタをまとめて読み込む件数。
+	 */
+	private const LATEST_CHECK_IN_COUNT_BATCH_SIZE = 100;
+
+	/**
 	 * 予約の単位「泊」の保存値。
 	 */
 	public const BOOKING_UNIT_NIGHT = 'night';
@@ -252,6 +263,8 @@ class Service_Menu_Post_Type {
 		add_action( 'quick_edit_custom_box', array( $this, 'render_quick_edit_fields' ), 10, 2 );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_quick_edit_assets' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_quick_edit' ), 20, 3 );
+		// クイック編集の保存処理（優先度1）より前に、担当できるリソースの入力を確かめる（#1144）。
+		add_action( 'wp_ajax_inline-save', array( $this, 'validate_quick_edit_staff_selection' ), 0 );
 	}
 
 	/**
@@ -283,7 +296,8 @@ class Service_Menu_Post_Type {
 	/**
 	 * 予約フォームが使う投稿一覧 API から、公開の一覧に出さないメニューを外す。
 	 *
-	 * 編集画面用（context=edit）かつメニューを編集できる利用者だけ、アーカイブ済みも残す。
+	 * アーカイブ済み・提供期間終了に加え、担当できるリソースがいないメニュー（#1144）も外す。
+	 * 編集画面用（context=edit）かつメニューを編集できる利用者だけ、外さずに残す。
 	 * 投稿 ID を指定した 1 件取得には効かない。
 	 *
 	 * @param array<string, mixed> $args    WP_Query に渡す引数。
@@ -294,6 +308,9 @@ class Service_Menu_Post_Type {
 		if ( $this->should_include_hidden_menus_in_rest_collection( $request ) ) {
 			return $args;
 		}
+
+		// 担当できるリソースがいないメニューは予約できないため、選択肢に出さない（#1144）。
+		$args = self::exclude_unassigned_menus_from_query_args( $args );
 
 		$listing_query = self::build_public_listing_meta_query();
 		if ( empty( $args['meta_query'] ) || ! is_array( $args['meta_query'] ) ) {
@@ -1065,12 +1082,15 @@ class Service_Menu_Post_Type {
 		$duration             = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['duration_minutes'] ) ) : '' );
 		$buffer_after         = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['buffer_after_minutes'] ) ) : '' );
 		$reservation_deadline = $this->sanitize_numeric_value( isset( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_deadline_hours'] ) ) : '' );
-		$staff_ids            = Staff_Editor::is_enabled() ? $this->sanitize_staff_ids( isset( $_POST['vkbm_service_menu_quick']['staff_ids'] ) && is_array( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ) : array() ) : null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by array_map( 'absint' ) and sanitize_staff_ids().
-		// 「すべてのリソースが担当できる」ラジオ（#485）。Pro 版でラジオが送信されたときだけ更新する
-		// （無料版や、ラジオを含まない古い行 DOM からの送信では触らない）。
-		$staff_all              = ( Staff_Editor::is_enabled() && isset( $_POST['vkbm_service_menu_quick']['staff_all'] ) )
-			? ( '1' === sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['staff_all'] ) ) ? '1' : '' )
-			: null;
+		$staff_input          = self::read_quick_edit_staff_input();
+		$staff_ids            = $staff_input['staff_ids'];
+		$staff_all            = $staff_input['staff_all'];
+		// 「選ぶ」でチェックが0件の入力は、保存前の確認（validate_quick_edit_staff_selection()）で止めている。
+		// 確認を通らずに届いた場合も、担当の設定だけは保存済みの値を残す（#1144）。
+		if ( null !== $staff_ids && null !== $staff_all && ! self::is_valid_staff_selection( '1' === $staff_all, $staff_ids ) ) {
+			$staff_ids = null;
+			$staff_all = null;
+		}
 		$other_conditions       = isset( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ? sanitize_textarea_field( wp_unslash( $_POST['vkbm_service_menu_quick']['other_conditions'] ) ) : '';
 		$reservation_day_type   = $this->sanitize_reservation_day_type( isset( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ? sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['reservation_day_type'] ) ) : '', $post_id );
 		$disable_nomination_fee = ! empty( $_POST['vkbm_service_menu_quick']['disable_nomination_fee'] ) ? '1' : '';
@@ -1093,6 +1113,108 @@ class Service_Menu_Post_Type {
 		if ( ! Industry_Presets::supports( 'lodging' ) ) {
 			$this->update_meta_value( $post_id, self::META_DISABLE_NOMINATION_FEE, $disable_nomination_fee );
 		}
+	}
+
+	/**
+	 * クイック編集で送信された「担当できるリソース」の入力を読み取る。
+	 *
+	 * Pro 版で送信されたときだけ値を返す。無料版や、ラジオを含まない古い行 DOM からの送信では
+	 * どちらも null を返し、保存済みの値を触らない。
+	 * 呼び出し元でノンス（_vkbm_service_menu_quick_nonce）を確認してから使うこと。
+	 *
+	 * @return array{staff_ids: array<int>|null, staff_all: string|null} staff_all は「すべて」なら '1'、「選ぶ」なら ''。
+	 */
+	private static function read_quick_edit_staff_input(): array {
+		$input = array(
+			'staff_ids' => null,
+			'staff_all' => null,
+		);
+
+		if ( ! Staff_Editor::is_enabled() ) {
+			return $input;
+		}
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- 呼び出し元で確認済み。
+		// 「すべてのリソースが担当できる」ラジオ（#485）を含まない送信では、チェックが無いことを
+		// 「0件を選んだ」と区別できないため、担当 ID も読まずに保存済みの値を残す（#1144）。
+		if ( ! isset( $_POST['vkbm_service_menu_quick']['staff_all'] ) ) {
+			return $input;
+		}
+		$input['staff_all'] = '1' === sanitize_text_field( wp_unslash( $_POST['vkbm_service_menu_quick']['staff_all'] ) ) ? '1' : '';
+		$input['staff_ids'] = self::normalize_staff_ids( isset( $_POST['vkbm_service_menu_quick']['staff_ids'] ) && is_array( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['vkbm_service_menu_quick']['staff_ids'] ) ) : array() ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized by array_map( 'absint' ) and normalize_staff_ids().
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		return $input;
+	}
+
+	/**
+	 * クイック編集の保存前に、「担当できるリソースを選ぶ」でチェックが0件なら保存を止める（#1144）。
+	 *
+	 * wp_ajax_inline-save の保存処理（優先度1）より前（優先度0）で動く。止めるときは wp_die() で
+	 * 案内文を返し、クイック編集の行内のエラー欄に表示させる（WordPress 本体の表示処理を使う）。
+	 * サービスメニュー以外の送信、ノンスが無い・合わない送信、無料版では何もしない。
+	 */
+	public function validate_quick_edit_staff_selection(): void {
+		if ( ! Staff_Editor::is_enabled() ) {
+			return;
+		}
+
+		if ( ! isset( $_POST['post_type'], $_POST['_vkbm_service_menu_quick_nonce'] ) || self::POST_TYPE !== sanitize_key( wp_unslash( $_POST['post_type'] ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verification just below.
+			return;
+		}
+
+		if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_vkbm_service_menu_quick_nonce'] ) ), 'vkbm_service_menu_quick_edit' ) ) {
+			return;
+		}
+
+		// 入力を読み取り、「選ぶ」でチェックが0件のときだけ止める。
+		$staff_input = self::read_quick_edit_staff_input();
+		if ( null === $staff_input['staff_all'] || null === $staff_input['staff_ids'] ) {
+			return;
+		}
+
+		if ( self::is_valid_staff_selection( '1' === $staff_input['staff_all'], $staff_input['staff_ids'] ) ) {
+			return;
+		}
+
+		wp_die( esc_html( self::get_staff_unselected_notice() ) );
+	}
+
+	/**
+	 * 「担当できるリソース」の入力が保存できる組み合わせかを返す（#1144）。
+	 *
+	 * 「すべてのリソースが担当できる」を選んでいるか、個別に1件以上選んでいれば保存できる。
+	 * 「選ぶ」でチェックが0件のときだけ保存できない（担当できるリソースがいないメニューを作らせないため）。
+	 *
+	 * @param bool       $staff_all 「すべてのリソースが担当できる」を選んでいれば true。
+	 * @param array<int> $staff_ids 個別に選んだリソースID。
+	 * @return bool 保存できる組み合わせなら true。
+	 */
+	public static function is_valid_staff_selection( bool $staff_all, array $staff_ids ): bool {
+		return $staff_all || array() !== self::normalize_staff_ids( $staff_ids );
+	}
+
+	/**
+	 * 「担当できるリソースが選ばれていません」の案内文を返す（#485）。
+	 *
+	 * 編集画面の案内欄（PHP の初期描画と service-menu-editor.js）と、保存を止めたときのエラー（#1144）で
+	 * 同じ文言を使う。翻訳関数は1文ごとに分け、リソースラベル（複数形）を差し込んで連結する。
+	 *
+	 * @return string 案内文（2文）。
+	 */
+	public static function get_staff_unselected_notice(): string {
+		$plural_label = vkbm_get_resource_label_plural();
+
+		return sprintf(
+			/* translators: %s: resource label (plural), e.g. "Staff". */
+			__( 'No %s have been selected to be in charge.', 'vk-booking-manager' ),
+			$plural_label
+		) . ' ' . sprintf(
+			/* translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option. */
+			__( 'Check the %1$s, or select "%2$s".', 'vk-booking-manager' ),
+			$plural_label,
+			self::get_all_staff_option_label()
+		);
 	}
 
 	/**
@@ -1289,6 +1411,104 @@ class Service_Menu_Post_Type {
 		// $staff_count）は count() するだけで存在確認をしないため、フィルターが存在しないIDを
 		// 足すと複数人一括予約の上限人数が水増しされ得る（安藤レビュー LOW）。
 		return self::normalize_staff_ids( $filtered );
+	}
+
+	/**
+	 * メニューを担当できる公開中のリソースが1件もいないかを返す（#1144）。
+	 *
+	 * 「選ぶ」でチェックが0件のメニューと、選んだリソースが全員削除・非公開になったメニューが該当する。
+	 * 該当するメニューは指名の有無に関わらず予約を受け付けず、メニュー一覧・予約画面の選択肢から外し、
+	 * 管理画面のお知らせで知らせる。
+	 * 無料版（Staff_Editor::is_enabled() が false）は担当が常に基本スタッフ1名のため、常に false を返す。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 担当できる公開中のリソースがいなければ true。
+	 */
+	public static function has_no_assignable_staff( int $menu_id ): bool {
+		if ( $menu_id <= 0 || ! Staff_Editor::is_enabled() ) {
+			return false;
+		}
+
+		return array() === array_intersect( self::get_assignable_staff_ids( $menu_id ), self::get_published_resource_ids() );
+	}
+
+	/**
+	 * WP_Query の引数から、担当できる公開中のリソースがいないメニューを外す（#1144）。
+	 *
+	 * post__not_in に足すだけでなく、post__in（REST の include など）が指定されているときは
+	 * そこからも差し引く。WP_Query は post__in があると post__not_in を使わないため。
+	 * post__in が該当メニューだけだった場合は、どのメニューも返らないよう array( 0 ) にする
+	 * （空配列にすると絞り込み自体が無くなり、全件が返るため）。
+	 * 無料版・該当メニューが無いときは引数をそのまま返す。
+	 *
+	 * @param array<string, mixed> $args WP_Query の引数。
+	 * @return array<string, mixed> 除外を反映した引数。
+	 */
+	public static function exclude_unassigned_menus_from_query_args( array $args ): array {
+		$unassigned_menu_ids = self::get_menu_ids_without_assignable_staff();
+		if ( empty( $unassigned_menu_ids ) ) {
+			return $args;
+		}
+
+		// 既存の除外指定を残したまま足す。
+		$excluded_ids         = isset( $args['post__not_in'] ) && is_array( $args['post__not_in'] ) ? array_map( 'intval', $args['post__not_in'] ) : array();
+		$args['post__not_in'] = array_values( array_unique( array_merge( $excluded_ids, $unassigned_menu_ids ) ) );
+
+		// post__in の指定があれば、そこからも差し引く。
+		if ( ! empty( $args['post__in'] ) && is_array( $args['post__in'] ) ) {
+			$remaining_ids    = array_values( array_diff( array_map( 'intval', $args['post__in'] ), $unassigned_menu_ids ) );
+			$args['post__in'] = array() !== $remaining_ids ? $remaining_ids : array( 0 );
+		}
+
+		return $args;
+	}
+
+	/**
+	 * 担当できる公開中のリソースがいないサービスメニューの投稿IDを返す（#1144）。
+	 *
+	 * 判定は has_no_assignable_staff() と同じ。無料版では問い合わせをせずに空配列を返す。
+	 *
+	 * @param string|array<int,string> $post_status 対象にする投稿の状態（WP_Query の post_status）。既定はゴミ箱以外のすべて。
+	 * @return array<int> 該当するメニューの投稿ID（メニューの並び順）。
+	 */
+	public static function get_menu_ids_without_assignable_staff( $post_status = 'any' ): array {
+		if ( ! Staff_Editor::is_enabled() ) {
+			return array();
+		}
+
+		// 「すべてのリソースが担当できる」のメニューは、公開中のリソースが1件でもいれば該当しない。
+		// 判定は1件ずつ has_no_assignable_staff() に任せ、ここでは対象のメニューIDをまとめて取るだけにする。
+		$menu_ids = get_posts(
+			array(
+				'post_type'              => self::POST_TYPE,
+				'post_status'            => $post_status,
+				'posts_per_page'         => -1,
+				'fields'                 => 'ids',
+				'no_found_rows'          => true,
+				'update_post_term_cache' => false,
+				'orderby'                => array(
+					'menu_order' => 'ASC',
+					'title'      => 'ASC',
+				),
+			)
+		);
+
+		if ( empty( $menu_ids ) ) {
+			return array();
+		}
+
+		$menu_ids = array_map( 'intval', $menu_ids );
+		// 1件ずつメタを読むため、先にまとめてキャッシュへ載せる。
+		update_meta_cache( 'post', $menu_ids );
+
+		return array_values(
+			array_filter(
+				$menu_ids,
+				static function ( int $menu_id ): bool {
+					return self::has_no_assignable_staff( $menu_id );
+				}
+			)
+		);
 	}
 
 	/**
@@ -2271,7 +2491,7 @@ class Service_Menu_Post_Type {
 				'auth_callback'     => $lodging_auth_callback,
 			)
 		);
-		foreach ( array( self::META_CHECK_IN_TIME, self::META_CHECK_OUT_TIME ) as $time_meta_key ) {
+		foreach ( array( self::META_CHECK_IN_TIME, self::META_LATEST_CHECK_IN_TIME, self::META_CHECK_OUT_TIME ) as $time_meta_key ) {
 			register_post_meta(
 				self::POST_TYPE,
 				$time_meta_key,
@@ -2604,6 +2824,146 @@ class Service_Menu_Post_Type {
 	}
 
 	/**
+	 * メニューで実際に使う最終チェックイン時刻（HH:MM）を返す（#1125・#1136）。どれも使えなければ空文字（上限なし）。
+	 *
+	 * 予約画面の選択肢・空室 API・REST フィールド vkbm_lodging・予約の受付時の検査は、すべてこの値を使う。
+	 * 次の順で決める。
+	 * 1. プラン自身の値（get_plan_latest_check_in_time()）
+	 * 2. 基本設定の値（get_default_latest_check_in_time()）。そのプランのチェックイン時刻より前なら使わない
+	 * 3. どちらも無ければ空文字
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string 最終チェックイン時刻（HH:MM）。使える値が無ければ空文字。
+	 */
+	public static function get_latest_check_in_time( int $menu_id ): string {
+		$plan_value = self::get_plan_latest_check_in_time( $menu_id );
+		if ( '' !== $plan_value ) {
+			return $plan_value;
+		}
+
+		$default_value = self::get_default_latest_check_in_time();
+
+		return self::is_latest_check_in_time_usable( $default_value, self::get_check_in_time( $menu_id ) ) ? $default_value : '';
+	}
+
+	/**
+	 * プランの編集画面で入れた最終チェックイン時刻（HH:MM）だけを返す（#1136）。未設定・不正値は空文字。
+	 *
+	 * 基本設定の値は含めない。プラン編集画面の初期表示と保存はこの値を使うこと
+	 * （実際に使う値を初期表示に出すと、保存したときに基本設定の値がプランへ書き込まれ、以後は基本設定を変えても効かなくなるため）。
+	 * チェックイン時刻より前の値も空文字（未設定扱い）にする。管理画面以外（REST API など）から矛盾した値が
+	 * 書き込まれても、予約画面のチェックイン予定時刻の選択肢が 0 件にならないようにするため。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return string 最終チェックイン時刻（HH:MM）。未設定なら空文字。
+	 */
+	public static function get_plan_latest_check_in_time( int $menu_id ): string {
+		$value = self::sanitize_time_value( get_post_meta( $menu_id, self::META_LATEST_CHECK_IN_TIME, true ) );
+
+		return self::is_latest_check_in_time_usable( $value, self::get_check_in_time( $menu_id ) ) ? $value : '';
+	}
+
+	/**
+	 * 基本設定の「最終チェックイン時刻（宿泊プラン）」（HH:MM）を返す（#1136）。未設定・不正値は空文字。
+	 *
+	 * @return string 最終チェックイン時刻（HH:MM）。未設定なら空文字。
+	 */
+	public static function get_default_latest_check_in_time(): string {
+		$settings = ( new Settings_Repository() )->get_settings();
+
+		return self::sanitize_time_value( $settings[ Settings_Repository::KEY_LODGING_LATEST_CHECK_IN_TIME ] ?? '' );
+	}
+
+	/**
+	 * 基本設定の最終チェックイン時刻が、このプランのチェックイン時刻より前のために使われないかを返す（#1136）。
+	 *
+	 * プラン自身の値があるとき（基本設定の値をもともと使わないとき）と、基本設定が未設定のときは false。
+	 *
+	 * @param int $menu_id サービスメニューの投稿ID。
+	 * @return bool 基本設定の値がチェックイン時刻より前で使われないなら true。
+	 */
+	public static function is_default_latest_check_in_time_before_check_in( int $menu_id ): bool {
+		return self::is_default_latest_check_in_time_ignored_for( $menu_id, self::get_default_latest_check_in_time() );
+	}
+
+	/**
+	 * 渡した基本設定の最終チェックイン時刻が、このプランのチェックイン時刻より前のために使われないかを返す（#1136）。
+	 *
+	 * 複数のプランを続けて判定するとき、基本設定の読み出しをプランごとに繰り返さないよう、値を引数で受け取る。
+	 *
+	 * @param int    $menu_id       サービスメニューの投稿ID。
+	 * @param string $default_value 基本設定の最終チェックイン時刻（HH:MM または空文字）。
+	 * @return bool 使われないなら true。プラン自身の値があるとき・基本設定が未設定のときは false。
+	 */
+	private static function is_default_latest_check_in_time_ignored_for( int $menu_id, string $default_value ): bool {
+		if ( '' === $default_value || '' !== self::get_plan_latest_check_in_time( $menu_id ) ) {
+			return false;
+		}
+
+		return ! self::is_latest_check_in_time_usable( $default_value, self::get_check_in_time( $menu_id ) );
+	}
+
+	/**
+	 * 基本設定の最終チェックイン時刻がチェックイン時刻より前のために使われない、泊単位のプランの数を返す（#1136）。
+	 *
+	 * 基本設定の保存後の通知に使う。ゴミ箱と自動下書き以外のプラン（下書き・非公開を含む）を数える。
+	 * 宿泊が有効でないサイトでは 0。
+	 *
+	 * @return int 該当するプランの数。
+	 */
+	public static function count_night_plans_ignoring_default_latest_check_in_time(): int {
+		$default_value = self::get_default_latest_check_in_time();
+		if ( ! Industry_Presets::supports( 'lodging' ) || '' === $default_value ) {
+			return 0;
+		}
+
+		// 泊単位のプランの ID だけを取り出す。
+		$menu_ids = get_posts(
+			array(
+				'post_type'              => self::POST_TYPE,
+				'post_status'            => 'any',
+				'posts_per_page'         => -1,
+				'fields'                 => 'ids',
+				'no_found_rows'          => true,
+				'update_post_term_cache' => false,
+				'meta_query'             => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'   => self::META_BOOKING_UNIT,
+						'value' => self::BOOKING_UNIT_NIGHT,
+					),
+				),
+			)
+		);
+
+		// ID だけの取得ではメタが読み込まれず、判定でプランごとにクエリが出るため、一定件数ずつまとめて読み込んでから判定する。
+		$count = 0;
+		foreach ( array_chunk( array_map( 'intval', $menu_ids ), self::LATEST_CHECK_IN_COUNT_BATCH_SIZE ) as $batch_ids ) {
+			update_meta_cache( 'post', $batch_ids );
+			foreach ( $batch_ids as $menu_id ) {
+				if ( self::is_default_latest_check_in_time_ignored_for( $menu_id, $default_value ) ) {
+					++$count;
+				}
+			}
+		}
+
+		return $count;
+	}
+
+	/**
+	 * 最終チェックイン時刻を、そのプランで使えるかを返す（#1136）。
+	 *
+	 * 空文字（未設定）と、チェックイン時刻より前の値は使えない。チェックイン時刻と同じ値は使える（選択肢はチェックイン時刻の 1 つだけになる）。
+	 * 時刻は HH:MM の固定長のため、文字列のまま大小を比べる。
+	 *
+	 * @param string $latest_check_in_time 最終チェックイン時刻（HH:MM または空文字）。
+	 * @param string $check_in_time        チェックイン時刻（HH:MM）。
+	 * @return bool 使えるなら true。
+	 */
+	private static function is_latest_check_in_time_usable( string $latest_check_in_time, string $check_in_time ): bool {
+		return '' !== $latest_check_in_time && $latest_check_in_time >= $check_in_time;
+	}
+
+	/**
 	 * メニューのチェックアウト時刻（最終宿泊日の翌日の HH:MM）を返す。未設定・不正値は既定値。
 	 *
 	 * @param int $menu_id サービスメニューの投稿ID。
@@ -2668,6 +3028,7 @@ class Service_Menu_Post_Type {
 			self::META_NIGHT_PRICE_PRE_HOLIDAY,
 			self::META_NIGHT_PRICE_SPECIAL,
 			self::META_CHECK_IN_TIME,
+			self::META_LATEST_CHECK_IN_TIME,
 			self::META_CHECK_OUT_TIME,
 		);
 	}
@@ -2839,7 +3200,7 @@ class Service_Menu_Post_Type {
 	 * 予約画面（app.js）はこの値が null かどうかで、宿泊用の画面に切り替えるかを決める。
 	 *
 	 * @param array<string, mixed> $post REST post data.
-	 * @return array{max_guests: int, guest_tiers: array<int, array{label: string, price: int}>, price_unit: string, extra_guest_fee: bool, included_guests: int, base_price: int, has_variable_rate: bool, lowest_price: int, check_in_time: string, check_out_time: string}|null 泊単位のプランの情報。泊単位でなければ null。
+	 * @return array{max_guests: int, guest_tiers: array<int, array{label: string, price: int}>, price_unit: string, extra_guest_fee: bool, included_guests: int, base_price: int, has_variable_rate: bool, lowest_price: int, check_in_time: string, latest_check_in_time: string, check_out_time: string}|null 泊単位のプランの情報。泊単位でなければ null。
 	 */
 	public function get_lodging_rest_field( array $post ): ?array {
 		$post_id = isset( $post['id'] ) ? (int) $post['id'] : 0;
@@ -2855,18 +3216,20 @@ class Service_Menu_Post_Type {
 		$price_summary = self::summarize_menu_price_rows( Lodging_Price_Display::get_menu_price_rows( $post_id ), $base_price );
 
 		return array(
-			'max_guests'        => $max_guests,
-			'guest_tiers'       => $guest_tiers,
-			'price_unit'        => self::get_night_price_unit( $post_id ),
+			'max_guests'           => $max_guests,
+			'guest_tiers'          => $guest_tiers,
+			'price_unit'           => self::get_night_price_unit( $post_id ),
 			// 規定人数を超えた分の追加料金を使うか、基本料金に含まれる人数（#934）。区分（guest_tiers）が1件も無いときは追加料金を使わない扱い。
-			'extra_guest_fee'   => self::is_night_extra_guest_fee_enabled( $post_id ) && array() !== $guest_tiers,
-			'included_guests'   => self::get_night_included_guests( $post_id ),
-			'base_price'        => $base_price,
+			'extra_guest_fee'      => self::is_night_extra_guest_fee_enabled( $post_id ) && array() !== $guest_tiers,
+			'included_guests'      => self::get_night_included_guests( $post_id ),
+			'base_price'           => $base_price,
 			// 休前日・特定日の料金が平日と違う金額か、その場合の最安の金額。メニューのカードの「〜」の判定と金額（#738）と同じ値にそろえる。
-			'has_variable_rate' => $price_summary['has_variable_rate'],
-			'lowest_price'      => $price_summary['lowest_price'],
-			'check_in_time'     => self::get_check_in_time( $post_id ),
-			'check_out_time'    => self::get_check_out_time( $post_id ),
+			'has_variable_rate'    => $price_summary['has_variable_rate'],
+			'lowest_price'         => $price_summary['lowest_price'],
+			'check_in_time'        => self::get_check_in_time( $post_id ),
+			// 最終チェックイン時刻（#1125）。未設定なら空文字。
+			'latest_check_in_time' => self::get_latest_check_in_time( $post_id ),
+			'check_out_time'       => self::get_check_out_time( $post_id ),
 		);
 	}
 

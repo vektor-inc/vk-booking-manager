@@ -1,9 +1,10 @@
 import { __ } from '@wordpress/i18n';
 import { useEffect, useMemo, useState } from '@wordpress/element';
 import apiFetch from '@wordpress/api-fetch';
-import { ReservationHeader } from './reservation-header';
+import { getBrandLogoAlt, ReservationHeader } from './reservation-header';
 import { ReservationFooter } from './reservation-footer';
 import { buildFooterModel, extractFooterSettings } from './footer-model';
+import { resolveMenuLabels } from './menu-label';
 
 /** 確認リンクのクエリ名（Guest_Booking_Controller::QUERY_VAR）。 */
 export const VERIFY_QUERY_VAR = 'vkbm_guest_verify';
@@ -89,13 +90,14 @@ export const GuestResultFrame = ( { reservationPageUrl, children } ) => {
 	const showName =
 		Boolean( settings?.reservation_show_provider_name ) &&
 		providerName.trim() !== '';
+	const brandLinkHref = settings?.reservation_page_url || '';
 
 	return (
 		<div className="vkbm-reservation-content vkbm-reservation-content--confirm vkbm-reservation-content--guest-result">
 			<div className="vkbm-confirm">
 				<ReservationHeader
 					showBrand={ showLogo || showName }
-					brandLinkHref={ settings?.reservation_page_url || '' }
+					brandLinkHref={ brandLinkHref }
 					showLogo={ showLogo }
 					logoUrl={ providerLogoUrl }
 					logoWidth={
@@ -103,11 +105,7 @@ export const GuestResultFrame = ( { reservationPageUrl, children } ) => {
 							? Number( settings.provider_logo_width )
 							: 0
 					}
-					logoAlt={
-						showName
-							? providerName
-							: __( 'Logo image', 'vk-booking-manager' )
-					}
+					logoAlt={ getBrandLogoAlt( providerName, brandLinkHref ) }
 					showName={ showName }
 					brandName={ providerName }
 					nav={ null }
@@ -128,10 +126,10 @@ export const GuestResultFrame = ( { reservationPageUrl, children } ) => {
 };
 
 /**
- * 画面に出す「担当」「人数」の見出しと人数の単位を、基本設定から決める。
+ * 画面に出す「担当」「人数」の見出しと人数の単位、メニューの呼び方を、基本設定から決める。
  *
  * @param {Object|null} settings 基本設定（読み込み前は null）。
- * @return {{resourceLabel: string, guestsLabel: string, guestsUnitLabel: string}} 見出しと単位。
+ * @return {{resourceLabel: string, guestsLabel: string, guestsUnitLabel: string, menuLabel: string}} 見出しと単位と呼び方。
  */
 export const getSummaryLabels = ( settings ) => ( {
 	resourceLabel:
@@ -148,6 +146,8 @@ export const getSummaryLabels = ( settings ) => ( {
 		typeof settings?.guests_unit_label === 'string'
 			? settings.guests_unit_label
 			: '',
+	// 読み込み前はページに埋め込まれた値を使う（「メニュー」と出てから切り替わらないように）。
+	menuLabel: resolveMenuLabels( settings ).menuLabel,
 } );
 
 /**

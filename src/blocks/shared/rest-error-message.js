@@ -14,8 +14,14 @@
  * 管理者のときだけ文字列ではなく React ノード（Fragment）になる。呼び出し側は
  * `{ resolveApiErrorMessage( ... ) }` のように JSX の子要素としてそのまま
  * 埋め込めば、文字列・React ノードのどちらでも正しく描画される。
+ *
+ * ログインしていないお客様の通信がセキュリティ系プラグインに止められたとき（401 / 403）も、
+ * プラグインの英文のエラーを出さず、電話での問い合わせを案内する文言に差し替える（#1154）。
  */
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
+
+import { resolveLoginState } from './auth';
+import { isGuestAccessDeniedError } from './rest-access-denied';
 
 /**
  * お客様1人あたりの予約数の上限に達したときの REST のエラーコード。
@@ -63,6 +69,84 @@ const getPermalinkSettingsUrl = () => {
 };
 
 /**
+ * `window.vkbmReservationConfig.providerPhone`（BM 設定の事業者の電話番号）を読み取る。
+ *
+ * 通信を止められると provider-settings の REST も読めないため、PHP 側
+ * （Reservation_Block::maybe_enqueue_reservation_config()）がページに埋め込んだ値を使う。
+ *
+ * @return {string} 電話番号。未設定・取得できない場合は空文字列。
+ */
+const getProviderPhone = () => {
+	const config =
+		typeof window !== 'undefined' && window.vkbmReservationConfig
+			? window.vkbmReservationConfig
+			: {};
+
+	return typeof config.providerPhone === 'string'
+		? config.providerPhone.trim()
+		: '';
+};
+
+/**
+ * 通信を止められたときにお客様へ出す、問い合わせの案内を組み立てる。
+ *
+ * 案内は `.vkbm-guest-access-denied` の span で包み、文ごと（電話番号があれば TEL の行も）を
+ * `__line` の span に分けて 1 行ずつ出す（狭い幅で語の途中で折り返さないための指定を、
+ * 共通の `.vkbm-alert` ではなくこの案内だけに当てるため。style.scss を参照）。
+ * 行どうしの間の半角スペースは、文字だけを取り出したとき（読み上げなど）に文がつながらないためのもの。
+ *
+ * @param {string} phone 事業者の電話番号（空なら番号を添えず、直接の問い合わせを案内する）。
+ * @return {JSX.Element} 案内の文言（電話番号があるときは tel: リンクを含む）。
+ */
+export const buildGuestAccessDeniedMessage = ( phone ) => {
+	const unavailableLine = (
+		<span className="vkbm-guest-access-denied__line">
+			{ __(
+				'Online reservations are not available at the moment.',
+				'vk-booking-manager'
+			) }
+		</span>
+	);
+
+	// 電話番号が無いときは、電話番号を添えずに直接の問い合わせを案内する。
+	if ( ! phone ) {
+		return (
+			<span className="vkbm-guest-access-denied">
+				{ unavailableLine }{ ' ' }
+				<span className="vkbm-guest-access-denied__line">
+					{ __(
+						'Sorry for the inconvenience, but please contact us directly.',
+						'vk-booking-manager'
+					) }
+				</span>
+			</span>
+		);
+	}
+
+	// 電話番号があるときは、電話での問い合わせの案内と tel: リンクを添える。
+	return (
+		<span className="vkbm-guest-access-denied">
+			{ unavailableLine }{ ' ' }
+			<span className="vkbm-guest-access-denied__line">
+				{ __(
+					'Sorry for the inconvenience, but please contact us by phone.',
+					'vk-booking-manager'
+				) }
+			</span>{ ' ' }
+			<span className="vkbm-guest-access-denied__line">
+				<a href={ `tel:${ phone.replace( /[^0-9+]/g, '' ) }` }>
+					{ sprintf(
+						/* translators: %s: Provider phone number. */
+						__( 'TEL: %s', 'vk-booking-manager' ),
+						phone
+					) }
+				</a>
+			</span>
+		</span>
+	);
+};
+
+/**
  * apiFetch が reject したエラーから、画面に表示するメッセージを解決する。
  *
  * @param {Object}  error                 apiFetch が reject したエラーオブジェクト。
@@ -91,6 +175,12 @@ export const resolveApiErrorMessage = (
 				</a>
 			</>
 		);
+	}
+
+	// ログインしていないお客様の通信が止められたときは、プラグインの英文を出さずに電話での問い合わせを案内する。
+	// 止められた通信先とステータスは registerAccessDeniedLogger()（rest-access-denied.js）がコンソールへ出す。
+	if ( isGuestAccessDeniedError( error, resolveLoginState() ) ) {
+		return buildGuestAccessDeniedMessage( getProviderPhone() );
 	}
 
 	if ( error?.code !== 'invalid_json' ) {

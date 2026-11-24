@@ -17,6 +17,7 @@ use Exception;
 use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Common\Attendee_Name;
+use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
@@ -587,6 +588,16 @@ class Guest_Booking_Controller {
 			return $attendee;
 		}
 
+		// 予約時の入力項目（#1147）の必須と文字数も、ここ（申し込みの時点）で確かめる（リンクを開いた後に失敗させない）。
+		// 確認待ちデータには、申し込み時点の設定にある項目の値だけを残す。確定時は確定時点の設定で選び直す。
+		$custom_field_definitions = Booking_Custom_Fields::get_definitions( $settings );
+		$custom_field_values      = Booking_Custom_Fields::sanitize_values( $form[ Booking_Custom_Fields::REQUEST_PARAM ], $custom_field_definitions );
+		$custom_field_error       = Booking_Custom_Fields::create_error( Booking_Custom_Fields::validate_values( $custom_field_values, $custom_field_definitions, true ) );
+		if ( null !== $custom_field_error ) {
+			return $custom_field_error;
+		}
+		$form[ Booking_Custom_Fields::REQUEST_PARAM ] = $custom_field_values;
+
 		// 顧客フラグと重複予約の判定は、ここ（申し込みの時点）では行わない。
 		// 確認前に断ると、他人のメールアドレス・電話番号を入れて、顧客フラグの有無や予約の有無を探れてしまうため。
 		// メールの持ち主が確認リンクを開いた時点で判定する（create_booking_from_draft()）。
@@ -794,7 +805,7 @@ class Guest_Booking_Controller {
 		$form  = isset( $pending['form'] ) && is_array( $pending['form'] ) ? $pending['form'] : array();
 
 		$request = new WP_REST_Request( 'POST', '/' . self::REST_NAMESPACE . '/guest-bookings' );
-		foreach ( array( 'memo', 'agree_terms', 'agree_cancellation_policy', 'agree_terms_of_service', 'attendee_name', 'customer_address_full' ) as $key ) {
+		foreach ( array( 'memo', 'agree_terms', 'agree_cancellation_policy', 'agree_terms_of_service', 'attendee_name', 'customer_address_full', Booking_Custom_Fields::REQUEST_PARAM ) as $key ) {
 			if ( array_key_exists( $key, $form ) ) {
 				$request->set_param( $key, $form[ $key ] );
 			}
@@ -1366,7 +1377,7 @@ class Guest_Booking_Controller {
 	 *
 	 * @param WP_REST_Request     $request リクエスト。
 	 * @param array<string,mixed> $draft   予約の下書き。
-	 * @return array<string,mixed> memo・agree_*・attendee_name。
+	 * @return array<string,mixed> memo・agree_*・attendee_name・custom_fields（予約時の入力項目の回答。項目 ID => 値。検証前）。
 	 */
 	private function collect_form_values( WP_REST_Request $request, array $draft ): array {
 		$pick = static function ( string $key, $fallback ) use ( $request ) {
@@ -1379,6 +1390,9 @@ class Guest_Booking_Controller {
 		};
 
 		$agree_terms = ! empty( $pick( 'agree_terms', $draft['agree_terms'] ?? false ) );
+		// 予約時の入力項目の回答。配列以外が送られた場合は回答なしとして扱う。
+		$custom_fields = $pick( Booking_Custom_Fields::REQUEST_PARAM, $draft[ Booking_Custom_Fields::REQUEST_PARAM ] ?? array() );
+		$custom_fields = is_array( $custom_fields ) ? $custom_fields : array();
 
 		return array(
 			'memo'                      => Booking_Draft_Controller::truncate_memo( sanitize_textarea_field( $scalar( $pick( 'memo', $draft['memo'] ?? '' ) ) ) ),
@@ -1386,6 +1400,8 @@ class Guest_Booking_Controller {
 			'agree_cancellation_policy' => ! empty( $pick( 'agree_cancellation_policy', $draft['agree_cancellation_policy'] ?? $agree_terms ) ),
 			'agree_terms_of_service'    => ! empty( $pick( 'agree_terms_of_service', $draft['agree_terms_of_service'] ?? $agree_terms ) ),
 			'attendee_name'             => Attendee_Name::sanitize( $scalar( $pick( 'attendee_name', $draft['attendee_name'] ?? '' ) ) ),
+			// 中身は呼び出し側で設定の定義に照らして選ぶ。
+			'custom_fields'             => $custom_fields,
 		);
 	}
 
@@ -1395,10 +1411,7 @@ class Guest_Booking_Controller {
 	 * @return string 予約ページ URL。未設定ならサイトのトップページ。
 	 */
 	private function get_reservation_page_url(): string {
-		$settings = $this->settings_repository->get_settings();
-		$url      = isset( $settings['reservation_page_url'] ) ? (string) $settings['reservation_page_url'] : '';
-
-		$url = Reservation_Page_Url::resolve_usable( $url );
+		$url = Reservation_Page_Url::get_url( $this->settings_repository->get_settings() );
 
 		return '' !== $url ? $url : home_url( '/' );
 	}

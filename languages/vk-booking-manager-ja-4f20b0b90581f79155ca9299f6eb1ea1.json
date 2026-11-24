@@ -13,6 +13,9 @@
 			"Proceed to Reservation Button Block": [
 				"予約に進むボタンブロック"
 			],
+			"(opens in a new tab)": [
+				"（新しいタブで開きます）"
+			],
 			"Proceed to Reservation": [
 				"予約に進む"
 			],
@@ -27,9 +30,6 @@
 			],
 			"Open BM basic settings": [
 				"BM 基本設定画面を開く"
-			],
-			"(opens in a new tab)": [
-				"（新しいタブで開きます）"
 			],
 			"Target plan": [
 				"対象プラン"

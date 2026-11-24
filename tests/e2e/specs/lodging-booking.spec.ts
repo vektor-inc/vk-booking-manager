@@ -430,12 +430,12 @@ test.describe
 			`${ NIGHTS }泊`
 		);
 
-		// 初期値とは異なる予定時刻を入力し、確認画面への引き継ぎを確かめる。
-		// @step チェックイン予定時刻を「16:30」に変更する
+		// チェックイン時刻とは異なる予定時刻を選び、確認画面への引き継ぎを確かめる（#1125 で 30 分おきの選択に変更）。
+		// @step チェックイン予定時刻で「16:30」を選ぶ
 		const estimatedCheckInTime = '16:30';
 		await page
 			.getByLabel( 'チェックイン予定時刻', { exact: true } )
-			.fill( estimatedCheckInTime );
+			.selectOption( estimatedCheckInTime );
 
 		// 「予約に進む」で確認画面へ。
 		// @step 「予約に進む」を押す
@@ -509,6 +509,11 @@ test.describe
 				tokyoDateAfter( CHECK_IN_OFFSET + NIGHTS )
 			);
 			await page.locator( '.vkbm-lodging__room' ).first().click();
+			// チェックイン予定時刻は選択が必須（#1125）。先頭の選択肢（チェックイン時刻）を選ぶ。
+			// @step チェックイン予定時刻で「15:00」を選ぶ
+			await page
+				.getByLabel( 'チェックイン予定時刻', { exact: true } )
+				.selectOption( '15:00' );
 			await page.locator( '.vkbm-plan-summary__action' ).first().click();
 			await waitForConfirm( page );
 			const address = page.getByLabel( '住所（必須）', { exact: true } );

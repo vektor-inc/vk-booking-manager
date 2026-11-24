@@ -54,6 +54,8 @@ test.describe( '#988 サービスメニューカードの背景', () => {
 			wpEvalPhp( `$id = wp_insert_post( array( 'post_type' => 'vkbm_service_menu', 'post_status' => 'publish', 'post_title' => 'Issue 988 Menu', 'post_excerpt' => '<a href="#detail">Excerpt link</a> readable text' ) );
 			update_post_meta( $id, '_vkbm_base_price', 5000 );
 			update_post_meta( $id, '_vkbm_catch_copy', 'Readable catchphrase' );
+			// 担当できるスタッフがいないメニューは一覧に出ず、編集画面でも保存できない（#1144）ため、「すべて」を担当にする。
+			update_post_meta( $id, '_vkbm_staff_all', '1' );
 			echo $id;` )
 		);
 		pageId = Number(

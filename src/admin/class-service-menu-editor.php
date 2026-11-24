@@ -57,6 +57,17 @@ class Service_Menu_Editor {
 	private const META_PRICE_TIERS                 = '_vkbm_price_tiers';
 
 	/**
+	 * 時刻のプルダウンの「分」の選択肢（10 分刻み）。チェックアウト時刻に使う。
+	 */
+	private const TEN_MINUTE_OPTIONS = array( '00', '10', '20', '30', '40', '50' );
+
+	/**
+	 * チェックイン時刻・最終チェックイン時刻の「分」の選択肢（#1125）。
+	 * 予約画面のチェックイン予定時刻は 30 分おきの選択肢のため、両端の時刻もその区切りにそろえる。
+	 */
+	private const CHECK_IN_MINUTE_OPTIONS = array( '00', '30' );
+
+	/**
 	 * Register hooks.
 	 */
 	public function register(): void {
@@ -290,7 +301,8 @@ class Service_Menu_Editor {
 		wp_enqueue_script(
 			'vkbm-service-menu-editor',
 			$base_url . 'assets/js/service-menu-editor.js',
-			array( 'jquery' ),
+			// wp-hooks: ブロックエディタで保存前に担当できるリソースの入力を確かめる（editor.preSavePost、#1144）。
+			array( 'jquery', 'wp-hooks' ),
 			VKBM_VERSION,
 			true
 		);
@@ -358,7 +370,7 @@ class Service_Menu_Editor {
 					'maxCapacityNightDescription1'      => __( 'Maximum number of guests that can be booked together in a single reservation.', 'vk-booking-manager' ),
 					// #485: 担当できるリソースが「選ぶ」かつチェック0件のときに role="status" 領域へ入れる案内文
 					// （PHP 初期描画 render_staff_meta_box() と同じ文言）。
-					'staffUnselectedNotice'             => self::get_staff_unselected_notice(),
+					'staffUnselectedNotice'             => Service_Menu_Post_Type::get_staff_unselected_notice(),
 					// #572: 泊単位の料金の単位に合わせて JS で切り替える文言（PHP 初期描画と同じ文言）。
 					'nightPriceUnitPerGuest'            => self::get_night_price_unit_suffix( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_GUEST ),
 					'nightPriceUnitPerRoom'             => self::get_night_price_unit_suffix( Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM ),
@@ -1334,6 +1346,39 @@ class Service_Menu_Editor {
 			$time = $this->sanitize_time_selection( $data[ $name_base . '_hour' ], $data[ $name_base . '_minute' ] ?? '' );
 			$this->update_meta_value( $post_id, $meta_key, $time );
 		}
+
+		$this->save_latest_check_in_time_meta( $post_id, $data );
+	}
+
+	/**
+	 * 最終チェックイン時刻を保存する（#1125）。チェックイン時刻の保存より後に呼ぶ（保存後のチェックイン時刻と比べるため）。
+	 *
+	 * - 「時」が「設定しない」（空文字）ならメタを削除する。
+	 * - チェックイン時刻より前なら、投稿の保存は止めず、最終チェックイン時刻だけを保存せずに管理画面の通知で知らせる。
+	 * - 項目が送られない保存では既存のメタに触れない。
+	 *
+	 * @param int                  $post_id 投稿ID。
+	 * @param array<string, mixed> $data    送信された vkbm_service_menu 配列。
+	 */
+	private function save_latest_check_in_time_meta( int $post_id, array $data ): void {
+		if ( ! array_key_exists( 'latest_check_in_hour', $data ) ) {
+			return;
+		}
+
+		// 「設定しない」のときは「分」が無効で送られないため、時の値だけで判定する。
+		if ( '' === $data['latest_check_in_hour'] ) {
+			delete_post_meta( $post_id, Service_Menu_Post_Type::META_LATEST_CHECK_IN_TIME );
+			return;
+		}
+
+		// 「分」の無効を解く処理（JS）が動かなかったときも、時だけの選択を 00 分として受け取る。
+		$time = $this->sanitize_time_selection( $data['latest_check_in_hour'], $data['latest_check_in_minute'] ?? '00' );
+		if ( '' !== $time && $time < Service_Menu_Post_Type::get_check_in_time( $post_id ) ) {
+			$this->add_admin_notice( __( 'The latest check-in time was not saved because it was earlier than the check-in time.', 'vk-booking-manager' ) );
+			return;
+		}
+
+		$this->update_meta_value( $post_id, Service_Menu_Post_Type::META_LATEST_CHECK_IN_TIME, $time );
 	}
 
 	/**
@@ -1657,7 +1702,13 @@ class Service_Menu_Editor {
 		<tr id="vkbm-check-in-time-field" class="vkbm-booking-unit-night-only" <?php echo esc_attr( $night_only_hidden ); ?>>
 			<th scope="row"><?php esc_html_e( 'Check-in time', 'vk-booking-manager' ); ?></th>
 			<td>
-				<?php $this->render_time_selects( 'check_in', Service_Menu_Post_Type::get_check_in_time( $post->ID ), __( 'Check-in time', 'vk-booking-manager' ) ); ?>
+				<?php $this->render_time_selects( 'check_in', Service_Menu_Post_Type::get_check_in_time( $post->ID ), __( 'Check-in time', 'vk-booking-manager' ), self::CHECK_IN_MINUTE_OPTIONS ); ?>
+			</td>
+		</tr>
+		<tr id="vkbm-latest-check-in-time-field" class="vkbm-booking-unit-night-only" <?php echo esc_attr( $night_only_hidden ); ?>>
+			<th scope="row"><?php esc_html_e( 'Latest check-in time', 'vk-booking-manager' ); ?></th>
+			<td>
+				<?php $this->render_latest_check_in_time_field( $post ); ?>
 			</td>
 		</tr>
 		<tr id="vkbm-check-out-time-field" class="vkbm-booking-unit-night-only" <?php echo esc_attr( $night_only_hidden ); ?>>
@@ -1859,37 +1910,123 @@ class Service_Menu_Editor {
 	}
 
 	/**
-	 * 時と分（10分刻み）のプルダウンを出力する。固定開始時刻と同じ入力の形。
+	 * 「最終チェックイン時刻」の行の中身（時・分のプルダウン、説明文、基本設定の値が使われないときの注意）を出力する（#1125・#1136）。
 	 *
-	 * @param string $name_base  フォーム名のベース（{$name_base}_hour / {$name_base}_minute）。
-	 * @param string $time       現在値（HH:MM）。
-	 * @param string $aria_label 時・分のプルダウンの aria-label に使う名前。
+	 * 初期表示はプラン自身の値（get_plan_latest_check_in_time()）にする。基本設定の値を表示すると、そのまま保存したときにプランへ書き込まれるため。
+	 * 「時」の先頭の選択肢（送る値は空）は、基本設定に値があれば「基本設定の値（20:00）」、無ければ「設定しない」と表示する。
+	 *
+	 * @param WP_Post $post 編集中のサービスメニュー。
 	 */
-	private function render_time_selects( string $name_base, string $time, string $aria_label ): void {
-		$hour    = substr( $time, 0, 2 );
-		$minute  = substr( $time, 3, 2 );
-		$minutes = array( '00', '10', '20', '30', '40', '50' );
-		// REST などで10分刻み以外の値が保存されていても、値が変わらないよう選択肢に加える。
-		if ( ! in_array( $minute, $minutes, true ) ) {
+	private function render_latest_check_in_time_field( WP_Post $post ): void {
+		$default_value = Service_Menu_Post_Type::get_default_latest_check_in_time();
+		$settings_link = sprintf(
+			'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+			esc_url( admin_url( 'admin.php?page=vkbm-provider-settings&tab=system#vkbm-default-latest-check-in-time' ) ),
+			esc_html__( 'Latest check-in time on the General Settings page', 'vk-booking-manager' )
+		);
+		$unset_label   = '' !== $default_value
+			/* translators: %s: latest check-in time on the General Settings page (HH:MM). */
+			? sprintf( __( 'General Settings value (%s)', 'vk-booking-manager' ), $default_value )
+			: '';
+		$is_default_ignored = Service_Menu_Post_Type::is_default_latest_check_in_time_before_check_in( $post->ID );
+
+		$this->render_time_selects( 'latest_check_in', Service_Menu_Post_Type::get_plan_latest_check_in_time( $post->ID ), __( 'Latest check-in time', 'vk-booking-manager' ), self::CHECK_IN_MINUTE_OPTIONS, true, $unset_label );
+		?>
+		<p class="description">
+			<?php
+			esc_html_e( 'On the booking screen, the estimated check-in time can be chosen every 30 minutes from the check-in time up to this time.', 'vk-booking-manager' );
+			// 未設定のときに使われる値の説明（基本設定画面の該当の行へのリンク付き）。
+			// 基本設定の値がこのプランで使われないときは、直下の注意と逆のことを言うため出さない（注意で説明する）。
+			if ( ! $is_default_ignored ) {
+				echo '<br>';
+				if ( '' !== $default_value ) {
+					printf(
+						/* translators: 1: link to the latest check-in time on the General Settings page, 2: its current value (HH:MM). */
+						esc_html__( 'If not set, the %1$s (currently %2$s) is used.', 'vk-booking-manager' ),
+						$settings_link, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 組み立て時にエスケープ済み.
+						esc_html( $default_value )
+					);
+				} else {
+					printf(
+						/* translators: %s: link to the latest check-in time on the General Settings page. */
+						esc_html__( 'If not set, the %s is used.', 'vk-booking-manager' ),
+						$settings_link // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 組み立て時にエスケープ済み.
+					);
+					echo ' ';
+					esc_html_e( 'If it is not set on the General Settings page either, times up to 23:30 can be chosen.', 'vk-booking-manager' );
+				}
+			}
+			?>
+		</p>
+		<?php
+		// 基本設定の値がこのプランのチェックイン時刻より前のときは、このプランでは使われない（上限なし）ことと、取る操作を知らせる。
+		if ( $is_default_ignored ) :
+			?>
+			<div class="notice notice-warning inline vkbm-latest-check-in-time-notice">
+				<p>
+					<?php
+					printf(
+						/* translators: 1: link to the latest check-in time on the General Settings page, 2: its value (HH:MM), 3: check-in time of this plan (HH:MM). */
+						esc_html__( 'The %1$s (%2$s) is earlier than the check-in time (%3$s), so it is not used for this plan.', 'vk-booking-manager' ),
+						$settings_link, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 組み立て時にエスケープ済み.
+						esc_html( $default_value ),
+						esc_html( Service_Menu_Post_Type::get_check_in_time( $post->ID ) )
+					);
+					echo ' ';
+					esc_html_e( 'Set the latest check-in time for this plan.', 'vk-booking-manager' );
+					?>
+				</p>
+			</div>
+			<?php
+		endif;
+	}
+
+	/**
+	 * 時と分のプルダウンを出力する。固定開始時刻と同じ入力の形。
+	 * 時・「:」・分は 1 つの組（.vkbm-time-selects）にまとめて出力する（狭い幅で「:」だけが別の行に残らないようにするため）。
+	 *
+	 * $allow_unset が true のときは「時」の先頭に「設定しない」（空の値）を置き、選んでいる間は「分」を無効にする
+	 * （無効の切り替えは service-menu-editor.js が data-vkbm-minute-target を見て行う）。
+	 *
+	 * @param string            $name_base   フォーム名のベース（{$name_base}_hour / {$name_base}_minute）。
+	 * @param string            $time        現在値（HH:MM）。$allow_unset のときは空文字で「設定しない」。
+	 * @param string            $aria_label  時・分のプルダウンの aria-label に使う名前。
+	 * @param array<int,string> $minutes     「分」の選択肢（2 桁の文字列）。既定は 10 分刻み。
+	 * @param bool              $allow_unset 「設定しない」を選べるようにするか。
+	 * @param string            $unset_label $allow_unset のときの先頭の選択肢の文字。空文字なら「設定しない」。
+	 */
+	private function render_time_selects( string $name_base, string $time, string $aria_label, array $minutes = self::TEN_MINUTE_OPTIONS, bool $allow_unset = false, string $unset_label = '' ): void {
+		$is_unset = $allow_unset && '' === $time;
+		$hour     = $is_unset ? '' : substr( $time, 0, 2 );
+		$minute   = $is_unset ? '' : substr( $time, 3, 2 );
+		// REST や刻みを変える前に保存した値（15:10 など）は書き換えず、その分を選択肢に加えて表示する。
+		if ( '' !== $minute && ! in_array( $minute, $minutes, true ) ) {
 			$minutes[] = $minute;
 			sort( $minutes );
 		}
+		$hour_id   = 'vkbm_service_menu_' . $name_base . '_hour';
+		$minute_id = 'vkbm_service_menu_' . $name_base . '_minute';
 		/* translators: %s: field name such as "Check-in time". */
 		$hour_label = sprintf( __( '%s (hour)', 'vk-booking-manager' ), $aria_label );
 		/* translators: %s: field name such as "Check-in time". */
 		$minute_label = sprintf( __( '%s (minute)', 'vk-booking-manager' ), $aria_label );
 		?>
-		<select name="vkbm_service_menu[<?php echo esc_attr( $name_base ); ?>_hour]" aria-label="<?php echo esc_attr( $hour_label ); ?>">
-			<?php for ( $h = 0; $h <= 23; $h++ ) : ?>
-				<option value="<?php echo esc_attr( sprintf( '%02d', $h ) ); ?>" <?php selected( sprintf( '%02d', $h ), $hour ); ?>><?php echo esc_html( sprintf( '%02d', $h ) ); ?></option>
-			<?php endfor; ?>
-		</select>
-		<span>:</span>
-		<select name="vkbm_service_menu[<?php echo esc_attr( $name_base ); ?>_minute]" aria-label="<?php echo esc_attr( $minute_label ); ?>">
-			<?php foreach ( $minutes as $min ) : ?>
-				<option value="<?php echo esc_attr( $min ); ?>" <?php selected( $min, $minute ); ?>><?php echo esc_html( $min ); ?></option>
-			<?php endforeach; ?>
-		</select>
+		<div class="vkbm-time-selects">
+			<select id="<?php echo esc_attr( $hour_id ); ?>" class="<?php echo esc_attr( '' !== $unset_label ? 'vkbm-time-selects__hour vkbm-time-selects__hour--long-unset' : 'vkbm-time-selects__hour' ); ?>" name="vkbm_service_menu[<?php echo esc_attr( $name_base ); ?>_hour]" aria-label="<?php echo esc_attr( $hour_label ); ?>"<?php echo $allow_unset ? ' data-vkbm-minute-target="' . esc_attr( '#' . $minute_id ) . '"' : ''; ?>>
+				<?php if ( $allow_unset ) : ?>
+					<option value="" <?php selected( true, $is_unset ); ?>><?php echo esc_html( '' !== $unset_label ? $unset_label : __( 'Do not set', 'vk-booking-manager' ) ); ?></option>
+				<?php endif; ?>
+				<?php for ( $h = 0; $h <= 23; $h++ ) : ?>
+					<option value="<?php echo esc_attr( sprintf( '%02d', $h ) ); ?>" <?php selected( sprintf( '%02d', $h ), $hour ); ?>><?php echo esc_html( sprintf( '%02d', $h ) ); ?></option>
+				<?php endfor; ?>
+			</select>
+			<span>:</span>
+			<select id="<?php echo esc_attr( $minute_id ); ?>" class="vkbm-time-selects__minute" name="vkbm_service_menu[<?php echo esc_attr( $name_base ); ?>_minute]" aria-label="<?php echo esc_attr( $minute_label ); ?>" <?php disabled( true, $is_unset ); ?>>
+				<?php foreach ( $minutes as $min ) : ?>
+					<option value="<?php echo esc_attr( $min ); ?>" <?php selected( $min, $minute ); ?>><?php echo esc_html( $min ); ?></option>
+				<?php endforeach; ?>
+			</select>
+		</div>
 		<?php
 	}
 
@@ -2399,8 +2536,9 @@ class Service_Menu_Editor {
 	public function render_staff_meta_box( WP_Post $post ): void {
 		// 個別選択（保存値そのもの）。「すべて」選択中も保持しているため、そのままチェック状態に使う。
 		$selected_staff = Service_Menu_Post_Type::get_selected_staff_ids( $post->ID );
-		// 「すべてのリソースが担当できる」フラグ（#485）。既存・新規メニューとも未設定＝「選ぶ」が既定。
-		$is_all_staff = Service_Menu_Post_Type::is_all_staff_assigned( $post->ID );
+		// 「すべてのリソースが担当できる」フラグ（#485）。新規メニュー（まだ保存していない自動下書き）は
+		// 「すべて」を初期値にする（#1144）。保存済みのメニューは保存値に従う。
+		$is_all_staff = 'auto-draft' === $post->post_status || Service_Menu_Post_Type::is_all_staff_assigned( $post->ID );
 
 		$resources = get_posts(
 			array(
@@ -2520,36 +2658,12 @@ class Service_Menu_Editor {
 			</div>
 			<?php
 			// 未選択の案内。role="status" の領域を最初から置き、条件を満たしたときだけ文言を入れる
-			// （フォーカスは動かさない）。「予約を受け付けられません」のような結果は書かない
-			// （指名ありのメニューでは担当未設定でも指名スタッフを受け付ける現状挙動があり、事実と違うため）。
+			// （フォーカスは動かさない）。この状態のままでは保存できない（#1144）ため、案内は行動だけを書く。
 			// 開始タグ・文言・終了タグを1行に置き、案内を出さないときに空白文字を含めない（CSS の :empty で余白を消すため）。
 			?>
-			<p class="description vkbm-service-menu-staff__status" id="<?php echo esc_attr( $status_id ); ?>" role="status"><?php echo $show_unselected_notice ? esc_html( self::get_staff_unselected_notice() ) : ''; ?></p>
+			<p class="description vkbm-service-menu-staff__status" id="<?php echo esc_attr( $status_id ); ?>" role="status"><?php echo $show_unselected_notice ? esc_html( Service_Menu_Post_Type::get_staff_unselected_notice() ) : ''; ?></p>
 		</fieldset>
 		<?php
-	}
-
-	/**
-	 * 「担当できるリソースが選ばれていません」の案内文を返す（#485）。
-	 *
-	 * PHP の初期描画と service-menu-editor.js（wp_localize_script 経由）で同じ文言を使う。
-	 * 翻訳関数は1文ごとに分け、リソースラベル（複数形）を差し込んで連結する。
-	 *
-	 * @return string 案内文（2文）。
-	 */
-	private static function get_staff_unselected_notice(): string {
-		$plural_label = vkbm_get_resource_label_plural();
-
-		return sprintf(
-			/* translators: %s: resource label (plural), e.g. "Staff". */
-			__( 'No %s have been selected to be in charge.', 'vk-booking-manager' ),
-			$plural_label
-		) . ' ' . sprintf(
-			/* translators: 1: resource label (plural), e.g. "Staff". 2: label of the "All ... can be in charge" option. */
-			__( 'Check the %1$s, or select "%2$s".', 'vk-booking-manager' ),
-			$plural_label,
-			Service_Menu_Post_Type::get_all_staff_option_label()
-		);
 	}
 
 	/**
@@ -2869,7 +2983,13 @@ class Service_Menu_Editor {
 		// 予約枠の定員機能がオフでフォームに貸切・料金区分の欄が無い構成でも、泊単位では使わない値を残さない。
 		$this->delete_night_unit_unsupported_meta( $post_id );
 		$this->delete_per_booking_unsupported_meta( $post_id, $had_price_tiers );
-		if ( Staff_Editor::is_enabled() ) {
+		if ( Staff_Editor::is_enabled() && isset( $data['staff_all'] ) && ! Service_Menu_Post_Type::is_valid_staff_selection( $staff_all, $staff_ids ) ) {
+			// 「選ぶ」でチェックが0件のときは、担当の設定を保存せずに案内する（#1144）。
+			// ブロックエディタでは service-menu-editor.js が保存前に止めるため、ここに来るのはその確認を通らなかった送信だけ。
+			// 「すべて」「選ぶ」のラジオを含まない送信（担当の欄が無い画面）は対象外。
+			$this->add_admin_notice( Service_Menu_Post_Type::get_staff_unselected_notice() );
+		} elseif ( Staff_Editor::is_enabled() && isset( $data['staff_all'] ) ) {
+			// ラジオを含まない送信では、チェックが無いことを「0件を選んだ」と区別できないため、担当の設定を変えない（#1144）。
 			// 個別選択は「すべて」選択中も消さずに保持する（「選ぶ」へ戻したとき以前の選択を復元するため。#485）。
 			$this->update_meta_value( $post_id, '_vkbm_staff_ids', $staff_ids, true );
 			// '' のときは update_meta_value() がメタを削除し、未設定（既定 false＝「選ぶ」）に戻る。

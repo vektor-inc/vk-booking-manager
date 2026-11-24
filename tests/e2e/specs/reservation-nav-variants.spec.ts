@@ -1,6 +1,6 @@
 // @category 予約画面・カレンダー
 import { test, expect, Page } from '@playwright/test';
-import { wpCliArgs } from '../utils/helpers';
+import { wpCliArgs, wpEvalPhp } from '../utils/helpers';
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'http://localhost:8889';
 const ADMIN_USER = 'admin';
@@ -437,5 +437,132 @@ test.describe( 'Reservation header nav variants', () => {
 			screen: 'reservation',
 			variant: 'staff',
 		} );
+	} );
+} );
+
+// #1121: 未ログインのお客様のヘッダーナビは、予約の受付方法とユーザー登録の可否で「ログイン」「新規登録」を出し分ける。
+// @title 予約の受付方法・ユーザー登録の設定による、未ログインのヘッダーナビの出し分け
+test.describe( 'Guest header nav by booking customer mode (#1121)', () => {
+	test.use( { storageState: { cookies: [], origins: [] } } );
+
+	// 元の設定値（テストごとに復元する）。
+	let originalCustomerMode = '';
+	let originalUsersCanRegister = '';
+
+	/**
+	 * 基本設定の「予約の受付方法」だけを書き換える（他のキーは維持する）。
+	 *
+	 * @param mode member / guest / both。空文字ならキーごと消す（未保存の状態）。
+	 */
+	const setCustomerMode = ( mode: '' | 'member' | 'guest' | 'both' ) => {
+		wpEvalPhp(
+			'$s = get_option( "vkbm_provider_settings", array() );' +
+				'if ( ! is_array( $s ) ) { $s = array(); }' +
+				( mode
+					? `$s["booking_customer_mode"] = "${ mode }";`
+					: 'unset( $s["booking_customer_mode"] );' ) +
+				'update_option( "vkbm_provider_settings", $s );'
+		);
+	};
+
+	test.beforeAll( async () => {
+		// 復元用に、今の受付方法とユーザー登録の設定を控えておく。
+		originalCustomerMode = wpEvalPhp(
+			'$s = get_option( "vkbm_provider_settings", array() );' +
+				'echo is_array( $s ) && isset( $s["booking_customer_mode"] ) ? $s["booking_customer_mode"] : "";'
+		);
+		originalUsersCanRegister = wpCliArgs( [
+			'option',
+			'get',
+			'users_can_register',
+		] );
+	} );
+
+	test.beforeEach( async ( { page } ) => {
+		// @step ログアウトした状態から始める
+		await resetAuthState( page );
+	} );
+
+	test.afterEach( async () => {
+		// 他のテストに影響しないよう、受付方法とユーザー登録の設定を元に戻す。
+		setCustomerMode(
+			originalCustomerMode as '' | 'member' | 'guest' | 'both'
+		);
+		wpCliArgs( [
+			'option',
+			'update',
+			'users_can_register',
+			originalUsersCanRegister || '0',
+		] );
+	} );
+
+	// @title 受付方法が「会員登録なしのみ」なら、未ログインの予約画面に「ログイン」「新規登録」を出さない
+	test( 'hides login and sign-up in guest-only mode', async ( { page } ) => {
+		// @step 予約の受付方法を「ゲストのみ」、ユーザー登録を受け付ける設定にする
+		setCustomerMode( 'guest' );
+		wpCliArgs( [ 'option', 'update', 'users_can_register', '1' ] );
+
+		// @step ログインせずに予約ページを開く
+		await page.goto( buildBookingUrl() );
+		await page.waitForLoadState( 'networkidle' );
+		// 予約画面の描画が終わったことを、メニュー一覧などの予約セクションで確かめてから判定する。
+		await expect(
+			page.locator( '.vkbm-reservation' ).first()
+		).toBeVisible();
+
+		// @check ヘッダーにゲスト用のナビが出ず、「ログイン」「新規登録」のボタンも無い
+		await expect(
+			page.locator( `${ NAV_SELECTOR }[data-vkbm-nav-variant="guest"]` )
+		).toHaveCount( 0 );
+		await expect(
+			page.locator( '.vkbm-reservation-header__nav-link', {
+				hasText: /^(ログイン|Log in|新規登録|Sign up)$/,
+			} )
+		).toHaveCount( 0 );
+	} );
+
+	// @title 受付方法が「会員登録なしのみ」でも、URL でログイン画面を開けばログインフォームが出る
+	test( 'still shows login form via vkbm_auth=login in guest-only mode', async ( {
+		page,
+	} ) => {
+		// @step 予約の受付方法を「ゲストのみ」にする
+		setCustomerMode( 'guest' );
+
+		// @step ログインせずに予約ページのログイン画面（?vkbm_auth=login）を開く
+		await page.goto( buildBookingUrl( 'login' ) );
+		await page.waitForLoadState( 'networkidle' );
+
+		// @check ログインフォームが表示され、ヘッダーナビは「戻る」になる
+		await expect( page.locator( '#vkbm-login-username' ) ).toBeVisible( {
+			timeout: 10000,
+		} );
+		await expectNavVariant( page, {
+			screen: 'reservation',
+			variant: 'return',
+		} );
+	} );
+
+	// @title ユーザー登録を受け付けていなければ、未ログインの予約画面に「ログイン」だけを出す
+	test( 'shows only login when user registration is disabled', async ( {
+		page,
+	} ) => {
+		// @step 予約の受付方法を「会員のみ」、ユーザー登録を受け付けない設定にする
+		setCustomerMode( 'member' );
+		wpCliArgs( [ 'option', 'update', 'users_can_register', '0' ] );
+
+		// @step ログインせずに予約ページを開く
+		await page.goto( buildBookingUrl() );
+		await page.waitForLoadState( 'networkidle' );
+
+		// @check ゲスト用のナビに「ログイン」だけが並び、「新規登録」は無い
+		await expectNavVariant( page, {
+			screen: 'reservation',
+			variant: 'guest',
+		} );
+		const items = page.locator(
+			`${ NAV_SELECTOR }[data-vkbm-nav-variant="guest"] .vkbm-reservation-header__nav-link`
+		);
+		await expect( items ).toHaveCount( 1 );
+		await expect( items.first() ).toHaveText( /ログイン|Log in/ );
 	} );
 } );

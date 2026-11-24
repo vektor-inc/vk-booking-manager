@@ -156,6 +156,13 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 	 * @return string トークン。
 	 */
 	private function store_draft( int $menu_id, int $staff_id, string $start = self::START, string $end = self::END, array $extra = array() ): string {
+		// 担当できるスタッフがいないメニューは予約を受け付けない（#1144）ため、下書きのスタッフをメニューの担当に加える。
+		$draft_menu_id = isset( $extra['menu_id'] ) ? (int) $extra['menu_id'] : $menu_id;
+		$menu_staff    = Service_Menu_Post_Type::get_selected_staff_ids( $draft_menu_id );
+		if ( $staff_id > 0 && ! in_array( $staff_id, $menu_staff, true ) ) {
+			update_post_meta( $draft_menu_id, '_vkbm_staff_ids', array_merge( $menu_staff, array( $staff_id ) ) );
+		}
+
 		$token   = 'token' . strtolower( wp_generate_password( 8, false, false ) );
 		$payload = array_merge(
 			array(
@@ -2275,6 +2282,148 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 		$this->assertSame( 3, Guest_Booking_Controller::get_public_result()['bookingLimit'] );
 		$property->setValue( null, $test_cases[0]['current'] );
 		$this->assertArrayNotHasKey( 'bookingLimit', Guest_Booking_Controller::get_public_result() );
+	}
+
+	/**
+	 * 予約時の入力項目（#1147）は申し込みの時点で必須を確かめ、確認待ちデータに残した回答を、確認リンクを開いた時点の設定で予約へ保存する。
+	 */
+	public function test_create_guest_booking_request(): void {
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+
+		$course  = array(
+			'id'       => 'cf_course',
+			'label'    => '夕食のコース',
+			'type'     => 'text',
+			'required' => true,
+		);
+		$allergy = array(
+			'id'       => 'cf_allergy',
+			'label'    => 'アレルギー',
+			'type'     => 'textarea',
+			'required' => false,
+		);
+		$age     = array(
+			'id'       => 'cf_age',
+			'label'    => '代表者の年齢',
+			'type'     => 'text',
+			'required' => true,
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '必須の項目が空 => 申し込みの時点で断る',
+				'fields_at_request'   => array( $course, $allergy ),
+				'fields_at_verify'    => array( $course, $allergy ),
+				'answers'             => array( 'cf_allergy' => 'えび' ),
+				'expected_error'      => 'vkbm_custom_field_invalid',
+				'expected_pending'    => null,
+				'expected_snapshot'   => null,
+			),
+			array(
+				'test_condition_name' => '回答あり => 確認待ちデータに定義にある項目だけを残し、予約へ項目名と一緒に保存する',
+				'fields_at_request'   => array( $course, $allergy ),
+				'fields_at_verify'    => array( $course, $allergy ),
+				'answers'             => array(
+					'cf_course'  => '和食',
+					'cf_allergy' => "えび\nかに",
+					'cf_unknown' => '定義に無い項目',
+				),
+				'expected_error'      => '',
+				'expected_pending'    => array(
+					'cf_course'  => '和食',
+					'cf_allergy' => "えび\nかに",
+				),
+				'expected_snapshot'   => array(
+					array(
+						'id'    => 'cf_course',
+						'label' => '夕食のコース',
+						'type'  => 'text',
+						'value' => '和食',
+					),
+					array(
+						'id'    => 'cf_allergy',
+						'label' => 'アレルギー',
+						'type'  => 'textarea',
+						'value' => "えび\nかに",
+					),
+				),
+			),
+			array(
+				'test_condition_name' => '申し込み後に項目を削除・必須の項目を追加 => リンクを開いても失敗させず、開いた時点の設定で保存する',
+				'fields_at_request'   => array( $course, $allergy ),
+				'fields_at_verify'    => array( $course, $age ),
+				'answers'             => array(
+					'cf_course'  => '洋食',
+					'cf_allergy' => 'なし',
+				),
+				'expected_error'      => '',
+				'expected_pending'    => array(
+					'cf_course'  => '洋食',
+					'cf_allergy' => 'なし',
+				),
+				'expected_snapshot'   => array(
+					array(
+						'id'    => 'cf_course',
+						'label' => '夕食のコース',
+						'type'  => 'text',
+						'value' => '洋食',
+					),
+					array(
+						'id'    => 'cf_age',
+						'label' => '代表者の年齢',
+						'type'  => 'text',
+						'value' => '',
+					),
+				),
+			),
+		);
+
+		foreach ( $test_cases as $index => $case ) {
+			// 申し込みの時点の設定。
+			$this->save_settings(
+				array(
+					'booking_customer_mode'        => 'guest',
+					'provider_booking_status_mode' => 'confirmed',
+					'booking_custom_fields'        => $case['fields_at_request'],
+				)
+			);
+			list( $controller, $notification ) = $this->build_controller( $staff_id );
+			$email                             = 'custom-field' . $index . '@example.com';
+			$request                           = $this->build_request(
+				$this->store_draft( $menu_id, $staff_id ),
+				array(
+					'customer_email' => $email,
+					'custom_fields'  => $case['answers'],
+				)
+			);
+
+			if ( '' !== $case['expected_error'] ) {
+				$response = $controller->create_guest_booking_request( $request );
+				$this->assertInstanceOf( WP_Error::class, $response, $case['test_condition_name'] );
+				$this->assertSame( $case['expected_error'], $response->get_error_code(), $case['test_condition_name'] );
+				continue;
+			}
+
+			// 確認待ちデータに残った回答を確かめる。
+			$raw_token = $this->request_and_get_token( $controller, $notification, $request );
+			$pending   = get_transient( Guest_Booking_Controller::PENDING_PREFIX . hash( 'sha256', $raw_token ) );
+			$this->assertSame( $case['expected_pending'], $pending['form']['custom_fields'], $case['test_condition_name'] );
+
+			// 確認リンクを開く時点の設定に切り替えて、予約を作る。
+			$this->save_settings(
+				array(
+					'booking_customer_mode'        => 'guest',
+					'provider_booking_status_mode' => 'confirmed',
+					'booking_custom_fields'        => $case['fields_at_verify'],
+				)
+			);
+			$result = $controller->process_verification( $raw_token );
+			$this->assertSame( 'confirmed', $result['result'], $case['test_condition_name'] );
+			$this->assertSame( $case['expected_snapshot'], get_post_meta( $result['booking_id'], '_vkbm_booking_custom_fields', true ), $case['test_condition_name'] );
+			// 重複しないよう、次の案件のために作った予約は片付ける。
+			wp_delete_post( $result['booking_id'], true );
+		}
 	}
 
 	/**

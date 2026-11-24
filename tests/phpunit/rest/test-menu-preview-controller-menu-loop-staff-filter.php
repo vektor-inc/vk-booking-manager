@@ -20,6 +20,7 @@ namespace VKBookingManager\Tests\REST;
 
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\REST\Menu_Preview_Controller;
@@ -148,8 +149,19 @@ class Menu_Preview_Controller_Menu_Loop_Staff_Filter_Test extends WP_UnitTestCas
 
 		$this->set_site_wide_nomination( true );
 
-		$target_staff_id = 9201;
-		$other_staff_id  = 9202;
+		// 担当できるスタッフがいないメニューは一覧に出ない（#1144）ため、実在する公開中のスタッフを使う。
+		$target_staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		$other_staff_id  = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 
 		$menu_assigned_id = (int) $this->factory()->post->create(
 			array(
@@ -203,6 +215,14 @@ class Menu_Preview_Controller_Menu_Loop_Staff_Filter_Test extends WP_UnitTestCas
 				'post_title'  => 'メニューH（直接呼び出し確認用）',
 			)
 		);
+		// 担当できるスタッフがいないメニューは一覧に出ない（#1144）ため、「すべて」で担当できる公開中のスタッフを用意する。
+		update_post_meta( $menu_id, Service_Menu_Post_Type::META_STAFF_ALL, '1' );
+		$this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 
 		$request = new WP_REST_Request( 'GET', '/vkbm/v1/menu-loop' );
 		$request->set_param( 'staff', -5 );
@@ -242,7 +262,12 @@ class Menu_Preview_Controller_Menu_Loop_Staff_Filter_Test extends WP_UnitTestCas
 		// 明示的に未ログイン（匿名訪問者）へ固定する。
 		wp_set_current_user( 0 );
 
-		$target_staff_id = 9301;
+		$target_staff_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Resource_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
 
 		// 投稿作成時に指定したタイトル文字列そのもの。get_the_title() は非公開投稿に
 		// "Private: " 接頭辞を付与するなど、比較対象を書き換えてしまう場合があるため、

@@ -227,7 +227,8 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			'aria-pressed',
 			'true'
 		);
-		// @check 2 日後は × のまま「チェックアウト日に選べます」と読み上げられる押せる状態になる
+		// チェックアウトに選べる日は、× を ○ に置き換える（#1131）。
+		// @check 2 日後は × が ○ に変わり、「チェックアウト日に選べます」と読み上げられる押せる状態になる
 		const checkoutBoundary = await dayButton( page, 2 );
 		await expect( checkoutBoundary ).toHaveAttribute(
 			'aria-disabled',
@@ -238,10 +239,13 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			/チェックアウト日に選べます/
 		);
 		await expect(
+			checkoutBoundary.locator( '.vkbm-calendar__day-available-mark' )
+		).toHaveText( '○' );
+		await expect(
 			checkoutBoundary.locator( '.vkbm-calendar__day-unavailable-mark' )
-		).toHaveText( '×' );
+		).toHaveCount( 0 );
 
-		// @check 3 日後は「途中に予約できない日があります」と読み上げられる押せない状態で、× は付かない
+		// @check 3 日後は「途中に予約できない日があります」と読み上げられる押せない状態で、× も ○ も付かない
 		const blocked = await dayButton( page, 3 );
 		await expect( blocked ).toHaveAttribute( 'aria-disabled', 'true' );
 		await expect( blocked ).toHaveAttribute(
@@ -251,6 +255,9 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		await expect(
 			blocked.locator( '.vkbm-calendar__day-unavailable-mark' )
 		).toHaveText( '' );
+		await expect(
+			blocked.locator( '.vkbm-calendar__day-available-mark' )
+		).toHaveCount( 0 );
 
 		// 日程を選び直して満室日より後をチェックインにしても、前の満室日の × と選択不可状態は残る。
 		// @step 「日程を選び直す」ボタンを押し、4 日後をチェックイン日に選ぶ
@@ -292,7 +299,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 		).toHaveText( '' );
 	} );
 
-	test( '受付上限外の × の日もチェックイン後はチェックアウトに選べる', async ( {
+	test( '受付上限外の × の日もチェックイン後はチェックアウトに選べ、○ に変わる', async ( {
 		page,
 	} ) => {
 		try {
@@ -322,7 +329,7 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			);
 			await ( await dayButton( page, 1 ) ).click();
 			await checkoutMetaResponse;
-			// @check 2 日後が × のまま「チェックアウト日に選べます」と読み上げられる押せる状態になる
+			// @check 2 日後は × が ○ に変わり、「チェックアウト日に選べます」と読み上げられる押せる状態になる
 			const selectableCheckout = await dayButton( page, 2 );
 			await expect( selectableCheckout ).toHaveAttribute(
 				'aria-disabled',
@@ -334,9 +341,14 @@ test.describe.serial( 'issue #932: 宿泊カレンダーの予約不可日', () 
 			);
 			await expect(
 				selectableCheckout.locator(
+					'.vkbm-calendar__day-available-mark'
+				)
+			).toHaveText( '○' );
+			await expect(
+				selectableCheckout.locator(
 					'.vkbm-calendar__day-unavailable-mark'
 				)
-			).toHaveText( '×' );
+			).toHaveCount( 0 );
 			// @step 2 日後をチェックアウト日に選ぶ
 			await selectableCheckout.click();
 			// @check 2 日後が選択中になる
