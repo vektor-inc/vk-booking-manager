@@ -12,6 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Admin\Pro_Upsell;
+use VKBookingManager\Multilingual\Multilingual_Labels;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -311,11 +312,77 @@ function vkbm_get_resource_menu_icon(): string {
 }
 
 /**
+ * 呼び方を「表示中の言語で登録した値 → 基本の値 → 翻訳の既定値」の順で決め、フィルターフックに通して返す。
+ *
+ * 表示中の言語は determine_locale() で判定する（switch_to_locale() で切り替えている間は、切り替え後の言語になる）。
+ * 言語ごとの値は BM 設定の「多言語設定」タブで登録する（Multilingual_Labels）。
+ *
+ * @param string   $key            呼び方のキー（Multilingual_Labels::FIELD_KEYS のいずれか）。
+ * @param callable $get_base_label 言語ごとの値が空のときに使う値（基本の値、無ければ翻訳の既定値）を返す関数。引数に表示中のロケールを受け取る。
+ * @return string 表示する呼び方。
+ */
+function vkbm_resolve_label( string $key, callable $get_base_label ): string {
+	$locale = determine_locale();
+	$label  = Multilingual_Labels::get_value( $locale, $key );
+
+	// 表示中の言語の値が無ければ、基本の値（無ければ翻訳の既定値）を使う。
+	if ( '' === $label ) {
+		$label = (string) $get_base_label( $locale );
+	}
+
+	/**
+	 * 表示する呼び方を差し替える。
+	 *
+	 * WPML・Polylang など、Bogo 以外の多言語化プラグインを使うサイトで、言語に合わせた呼び方へ差し替えるときに使う。
+	 *
+	 * @param string $label  表示する呼び方（表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決めた値）。
+	 * @param string $key    呼び方のキー（例: menu_label、guests_count_label）。
+	 * @param string $locale 表示中のロケール（determine_locale() の値。例: en_US）。
+	 */
+	return (string) apply_filters( 'vkbm_label', $label, $key, $locale ); // フック名は Multilingual_Labels::FILTER_HOOK と揃える。
+}
+
+/**
+ * 呼び方のキーから、基本の値（無ければ翻訳の既定値）を返す。
+ *
+ * 「多言語設定」タブの入力欄のプレースホルダー（空欄のときに表示される呼び方）に使う。
+ * 対象の言語で取得するには、呼び出し側で switch_to_locale() してから呼ぶ。
+ *
+ * @param string $key 呼び方のキー（Multilingual_Labels::FIELD_KEYS のいずれか）。
+ * @return string 基本の値。対象外のキーなら空文字。
+ */
+function vkbm_get_base_label( string $key ): string {
+	$getters = array(
+		'duration_label'         => 'vkbm_get_base_duration_label',
+		'other_conditions_label' => 'vkbm_get_base_other_conditions_label',
+		'menu_label'             => 'vkbm_get_base_menu_label',
+		'menu_label_plural'      => 'vkbm_get_base_menu_label_plural',
+		'guests_count_label'     => 'vkbm_get_base_guests_count_label',
+		'guests_unit_label'      => 'vkbm_get_base_guests_unit_label',
+		'no_nomination_label'    => 'vkbm_get_base_no_nomination_label',
+		'nomination_fee_label'   => 'vkbm_get_base_nomination_fee_label',
+	);
+
+	return isset( $getters[ $key ] ) ? (string) call_user_func( $getters[ $key ] ) : '';
+}
+
+/**
  * 指名なしラベルを取得する（デフォルト: No preference）。
+ *
+ * 表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決める（vkbm_resolve_label()）。
  *
  * @return string
  */
 function vkbm_get_no_nomination_label(): string {
+	return vkbm_resolve_label( 'no_nomination_label', 'vkbm_get_base_no_nomination_label' );
+}
+
+/**
+ * 基本の値（「表記設定」タブの値）の指名なしラベルを取得する（デフォルト: No preference）。
+ *
+ * @return string
+ */
+function vkbm_get_base_no_nomination_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['no_nomination_label'] ) ? trim( (string) $settings['no_nomination_label'] ) : '';
@@ -326,9 +393,20 @@ function vkbm_get_no_nomination_label(): string {
 /**
  * 指名料ラベルを取得する（デフォルト: Nomination fee）。
  *
+ * 表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決める（vkbm_resolve_label()）。
+ *
  * @return string
  */
 function vkbm_get_nomination_fee_label(): string {
+	return vkbm_resolve_label( 'nomination_fee_label', 'vkbm_get_base_nomination_fee_label' );
+}
+
+/**
+ * 基本の値の指名料ラベルを取得する（デフォルト: Nomination fee）。
+ *
+ * @return string
+ */
+function vkbm_get_base_nomination_fee_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['nomination_fee_label'] ) ? trim( (string) $settings['nomination_fee_label'] ) : '';
@@ -340,9 +418,20 @@ function vkbm_get_nomination_fee_label(): string {
  * Get the configured duration label (default: Time).
  * 所要時間ラベルを取得する（デフォルト: Time）。
  *
+ * 表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決める（vkbm_resolve_label()）。
+ *
  * @return string
  */
 function vkbm_get_duration_label(): string {
+	return vkbm_resolve_label( 'duration_label', 'vkbm_get_base_duration_label' );
+}
+
+/**
+ * 基本の値の所要時間ラベルを取得する（デフォルト: Time）。
+ *
+ * @return string
+ */
+function vkbm_get_base_duration_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['duration_label'] ) ? trim( (string) $settings['duration_label'] ) : '';
@@ -354,9 +443,20 @@ function vkbm_get_duration_label(): string {
  * Get the configured other conditions label (default: Other conditions).
  * その他条件ラベルを取得する（デフォルト: Other conditions）。
  *
+ * 表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決める（vkbm_resolve_label()）。
+ *
  * @return string
  */
 function vkbm_get_other_conditions_label(): string {
+	return vkbm_resolve_label( 'other_conditions_label', 'vkbm_get_base_other_conditions_label' );
+}
+
+/**
+ * 基本の値のその他条件ラベルを取得する（デフォルト: Other conditions）。
+ *
+ * @return string
+ */
+function vkbm_get_base_other_conditions_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['other_conditions_label'] ) ? trim( (string) $settings['other_conditions_label'] ) : '';
@@ -367,11 +467,22 @@ function vkbm_get_other_conditions_label(): string {
 /**
  * 数量の見出しラベルを取得する（デフォルト: Number of guests / 人数）。
  *
- * 既存のラベル群と同じく、設定が空文字の場合は翻訳既定へフォールバックする。
+ * 表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決める（vkbm_resolve_label()）。
  *
  * @return string
  */
 function vkbm_get_guests_count_label(): string {
+	return vkbm_resolve_label( 'guests_count_label', 'vkbm_get_base_guests_count_label' );
+}
+
+/**
+ * 基本の値の数量の見出しラベルを取得する（デフォルト: Number of guests / 人数）。
+ *
+ * 既存のラベル群と同じく、設定が空文字の場合は翻訳既定へフォールバックする。
+ *
+ * @return string
+ */
+function vkbm_get_base_guests_count_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['guests_count_label'] ) ? trim( (string) $settings['guests_count_label'] ) : '';
@@ -382,12 +493,23 @@ function vkbm_get_guests_count_label(): string {
 /**
  * メニューの呼び方を取得する（デフォルト: Menu / メニュー）。
  *
- * 数量の見出しと同じく、設定が空文字の場合は翻訳既定へフォールバックする。
+ * 表示中の言語で登録した値 → 基本の値 → 翻訳の既定値の順で決める（vkbm_resolve_label()）。
  * 無料版でも保存値をそのまま返す。
+ *
+ * @return string 表示する呼び方。
+ */
+function vkbm_get_menu_label(): string {
+	return vkbm_resolve_label( 'menu_label', 'vkbm_get_base_menu_label' );
+}
+
+/**
+ * 基本の値のメニューの呼び方を取得する（デフォルト: Menu / メニュー）。
+ *
+ * 数量の見出しと同じく、設定が空文字の場合は翻訳既定へフォールバックする。
  *
  * @return string 保存された呼び方。未保存・空文字の場合は翻訳既定の「メニュー」。
  */
-function vkbm_get_menu_label(): string {
+function vkbm_get_base_menu_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['menu_label'] ) ? trim( (string) $settings['menu_label'] ) : '';
@@ -398,17 +520,40 @@ function vkbm_get_menu_label(): string {
 /**
  * メニューの呼び方（複数形）を取得する。
  *
- * 複数形の欄は複数形のある言語の画面にしか出ないため、空文字の場合は
- * 単数形の呼び方（vkbm_get_menu_label() の実効値）へフォールバックする。
+ * 表示中の言語で登録した複数形 → 基本の値の複数形 → 単数形の基本の値の順で決める（vkbm_get_base_menu_label_plural()）。
+ * ただし表示中の言語で単数形を登録しているときは、基本の値の複数形を飛ばして、その言語の単数形を使う
+ * （別の言語の複数形が混ざらないようにするため）。
  *
- * @return string 保存された複数形。未保存・空文字の場合は単数形の呼び方。
+ * @return string 表示する複数形の呼び方。
  */
 function vkbm_get_menu_label_plural(): string {
+	return vkbm_resolve_label(
+		'menu_label_plural',
+		static function ( string $locale ): string {
+			// 表示中の言語で単数形を登録していれば、その単数形を複数形の代わりに使う。
+			if ( '' !== Multilingual_Labels::get_value( $locale, 'menu_label' ) ) {
+				return vkbm_get_menu_label();
+			}
+
+			return vkbm_get_base_menu_label_plural();
+		}
+	);
+}
+
+/**
+ * 基本の値のメニューの呼び方（複数形）を取得する。
+ *
+ * 複数形の欄は複数形のある言語の画面にしか出ないため、空文字の場合は
+ * 単数形の基本の値（vkbm_get_base_menu_label()）へフォールバックする。言語ごとの値は混ぜない。
+ *
+ * @return string 保存された複数形。未保存・空文字の場合は単数形の基本の値。
+ */
+function vkbm_get_base_menu_label_plural(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 	$label      = isset( $settings['menu_label_plural'] ) ? trim( (string) $settings['menu_label_plural'] ) : '';
 
-	return '' !== $label ? $label : vkbm_get_menu_label();
+	return '' !== $label ? $label : vkbm_get_base_menu_label();
 }
 
 /**
@@ -462,6 +607,18 @@ function vkbm_get_menu_label_text( string $default_text, string $labeled_templat
 /**
  * 数量の単位ラベルを取得する（実効値を返す）。
  *
+ * 表示中の言語で登録した値 → 基本の値（vkbm_get_base_guests_unit_label()）の順で決める（vkbm_resolve_label()）。
+ * 言語ごとの値の空欄は「単位なし」ではなく「基本の値を使う」として扱う。
+ *
+ * @return string 表示する単位。単位なしの場合は空文字。
+ */
+function vkbm_get_guests_unit_label(): string {
+	return vkbm_resolve_label( 'guests_unit_label', 'vkbm_get_base_guests_unit_label' );
+}
+
+/**
+ * 基本の値（「表記設定」タブの値）の数量の単位ラベルを取得する。
+ *
  * 設定値の出し分け:
  * - null（未設定）       → ロケール既定を返す（従来挙動の維持）。日本語は「名」、その他は「guests」。
  * - ''（意図的な空保存） → 空文字を返す（単位なし）。
@@ -469,7 +626,7 @@ function vkbm_get_menu_label_text( string $default_text, string $labeled_templat
  *
  * @return string ロケール既定または保存された単位。単位なしの場合は空文字。
  */
-function vkbm_get_guests_unit_label(): string {
+function vkbm_get_base_guests_unit_label(): string {
 	$repository = new Settings_Repository();
 	$settings   = $repository->get_settings();
 

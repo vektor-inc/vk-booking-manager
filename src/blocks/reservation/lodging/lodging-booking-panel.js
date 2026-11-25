@@ -26,6 +26,8 @@ import { formatReservationDate } from '../date-format';
 import { LodgingRangeCalendar } from './lodging-range-calendar';
 import { LodgingRoomList } from './lodging-room-list';
 import { NightRates, getNightPrice } from './night-rates';
+import { ExtraGuestPriceNote } from '../components/extra-guest-fee-sentence';
+import { buildPerRoomExtraGuestPriceNote } from '../pricing-breakdown';
 import {
 	CHECK_IN_TIME_STEP_MINUTES,
 	addCheckInTimeOption,
@@ -48,14 +50,15 @@ import {
 import './lodging.scss';
 
 /**
- * 人数の入力値を、1 以上の整数にそろえる。
+ * 人数の入力値を、下限以上・上限以下の整数にそろえる。
  *
  * @param {*}      value 入力値。
+ * @param {number} min   下限（1 以上）。
  * @param {number} max   上限。
- * @return {number} 1 以上 max 以下の整数。
+ * @return {number} min 以上 max 以下の整数。
  */
-const clampGuests = ( value, max ) =>
-	Math.min( Math.max( 1, Math.floor( Number( value ) || 1 ) ), max );
+const clampGuests = ( value, min, max ) =>
+	Math.min( Math.max( min, Math.floor( Number( value ) || min ) ), max );
 
 /**
  * 選択中の表示の 1 行（見出し dt と値 dd）。
@@ -100,6 +103,7 @@ const DateTimeValue = ( date, time ) => (
  * @param {string}                         props.menuTitle               メニュー名。
  * @param {number[]}                       props.assignableRoomIds       プランを担当する客室 ID。
  * @param {Object}                         props.lodging                 メニューの REST フィールド vkbm_lodging（人数の上限・料金区分・料金の単位・時刻）。
+ * @param {number}                         props.minGuests               最低申し込み人数（REST フィールド vkbm_nomination_min_guests。0 は制限なし）。
  * @param {?{year: number, month: number}} props.servicePeriodStartMonth 提供期間の開始日が今日より先のときの開始日の年月（カレンダーの初期表示月に使う。なければ null）。
  * @param {string}                         props.siteToday               サイト時刻（WordPress のタイムゾーン）の今日（YYYY-MM-DD。カレンダーの上限年の基準。空文字ならブラウザの日付で代用する）。
  * @param {string}                         props.locale                  WordPress のロケール。
@@ -121,6 +125,7 @@ const LodgingBookingPanel = ( {
 	menuTitle,
 	assignableRoomIds = [],
 	lodging,
+	minGuests = 0,
 	servicePeriodStartMonth = null,
 	siteToday = '',
 	locale,
@@ -141,7 +146,15 @@ const LodgingBookingPanel = ( {
 	const guestsHintId = `${ idPrefix }-guests-hint`;
 	const actionHintId = `${ idPrefix }-action-hint`;
 	const guestsLabelId = `${ idPrefix }-guests-label`;
+	// 追加料金を使うプランで、全員の人数を入れることを伝える指示文の id（#1175）。
+	const guestsInstructionId = `${ idPrefix }-guests-instruction`;
 	const maxGuests = Math.max( 1, Number( lodging?.max_guests ) || 1 );
+	// #1109: 人数欄の下限・初期値・説明文は、サーバーが受付で断る最低申し込み人数にそろえる。
+	// 値の判定（1室1泊あたりは 0 など）は Availability_Service::get_menu_nomination_min_guests() だけで行い、ここでは再計算しない。
+	const minGuestCount = Math.min(
+		maxGuests,
+		Math.max( 1, Math.floor( Number( minGuests ) || 0 ) )
+	);
 	const tiers = useMemo(
 		() =>
 			Array.isArray( lodging?.guest_tiers ) ? lodging.guest_tiers : [],
@@ -205,10 +218,13 @@ const LodgingBookingPanel = ( {
 		isCarriedDatePast ? { kind: 'past', range: null } : null
 	);
 	// 入力中は空文字も許す。範囲への丸めは欄を離れた時に行う。
-	const [ guestsInput, setGuestsInput ] = useState( '1' );
+	const [ guestsInput, setGuestsInput ] = useState( () =>
+		String( minGuestCount )
+	);
 	const guests = Math.floor( Number( guestsInput ) ) || 0;
+	// 料金区分があるときは、最初の区分に下限の人数を入れておく（合計が下限未満で始まらないようにする）。
 	const [ tierCounts, setTierCounts ] = useState( () =>
-		tiers.map( ( _, index ) => ( index === 0 ? 1 : 0 ) )
+		tiers.map( ( _, index ) => ( index === 0 ? minGuestCount : 0 ) )
 	);
 	const [ availability, setAvailability ] = useState( {
 		status: 'idle',
@@ -257,7 +273,8 @@ const LodgingBookingPanel = ( {
 	const guestCount = hasTiers
 		? tierCounts.reduce( ( total, count ) => total + count, 0 )
 		: guests;
-	const isGuestCountValid = guestCount >= 1 && guestCount <= maxGuests;
+	const isGuestCountValid =
+		guestCount >= minGuestCount && guestCount <= maxGuests;
 	const tierCountsKey = tierCounts.join( ',' );
 	const isRangeComplete = Boolean( range.checkIn && range.checkOut );
 	const nights = countNights( range.checkIn, range.checkOut );
@@ -1124,7 +1141,7 @@ const LodgingBookingPanel = ( {
 						'The number of guests can be from %1$s to %2$s.',
 						'vk-booking-manager'
 					),
-					formatGuestsCount( 1, guestsUnitLabel ),
+					formatGuestsCount( minGuestCount, guestsUnitLabel ),
 					formatGuestsCount( maxGuests, guestsUnitLabel )
 				) }
 			</p>
@@ -1136,7 +1153,11 @@ const LodgingBookingPanel = ( {
 					className="vkbm-plan-summary__guest-tiers"
 					role="group"
 					aria-labelledby={ guestsLabelId }
-					aria-describedby={ guestsHintId }
+					aria-describedby={
+						isExtraGuestFee
+							? `${ guestsInstructionId } ${ guestsHintId }`
+							: guestsHintId
+					}
 				>
 					<span
 						className="vkbm-plan-summary__guests-label"
@@ -1144,6 +1165,18 @@ const LodgingBookingPanel = ( {
 					>
 						{ guestsCountLabel }
 					</span>
+					{ /* 追加料金を使うプランは、追加の人数ではなく全員の人数を入れることを入力欄の前で伝える（#1175）。 */ }
+					{ isExtraGuestFee && (
+						<p
+							className="vkbm-plan-summary__hint vkbm-plan-summary__guests-instruction"
+							id={ guestsInstructionId }
+						>
+							{ __(
+								'Enter the number of all guests staying for each category.',
+								'vk-booking-manager'
+							) }
+						</p>
+					) }
 					{ tiers.map( ( tier, index ) => (
 						<div
 							key={ `${ index }-${ tier.label }` }
@@ -1156,15 +1189,6 @@ const LodgingBookingPanel = ( {
 								<span className="text-nowrap">
 									{ tier.label }
 								</span>
-								{ isExtraGuestFee && (
-									<span className="vkbm-plan-summary__guest-tier-price">
-										+
-										{ formatCurrency(
-											tier.price,
-											currencySymbol
-										) }
-									</span>
-								) }
 							</label>
 							<GuestCountInput
 								id={ `${ idPrefix }-tier-${ index }` }
@@ -1210,6 +1234,18 @@ const LodgingBookingPanel = ( {
 							) }
 						</p>
 					) }
+					{ guestCount >= 1 && guestCount < minGuestCount && (
+						<p className="vkbm-plan-summary__hint vkbm-plan-summary__hint--warning">
+							{ sprintf(
+								/* translators: %d: minimum number of guests required to book this menu. */
+								__(
+									'Please set the number of guests to %d or more.',
+									'vk-booking-manager'
+								),
+								minGuestCount
+							) }
+						</p>
+					) }
 				</div>
 			);
 		}
@@ -1225,7 +1261,7 @@ const LodgingBookingPanel = ( {
 				<GuestCountInput
 					id={ `${ idPrefix }-guests` }
 					className="vkbm-plan-summary__guests-select"
-					min="1"
+					min={ minGuestCount }
 					max={ maxGuests }
 					step="1"
 					value={ guestsInput }
@@ -1235,7 +1271,13 @@ const LodgingBookingPanel = ( {
 					}
 					onBlur={ () =>
 						setGuestsInput(
-							String( clampGuests( guestsInput, maxGuests ) )
+							String(
+								clampGuests(
+									guestsInput,
+									minGuestCount,
+									maxGuests
+								)
+							)
 						)
 					}
 				/>
@@ -1273,20 +1315,19 @@ const LodgingBookingPanel = ( {
 			: formattedPrice;
 		let text;
 		if ( isExtraGuestFee ) {
-			text = joinSentences(
-				sprintf(
-					/* translators: 1: base price per room per night, 2: number of guests included in the base price with unit (e.g. 4). */
-					__(
-						'The rate is %1$s per room per night, which includes up to %2$s.',
-						'vk-booking-manager'
-					),
-					price,
-					formatGuestsCount( includedGuests, guestsUnitLabel )
-				),
-				__(
-					'Guests beyond the included number are charged the additional fee shown for each guest category, per extra guest, per night.',
-					'vk-booking-manager'
-				)
+			// 人数欄には追加料金を出さないため、区分ごとの追加料金（平日の金額）をここに並べる（#1175）。
+			text = (
+				<ExtraGuestPriceNote
+					note={ buildPerRoomExtraGuestPriceNote( {
+						priceText: price,
+						includedGuestsText: formatGuestsCount(
+							includedGuests,
+							guestsUnitLabel
+						),
+						tiers,
+						currencySymbol,
+					} ) }
+				/>
 			);
 		} else {
 			text =
@@ -1544,6 +1585,7 @@ const LodgingBookingPanel = ( {
 					nights={ nightRates }
 					locale={ locale }
 					currencySymbol={ currencySymbol }
+					guestsUnitLabel={ guestsUnitLabel }
 				/>
 			) }
 

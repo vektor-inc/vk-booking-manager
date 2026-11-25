@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Multilingual\Service_Menu_Texts;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\Staff\Staff_Editor;
@@ -327,7 +328,7 @@ class User_Favorites_Controller {
 
 		$available = ( $menu_available && $resource_available );
 
-		$menu_name = $menu_available ? (string) get_the_title( $menu_id ) : '';
+		$menu_name = $menu_available ? Service_Menu_Texts::get_title( $menu_id ) : '';
 
 		// 指名なし（resource_id=0）は「指名なし」ラベル、指名ありは表示名を返す。
 		$resource_name = $resource_id > 0

@@ -23,6 +23,8 @@ namespace VKBookingManager\Tests\Notifications;
 use ReflectionMethod;
 use VKBookingManager\Admin\Email_Log_Repository;
 use VKBookingManager\Notifications\Booking_Notification_Service;
+use VKBookingManager\Multilingual\Service_Menu_Texts;
+use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Error;
@@ -36,6 +38,145 @@ use function update_post_meta;
  * @group notifications
  */
 class Booking_Notification_Service_Email_Log_Test extends WP_UnitTestCase {
+	/**
+	 * 予約言語は利用者メールだけに適用し、送信後に元へ戻す。
+	 *
+	 * @return void
+	 */
+	public function test_booking_locale_is_used_only_for_customer_mail(): void {
+		$booking_id = $this->create_booking( 'customer@example.com' );
+		$locale_filter = static function (): string { return 'de_DE'; };
+		add_filter( 'locale', $locale_filter );
+		$seen = array();
+		$filter = static function ( $result, $mail ) use ( &$seen ) {
+			$seen[] = array( $mail['to'], determine_locale() );
+			return true;
+		};
+		add_filter( 'pre_wp_mail', $filter, 10, 2 );
+		try {
+			$this->assertSame( 'de_DE', determine_locale() );
+			$service = new Booking_Notification_Service( $this->settings_repository, $this->email_log_repository );
+			$cases = array(
+				array( 'locale' => 'en_US', 'expected' => 'en_US' ),
+				array( 'locale' => '', 'expected' => 'de_DE' ),
+				array( 'locale' => 'bad<script>', 'expected' => 'de_DE' ),
+				array( 'locale' => 'fr_FR', 'expected' => 'de_DE' ),
+			);
+			foreach ( $cases as $case ) {
+				if ( '' === $case['locale'] ) {
+					delete_post_meta( $booking_id, '_vkbm_booking_locale' );
+				} else {
+					update_post_meta( $booking_id, '_vkbm_booking_locale', $case['locale'] );
+				}
+				$seen = array();
+				$service->handle_pending_creation( $booking_id );
+				$this->assertCount( 2, $seen );
+				$this->assertSame( 'customer@example.com', $seen[0][0] );
+				$this->assertSame( get_option( 'admin_email' ), $seen[1][0] );
+				$this->assertSame( $case['expected'], $seen[0][1], $case['locale'] );
+				$this->assertSame( 'de_DE', $seen[1][1] );
+				$this->assertSame( 'de_DE', determine_locale() );
+			}
+		} finally {
+			remove_filter( 'pre_wp_mail', $filter, 10 );
+			remove_filter( 'locale', $locale_filter );
+		}
+	}
+	/**
+	 * 下書きの言語をゲスト確認メールに使い、送信後に戻す。
+	 *
+	 * @return void
+	 */
+	public function test_guest_verification_uses_draft_locale(): void {
+		$locale_filter = static function (): string { return 'de_DE'; };
+		$seen = array();
+		$mail_filter = static function ( $result, $mail ) use ( &$seen ) {
+			$seen[] = array( $mail['to'], determine_locale() );
+			return true;
+		};
+		add_filter( 'locale', $locale_filter );
+		add_filter( 'pre_wp_mail', $mail_filter, 10, 2 );
+		try {
+			$service = new Booking_Notification_Service( $this->settings_repository, $this->email_log_repository );
+			foreach ( array( 'en_US' => 'en_US', 'fr_FR' => 'de_DE', '' => 'de_DE' ) as $locale => $expected ) {
+				$seen = array();
+				$this->assertTrue( $service->send_guest_verification( array( 'email' => 'guest@example.com', 'draft' => array( 'locale' => $locale ) ) ) );
+				$this->assertSame( array( array( 'guest@example.com', $expected ) ), $seen );
+				$this->assertSame( 'de_DE', determine_locale() );
+			}
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter, 10 );
+			remove_filter( 'locale', $locale_filter );
+		}
+	}
+
+	/**
+	 * ゲスト確認メールのプラン名を下書きの言語で解決する。
+	 *
+	 * @return void
+	 */
+	public function test_guest_verification_uses_localized_menu_title(): void {
+		$menu_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Service_Menu_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+				'post_title'  => 'カット',
+			)
+		);
+		update_option( 'vkbm_multilingual_labels', array( 'en_US' => array() ) );
+		update_post_meta( $menu_id, Service_Menu_Texts::META_KEY, array( 'en_US' => array( 'title' => 'Cut' ) ) );
+		$locale_filter = static function (): string { return 'de_DE'; };
+		add_filter( 'locale', $locale_filter );
+		$seen = array();
+		$filter = static function ( $result, $mail ) use ( &$seen ) {
+			$seen[] = $mail['message'];
+			return true;
+		};
+		add_filter( 'pre_wp_mail', $filter, 10, 2 );
+		try {
+			$service = new Booking_Notification_Service( $this->settings_repository, $this->email_log_repository );
+			$cases = array(
+				array( 'locale' => 'en_US', 'expected' => 'Cut', 'unexpected' => 'カット', 'label' => '英語では言語別タイトル' ),
+				array( 'locale' => '', 'expected' => 'カット', 'unexpected' => 'Cut', 'label' => '既定言語では基本タイトル' ),
+				array( 'locale' => 'fr_FR', 'expected' => 'カット', 'unexpected' => 'Cut', 'label' => '未導入言語では基本タイトル' ),
+			);
+			foreach ( $cases as $case ) {
+				$seen = array();
+				$this->assertTrue( $service->send_guest_verification( array( 'email' => 'guest@example.com', 'draft' => array( 'locale' => $case['locale'], 'menu_id' => $menu_id ) ) ), $case['label'] );
+				$this->assertCount( 1, $seen, $case['label'] );
+				$this->assertStringContainsString( $case['expected'], $seen[0], $case['label'] );
+				$this->assertStringNotContainsString( $case['unexpected'], $seen[0], $case['label'] );
+			}
+		} finally {
+			remove_filter( 'pre_wp_mail', $filter, 10 );
+			remove_filter( 'locale', $locale_filter );
+		}
+	}
+
+	/**
+	 * メニューの無い予約は投稿コンテキストにかかわらず未設定と表示する。
+	 *
+	 * @return void
+	 */
+	public function test_missing_menu_title_uses_unset_fallback(): void {
+		$booking_id = $this->create_booking( 'customer@example.com' );
+		$service = new Booking_Notification_Service( $this->settings_repository, $this->email_log_repository );
+		$method = new ReflectionMethod( Booking_Notification_Service::class, 'build_booking_payload' );
+		$method->setAccessible( true );
+		global $post;
+		$old_post = $post;
+		$post = get_post( $booking_id );
+		try {
+			foreach ( array( 0, 99999999 ) as $menu_id ) {
+				update_post_meta( $booking_id, '_vkbm_booking_service_id', $menu_id );
+				$payload = $method->invoke( $service, $booking_id );
+				$this->assertSame( __( 'Not set', 'vk-booking-manager' ), $payload['menu_title'] );
+			}
+		} finally {
+			$post = $old_post;
+		}
+	}
+
 	/** @var string */
 	private $original_admin_email = '';
 

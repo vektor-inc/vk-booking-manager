@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.17.0
+ * Version:     3.18.0
  * Requires at least: 6.8
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
@@ -57,6 +57,7 @@ if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
 
 require_once __DIR__ . '/src/common/trait-rate-limit.php';
 require_once __DIR__ . '/src/post-types/class-booking-post-type.php';
+require_once __DIR__ . '/src/admin/class-post-duplicator.php';
 require_once __DIR__ . '/src/bookings/class-booking-overlap.php';
 require_once __DIR__ . '/src/bookings/class-customer-booking-limit.php';
 require_once __DIR__ . '/src/bookings/class-booking-source.php';
@@ -137,6 +138,11 @@ require_once __DIR__ . '/src/admin/class-user-profile-fields.php';
 require_once __DIR__ . '/src/admin/class-email-log-repository.php';
 require_once __DIR__ . '/src/admin/class-email-log-page.php';
 require_once __DIR__ . '/src/oembed/class-oembed-override.php';
+require_once __DIR__ . '/src/multilingual/class-multilingual-labels.php';
+require_once __DIR__ . '/src/multilingual/class-multilingual-settings-panel.php';
+require_once __DIR__ . '/src/multilingual/class-rest-locale.php';
+require_once __DIR__ . '/src/multilingual/class-service-menu-texts.php';
+require_once __DIR__ . '/src/multilingual/class-service-menu-multilingual-meta-box.php';
 require_once __DIR__ . '/src/resources/resource-labels.php';
 require_once __DIR__ . '/src/provider-settings/class-industry-presets.php';
 require_once __DIR__ . '/src/provider-settings/class-provider-display-name.php';
@@ -219,6 +225,7 @@ use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use VKBookingManager\PostTypes\Service_Menu_Front_Redirect;
 use VKBookingManager\PostTypes\Shift_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\ProviderSettings\Privacy_Policy_Page_Migration;
 use VKBookingManager\ProviderSettings\Reservation_Page_Migration;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
@@ -418,6 +425,13 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// Resource_Delete_Guard と同様、Plugin へ注入せずここで直接登録する。
 		( new Reservation_Content_Routes() )->register();
 
+		// 予約画面の REST を、予約画面が添えたページの言語で処理する（#1186）。
+		( new \VKBookingManager\Multilingual\Rest_Locale() )->register();
+
+		// プランのタイトル・抜粋・その他条件を言語ごとに入力する欄と、予約画面の REST での出し分け（#1187）。
+		( new \VKBookingManager\Multilingual\Service_Menu_Texts() )->register();
+		( new \VKBookingManager\Multilingual\Service_Menu_Multilingual_Meta_Box() )->register();
+
 		// シフト・サービスメニュー・スタッフ・システム設定の保存/削除で
 		// 空き状況キャッシュ（transient）の世代番号を進める（#410 / #412）。
 		Availability_Cache_Generation::register();
@@ -432,6 +446,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		$setup_notices->register();
 		// 更新前に URL で保存されていた予約ページを、固定ページの選択へ一度だけ切り替える（#1050）。
 		( new Reservation_Page_Migration() )->register();
+		// 更新前に URL で保存されていたプライバシーポリシーのページを、固定ページの選択へ一度だけ切り替える（#1168）。
+		( new Privacy_Policy_Page_Migration() )->register();
 		$email_log_page->register();
 		$attendee_roster_profile->register();
 

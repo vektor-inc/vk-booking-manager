@@ -25,6 +25,8 @@ use VKBookingManager\Common\Mail_Error_Capture;
 use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Multilingual\Multilingual_Labels;
+use VKBookingManager\Multilingual\Service_Menu_Texts;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -42,9 +44,9 @@ use function get_user_by;
 use function get_option;
 use function get_post;
 use function get_post_meta;
+use function get_available_languages;
 use function get_post_status;
 use function get_post_type;
-use function get_the_title;
 use function get_bloginfo;
 use function home_url;
 use function is_email;
@@ -54,6 +56,8 @@ use function sanitize_text_field;
 use function sprintf;
 use function strtotime;
 use function remove_filter;
+use function restore_previous_locale;
+use function switch_to_locale;
 use function wp_date;
 use function wp_next_scheduled;
 use function wp_schedule_event;
@@ -77,6 +81,7 @@ class Booking_Notification_Service {
 	private const REMINDER_SCHEDULE       = 'vkbm_quarter_hour';
 	private const REMINDER_WINDOW         = 3600;
 	private const META_REMINDER_SENT      = '_vkbm_booking_reminder_sent';
+	private const META_LOCALE             = '_vkbm_booking_locale';
 	private const META_DATE_START         = '_vkbm_booking_service_start';
 	private const META_STATUS             = '_vkbm_booking_status';
 	private const META_GUESTS             = '_vkbm_booking_guests';
@@ -138,6 +143,22 @@ class Booking_Notification_Service {
 	 * @return bool 送信できたら true。
 	 */
 	public function send_guest_verification( array $data ): bool {
+		$draft = isset( $data['draft'] ) && is_array( $data['draft'] ) ? $data['draft'] : array();
+		return $this->with_locale(
+			(string) ( $draft['locale'] ?? '' ),
+			function () use ( $data ): bool {
+				return $this->send_guest_verification_in_locale( $data );
+			}
+		);
+	}
+
+	/**
+	 * 下書きの言語でゲスト確認メールを組み立てて送る。
+	 *
+	 * @param array<string,mixed> $data 送信内容。
+	 * @return bool 送信できたら true。
+	 */
+	private function send_guest_verification_in_locale( array $data ): bool {
 		$email = sanitize_email( (string) ( $data['email'] ?? '' ) );
 		if ( ! is_email( $email ) ) {
 			return false;
@@ -258,7 +279,7 @@ class Booking_Notification_Service {
 
 		// 予約メニューとして公開中の投稿だけを対象にする。
 		$is_menu_usable = $this->is_published_post_of_type( $menu_id, Service_Menu_Post_Type::POST_TYPE );
-		$menu_title     = $is_menu_usable ? get_the_title( $menu_id ) : '';
+		$menu_title     = $is_menu_usable ? Service_Menu_Texts::get_title( $menu_id ) : '';
 
 		$staff_title = '';
 		$nights      = 0;
@@ -321,7 +342,7 @@ class Booking_Notification_Service {
 						)
 					)
 				);
-				$price_breakdown_lines = $this->build_extra_guest_breakdown_lines( $base_price, $extra_guest_tiers, $nomination_fee );
+				$price_breakdown_lines = $this->build_extra_guest_breakdown_lines( $base_price, $extra_guest_tiers, $nomination_fee, Service_Menu_Post_Type::get_included_guests( $menu_id ) );
 			} elseif ( ! empty( $guest_tiers ) && ! Booking_Price::is_per_booking( $price_unit ) ) {
 				$price_label = $this->format_price_with_tax_label( max( 0, Price_Tiers::total_price( $guest_tiers ) + $nomination_fee ) );
 			} else {
@@ -545,17 +566,69 @@ class Booking_Notification_Service {
 			return;
 		}
 
-		$payload = $this->build_booking_payload( $booking_id );
+		// 利用者宛ての組み立てと送信だけを予約時の言語で行う。
+		if ( ! $this->is_provider_notification_type( $type ) ) {
+			$this->with_booking_locale(
+				$booking_id,
+				function () use ( $type, $booking_id, $attempt ): void {
+					$this->send_notification( $type, $booking_id, $attempt );
+				}
+			);
+			return;
+		}
 
-		if ( empty( $payload ) ) {
+		$this->send_notification( $type, $booking_id, $attempt );
+	}
+
+	/**
+	 * 保存済みの有効な言語で通知を処理し、処理後は元の言語へ戻す。
+	 *
+	 * @param int      $booking_id 予約 ID。
+	 * @param callable $callback  通知の組み立てと送信。
+	 * @return mixed コールバックの結果。
+	 */
+	private function with_booking_locale( int $booking_id, callable $callback ) {
+		return $this->with_locale( (string) get_post_meta( $booking_id, self::META_LOCALE, true ), $callback );
+	}
+
+	/**
+	 * 有効な言語で処理し、処理後は元の言語へ戻す。
+	 *
+	 * @param string   $locale   切り替え先の言語。
+	 * @param callable $callback 言語内で行う処理。
+	 * @return mixed コールバックの結果。
+	 */
+	private function with_locale( string $locale, callable $callback ) {
+		$locale = Multilingual_Labels::sanitize_locale( $locale );
+		if ( '' === $locale || ! in_array( $locale, array_merge( array( 'en_US' ), get_available_languages() ), true ) || ! switch_to_locale( $locale ) ) {
+			return $callback();
+		}
+
+		try {
+			return $callback();
+		} finally {
+			restore_previous_locale();
+		}
+	}
+
+	/**
+	 * 通知の件名・本文を作り、宛先へ送る。
+	 *
+	 * @param string $type         通知種別。
+	 * @param int    $booking_id   予約 ID。
+	 * @param int    $attempt      送信回数。
+	 * @return void
+	 */
+	private function send_notification( string $type, int $booking_id, int $attempt ): void {
+		$payload = $this->build_booking_payload( $booking_id );
+		if ( array() === $payload ) {
 			return;
 		}
 
 		$payload = $this->attach_guest_cancel_info( $type, $booking_id, $payload );
-		// このメールのために発行したトークン。メールを送らなかった・送れなかったときは取り消す。
+		// 送れなかった場合に取り消すため、この送信で発行したトークンを保持する。
 		$issued_token = (string) ( $payload['guest_cancel_token'] ?? '' );
-
-		$message = $this->build_message( $type, $payload );
+		$message      = $this->build_message( $type, $payload );
 
 		if ( '' === trim( $message['body'] ?? '' ) ) {
 			Guest_Cancel_Controller::revoke_token( $booking_id, $issued_token );
@@ -878,6 +951,22 @@ class Booking_Notification_Service {
 	 * @return bool
 	 */
 	private function send_customer_reminder( int $booking_id, int $hours_before ): bool {
+		return $this->with_booking_locale(
+			$booking_id,
+			function () use ( $booking_id, $hours_before ): bool {
+				return $this->send_customer_reminder_in_locale( $booking_id, $hours_before );
+			}
+		);
+	}
+
+	/**
+	 * 予約時の言語でリマインダーを組み立てて送る。
+	 *
+	 * @param int $booking_id 予約 ID。
+	 * @param int $hours_before 開始前の時間。
+	 * @return bool 送信結果。
+	 */
+	private function send_customer_reminder_in_locale( int $booking_id, int $hours_before ): bool {
 		$payload = $this->build_booking_payload( $booking_id );
 		if ( array() === $payload ) {
 			return false;
@@ -1148,7 +1237,7 @@ class Booking_Notification_Service {
 		// 料金区分の人数内訳スナップショット。未設定の既存予約は空配列（従来表示）。
 		$guest_tiers = Price_Tiers::normalize_guest_tiers( get_post_meta( $booking_id, self::META_GUEST_TIERS, true ) );
 
-		$menu_title  = $menu_id > 0 ? get_the_title( $menu_id ) : '';
+		$menu_title  = $menu_id > 0 ? Service_Menu_Texts::get_title( $menu_id ) : '';
 		$staff_title = '';
 		// #391: サイト全体の判定からメニュー単位の判定へ置き換え。
 		$nomination_enabled = Staff_Editor::is_nomination_enabled_for_menu( $menu_id );
@@ -1190,7 +1279,7 @@ class Booking_Notification_Service {
 		}
 		// 1ツアーあたりで規定人数を超えた分の追加料金がある予約は、ツアー料金と追加料金を分けた内訳も添える（#1003）。
 		$extra_guests          = Booking_Price::normalize_extra_guests( get_post_meta( $booking_id, Booking_Price::META_BOOKING_EXTRA_GUESTS, true ) );
-		$price_breakdown_lines = array() !== $extra_guests ? $this->build_extra_guest_breakdown_lines( $base_price, $extra_guests['tiers'], $nomination_fee ) : array();
+		$price_breakdown_lines = array() !== $extra_guests ? $this->build_extra_guest_breakdown_lines( $base_price, $extra_guests['tiers'], $nomination_fee, $extra_guests['included_guests'] ) : array();
 		// 無料版では保存値ではなく既定値を返す共通関数を通す。
 		$resource_label_singular = vkbm_get_resource_label_singular();
 		// Use the shared helper to get the duration label with fallback.
@@ -1469,7 +1558,7 @@ class Booking_Notification_Service {
 	 */
 	private function render_customer_body( array $payload, string $lead ): string {
 		$lines               = array();
-		$cancellation_policy = trim( (string) ( $payload['provider_cancellation_policy'] ?? '' ) );
+		$cancellation_policy = trim( Multilingual_Labels::resolve_text( 'provider_cancellation_policy', (string) ( $payload['provider_cancellation_policy'] ?? '' ) ) );
 
 		/* translators: %s: Customer name. */
 		$lines[] = sprintf( __( 'Dear %s', 'vk-booking-manager' ), $payload['customer_name'] );
@@ -1802,13 +1891,15 @@ class Booking_Notification_Service {
 	 * 1ツアーあたりの予約の料金の内訳（ツアー料金と、規定人数を超えた分の追加料金）をメールの行にして返す（#1003）。
 	 *
 	 * 追加料金の行には、区分ごとの追加料金の単価と超過人数を添える。超過した人がいない（追加料金がない）ときは空配列。
+	 * ツアー料金の行には、基本料金に含まれる人数を「（3名まで）」の形で添える（#1175）。人数が分からない（0）ときは添えない。
 	 *
 	 * @param int                                                      $base_price        ツアー料金（基本料金）。
 	 * @param array<int, array{label: string, price: int, count: int}> $extra_guest_tiers 超過した人がいる区分と超過人数。
 	 * @param int                                                      $nomination_fee    指名料。0 のときは指名料の行を出さない。
+	 * @param int                                                      $included_guests   基本料金に含まれる人数。0 のときは人数を添えない。
 	 * @return array<int, string> メールの行。
 	 */
-	private function build_extra_guest_breakdown_lines( int $base_price, array $extra_guest_tiers, int $nomination_fee = 0 ): array {
+	private function build_extra_guest_breakdown_lines( int $base_price, array $extra_guest_tiers, int $nomination_fee = 0, int $included_guests = 0 ): array {
 		if ( array() === $extra_guest_tiers ) {
 			return array();
 		}
@@ -1818,9 +1909,22 @@ class Booking_Notification_Service {
 			$details[] = Booking_Price_Display::format_extra_guest_tier_text( $tier );
 		}
 
-		$lines = array(
+		// ツアー料金の行。基本料金に含まれる人数が分かるときは見出しに添える。
+		$tour_fee = VKBM_Helper::format_currency( max( 0, $base_price ) );
+		if ( $included_guests > 0 ) {
+			$tour_fee_line = sprintf(
+				/* translators: 1: number of guests included in the tour fee with unit (e.g. 3 guests), 2: tour fee (the basic price of one tour). */
+				__( 'Tour fee (up to %1$s): %2$s', 'vk-booking-manager' ),
+				vkbm_format_guests_count( $included_guests ),
+				$tour_fee
+			);
+		} else {
 			/* translators: %s: tour fee (the basic price of one tour). */
-			sprintf( __( 'Tour fee: %s', 'vk-booking-manager' ), VKBM_Helper::format_currency( max( 0, $base_price ) ) ),
+			$tour_fee_line = sprintf( __( 'Tour fee: %s', 'vk-booking-manager' ), $tour_fee );
+		}
+
+		$lines = array(
+			$tour_fee_line,
 			sprintf(
 				/* translators: 1: total extra guest fee, 2: breakdown by price category (e.g. Child ¥1,500 × 1 guest). */
 				__( 'Extra guest fee: %1$s (%2$s)', 'vk-booking-manager' ),

@@ -7,6 +7,9 @@
  *      最大人数を超える人数を入れて保存すると、最大人数に丸めて保存される。
  *   2. 予約画面: 区分ごとの人数を入れると、規定人数以内は基本料金のみ、超えると高い区分の人から基本料金に含めて
  *      超過分の追加料金が加算される。確認画面の合計金額が一致する。
+ *      人数欄には追加料金の金額を出さず、全員の人数を入れる指示文と、区分ごとの追加料金を並べた案内を出す
+ *      （390px でも「4名」「大人 ¥3,000」の組の途中で改行しない）。
+ *      泊ごとの内訳に「基本料金（4名まで）」と区分ごとの「追加料金」の行が出る（#1175）。
  *
  * 注: 文言は日本語で確かめる（e2e のサイトは日本語）。
  * テストデータは接頭辞（E2E934）を付けて作り、afterAll で消す。BM 設定は beforeAll で控えて必ず戻す。
@@ -482,22 +485,43 @@ test.describe
 		).toBeEnabled( { timeout: 15000 } );
 		const summary = page.locator( '.vkbm-lodging__summary' );
 
-		// @check 大人・子供の区分ごとの人数欄と追加料金（+¥3,000・+¥2,000）が出て、追加料金がかかる旨の案内が出る
+		// @check 大人・子供の区分ごとの人数欄が出て、区分名の横に追加料金の金額（+¥）は出ない（#1175）
 		const tierLabels = page.locator(
 			'.vkbm-plan-summary__guest-tier-label'
 		);
 		await expect( tierLabels ).toHaveCount( 2 );
-		await expect( tierLabels.nth( 0 ) ).toContainText( '大人' );
-		await expect( tierLabels.nth( 0 ) ).toContainText( '+¥3,000' );
-		await expect( tierLabels.nth( 1 ) ).toContainText( '子供' );
-		await expect( tierLabels.nth( 1 ) ).toContainText( '+¥2,000' );
+		await expect( tierLabels.nth( 0 ) ).toHaveText( '大人' );
+		await expect( tierLabels.nth( 1 ) ).toHaveText( '子供' );
+		// @check 人数の見出しの下に「泊まる方全員の人数を、区分ごとに入力してください。」が出る
+		await expect(
+			page.locator( '.vkbm-plan-summary__guests-instruction' )
+		).toHaveText( '泊まる方全員の人数を、区分ごとに入力してください。' );
+		// @check 人数欄の下の案内に、含まれる人数と区分ごとの追加料金（大人 ¥3,000、子供 ¥2,000）が並ぶ
 		const feeNote = page.locator( '.vkbm-plan-summary__hint', {
-			hasText: '4名までのご利用を含みます',
+			hasText: '4名までのご宿泊を含みます',
 		} );
 		await expect( feeNote ).toBeVisible();
 		await expect( feeNote ).toContainText(
-			'超えた1名につき1泊ごとに加算されます'
+			'4名を超えた分は、1名1泊ごとに追加料金がかかります（大人 ¥3,000、子供 ¥2,000）。'
 		);
+		// @step 画面幅を 390px にする
+		await page.setViewportSize( { width: 390, height: 800 } );
+		// @check 案内の料金・「4名」（含まれる人数の数字と単位）・「大人 ¥3,000」「子供 ¥2,000」の組は、それぞれ途中で改行しない
+		const noBreakParts = feeNote.locator( '.vkbm-plan-summary__nowrap' );
+		await expect( noBreakParts ).toHaveText( [
+			`¥${ BASE_PRICE.toLocaleString( 'en-US' ) }`,
+			'4名',
+			'4名',
+			'大人 ¥3,000',
+			'子供 ¥2,000',
+		] );
+		for ( let i = 0; i < 5; i++ ) {
+			const lines = await noBreakParts
+				.nth( i )
+				.evaluate( ( el ) => el.getClientRects().length );
+			expect( lines ).toBe( 1 );
+		}
+		await page.setViewportSize( { width: 1280, height: 800 } );
 
 		// @step 大人 2 名・子供 2 名（規定人数の 4 名以内）を入れる
 		await fillGuestTiers( page, 2, 2 );
@@ -515,6 +539,22 @@ test.describe
 			`¥${ expectedTotal.toLocaleString( 'en-US' ) }`,
 			{ timeout: 15000 }
 		);
+		// @check 泊ごとの内訳の各泊に「基本料金（4名まで） ¥20,000」と「追加料金 子供 ¥2,000 × 1名 ¥2,000」の行が出る（年間同じ料金のプランでも出る。#1175）
+		const firstNightRows = page
+			.locator( '.vkbm-lodging__night-rates .vkbm-lodging__night' )
+			.first()
+			.locator( '.vkbm-lodging__night-guest' );
+		await expect( firstNightRows ).toHaveCount( 2 );
+		await expect( firstNightRows.nth( 0 ) ).toContainText(
+			'基本料金（4名まで）'
+		);
+		await expect( firstNightRows.nth( 0 ) ).toContainText(
+			`¥${ BASE_PRICE.toLocaleString( 'en-US' ) }`
+		);
+		await expect( firstNightRows.nth( 1 ) ).toContainText(
+			'追加料金 子供'
+		);
+		await expect( firstNightRows.nth( 1 ) ).toContainText( '× 1名' );
 
 		// @step 大人 5 名・子供 1 名（最大人数の 6 名。規定人数を 2 名超える）を入れて、予約に進む
 		await fillGuestTiers( page, 5, 1 );
@@ -535,6 +575,10 @@ test.describe
 		// @check 確認画面の合計金額が、高い大人 4 名が基本料金に含まれ、大人 1 名と子供 1 名が加算された金額（（20,000 + 3,000 + 2,000）× 2 泊 = 50,000円）になる
 		const confirm = page.locator( '.vkbm-confirm__summary' ).first();
 		await confirm.waitFor( { state: 'visible', timeout: 15000 } );
+		// @check 確認画面も泊ごとの内訳に「基本料金（4名まで）」と大人・子供の「追加料金」の行を出す（#1175）
+		await expect( confirm ).toContainText( '基本料金（4名まで）' );
+		await expect( confirm ).toContainText( '追加料金 大人' );
+		await expect( confirm ).toContainText( '追加料金 子供' );
 		const total = toAmount(
 			await confirm
 				.locator( '.vkbm-confirm__summary-item-value--price' )

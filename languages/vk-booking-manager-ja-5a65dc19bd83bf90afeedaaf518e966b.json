@@ -253,6 +253,9 @@
 			"Not selected": [
 				"未選択"
 			],
+			"Enter the number of all participants for each category.": [
+				"参加する方全員の人数を、区分ごとに入力してください。"
+			],
 			"Total: %s": [
 				"合計：%s"
 			],
@@ -616,9 +619,6 @@
 			"Make a reservation without registering": [
 				"会員登録せずに予約する"
 			],
-			"Customer information": [
-				"お客様情報"
-			],
 			"Name of the person making the reservation (required)": [
 				"予約者のお名前（必須）"
 			],
@@ -811,14 +811,11 @@
 			"The number of guests can be from %1$s to %2$s.": [
 				"宿泊人数は %1$s から %2$s までです。"
 			],
+			"Enter the number of all guests staying for each category.": [
+				"泊まる方全員の人数を、区分ごとに入力してください。"
+			],
 			"The number of guests can be up to %s.": [
 				"宿泊人数は %s までです。"
-			],
-			"The rate is %1$s per room per night, which includes up to %2$s.": [
-				"料金は 1室1泊あたり %1$s で、%2$sまでのご利用を含みます。"
-			],
-			"Guests beyond the included number are charged the additional fee shown for each guest category, per extra guest, per night.": [
-				"規定人数を超える分は、区分ごとに表示した追加料金（+金額）が、超えた1名につき1泊ごとに加算されます。"
 			],
 			"The rate is %s per room per night. It does not change with the number of guests.": [
 				"料金は 1室1泊あたり %s です。宿泊人数で料金は変わりません。"
@@ -943,14 +940,20 @@
 			"See each night": [
 				"泊ごとに見る"
 			],
-			"%s / person": [
-				"%s / 1名"
+			"Basic rate (up to %s)": [
+				"基本料金（%sまで）"
+			],
+			"Extra guest fee for %s": [
+				"追加料金 %s"
 			],
 			"× %d": [
 				"× %d名"
 			],
 			"Subtotal": [
 				"小計"
+			],
+			"%s / person": [
+				"%s / 1名"
 			],
 			"Plan price %1$s + room surcharge %2$s": [
 				"プラン料金 %1$s + 客室の追加料金 %2$s"
@@ -1015,8 +1018,20 @@
 			"Please select a date and time again.": [
 				"お手数ですが、もう一度日時を選んでください。"
 			],
-			"I agree to the cancellation policy": [
-				"キャンセルポリシーに同意します"
+			"Reserved name (required)": [
+				"予約者名（必須）"
+			],
+			"Please enter customer name.": [
+				"お名前を入力してください。"
+			],
+			"If the customer name is unknown, enter \"Unknown\" or a similar placeholder.": [
+				"お名前が分からない場合は「不明」などを入力してください。"
+			],
+			"Please enter your contact phone number.": [
+				"ご連絡先の電話番号を入力してください。"
+			],
+			"Requests/Notes": [
+				"ご要望・備考"
 			],
 			"Payment method": [
 				"決済方法"
@@ -1026,6 +1041,9 @@
 			],
 			"Card payment (Stripe)": [
 				"カード決済"
+			],
+			"I agree to the cancellation policy": [
+				"キャンセルポリシーに同意します"
 			],
 			"Save these details so you can quickly book the same thing again next time (add to favorites)": [
 				"この予約内容で次回もすぐ予約できるようにする（お気に入り登録）"
@@ -1038,21 +1056,6 @@
 			],
 			"You must log in to confirm your reservation.": [
 				"予約を確認するにはログインする必要があります。"
-			],
-			"Requests/Notes": [
-				"ご要望・備考"
-			],
-			"Reserved name (required)": [
-				"予約者名（必須）"
-			],
-			"Please enter customer name.": [
-				"お名前を入力してください。"
-			],
-			"If the customer name is unknown, enter \"Unknown\" or a similar placeholder.": [
-				"お名前が分からない場合は「不明」などを入力してください。"
-			],
-			"Please enter your contact phone number.": [
-				"ご連絡先の電話番号を入力してください。"
 			],
 			"If the minimum number of participants is not reached, the session may not take place.": [
 				"最少催行人数に満たない場合、開催されない可能性があります。"
@@ -1105,6 +1108,9 @@
 			"%1$s %2$s": [
 				"%1$s%2$s"
 			],
+			"Tour fee (up to %s)": [
+				"ツアー料金（%sまで）"
+			],
 			"Tour fee (per tour)": [
 				"ツアー料金（1ツアーあたり）"
 			],
@@ -1114,26 +1120,26 @@
 			"Extra guest fee (%1$s %2$s × %3$s)": [
 				"追加料金（%1$s %2$s × %3$s）"
 			],
-			"Extra fee %s": [
-				"追加料金 %s"
-			],
-			"Tour fee %s": [
-				"ツアー料金 %s"
-			],
-			"+ Extra guest fee %s": [
-				"＋ 追加料金 %s"
-			],
 			"%1$s (%2$s × %3$s)": [
 				"%1$s（%2$s × %3$s）"
 			],
 			"The price is %s per tour.": [
 				"料金は 1ツアーあたり %s です。"
 			],
+			"separator between extra guest fees by price category\u0004, ": [
+				"、"
+			],
 			"The price is %1$s per tour and includes up to %2$s.": [
 				"料金は 1ツアーあたり %1$s で、%2$sまでの参加を含みます。"
 			],
-			"For guests over this number, the extra fee shown for each category is added per extra guest.": [
-				"これを超える人数には、区分ごとに表示した追加料金が、超えた1名あたりで加算されます。"
+			"Guests beyond %1$s are charged an extra fee per guest (%2$s).": [
+				"%1$sを超えた分は、1名ごとに追加料金がかかります（%2$s）。"
+			],
+			"The rate is %1$s per room per night, which includes up to %2$s.": [
+				"料金は 1室1泊あたり %1$s で、%2$sまでのご宿泊を含みます。"
+			],
+			"Guests beyond %1$s are charged an extra fee per guest per night (%2$s).": [
+				"%1$sを超えた分は、1名1泊ごとに追加料金がかかります（%2$s）。"
 			],
 			"The response is not a valid JSON response.": [
 				"有効な JSON 応答ではありません。"

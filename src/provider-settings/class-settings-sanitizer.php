@@ -429,6 +429,13 @@ class Settings_Sanitizer {
 		$data['provider_privacy_policy_content'] = sanitize_textarea_field(
 			(string) ( $input['provider_privacy_policy_content'] ?? ( $data['provider_privacy_policy_content'] ?? '' ) )
 		);
+		// プライバシーポリシーの固定ページ（#1168）。存在する固定ページの ID だけを通し、「その他」（other）や削除済みの ID は 0 にする。
+		$data['provider_privacy_policy_page_id'] = Page_Reference::sanitize_page_id( $data['provider_privacy_policy_page_id'] ?? 0 );
+		// プルダウンで「選択してください」（空文字）を選んで保存したときは、残っていた URL も消して未設定に戻す。
+		// 0 や未送信（プログラムからの保存・旧バージョンの保存形式）では URL をそのまま残す。
+		if ( isset( $input['provider_privacy_policy_page_id'] ) && '' === $input['provider_privacy_policy_page_id'] ) {
+			$data['provider_privacy_policy_url'] = '';
+		}
 
 		$data['provider_regular_holidays_disabled'] = ! empty( $input['provider_regular_holidays_disabled'] );
 		$data['provider_regular_holidays']          = $data['provider_regular_holidays_disabled']

@@ -357,7 +357,49 @@ test.describe( 'Issue #961: guest booking form on the reservation screen', () =>
 		// @check ログイン・新規登録の欄は出ず、お名前・メールアドレス・電話番号の入力欄と、送信後の流れの案内が出る
 		const fields = page.locator( '.vkbm-confirm__guest-fields' );
 		await expect( fields ).toBeVisible();
-		await expect( fields.locator( 'h3' ) ).toHaveText( 'お客様情報' );
+
+		// @check お客様情報は予約時に入力する情報の箱の先頭にあり、箱に見出しは無く、枠線は箱にだけ付いている（#1173）
+		const inputsBox = page.locator( '.vkbm-confirm__inputs' );
+		await expect( inputsBox ).toHaveCount( 1 );
+		await expect(
+			inputsBox.locator( '> .vkbm-confirm__guest-fields' )
+		).toHaveCount( 1 );
+		await expect(
+			inputsBox.locator( 'h1, h2, h3, h4, h5, h6' )
+		).toHaveCount( 0 );
+		await expect( page.locator( '.vkbm-confirm__answers' ) ).toHaveCount(
+			0
+		);
+		await expect( inputsBox ).toHaveCSS( 'border-top-width', '1px' );
+		await expect( fields ).toHaveCSS( 'border-top-width', '0px' );
+		// @check 箱の中の 1 行の入力欄・プルダウンは、どのまとまりでも最小の高さ 42px が付き、同じ高さで並ぶ（#1173）
+		const lineHeights = await inputsBox.evaluate( ( box ) =>
+			Array.from(
+				box.querySelectorAll< HTMLInputElement | HTMLSelectElement >(
+					'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select'
+				)
+			)
+				.filter(
+					( el ) =>
+						el.getClientRects().length > 0 &&
+						! el.closest( '[aria-hidden="true"]' )
+				)
+				.map( ( el ) => ( {
+					minHeight: getComputedStyle( el ).minHeight,
+					height: Math.round( el.getBoundingClientRect().height ),
+				} ) )
+		);
+		expect( lineHeights.length ).toBeGreaterThan( 1 );
+		for ( const { minHeight } of lineHeights ) {
+			expect( minHeight ).toBe( '42px' );
+		}
+		expect(
+			new Set( lineHeights.map( ( { height } ) => height ) ).size
+		).toBe( 1 );
+		// ご要望・備考も同じ箱の中にある。
+		await expect( inputsBox.locator( '#vkbm-confirm-memo' ) ).toHaveCount(
+			1
+		);
 		await expect( page.locator( '.vkbm-confirm__auth' ) ).toHaveCount( 0 );
 		await expect(
 			page.locator( '.vkbm-confirm__guest-login-prompt' )
@@ -548,6 +590,17 @@ test.describe( 'Issue #961: guest booking form on the reservation screen', () =>
 		await expect(
 			prompt.getByRole( 'button', { name: '新規登録' } )
 		).toBeVisible();
+		// @check 案内は入力欄の箱の外（上）にある（#1173）
+		await expect(
+			page.locator(
+				'.vkbm-confirm__inputs .vkbm-confirm__guest-login-prompt'
+			)
+		).toHaveCount( 0 );
+		await expect(
+			page.locator(
+				'.vkbm-confirm__guest-login-prompt + .vkbm-confirm__inputs'
+			)
+		).toHaveCount( 1 );
 
 		// @step お名前と電話番号を入力し、案内の「ログイン」を押す
 		await page.locator( '#vkbm-confirm-guest-name' ).fill( '山田 花子' );

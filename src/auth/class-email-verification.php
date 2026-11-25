@@ -299,9 +299,9 @@ class Email_Verification {
 	}
 
 	/**
-	 * Marks a user as unverified. Used immediately after registration.
+	 * 利用者を未認証にする。新規登録の直後と、プロフィールでメールアドレスを変えた直後（#646）に使う。
 	 *
-	 * @param int $user_id User ID.
+	 * @param int $user_id 利用者 ID。
 	 */
 	public static function mark_unverified( int $user_id ): void {
 		update_user_meta( $user_id, self::META_STATUS, self::STATUS_UNVERIFIED );

@@ -13,11 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Privacy_Policy_Url;
 use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\Common\Booking_Custom_Fields;
+use VKBookingManager\Multilingual\Multilingual_Labels;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 use VKBookingManager\Staff\Staff_Editor;
@@ -130,9 +132,9 @@ class Provider_Settings_Controller {
 			$provider_logo_url = '';
 		}
 		$provider_logo_url   = '' !== $provider_logo_url ? esc_url_raw( $provider_logo_url ) : '';
-		$cancellation_policy = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
+		$cancellation_policy = Multilingual_Labels::resolve_text( 'provider_cancellation_policy', (string) ( $settings['provider_cancellation_policy'] ?? '' ) );
 		$terms_of_service    = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
-		$payment_method      = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
+		$payment_method      = Multilingual_Labels::resolve_text( 'provider_payment_method', (string) ( $settings['provider_payment_method'] ?? '' ) );
 		$closed_day_label    = isset( $settings['closed_day_label'] ) ? (string) $settings['closed_day_label'] : '';
 		// Use the shared helper to apply fallback when the setting is empty.
 		// 設定が空の場合にデフォルト値を適用するため共通ヘルパーを使用する。
@@ -194,7 +196,7 @@ class Provider_Settings_Controller {
 			'terms_of_service'                   => $terms_of_service,
 			'payment_method'                     => $payment_method,
 			// 仮予約の完了画面の案内文（実効値。設定が空なら標準文に解決済み）。
-			'booking_complete_message_pending'   => $this->settings_repository->resolve_booking_complete_message_pending( $settings ),
+			'booking_complete_message_pending'   => Multilingual_Labels::resolve_text( 'provider_booking_complete_message_pending', (string) ( $settings['provider_booking_complete_message_pending'] ?? '' ), $this->settings_repository->get_default_booking_complete_message_pending() ),
 			'no_nomination_label'                => $no_nomination_label,
 			'nomination_fee_label'               => $nomination_fee_label,
 			'closed_day_label'                   => $closed_day_label,
@@ -237,8 +239,9 @@ class Provider_Settings_Controller {
 	 * 予約ブロックのフッターに表示する店舗情報とプライバシーポリシーを組み立てる。
 	 *
 	 * 事業者情報は基本設定の既存値をそのまま使う（前後の空白のみ除去）。
-	 * プライバシーポリシーは会員登録画面と同じ判定で、URL 指定モードは URL が、
-	 * 本文モードは本文が入力されているときだけ値を返す。
+	 * プライバシーポリシーは会員登録画面と同じ判定で、ページ指定モードはリンク先の URL（Privacy_Policy_Url::get_url()。
+	 * 選んだ固定ページが公開中ならその時点のパーマリンク、未公開・ゴミ箱・削除済みなら空文字）を、
+	 * 本文モードは本文を返す（JS 側の受け取り方は変えない）。
 	 * ウェブサイトURLは、予約ページURLと異なるときだけ返す（同じ場合・未入力の場合は空文字）。
 	 *
 	 * @param array $settings Settings_Repository から取得した設定値。
@@ -251,11 +254,7 @@ class Provider_Settings_Controller {
 		};
 
 		// プライバシーポリシーの公開方法を判定する（不正値は「表示しない」）。
-		$privacy_mode = sanitize_key( $read_text( 'provider_privacy_policy_mode' ) );
-		if ( ! in_array( $privacy_mode, array( 'none', 'url', 'content' ), true ) ) {
-			$privacy_mode = 'none';
-		}
-		$privacy_url     = esc_url_raw( $read_text( 'provider_privacy_policy_url' ) );
+		$privacy_mode    = Privacy_Policy_Url::get_mode( $settings );
 		$privacy_content = $read_text( 'provider_privacy_policy_content' );
 
 		$website_url = self::resolve_footer_website_url(
@@ -271,8 +270,8 @@ class Provider_Settings_Controller {
 			'website_url'    => $website_url,
 			'privacy_policy' => array(
 				'mode'    => $privacy_mode,
-				'url'     => 'url' === $privacy_mode ? $privacy_url : '',
-				'content' => 'content' === $privacy_mode ? $privacy_content : '',
+				'url'     => Privacy_Policy_Url::get_url( $settings ),
+				'content' => Privacy_Policy_Url::MODE_CONTENT === $privacy_mode ? $privacy_content : '',
 			),
 		);
 	}

@@ -27,6 +27,11 @@ const MANUAL_USER_EMAIL = 'issue507_manual_user@example.com';
 
 let ORIGINAL_LOCALE = 'en_US';
 
+// テスト前の BM 設定（vkbm_provider_settings）の JSON。afterAll で元に戻すために控えておく。
+// このファイルはメール認証を必須にするため、戻さないと同じ環境で後から走るテスト
+// （profile-password-error.spec.ts など、メール認証オフが前提のもの）が落ちる。
+let ORIGINAL_PROVIDER_SETTINGS_JSON: string | null = null;
+
 /**
  * テスト用ログインページ（[vkbm_login_form] のみ）を用意する。
  * login-user-enumeration.spec.ts と同じ考え方。
@@ -85,6 +90,50 @@ function disableRateLimitSetting(): void {
 		wpEvalPhp(
 			`update_option( 'vkbm_provider_settings', json_decode( base64_decode( '${ b64 }' ), true ) );`
 		);
+	} catch ( _e ) {
+		// ignore
+	}
+}
+
+/**
+ * テスト前の BM 設定を JSON のまま控える。
+ */
+function saveProviderSettings(): void {
+	try {
+		ORIGINAL_PROVIDER_SETTINGS_JSON = wpCliArgs( [
+			'option',
+			'get',
+			'vkbm_provider_settings',
+			'--format=json',
+		] );
+	} catch ( _e ) {
+		ORIGINAL_PROVIDER_SETTINGS_JSON = null;
+	}
+}
+
+/**
+ * 控えておいた BM 設定に戻す。
+ * 控えられなかったときは、少なくともメール認証をオフに戻す（global-setup の既定値）。
+ */
+function restoreProviderSettings(): void {
+	try {
+		if ( null !== ORIGINAL_PROVIDER_SETTINGS_JSON ) {
+			const b64 = Buffer.from( ORIGINAL_PROVIDER_SETTINGS_JSON ).toString(
+				'base64'
+			);
+			wpEvalPhp(
+				`update_option( 'vkbm_provider_settings', json_decode( base64_decode( '${ b64 }' ), true ) );`
+			);
+			return;
+		}
+		wpEvalPhp( `
+			$settings = get_option( 'vkbm_provider_settings', array() );
+			if ( ! is_array( $settings ) ) {
+				$settings = array();
+			}
+			$settings['registration_email_verification_enabled'] = 0;
+			update_option( 'vkbm_provider_settings', $settings );
+		` );
 	} catch ( _e ) {
 		// ignore
 	}
@@ -224,6 +273,8 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 		// @step サイトの言語を日本語にし、ログインフォームだけを置いたログインページを作り、ログイン試行回数の制限を無効にしておく
 		ensureJapaneseLocale();
 		ensureLoginPage();
+		// 設定を書き換える前に、元の設定を控えておく（afterAll で戻す）
+		saveProviderSettings();
 		disableRateLimitSetting();
 	} );
 
@@ -233,6 +284,8 @@ test.describe( 'issue #507: メール認証の再送・手動承認', () => {
 	} );
 
 	test.afterAll( () => {
+		// メール認証の必須・レート制限の無効化を、テスト前の BM 設定に戻す
+		restoreProviderSettings();
 		try {
 			wpCliArgs( [ 'site', 'switch-language', ORIGINAL_LOCALE ] );
 		} catch ( _e ) {

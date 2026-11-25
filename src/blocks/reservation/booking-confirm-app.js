@@ -432,6 +432,10 @@ export const BookingConfirmApp = ( {
 			guests: draftGuests,
 			isMultiGuest,
 			isPerBooking,
+			// 追加料金を使う1ツアーあたりは、下書きの基本料金に含まれる人数で「ツアー料金（3名まで）」にする（#1175）。
+			includedGuests: isPerBooking
+				? Number( draft?.extra_guest?.included_guests ) || 0
+				: 0,
 			currencySymbol: currencySymbolValue,
 			guestsUnitLabel,
 		} );
@@ -1377,6 +1381,42 @@ export const BookingConfirmApp = ( {
 		window.setTimeout( () => target.current?.focus(), 0 );
 	};
 
+	/**
+	 * 予約者の連絡先（ゲストのお客様情報・代理予約のお名前・住所）を表示順に確かめる。
+	 * エラーがあれば欄の直下に出し、最初にエラーのある欄へフォーカスを移す。
+	 *
+	 * @return {boolean} エラーが無ければ true。
+	 */
+	const validateContactFields = () => {
+		// ゲスト予約: お名前・メールアドレスは必須。電話番号は設定で必須のときだけ必須。
+		if ( showGuestForm ) {
+			const errors = validateGuestContact( guestContact, phoneRequired );
+			setGuestErrors( errors );
+			if ( hasGuestContactErrors( errors ) ) {
+				focusFirstGuestError( errors );
+				return false;
+			}
+		}
+
+		// 代理予約: お客様のお名前は必須。
+		if ( canManageReservations ) {
+			if ( ! customerName.trim() ) {
+				setCustomerNameError(
+					__(
+						'Please enter the customer name.',
+						'vk-booking-manager'
+					)
+				);
+				setCustomerNameFocusRequest( ( request ) => request + 1 );
+				return false;
+			}
+			setCustomerNameError( '' );
+		}
+
+		// 宿泊の住所（ゲスト・会員・代理予約の共通）。
+		return validateAddress();
+	};
+
 	const validateAddress = () => {
 		if ( draft?.lodging ) {
 			const error = validateCustomerAddress(
@@ -1452,19 +1492,8 @@ export const BookingConfirmApp = ( {
 	};
 
 	// 会員登録せずに予約する申し込みを送る。確認メールのリンクを開くまで、予約は作られない。
+	// お客様情報・住所の検査は、呼び出し元の handleConfirm で validateContactFields() が済ませている。
 	const handleGuestSubmit = async ( agreement ) => {
-		// 入力の検査（お名前・メールアドレスは必須。電話番号は設定で必須のときだけ必須）。
-		const errors = validateGuestContact( guestContact, phoneRequired );
-		setGuestErrors( errors );
-		if ( hasGuestContactErrors( errors ) ) {
-			focusFirstGuestError( errors );
-			return;
-		}
-
-		if ( ! validateAddress() ) {
-			return;
-		}
-
 		setSubmitting( true );
 		setSubmitError( '' );
 
@@ -1571,6 +1600,12 @@ export const BookingConfirmApp = ( {
 			return;
 		}
 
+		// 入力欄の箱の表示順（予約者の連絡先 → ご利用になる方 → 予約時の入力項目）に確かめ、最初にエラーのある欄へフォーカスを移す。
+		// 代理予約の入力漏れは、決済の事前処理を始める前に知らせる。
+		if ( ! validateContactFields() ) {
+			return;
+		}
+
 		const cancellationText =
 			typeof providerCancellationPolicy === 'string' &&
 			providerCancellationPolicy.trim() !== ''
@@ -1656,19 +1691,6 @@ export const BookingConfirmApp = ( {
 				agreeCancellationPolicy,
 				agreeTermsOfService,
 			} );
-			return;
-		}
-
-		// 決済の事前処理を始める前に、代理予約の入力漏れを知らせる。
-		if ( canManageReservations && ! customerName.trim() ) {
-			setCustomerNameError(
-				__( 'Please enter the customer name.', 'vk-booking-manager' )
-			);
-			setCustomerNameFocusRequest( ( request ) => request + 1 );
-			return;
-		}
-		setCustomerNameError( '' );
-		if ( ! validateAddress() ) {
 			return;
 		}
 
@@ -2273,6 +2295,212 @@ export const BookingConfirmApp = ( {
 		/>
 	);
 
+	// 予約時に入力する情報（予約者の連絡先 → ご利用になる方 → 予約時の入力項目 → ご要望・備考）を 1 つの箱にまとめる（#1173）。
+	// 枠線・背景はこの箱にだけ付け、ゲスト・会員・代理予約のどの場合も同じ箱にする。見出しは付けない。
+	const renderInputsBox = () => (
+		<div className="vkbm-confirm__inputs">
+			{ /* 1. 予約者の連絡先（ゲスト予約） */ }
+			{ showGuestForm && ! guestSent && (
+				<GuestContactFields
+					phoneRequired={ phoneRequired }
+					addressField={ renderCustomerAddressField( true ) }
+					values={ guestContact }
+					errors={ guestErrors }
+					inputRefs={ {
+						name: guestNameRef,
+						email: guestEmailRef,
+						phone: guestPhoneRef,
+					} }
+					honeypot={ guestHoneypot }
+					onChange={ handleGuestContactChange }
+					onHoneypotChange={ setGuestHoneypot }
+				/>
+			) }
+			{ /* 1. 予約者の連絡先（代理予約。お客様の選択を含む） */ }
+			{ canManageReservations && (
+				<div className="vkbm-confirm__admin-fields">
+					<div className="vkbm-confirm__admin-field">
+						<label htmlFor="vkbm-confirm-customer-name">
+							{ __(
+								'Reserved name (required)',
+								'vk-booking-manager'
+							) }
+						</label>
+						<input
+							type="text"
+							id="vkbm-confirm-customer-name"
+							ref={ customerNameRef }
+							required
+							aria-required="true"
+							aria-invalid={
+								customerNameError ? 'true' : undefined
+							}
+							aria-describedby={
+								customerNameError
+									? 'vkbm-confirm-customer-name-error vkbm-confirm-customer-name-help'
+									: 'vkbm-confirm-customer-name-help'
+							}
+							value={ customerName }
+							onChange={ ( event ) => {
+								setCustomerName( event.target.value );
+								setCustomerNameError( '' );
+							} }
+							placeholder={ __(
+								'Please enter customer name.',
+								'vk-booking-manager'
+							) }
+						/>
+						{ customerNameError && (
+							<div
+								id="vkbm-confirm-customer-name-error"
+								className="vkbm-alert vkbm-alert__danger vkbm-alert--compact"
+								role="alert"
+							>
+								{ customerNameError }
+							</div>
+						) }
+						<p
+							id="vkbm-confirm-customer-name-help"
+							className="vkbm-confirm__admin-field-help"
+						>
+							{ __(
+								'If the customer name is unknown, enter "Unknown" or a similar placeholder.',
+								'vk-booking-manager'
+							) }
+						</p>
+					</div>
+					<div className="vkbm-confirm__admin-field">
+						<label htmlFor="vkbm-confirm-customer-phone">
+							{ __( 'Telephone number', 'vk-booking-manager' ) }
+						</label>
+						<input
+							type="tel"
+							id="vkbm-confirm-customer-phone"
+							value={ customerPhone }
+							onChange={ ( event ) =>
+								setCustomerPhone( event.target.value )
+							}
+							placeholder={ __(
+								'Please enter your contact phone number.',
+								'vk-booking-manager'
+							) }
+						/>
+					</div>
+					{ renderCustomerAddressField( true ) }
+					{ attendeeStale && attendeeRosterActive && (
+						<div className="vkbm-confirm__admin-field">
+							{ renderAttendeeLoading() }
+						</div>
+					) }
+					{ ! attendeeStale && attendeeRosterActive && (
+						<div className="vkbm-confirm__admin-field">
+							{ renderAttendeeSelector() }
+						</div>
+					) }
+				</div>
+			) }
+			{ /* 1. 予約者の連絡先（会員予約は住所欄だけ。氏名などはプロフィールから入る） */ }
+			{ ! showGuestForm &&
+				! canManageReservations &&
+				renderCustomerAddressField() }
+			{ /* 2. ご利用になる方 */ }
+			{ attendeeLoading && renderAttendeeLoading() }
+			{ ! attendeeLoading &&
+				( attendeeRosterActive
+					? ! canManageReservations && renderAttendeeSelector()
+					: renderAttendeeNameField() ) }
+			{ renderAttendeeStatus() }
+			{ /* 3. 予約時の入力項目 */ }
+			<BookingCustomFields
+				definitions={ customFieldDefinitions }
+				values={ customFieldValues }
+				errors={ customFieldErrors }
+				enforceRequired={ ! canManageReservations }
+				readOnly={ isFormLocked }
+				focusRequest={ customFieldFocusRequest }
+				onChange={ ( id, value ) => {
+					setCustomFieldValues( ( current ) => ( {
+						...current,
+						[ id ]: value,
+					} ) );
+					setCustomFieldErrors( ( current ) => ( {
+						...current,
+						[ id ]: '',
+					} ) );
+				} }
+			/>
+			{ /* 4. ご要望・備考 */ }
+			<div className="vkbm-confirm__form">
+				<label htmlFor="vkbm-confirm-memo">
+					{ __( 'Requests/Notes', 'vk-booking-manager' ) }
+				</label>
+				{ renderMemoField() }
+			</div>
+			{ /* スタッフだけが使う欄（決済方法・管理用メモ）は、お客様から聞く欄の後に置く */ }
+			{ canManageReservations && (
+				<div className="vkbm-confirm__admin-staff-fields">
+					{ window.vkbmPaymentConfig?.payment_enabled && (
+						<div className="vkbm-confirm__admin-field">
+							<span id="vkbm-payment-method-label">
+								{ __( 'Payment method', 'vk-booking-manager' ) }
+							</span>
+							<div
+								className="vkbm-confirm__payment-method-options"
+								role="radiogroup"
+								aria-labelledby="vkbm-payment-method-label"
+							>
+								<label htmlFor="vkbm-payment-method-onsite">
+									<input
+										type="radio"
+										id="vkbm-payment-method-onsite"
+										name="vkbm-payment-method"
+										value="onsite"
+										checked={ paymentMethod === 'onsite' }
+										onChange={ () =>
+											setPaymentMethod( 'onsite' )
+										}
+									/>
+									{ __(
+										'On-site payment',
+										'vk-booking-manager'
+									) }
+								</label>
+								<label htmlFor="vkbm-payment-method-card">
+									<input
+										type="radio"
+										id="vkbm-payment-method-card"
+										name="vkbm-payment-method"
+										value="card"
+										checked={ paymentMethod === 'card' }
+										onChange={ () =>
+											setPaymentMethod( 'card' )
+										}
+									/>
+									{ __(
+										'Card payment (Stripe)',
+										'vk-booking-manager'
+									) }
+								</label>
+							</div>
+						</div>
+					) }
+					<div className="vkbm-confirm__admin-field">
+						<label htmlFor="vkbm-confirm-provider-note">
+							{ __( 'Management memo', 'vk-booking-manager' ) }
+						</label>
+						<textarea
+							id="vkbm-confirm-provider-note"
+							value={ providerNote }
+							onChange={ ( event ) =>
+								setProviderNote( event.target.value )
+							}
+						/>
+					</div>
+				</div>
+			) }
+		</div>
+	);
+
 	const renderAgreements = () => {
 		if ( isFormLocked || canManageReservations ) {
 			return null;
@@ -2810,6 +3038,7 @@ export const BookingConfirmApp = ( {
 										draft.lodging.rate_tiers_enabled ===
 										true
 									}
+									guestsUnitLabel={ guestsUnitLabel }
 									locale={ userBootstrap?.locale }
 									currencySymbol={
 										currencySymbol.trim() !== ''
@@ -3017,42 +3246,6 @@ export const BookingConfirmApp = ( {
 						) }
 					</div>
 
-					{ showGuestForm && ! guestSent && (
-						<div className="vkbm-confirm__guest">
-							{ /* 「どちらでも」のときだけ、会員のお客様がログイン・新規登録へ切り替える案内を出す。 */ }
-							{ bookingCustomerMode ===
-								BOOKING_CUSTOMER_MODE.BOTH && (
-								<GuestLoginPrompt
-									showRegister={ guestCanRegister }
-									onLogin={ () => {
-										setAuthFocusPending( true );
-										toggleAuthMode( 'login' );
-									} }
-									onRegister={ () => {
-										setAuthFocusPending( true );
-										toggleAuthMode( 'register' );
-									} }
-								/>
-							) }
-							<GuestContactFields
-								phoneRequired={ phoneRequired }
-								addressField={ renderCustomerAddressField(
-									true
-								) }
-								values={ guestContact }
-								errors={ guestErrors }
-								inputRefs={ {
-									name: guestNameRef,
-									email: guestEmailRef,
-									phone: guestPhoneRef,
-								} }
-								honeypot={ guestHoneypot }
-								onChange={ handleGuestContactChange }
-								onHoneypotChange={ setGuestHoneypot }
-							/>
-						</div>
-					) }
-
 					{ ! isLoggedIn && ! showGuestForm && (
 						<div className="vkbm-confirm__auth">
 							<p className="vkbm-confirm__auth-label">
@@ -3150,198 +3343,28 @@ export const BookingConfirmApp = ( {
 						</div>
 					) }
 
-					{ attendeeLoading && renderAttendeeLoading() }
-					{ ! attendeeLoading &&
-						( attendeeRosterActive
-							? ! canManageReservations &&
-							  renderAttendeeSelector()
-							: renderAttendeeNameField() ) }
-					{ renderAttendeeStatus() }
-
-					{ ! showGuestForm &&
-						! canManageReservations &&
-						renderCustomerAddressField() }
-
-					{ /* 予約について施設への回答（追加した項目・ご要望・備考）を 1 つのまとまりにする。欄どうしは前後のまとまりとの間隔より狭くする。 */ }
-					<div className="vkbm-confirm__answers">
-						<BookingCustomFields
-							definitions={ customFieldDefinitions }
-							values={ customFieldValues }
-							errors={ customFieldErrors }
-							enforceRequired={ ! canManageReservations }
-							readOnly={ isFormLocked }
-							focusRequest={ customFieldFocusRequest }
-							onChange={ ( id, value ) => {
-								setCustomFieldValues( ( current ) => ( {
-									...current,
-									[ id ]: value,
-								} ) );
-								setCustomFieldErrors( ( current ) => ( {
-									...current,
-									[ id ]: '',
-								} ) );
-							} }
-						/>
-
-						<div className="vkbm-confirm__form">
-							<label htmlFor="vkbm-confirm-memo">
-								{ __( 'Requests/Notes', 'vk-booking-manager' ) }
-							</label>
-							{ renderMemoField() }
-						</div>
-					</div>
-
-					{ canManageReservations && (
-						<div className="vkbm-confirm__admin-fields">
-							<div className="vkbm-confirm__admin-field">
-								<label htmlFor="vkbm-confirm-customer-name">
-									{ __(
-										'Reserved name (required)',
-										'vk-booking-manager'
-									) }
-								</label>
-								<input
-									type="text"
-									id="vkbm-confirm-customer-name"
-									ref={ customerNameRef }
-									required
-									aria-required="true"
-									aria-invalid={
-										customerNameError ? 'true' : undefined
-									}
-									aria-describedby={
-										customerNameError
-											? 'vkbm-confirm-customer-name-error vkbm-confirm-customer-name-help'
-											: 'vkbm-confirm-customer-name-help'
-									}
-									value={ customerName }
-									onChange={ ( event ) => {
-										setCustomerName( event.target.value );
-										setCustomerNameError( '' );
+					{ /* ゲスト予約では、ログイン・新規登録へ切り替える案内を入力欄の箱の外（上）に置き、箱に寄せる。 */ }
+					{ showGuestForm && ! guestSent ? (
+						<div className="vkbm-confirm__guest">
+							{ /* 「どちらでも」のときだけ、会員のお客様がログイン・新規登録へ切り替える案内を出す。 */ }
+							{ bookingCustomerMode ===
+								BOOKING_CUSTOMER_MODE.BOTH && (
+								<GuestLoginPrompt
+									showRegister={ guestCanRegister }
+									onLogin={ () => {
+										setAuthFocusPending( true );
+										toggleAuthMode( 'login' );
 									} }
-									placeholder={ __(
-										'Please enter customer name.',
-										'vk-booking-manager'
-									) }
+									onRegister={ () => {
+										setAuthFocusPending( true );
+										toggleAuthMode( 'register' );
+									} }
 								/>
-								{ customerNameError && (
-									<div
-										id="vkbm-confirm-customer-name-error"
-										className="vkbm-alert vkbm-alert__danger vkbm-alert--compact"
-										role="alert"
-									>
-										{ customerNameError }
-									</div>
-								) }
-								<p
-									id="vkbm-confirm-customer-name-help"
-									className="vkbm-confirm__admin-field-help"
-								>
-									{ __(
-										'If the customer name is unknown, enter "Unknown" or a similar placeholder.',
-										'vk-booking-manager'
-									) }
-								</p>
-							</div>
-							<div className="vkbm-confirm__admin-field">
-								<label htmlFor="vkbm-confirm-customer-phone">
-									{ __(
-										'Telephone number',
-										'vk-booking-manager'
-									) }
-								</label>
-								<input
-									type="tel"
-									id="vkbm-confirm-customer-phone"
-									value={ customerPhone }
-									onChange={ ( event ) =>
-										setCustomerPhone( event.target.value )
-									}
-									placeholder={ __(
-										'Please enter your contact phone number.',
-										'vk-booking-manager'
-									) }
-								/>
-							</div>
-							{ renderCustomerAddressField( true ) }
-							{ attendeeStale && attendeeRosterActive && (
-								<div className="vkbm-confirm__admin-field">
-									{ renderAttendeeLoading() }
-								</div>
 							) }
-							{ ! attendeeStale && attendeeRosterActive && (
-								<div className="vkbm-confirm__admin-field">
-									{ renderAttendeeSelector() }
-								</div>
-							) }
-							{ window.vkbmPaymentConfig?.payment_enabled && (
-								<div className="vkbm-confirm__admin-field">
-									<span id="vkbm-payment-method-label">
-										{ __(
-											'Payment method',
-											'vk-booking-manager'
-										) }
-									</span>
-									<div
-										className="vkbm-confirm__payment-method-options"
-										role="radiogroup"
-										aria-labelledby="vkbm-payment-method-label"
-									>
-										<label htmlFor="vkbm-payment-method-onsite">
-											<input
-												type="radio"
-												id="vkbm-payment-method-onsite"
-												name="vkbm-payment-method"
-												value="onsite"
-												checked={
-													paymentMethod === 'onsite'
-												}
-												onChange={ () =>
-													setPaymentMethod( 'onsite' )
-												}
-											/>
-											{ __(
-												'On-site payment',
-												'vk-booking-manager'
-											) }
-										</label>
-										<label htmlFor="vkbm-payment-method-card">
-											<input
-												type="radio"
-												id="vkbm-payment-method-card"
-												name="vkbm-payment-method"
-												value="card"
-												checked={
-													paymentMethod === 'card'
-												}
-												onChange={ () =>
-													setPaymentMethod( 'card' )
-												}
-											/>
-											{ __(
-												'Card payment (Stripe)',
-												'vk-booking-manager'
-											) }
-										</label>
-									</div>
-								</div>
-							) }
-							<div className="vkbm-confirm__admin-field">
-								<label htmlFor="vkbm-confirm-provider-note">
-									{ __(
-										'Management memo',
-										'vk-booking-manager'
-									) }
-								</label>
-								<textarea
-									id="vkbm-confirm-provider-note"
-									value={ providerNote }
-									onChange={ ( event ) =>
-										setProviderNote( event.target.value )
-									}
-								/>
-							</div>
+							{ renderInputsBox() }
 						</div>
+					) : (
+						renderInputsBox()
 					) }
 
 					{ renderAgreements() }

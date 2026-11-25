@@ -134,7 +134,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'test_condition_name' => '連携・ライセンス・拡張プラグインなし => 「拡張・連携」グループは出ない',
 				'conditions'          => array( false, false, false ),
 				'expected'            => array(
-					'service'  => array( 'store', 'system', 'notation', 'email', 'design' ),
+					'service'  => array( 'store', 'system', 'notation', 'multilingual', 'email', 'design' ),
 					'customer' => array( 'attendees', 'booking-fields', 'registration', 'consent' ),
 					'admin'    => array( 'advanced' ),
 					'help'     => array( 'faq' ),
@@ -144,7 +144,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'test_condition_name' => '連携あり・ライセンスあり => 「拡張・連携」に連携、「管理」にライセンスが入る',
 				'conditions'          => array( true, true, false ),
 				'expected'            => array(
-					'service'   => array( 'store', 'system', 'notation', 'email', 'design' ),
+					'service'   => array( 'store', 'system', 'notation', 'multilingual', 'email', 'design' ),
 					'customer'  => array( 'attendees', 'booking-fields', 'registration', 'consent' ),
 					'extension' => array( 'integration' ),
 					'admin'     => array( 'advanced', 'license' ),
@@ -155,7 +155,7 @@ class Provider_Settings_Navigation_Test extends WP_UnitTestCase {
 				'test_condition_name' => '拡張プラグインのリンクだけある => 項目が空でも「拡張・連携」グループは出る',
 				'conditions'          => array( false, false, true ),
 				'expected'            => array(
-					'service'   => array( 'store', 'system', 'notation', 'email', 'design' ),
+					'service'   => array( 'store', 'system', 'notation', 'multilingual', 'email', 'design' ),
 					'customer'  => array( 'attendees', 'booking-fields', 'registration', 'consent' ),
 					'extension' => array(),
 					'admin'     => array( 'advanced' ),

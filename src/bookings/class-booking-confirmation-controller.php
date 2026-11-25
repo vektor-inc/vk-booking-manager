@@ -32,6 +32,7 @@ use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
+use VKBookingManager\Multilingual\Multilingual_Labels;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -84,6 +85,7 @@ class Booking_Confirmation_Controller {
 
 	// #431: 予約時にユーザーが指定したリソースタグ（希望タグ）のターム ID 配列。タグ未指定なら保存しない。
 	private const META_RESOURCE_TAG_IDS          = '_vkbm_booking_resource_tag_ids';
+	private const META_LOCALE                    = '_vkbm_booking_locale';
 	private const META_SERVICE_ID                = '_vkbm_booking_service_id';
 	private const META_CUSTOMER                  = '_vkbm_booking_customer_name';
 	private const META_CUSTOMER_TEL              = '_vkbm_booking_customer_tel';
@@ -582,7 +584,7 @@ class Booking_Confirmation_Controller {
 		if ( is_wp_error( $customer_address ) ) {
 			return $customer_address;
 		}
-		$requires_cancellation = '' !== trim( (string) ( $settings['provider_cancellation_policy'] ?? '' ) );
+		$requires_cancellation = Multilingual_Labels::requires_cancellation_policy_agreement( $settings, $draft );
 		$requires_tos          = '' !== trim( (string) ( $settings['provider_terms_of_service'] ?? '' ) );
 		$status_mode           = sanitize_key( (string) ( $settings['provider_booking_status_mode'] ?? self::BOOKING_STATUS_PENDING ) );
 		$initial_status        = self::BOOKING_STATUS_PENDING === $status_mode ? self::BOOKING_STATUS_PENDING : self::BOOKING_STATUS_CONFIRMED;
@@ -850,7 +852,12 @@ class Booking_Confirmation_Controller {
 					);
 				}
 
-				$start_for_storage     = $this->format_datetime_for_storage( $start_at );
+				$start_for_storage = $this->format_datetime_for_storage( $start_at );
+				// 下書き作成時の表示言語を予約へ保存する。旧下書きは現在の言語を使う。
+				$booking_locale = Multilingual_Labels::sanitize_locale( $draft['locale'] ?? determine_locale() );
+				if ( '' !== $booking_locale ) {
+					update_post_meta( $booking_id, self::META_LOCALE, $booking_locale );
+				}
 				$end_for_storage       = $this->format_datetime_for_storage( $end_at );
 				$service_end_at        = isset( $slot['service_end_at'] ) ? (string) $slot['service_end_at'] : '';
 				$service_end_for_store = $this->format_datetime_for_storage( $service_end_at );

@@ -24,6 +24,13 @@ use WP_Error;
  */
 class Settings_Service {
 	/**
+	 * 固定ページを選ぶ設定の ID のキー（予約ページ #1050・プライバシーポリシー #1168）。
+	 *
+	 * 保存時に、未送信なら現在の値を引き継ぎ、新しく選べるのを公開中の固定ページに限る。
+	 */
+	private const PAGE_ID_SETTING_KEYS = array( 'reservation_page_id', 'provider_privacy_policy_page_id' );
+
+	/**
 	 * Settings repository.
 	 *
 	 * @var Settings_Repository
@@ -104,10 +111,12 @@ class Settings_Service {
 		if ( ! array_key_exists( 'booking_auto_anonymize_months', $raw_settings ) && isset( $current['booking_auto_anonymize_months'] ) ) {
 			$raw_settings['booking_auto_anonymize_months'] = $current['booking_auto_anonymize_months'];
 		}
-		// 予約ページの固定ページ（#1050）が送られなかった保存（REST 経由の部分更新など）では、現在の保存値を引き継ぎ、
-		// 選んだページが黙って「その他」の URL に戻らないようにする。
-		if ( ! array_key_exists( 'reservation_page_id', $raw_settings ) && isset( $current['reservation_page_id'] ) ) {
-			$raw_settings['reservation_page_id'] = $current['reservation_page_id'];
+		// 固定ページを選ぶ設定（予約ページ #1050・プライバシーポリシー #1168）が送られなかった保存（REST 経由の部分更新など）では、
+		// 現在の保存値を引き継ぎ、選んだページが黙って「その他」の URL に戻らないようにする。
+		foreach ( self::PAGE_ID_SETTING_KEYS as $page_id_key ) {
+			if ( ! array_key_exists( $page_id_key, $raw_settings ) && isset( $current[ $page_id_key ] ) ) {
+				$raw_settings[ $page_id_key ] = $current[ $page_id_key ];
+			}
 		}
 		// 利用者名のモードと見出しが送られなかった保存では、現在の保存値を引き継ぐ。
 		// 無効時に disabled となる見出しや、REST 経由の部分更新で入力済みの設定を消さない。
@@ -149,17 +158,19 @@ class Settings_Service {
 		$sanitized = $this->sanitizer->sanitize( $raw_settings, $defaults );
 		$sanitized = Industry_Presets::apply_transition( $current, $sanitized, $raw_settings, $defaults );
 
-		// 予約ページに新しく選べるのは公開中の固定ページだけ（#1050）。今保存されている ID はゴミ箱に入れた等でも保つ。
-		$current_page_id                  = (int) ( $current['reservation_page_id'] ?? 0 );
-		$sanitized['reservation_page_id'] = Page_Reference::restrict_to_selectable(
-			(int) ( $sanitized['reservation_page_id'] ?? 0 ),
-			$current_page_id
-		);
-		// 今保存されている ID が送られた（部分更新で引き継いだ）ときは、ページを完全に削除した後でも保つ。
-		// サニタイズでは存在しない ID は 0 になるが、0 にすると「削除済み」の警告が消え、残っている URL の設定へ黙って戻るため。
-		$submitted_page_id = $raw_settings['reservation_page_id'] ?? null;
-		if ( $current_page_id > 0 && is_numeric( $submitted_page_id ) && (int) $submitted_page_id === $current_page_id ) {
-			$sanitized['reservation_page_id'] = $current_page_id;
+		foreach ( self::PAGE_ID_SETTING_KEYS as $page_id_key ) {
+			// 固定ページに新しく選べるのは公開中のものだけ（#1050・#1168）。今保存されている ID はゴミ箱に入れた等でも保つ。
+			$current_page_id           = (int) ( $current[ $page_id_key ] ?? 0 );
+			$sanitized[ $page_id_key ] = Page_Reference::restrict_to_selectable(
+				(int) ( $sanitized[ $page_id_key ] ?? 0 ),
+				$current_page_id
+			);
+			// 今保存されている ID が送られた（部分更新で引き継いだ）ときは、ページを完全に削除した後でも保つ。
+			// サニタイズでは存在しない ID は 0 になるが、0 にすると「削除済み」の警告が消え、残っている URL の設定へ黙って戻るため。
+			$submitted_page_id = $raw_settings[ $page_id_key ] ?? null;
+			if ( $current_page_id > 0 && is_numeric( $submitted_page_id ) && (int) $submitted_page_id === $current_page_id ) {
+				$sanitized[ $page_id_key ] = $current_page_id;
+			}
 		}
 
 		// 「プラグイン削除時の片付け」は、データを消す設定のため manage_options を持つ利用者だけが変更できる。

@@ -197,8 +197,8 @@
 // =============================================================================
 // 切り替えるタブの一覧。タブを足すときは、ここに名前を1つ足すだけで切替の CSS が揃う
 // （PHP 側は、そのタブの行に vkbm-provider-settings__tab-{名前} を付ける）。
-$vkbm-provider-settings-tabs: store, system, notation, attendees, booking-fields,
-	email, registration, consent, design, advanced, faq, license;
+$vkbm-provider-settings-tabs: store, system, notation, multilingual, attendees,
+	booking-fields, email, registration, consent, design, advanced, faq, license;
 
 .vkbm-provider-settings {
 	// タブの切り替え
@@ -432,14 +432,26 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, booking-fields
 		line-break: strict;
 	}
 
-	// 親のプルダウンの値で出し入れする子の入力欄（プライバシーポリシーの URL・本文、予約ページの「その他」の URL）。
+	// 親のプルダウンの値で出し入れする子の入力欄（プライバシーポリシーのページ指定・「その他」の URL・本文、予約ページの「その他」の URL）。
 	.vkbm-provider-settings__privacy-policy-field,
 	.vkbm-provider-settings__reservation-page-url-field {
 		margin-top: 0.75rem;
 	}
 
-	// 予約ページに選んだ固定ページの URL の行。長い URL が欄の幅からはみ出さず折り返せるようにする。
-	.vkbm-reservation-page-info {
+	// 同意項目タブのプルダウン（プライバシーポリシーの表示方法・ページ選択）を「その他」の URL 欄（コアの min-height: 40px）と高さを揃える。
+	// コアは 782px 以下で select の line-height を 2.5（16px の文字で 40px）にし、枠線の分だけ 42px になるため、
+	// 広い幅と同じく行の高さを枠線の内側の 38px にする。
+	@include vkbm-bp-down($vkbm-bp-admin-sm) {
+
+		.vkbm-provider-settings__tab-consent select {
+			box-sizing: border-box;
+			line-height: 38px;
+		}
+	}
+
+	// 予約ページ・プライバシーポリシーに選んだ固定ページの URL の行。長い URL が欄の幅からはみ出さず折り返せるようにする。
+	.vkbm-reservation-page-info,
+	.vkbm-privacy-policy-page-info {
 		overflow-wrap: anywhere;
 	}
 
@@ -657,6 +669,122 @@ $vkbm-provider-settings-tabs: store, system, notation, attendees, booking-fields
 			.vkbm-button {
 				flex: 1 1 0;
 			}
+		}
+	}
+
+	// 表記設定タブ冒頭の案内（多言語設定タブへのリンク）
+	// -----------------------------------------------------------------------------
+	.vkbm-provider-settings__tab-lead {
+		margin: 0 0 var(--vkbm--spacing--xs);
+	}
+
+	// 多言語設定（#1186）
+	// -----------------------------------------------------------------------------
+	.vkbm-multilingual__intro {
+		margin: 0 0 var(--vkbm--spacing--xs);
+	}
+
+	.vkbm-multilingual__add {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--vkbm--spacing--xs);
+
+		// コアの select の左右 margin（1px）を消し、縦に積んだときにボタンと左端を揃える。
+		select,
+		.button {
+			margin: 0;
+		}
+
+		// ボタン・テキスト入力（40px）と高さを揃える。コアは 782px 以下で select の line-height を
+		// 2.5（16px の文字で 40px）にし、枠線の分だけ 42px になるため、行の高さを枠線の内側の 38px に固定する。
+		select {
+			box-sizing: border-box;
+			line-height: 38px;
+		}
+	}
+
+	// 補足文の字面の行間より、選択欄・ボタンの組から補足文までを広く空ける（コアの p.description は 4px）。
+	.vkbm-multilingual__add-help,
+	.vkbm-multilingual__no-more {
+		margin-top: var(--vkbm--spacing--xs);
+	}
+
+	// 言語ごとのまとまりの間は、まとまりの中の欄どうしより広く空ける。
+	.vkbm-multilingual__language {
+		margin-top: var(--vkbm--spacing--lg);
+		padding-top: var(--vkbm--spacing--sm);
+		border-top: 1px solid #dcdcde;
+
+		.form-table {
+			margin-top: 0;
+		}
+	}
+
+	.vkbm-multilingual__language-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--vkbm--spacing--xs);
+
+		.vkbm-button {
+			margin: 0;
+			white-space: nowrap;
+		}
+	}
+
+	.vkbm-multilingual__language-title {
+		margin: 0;
+		line-height: 1.4;
+	}
+
+	.vkbm-multilingual__subheading {
+		margin: 28px 0 0;
+		color: #1d2327;
+		font-size: 15px;
+		font-weight: 600;
+		line-height: 1.4;
+	}
+
+	.vkbm-multilingual__subheading--guidance {
+		margin-top: 24px;
+		margin-bottom: 12px;
+	}
+
+	// コアの表の先頭行の padding が小見出しと最初の項目を離すのを防ぐ。
+	.vkbm-multilingual__terms-table tr:first-child {
+
+		th {
+			padding-top: 8px;
+		}
+
+		@include vkbm-bp-up($vkbm-bp-admin-sm) {
+
+			td {
+				padding-top: 3px;
+			}
+		}
+	}
+
+	.vkbm-multilingual__guidance-description {
+		line-break: strict;
+	}
+
+	.vkbm-multilingual__empty {
+		margin: var(--vkbm--spacing--md) 0 0;
+	}
+
+	@include vkbm-bp-down($vkbm-bp-admin-sm) {
+		// 選択欄とボタンは、途中で折り返さないよう最初から縦に積み、左端を揃える。
+		.vkbm-multilingual__add {
+			flex-direction: column;
+			align-items: flex-start;
+		}
+
+		// 削除ボタンは見出しの横で折り返さず、見出しの下に置く。
+		.vkbm-multilingual__language-title {
+			flex: 1 0 100%;
 		}
 	}
 

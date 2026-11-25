@@ -50,6 +50,7 @@ const BUNDLES = {
 		'admin-resource-delete-guard.scss',
 		'admin-service-menu-quick-edit.scss',
 		'admin-service-menu-gallery.scss',
+		'admin-service-menu-multilingual.scss',
 		'admin-order.scss',
 		'admin-style-guide.scss',
 		'admin-email-log.scss',

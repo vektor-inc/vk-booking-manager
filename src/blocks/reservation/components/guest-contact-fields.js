@@ -145,6 +145,7 @@ const GuestField = ( {
 
 /**
  * 「お客様情報」欄（お名前・メールアドレス・電話番号と宿泊時の住所）。
+ * 予約時に入力する情報の箱（.vkbm-confirm__inputs）の先頭に入れるため、見出しは付けない（#1173）。
  *
  * @param {Object}      props                  プロパティ。
  * @param {JSX.Element} props.addressField     宿泊時の住所欄。
@@ -168,9 +169,6 @@ export const GuestContactFields = ( {
 	onHoneypotChange,
 } ) => (
 	<div className="vkbm-confirm__guest-fields">
-		<h3 className="vkbm-confirm__guest-title">
-			{ __( 'Customer information', 'vk-booking-manager' ) }
-		</h3>
 		<GuestField
 			id="vkbm-confirm-guest-name"
 			label={ __(

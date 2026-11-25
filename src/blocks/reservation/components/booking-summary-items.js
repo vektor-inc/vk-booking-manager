@@ -54,11 +54,16 @@ export const BookingSummaryItems = ( {
 	const extraGuestTiers = Array.isArray( booking?.extra_guests?.tiers )
 		? booking.extra_guests.tiers
 		: [];
+	// ツアー料金の見出しには、保存済みの基本料金に含まれる人数を「（3名まで）」の形で添える（#1175）。
+	// 人数が保存されていない予約は、従来の「ツアー料金（1ツアーあたり）」に戻る。
 	const tourFeeRow =
 		extraGuestTiers.length > 0
 			? buildServiceBasicFeeRow( {
 					unitPrice: Number( booking?.base_price ) || 0,
 					isPerBooking: true,
+					includedGuests:
+						Number( booking?.extra_guests?.included_guests ) || 0,
+					guestsUnitLabel,
 			  } )
 			: null;
 	const extraGuestRows = buildExtraGuestFeeRows( {

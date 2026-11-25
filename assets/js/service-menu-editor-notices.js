@@ -2,6 +2,9 @@
  * ブロックエディタで、保存時のお知らせ（人数の丸め・料金区分なしの警告・予約可能日のお知らせ）を
  * 標準の通知（core/notices）で表示する。
  *
+ * 一覧の「複製」で下書きを作った直後は、PHP が判定済みの文言（duplicatedMessage）を
+ * 成功の通知で表示する（#1176）。
+ *
  * お知らせは PHP が一時保存し、REST で取得すると同時に消費される。
  * 画面読み込み時と、メタボックスの保存が終わったときに取得する。
  */
@@ -28,6 +31,14 @@
 				}
 			} )
 			.catch( function () {} );
+	}
+
+	if ( config.duplicatedMessage ) {
+		data.dispatch( 'core/notices' ).createNotice(
+			'success',
+			config.duplicatedMessage,
+			{ id: 'vkbm-duplicate-notice', isDismissible: true }
+		);
 	}
 
 	fetchNotice();

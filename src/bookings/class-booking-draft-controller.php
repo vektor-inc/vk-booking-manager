@@ -624,6 +624,8 @@ class Booking_Draft_Controller {
 		$attendee_name_mode       = Attendee_Name::get_mode( $this->settings_repository->get_settings() );
 		$custom_field_definitions = Booking_Custom_Fields::get_definitions( $this->settings_repository->get_settings() );
 		$payload                  = array(
+			// 確定 REST はページの言語へ切り替えないため、下書き時の言語を引き継ぐ。
+			'locale'                    => determine_locale(),
 			'menu_id'                   => $menu_id,
 			'resource_id'               => $resource_id,
 			// #431: リソースタグ絞り込み（ターム ID配列・AND条件）。予約確定時の再検証・
@@ -947,11 +949,12 @@ class Booking_Draft_Controller {
 				$plan_inputs
 			);
 
-			// 休前日・特定日の料金がある、または1名あたりで予約者区分があるプランで、確認画面に泊ごとの内訳を出す（night_rates は泊ごとの日付・区分・特定日の名称・プラン料金と、予約者区分ごとの単価・人数・小計）。
+			// 休前日・特定日の料金がある、1名あたりで予約者区分がある、または1室あたりで追加料金を使うプランで、確認画面に泊ごとの内訳を出す（night_rates は泊ごとの日付・区分・特定日の名称・プラン料金と、予約者区分ごとの単価・人数・小計、追加料金の内訳）。
 			$stay_display = Lodging_Price_Display::build_stay_display(
 				$plan_inputs,
 				$has_price_tiers ? $guest_tiers : array(),
-				$lodging_price['night_breakdown']
+				$lodging_price['night_breakdown'],
+				$lodging_price['night_extra_guests']
 			);
 
 			$payload['lodging']['price_unit']               = $lodging_price['price_unit'];
@@ -959,7 +962,7 @@ class Booking_Draft_Controller {
 			$payload['lodging']['room_surcharge_per_night'] = $lodging_price['room_surcharge_per_night'];
 			$payload['lodging']['price_per_night']          = $lodging_price['price_per_night'];
 			$payload['lodging']['night_breakdown']          = $lodging_price['night_breakdown'];
-			// rate_tiers_enabled は、休前日・特定日の料金がある場合に加え、1名あたりで予約者区分がある場合も true（キー名は #738 当時のまま）。
+			// rate_tiers_enabled は、休前日・特定日の料金がある場合に加え、1名あたりで予約者区分がある場合と1室あたりで追加料金を使う場合も true（キー名は #738 当時のまま）。
 			$payload['lodging']['rate_tiers_enabled'] = $stay_display['enabled'];
 			$payload['lodging']['night_rates']        = $stay_display['night_rates'];
 			$total_price                              = $lodging_price['total'];

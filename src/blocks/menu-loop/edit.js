@@ -54,6 +54,9 @@ const GROUP_FILTER_MODE_OPTIONS = [
 	},
 ];
 
+// サービスグループを読み込めていないときに使う空の一覧
+const EMPTY_SERVICE_GROUPS = [];
+
 const generateLoopId = ( takenIds ) => {
 	let suffix = 1;
 	while ( takenIds.has( `loop-${ suffix }` ) ) {
@@ -64,22 +67,34 @@ const generateLoopId = ( takenIds ) => {
 
 const EditComponent = ( { attributes, setAttributes, clientId } ) => {
 	const blockProps = useBlockProps();
-	const { loopBlocks, serviceGroups } = useSelect( ( select ) => {
-		const groups = select( 'core' ).getEntityRecords(
-			'taxonomy',
-			'vkbm_service_menu_group',
-			{ per_page: -1, orderby: 'name', order: 'asc' }
-		);
-		const allBlocks = flattenBlocks(
-			select( 'core/block-editor' ).getBlocks()
-		);
-		return {
-			loopBlocks: allBlocks.filter(
+	// ページ内のブロック一覧と、サービスグループの一覧を読む。
+	// useSelect の中で絞り込んだり空配列を作ったりすると毎回新しい配列になり、エディタで何か変わるたびに
+	// 再描画されてコンソールに警告が出るため、ここでは取得した値をそのまま返し、整形は外で行う。
+	const { blocks, groups } = useSelect(
+		( select ) => ( {
+			blocks: select( 'core/block-editor' ).getBlocks(),
+			groups: select( 'core' ).getEntityRecords(
+				'taxonomy',
+				'vkbm_service_menu_group',
+				{ per_page: -1, orderby: 'name', order: 'asc' }
+			),
+		} ),
+		[]
+	);
+
+	// 入れ子のブロックを平らに並べ、メニューループだけを取り出す。
+	const loopBlocks = useMemo(
+		() =>
+			flattenBlocks( blocks ).filter(
 				( block ) => block?.name === metadata.name
 			),
-			serviceGroups: Array.isArray( groups ) ? groups : [],
-		};
-	}, [] );
+		[ blocks ]
+	);
+
+	// 読み込み中・取得できないときは空の一覧として扱う。
+	const serviceGroups = Array.isArray( groups )
+		? groups
+		: EMPTY_SERVICE_GROUPS;
 
 	const otherLoopIds = useMemo( () => {
 		const ids = new Set();

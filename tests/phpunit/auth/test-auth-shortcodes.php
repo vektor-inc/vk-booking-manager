@@ -303,10 +303,12 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 					array(
 						'user_login' => $case['user_login'],
 						'user_email' => $case['old_email'],
+						'user_pass'  => 'current-password-123',
 					)
 				);
 				wp_set_current_user( $user_id );
 
+				// メール・パスワードの変更には現在のパスワードが要る（#646）。
 				$_SERVER['REQUEST_METHOD'] = 'POST';
 				$_POST                     = array(
 					'vkbm_profile_form'       => '1',
@@ -314,6 +316,7 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 					'user_email'              => $case['new_email'],
 					'kana_name'               => 'わだ',
 					'phone_number'            => '090-0000-0000',
+					'current_password'        => 'current-password-123',
 					'new_password'            => $case['new_password'],
 					'new_password_confirm'    => $case['new_password'],
 				);
@@ -330,6 +333,489 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		} finally {
 			remove_filter( 'pre_wp_mail', $mail_filter, 10 );
 			delete_option( Settings_Repository::OPTION_KEY );
+			$_POST   = $previous_post;
+			$_SERVER = $previous_server;
+		}
+	}
+
+	/**
+	 * #646: プロフィールの保存で、メールアドレス・パスワードを変えるときだけ現在のパスワードを照合すること、
+	 * メールアドレスを変えたら（メール認証が必須の設定で、予約顧客のとき）メール認証をやり直すことを検証する。
+	 *
+	 * @return void
+	 */
+	public function test_process_profile_request(): void {
+		$previous_post     = $_POST;
+		$previous_server   = $_SERVER;
+		$original_settings = ( new Settings_Repository() )->get_settings();
+		$current_password  = 'CurrentPass123!';
+		$new_password      = 'NewPass456!';
+		$captured_mails    = array();
+		$mail_result       = true;
+		/**
+		 * 送ったメールを記録し、送信結果はケースごとに切り替える。
+		 *
+		 * @param null|bool $return 送信を止めるかどうかの値（使わない）。
+		 * @param array     $atts   wp_mail() に渡された宛先・件名・本文など。
+		 * @return bool 送信結果として返す値。
+		 */
+		$mail_filter = static function ( $return, array $atts ) use ( &$captured_mails, &$mail_result ) {
+			$captured_mails[] = $atts;
+			return $mail_result;
+		};
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'メールを変え、現在のパスワードが未入力の場合 => 何も保存せず、現在のパスワードを求める',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => '',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'missing_current_password' ),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => false,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールを変え、現在のパスワードが誤りの場合 => 何も保存せず、パスワードが違うと伝える',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => 'WrongPass789!',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'incorrect_current_password' ),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => false,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'パスワードだけを変え、現在のパスワードが未入力の場合 => パスワードを変えず、新しいパスワードの入れ直しも促す',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => false,
+					'new_password'          => $new_password,
+					'current_password'      => '',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'missing_current_password', 'reenter_new_password' ),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => false,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'パスワードだけを変え、現在のパスワードが誤りの場合 => パスワードを変えず、新しいパスワードの入れ直しも促す',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => false,
+					'new_password'          => $new_password,
+					'current_password'      => 'WrongPass789!',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'incorrect_current_password', 'reenter_new_password' ),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => false,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'パスワードだけを変え、現在のパスワードが正しい場合 => パスワードを変え、認証状態はそのまま',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => false,
+					'new_password'          => $new_password,
+					'current_password'      => $current_password,
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => false,
+					'password_changed'  => true,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールを変え、現在のパスワードが正しく、認証必須の場合 => メールを変え、未認証に戻して新しいアドレスへ確認メールを送る',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => $current_password,
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_UNVERIFIED,
+					'verification_mail' => true,
+				),
+			),
+			array(
+				'test_condition_name' => '認証状態の保存値が無い（機能導入前の）利用者がメールを変え、認証必須の場合 => 未認証にして確認メールを送る',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => null,
+					'verification_required' => true,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => $current_password,
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_UNVERIFIED,
+					'verification_mail' => true,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールを変え、現在のパスワードが正しく、認証不要の場合 => メールを変え、認証状態はそのまま',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => $current_password,
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールもパスワードも変えない場合 => 現在のパスワード無しで他の項目を保存する',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => false,
+					'new_password'          => '',
+					'current_password'      => '',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '予約顧客ではない利用者（編集者）がメールを変え、認証必須の場合 => メールを変え、認証状態はそのまま',
+				'conditions'          => array(
+					'role'                  => 'editor',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => $current_password,
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールを変え、認証必須で確認メールの送信に失敗した場合 => メールは変え、未認証のまま送信失敗を伝える',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => true,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => $current_password,
+					'mail_result'           => false,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'verification_email_failed' ),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_UNVERIFIED,
+					'verification_mail' => true,
+				),
+			),
+			array(
+				'test_condition_name' => '標準のパスワード再設定（スラッシュ付き）で設定した引用符入りのパスワードを、現在のパスワードに正しく入れた場合 => メールを変える',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'stored_password'       => "it's-me123",
+					'stored_by_core'        => true,
+					'current_password'      => "it's-me123",
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '会員登録・このフォーム（スラッシュなし）で設定した引用符入りのパスワードを、現在のパスワードに正しく入れた場合 => メールを変える',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'stored_password'       => 'say "hi" \\ 123',
+					'stored_by_core'        => false,
+					'current_password'      => 'say "hi" \\ 123',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '標準のパスワード再設定で設定した引用符入りのパスワードに対し、引用符の無い値を入れた場合 => 何も保存しない',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'stored_password'       => "it's-me123",
+					'stored_by_core'        => true,
+					'current_password'      => 'its-me123',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'incorrect_current_password' ),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => false,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '現在のパスワードを前後に空白を付けて正しく入れた場合 => ログインと同じく空白を除いて照合し、メールを変える',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => ' ' . $current_password . '  ',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => '標準のパスワード再設定で設定した引用符入りのパスワードを、前後に空白を付けて入れた場合 => 空白を除きスラッシュを付けた値で照合し、メールを変える',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'stored_password'       => "it's-me123",
+					'stored_by_core'        => true,
+					'current_password'      => " it's-me123 ",
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array(),
+					'email_changed'     => true,
+					'password_changed'  => false,
+					'kana_saved'        => true,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'メールを変え、現在のパスワードが空白だけの場合 => 未入力として扱い、何も保存しない',
+				'conditions'          => array(
+					'role'                  => 'subscriber',
+					'initial_status'        => Email_Verification::STATUS_VERIFIED,
+					'verification_required' => false,
+					'change_email'          => true,
+					'new_password'          => '',
+					'current_password'      => '   ',
+					'mail_result'           => true,
+				),
+				'expected'            => array(
+					'error_codes'       => array( 'missing_current_password' ),
+					'email_changed'     => false,
+					'password_changed'  => false,
+					'kana_saved'        => false,
+					'status'            => Email_Verification::STATUS_VERIFIED,
+					'verification_mail' => false,
+				),
+			),
+		);
+
+		add_filter( 'pre_wp_mail', $mail_filter, 10, 2 );
+		try {
+			foreach ( $test_cases as $index => $case ) {
+				$conditions = $case['conditions'];
+				$expected   = $case['expected'];
+				$name       = $case['test_condition_name'];
+				$old_email  = 'profile646-old-' . $index . '@example.com';
+				$new_email  = $conditions['change_email'] ? 'profile646-new-' . $index . '@example.com' : $old_email;
+				// 保存済みのパスワード。指定が無いケースは $current_password。標準の画面はスラッシュ付きの値で保存する。
+				$stored_password = $conditions['stored_password'] ?? $current_password;
+				$stored_value    = ! empty( $conditions['stored_by_core'] ) ? wp_slash( $stored_password ) : $stored_password;
+
+				// 利用者・認証状態・設定・メール送信結果をケースに合わせて用意する。
+				$user_id = $this->factory()->user->create(
+					array(
+						'user_login' => 'profile646_' . $index,
+						'user_email' => $old_email,
+						'user_pass'  => $stored_value,
+						'role'       => $conditions['role'],
+					)
+				);
+				if ( null !== $conditions['initial_status'] ) {
+					update_user_meta( $user_id, Email_Verification::META_STATUS, $conditions['initial_status'] );
+				}
+				$this->set_email_verification_required( $conditions['verification_required'] );
+				$mail_result    = $conditions['mail_result'];
+				$captured_mails = array();
+				wp_set_current_user( $user_id );
+
+				// フリガナも一緒に変え、エラー時に他の項目まで保存されないことを見る。
+				// 実際のリクエストと同じく、WordPress がスラッシュを付けた形で $_POST に入れる。
+				$_SERVER['REQUEST_METHOD'] = 'POST';
+				$_POST                     = wp_slash(
+					array(
+						'vkbm_profile_form'    => '1',
+						'vkbm_profile_nonce'   => wp_create_nonce( 'vkbm_profile_form' ),
+						'user_email'           => $new_email,
+						'kana_name'            => 'へんこうご',
+						'phone_number'         => '090-0000-0000',
+						'current_password'     => $conditions['current_password'],
+						'new_password'         => $conditions['new_password'],
+						'new_password_confirm' => $conditions['new_password'],
+					)
+				);
+
+				$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+				$shortcodes->handle_form_submission();
+
+				// エラーの種類を確認する（成功時はエラーなし）。
+				$property = new \ReflectionProperty( Auth_Shortcodes::class, 'profile_errors' );
+				$property->setAccessible( true );
+				$errors      = $property->getValue( $shortcodes );
+				$error_codes = $errors instanceof \WP_Error ? $errors->get_error_codes() : array();
+				$this->assertSame( $expected['error_codes'], $error_codes, $name );
+				$this->assertNotNull( $shortcodes->last_redirect_url, $name );
+
+				// メールアドレス・パスワード・他の項目が保存されたかを確認する。
+				clean_user_cache( $user_id );
+				$user = get_userdata( $user_id );
+				$this->assertSame( $expected['email_changed'] ? $new_email : $old_email, $user->user_email, $name );
+				$this->assertSame( $expected['password_changed'], wp_check_password( $new_password, $user->user_pass, $user_id ), $name );
+				$this->assertSame( ! $expected['password_changed'], wp_check_password( $stored_value, $user->user_pass, $user_id ), $name );
+				$this->assertSame( $expected['kana_saved'] ? 'へんこうご' : '', get_user_meta( $user_id, 'vkbm_kana_name', true ), $name );
+
+				// メール認証の状態と、新しいアドレスへの確認メールを確認する。
+				$this->assertSame( $expected['status'], Email_Verification::get_status( $user_id ), $name );
+				$verification_tokens = array();
+				foreach ( $captured_mails as $mail ) {
+					if ( $new_email === $mail['to'] && preg_match( '/vkbm_verify_email=([A-Za-z0-9]+)/', (string) $mail['message'], $matches ) ) {
+						$verification_tokens[] = $matches[1];
+					}
+				}
+				$this->assertCount( $expected['verification_mail'] ? 1 : 0, $verification_tokens, $name );
+				if ( $expected['verification_mail'] ) {
+					// 保存するのはメールで送ったトークンのハッシュだけ。
+					$this->assertSame( hash( 'sha256', $verification_tokens[0] ), get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true ), $name );
+					$this->assertGreaterThan( time(), (int) get_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, true ), $name );
+				} else {
+					$this->assertSame( '', get_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, true ), $name );
+				}
+
+				// 保存できたときは更新の通知を出し、確認メールを送れたときはその旨を添える。
+				$notice = $shortcodes->notice_cookies['vkbm_profile_notice'] ?? '';
+				$this->assertSame( $expected['kana_saved'], '' !== $notice, $name );
+				$sent_message = __( 'A confirmation email has been sent to your new email address.', 'vk-booking-manager' );
+				$this->assertSame( $expected['verification_mail'] && empty( $expected['error_codes'] ), false !== strpos( $notice, $sent_message ), $name );
+				$password_message = __( 'Your password has been changed.', 'vk-booking-manager' );
+				$this->assertSame( $expected['password_changed'], false !== strpos( $notice, $password_message ), $name );
+
+				// 再表示用に一時保存する入力値に、パスワードを含めない。
+				$posted = get_transient( 'vkbm_profile_input_' . $user_id );
+				$this->assertStringNotContainsString( $stored_password, (string) maybe_serialize( $posted ), $name );
+				if ( '' !== $conditions['current_password'] ) {
+					$this->assertStringNotContainsString( $conditions['current_password'], (string) maybe_serialize( $posted ), $name );
+				}
+				$this->assertStringNotContainsString( $new_password, (string) maybe_serialize( $posted ), $name );
+				delete_transient( 'vkbm_profile_input_' . $user_id );
+			}
+		} finally {
+			remove_filter( 'pre_wp_mail', $mail_filter, 10 );
+			( new Settings_Repository() )->update_settings( $original_settings );
 			$_POST   = $previous_post;
 			$_SERVER = $previous_server;
 		}
@@ -1577,6 +2063,171 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		} finally {
 			$repository->update_settings( $original_settings );
 			( new \VKBookingManager\Admin\Email_Log_Repository() )->clear_logs();
+		}
+	}
+
+	/**
+	 * #646: ログイン中の本人が確認リンクを開いたときは、結果をプロフィール画面で伝えること。
+	 * ログインしていないとき・他人のリンクのときは、従来どおりログイン画面へ転送すること。
+	 *
+	 * @return void
+	 */
+	public function test_handle_email_verification(): void {
+		$previous_get      = $_GET;
+		$previous_server   = $_SERVER;
+		$original_settings = ( new Settings_Repository() )->get_settings();
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => 'ログイン中の本人が有効なリンクを開いた場合 => 認証済みにし、プロフィール画面で完了を伝える',
+				'conditions'          => array(
+					'logged_in_as'          => 'owner',
+					'link'                  => 'valid',
+					'verification_required' => true,
+				),
+				'expected'            => array(
+					'status'              => Email_Verification::STATUS_VERIFIED,
+					'auth_mode'           => 'profile',
+					'profile_notice'      => 'Email address verification has been completed.',
+					'profile_errors'      => array(),
+					'verification_notice' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'ログイン中の本人が期限切れのリンクを開いた場合 => 未認証のまま、プロフィール画面で期限切れと再送方法を伝える',
+				'conditions'          => array(
+					'logged_in_as'          => 'owner',
+					'link'                  => 'expired',
+					'verification_required' => true,
+				),
+				'expected'            => array(
+					'status'              => Email_Verification::STATUS_UNVERIFIED,
+					'auth_mode'           => 'profile',
+					'profile_notice'      => '',
+					'profile_errors'      => array( 'The confirmation link has expired.', 'The next time you log in, you can resend it from the login screen.' ),
+					'verification_notice' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'ログイン中の本人が期限切れのリンクを開き、メール認証が不要の設定の場合 => 再送方法は伝えない',
+				'conditions'          => array(
+					'logged_in_as'          => 'owner',
+					'link'                  => 'expired',
+					'verification_required' => false,
+				),
+				'expected'            => array(
+					'status'              => Email_Verification::STATUS_UNVERIFIED,
+					'auth_mode'           => 'profile',
+					'profile_notice'      => '',
+					'profile_errors'      => array( 'The confirmation link has expired.' ),
+					'verification_notice' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'ログイン中に無効なリンクを開いた場合 => プロフィール画面で無効なリンクだと伝える',
+				'conditions'          => array(
+					'logged_in_as'          => 'owner',
+					'link'                  => 'unknown',
+					'verification_required' => true,
+				),
+				'expected'            => array(
+					'status'              => Email_Verification::STATUS_UNVERIFIED,
+					'auth_mode'           => 'profile',
+					'profile_notice'      => '',
+					'profile_errors'      => array( 'Invalid verification link.', 'The next time you log in, you can resend it from the login screen.' ),
+					'verification_notice' => false,
+				),
+			),
+			array(
+				'test_condition_name' => 'ログインしていない人が有効なリンクを開いた場合 => 従来どおり認証済みにしてログイン画面へ転送する',
+				'conditions'          => array(
+					'logged_in_as'          => 'nobody',
+					'link'                  => 'valid',
+					'verification_required' => true,
+				),
+				'expected'            => array(
+					'status'              => Email_Verification::STATUS_VERIFIED,
+					'auth_mode'           => 'login',
+					'profile_notice'      => '',
+					'profile_errors'      => array(),
+					'verification_notice' => true,
+				),
+			),
+			array(
+				'test_condition_name' => '別の利用者がログイン中に有効なリンクを開いた場合 => 従来どおりリンクの持ち主を認証済みにしてログイン画面へ転送する',
+				'conditions'          => array(
+					'logged_in_as'          => 'other',
+					'link'                  => 'valid',
+					'verification_required' => true,
+				),
+				'expected'            => array(
+					'status'              => Email_Verification::STATUS_VERIFIED,
+					'auth_mode'           => 'login',
+					'profile_notice'      => '',
+					'profile_errors'      => array(),
+					'verification_notice' => true,
+				),
+			),
+		);
+
+		try {
+			foreach ( $test_cases as $index => $case ) {
+				$conditions = $case['conditions'];
+				$expected   = $case['expected'];
+				$name       = $case['test_condition_name'];
+
+				// メールアドレスを変えて確認待ちになった利用者と、確認リンクを用意する。
+				$owner_id = $this->factory()->user->create( array( 'user_login' => 'verify646_owner_' . $index ) );
+				$other_id = $this->factory()->user->create( array( 'user_login' => 'verify646_other_' . $index ) );
+				$token    = 'verify646-token-' . $index . '-' . wp_generate_password( 12, false );
+				update_user_meta( $owner_id, Email_Verification::META_STATUS, Email_Verification::STATUS_UNVERIFIED );
+				update_user_meta( $owner_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', $token ) );
+				update_user_meta( $owner_id, Email_Verification::META_TOKEN_EXPIRES, 'expired' === $conditions['link'] ? time() - 60 : time() + HOUR_IN_SECONDS );
+				$this->set_email_verification_required( $conditions['verification_required'] );
+
+				$logged_in_ids = array(
+					'owner'  => $owner_id,
+					'other'  => $other_id,
+					'nobody' => 0,
+				);
+				wp_set_current_user( $logged_in_ids[ $conditions['logged_in_as'] ] );
+
+				// 確認メールのリンクを開いたリクエストを再現する。
+				$opened_token           = 'unknown' === $conditions['link'] ? 'unknown-token-' . $index : $token;
+				$_GET                   = array( 'vkbm_verify_email' => $opened_token );
+				$_SERVER['REQUEST_URI'] = '/booking/?vkbm_verify_email=' . rawurlencode( $opened_token );
+
+				$shortcodes = new Testable_Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+				$shortcodes->handle_email_verification();
+
+				// 認証状態と転送先を確認する。
+				$this->assertSame( $expected['status'], Email_Verification::get_status( $owner_id ), $name );
+				$this->assertNotNull( $shortcodes->last_redirect_url, $name );
+				$query = array();
+				wp_parse_str( (string) wp_parse_url( (string) $shortcodes->last_redirect_url, PHP_URL_QUERY ), $query );
+				$this->assertSame( $expected['auth_mode'], $query['vkbm_auth'] ?? '', $name );
+				$this->assertArrayNotHasKey( 'vkbm_verify_email', $query, $name );
+
+				// プロフィール画面の通知・エラーと、ログイン画面向けの通知を確認する。
+				// 期待値は英文で持ち、読み込んだ翻訳に通してから比べる。
+				$expected_notice = '' === $expected['profile_notice'] ? '' : __( $expected['profile_notice'], 'vk-booking-manager' );
+				$this->assertSame( $expected_notice, $shortcodes->notice_cookies['vkbm_profile_notice'] ?? '', $name );
+				$error_json      = $shortcodes->notice_cookies['vkbm_profile_errors'] ?? '';
+				$expected_errors = array();
+				if ( ! empty( $expected['profile_errors'] ) ) {
+					$parts = array();
+					foreach ( $expected['profile_errors'] as $text ) {
+						$parts[] = __( $text, 'vk-booking-manager' );
+					}
+					$expected_errors = array( implode( ' ', $parts ) );
+				}
+				$this->assertSame( $expected_errors, '' === $error_json ? array() : json_decode( $error_json, true ), $name );
+				$this->assertSame( $expected['verification_notice'], isset( $shortcodes->notice_cookies['vkbm_verification_notice'] ), $name );
+			}
+		} finally {
+			( new Settings_Repository() )->update_settings( $original_settings );
+			$_GET    = $previous_get;
+			$_SERVER = $previous_server;
 		}
 	}
 
@@ -2894,6 +3545,7 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 
 	/**
 	 * 名簿の件数によらず、プロフィールと独立したカード内で各フォームを操作できる。
+	 * あわせて「現在のパスワード」欄の再設定リンクが戻り先なしの標準 URL であることを確認する（#646）。
 	 *
 	 * @return void
 	 */
@@ -2983,6 +3635,11 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 			$this->assertSame( $case['forms'], $xpath->query( $card . '//div[@class="vkbm-attendee-roster__fields"]/label/input[@name="attendee_kana"]' )->length, $case['test_condition_name'] );
 			$this->assertSame( $case['unregistered'], $xpath->query( $card . '//label/span[@class="vkbm-attendee-roster__unregistered"]' )->length, $case['test_condition_name'] );
 			$this->assertSame( min( 1, $case['count'] ), $xpath->query( $card . '//input[@value="A-001" and @readonly]' )->length, $case['test_condition_name'] );
+
+			// 再設定リンクに戻り先が付くと、送信後に WordPress 標準の送信完了画面が出ないため、引数なしの URL であることを確認する。
+			$lost_password_links = $xpath->query( '//p[@id="vkbm-profile-current-password-help"]/following-sibling::p[1]/a' );
+			$this->assertSame( 1, $lost_password_links->length, $case['test_condition_name'] );
+			$this->assertSame( wp_lostpassword_url(), $lost_password_links->item( 0 )->getAttribute( 'href' ), $case['test_condition_name'] );
 		}
 	}
 
@@ -3923,5 +4580,216 @@ class Auth_Shortcodes_Test extends WP_UnitTestCase {
 		}
 
 		update_option( 'users_can_register', $original );
+	}
+
+	/**
+	 * プライバシーポリシーの設定（表示方法・固定ページ・URL）ごとの、同意欄の出し分けを用意する（#1168）。
+	 *
+	 * 既存の設定（URL だけ・外部サイトの URL・旧ドメインの URL・空）と、固定ページを選ぶ新しい設定の組み合わせ。
+	 *
+	 * @return array<int,array<string,mixed>> テストケース。
+	 */
+	private function get_privacy_policy_cases(): array {
+		$this->set_permalink_structure( '/%postname%/' );
+		$published_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'privacy',
+				'post_status' => 'publish',
+			)
+		);
+		$draft_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'draft-privacy',
+				'post_status' => 'draft',
+			)
+		);
+		$trash_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'trashed-privacy',
+				'post_status' => 'trash',
+			)
+		);
+
+		return array(
+			array(
+				'test_condition_name' => 'ページ指定・公開中の固定ページを選択（URL 無し） => そのページへのリンクで同意を求める（変更前は同意欄が出なかった）',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'url',
+					'provider_privacy_policy_page_id' => $published_id,
+					'provider_privacy_policy_url'     => '',
+				),
+				'expected_required'   => true,
+				'expected_href'       => home_url( '/privacy/' ),
+			),
+			array(
+				'test_condition_name' => 'ページ指定・公開中の固定ページと旧ドメインの URL（自動切り替え後） => 固定ページへのリンク',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'url',
+					'provider_privacy_policy_page_id' => $published_id,
+					'provider_privacy_policy_url'     => 'https://old.example.com/privacy/',
+				),
+				'expected_required'   => true,
+				'expected_href'       => home_url( '/privacy/' ),
+			),
+			array(
+				'test_condition_name' => 'ページ指定・下書きの固定ページだけ => リンクを出さないので、同意も求めない',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'url',
+					'provider_privacy_policy_page_id' => $draft_id,
+				),
+				'expected_required'   => false,
+				'expected_href'       => null,
+			),
+			array(
+				'test_condition_name' => 'ページ指定・ゴミ箱の固定ページと残っている URL => 残っている URL へは戻さず、同意も求めない',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'url',
+					'provider_privacy_policy_page_id' => $trash_id,
+					'provider_privacy_policy_url'     => home_url( '/trashed-privacy/' ),
+				),
+				'expected_required'   => false,
+				'expected_href'       => null,
+			),
+			array(
+				'test_condition_name' => '既存の設定: ページ指定・外部サイトの URL だけ => その URL へのリンクで同意を求める（更新前と同じ）',
+				'settings'            => array(
+					'provider_privacy_policy_mode' => 'url',
+					'provider_privacy_policy_url'  => 'https://external.example.com/privacy/',
+				),
+				'expected_required'   => true,
+				'expected_href'       => 'https://external.example.com/privacy/',
+			),
+			array(
+				'test_condition_name' => '既存の設定: ページ指定・旧ドメインの URL だけ => その URL へのリンク（外部サイトと区別できないため、更新前と同じ）',
+				'settings'            => array(
+					'provider_privacy_policy_mode' => 'url',
+					'provider_privacy_policy_url'  => 'https://old.example.com/privacy/',
+				),
+				'expected_required'   => true,
+				'expected_href'       => 'https://old.example.com/privacy/',
+			),
+			array(
+				'test_condition_name' => '既存の設定: ページ指定で固定ページも URL も空 => 同意を求めない（更新前と同じ）',
+				'settings'            => array(
+					'provider_privacy_policy_mode' => 'url',
+					'provider_privacy_policy_url'  => '',
+				),
+				'expected_required'   => false,
+				'expected_href'       => null,
+			),
+			array(
+				'test_condition_name' => '既存の設定: 本文を入力する方式 => 本文で同意を求める（リンクは無い）',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'content',
+					'provider_privacy_policy_page_id' => $published_id,
+					'provider_privacy_policy_content' => 'プライバシーポリシー本文',
+				),
+				'expected_required'   => true,
+				'expected_href'       => null,
+			),
+			array(
+				'test_condition_name' => '既存の設定: 表示しない（none）で URL が残っている => 同意を求めない',
+				'settings'            => array(
+					'provider_privacy_policy_mode' => 'none',
+					'provider_privacy_policy_url'  => 'https://external.example.com/privacy/',
+				),
+				'expected_required'   => false,
+				'expected_href'       => null,
+			),
+		);
+	}
+
+	/**
+	 * render_registration_form() のプライバシーポリシーの同意欄が、リンク先を出せるときだけ出ることを検証する（#1168）。
+	 */
+	public function test_render_registration_form(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+		$repository = new Settings_Repository();
+		$service    = new Settings_Service( $repository, new Settings_Sanitizer() );
+
+		foreach ( $this->get_privacy_policy_cases() as $case ) {
+			// 利用規約は空にして、同意欄をプライバシーポリシーだけにする。
+			update_option( Settings_Repository::OPTION_KEY, array_merge( array( 'provider_terms_of_service' => '' ), $case['settings'] ) );
+
+			$html = ( new Testable_Auth_Shortcodes( $service ) )->render_registration_form();
+
+			$this->assertSame(
+				$case['expected_required'],
+				false !== strpos( $html, 'name="vkbm_agree_privacy_policy"' ),
+				$case['test_condition_name'] . '（同意欄）'
+			);
+			if ( null === $case['expected_href'] ) {
+				$this->assertStringNotContainsString( 'target="_blank" rel="noopener noreferrer"', $html, $case['test_condition_name'] . '（リンクなし）' );
+			} else {
+				$this->assertStringContainsString( 'href="' . esc_url( $case['expected_href'] ) . '"', $html, $case['test_condition_name'] . '（リンク先）' );
+			}
+		}
+
+		delete_option( Settings_Repository::OPTION_KEY );
+		update_option( 'users_can_register', $original_registration );
+		$this->set_permalink_structure( '' );
+	}
+
+	/**
+	 * process_registration_request() が、フォームにプライバシーポリシーを出しているときだけ同意を必須にすることを検証する（#1168）。
+	 *
+	 * 表示（render_registration_form()）と同じ判定になっていることを、同じテストケースで確かめる。
+	 */
+	public function test_process_registration_request(): void {
+		$original_registration = get_option( 'users_can_register' );
+		update_option( 'users_can_register', 1 );
+		$previous_post   = $_POST;
+		$previous_server = $_SERVER;
+
+		foreach ( $this->get_privacy_policy_cases() as $case ) {
+			// 短時間の連続送信で止まらないよう回数制限を切り、利用規約は空にして同意の判定をプライバシーポリシーだけにする。
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array_merge(
+					array(
+						'auth_rate_limit_enabled'   => false,
+						'provider_terms_of_service' => '',
+					),
+					$case['settings']
+				)
+			);
+
+			// 同意せずに送信する。ユーザーが作られないよう、パスワードは食い違わせる。
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			$_POST                     = array(
+				'vkbm_registration_form'  => '1',
+				'vkbm_registration_nonce' => wp_create_nonce( 'vkbm_registration_form' ),
+				'user_login'              => 'privacyuser',
+				'user_email'              => 'privacyuser@example.com',
+				'user_pass'               => 'password123',
+				'user_pass_confirm'       => 'password456',
+				'kana_name'               => 'たろう',
+				'phone_number'            => '090-0000-0000',
+			);
+
+			$shortcodes = new Auth_Shortcodes( new Settings_Service( new Settings_Repository(), new Settings_Sanitizer() ) );
+			$shortcodes->handle_form_submission();
+
+			$property = new \ReflectionProperty( $shortcodes, 'registration_errors' );
+			$property->setAccessible( true );
+			$errors = $property->getValue( $shortcodes );
+
+			$this->assertInstanceOf( \WP_Error::class, $errors, $case['test_condition_name'] );
+			$this->assertSame(
+				$case['expected_required'],
+				in_array( 'privacy_required', $errors->get_error_codes(), true ),
+				$case['test_condition_name']
+			);
+		}
+
+		$_POST   = $previous_post;
+		$_SERVER = $previous_server;
+		delete_option( Settings_Repository::OPTION_KEY );
+		update_option( 'users_can_register', $original_registration );
+		$this->set_permalink_structure( '' );
 	}
 }

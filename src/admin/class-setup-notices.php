@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Common\Privacy_Policy_Url;
 use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Capabilities\Capabilities;
@@ -152,6 +153,7 @@ class Setup_Notices {
 		add_action( 'admin_notices', array( $this, 'render_google_calendar_sync_broken_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_holiday_data_expiry_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_reservation_page_problem_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_privacy_policy_page_problem_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_unassigned_menu_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_siteguard_rest_api_notice' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
@@ -1236,6 +1238,18 @@ class Setup_Notices {
 	}
 
 	/**
+	 * BM 設定（vkbm-provider-settings）の同意項目タブを開いているかを判定する。
+	 *
+	 * @return bool
+	 */
+	private function is_consent_tab_screen(): bool {
+		$page = isset( $_GET['page'] ) ? sanitize_text_field( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+		$tab  = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only screen check.
+
+		return 'vkbm-provider-settings' === $page && 'consent' === $tab;
+	}
+
+	/**
 	 * BM 設定（vkbm-provider-settings）のよくある質問タブを開いているかを判定する。
 	 *
 	 * @return bool
@@ -1382,6 +1396,41 @@ class Setup_Notices {
 			<p><?php echo esc_html__( 'Until then, the "Reservation page" item in the admin menu also opens the reservation page field in BM settings.', 'vk-booking-manager' ); ?></p>
 			<div class="vkbm-buttons">
 				<?php // 行き先は状態ごとに 1 つ（編集画面／ゴミ箱一覧／予約ページの設定欄）。 ?>
+				<a class="button button-primary" href="<?php echo esc_url( $action['url'] ); ?>">
+					<?php echo esc_html( $action['label'] ); ?>
+				</a>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * プライバシーポリシーページに選んだ固定ページが使えないとき（未公開・ゴミ箱・削除済み）に警告する（#1168）。
+	 *
+	 * 表示方法が「プライバシーポリシーページを指定」のときだけ出す（Privacy_Policy_Url::get_active_problem()）。
+	 * 閉じるボタンは付けない（直すまで会員登録フォームで同意を求めないため、出し続ける）。
+	 * 店舗設定の権限を持つユーザーにだけ、管理画面のどの画面でも表示する。同意項目タブでは欄の中に同じ警告が出るため、重ねて出さない。
+	 */
+	public function render_privacy_policy_page_problem_notice(): void {
+		if ( ! current_user_can( Capabilities::MANAGE_PROVIDER_SETTINGS ) ) {
+			return;
+		}
+
+		if ( $this->is_consent_tab_screen() ) {
+			return;
+		}
+
+		$problem = Privacy_Policy_Url::get_active_problem( ( new Settings_Repository() )->get_settings() );
+		if ( null === $problem ) {
+			return;
+		}
+		?>
+		<?php $action = Privacy_Policy_Url::get_problem_action( $problem ); ?>
+		<div class="notice vkbm-notice vkbm-notice__warning" id="vkbm-privacy-policy-page-problem-notice">
+			<h3><?php echo esc_html__( 'Please check the privacy policy page', 'vk-booking-manager' ); ?></h3>
+			<p><?php echo wp_kses( Privacy_Policy_Url::build_problem_message( $problem ), array() ); ?></p>
+			<div class="vkbm-buttons">
+				<?php // 行き先は状態ごとに 1 つ（編集画面／ゴミ箱一覧／同意項目タブのプライバシーポリシーページの欄）。 ?>
 				<a class="button button-primary" href="<?php echo esc_url( $action['url'] ); ?>">
 					<?php echo esc_html( $action['label'] ); ?>
 				</a>

@@ -257,6 +257,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 			$end      = '2026-08-03T10:30:00+09:00';
 			$token    = $this->store_temporary_reservation_data( $menu_id, $staff_id, $start, $end );
 			$draft    = get_transient( self::TRANSIENT_PREFIX . $token );
+			$draft['locale'] = 'de_DE';
 			$user_id  = 'member' === $case['booker'] ? $this->factory()->user->create() : 99999999;
 
 			// 現在のログイン状態とは別のユーザーを操作者として渡す。
@@ -276,6 +277,7 @@ class Booking_Confirmation_Controller_Test extends WP_UnitTestCase {
 				$this->assertIsArray( $result, $case['test_condition_name'] );
 				$this->assertContains( $result['status'], array( 'pending', 'confirmed' ), $case['test_condition_name'] );
 				$this->assertSame( $user_id, (int) get_post( $result['booking_id'] )->post_author, $case['test_condition_name'] );
+				$this->assertSame( 'de_DE', get_post_meta( $result['booking_id'], '_vkbm_booking_locale', true ), $case['test_condition_name'] );
 				$this->assertFalse( metadata_exists( 'post', $result['booking_id'], '_vkbm_booking_customer_address_full' ), '時間枠予約に住所を保存しない' );
 			} else {
 				$this->assertInstanceOf( WP_Error::class, $result, $case['test_condition_name'] );

@@ -150,9 +150,11 @@ class Lodging_Price {
 	 *
 	 * 戻り値の plan_price_per_night / price_per_night は、すべての泊で同じ金額のときだけ金額が入り、
 	 * 泊ごとに違うときは null（誤った単価を表示しないため）。泊ごとの内訳は night_breakdown に入る。
+	 * 1室あたりで追加料金を使うときは、泊ごとの基本料金と超過した人数の内訳を night_extra_guests に入れる（#1175。表示用）。
+	 * 保存用の night_breakdown の形は変えないため、別のキーにしている。追加料金を使わないときは空配列。
 	 *
 	 * @param array<string, mixed> $args 計算に使う値。
-	 * @return array{nights: int, price_unit: string, plan_price_per_night: int|null, room_surcharge_per_night: int, price_per_night: int|null, total: int, is_uniform_price: bool, night_breakdown: array<int, array{date: string, rate: string, plan_price: int, room_surcharge: int, price: int}>} 計算結果。
+	 * @return array{nights: int, price_unit: string, plan_price_per_night: int|null, room_surcharge_per_night: int, price_per_night: int|null, total: int, is_uniform_price: bool, night_breakdown: array<int, array{date: string, rate: string, plan_price: int, room_surcharge: int, price: int}>, night_extra_guests: array<int, array{date: string, base_price: int, included_guests: int, tiers: array<int, array{label: string, price: int, count: int, subtotal: int}>}>} 計算結果。
 	 */
 	public static function calculate( array $args ): array {
 		$room_surcharge = max( 0, self::to_int( $args['room_surcharge'] ?? 0 ) );
@@ -177,14 +179,23 @@ class Lodging_Price {
 		$included_guests   = max( 1, self::to_int( $args['included_guests'] ?? 1 ) );
 
 		// 泊ごとの料金を求める。泊数が 0 のときは、1泊あたりの値を返すために日付なし（平日）の1泊分だけ求める。
-		$evaluated_dates = array() !== $night_dates ? $night_dates : array_fill( 0, max( 1, $nights ), '' );
-		$night_breakdown = array();
+		$evaluated_dates    = array() !== $night_dates ? $night_dates : array_fill( 0, max( 1, $nights ), '' );
+		$night_breakdown    = array();
+		$night_extra_guests = array();
 		foreach ( $evaluated_dates as $date ) {
 			$is_special     = '' !== $date && Lodging_Rate::is_special_date( $date, $special_periods );
 			$is_pre_holiday = '' !== $date && Lodging_Rate::is_pre_holiday_date( $date, $weekdays );
 			$night_items    = $items;
 			if ( array() !== $extra_guest_items ) {
-				$night_items = array_merge( $items, self::exclude_included_guests( $extra_guest_items, $included_guests, $is_special, $is_pre_holiday ) );
+				// 超過する人は泊ごとの単価で決まるため、泊ごとに求めて表示用の内訳にも残す。
+				$excess_items         = self::exclude_included_guests( $extra_guest_items, $included_guests, $is_special, $is_pre_holiday );
+				$night_items          = array_merge( $items, $excess_items );
+				$night_extra_guests[] = array(
+					'date'            => $date,
+					'base_price'      => self::resolve_night_plan_price( $items, $is_special, $is_pre_holiday )['plan_price'],
+					'included_guests' => $included_guests,
+					'tiers'           => self::build_excess_tier_rows( $excess_items, $is_special, $is_pre_holiday ),
+				);
 			}
 			$resolved          = self::resolve_night_plan_price( $night_items, $is_special, $is_pre_holiday );
 			$night_breakdown[] = array(
@@ -208,7 +219,8 @@ class Lodging_Price {
 
 		// 泊数が 0 のときの内訳は、1泊あたりの値を出すための仮の1件なので返さない。
 		if ( $nights < 1 ) {
-			$night_breakdown = array();
+			$night_breakdown    = array();
+			$night_extra_guests = array();
 		}
 
 		return array(
@@ -220,7 +232,36 @@ class Lodging_Price {
 			'total'                    => $total,
 			'is_uniform_price'         => $is_uniform_price,
 			'night_breakdown'          => $night_breakdown,
+			'night_extra_guests'       => $night_extra_guests,
 		);
+	}
+
+	/**
+	 * 1泊分の超過分の項目を、超過した人がいる区分ごとの表示用の行（区分名・その泊の単価・超過人数・小計）にする（#1175）。
+	 *
+	 * @param array<int, array{weekday: int, pre_holiday: int|null, special: int|null, count: int, label?: string}> $excess_items   exclude_included_guests() の戻り値。
+	 * @param bool                                                                                                  $is_special     泊の日付が特定日か。
+	 * @param bool                                                                                                  $is_pre_holiday 泊の日付が休前日か。
+	 * @return array<int, array{label: string, price: int, count: int, subtotal: int}> 超過した人がいる区分の行（区分の並び順）。
+	 */
+	private static function build_excess_tier_rows( array $excess_items, bool $is_special, bool $is_pre_holiday ): array {
+		$rows = array();
+		foreach ( $excess_items as $item ) {
+			// 超過していない区分は行にしない。
+			if ( $item['count'] < 1 ) {
+				continue;
+			}
+
+			$unit_price = self::resolve_item_unit_price( $item, $is_special, $is_pre_holiday )['unit_price'];
+			$rows[]     = array(
+				'label'    => (string) ( $item['label'] ?? '' ),
+				'price'    => $unit_price,
+				'count'    => $item['count'],
+				'subtotal' => $unit_price * $item['count'],
+			);
+		}
+
+		return $rows;
 	}
 
 	/**
@@ -286,7 +327,7 @@ class Lodging_Price {
 	 *
 	 * @param array<string, mixed> $args        calculate() と同じキー。
 	 * @param bool                 $is_per_room 1室あたりの料金か。
-	 * @return array<int, array{weekday: int, pre_holiday: int|null, special: int|null, count: int}> 追加料金の項目。
+	 * @return array<int, array{weekday: int, pre_holiday: int|null, special: int|null, count: int, label: string}> 追加料金の項目（表示用に区分名も持つ）。
 	 */
 	private static function collect_extra_guest_items( array $args, bool $is_per_room ): array {
 		$guest_tiers = isset( $args['guest_tiers'] ) && is_array( $args['guest_tiers'] ) ? $args['guest_tiers'] : array();
@@ -297,7 +338,10 @@ class Lodging_Price {
 		$items = array();
 		foreach ( $guest_tiers as $tier ) {
 			if ( is_array( $tier ) ) {
-				$items[] = self::build_item( $tier['price'] ?? 0, $tier['pre_holiday_price'] ?? null, $tier['special_price'] ?? null, $tier['count'] ?? 0 );
+				$items[] = array_merge(
+					self::build_item( $tier['price'] ?? 0, $tier['pre_holiday_price'] ?? null, $tier['special_price'] ?? null, $tier['count'] ?? 0 ),
+					array( 'label' => (string) ( $tier['label'] ?? '' ) )
+				);
 			}
 		}
 

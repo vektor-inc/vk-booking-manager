@@ -4,8 +4,10 @@
  * 検証内容（業種プリセットが「アクティビティ・ツアー」のサイト・Pro 版のみ）:
  *   1. 編集画面: 「1ツアーあたり」のときだけ追加料金のチェックが出て、オンにすると「基本料金に含まれる人数」の欄と
  *      料金区分の行が出る。区分（大人 ¥3,000・子供 ¥1,500）と含まれる人数 4 を入力して保存すると保存される。
- *   2. 予約画面: 区分ごとの人数欄になり、区分の金額に「+」が付く（狭い幅でも「+」だけが次の行に落ちない）。
- *      大人 4 名＋子供 1 名にすると、ツアー料金と追加料金の内訳（¥30,000 ＋ ¥1,500）と合計 ¥31,500 が出る。
+ *   2. 予約画面: 区分ごとの人数欄になり、区分名の横に金額は出さない（#1175）。全員の人数を入れる指示文と、
+ *      区分ごとの追加料金を並べた補足文を出す（狭い幅でも「4名」「大人 ¥3,000」の組の途中で改行しない）。
+ *      390px でも人数欄のまとまりの右端が「予約に進む」ボタンの右端と揃う。
+ *      大人 4 名＋子供 1 名にすると、「ツアー料金（4名まで）」と「追加料金（子供 ¥1,500 × 1名）」の行と合計 ¥31,500 が出る。
  *      確認画面はツアー料金と追加料金の行を分けて出す。
  *   3. 予約を確定すると、人数 5・合計 ¥31,500・超過の内訳が保存され、管理画面の予約詳細でツアー料金と追加料金が分かれて見える。
  *
@@ -374,24 +376,36 @@ test.describe
 		await slots.first().waitFor( { state: 'visible', timeout: 10000 } );
 		await slots.first().click();
 
-		// @check 人数を区分ごとの人数欄で受け取り、区分の金額に「+」が付いている（読み上げ用の「追加料金 ¥3,000」も添えてある）
+		// @check 人数を区分ごとの人数欄で受け取り、区分名の横に追加料金の金額（+¥）は出ない（#1175）
 		const adultInput = page.locator( '#vkbm-reservation-tier-0' );
 		const childInput = page.locator( '#vkbm-reservation-tier-1' );
 		await adultInput.waitFor( { state: 'visible', timeout: 10000 } );
 		await expect( page.locator( '#vkbm-reservation-guests' ) ).toHaveCount(
 			0
 		);
-		const adultPrice = page
-			.locator( '.vkbm-plan-summary__guest-tier-price' )
-			.nth( 0 );
-		await expect( adultPrice.locator( '[aria-hidden="true"]' ) ).toHaveText(
-			'+¥3,000'
+		await expect(
+			page.locator( '.vkbm-plan-summary__guest-tier-price' )
+		).toHaveCount( 0 );
+		await expect(
+			page.locator( '.vkbm-plan-summary__guest-tier-label' ).nth( 0 )
+		).toHaveText( '大人' );
+		// @check 人数の見出しの下に「参加する方全員の人数を、区分ごとに入力してください。」が出て、人数欄のまとまりに関連付けられている
+		const instruction = page.locator(
+			'#vkbm-reservation-guests-instruction'
 		);
-		await expect( adultPrice ).toContainText( '追加料金 ¥3,000' );
-		// @check 人数欄の下の補足文が「4名までの参加を含みます」の文言になり、人数欄に関連付けられている
+		await expect( instruction ).toHaveText(
+			'参加する方全員の人数を、区分ごとに入力してください。'
+		);
+		await expect(
+			page.locator( '.vkbm-plan-summary__guest-tiers' )
+		).toHaveAttribute(
+			'aria-describedby',
+			'vkbm-reservation-guests-instruction'
+		);
+		// @check 人数欄の下の補足文に、含まれる人数と区分ごとの追加料金（大人 ¥3,000、子供 ¥1,500）が並び、人数欄に関連付けられている
 		const note = page.locator( '#vkbm-reservation-per-booking-note' );
 		await expect( note ).toHaveText(
-			'料金は 1ツアーあたり ¥30,000 で、4名までの参加を含みます。これを超える人数には、区分ごとに表示した追加料金が、超えた1名あたりで加算されます。'
+			'料金は 1ツアーあたり ¥30,000 で、4名までの参加を含みます。4名を超えた分は、1名ごとに追加料金がかかります（大人 ¥3,000、子供 ¥1,500）。'
 		);
 		await expect( adultInput ).toHaveAttribute(
 			'aria-describedby',
@@ -402,32 +416,62 @@ test.describe
 		await adultInput.fill( String( ADULTS ) );
 		await childInput.fill( String( CHILDREN ) );
 
-		// @check 合計の上に「ツアー料金 ¥30,000 ＋ 追加料金 ¥1,500」が 1 行出て、合計は ¥31,500
-		await expect(
-			page.locator( '.vkbm-plan-summary__guest-tiers-breakdown' )
-		).toHaveText( 'ツアー料金 ¥30,000 ＋ 追加料金 ¥1,500' );
+		// @check 合計の上に「ツアー料金（4名まで） ¥30,000」と「追加料金（子供 ¥1,500 × 1名） ¥1,500」の行が出て、合計は ¥31,500
+		const breakdownRows = page.locator(
+			'.vkbm-plan-summary__guest-tiers-breakdown .vkbm-plan-summary__pricing-row'
+		);
+		await expect( breakdownRows ).toHaveCount( 2 );
+		await expect( breakdownRows.nth( 0 ) ).toContainText(
+			'ツアー料金（4名まで）'
+		);
+		await expect( breakdownRows.nth( 0 ) ).toContainText( '¥30,000' );
+		await expect( breakdownRows.nth( 1 ) ).toContainText(
+			'追加料金（子供 ¥1,500 × 1名）'
+		);
+		await expect( breakdownRows.nth( 1 ) ).toContainText( '¥1,500' );
 		await expect(
 			page.locator( '.vkbm-plan-summary__guest-tiers-total' )
 		).toContainText( '¥31,500' );
 
 		// @step 画面幅を狭くする
 		await page.setViewportSize( { width: 320, height: 800 } );
-		// @check 「+¥3,000」の記号だけが次の行に落ちず、1 行のまま表示される
-		const wrappedLines = await adultPrice
-			.locator( '[aria-hidden="true"]' )
-			.evaluate( ( el ) => el.getClientRects().length );
-		expect( wrappedLines ).toBe( 1 );
-		// @check 合計の上の「ツアー料金 ¥30,000」「＋ 追加料金 ¥1,500」も、それぞれ 1 行のまま（折り返しは 2 つの塊の境目だけ）
-		const breakdownParts = page.locator(
-			'.vkbm-plan-summary__guest-tiers-breakdown .vkbm-plan-summary__nowrap'
-		);
-		await expect( breakdownParts ).toHaveCount( 2 );
-		for ( let i = 0; i < 2; i++ ) {
-			const lines = await breakdownParts
+		// @check 補足文のツアー料金・「4名」（含まれる人数の数字と単位）・「大人 ¥3,000」「子供 ¥1,500」の組は、それぞれ途中で改行しない
+		const noBreakParts = note.locator( '.vkbm-plan-summary__nowrap' );
+		await expect( noBreakParts ).toHaveText( [
+			'¥30,000',
+			'4名',
+			'4名',
+			'大人 ¥3,000',
+			'子供 ¥1,500',
+		] );
+		for ( let i = 0; i < 5; i++ ) {
+			const lines = await noBreakParts
 				.nth( i )
 				.evaluate( ( el ) => el.getClientRects().length );
 			expect( lines ).toBe( 1 );
 		}
+		// @step 画面幅を 390px にする
+		await page.setViewportSize( { width: 390, height: 800 } );
+		// @check 人数欄のまとまり（入力欄・内訳・合計）の右端が「予約に進む」ボタンの右端と揃う
+		const rightEdges = await page
+			.locator( '.vkbm-plan-summary__status--detached' )
+			.first()
+			.evaluate( ( box ) => {
+				const right = ( selector: string ) =>
+					box.querySelector( selector )?.getBoundingClientRect()
+						.right ?? NaN;
+				return {
+					tiers: right( '.vkbm-plan-summary__guest-tiers' ),
+					total: right( '.vkbm-plan-summary__guest-tiers-total' ),
+					action: right( '.vkbm-plan-summary__action' ),
+				};
+			} );
+		expect( Math.abs( rightEdges.tiers - rightEdges.action ) ).toBeLessThan(
+			1
+		);
+		expect( Math.abs( rightEdges.total - rightEdges.action ) ).toBeLessThan(
+			1
+		);
 		await page.setViewportSize( { width: 1280, height: 800 } );
 
 		// @step 「予約に進む」ボタンを押して確認画面へ進む
@@ -439,7 +483,7 @@ test.describe
 
 		// @check 確認画面は、ツアー料金（¥30,000）と追加料金（子供 ¥1,500 × 1名）を分けた行で出し、合計は ¥31,500
 		const summary = page.locator( '.vkbm-confirm__summary' ).first();
-		await expect( summary ).toContainText( 'ツアー料金（1ツアーあたり）' );
+		await expect( summary ).toContainText( 'ツアー料金（4名まで）' );
 		await expect( summary ).toContainText( '¥30,000' );
 		await expect( summary ).toContainText(
 			'追加料金（子供 ¥1,500 × 1名）'

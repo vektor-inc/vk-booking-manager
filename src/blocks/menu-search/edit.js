@@ -37,19 +37,26 @@ const ALLOWED_BLOCKS = [
 const EditComponent = ( { attributes, setAttributes } ) => {
 	const blockProps = useBlockProps( { className: 'vkbm-menu-search' } );
 
-	const { loopBlocks, searchBlocks } = useSelect( ( select ) => {
-		const blocks = flattenBlocks(
-			select( 'core/block-editor' ).getBlocks()
-		);
+	// ページ内のブロック一覧を読む。
+	// useSelect の中で絞り込むと毎回新しい配列になり、エディタで何か変わるたびに再描画されて
+	// コンソールに警告が出るため、ここでは getBlocks() の結果だけを返し、絞り込みは下の useMemo で行う。
+	const blocks = useSelect(
+		( select ) => select( 'core/block-editor' ).getBlocks(),
+		[]
+	);
+
+	// 入れ子のブロックを平らに並べ、メニューループと検索ブロックを取り出す。
+	const { loopBlocks, searchBlocks } = useMemo( () => {
+		const allBlocks = flattenBlocks( blocks );
 		return {
-			loopBlocks: blocks.filter(
+			loopBlocks: allBlocks.filter(
 				( block ) => block?.name === 'vk-booking-manager/menu-loop'
 			),
-			searchBlocks: blocks.filter(
+			searchBlocks: allBlocks.filter(
 				( block ) => block?.name === metadata.name
 			),
 		};
-	}, [] );
+	}, [ blocks ] );
 
 	const loopIds = useMemo(
 		() =>

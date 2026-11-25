@@ -20,6 +20,7 @@ use VKBookingManager\Common\Attendee_Name;
 use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\Common\Rate_Limit_Trait;
 use VKBookingManager\Common\VKBM_Helper;
+use VKBookingManager\Multilingual\Multilingual_Labels;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use VKBookingManager\Common\Customer_Address;
@@ -562,7 +563,7 @@ class Guest_Booking_Controller {
 		}
 
 		// キャンセルポリシーと利用規約への同意（設定されているときだけ必須）。リンクを開いた後に失敗させないよう、申し込みの時点で確かめる。
-		if ( '' !== trim( (string) ( $settings['provider_cancellation_policy'] ?? '' ) ) && ! $form['agree_cancellation_policy'] ) {
+		if ( Multilingual_Labels::requires_cancellation_policy_agreement( $settings, $draft ) && ! $form['agree_cancellation_policy'] ) {
 			return new WP_Error(
 				'cancellation_policy_required',
 				__( 'You must agree to the cancellation policy.', 'vk-booking-manager' ),

@@ -200,9 +200,26 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 
 	/**
 	 * build_footer_data() が、前後の空白の除去と、プライバシーポリシーの不正なモードの
-	 * 「表示しない」への丸め込みを行うことを検証する。
+	 * 「表示しない」への丸め込みを行い、プライバシーポリシーのリンク先を選んだ固定ページ（公開中のみ）か
+	 * 「その他」の URL にすることを検証する（#1168）。
 	 */
 	public function test_build_footer_data(): void {
+		$this->set_permalink_structure( '/%postname%/' );
+		$published_page_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'privacy',
+				'post_status' => 'publish',
+			)
+		);
+		$draft_page_id     = self::factory()->post->create(
+			array(
+				'post_type'   => 'page',
+				'post_name'   => 'draft-privacy',
+				'post_status' => 'draft',
+			)
+		);
+
 		$test_cases = array(
 			array(
 				'test_condition_name' => '前後の空白は除去する',
@@ -215,6 +232,7 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 					'provider_name' => '店舗',
 					'phone'         => '03-0000-0000',
 					'mode'          => 'none',
+					'url'           => '',
 				),
 			),
 			array(
@@ -227,6 +245,7 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 					'provider_name' => '',
 					'phone'         => '',
 					'mode'          => 'none',
+					'url'           => '',
 				),
 			),
 			array(
@@ -236,6 +255,62 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 					'provider_name' => '',
 					'phone'         => '',
 					'mode'          => 'none',
+					'url'           => '',
+				),
+			),
+			array(
+				'test_condition_name' => 'ページ指定・公開中の固定ページを選択（URL 無し） => そのページのパーマリンク（変更前は URL が空で返った）',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'url',
+					'provider_privacy_policy_page_id' => $published_page_id,
+					'provider_privacy_policy_url'     => '',
+				),
+				'expected'            => array(
+					'provider_name' => '',
+					'phone'         => '',
+					'mode'          => 'url',
+					'url'           => home_url( '/privacy/' ),
+				),
+			),
+			array(
+				'test_condition_name' => 'ページ指定・下書きの固定ページを選択し URL も残っている => 空文字（リンクを出さない）',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'url',
+					'provider_privacy_policy_page_id' => $draft_page_id,
+					'provider_privacy_policy_url'     => home_url( '/draft-privacy/' ),
+				),
+				'expected'            => array(
+					'provider_name' => '',
+					'phone'         => '',
+					'mode'          => 'url',
+					'url'           => '',
+				),
+			),
+			array(
+				'test_condition_name' => '既存の設定: ページ指定・旧ドメインの URL だけ => その URL（更新前と同じ）',
+				'settings'            => array(
+					'provider_privacy_policy_mode' => 'url',
+					'provider_privacy_policy_url'  => 'https://old.example.com/privacy/',
+				),
+				'expected'            => array(
+					'provider_name' => '',
+					'phone'         => '',
+					'mode'          => 'url',
+					'url'           => 'https://old.example.com/privacy/',
+				),
+			),
+			array(
+				'test_condition_name' => '本文モードで固定ページを選んだまま => URL は返さない',
+				'settings'            => array(
+					'provider_privacy_policy_mode'    => 'content',
+					'provider_privacy_policy_page_id' => $published_page_id,
+					'provider_privacy_policy_content' => '本文',
+				),
+				'expected'            => array(
+					'provider_name' => '',
+					'phone'         => '',
+					'mode'          => 'content',
+					'url'           => '',
 				),
 			),
 		);
@@ -246,7 +321,10 @@ class Provider_Settings_Controller_Footer_Test extends WP_UnitTestCase {
 			$this->assertSame( $case['expected']['provider_name'], $result['provider_name'], $case['test_condition_name'] . ' (provider_name)' );
 			$this->assertSame( $case['expected']['phone'], $result['phone'], $case['test_condition_name'] . ' (phone)' );
 			$this->assertSame( $case['expected']['mode'], $result['privacy_policy']['mode'], $case['test_condition_name'] . ' (mode)' );
+			$this->assertSame( $case['expected']['url'], $result['privacy_policy']['url'], $case['test_condition_name'] . ' (url)' );
 		}
+
+		$this->set_permalink_structure( '' );
 	}
 
 	/**

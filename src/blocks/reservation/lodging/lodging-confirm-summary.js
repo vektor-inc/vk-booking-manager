@@ -60,9 +60,10 @@ const DateTimeValue = ( { dateTime } ) => (
  * @param {string}  props.pricePerNightText    1 泊あたりの料金（部屋全体）。空文字なら行を出さない。泊ごとの内訳を出すときは使わない。
  * @param {Array}   props.nightBreakdown       泊ごとの内訳（date / rate / plan_price / room_surcharge / price）。
  * @param {Array}   props.nightRates           泊ごとの区分（date / rate / special_label）。特定日の名称を添えるために使う。
- * @param {boolean} props.isRateTiersEnabled   予約者区分または休前日・特定日の料金を設定したプランか。true のとき「1 泊あたりの料金」の行を泊ごとの内訳（常に開いた状態）に置き換える。
+ * @param {boolean} props.isRateTiersEnabled   予約者区分・休前日・特定日の料金を設定したプラン、または1室あたりで追加料金を使うプランか。true のとき「1 泊あたりの料金」の行を泊ごとの内訳（常に開いた状態）に置き換える。
  * @param {string}  props.locale               WordPress のロケール（泊の日付の曜日表記に使う）。
  * @param {?string} props.currencySymbol       通貨記号。
+ * @param {string}  props.guestsUnitLabel      人数の単位（例: 名）。追加料金の内訳の「基本料金（3名まで）」に使う。
  * @param {string}  props.totalText            合計金額。
  * @return {JSX.Element} サマリ。
  */
@@ -83,6 +84,7 @@ const LodgingConfirmSummary = ( {
 	isRateTiersEnabled,
 	locale,
 	currencySymbol,
+	guestsUnitLabel = '',
 	totalText,
 } ) => (
 	<>
@@ -120,6 +122,7 @@ const LodgingConfirmSummary = ( {
 				nightRates={ nightRates }
 				locale={ locale }
 				currencySymbol={ currencySymbol }
+				guestsUnitLabel={ guestsUnitLabel }
 			/>
 		) : (
 			pricePerNightText && (

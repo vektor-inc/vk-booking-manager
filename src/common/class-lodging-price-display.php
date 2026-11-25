@@ -30,15 +30,17 @@ class Lodging_Price_Display {
 	 * 予約者区分も休前日・特定日の料金設定もないプランは enabled が false・night_rates が空配列になり、画面は区分も内訳も出さない。
 	 * enabled のときの night_rates は、泊ごとの日付・料金区分・特定日の名称・プラン料金と予約者区分の単価・人数・小計。
 	 * 泊小計は計算結果の night_breakdown を使い、区分別単価は同じ計算から取得する（保存用の night_breakdown の形は変更しない）。
+	 * 1室あたりで追加料金を使うプランは、年間同じ料金でも内訳を出し、泊ごとに基本料金と超過した人の追加料金（extra_guest）を添える（#1175）。
 	 *
-	 * @param array<string, mixed>                                                                            $plan_inputs     Lodging_Price::get_plan_inputs() の結果。
-	 * @param array<int, array<mixed>>                                                                        $guest_tiers     料金区分の内訳（無ければ空配列）。
-	 * @param array<int, array{date: string, rate: string, plan_price: int, room_surcharge: int, price: int}> $night_breakdown Lodging_Price::calculate() の night_breakdown。
-	 * @return array{enabled: bool, night_rates: array<int, array{date: string, rate: string, special_label: string, plan_price: int, guest_tiers: array}>} 表示用データ。
+	 * @param array<string, mixed>                                                                            $plan_inputs        Lodging_Price::get_plan_inputs() の結果。
+	 * @param array<int, array<mixed>>                                                                        $guest_tiers        料金区分の内訳（無ければ空配列）。
+	 * @param array<int, array{date: string, rate: string, plan_price: int, room_surcharge: int, price: int}> $night_breakdown    Lodging_Price::calculate() の night_breakdown。
+	 * @param array<int, array<string, mixed>>                                                                $night_extra_guests Lodging_Price::calculate() の night_extra_guests（追加料金を使わないときは空配列）。
+	 * @return array{enabled: bool, night_rates: array<int, array{date: string, rate: string, special_label: string, plan_price: int, guest_tiers: array, extra_guest: array|null}>} 表示用データ。
 	 */
-	public static function build_stay_display( array $plan_inputs, array $guest_tiers, array $night_breakdown ): array {
+	public static function build_stay_display( array $plan_inputs, array $guest_tiers, array $night_breakdown, array $night_extra_guests = array() ): array {
 		$has_guest_tiers = Service_Menu_Post_Type::NIGHT_PRICE_UNIT_PER_ROOM !== ( $plan_inputs['price_unit'] ?? '' ) && array() !== $guest_tiers;
-		$enabled         = $has_guest_tiers || Lodging_Price::has_rate_tiers( array_merge( $plan_inputs, array( 'guest_tiers' => $guest_tiers ) ) );
+		$enabled         = $has_guest_tiers || array() !== $night_extra_guests || Lodging_Price::has_rate_tiers( array_merge( $plan_inputs, array( 'guest_tiers' => $guest_tiers ) ) );
 		if ( ! $enabled ) {
 			return array(
 				'enabled'     => false,
@@ -75,6 +77,16 @@ class Lodging_Price_Display {
 			}
 		}
 
+		// 追加料金の内訳は、泊の日付でひも付ける。
+		$extra_guest_nights = array();
+		foreach ( $night_extra_guests as $extra_night ) {
+			$extra_guest_nights[ (string) ( $extra_night['date'] ?? '' ) ] = array(
+				'base_price'      => (int) ( $extra_night['base_price'] ?? 0 ),
+				'included_guests' => (int) ( $extra_night['included_guests'] ?? 0 ),
+				'tiers'           => isset( $extra_night['tiers'] ) && is_array( $extra_night['tiers'] ) ? array_values( $extra_night['tiers'] ) : array(),
+			);
+		}
+
 		$night_rates = array();
 		foreach ( $night_breakdown as $night ) {
 			$date = (string) ( $night['date'] ?? '' );
@@ -88,6 +100,8 @@ class Lodging_Price_Display {
 				// その泊のプラン料金（部屋全体・税込）。予約者区分の行を出さないプラン（1室単位など）でも、客室を選ぶ前に泊ごとの金額を出すために使う。
 				'plan_price'    => (int) ( $night['plan_price'] ?? 0 ),
 				'guest_tiers'   => $tier_nights[ $date ] ?? array(),
+				// 1室あたりで追加料金を使うプランの、その泊の基本料金と超過した人の追加料金。使わないプランは null。
+				'extra_guest'   => $extra_guest_nights[ $date ] ?? null,
 			);
 		}
 

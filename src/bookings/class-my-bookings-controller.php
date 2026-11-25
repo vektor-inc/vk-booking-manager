@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Common\Booking_Price;
 use VKBookingManager\Common\Price_Tiers;
 use VKBookingManager\Integrations\Booking_Event_Dispatcher;
+use VKBookingManager\Multilingual\Service_Menu_Texts;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Booking_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -50,7 +51,6 @@ class My_Bookings_Controller {
 	private const META_SERVICE_START      = '_vkbm_booking_service_start';
 	private const META_SERVICE_END        = '_vkbm_booking_service_end';
 	private const META_IS_STAFF_PREFERRED = '_vkbm_booking_is_staff_preferred';
-	private const META_OTHER_CONDITIONS   = '_vkbm_other_conditions';
 	private const META_NOMINATION_FEE     = '_vkbm_booking_nomination_fee';
 	private const META_BASE_PRICE         = '_vkbm_booking_service_base_price';
 	private const META_BASE_TOTAL_PRICE   = '_vkbm_booking_base_total_price';
@@ -206,14 +206,14 @@ class My_Bookings_Controller {
 			$menu_id     = (int) get_post_meta( $booking_id, self::META_SERVICE_ID, true );
 			$resource_id = (int) get_post_meta( $booking_id, self::META_RESOURCE_ID, true );
 
-			$menu_name     = $menu_id > 0 ? (string) get_the_title( $menu_id ) : '';
+			$menu_name     = $menu_id > 0 ? Service_Menu_Texts::get_title( $menu_id ) : '';
 			$resource_name = $resource_id > 0 ? vkbm_get_resource_display_name( $resource_id ) : vkbm_get_no_nomination_label();
 
 			$other_conditions = '';
 			if ( $menu_id > 0 ) {
 				$other_conditions = trim(
 					sanitize_textarea_field(
-						(string) get_post_meta( $menu_id, self::META_OTHER_CONDITIONS, true )
+						Service_Menu_Texts::get_other_conditions( $menu_id )
 					)
 				);
 			}

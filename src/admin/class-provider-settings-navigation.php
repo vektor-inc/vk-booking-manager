@@ -126,6 +126,10 @@ class Provider_Settings_Navigation {
 						'label' => __( 'Notation settings', 'vk-booking-manager' ),
 					),
 					array(
+						'slug'  => 'multilingual',
+						'label' => __( 'Multilingual settings', 'vk-booking-manager' ),
+					),
+					array(
 						'slug'  => 'email',
 						'label' => __( 'Email settings', 'vk-booking-manager' ),
 					),

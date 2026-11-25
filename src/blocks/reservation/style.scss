@@ -675,6 +675,32 @@ $vkbm-plan-summary-control-height: 44px;
 	flex-wrap: wrap;
 }
 
+// 料金区分ごとの人数欄がある箱は、中の要素どうしの間隔（日時と人数、入力欄と料金の内訳）が広くなる。
+// 箱の内側の上下左右の余白をそれ以上にし、中の要素が箱の外とつながって見えないようにする（design-rules「余白」）。
+// 中の間隔を詰めると、人数の入力と料金の内訳のまとまりの区別が崩れるため、内側の余白のほうを広げる。
+.vkbm-plan-summary__status--detached:where(:has(> .vkbm-plan-summary__guest-tiers)) {
+	padding: 1.75rem;
+
+	// 狭い幅で人数欄のまとまりが1行を占めるときは、箱の中の幅いっぱいに広げ、入力欄・内訳・合計の右端を
+	// 「予約に進む」ボタンの右端（箱の中の右端）に揃える。広げないと幅が指示文や入力欄の幅で決まり、ボタンより内側で止まる
+	// （design-rules「要素のグループごとでの改行を考慮する」）。
+	// 日時や操作ボタンの列と同じ行に並ぶときは、行の余りをそちらへ回し（伸び率の差を大きくする）、人数欄は今の幅・今の位置のまま置く。
+	// 余りは操作ボタンの列 > 日時の順に回す。操作ボタンの列がある行では、従来の margin-left: auto と同じく人数欄とボタンの間が空き、
+	// 日時と人数欄だけの行では、従来の space-between と同じく人数欄が右端に寄る。
+	// 日時は文字だけ、操作ボタンの列は中身を右に寄せる要素なので、幅が広がっても見た目は変わらない。
+	> .vkbm-plan-summary__datetime {
+		flex-grow: 10000;
+	}
+
+	> .vkbm-plan-summary__actions {
+		flex-grow: 100000000;
+	}
+
+	> .vkbm-plan-summary__guest-tiers {
+		flex-grow: 1;
+	}
+}
+
 .vkbm-plan-summary__actions {
 	display: flex;
 	flex-direction: column;
@@ -743,6 +769,27 @@ $vkbm-plan-summary-control-height: 44px;
 	gap: 0.5rem;
 }
 
+// 追加料金を使うメニューで、見出しと最初の入力欄の間に置く「全員の人数を入れる」指示文（#1175）.
+// 翻訳される文言で <br> や語単位の nowrap を入れられないため、狭い列では文節の境目で折り返し（auto-phrase）、
+// 行の長さをそろえて「くださ／い。」のように末尾だけが次の行に落ちないようにする（balance）。
+// 非対応のブラウザでは従来の折り返しになる。
+.vkbm-plan-summary__guests-instruction {
+	line-break: strict;
+	word-break: auto-phrase;
+	text-wrap: balance;
+}
+
+// common.scss の text-box が効くブラウザでは指示文の上下の行の余分が消え、入力欄との見た目の間隔が親の gap（8px）だけになり、
+// 指示文の行間（0.75em）より狭くなる。指示文 → 入力欄を行間以上にするため、効くブラウザでだけ下の余白を足す。
+// 効かないブラウザでは行の余分（0.375em）が gap に加わり、すでに行間以上になる。
+// 後ろにある .vkbm-plan-summary__hint の margin: 0 に負けないよう、クラスを重ねて詳細度を (0,2,0) にする。
+@supports (text-box: trim-both text) {
+
+	.vkbm-plan-summary__hint.vkbm-plan-summary__guests-instruction {
+		margin-bottom: 0.25rem;
+	}
+}
+
 // 1区分の行：ラベル（区分名＋料金）と人数入力をラベル左・入力右で揃える.
 .vkbm-plan-summary__guest-tier {
 	display: flex;
@@ -763,6 +810,17 @@ $vkbm-plan-summary-control-height: 44px;
 	font-size: 0.875rem;
 }
 
+// 料金を出さない行（1ツアーあたりのメニュー・宿泊のプラン。#1175）は、区分名を入力欄の直前に寄せる
+// （区分の行どうしの間隔より狭くする）。入力欄は行の右端のままなので、区分名の文字数が違っても入力欄の左端は揃う。
+.vkbm-plan-summary__guest-tier:where(:not(:has(.vkbm-plan-summary__guest-tier-price))) {
+	justify-content: flex-end;
+	gap: 0.25rem;
+
+	> .vkbm-plan-summary__guest-tier-label {
+		flex-grow: 0;
+	}
+}
+
 // 区分料金は補足情報として弱めの色で示す。
 // margin-left:auto でラベル行内の右端（入力欄の直前）に固定する。折り返して単独行になった場合も
 // justify-content ではなく margin の auto で寄せているため、右揃えが崩れない。
@@ -774,17 +832,14 @@ $vkbm-plan-summary-control-height: 44px;
 	white-space: nowrap;
 }
 
-// 追加料金の金額（「+¥3,000」）に添える読み上げ用の文言。画面には出さず、視覚的にのみ隠す.
-.vkbm-plan-summary__visually-hidden {
-
-	@include vkbm-visually-hidden;
-}
-
-// 追加料金ありの概算合計の上に添える、ツアー料金と追加料金の内訳の1行.
+// 追加料金ありの概算合計の上に出す、ツアー料金の行と区分ごとの追加料金の行.
+// 人数の入力とは別のまとまり（料金の内訳）なので、親の gap に上の余白を足し、最後の入力欄 → 1行目を
+// 内訳の行どうし・最後の行 → 合計の罫線より広くする。
 .vkbm-plan-summary__guest-tiers-breakdown {
-	margin: 0;
-	font-size: 0.875rem;
-	text-align: right;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	margin-top: 0.75rem;
 }
 
 // 折り返さない塊。狭い幅でも、折り返しは塊と塊の境界だけで起こる.
@@ -1790,8 +1845,12 @@ $vkbm-plan-summary-control-height: 44px;
 		min-height: 120px;
 	}
 
+	// 入力欄の箱の中の 1 行の入力欄・プルダウンは、どのまとまりでも同じ高さにそろえる（#1173）。
 	.vkbm-confirm__form input:where(:not([type="checkbox"]):not([type="radio"])),
-	.vkbm-confirm__form select {
+	.vkbm-confirm__form select,
+	.vkbm-confirm__guest-field input:where(:not([type="checkbox"]):not([type="radio"])),
+	.vkbm-confirm__admin-field input:where(:not([type="checkbox"]):not([type="radio"])),
+	.vkbm-confirm__address-field input {
 		min-height: 42px;
 	}
 
@@ -1809,22 +1868,24 @@ $vkbm-plan-summary-control-height: 44px;
 		}
 	}
 
-	// 予約について施設への回答（追加した項目・ご要望・備考）のまとまり。
-	// 欄どうし（まとまりの中）は、前後のまとまりとの間隔（.vkbm-confirm の gap: 1.25rem）より狭くする。
-	.vkbm-confirm__answers {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.vkbm-confirm__admin-fields,
-	.vkbm-confirm__guest-fields,
-	.vkbm-confirm__address {
+	// 予約時に入力する情報の箱（予約者の連絡先・ご利用になる方・予約時の入力項目・ご要望・備考）。
+	// 枠線・背景はこの箱にだけ付け、中の欄やまとまり（.vkbm-confirm__guest-fields など）には付けない。
+	.vkbm-confirm__inputs {
 		border: 1px solid var(--vkbm--color--border, #e0e0e0);
 		border-radius: var(--vkbm--radius--md, 8px);
 		padding: 1.75rem;
 		background: var(--vkbm--color--bg-primary, #fff);
 		color: var(--vkbm--color--surface-text, #333);
+		// :root に color-scheme: dark を指定するテーマでも、箱の中のラジオ・チェックボックスを白い背景に合う配色で描く。
+		// 子孫のラジオ・チェックボックスへ継承させるため、個々の欄ではなく箱に指定する。
+		color-scheme: light;
+	}
+
+	// 箱の中のまとまりも箱と同じ gap にし、箱の中の欄どうしを均一な間隔で並べる。
+	.vkbm-confirm__inputs,
+	.vkbm-confirm__admin-fields,
+	.vkbm-confirm__admin-staff-fields,
+	.vkbm-confirm__guest-fields {
 		display: flex;
 		flex-direction: column;
 
@@ -1844,6 +1905,8 @@ $vkbm-plan-summary-control-height: 44px;
 
 	// 欄の中の見出しは、テーマの margin や大きな line-height を持ち込まず、入力欄との間隔を gap だけで決める。
 	// 欄どうしの見える間隔が gap より大きく膨らむのを防ぐ。
+	.vkbm-confirm__form > label,
+	.vkbm-confirm__form > span,
 	.vkbm-confirm__admin-field > label,
 	.vkbm-confirm__admin-field > span,
 	.vkbm-confirm__guest-field > label,
@@ -1861,7 +1924,7 @@ $vkbm-plan-summary-control-height: 44px;
 
 	// 選択肢の最後の行は、タップ領域のための min-height（28px）と行間で字面の下に約 10.7px の空きができる。
 	// 見える間隔が次の欄との gap と合わせて箱の内側の余白（1.75rem）を超えないよう、空きの分だけ下の余白を引き戻す（タップ領域は保つ）。
-	.vkbm-confirm__admin-fields .vkbm-confirm__attendee-options {
+	.vkbm-confirm__inputs .vkbm-confirm__attendee-options {
 		margin-bottom: -0.5rem;
 	}
 
@@ -1923,18 +1986,6 @@ $vkbm-plan-summary-control-height: 44px;
 		display: inline-flex;
 		align-items: center;
 		min-height: 44px;
-	}
-
-	// 見出しは、テーマの見出し装飾（余白・罫線・背景）を打ち消し、箱の中の欄より目立たせすぎない。
-	// 下の余白は箱の gap（欄どうしの間隔）を打ち消して、見出しを最初の欄に寄せる。
-	.vkbm-confirm__guest-title {
-		margin: 0 0 -0.5rem;
-		padding: 0;
-		border: 0;
-		background: none;
-		font-size: 1rem;
-		font-weight: 600;
-		line-height: 1.4;
 	}
 
 	// 文章の中のリンクとして使うボタン。ボタンの見た目（枠・背景）を消し、リンクとして読ませる。
@@ -2172,8 +2223,8 @@ $vkbm-plan-summary-control-height: 44px;
 	}
 
 	// 選択肢群の下の空き（約 10.7px）に attendee の gap（0.5rem）が加わり、字面どうしの見える間隔は約 21.6px になる。
-	// 代理予約の枠では選択肢群の下を引き戻しているため、同じ見える間隔になるよう差分を足す。
-	.vkbm-confirm__admin-fields .vkbm-confirm__attendee-manual {
+	// 入力欄の箱では選択肢群の下を引き戻しているため、同じ見える間隔になるよう差分を足す。
+	.vkbm-confirm__inputs .vkbm-confirm__attendee-manual {
 		margin-top: 0.5rem;
 	}
 

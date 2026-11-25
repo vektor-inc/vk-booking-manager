@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Common;
 
+use VKBookingManager\Capabilities\Roles_Manager;
 use VKBookingManager\Common\Page_Reference;
 use WP_UnitTestCase;
 
@@ -270,6 +271,108 @@ class Page_Reference_Test extends WP_UnitTestCase {
 		foreach ( $test_cases as $case ) {
 			$this->assertSame( $case['expected'], Page_Reference::sanitize_page_id( $case['value'] ), $case['test_condition_name'] );
 		}
+	}
+
+	/**
+	 * get_fix_action() が、そのページを今の利用者が直せるときだけ行き先を返すことを検証する（#1168 で予約ページから切り出し）。
+	 */
+	public function test_get_fix_action(): void {
+		// ラベルは英語（原文）で検証する（先に動いた他のテストが日本語の翻訳を読み込んでいると、実行順で結果が変わるため）。
+		switch_to_locale( 'en_US' );
+		unload_textdomain( 'vk-booking-manager', true );
+		( new Roles_Manager() )->sync_roles();
+		$admin_id      = self::factory()->user->create( array( 'role' => 'administrator' ) );
+		$editor_id     = self::factory()->user->create( array( 'role' => 'editor' ) );
+		$subscriber_id = self::factory()->user->create( array( 'role' => 'subscriber' ) );
+		$owner_id      = self::factory()->user->create( array( 'role' => Roles_Manager::ROLE_PROVIDER_OWNER ) );
+		$no_publish_id = self::factory()->user->create( array( 'role' => 'editor' ) );
+		$no_delete_id  = self::factory()->user->create( array( 'role' => 'editor' ) );
+		$draft_id      = $this->create_page( array( 'post_status' => 'draft' ) );
+		$trash_id      = $this->create_page( array( 'post_status' => 'trash' ) );
+		$others_trash  = $this->create_page(
+			array(
+				'post_status' => 'trash',
+				'post_author' => $admin_id,
+			)
+		);
+		// 固定ページを編集できても公開できない利用者（独自ロールなど）にする。
+		get_user_by( 'id', $no_publish_id )->add_cap( 'publish_pages', false );
+		// 固定ページの公開・編集はできるが、他人のページを削除（ゴミ箱から戻す）できない利用者（独自ロールなど）にする。
+		get_user_by( 'id', $no_delete_id )->add_cap( 'delete_others_pages', false );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '未公開・管理者 => そのページの編集画面',
+				'user_id'             => $admin_id,
+				'problem'             => Page_Reference::PROBLEM_UNPUBLISHED,
+				'page_id'             => $draft_id,
+				'expected_url_part'   => 'post.php?post=' . $draft_id . '&action=edit',
+				'expected_label'      => 'Edit the page',
+			),
+			array(
+				'test_condition_name' => 'ゴミ箱・編集者 => 固定ページのゴミ箱の一覧',
+				'user_id'             => $editor_id,
+				'problem'             => Page_Reference::PROBLEM_TRASH,
+				'page_id'             => $trash_id,
+				'expected_url_part'   => 'edit.php?post_status=trash&post_type=page',
+				'expected_label'      => 'Open the trash',
+			),
+			array(
+				'test_condition_name' => '未公開・購読者 => null（選び直しを案内する）',
+				'user_id'             => $subscriber_id,
+				'problem'             => Page_Reference::PROBLEM_UNPUBLISHED,
+				'page_id'             => $draft_id,
+				'expected_url_part'   => null,
+				'expected_label'      => null,
+			),
+			array(
+				'test_condition_name' => 'ゴミ箱・業務オーナー（固定ページの権限なし） => null',
+				'user_id'             => $owner_id,
+				'problem'             => Page_Reference::PROBLEM_TRASH,
+				'page_id'             => $trash_id,
+				'expected_url_part'   => null,
+				'expected_label'      => null,
+			),
+			array(
+				'test_condition_name' => '未公開・編集できるが公開できない => null（公開まで直せない）',
+				'user_id'             => $no_publish_id,
+				'problem'             => Page_Reference::PROBLEM_UNPUBLISHED,
+				'page_id'             => $draft_id,
+				'expected_url_part'   => null,
+				'expected_label'      => null,
+			),
+			array(
+				'test_condition_name' => '他人がゴミ箱に入れたページ・他人のページを戻せない => null',
+				'user_id'             => $no_delete_id,
+				'problem'             => Page_Reference::PROBLEM_TRASH,
+				'page_id'             => $others_trash,
+				'expected_url_part'   => null,
+				'expected_label'      => null,
+			),
+			array(
+				'test_condition_name' => '削除済み・管理者 => null（選び直すしかない）',
+				'user_id'             => $admin_id,
+				'problem'             => Page_Reference::PROBLEM_NOT_FOUND,
+				'page_id'             => 0,
+				'expected_url_part'   => null,
+				'expected_label'      => null,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			wp_set_current_user( $case['user_id'] );
+
+			$action = Page_Reference::get_fix_action( $case['problem'], $case['page_id'] );
+
+			if ( null === $case['expected_url_part'] ) {
+				$this->assertNull( $action, $case['test_condition_name'] );
+				continue;
+			}
+			$this->assertStringContainsString( $case['expected_url_part'], (string) ( $action['url'] ?? '' ), $case['test_condition_name'] . '（URL）' );
+			$this->assertSame( $case['expected_label'], $action['label'] ?? null, $case['test_condition_name'] . '（ラベル）' );
+		}
+		wp_set_current_user( 0 );
+		restore_previous_locale();
 	}
 
 	/**

@@ -16,6 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 use VKBookingManager\Availability\Availability_Service;
 use VKBookingManager\Availability\Menu_Date_Filter;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Multilingual\Service_Menu_Texts;
 use VKBookingManager\Common\Booking_Price_Display;
 use VKBookingManager\Common\Public_Price_Display;
 use VKBookingManager\Common\Lodging_Price_Display;
@@ -736,7 +737,7 @@ class Menu_Loop_Block {
 	private function render_text_item( WP_Post $post, array $attributes ): string {
 		$segments = array();
 
-		$title_text = esc_html( get_the_title( $post ) );
+		$title_text = esc_html( Service_Menu_Texts::get_title( $post ) );
 		$edit_link  = $this->get_menu_edit_link_markup( $post );
 
 		$use_detail_page = '1' === (string) get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
@@ -1131,6 +1132,9 @@ class Menu_Loop_Block {
 			}
 		}
 
+		// 抜粋を表示中の言語の値に置き換えた投稿で取る（言語の値が無ければ渡した投稿のまま）。
+		$post = Service_Menu_Texts::localize_post( $post );
+
 		try {
 			// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- 抜粋フィルターが参照する表示中の投稿を一時的に差し替え、finally で戻す。
 			$GLOBALS['post'] = $post;
@@ -1166,12 +1170,12 @@ class Menu_Loop_Block {
 
 		$use_detail_page = '1' === (string) get_post_meta( $post->ID, self::META_USE_DETAIL_PAGE, true );
 		if ( ! empty( $attributes['disableTitleLink'] ) || ! $use_detail_page ) {
-			$title_markup = esc_html( get_the_title( $post ) );
+			$title_markup = esc_html( Service_Menu_Texts::get_title( $post ) );
 		} else {
 			$title_markup = sprintf(
 				'<a href="%1$s">%2$s</a>',
 				esc_url( $this->detail_link->get_detail_url( $post, $this->get_detail_link_query( $attributes ) ) ),
-				esc_html( get_the_title( $post ) )
+				esc_html( Service_Menu_Texts::get_title( $post ) )
 			);
 		}
 
@@ -1362,7 +1366,7 @@ class Menu_Loop_Block {
 			return '';
 		}
 
-		$menu_title = get_the_title( $post );
+		$menu_title = Service_Menu_Texts::get_title( $post );
 		$items      = '';
 
 		foreach ( $attachment_ids as $index => $attachment_id ) {
@@ -1450,7 +1454,7 @@ class Menu_Loop_Block {
 		$duration             = get_post_meta( $post->ID, '_vkbm_duration_minutes', true );
 		$price                = get_post_meta( $post->ID, '_vkbm_base_price', true );
 		$reservation_day_type = (string) get_post_meta( $post->ID, '_vkbm_reservation_day_type', true );
-		$other_conditions     = trim( (string) get_post_meta( $post->ID, '_vkbm_other_conditions', true ) );
+		$other_conditions     = trim( Service_Menu_Texts::get_other_conditions( (int) $post->ID ) );
 		// #485: 「すべて」かどうかの判定のみここで取得する。担当できるリソース ID の解決
 		// （get_assignable_staff_ids()）は、名前一覧を表示する分岐に入ってから行う。
 		// ここで無条件に呼ぶと、「すべて」のとき（＝担当できるリソースが最も多いとき）に
@@ -1681,7 +1685,10 @@ class Menu_Loop_Block {
 		// 「指名OFF」を明示的に要求する（残数・催行状態をフロントで表示しない要件と同じ理由）。
 		// #968: 「貸し切り予約」ONのメニューも最初の1件で枠が閉じ、最少催行人数は受付制限として働く
 		// （催行状態のしきい値ではない）ため、指名を使うメニューと同じく非表示にする。
+		// #1109: 1室1泊あたりのプランは人数で受付を制限しないため、保存値が残っていても非表示にする
+		// （Availability_Service::get_menu_min_capacity()・get_menu_nomination_min_guests() と同じ判定）。
 		$min_capacity_available = $slot_capacity_available && ! $is_nomination_menu
+			&& ! Service_Menu_Post_Type::is_night_price_per_room( $post->ID )
 			&& ! ( new Availability_Service() )->is_menu_exclusive_when_booked( $post );
 		if ( $slot_capacity_displayable && $max_capacity >= 2 ) {
 			// #392: 指名を使うメニューは「1組の最大人数」、使わないメニューは従来どおり
@@ -1703,7 +1710,7 @@ class Menu_Loop_Block {
 		// 1枠あたりの最大予約受付数（_vkbm_max_capacity）が 2 以上、かつ最少催行人数が 2 以上の
 		// 複数人前提のメニューのときだけ、定員の直後に項目を追加する。
 		// max が 1 または未設定（実質 1）、min が 0/1（制約なし or 単独でも催行）の場合は従来どおり表示しない。
-		// #392: 指名を使うメニューでは常に非表示にする（$min_capacity_available 参照）。
+		// #392: 指名を使うメニュー・1室1泊あたりのプラン（#1109）では常に非表示にする（$min_capacity_available 参照）。
 		if ( $min_capacity_available && $max_capacity >= 2 && $min_capacity >= 2 ) {
 			// 値は数量整形ヘルパーで「整数＋単位」（例: 2名 / 2 guests）に揃える。
 			$items[] = sprintf(
@@ -1834,7 +1841,7 @@ class Menu_Loop_Block {
 					'label'             => trim( (string) ( $this->get_provider_settings()['menu_loop_reserve_button_label'] ?? '' ) ),
 					'extra_classes'     => 'vkbm-menu-loop__button vkbm-menu-loop__button--reserve',
 					'fallback_url'      => (string) get_permalink( $post ),
-					'accessible_suffix' => (string) get_the_title( $post ),
+					'accessible_suffix' => Service_Menu_Texts::get_title( $post ),
 				)
 			);
 

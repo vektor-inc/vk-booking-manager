@@ -47,8 +47,68 @@
 }
 
 /* ==========================================================================
-   サービスメニュー一覧：料金区分の一覧表示
+   サービスメニュー・リソース一覧
    ========================================================================== */
+
+// 列見出し（上下とも）と本文の全セルで、日本語の長音符・小書き文字が行頭に来ないようにする。スマホ幅でも同じ。
+// 狭い列で最後の1文字だけが次の行に落ちる（「サービスタ／グ」）のも、折り返し位置を前の行と均して避ける。
+.edit-php.post-type-vkbm_service_menu .wp-list-table th,
+.edit-php.post-type-vkbm_service_menu .wp-list-table td,
+.edit-php.post-type-vkbm_resource .wp-list-table th,
+.edit-php.post-type-vkbm_resource .wp-list-table td {
+	line-break: strict;
+	text-wrap: pretty;
+}
+
+// 行アクション（クイック編集・複製など）は1項目ずつ語の途中で割らない。
+// 項目の span は間に空白が無く続くため、inline-block にして項目の間で折り返せるようにする。
+.edit-php.post-type-vkbm_service_menu .wp-list-table .row-actions > span,
+.edit-php.post-type-vkbm_resource .wp-list-table .row-actions > span {
+	display: inline-block;
+	white-space: nowrap;
+
+	// inline-block の末尾の空白は表示されないため、「|」の後ろの空白の代わりに行末側の余白を付ける。
+	// 行頭の項目の端がそろうよう、行頭側ではなく行末側に付ける（右から左へ書く言語では左側になる）。
+	&:where(:not(:last-child)) {
+		margin-inline-end: 0.25em;
+	}
+}
+
+@media (min-width: 783px) {
+
+	// サービスメニュー一覧は列が多く、タイトル列が 60px 台まで狭まる。
+	// 行アクションの最長の項目（「クイック編集」「ゴミ箱へ移動」）が1行に入る幅を確保する。
+	// 固定レイアウトの表では max() に % を混ぜた幅が効かないため、広い画面の % 指定はメディアクエリで分ける。
+	.edit-php.post-type-vkbm_service_menu .wp-list-table th.column-title {
+		width: 9em;
+	}
+
+	// ソート可能な見出しには余白がなく、本文には左右 10px ずつ余白がある。本文の日時が収まる幅を確保する。
+	// 日本語表示の「2026年11月24日 12:45 PM」が1行に収まり、Windows の数字の幅にも余裕が残る幅にする。
+	.edit-php.post-type-vkbm_resource .wp-list-table th.column-date {
+		width: 15em;
+	}
+}
+
+// 783〜959px ではサービスメニュー一覧の列が 55px 前後まで狭まり、左右 10px の余白では本文が全角2文字分しか入らない。
+// 「ニュー」のように行頭に置けない文字を含む3文字が入らないと、行頭禁止を破って途中で折り返されるため、左右の余白を詰める。
+// ソート可能な見出しはリンク側に余白があり、チェックボックスの列は位置を変えないため除く。
+@media (min-width: 783px) and (max-width: 959px) {
+
+	.edit-php.post-type-vkbm_service_menu .wp-list-table th:where(:not(.check-column, .sortable, .sorted)),
+	.edit-php.post-type-vkbm_service_menu .wp-list-table td:where(:not(.check-column)) {
+		padding-inline: 6px;
+	}
+}
+
+@media (min-width: 1280px) {
+
+	// 広い画面では、ほかの列より狭くならないよう表の幅に合わせて広げる。
+	// 1280px で約 160px になり、1279px までの 9em（約 126px）より広くなるため、境目で狭まることはない。
+	.edit-php.post-type-vkbm_service_menu .wp-list-table th.column-title {
+		width: 15%;
+	}
+}
 
 /*
  * 料金区分で設定されているメニューの料金列。区分を全件縦に並べる。

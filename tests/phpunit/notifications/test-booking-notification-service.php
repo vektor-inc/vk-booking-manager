@@ -20,6 +20,72 @@ use WP_UnitTestCase;
  * @group notifications
  */
 class Booking_Notification_Service_Test extends WP_UnitTestCase {
+	/**
+	 * お客様向け本文だけに予約言語のポリシーを使う。
+	 *
+	 * @return void
+	 */
+	public function test_customer_policy_uses_booking_locale_and_provider_uses_base(): void {
+		$base = '基本ポリシー';
+		update_option( Settings_Repository::OPTION_KEY, array( 'provider_cancellation_policy' => $base ) );
+		update_option( \VKBookingManager\Multilingual\Multilingual_Labels::OPTION_KEY, array( 'en_US' => array( 'provider_cancellation_policy' => 'English policy' ) ) );
+		$booking_id = (int) $this->factory()->post->create(
+			array(
+				'post_type'   => Booking_Post_Type::POST_TYPE,
+				'post_status' => 'publish',
+			)
+		);
+		update_post_meta( $booking_id, '_vkbm_booking_service_start', '2026-10-10 15:00:00' );
+		update_post_meta( $booking_id, '_vkbm_booking_service_end', '2026-10-10 16:00:00' );
+		update_post_meta( $booking_id, '_vkbm_booking_status', 'confirmed' );
+		update_post_meta( $booking_id, '_vkbm_booking_locale', 'en_US' );
+		$service         = new Booking_Notification_Service( new Settings_Repository() );
+		$payload_method  = new ReflectionMethod( Booking_Notification_Service::class, 'build_booking_payload' );
+		$customer_method = new ReflectionMethod( Booking_Notification_Service::class, 'render_customer_body' );
+		$provider_method = new ReflectionMethod( Booking_Notification_Service::class, 'render_provider_body' );
+		$payload         = $payload_method->invoke( $service, $booking_id );
+		$switched        = switch_to_locale( 'ja_JP' );
+		$locale_method   = new ReflectionMethod( Booking_Notification_Service::class, 'with_booking_locale' );
+		$this->assertSame(
+			'English policy',
+			$locale_method->invoke(
+				$service,
+				$booking_id,
+				function () use ( $customer_method, $service, $payload ): string {
+					$body = $customer_method->invoke( $service, $payload, 'lead' );
+					$this->assertStringContainsString( 'English policy', $body );
+					return 'English policy';
+				}
+			)
+		);
+		$this->assertStringContainsString( $base, $provider_method->invoke( $service, $payload, 'confirmed' ) );
+		update_post_meta( $booking_id, '_vkbm_booking_customer_email', 'customer@example.com' );
+		update_post_meta( $booking_id, '_vkbm_booking_customer_name', 'Test customer' );
+		$mail = array();
+		$capture = static function ( $result, $args ) use ( &$mail ) {
+			$mail[] = $args;
+			return true;
+		};
+		add_filter( 'pre_wp_mail', $capture, 10, 2 );
+		try {
+			$dispatch = new ReflectionMethod( Booking_Notification_Service::class, 'dispatch_notification' );
+			$dispatch->invoke( $service, 'confirmed_customer', $booking_id, 1 );
+			$reminder = new ReflectionMethod( Booking_Notification_Service::class, 'send_customer_reminder' );
+			$this->assertTrue( $reminder->invoke( $service, $booking_id, 24 ) );
+		} finally {
+			remove_filter( 'pre_wp_mail', $capture, 10 );
+		}
+		$this->assertCount( 2, $mail );
+		$this->assertStringContainsString( 'English policy', $mail[0]['message'] );
+		$this->assertStringContainsString( 'English policy', $mail[1]['message'] );
+
+		$this->assertSame( 'ja_JP', determine_locale() );
+		if ( $switched ) {
+			restore_previous_locale();
+		}
+		delete_option( \VKBookingManager\Multilingual\Multilingual_Labels::OPTION_KEY );
+	}
+
 	/** @var string */
 	private $original_date_format = '';
 
@@ -362,9 +428,9 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 			'guests'                  => 1,
 			'staff_enabled'           => false,
 			'resource_label_singular' => 'スタッフ',
-			'attendee_name'            => '',
-			'attendee_name_mode'       => 'disabled',
-			'attendee_name_label'      => '受診者名',
+			'attendee_name'           => '',
+			'attendee_name_mode'      => 'disabled',
+			'attendee_name_label'     => '受診者名',
 		);
 
 		$cases = array(
@@ -941,7 +1007,7 @@ class Booking_Notification_Service_Test extends WP_UnitTestCase {
 		 * @param string $status 投稿の状態。
 		 * @return int 投稿 ID。
 		 */
-		$create_menu     = function ( string $title, string $status = 'publish' ): int {
+		$create_menu = function ( string $title, string $status = 'publish' ): int {
 			return (int) $this->factory()->post->create(
 				array(
 					'post_type'    => Service_Menu_Post_Type::POST_TYPE,

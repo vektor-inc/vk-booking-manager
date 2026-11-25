@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Common\Reservation_Page_Url;
+use VKBookingManager\Common\Privacy_Policy_Url;
 use VKBookingManager\Common\Customer_Address;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\Admin\Email_Log_Repository;
@@ -732,16 +733,29 @@ class Auth_Shortcodes {
 			)
 		);
 
+		// ログイン中は予約ブロックがログイン画面を出さず、ログイン画面向けの通知が表示されないため、
+		// ログイン中の本人の結果はプロフィール画面で伝える（#646）。
+		$current_user_id = get_current_user_id();
+
 		if ( empty( $user[0] ) ) {
+			if ( $current_user_id > 0 ) {
+				$this->redirect_to_profile_with_verification_error( __( 'Invalid verification link.', 'vk-booking-manager' ), $current_user_id );
+				return;
+			}
 			$this->set_verification_notice( __( 'Invalid verification link.', 'vk-booking-manager' ) );
 			return;
 		}
 
-		$user    = $user[0];
-		$expires = (int) get_user_meta( $user->ID, 'vkbm_email_verify_expires', true );
+		$user        = $user[0];
+		$is_own_link = $current_user_id > 0 && (int) $user->ID === $current_user_id;
+		$expires     = (int) get_user_meta( $user->ID, 'vkbm_email_verify_expires', true );
 
 		// 有効期限が保存されていない・0 の場合は、期限が分からないため期限切れとして扱う。
 		if ( $expires <= 0 || $expires < time() ) {
+			if ( $is_own_link ) {
+				$this->redirect_to_profile_with_verification_error( __( 'The confirmation link has expired.', 'vk-booking-manager' ), $current_user_id );
+				return;
+			}
 			$this->set_verification_notice( __( 'The confirmation link has expired.', 'vk-booking-manager' ) );
 			return;
 		}
@@ -751,12 +765,46 @@ class Auth_Shortcodes {
 		$this->invalidate_current_resend_grant();
 		$this->clear_resend_grant_cookie();
 		$this->resend_grant_token = '';
-		$this->set_verification_notice( __( 'Email verification has been completed. Please log in.', 'vk-booking-manager' ) );
 
-		// 固定ページのパーマリンクにはクエリが含まれないため、検証済みの予約トークンだけを戻す。
+		if ( $is_own_link ) {
+			$this->set_profile_notice( __( 'Email address verification has been completed.', 'vk-booking-manager' ) );
+			$this->redirect_and_exit( $this->build_verification_result_url( 'profile' ) );
+			return;
+		}
+
+		$this->set_verification_notice( __( 'Email verification has been completed. Please log in.', 'vk-booking-manager' ) );
+		$this->redirect_and_exit( $this->build_verification_result_url( 'login' ) );
+	}
+
+	/**
+	 * 確認リンクを開いた後の転送先 URL を組み立てる。
+	 *
+	 * 固定ページのパーマリンクにはクエリが含まれないため、確認リンクのクエリを外したうえで、検証済みの予約トークンだけを戻す。
+	 *
+	 * @param string $auth_mode 表示する画面（login / profile）。
+	 * @return string 転送先 URL。
+	 */
+	private function build_verification_result_url( string $auth_mode ): string {
 		$redirect_url = $this->keep_request_draft( remove_query_arg( 'vkbm_verify_email', $this->get_current_url() ) );
-		$redirect_url = add_query_arg( 'vkbm_auth', 'login', $redirect_url );
-		$this->redirect_and_exit( $redirect_url );
+		return add_query_arg( 'vkbm_auth', $auth_mode, $redirect_url );
+	}
+
+	/**
+	 * ログイン中の利用者に、確認リンクを開けなかったことをプロフィール画面のエラーとして伝えて転送する（#646）。
+	 *
+	 * 利用者がメール未認証で、メール認証が必須の設定のときは、次のログイン時に確認メールを再送できることも添える。
+	 *
+	 * @param string $message 伝える文（翻訳済み）。
+	 * @param int    $user_id ログイン中の利用者 ID。
+	 * @return void
+	 */
+	private function redirect_to_profile_with_verification_error( string $message, int $user_id ): void {
+		if ( $this->requires_email_verification() && Email_Verification::STATUS_UNVERIFIED === Email_Verification::get_status( $user_id ) ) {
+			$message .= ' ' . __( 'The next time you log in, you can resend it from the login screen.', 'vk-booking-manager' );
+		}
+
+		$this->set_profile_errors_cookie( new WP_Error( 'verification_link_failed', $message ) );
+		$this->redirect_and_exit( $this->build_verification_result_url( 'profile' ) );
 	}
 
 	/**
@@ -1275,15 +1323,13 @@ else :
 		$agree_privacy_value    = ! empty( $this->registration_posted_data['agree_privacy_policy'] );
 		$settings               = $this->settings_service->get_settings();
 		$terms_of_service       = isset( $settings['provider_terms_of_service'] ) ? trim( (string) $settings['provider_terms_of_service'] ) : '';
-		$privacy_policy_mode    = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
-		$privacy_policy_url     = isset( $settings['provider_privacy_policy_url'] ) ? trim( (string) $settings['provider_privacy_policy_url'] ) : '';
+		$privacy_policy_mode    = Privacy_Policy_Url::get_mode( $settings );
+		$privacy_policy_url     = Privacy_Policy_Url::get_url( $settings );
 		$privacy_policy_content = isset( $settings['provider_privacy_policy_content'] ) ? trim( (string) $settings['provider_privacy_policy_content'] ) : '';
-		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
-			$privacy_policy_mode = 'none';
-		}
+		// 同意欄の出し分け。プライバシーポリシーのリンクは、リンク先（選んだ固定ページ（公開中のみ）か「その他」の URL。#1168）があるときだけ出す（送信時の必須判定と同じ条件）。
 		$show_terms           = '' !== $terms_of_service;
-		$show_privacy_url     = 'url' === $privacy_policy_mode && '' !== $privacy_policy_url;
-		$show_privacy_content = 'content' === $privacy_policy_mode && '' !== $privacy_policy_content;
+		$show_privacy_url     = '' !== $privacy_policy_url;
+		$show_privacy_content = Privacy_Policy_Url::MODE_CONTENT === $privacy_policy_mode && '' !== $privacy_policy_content;
 
 		ob_start();
 		?>
@@ -1565,14 +1611,15 @@ else :
 			<?php endif; ?>
 			<?php $this->render_error_list( $this->profile_errors ); ?>
 			<?php if ( $message ) : ?>
-				<div class="vkbm-alert vkbm-alert__success">
+				<div class="vkbm-alert vkbm-alert__success" role="status">
 					<?php echo esc_html( $message ); ?>
 				</div>
 			<?php endif; ?>
 			<form class="vkbm-auth-form" method="post" action="<?php echo esc_url( $form_action ); ?>">
 				<div class="vkbm-auth-form__field">
 					<label class="vkbm-auth-form__label" for="vkbm-profile-username"><?php esc_html_e( 'username', 'vk-booking-manager' ); ?></label>
-					<input type="text" class="vkbm-auth-form__input" id="vkbm-profile-username" value="<?php echo esc_attr( $current_user->user_login ); ?>" disabled>
+					<?php // パスワード管理機能が「現在のパスワード」をどのアカウントのものか判別できるよう、ユーザー名欄であることを示す（#646）。 ?>
+					<input type="text" class="vkbm-auth-form__input" id="vkbm-profile-username" value="<?php echo esc_attr( $current_user->user_login ); ?>" autocomplete="username" disabled>
 				</div>
 				<?php
 				$this->render_text_field(
@@ -1628,10 +1675,33 @@ else :
 					);
 					?>
 				</div>
+				<?php // 現在のパスワード欄には再表示用の値を入れない（パスワードを一時保存に残さないため。#646）。 ?>
+				<div class="vkbm-auth-form__field vkbm-auth-form__password">
+					<label class="vkbm-auth-form__label" for="vkbm-profile-current-password"><?php esc_html_e( 'Current password', 'vk-booking-manager' ); ?></label>
+					<div class="vkbm-auth-form__password-field">
+						<input type="password" class="vkbm-auth-form__input" id="vkbm-profile-current-password" name="current_password" autocomplete="current-password" aria-describedby="vkbm-profile-current-password-help">
+						<button
+							type="button"
+							class="vkbm-auth-form__password-toggle"
+							aria-controls="vkbm-profile-current-password"
+							aria-pressed="false"
+							data-show-label="<?php esc_attr_e( 'Show password', 'vk-booking-manager' ); ?>"
+							data-hide-label="<?php esc_attr_e( 'hide password', 'vk-booking-manager' ); ?>"
+						>
+							<span class="vkbm-auth-form__password-toggle-label"><?php esc_html_e( 'show password', 'vk-booking-manager' ); ?></span>
+							<svg class="vkbm-auth-form__password-toggle-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+								<path d="M12 5c-5.5 0-9.5 4.5-10.5 6.5C2.5 13.5 6.5 18 12 18s9.5-4.5 10.5-6.5C21.5 9.5 17.5 5 12 5zm0 11c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5S14.5 16 12 16zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z" />
+							</svg>
+						</button>
+					</div>
+					<p class="vkbm-auth-form__note" id="vkbm-profile-current-password-help"><?php esc_html_e( 'Enter it only when changing your email address or password.', 'vk-booking-manager' ); ?></p>
+					<?php // 戻り先（redirect_to）を付けると、WordPress 本体が再設定メールの送信後に「確認メールを送りました」の案内を出さずに戻り先へ転送するため、引数を付けない（#646）。 ?>
+					<p class="vkbm-auth-form__note"><a class="vkbm-auth-form__link" href="<?php echo esc_url( wp_lostpassword_url() ); ?>"><?php esc_html_e( 'Forgot your password?', 'vk-booking-manager' ); ?></a></p>
+				</div>
 				<div class="vkbm-auth-form__field vkbm-auth-form__password">
 					<label class="vkbm-auth-form__label" for="vkbm-profile-password"><?php esc_html_e( 'New Password', 'vk-booking-manager' ); ?></label>
 					<div class="vkbm-auth-form__password-field">
-						<input type="password" class="vkbm-auth-form__input" id="vkbm-profile-password" name="new_password" autocomplete="new-password">
+						<input type="password" class="vkbm-auth-form__input" id="vkbm-profile-password" name="new_password" autocomplete="new-password" aria-describedby="vkbm-profile-password-help">
 						<button
 							type="button"
 							class="vkbm-auth-form__password-toggle"
@@ -1646,7 +1716,7 @@ else :
 							</svg>
 						</button>
 					</div>
-					<p class="vkbm-auth-form__note"><?php esc_html_e( 'Please use at least 8 characters.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Leave empty if you do not want to change it.', 'vk-booking-manager' ); ?></p>
+					<p class="vkbm-auth-form__note" id="vkbm-profile-password-help"><?php esc_html_e( 'Please use at least 8 characters.', 'vk-booking-manager' ); ?> <?php esc_html_e( 'Leave empty if you do not want to change it.', 'vk-booking-manager' ); ?></p>
 				</div>
 				<div class="vkbm-auth-form__field vkbm-auth-form__password">
 					<label class="vkbm-auth-form__label" for="vkbm-profile-password-confirm"><?php esc_html_e( 'New password (confirm)', 'vk-booking-manager' ); ?></label>
@@ -1708,6 +1778,8 @@ else :
 		$email        = sanitize_email( $raw['user_email'] ?? '' );
 		$new_pass     = (string) ( $raw['new_password'] ?? '' );
 		$pass_confirm = (string) ( $raw['new_password_confirm'] ?? '' );
+		// 現在のパスワードは照合にだけ使い、再表示用の一時保存（profile_posted_data）には入れない。
+		$current_pass = (string) ( $raw['current_password'] ?? '' );
 
 		$this->profile_posted_data = array(
 			'first_name'   => $first_name,
@@ -1754,7 +1826,16 @@ else :
 			$this->validate_password_pair( $errors, $new_pass, $pass_confirm, false );
 		}
 
+		// メールアドレスかパスワードを変えるときだけ、現在のパスワードで本人確認する（#646）。
+		$user          = wp_get_current_user();
+		$email_changed = is_email( $email ) && (string) $user->user_email !== $email;
+		if ( $email_changed || '' !== $new_pass ) {
+			$this->validate_current_password( $errors, $user, $current_pass );
+		}
+
 		if ( $errors->has_errors() ) {
+			$this->add_new_password_reentry_error( $errors, $new_pass );
+
 			// Save errors to cookie and redirect so the SPA can display them.
 			// エラーを Cookie に保存してリダイレクトし、SPA 側でエラーを表示できるようにする。
 			set_transient( $this->profile_input_key( $user_id ), $this->profile_posted_data, 5 * MINUTE_IN_SECONDS );
@@ -1790,6 +1871,8 @@ else :
 		}
 
 		if ( is_wp_error( $update ) ) {
+			$this->add_new_password_reentry_error( $update, $new_pass );
+
 			// Save wp_update_user errors to cookie and redirect.
 			// wp_update_user のエラーを Cookie に保存してリダイレクトする。
 			set_transient( $this->profile_input_key( $user_id ), $this->profile_posted_data, 5 * MINUTE_IN_SECONDS );
@@ -1822,9 +1905,31 @@ else :
 		delete_transient( $this->profile_input_key( $user_id ) );
 		$this->profile_posted_data = array();
 
-		$this->set_profile_notice( __( 'User information has been updated.', 'vk-booking-manager' ) );
-
 		$redirect_to = isset( $raw['redirect_to'] ) ? $this->normalize_redirect( $raw['redirect_to'] ) : $this->get_current_url();
+		$notice      = __( 'User information has been updated.', 'vk-booking-manager' );
+		if ( '' !== $new_pass ) {
+			// パスワードを変えなかった保存と見分けられるよう、変えたときだけ伝える（#646）。
+			$notice .= ' ' . __( 'Your password has been changed.', 'vk-booking-manager' );
+		}
+
+		// メールアドレスを変えた予約顧客は、メール認証が必須の設定ならメール認証をやり直す（#646）。
+		if ( $email_changed && $this->requires_email_verification() && self::is_booking_customer( $user ) ) {
+			if ( $this->restart_email_verification( $user_id, $email, $redirect_to ) ) {
+				$notice .= ' ' . __( 'A confirmation email has been sent to your new email address.', 'vk-booking-manager' );
+				$notice .= ' ' . __( 'Click the link in the email to complete email address verification.', 'vk-booking-manager' );
+			} else {
+				// 送れなかったことは、更新の通知とは別にエラーとして伝える。
+				$send_error = new WP_Error(
+					'verification_email_failed',
+					__( 'The confirmation email could not be sent to your new email address.', 'vk-booking-manager' ) . ' ' . __( 'The next time you log in, you can resend it from the login screen.', 'vk-booking-manager' )
+				);
+				$this->set_profile_errors_cookie( $send_error );
+				$this->profile_errors = $send_error;
+			}
+		}
+
+		$this->set_profile_notice( $notice );
+
 		$redirect_to = add_query_arg( 'vkbm_auth', 'profile', $redirect_to );
 
 		$this->redirect_and_exit( $redirect_to );
@@ -2288,14 +2393,13 @@ else :
 				__( 'You must agree to the terms of use.', 'vk-booking-manager' )
 			);
 		}
-		$privacy_policy_mode = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
-		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
-			$privacy_policy_mode = 'none';
-		}
-		$privacy_policy_url     = isset( $settings['provider_privacy_policy_url'] ) ? trim( (string) $settings['provider_privacy_policy_url'] ) : '';
+		// 同意を必須にするのは、フォームにプライバシーポリシー（リンクまたは本文）を出しているときだけ（表示と同じ判定。#1168）。
+		// 選んだ固定ページが公開中でないときはリンクを出さないため、同意も求めない。
+		$privacy_policy_mode    = Privacy_Policy_Url::get_mode( $settings );
+		$privacy_policy_url     = Privacy_Policy_Url::get_url( $settings );
 		$privacy_policy_content = isset( $settings['provider_privacy_policy_content'] ) ? trim( (string) $settings['provider_privacy_policy_content'] ) : '';
-		$requires_privacy       = ( 'url' === $privacy_policy_mode && '' !== $privacy_policy_url )
-			|| ( 'content' === $privacy_policy_mode && '' !== $privacy_policy_content );
+		$requires_privacy       = '' !== $privacy_policy_url
+			|| ( Privacy_Policy_Url::MODE_CONTENT === $privacy_policy_mode && '' !== $privacy_policy_content );
 		if ( $requires_privacy && ! $agree_privacy ) {
 			$this->registration_errors->add(
 				'privacy_required',
@@ -2878,6 +2982,27 @@ else :
 	 */
 	private function generate_email_token(): string {
 		return wp_generate_password( 32, false, false );
+	}
+
+	/**
+	 * メールアドレスを変えた利用者のメール認証をやり直す。
+	 *
+	 * 認証状態を未認証に戻し、新しい認証トークンを発行して（保存するのはハッシュだけ）、
+	 * 新しいメールアドレスへ確認メールを送る。送れなかったときも未認証のままにする。
+	 *
+	 * @param int    $user_id     利用者 ID。
+	 * @param string $email       新しいメールアドレス。
+	 * @param string $redirect_to 確認メールのリンク先にするページの URL。
+	 * @return bool 確認メールを送れたら true。
+	 */
+	private function restart_email_verification( int $user_id, string $email, string $redirect_to ): bool {
+		Email_Verification::mark_unverified( $user_id );
+
+		$token = $this->generate_email_token();
+		update_user_meta( $user_id, Email_Verification::META_TOKEN_HASH, hash( 'sha256', $token ) );
+		update_user_meta( $user_id, Email_Verification::META_TOKEN_EXPIRES, time() + self::EMAIL_TOKEN_TTL );
+
+		return $this->send_verification_email( $email, $redirect_to, $token );
 	}
 
 	/**
@@ -3542,6 +3667,67 @@ else :
 		if ( '' !== $password && strlen( $password ) < 8 ) {
 			$errors->add( 'password_short', __( 'Please enter a password of 8 characters or more.', 'vk-booking-manager' ) );
 		}
+	}
+
+	/**
+	 * プロフィールでメールアドレス・パスワードを変えるときに、入力された現在のパスワードを照合する。
+	 *
+	 * 未入力・不一致のときはエラーを追加する。照合は wp_check_password()（パスワード照合関数）で行う。
+	 *
+	 * WordPress 標準のパスワード再設定・ログインは、引用符・円記号（バックスラッシュ）にスラッシュが付いた値で
+	 * パスワードを扱う。このフォームはスラッシュを外した値を受け取るため、一致しなければスラッシュを付けた値でも照合する。
+	 *
+	 * ログイン（wp_authenticate()）は前後の空白を除いてから照合し、wp_hash_password()（パスワードのハッシュ化関数）も
+	 * 前後の空白を除いて保存する。空白付きの入力がログインでは通るのにここで断られないよう、空白を除いた値でも照合する。
+	 *
+	 * @param WP_Error $errors           エラーの入れ物。
+	 * @param WP_User  $user             プロフィールを変更する利用者。
+	 * @param string   $current_password 入力された現在のパスワード（スラッシュを外した値）。
+	 * @return void
+	 */
+	private function validate_current_password( WP_Error $errors, WP_User $user, string $current_password ): void {
+		// ログインも空白だけのパスワードは空として断るため、空白だけの入力は未入力として扱う。
+		$trimmed_password = trim( $current_password );
+		if ( '' === $trimmed_password ) {
+			$errors->add( 'missing_current_password', __( 'Enter your current password to change your email address or password.', 'vk-booking-manager' ) );
+			return;
+		}
+
+		// 入力そのまま（スラッシュなし → スラッシュ付き）→ 前後の空白を除いた値（スラッシュなし → スラッシュ付き）の順に照合する。
+		// 引用符・円記号・前後の空白が無ければ候補は1つになり、照合は1回で済む。
+		$candidates = array_unique(
+			array(
+				$current_password,
+				wp_slash( $current_password ),
+				$trimmed_password,
+				wp_slash( $trimmed_password ),
+			)
+		);
+		foreach ( $candidates as $candidate ) {
+			if ( wp_check_password( $candidate, $user->user_pass, $user->ID ) ) {
+				return;
+			}
+		}
+
+		$errors->add( 'incorrect_current_password', __( 'The current password is incorrect.', 'vk-booking-manager' ) );
+	}
+
+	/**
+	 * プロフィールをエラーで戻すときに、新しいパスワードの入れ直しを促す文をエラーに足す。
+	 *
+	 * 新しいパスワードは再表示用に保存しないため、戻った画面では欄が空になる。空のまま保存すると、
+	 * パスワードが変わらないまま成功の通知が出るため、新しいパスワードの入力があったときだけ足す（#646）。
+	 *
+	 * @param WP_Error $errors       画面に返すエラー。
+	 * @param string   $new_password 入力された新しいパスワード。
+	 * @return void
+	 */
+	private function add_new_password_reentry_error( WP_Error $errors, string $new_password ): void {
+		if ( '' === $new_password ) {
+			return;
+		}
+
+		$errors->add( 'reenter_new_password', __( 'Please enter the new password again.', 'vk-booking-manager' ) );
 	}
 
 	/**

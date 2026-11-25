@@ -1,0 +1,31 @@
+/* ==========================================================================
+   サービスメニュー編集画面: メタボックス「多言語設定」
+   ========================================================================== */
+
+.vkbm-service-menu-multilingual__intro {
+	margin: 0 0 var(--vkbm--spacing--xs);
+}
+
+/* 言語ごとのまとまり
+   ========================================================================== */
+
+// 言語ごとのまとまりの間は、まとまりの中の欄どうしより広く空ける（「多言語設定」タブの言語ごとのまとまりと揃える）。
+.vkbm-service-menu-multilingual__language {
+	margin-top: var(--vkbm--spacing--lg);
+	padding-top: var(--vkbm--spacing--sm);
+	border-top: 1px solid #dcdcde;
+
+	.form-table {
+		margin-top: 0;
+	}
+}
+
+// 箱のタイトル（コアの h2.hndle は 14px・太さ 600）より目立たないよう、コアの h3（1.3em）の
+// 大きさをやめて一段小さくする。欄のラベル（th、14px・太さ 600）とは、直上の区切り線に付く位置と
+// 左の列に収まらない全幅の配置で区別する。
+.vkbm-service-menu-multilingual__language-title {
+	margin: 0;
+	font-size: var(--vkbm--admin--font-size--md);
+	font-weight: 600;
+	line-height: 1.4;
+}

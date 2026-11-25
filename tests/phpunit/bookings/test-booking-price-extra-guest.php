@@ -19,6 +19,7 @@ use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\My_Bookings_Controller;
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Common\VKBM_Helper;
 use VKBookingManager\Notifications\Booking_Notification_Service;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
@@ -634,6 +635,42 @@ class Booking_Price_Extra_Guest_Test extends WP_UnitTestCase {
 				$this->assertStringContainsString( '3,000', $lines[2], $case['test_condition_name'] . ' / 指名料の金額' );
 				$this->assertStringContainsString( vkbm_get_nomination_fee_label(), $lines[2], $case['test_condition_name'] . ' / 指名料の見出し' );
 			}
+		}
+	}
+
+	/**
+	 * 確認メールの内訳の行: 基本料金に含まれる人数が分かるときは、ツアー料金の行に「（3名まで）」を添える（#1175）。
+	 */
+	public function test_breakdown_lines_tour_fee_label_with_included_guests(): void {
+		$service = new Booking_Notification_Service( new Settings_Repository() );
+		$method  = new ReflectionMethod( Booking_Notification_Service::class, 'build_extra_guest_breakdown_lines' );
+		$method->setAccessible( true );
+		$extra = array(
+			array(
+				'label' => '大人',
+				'price' => 2000,
+				'count' => 1,
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '含まれる人数 3 => 「ツアー料金（3名まで）: ¥8,500」',
+				'included_guests'     => 3,
+				/* translators: 1: number of guests included in the tour fee with unit (e.g. 3 guests), 2: tour fee (the basic price of one tour). */
+				'expected'            => sprintf( __( 'Tour fee (up to %1$s): %2$s', 'vk-booking-manager' ), vkbm_format_guests_count( 3 ), VKBM_Helper::format_currency( 8500 ) ),
+			),
+			array(
+				'test_condition_name' => '含まれる人数 0（過去の予約で値が無い）=> 従来の「ツアー料金: ¥8,500」',
+				'included_guests'     => 0,
+				/* translators: %s: tour fee (the basic price of one tour). */
+				'expected'            => sprintf( __( 'Tour fee: %s', 'vk-booking-manager' ), VKBM_Helper::format_currency( 8500 ) ),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$lines = $method->invoke( $service, 8500, $extra, 0, $case['included_guests'] );
+			$this->assertSame( $case['expected'], $lines[0], $case['test_condition_name'] );
 		}
 	}
 

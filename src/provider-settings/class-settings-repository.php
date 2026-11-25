@@ -262,6 +262,9 @@ Japanese law shall be the governing law for the interpretation of these Terms, a
 					'vk-booking-manager'
 				),
 			'provider_privacy_policy_mode'               => 'none',
+			// プライバシーポリシーのページ（#1168）。固定ページを選んだときは provider_privacy_policy_page_id（0 は未選択）、
+			// 「その他（URL を入力）」のときは provider_privacy_policy_url を使う。両方あるときは ID を優先する。
+			'provider_privacy_policy_page_id'            => 0,
 			'provider_privacy_policy_url'                => '',
 			'provider_privacy_policy_content'            => $is_japanese
 				? $this->get_default_privacy_policy_ja()

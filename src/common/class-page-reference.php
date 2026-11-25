@@ -2,7 +2,7 @@
 /**
  * 固定ページを ID で参照する設定のための共通処理（URL から固定ページ ID を求める・ページの状態を判定する）。
  *
- * 予約ページ（#1050）のほか、固定ページを選ばせる設定を増やすときにそのまま使えるよう、特定の設定に寄せずに置く。
+ * 予約ページ（#1050）・プライバシーポリシー（#1168）のほか、固定ページを選ばせる設定を増やすときにそのまま使えるよう、特定の設定に寄せずに置く。
  *
  * @package VKBookingManager
  */
@@ -13,6 +13,9 @@ namespace VKBookingManager\Common;
 
 use WP_Post;
 use function __;
+use function admin_url;
+use function current_user_can;
+use function get_edit_post_link;
 use function get_permalink;
 use function get_post;
 use function is_numeric;
@@ -154,6 +157,42 @@ class Page_Reference {
 		}
 
 		return self::PROBLEM_NONE === self::get_page_problem( $page_id ) ? $page_id : 0;
+	}
+
+	/**
+	 * 公開中でない固定ページを、今の利用者が自分で直せるときの行き先（URL とラベル）を返す。
+	 *
+	 * 未公開・ゴミ箱のどちらも、最後に公開するところまでできないと直らないため、固定ページの公開権限（publish_pages）を前提にする。
+	 * - 未公開: そのページを編集できるときは、そのページの編集画面
+	 * - ゴミ箱: 固定ページの一覧を開けて（edit_pages）、そのページを戻せる（delete_post）ときは、固定ページのゴミ箱の一覧
+	 * それ以外（削除済み・権限が無い）は null。呼び出し側は、その設定欄での選び直しを案内する。
+	 *
+	 * @param string $problem get_page_problem() の戻り値。
+	 * @param int    $page_id 固定ページ ID。
+	 * @return array{url:string,label:string}|null 行き先の URL とリンクのラベル。直せないときは null。
+	 */
+	public static function get_fix_action( string $problem, int $page_id ): ?array {
+		$can_publish = $page_id > 0 && current_user_can( 'publish_pages' );
+
+		if ( self::PROBLEM_UNPUBLISHED === $problem && $can_publish ) {
+			// そのページを編集できないときは空が返り、選び直しの案内になる。
+			$edit_url = get_edit_post_link( $page_id, 'raw' );
+			if ( is_string( $edit_url ) && '' !== $edit_url ) {
+				return array(
+					'url'   => $edit_url,
+					'label' => __( 'Edit the page', 'vk-booking-manager' ),
+				);
+			}
+		}
+
+		if ( self::PROBLEM_TRASH === $problem && $can_publish && current_user_can( 'edit_pages' ) && current_user_can( 'delete_post', $page_id ) ) {
+			return array(
+				'url'   => admin_url( 'edit.php?post_status=trash&post_type=page' ),
+				'label' => __( 'Open the trash', 'vk-booking-manager' ),
+			);
+		}
+
+		return null;
 	}
 
 	/**

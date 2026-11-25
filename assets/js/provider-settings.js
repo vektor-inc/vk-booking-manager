@@ -386,30 +386,25 @@
 		}
 	}
 
-	// 予約ページ（#1050）: 「その他（URL を入力）」を選んだときだけ URL 欄を見せる。
+	// 固定ページを選ぶ欄（予約ページ #1050・プライバシーポリシー #1168）: 「その他（URL を入力）」を選んだときだけ URL 欄を見せる。
 	// 保存中のページの URL の行と警告は、そのページを選び直したときだけ見せ、見えているものだけを
 	// プルダウンの aria-describedby に並べる（別の選択肢に変えたら隠して参照からも外す）。
-	function initReservationPageSelect() {
-		const select = document.getElementById( 'vkbm-reservation-page-url' );
-		const urlField = document.getElementById(
-			'vkbm-reservation-page-url-field'
-		);
+	function initPageSelectField( ids ) {
+		const select = document.getElementById( ids.select );
+		const urlField = document.getElementById( ids.urlField );
 
 		if ( ! select || ! urlField ) {
 			return;
 		}
 
 		const otherValue = select.dataset.otherValue || 'other';
-		const urlInput = document.getElementById(
-			'vkbm-reservation-page-url-input'
-		);
-		const description = document.getElementById(
-			'vkbm-reservation-page-description'
-		);
-		const savedPageElements = [
-			document.getElementById( 'vkbm-reservation-page-info' ),
-			document.getElementById( 'vkbm-reservation-page-problem' ),
-		].filter( Boolean );
+		const urlInput = document.getElementById( ids.urlInput );
+		const description = document.getElementById( ids.description );
+		const savedPageElements = ids.savedPageElements
+			.map( function ( id ) {
+				return document.getElementById( id );
+			} )
+			.filter( Boolean );
 
 		// 削除済みページでは選択値が空になるため、ページ ID ではなく初期値へ戻ったかで判定する。
 		const initialValue = select.value;
@@ -433,6 +428,32 @@
 					return element.id;
 				} );
 			select.setAttribute( 'aria-describedby', describedBy.join( ' ' ) );
+		} );
+	}
+
+	function initReservationPageSelect() {
+		initPageSelectField( {
+			select: 'vkbm-reservation-page-url',
+			urlField: 'vkbm-reservation-page-url-field',
+			urlInput: 'vkbm-reservation-page-url-input',
+			description: 'vkbm-reservation-page-description',
+			savedPageElements: [
+				'vkbm-reservation-page-info',
+				'vkbm-reservation-page-problem',
+			],
+		} );
+	}
+
+	function initPrivacyPolicyPageSelect() {
+		initPageSelectField( {
+			select: 'vkbm-provider-privacy-policy-page',
+			urlField: 'vkbm-provider-privacy-policy-other-url-field',
+			urlInput: 'vkbm-provider-privacy-policy-url',
+			description: 'vkbm-provider-privacy-policy-page-description',
+			savedPageElements: [
+				'vkbm-provider-privacy-policy-page-info',
+				'vkbm-provider-privacy-policy-page-problem',
+			],
 		} );
 	}
 
@@ -1388,6 +1409,7 @@
 		initIndustryPreset();
 		initServiceMenuDetailDisplayModeNotice();
 		initReservationPageSelect();
+		initPrivacyPolicyPageSelect();
 		initUnsetTimeMinute();
 		initUnsavedChangesGuard();
 	} );

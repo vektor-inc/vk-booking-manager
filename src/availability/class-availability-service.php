@@ -1476,7 +1476,11 @@ class Availability_Service {
 		sort( $sorted_tag_ids );
 		$tag_hash = md5( implode( '-', $sorted_tag_ids ) );
 
-		return sprintf( 'vkbm_%s_g%d_bg%d_%d_%s_%s_p%d_t%s', $prefix, $generation, $date_generation, $menu_id, $staff_hash, $date_key, $is_staff_preferred ? 1 : 0, $tag_hash );
+		// #1186: 結果に言語で変わる文字列（日別枠の指名なしの呼び方・月次カレンダーの注記）が入るため、言語ごとに分ける。
+		// 予約画面の REST はページの言語へ切り替えて処理する（Rest_Locale）ため、分けないと別の言語のページの表記が混ざる。
+		$locale = sanitize_key( determine_locale() );
+
+		return sprintf( 'vkbm_%s_g%d_bg%d_%d_%s_%s_p%d_t%s_l%s', $prefix, $generation, $date_generation, $menu_id, $staff_hash, $date_key, $is_staff_preferred ? 1 : 0, $tag_hash, $locale );
 	}
 
 	/**
@@ -2520,7 +2524,7 @@ class Availability_Service {
 	 * サービスメニューの最小催行人数（グループ開催型）を取得する。
 	 *
 	 * 同じ時間枠の合計予約人数がこの値に達したら開催確定とみなす表示用の値です。
-	 * 0 は「制約なし（催行判定なし）」で、未設定・Free版・指名ON・貸し切り予約ON・複数人予約OFF時は 0 を返します。
+	 * 0 は「制約なし（催行判定なし）」で、未設定・Free版・指名ON・貸し切り予約ON・複数人予約OFF・1室1泊あたり時は 0 を返します。
 	 * 最大同時予約人数（get_menu_max_capacity）を上限としてクランプします。
 	 *
 	 * #392: 指名を使うメニューは常に1枠1組（貸切）のため、複数の別々の予約が相乗りして
@@ -2532,6 +2536,12 @@ class Availability_Service {
 	 * @return int 最小催行人数（0=制約なし）。
 	 */
 	public function get_menu_min_capacity( WP_Post $menu_post ): int {
+		// #1109: 1室1泊あたりのプランは人数で受付を制限しない（get_menu_nomination_min_guests() と同じ）。
+		// 保存値が残っていても、メニューカードに最少催行人数を出して受付と食い違わないよう 0 にする。
+		if ( Service_Menu_Post_Type::is_night_price_per_room( $menu_post->ID ) ) {
+			return 0;
+		}
+
 		// 指名を使うメニューは1枠1組（貸切）が確定しており、催行判定の概念が無いため常に0。
 		if ( Staff_Editor::is_nomination_enabled_for_menu( $menu_post->ID ) ) {
 			return 0;
@@ -2836,10 +2846,12 @@ class Availability_Service {
 		$plan_inputs = Lodging_Price::get_plan_inputs( $menu->ID );
 
 		// 泊ごとの区分は客室によらないため、客室の追加料金なしで1回だけ求める（客室一覧の上に出す区分の表示用）。
+		$stay_price = Lodging_Booking::calculate_price( $menu->ID, 0, $check_in_date, $nights, $guests, $guest_tiers, $plan_inputs );
 		$stay_rates = Lodging_Price_Display::build_stay_display(
 			$plan_inputs,
 			$guest_tiers,
-			Lodging_Booking::calculate_price( $menu->ID, 0, $check_in_date, $nights, $guests, $guest_tiers, $plan_inputs )['night_breakdown']
+			$stay_price['night_breakdown'],
+			$stay_price['night_extra_guests']
 		);
 
 		$rooms = array();
@@ -2871,7 +2883,7 @@ class Availability_Service {
 			'latest_check_in_time' => Service_Menu_Post_Type::get_latest_check_in_time( $menu->ID ),
 			'check_out_time'       => $check_out_time,
 			'rooms'                => $rooms,
-			// 休前日・特定日の料金がある、または1名あたりで予約者区分があるプランで true（キー名は #738 当時のまま）。false のときは画面に区分も内訳も出さない。
+			// 休前日・特定日の料金がある、1名あたりで予約者区分がある、または1室あたりで追加料金を使うプランで true（キー名は #738 当時のまま）。false のときは画面に区分も内訳も出さない。
 			'rate_tiers_enabled'   => $stay_rates['enabled'],
 			'night_rates'          => $stay_rates['night_rates'],
 			'meta'                 => array(

@@ -19,6 +19,45 @@
 	gap: 1rem;
 }
 
+// 区分ごとの人数欄
+// -----------------------------------------------------------------------------
+
+// 宿泊の人数欄は箱が無く全幅を使うため、区分の行を右端に置くと見出し・指示文から横に離れる。
+// 区分名と入力欄を中身の幅の列に並べて左に置き、区分名は入力欄の直前に寄せる（入力欄の左端は行ごとに揃う）。
+// 見出し・指示文・人数範囲の文・警告は全列にまたがらせる。最後の列を 1fr にして、長い文が区分名・入力欄の列を広げないようにする。
+// 列で揃えるため、行の要素は display: contents にして、区分名と入力欄を直接この格子に並べる。
+.vkbm-lodging > .vkbm-plan-summary__guest-tiers {
+	display: grid;
+	grid-template-columns: max-content max-content 1fr;
+	align-items: center;
+	gap: 0.5rem 0.25rem;
+	// 見出しの行の高さの余分が格子の中の間隔を広げるため、親の gap（1rem）だけでは次のまとまり（料金の補足文・カレンダー）との区切りが
+	// 格子の中の間隔とほぼ同じになる。警告の有無にかかわらず、下に足して区切りを格子の中より明確に広くする。
+	margin-bottom: 0.5rem;
+
+	> * {
+		grid-column: 1 / -1;
+	}
+
+	> .vkbm-plan-summary__guest-tier {
+		display: contents;
+
+		> .vkbm-plan-summary__guest-tier-label {
+			grid-column: 1;
+			justify-self: end;
+		}
+
+		> .vkbm-plan-summary__guests-select {
+			grid-column: 2;
+		}
+	}
+
+	// 警告は人数範囲の文の直後（格子の最後）に出る。行の間隔 0.5rem のままだと、人数範囲の文の行間より近くなるため、上に足して行間以上に離す。
+	> .vkbm-plan-summary__hint--warning {
+		margin-top: 0.25rem;
+	}
+}
+
 // 引き継いだ日程で予約できなかった案内が無いときは、領域（読み上げ用）だけ残して間隔を作らない。
 .vkbm-lodging__carry-notice:empty {
 	position: absolute;
@@ -614,6 +653,12 @@
 .vkbm-lodging__night-guest-label {
 	min-width: 0;
 	overflow-wrap: anywhere;
+}
+
+// 1室あたりの追加料金を使うプランの「基本料金（3名まで）」の行は単価・人数の列を持たないため、見出しを金額列の手前までまたがせる。
+// 狭い箱で見出しを 1 段目に広げる指定（コンテナクエリ内の .vkbm-lodging__night-guest-label）より詳細度を高くして、狭い箱でも見出しと金額を 1 段に並べる。
+.vkbm-lodging__night-guest--base > .vkbm-lodging__night-guest-label {
+	grid-column: 1 / -2;
 }
 
 // 単価と人数は、広いときは親の列にそのまま載せ、狭いときは 1 つの塊（flex）にして小計の左に置く。

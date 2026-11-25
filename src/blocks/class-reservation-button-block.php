@@ -17,6 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Capabilities\Capabilities;
+use VKBookingManager\Multilingual\Service_Menu_Texts;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
 use WP_Block;
@@ -147,7 +148,7 @@ class Reservation_Button_Block {
 				// 予約ボタンブロックは従来どおり小さいサイズで表示する。
 				'size'              => Reservation_Button_Renderer::SIZE_SM,
 				// アクセシブルネームに対象プラン名を含める。
-				'accessible_suffix' => (string) get_the_title( $post ),
+				'accessible_suffix' => Service_Menu_Texts::get_title( $post ),
 			)
 		);
 

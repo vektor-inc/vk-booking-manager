@@ -15,6 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 use VKBookingManager\Common\Booking_Custom_Fields;
 use VKBookingManager\Common\Page_Reference;
+use VKBookingManager\Common\Privacy_Policy_Url;
 use VKBookingManager\Common\Reservation_Page_Url;
 use VKBookingManager\Assets\Common_Styles;
 use VKBookingManager\Bookings\Customer_Booking_Limit;
@@ -24,6 +25,8 @@ use VKBookingManager\Common\Nomination_Min_Guests_Message;
 use VKBookingManager\Common\Lodging_Rate;
 use VKBookingManager\Common\Mail_From;
 use VKBookingManager\Common\Weekday_Rule;
+use VKBookingManager\Multilingual\Multilingual_Labels;
+use VKBookingManager\Multilingual\Multilingual_Settings_Panel;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Industry_Presets;
 use VKBookingManager\ProviderSettings\Payment_Instructions;
@@ -33,6 +36,7 @@ use VKBookingManager\ProviderSettings\Settings_Service;
 use VKBookingManager\Shifts\Shift_Editor;
 use VKBookingManager\Staff\Staff_Editor;
 use VKBookingManager\Uninstall\Uninstaller;
+use WP_Post;
 use function vkbm_get_default_resource_menu_icon;
 use function vkbm_get_resource_label_singular;
 use function vkbm_sanitize_resource_menu_icon;
@@ -268,6 +272,15 @@ class Provider_Settings_Page {
 			$delete_license_key = ! empty( $payload['delete_license_key'] );
 		}
 		unset( $payload['license_key'], $payload['delete_license_key'] );
+
+		// 「多言語設定」タブの欄が送られたときだけ、言語ごとの呼び方を保存し直す（別の option に保存するため、基本の値の入力エラーとは関係なく保存する）。
+		Multilingual_Labels::save_from_request(
+			array(
+				Multilingual_Labels::SUBMITTED_KEY => isset( $_POST[ Multilingual_Labels::SUBMITTED_KEY ] ) ? sanitize_text_field( wp_unslash( $_POST[ Multilingual_Labels::SUBMITTED_KEY ] ) ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce checked above.
+				Multilingual_Labels::INPUT_NAME    => isset( $_POST[ Multilingual_Labels::INPUT_NAME ] ) && is_array( $_POST[ Multilingual_Labels::INPUT_NAME ] ) ? wp_unslash( $_POST[ Multilingual_Labels::INPUT_NAME ] ) : array(), // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Nonce checked above. Sanitized inside Multilingual_Labels::sanitize_input().
+			)
+		);
+
 		$result       = $this->settings_service->save_settings( $payload );
 		$saved        = true;
 		$field_errors = array();
@@ -342,7 +355,7 @@ class Provider_Settings_Page {
 		}
 
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Preserve UI state.
-		$allowed_tabs = array( 'store', 'system', 'notation', 'attendees', 'booking-fields', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		$allowed_tabs = array( 'store', 'system', 'notation', 'multilingual', 'attendees', 'booking-fields', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $this->show_integration_tab() ) {
 			$allowed_tabs[] = 'integration';
 		}
@@ -453,6 +466,26 @@ class Provider_Settings_Page {
 				'removed'  => __( 'Deleted %s.', 'vk-booking-manager' ),
 			)
 		);
+		// 「多言語設定」タブ（#1186）の言語の追加・削除。削除の確認には共通の確認ダイアログを使う。
+		wp_enqueue_script( 'vkbm-multilingual-settings', VKBM_PLUGIN_DIR_URL . 'assets/js/multilingual-settings.js', array( 'vkbm-admin-guard-dialog' ), defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0', true );
+		wp_localize_script(
+			'vkbm-multilingual-settings',
+			'vkbmMultilingualSettings',
+			array(
+				/* translators: %s: Language name. */
+				'languageName' => __( '“%s”', 'vk-booking-manager' ),
+				/* translators: %s: Language name in quotation marks. */
+				'added'        => __( 'Added %s.', 'vk-booking-manager' ),
+				/* translators: %s: Language name in quotation marks. */
+				'removed'      => __( 'Deleted %s.', 'vk-booking-manager' ),
+				'dialogTitle'  => __( 'Delete language', 'vk-booking-manager' ),
+				/* translators: %s: Language name in quotation marks. */
+				'dialogBody'   => __( 'Delete %s and any terms or booking guidance text entered for this language?', 'vk-booking-manager' ),
+				'dialogNote'   => __( 'This is not final until you click "Save changes".', 'vk-booking-manager' ),
+				'confirm'      => _x( 'Delete', 'multilingual language confirm button', 'vk-booking-manager' ),
+				'cancel'       => __( 'Cancel', 'vk-booking-manager' ),
+			)
+		);
 		wp_enqueue_script( 'vkbm-booking-auto-anonymize-settings', VKBM_PLUGIN_DIR_URL . 'assets/js/booking-auto-anonymize-settings.js', array( 'vkbm-admin-guard-dialog' ), defined( 'VKBM_VERSION' ) ? VKBM_VERSION : '1.0.0', true );
 		wp_localize_script(
 			'vkbm-booking-auto-anonymize-settings',
@@ -507,7 +540,7 @@ class Provider_Settings_Page {
 					'industryChangeWithAppliedTemplate' => __( '%1$s selected. Automatically configured items: %2$d, items updated to default value: %3$d.', 'vk-booking-manager' ),
 					'enabledLabel'                      => __( 'Enabled', 'vk-booking-manager' ),
 					'disabledLabel'                     => __( 'Disabled', 'vk-booking-manager' ),
-					'defaultGuestsUnitLabel'            => vkbm_get_guests_unit_label(),
+					'defaultGuestsUnitLabel'            => vkbm_get_base_guests_unit_label(),
 				)
 			);
 		}
@@ -931,7 +964,7 @@ class Provider_Settings_Page {
 		if ( array_key_exists( 'guests_unit_label', $settings ) && null !== $settings['guests_unit_label'] ) {
 			$guests_unit_label = (string) $settings['guests_unit_label'];
 		} else {
-			$guests_unit_label = vkbm_get_guests_unit_label();
+			$guests_unit_label = vkbm_get_base_guests_unit_label();
 		}
 
 		$locale                     = function_exists( 'get_locale' ) ? (string) get_locale() : '';
@@ -958,7 +991,6 @@ class Provider_Settings_Page {
 		$cancellation_policy               = isset( $settings['provider_cancellation_policy'] ) ? (string) $settings['provider_cancellation_policy'] : '';
 		$terms_of_service                  = isset( $settings['provider_terms_of_service'] ) ? (string) $settings['provider_terms_of_service'] : '';
 		$privacy_policy_mode               = isset( $settings['provider_privacy_policy_mode'] ) ? sanitize_key( (string) $settings['provider_privacy_policy_mode'] ) : 'none';
-		$privacy_policy_url                = isset( $settings['provider_privacy_policy_url'] ) ? (string) $settings['provider_privacy_policy_url'] : '';
 		$privacy_policy_content            = isset( $settings['provider_privacy_policy_content'] ) ? (string) $settings['provider_privacy_policy_content'] : '';
 		$payment_method                    = isset( $settings['provider_payment_method'] ) ? (string) $settings['provider_payment_method'] : '';
 		if ( ! in_array( $privacy_policy_mode, array( 'none', 'url', 'content' ), true ) ) {
@@ -1026,7 +1058,7 @@ class Provider_Settings_Page {
 			$reservation_menu_list_display_mode = 'card';
 		}
 		$active_tab   = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- UI state.
-		$allowed_tabs = array( 'store', 'system', 'notation', 'attendees', 'booking-fields', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
+		$allowed_tabs = array( 'store', 'system', 'notation', 'multilingual', 'attendees', 'booking-fields', 'email', 'registration', 'consent', 'design', 'advanced', 'faq' );
 		if ( $show_integration_tab ) {
 			$allowed_tabs[] = 'integration';
 		}
@@ -1092,6 +1124,17 @@ class Provider_Settings_Page {
 			<?php elseif ( $is_core_tab ) : ?>
 			<form class="vkbm-provider-settings__form" method="post" action="">
 				<?php wp_nonce_field( self::NONCE_ACTION, self::NONCE_NAME ); ?>
+				<?php if ( 'notation' === $active_tab ) : ?>
+					<p class="vkbm-provider-settings__tab-lead">
+						<?php
+						printf(
+							/* translators: %s: link to the "Multilingual settings" tab. */
+							esc_html__( 'Terms for pages in other languages, such as English, can be registered in "%s".', 'vk-booking-manager' ),
+							'<a href="' . esc_url( add_query_arg( 'tab', 'multilingual', $base_url ) ) . '">' . esc_html__( 'Multilingual settings', 'vk-booking-manager' ) . '</a>'
+						);
+						?>
+					</p>
+				<?php endif; ?>
 				<table class="form-table" role="presentation">
 					<tbody>
 						<tr class="vkbm-provider-settings__tab-store vkbm-industry-preset-row">
@@ -2450,7 +2493,7 @@ class Provider_Settings_Page {
 										<?php esc_html_e( 'please select', 'vk-booking-manager' ); ?>
 									</option>
 									<option value="url" <?php selected( $privacy_policy_mode, 'url' ); ?>>
-										<?php esc_html_e( 'Specify the URL of the privacy policy page', 'vk-booking-manager' ); ?>
+										<?php esc_html_e( 'Specify the privacy policy page', 'vk-booking-manager' ); ?>
 									</option>
 									<option value="content" <?php selected( $privacy_policy_mode, 'content' ); ?>>
 										<?php esc_html_e( 'Specify from this page', 'vk-booking-manager' ); ?>
@@ -2464,16 +2507,7 @@ class Provider_Settings_Page {
 									class="vkbm-provider-settings__privacy-policy-field"
 									<?php echo 'url' === $privacy_policy_mode ? '' : 'hidden'; ?>
 								>
-									<label for="vkbm-provider-privacy-policy-url" class="vkbm-form__label--block">
-										<?php esc_html_e( 'Privacy policy page URL', 'vk-booking-manager' ); ?>
-									</label>
-									<input
-										type="url"
-										class="regular-text"
-										id="vkbm-provider-privacy-policy-url"
-										name="vkbm_provider_settings[provider_privacy_policy_url]"
-										value="<?php echo esc_attr( $privacy_policy_url ); ?>"
-									/>
+									<?php $this->render_privacy_policy_page_field( $settings ); ?>
 								</div>
 								<div
 									id="vkbm-provider-privacy-policy-content-field"
@@ -3600,6 +3634,19 @@ class Provider_Settings_Page {
 					</tbody>
 				</table>
 
+				<?php if ( 'multilingual' === $active_tab ) : ?>
+					<?php
+					// #1186: 言語ごとの呼び方。欄はこのタブを開いたときだけ出し、別のタブの保存では保存済みの値を変えない（Multilingual_Labels::save_from_request()）。
+					$multilingual_panel = new Multilingual_Settings_Panel(
+						$industry_hidden_fields,
+						Staff_Editor::is_nomination_enabled(),
+						Industry_Presets::supports( 'lodging' ),
+						add_query_arg( 'tab', 'notation', $base_url )
+					);
+					$multilingual_panel->render();
+					?>
+				<?php endif; ?>
+
 				<?php
 				// サービスメニューの表示方法は「システム」、通貨記号・税表記は「表記設定」のタブだけで描画される。
 				// 保存時、送信されなかった項目は初期値で埋められるため、ほかのタブ（ライセンスタブを含む）で
@@ -3720,26 +3767,7 @@ class Provider_Settings_Page {
 			$selected_value = '';
 		}
 
-		// 公開中の固定ページを階層順に並べる（字下げは WordPress 本体の Walker_PageDropdown に任せる）。
-		// hierarchical を切るのは、親が非公開・下書き・ゴミ箱の公開ページも一覧に出すため（既定だと親をたどれるページしか返らない）。
-		$published_pages = get_pages(
-			array(
-				'post_status'  => 'publish',
-				'sort_column'  => 'menu_order,post_title',
-				'hierarchical' => 0,
-			)
-		);
-		$published_pages = is_array( $published_pages ) ? $published_pages : array();
-		$page_options    = array() === $published_pages ? '' : walk_page_dropdown_tree(
-			$published_pages,
-			0,
-			array(
-				'selected'    => null !== $selected_page ? $page_id : 0,
-				'value_field' => 'ID',
-			)
-		);
-		// 選択中のページが一覧に無いとき（公開中でない、または一覧の取得から漏れた）は、必ず選択肢として足す。
-		$selected_in_list = null !== $selected_page && in_array( $page_id, array_map( 'intval', wp_list_pluck( $published_pages, 'ID' ) ), true );
+		$published_pages = $this->get_selectable_pages();
 
 		// 読み上げの結び付け: 見えているものだけを並べる。
 		$select_describedby = array_filter(
@@ -3763,37 +3791,12 @@ class Provider_Settings_Page {
 			aria-describedby="<?php echo esc_attr( implode( ' ', $select_describedby ) ); ?>"
 		>
 			<option value=""<?php selected( '' === $selected_value ); ?>><?php esc_html_e( 'please select', 'vk-booking-manager' ); ?></option>
-			<?php echo $page_options; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Walker_PageDropdown がエスケープ済み。 ?>
-			<?php if ( null !== $selected_page && ! $selected_in_list ) : ?>
-				<option value="<?php echo esc_attr( (string) $page_id ); ?>" selected="selected">
-					<?php
-					// 公開中でないページには状態を添える（公開中なら名前だけ）。
-					echo esc_html(
-						'publish' === $selected_page->post_status
-							? Page_Reference::get_page_label( $selected_page )
-							: sprintf(
-								/* translators: 1: page title, 2: post status label (Draft, Trash, etc.) */
-								__( '%1$s (%2$s)', 'vk-booking-manager' ),
-								Page_Reference::get_page_label( $selected_page ),
-								$this->get_reservation_page_status_label( (string) $selected_page->post_status )
-							)
-					);
-					?>
-				</option>
-			<?php endif; ?>
+			<?php $this->render_page_select_options( $published_pages, $selected_page ); ?>
 			<option value="other"<?php selected( 'other' === $selected_value ); ?>><?php esc_html_e( 'Other (enter URL)', 'vk-booking-manager' ); ?></option>
 		</select>
 		<?php if ( $has_page_info ) : ?>
-			<?php $selected_page_url = (string) get_permalink( $selected_page ); ?>
 			<p class="description vkbm-reservation-page-info" id="vkbm-reservation-page-info" data-page-id="<?php echo esc_attr( (string) $page_id ); ?>">
-				<?php
-				// 表示する文字だけデコードして、日本語スラッグも読める形にする（リンク先はそのまま）。
-				printf(
-					/* translators: %s: link to the page selected as the reservation page. */
-					esc_html__( 'URL: %s', 'vk-booking-manager' ),
-					'<a href="' . esc_url( $selected_page_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( urldecode( $selected_page_url ) ) . '<span class="screen-reader-text"> ' . esc_html__( '(opens in a new tab)', 'vk-booking-manager' ) . '</span></a>'
-				);
-				?>
+				<?php $this->render_page_url_line( $selected_page ); ?>
 			</p>
 		<?php endif; ?>
 		<?php if ( null !== $page_problem ) : ?>
@@ -3847,14 +3850,199 @@ class Provider_Settings_Page {
 	}
 
 	/**
-	 * 予約ページのプルダウンで、公開中でない選択中のページに添える状態のラベルを返す。
+	 * 「プライバシーポリシーのページを指定」の欄（固定ページのプルダウン＋「その他（URL を入力）」の URL 欄）を描画する（#1168）。
+	 *
+	 * 予約ページの欄（render_reservation_page_field()）と同じく「プルダウン →（選択中のページの URL の行／状態の警告）→ 説明文 →（その他の URL 欄）」
+	 * の順に並べ、選択肢も同じ作り方にする（選択中のページは公開状態にかかわらず残し、完全に削除されたページは「選択してください」に戻す）。
+	 * 外部サイトのプライバシーポリシーを指定する人もいるため、「その他」の URL がこのサイトのものかは判定しない（旧ドメインの警告も出さない）。
+	 * 「その他」の URL 欄は hidden で隠すだけで送信するため、固定ページを選んでいても URL の設定は残る（旧バージョンに戻しても動く）。
+	 * 隠れた URL 欄に相対パスが残っているとブラウザの入力検証で保存が止まるため、値は絶対 URL にして出す。
+	 * 見えている説明文・URL の行・警告だけを aria-describedby に並べる（切り替え時の追従は assets/js/provider-settings.js）。
+	 *
+	 * @param array<string,mixed> $settings 表示する設定（入力エラー時は送信値で上書き済み）。
+	 * @return void
+	 */
+	private function render_privacy_policy_page_field( array $settings ): void {
+		$page_id       = is_numeric( $settings['provider_privacy_policy_page_id'] ?? null ) ? (int) $settings['provider_privacy_policy_page_id'] : 0;
+		$url           = vkbm_normalize_reservation_page_url( (string) ( $settings['provider_privacy_policy_url'] ?? '' ) );
+		$selected_page = Page_Reference::get_page( $page_id );
+		$problem       = Privacy_Policy_Url::get_problem( $settings );
+		$has_page_info = null !== $selected_page && null === $problem;
+
+		// 選択状態: 存在する固定ページ／「その他」（URL だけが入っている）／未選択。
+		if ( null !== $selected_page ) {
+			$selected_value = (string) $page_id;
+		} elseif ( 0 === $page_id && '' !== $url ) {
+			$selected_value = 'other';
+		} else {
+			$selected_value = '';
+		}
+
+		$published_pages = $this->get_selectable_pages();
+
+		// 読み上げの結び付け: 見えているものだけを並べる。
+		$select_describedby = array_filter(
+			array(
+				$has_page_info ? 'vkbm-provider-privacy-policy-page-info' : '',
+				null !== $problem ? 'vkbm-provider-privacy-policy-page-problem' : '',
+				'vkbm-provider-privacy-policy-page-description',
+			)
+		);
+		?>
+		<label for="vkbm-provider-privacy-policy-page" class="vkbm-form__label--block">
+			<?php esc_html_e( 'Privacy policy page', 'vk-booking-manager' ); ?>
+		</label>
+		<select
+			id="vkbm-provider-privacy-policy-page"
+			name="vkbm_provider_settings[provider_privacy_policy_page_id]"
+			data-other-value="other"
+			aria-describedby="<?php echo esc_attr( implode( ' ', $select_describedby ) ); ?>"
+		>
+			<option value=""<?php selected( '' === $selected_value ); ?>><?php esc_html_e( 'please select', 'vk-booking-manager' ); ?></option>
+			<?php $this->render_page_select_options( $published_pages, $selected_page ); ?>
+			<option value="other"<?php selected( 'other' === $selected_value ); ?>><?php esc_html_e( 'Other (enter URL)', 'vk-booking-manager' ); ?></option>
+		</select>
+		<?php if ( $has_page_info ) : ?>
+			<p class="description vkbm-privacy-policy-page-info" id="vkbm-provider-privacy-policy-page-info" data-page-id="<?php echo esc_attr( (string) $page_id ); ?>">
+				<?php $this->render_page_url_line( $selected_page ); ?>
+			</p>
+		<?php endif; ?>
+		<?php if ( null !== $problem ) : ?>
+			<?php $problem_action = Privacy_Policy_Url::get_problem_action( $problem ); ?>
+			<div class="notice notice-warning inline vkbm-privacy-policy-page-warning" id="vkbm-provider-privacy-policy-page-problem" data-page-id="<?php echo esc_attr( (string) $page_id ); ?>">
+				<p>
+					<?php echo wp_kses( Privacy_Policy_Url::build_problem_message( $problem ), array() ); ?>
+					<?php if ( ! $problem_action['is_settings'] ) : ?>
+						<?php // 選び直しはこの欄で行うため、リンクを出すのは別の画面へ行く行動（公開する・ゴミ箱から戻す）のときだけ。 ?>
+						<a class="vkbm-link-nowrap" href="<?php echo esc_url( $problem_action['url'] ); ?>"><?php echo esc_html( $problem_action['label'] ); ?></a>
+					<?php endif; ?>
+				</p>
+			</div>
+		<?php endif; ?>
+		<p class="description" id="vkbm-provider-privacy-policy-page-description">
+			<?php esc_html_e( 'You can select from the published pages.', 'vk-booking-manager' ); ?>
+			<?php esc_html_e( 'To use something other than a page, such as another site or a post, select "Other (enter URL)".', 'vk-booking-manager' ); ?>
+			<?php // 固定ページを作れない利用者（業務オーナーなど）には、押すと権限エラーになるリンクを出さない。 ?>
+			<?php if ( array() === $published_pages && current_user_can( 'edit_pages' ) ) : ?>
+				<a class="vkbm-link-nowrap" href="<?php echo esc_url( admin_url( 'post-new.php?post_type=page' ) ); ?>"><?php esc_html_e( 'Add a page', 'vk-booking-manager' ); ?></a>
+			<?php endif; ?>
+		</p>
+		<div
+			id="vkbm-provider-privacy-policy-other-url-field"
+			class="vkbm-provider-settings__privacy-policy-field"
+			<?php echo 'other' === $selected_value ? '' : 'hidden'; ?>
+		>
+			<label for="vkbm-provider-privacy-policy-url" class="vkbm-form__label--block">
+				<?php esc_html_e( 'Privacy policy page URL', 'vk-booking-manager' ); ?>
+			</label>
+			<input
+				type="url"
+				class="regular-text"
+				id="vkbm-provider-privacy-policy-url"
+				name="vkbm_provider_settings[provider_privacy_policy_url]"
+				value="<?php echo esc_attr( $url ); ?>"
+				placeholder="https://"
+				aria-describedby="vkbm-provider-privacy-policy-url-description"
+			/>
+			<p class="description" id="vkbm-provider-privacy-policy-url-description">
+				<?php esc_html_e( 'Enter the URL of the privacy policy page.', 'vk-booking-manager' ); ?>
+				<?php esc_html_e( 'If it is a page of this site, you can also select it from the list above.', 'vk-booking-manager' ); ?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * 固定ページを選ぶプルダウンに並べる、公開中の固定ページを返す。
+	 *
+	 * hierarchical を切るのは、親が非公開・下書き・ゴミ箱の公開ページも一覧に出すため（既定だと親をたどれるページしか返らない）。
+	 *
+	 * @return WP_Post[] 公開中の固定ページ（並び順・タイトル順）。
+	 */
+	private function get_selectable_pages(): array {
+		$published_pages = get_pages(
+			array(
+				'post_status'  => 'publish',
+				'sort_column'  => 'menu_order,post_title',
+				'hierarchical' => 0,
+			)
+		);
+
+		return is_array( $published_pages ) ? $published_pages : array();
+	}
+
+	/**
+	 * 固定ページを選ぶプルダウンの、固定ページの選択肢を出力する（予約ページ・プライバシーポリシーの欄で共通）。
+	 *
+	 * 公開中の固定ページを階層順に並べる（字下げは WordPress 本体の Walker_PageDropdown に任せる）。
+	 * 選択中のページが一覧に無いとき（公開中でない、または一覧の取得から漏れた）は、必ず選択肢として足す
+	 * （一覧から消えると、他の項目を保存しただけで選択が外れるため）。公開中でないページには状態を添える。
+	 *
+	 * @param WP_Post[]    $published_pages get_selectable_pages() の戻り値。
+	 * @param WP_Post|null $selected_page   選択中の固定ページ（無ければ null）。
+	 * @return void
+	 */
+	private function render_page_select_options( array $published_pages, ?WP_Post $selected_page ): void {
+		$selected_page_id = null !== $selected_page ? (int) $selected_page->ID : 0;
+		if ( array() !== $published_pages ) {
+			echo walk_page_dropdown_tree( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Walker_PageDropdown がエスケープ済み。
+				$published_pages,
+				0,
+				array(
+					'selected'    => $selected_page_id,
+					'value_field' => 'ID',
+				)
+			);
+		}
+
+		if ( null === $selected_page || in_array( $selected_page_id, array_map( 'intval', wp_list_pluck( $published_pages, 'ID' ) ), true ) ) {
+			return;
+		}
+		?>
+		<option value="<?php echo esc_attr( (string) $selected_page_id ); ?>" selected="selected">
+			<?php
+			// 公開中でないページには状態を添える（公開中なら名前だけ）。
+			echo esc_html(
+				'publish' === $selected_page->post_status
+					? Page_Reference::get_page_label( $selected_page )
+					: sprintf(
+						/* translators: 1: page title, 2: post status label (Draft, Trash, etc.) */
+						__( '%1$s (%2$s)', 'vk-booking-manager' ),
+						Page_Reference::get_page_label( $selected_page ),
+						$this->get_page_status_label( (string) $selected_page->post_status )
+					)
+			);
+			?>
+		</option>
+		<?php
+	}
+
+	/**
+	 * 選択中の固定ページの URL の行（新しいタブで開くリンク）の中身を出力する。
+	 *
+	 * 表示する文字だけデコードして、日本語スラッグも読める形にする（リンク先はそのまま）。
+	 *
+	 * @param WP_Post $page 選択中の固定ページ（公開中）。
+	 * @return void
+	 */
+	private function render_page_url_line( WP_Post $page ): void {
+		$page_url = (string) get_permalink( $page );
+		printf(
+			/* translators: %s: link to the selected page. */
+			esc_html__( 'URL: %s', 'vk-booking-manager' ),
+			'<a href="' . esc_url( $page_url ) . '" target="_blank" rel="noopener noreferrer">' . esc_html( urldecode( $page_url ) ) . '<span class="screen-reader-text"> ' . esc_html__( '(opens in a new tab)', 'vk-booking-manager' ) . '</span></a>'
+		);
+	}
+
+	/**
+	 * 固定ページのプルダウンで、公開中でない選択中のページに添える状態のラベルを返す。
 	 *
 	 * WordPress 本体の「予約済み」（future）は予約プラグインの「予約」と紛れるため、「公開予定」にする。
 	 *
 	 * @param string $status 投稿ステータス。
 	 * @return string 状態のラベル。
 	 */
-	private function get_reservation_page_status_label( string $status ): string {
+	private function get_page_status_label( string $status ): string {
 		switch ( $status ) {
 			case 'draft':
 				return __( 'Draft', 'vk-booking-manager' );
@@ -3890,23 +4078,24 @@ class Provider_Settings_Page {
 	}
 
 	/**
-	 * 入力エラー時の再表示用に、送信された予約ページの固定ページ ID を保存時と同じ条件で復元する。
+	 * 入力エラー時の再表示用に、送信された固定ページ ID（予約ページ・プライバシーポリシー）を保存時と同じ条件で復元する。
 	 *
 	 * 保存時（Settings_Service::save_settings()）と同じく、新しく選べるのは公開中の固定ページだけで、
 	 * 今保存されている ID はそのまま保つ。数値以外（「その他」の other・未選択の空文字）は 0。
 	 *
 	 * @param array<string,mixed> $input 送信値。
+	 * @param string              $key   固定ページ ID の設定キー（reservation_page_id / provider_privacy_policy_page_id）。
 	 * @return int 復元する固定ページ ID。
 	 */
-	private function restore_reservation_page_id( array $input ): int {
-		$page_id = is_numeric( $input['reservation_page_id'] ?? null ) ? (int) $input['reservation_page_id'] : 0;
+	private function restore_selected_page_id( array $input, string $key ): int {
+		$page_id = is_numeric( $input[ $key ] ?? null ) ? (int) $input[ $key ] : 0;
 		if ( $page_id <= 0 ) {
 			return 0;
 		}
 
 		$current = $this->settings_service->get_settings();
 
-		return Page_Reference::restrict_to_selectable( $page_id, (int) ( $current['reservation_page_id'] ?? 0 ) );
+		return Page_Reference::restrict_to_selectable( $page_id, (int) ( $current[ $key ] ?? 0 ) );
 	}
 
 	/**
@@ -4397,7 +4586,8 @@ class Provider_Settings_Page {
 		$output['provider_booking_cancel_deadline_hours']         = absint( $input['provider_booking_cancel_deadline_hours'] ?? 24 );
 		$output['provider_website_url']                           = sanitize_text_field( $input['provider_website_url'] ?? '' );
 		$output['reservation_page_url']                           = $this->restore_reservation_page_url( $input );
-		$output['reservation_page_id']                            = $this->restore_reservation_page_id( $input );
+		$output['reservation_page_id']                            = $this->restore_selected_page_id( $input, 'reservation_page_id' );
+		$output['provider_privacy_policy_page_id']                = $this->restore_selected_page_id( $input, 'provider_privacy_policy_page_id' );
 		$output['reservation_show_menu_search']                   = ! empty( $input['reservation_show_menu_search'] );
 		$output['reservation_show_menu_list']                     = ! empty( $input['reservation_show_menu_list'] );
 		$output['reservation_menu_list_image_aspect_ratio']       = Settings_Sanitizer::resolve_reservation_menu_list_image_aspect_ratio( $input );
@@ -5239,7 +5429,7 @@ class Provider_Settings_Page {
 						name="<?php echo esc_attr( $name_base ); ?>[label]"
 						value="<?php echo esc_attr( $value['label'] ); ?>"
 						maxlength="<?php echo esc_attr( (string) Booking_Custom_Fields::LABEL_MAX_LENGTH ); ?>"
-						placeholder="<?php esc_attr_e( 'e.g. Dinner course', 'vk-booking-manager' ); ?>"
+						placeholder="<?php esc_attr_e( 'e.g. Age', 'vk-booking-manager' ); ?>"
 						<?php echo '' !== $error && 'label' === $error_field ? 'aria-invalid="true" aria-describedby="' . esc_attr( $error_id ) . '"' : ''; ?>
 					/>
 					<?php if ( '' !== $error && 'label' === $error_field ) : ?>

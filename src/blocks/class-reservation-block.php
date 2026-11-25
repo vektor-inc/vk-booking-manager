@@ -385,6 +385,8 @@ class Reservation_Block {
 			// メニューの呼び方（#1128）。REST の応答を待つ間に「メニュー」と出てから切り替わらないよう、ページに埋め込む。
 			'menuLabel'            => vkbm_get_menu_label(),
 			'menuLabelPlural'      => vkbm_get_menu_label_plural(),
+			// ページの言語（#1186）。REST の通信先にはページの言語が含まれないため、REST に添えて同じ言語の呼び方を受け取る（src/blocks/shared/rest-locale.js）。
+			'locale'               => determine_locale(),
 			// 事業者の電話番号（#1154）。お客様の通信がセキュリティ系プラグインに止められたときの案内に添える。
 			// 止められると provider-settings の REST も読めないため、REST ではなくページに埋め込む。
 			'providerPhone'        => $this->get_provider_phone(),

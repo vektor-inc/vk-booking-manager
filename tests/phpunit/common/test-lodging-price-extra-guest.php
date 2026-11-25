@@ -350,6 +350,110 @@ class Lodging_Price_Extra_Guest_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * calculate: 追加料金を使うときは、泊ごとの基本料金と超過した人がいる区分の内訳を night_extra_guests に返す（#1175）。
+	 */
+	public function test_calculate_night_extra_guests(): void {
+		// 大人は平日が高く休前日が安い。子供は逆に休前日が高い（休前日の泊は超過する人が入れ替わる）。
+		$adult = $this->tier( '大人', 3000, 2, array( 'pre_holiday_price' => 1000 ) );
+		$child = $this->tier( '子供', 2000, 1, array( 'pre_holiday_price' => 2500 ) );
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '金曜・土曜の 2 泊・規定 2 名 => 金曜は子供 1 名、土曜は大人 1 名が超過。基本料金は泊ごとの料金',
+				'args'                => $this->build_args(
+					array(
+						'included_guests'        => 2,
+						'night_dates'            => array( '2026-10-09', '2026-10-10' ),
+						'base_price_pre_holiday' => 15000,
+						'guest_tiers'            => array( $adult, $child ),
+					)
+				),
+				'expected'            => array(
+					array(
+						'date'            => '2026-10-09',
+						'base_price'      => 10000,
+						'included_guests' => 2,
+						'tiers'           => array(
+							array(
+								'label'    => '子供',
+								'price'    => 2000,
+								'count'    => 1,
+								'subtotal' => 2000,
+							),
+						),
+					),
+					array(
+						'date'            => '2026-10-10',
+						'base_price'      => 15000,
+						'included_guests' => 2,
+						'tiers'           => array(
+							array(
+								'label'    => '大人',
+								'price'    => 1000,
+								'count'    => 1,
+								'subtotal' => 1000,
+							),
+						),
+					),
+				),
+			),
+			array(
+				'test_condition_name' => '全員が規定人数に含まれる => 泊ごとの基本料金だけを返し、区分の行は空',
+				'args'                => $this->build_args(
+					array(
+						'included_guests' => 4,
+						'guest_tiers'     => array( $adult, $child ),
+					)
+				),
+				'expected'            => array(
+					array(
+						'date'            => '2026-10-12',
+						'base_price'      => 10000,
+						'included_guests' => 4,
+						'tiers'           => array(),
+					),
+				),
+			),
+			array(
+				'test_condition_name' => '追加料金を使わない（extra_guest_enabled が false）=> 空配列',
+				'args'                => $this->build_args(
+					array(
+						'extra_guest_enabled' => false,
+						'guest_tiers'         => array( $adult, $child ),
+					)
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '1名あたりのプラン => 空配列',
+				'args'                => $this->build_args(
+					array(
+						'price_unit'  => 'per_guest',
+						'guest_tiers' => array( $adult, $child ),
+					)
+				),
+				'expected'            => array(),
+			),
+			array(
+				'test_condition_name' => '泊数が 0（日付なし）=> 仮の1泊分は返さず空配列',
+				'args'                => $this->build_args(
+					array(
+						'night_dates' => array(),
+						'nights'      => 0,
+						'guest_tiers' => array( $adult, $child ),
+					)
+				),
+				'expected'            => array(),
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$actual = Lodging_Price::calculate( $case['args'] );
+			$this->assertSame( $case['expected'], $actual['night_extra_guests'], $case['test_condition_name'] );
+		}
+	}
+
+	/**
 	 * has_rate_tiers: 1室あたりで追加料金を使うときは、基本料金と区分の両方の休前日・特定日の料金を見る。
 	 */
 	public function test_has_rate_tiers(): void {

@@ -315,6 +315,82 @@ class Lodging_Price_Display_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * build_stay_display: 1室あたりで追加料金を使うプランは、年間同じ料金でも有効にし、泊ごとに追加料金の内訳を添える（#1175）。
+	 */
+	public function test_build_stay_display_extra_guest(): void {
+		$plan_inputs = array(
+			'price_unit'          => 'per_room',
+			'extra_guest_enabled' => true,
+			'included_guests'     => 3,
+			'base_price'          => 8500,
+		);
+		$guest_tiers = array(
+			array(
+				'label' => '大人',
+				'price' => 2000,
+				'count' => 5,
+			),
+			array(
+				'label' => '子供',
+				'price' => 1000,
+				'count' => 0,
+			),
+		);
+
+		$test_cases = array(
+			array(
+				'test_condition_name' => '追加料金あり・休前日・特定日の料金なし・大人 5 名（規定 3 名）=> 有効。泊ごとに基本料金と大人 2 名分の追加料金',
+				'plan_inputs'         => $plan_inputs,
+				'expected_enabled'    => true,
+				'expected_extra'      => array(
+					'base_price'      => 8500,
+					'included_guests' => 3,
+					'tiers'           => array(
+						array(
+							'label'    => '大人',
+							'price'    => 2000,
+							'count'    => 2,
+							'subtotal' => 4000,
+						),
+					),
+				),
+			),
+			array(
+				'test_condition_name' => '追加料金なしの1室あたり => 年間同じ料金なら無効（従来どおり）',
+				'plan_inputs'         => array_merge( $plan_inputs, array( 'extra_guest_enabled' => false ) ),
+				'expected_enabled'    => false,
+				'expected_extra'      => null,
+			),
+		);
+
+		foreach ( $test_cases as $case ) {
+			$calculated = Lodging_Price::calculate(
+				array_merge(
+					$case['plan_inputs'],
+					array(
+						'night_dates' => array( '2026-10-13', '2026-10-14' ),
+						'guest_tiers' => $guest_tiers,
+					)
+				)
+			);
+			$display    = Lodging_Price_Display::build_stay_display( $case['plan_inputs'], $guest_tiers, $calculated['night_breakdown'], $calculated['night_extra_guests'] );
+
+			$this->assertSame( $case['expected_enabled'], $display['enabled'], $case['test_condition_name'] . ': enabled' );
+			if ( ! $case['expected_enabled'] ) {
+				$this->assertSame( array(), $display['night_rates'], $case['test_condition_name'] . ': 区分を返さない' );
+				continue;
+			}
+
+			foreach ( $display['night_rates'] as $night ) {
+				$this->assertSame( $case['expected_extra'], $night['extra_guest'], $case['test_condition_name'] . ': ' . $night['date'] );
+				// 1室単位のプランは、人数を掛けた区分の行は出さない（追加料金は extra_guest で出す）。
+				$this->assertSame( array(), $night['guest_tiers'], $case['test_condition_name'] . ': 区分の行なし' );
+				$this->assertSame( 12500, $night['plan_price'], $case['test_condition_name'] . ': 泊のプラン料金は基本料金＋追加料金' );
+			}
+		}
+	}
+
+	/**
 	 * build_stay_display: 区分別の実単価・人数・小計を返し、0名と1室単位を除外する（#969）。
 	 */
 	public function test_build_stay_display_guest_tiers(): void {

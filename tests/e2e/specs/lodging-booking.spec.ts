@@ -517,7 +517,7 @@ test.describe
 			await page.locator( '.vkbm-plan-summary__action' ).first().click();
 			await waitForConfirm( page );
 			const address = page.getByLabel( '住所（必須）', { exact: true } );
-			// @check 住所はお客様情報の箱で電話番号の直後にある
+			// @check 住所はお客様情報のまとまりの中で電話番号の直後にある
 			const guestFields = page.locator( '.vkbm-confirm__guest-fields' );
 			await expect(
 				guestFields.locator( '#vkbm-confirm-address' )

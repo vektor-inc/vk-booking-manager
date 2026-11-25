@@ -18,8 +18,6 @@ use function esc_html__;
 use function __;
 use function admin_url;
 use function apply_filters;
-use function current_user_can;
-use function get_edit_post_link;
 use function array_filter;
 use function array_values;
 use function esc_url_raw;
@@ -223,7 +221,7 @@ class Reservation_Page_Url {
 	/**
 	 * get_problem() の結果に対して、利用者が次にすることの行き先（URL とラベル）を 1 つ返す。
 	 *
-	 * そのページを直せる（公開できる）利用者には、未公開のページは編集画面、ゴミ箱のページは固定ページのゴミ箱一覧を返す。
+	 * そのページを直せる利用者には、Page_Reference::get_fix_action() の行き先（未公開は編集画面、ゴミ箱は固定ページのゴミ箱一覧）を返す。
 	 * それ以外（削除済み・旧ドメインの URL・業務オーナーなど固定ページを直す権限が無いとき）は予約ページの設定欄で選び直してもらう。
 	 * build_problem_message() の「次にすること」はこの行き先に合わせるため、条件を変えるときは文面も一緒に確かめること。
 	 *
@@ -231,28 +229,11 @@ class Reservation_Page_Url {
 	 * @return array{url:string,label:string,is_settings:bool} 行き先の URL・ボタンのラベル・予約ページの設定欄への案内かどうか。
 	 */
 	public static function get_problem_action( array $problem ): array {
-		$type    = (string) ( $problem['type'] ?? '' );
-		$page_id = (int) ( $problem['page_id'] ?? 0 );
-		// 未公開・ゴミ箱のどちらも、最後に公開するところまでできないと直らない。
-		$can_publish = $page_id > 0 && current_user_can( 'publish_pages' );
-
-		if ( Page_Reference::PROBLEM_UNPUBLISHED === $type && $can_publish ) {
-			// そのページを編集できないときは空が返り、設定欄の案内になる。
-			$edit_url = get_edit_post_link( $page_id, 'raw' );
-			if ( is_string( $edit_url ) && '' !== $edit_url ) {
-				return array(
-					'url'         => $edit_url,
-					'label'       => __( 'Edit the page', 'vk-booking-manager' ),
-					'is_settings' => false,
-				);
-			}
-		}
-
-		// ゴミ箱の一覧を開けて（edit_pages）、そのページを戻せる（delete_post）ときだけ、ゴミ箱の一覧へ案内する。
-		if ( Page_Reference::PROBLEM_TRASH === $type && $can_publish && current_user_can( 'edit_pages' ) && current_user_can( 'delete_post', $page_id ) ) {
+		$fix_action = Page_Reference::get_fix_action( (string) ( $problem['type'] ?? '' ), (int) ( $problem['page_id'] ?? 0 ) );
+		if ( null !== $fix_action ) {
 			return array(
-				'url'         => admin_url( 'edit.php?post_status=trash&post_type=page' ),
-				'label'       => __( 'Open the trash', 'vk-booking-manager' ),
+				'url'         => $fix_action['url'],
+				'label'       => $fix_action['label'],
 				'is_settings' => false,
 			);
 		}

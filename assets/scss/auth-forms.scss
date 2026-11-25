@@ -255,7 +255,8 @@
 	font-size: 0.85rem;
 	color: var(--vkbm--color--text-secondary);
 	text-align: left;
-	margin: 0.25rem 0 0;
+	// 入力欄の下端から補足文の字面までを、折り返した補足文の字面の行間以上に離す。
+	margin: 0.375rem 0 0;
 }
 
 .vkbm-auth-form__note--error {

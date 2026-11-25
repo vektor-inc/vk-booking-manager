@@ -14,6 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 use VKBookingManager\Admin\Owner_Admin_Menu_Filter;
+use VKBookingManager\Admin\Post_Duplicator;
 use VKBookingManager\Admin\Provider_Settings_Page;
 use VKBookingManager\Admin\Service_Menu_Editor;
 use VKBookingManager\Admin\Shift_Dashboard_Page;
@@ -426,9 +427,12 @@ class Plugin {
 	}
 
 	/**
-	 * Register plugin hooks.
+	 * プラグインのフックを登録する。
 	 */
 	public function register(): void {
+		if ( is_admin() ) {
+			( new Post_Duplicator() )->register();
+		}
 		$this->common_styles->register();
 		$this->booking_notification_service->register();
 		// 予約のゴミ箱移動・復元・完全削除（trashed_post/untrashed_post/before_delete_post）を購読する。

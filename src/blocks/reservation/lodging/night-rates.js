@@ -2,6 +2,9 @@
 import { useId } from '@wordpress/element';
 import { __, _n, _x, sprintf } from '@wordpress/i18n';
 import { formatCurrency } from '../../shared/pricing';
+import { formatGuestsCount } from '../../shared/guests';
+import { buildLabelWithDetail } from '../pricing-breakdown';
+import { PricingRowLabel } from '../components/pricing-row-label';
 import { parseIsoDate, getWeekday } from './stay-dates';
 import './lodging.scss';
 
@@ -118,7 +121,8 @@ export const summarizeRates = ( nights ) => {
  *
  * @param {Array} breakdown  泊ごとの内訳（date / rate / plan_price / room_surcharge / price）。
  * @param {Array} nightRates 泊ごとの区分（date / rate / special_label）。
- * @return {Array} 特定日の名称（special_label）と区分別の実単価・人数・小計（guest_tiers）を足した内訳。
+ * @return {Array} 特定日の名称（special_label）と区分別の実単価・人数・小計（guest_tiers）、
+ *                 1室あたりの追加料金の内訳（extra_guest。#1175）を足した内訳。
  */
 export const attachNightRateDetails = ( breakdown, nightRates ) => {
 	const rateDetailsByDate = {};
@@ -134,6 +138,8 @@ export const attachNightRateDetails = ( breakdown, nightRates ) => {
 		)
 			? rateDetailsByDate[ night.date ].guest_tiers
 			: [],
+		// 1室あたりで追加料金を使うプランの、その泊の基本料金と超過した人の追加料金。使わないプランは null。
+		extra_guest: rateDetailsByDate[ night.date ]?.extra_guest ?? null,
 	} ) );
 };
 
@@ -233,12 +239,18 @@ export const getNightPrice = ( night ) => {
  * 金額が無いときは、日付と区分だけの一覧にする。
  *
  * @param {Object}           props
- * @param {Array}            props.nights         泊の一覧（date / rate / special_label / plan_price / guest_tiers）。
- * @param {string|undefined} props.locale         WordPress のロケール。
- * @param {?string}          props.currencySymbol 通貨記号。
+ * @param {Array}            props.nights          泊の一覧（date / rate / special_label / plan_price / guest_tiers）。
+ * @param {string|undefined} props.locale          WordPress のロケール。
+ * @param {?string}          props.currencySymbol  通貨記号。
+ * @param {string}           props.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
  * @return {JSX.Element|null} 泊ごとの区分。泊が無ければ null。
  */
-export const NightRates = ( { nights, locale, currencySymbol } ) => {
+export const NightRates = ( {
+	nights,
+	locale,
+	currencySymbol,
+	guestsUnitLabel = '',
+} ) => {
 	if ( ! Array.isArray( nights ) || nights.length === 0 ) {
 		return null;
 	}
@@ -258,6 +270,7 @@ export const NightRates = ( { nights, locale, currencySymbol } ) => {
 			nightRates={ nights }
 			locale={ locale }
 			currencySymbol={ currencySymbol }
+			guestsUnitLabel={ guestsUnitLabel }
 		/>
 	) : (
 		<NightRateItems nights={ nights } locale={ locale } />
@@ -310,17 +323,101 @@ export const NightRates = ( { nights, locale, currencySymbol } ) => {
 };
 
 /**
+ * 1室あたりで追加料金を使うプランの、1泊分の「基本料金（3名まで）」の行と、区分ごとの「追加料金」の行（#1175）。
+ *
+ * 追加料金の行は、その泊に超過した人がいる区分だけを出す（超過する人は泊ごとの単価で決まるため、泊ごとに変わり得る）。
+ * 行の列は予約者区分の行と同じ（区分名 ／ 単価 ／ 人数 ／ 小計）。基本料金の行は単価と人数の列を使わない。
+ *
+ * @param {Object}  props
+ * @param {Object}  props.extraGuest      その泊の追加料金の内訳（base_price / included_guests / tiers）。
+ * @param {?string} props.currencySymbol  通貨記号。
+ * @param {string}  props.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
+ * @return {JSX.Element} 基本料金と追加料金の行。
+ */
+const ExtraGuestNightRows = ( {
+	extraGuest,
+	currencySymbol,
+	guestsUnitLabel,
+} ) => {
+	// 見出しの「（3名まで）」は途中で改行させない。
+	const baseLabel = buildLabelWithDetail(
+		/* translators: %s: number of guests included in the base rate with unit (e.g. 3 guests). */
+		__( 'Basic rate (up to %s)', 'vk-booking-manager' ),
+		[
+			formatGuestsCount(
+				Number( extraGuest.included_guests ) || 0,
+				guestsUnitLabel
+			),
+		],
+		0
+	);
+	const tiers = Array.isArray( extraGuest.tiers )
+		? extraGuest.tiers.filter( ( tier ) => Number( tier.count ) > 0 )
+		: [];
+
+	return (
+		<>
+			<div className="vkbm-lodging__night-guest vkbm-lodging__night-guest--base">
+				<span className="vkbm-lodging__night-guest-label">
+					<PricingRowLabel
+						label={ baseLabel.label }
+						labelParts={ baseLabel.labelParts }
+					/>
+				</span>
+				<span className="vkbm-lodging__night-price">
+					{ formatCurrency( extraGuest.base_price, currencySymbol ) }
+				</span>
+			</div>
+			{ tiers.map( ( tier, index ) => (
+				<div className="vkbm-lodging__night-guest" key={ index }>
+					<span className="vkbm-lodging__night-guest-label">
+						{ sprintf(
+							/* translators: %s: price category name (e.g. Adult). */
+							__(
+								'Extra guest fee for %s',
+								'vk-booking-manager'
+							),
+							tier.label
+						) }
+					</span>
+					<span className="vkbm-lodging__night-calc">
+						<span className="text-nowrap">
+							{ formatCurrency( tier.price, currencySymbol ) }
+						</span>
+						<span className="text-nowrap">
+							{ sprintf(
+								/* translators: %d: この区分の人数。 */
+								__( '× %d', 'vk-booking-manager' ),
+								tier.count
+							) }
+						</span>
+					</span>
+					<span className="vkbm-lodging__night-price">
+						<span className="vkbm-lodging__sr-only">
+							{ __( 'Subtotal', 'vk-booking-manager' ) }
+						</span>
+						{ formatCurrency( tier.subtotal, currencySymbol ) }
+					</span>
+				</div>
+			) ) }
+		</>
+	);
+};
+
+/**
  * 泊ごとの内訳（日付・料金区分のバッジ、予約者区分ごとの単価・人数・小計、泊小計）。
  *
  * 単価は部屋全体の 1 泊分（プラン料金＋客室の追加料金）。客室の追加料金があるときは内訳も添える。
+ * 1室あたりで追加料金を使うプランは、「基本料金（3名まで）」の行と、超過した人がいる区分ごとの「追加料金」の行を出す（#1175）。
  * 宿泊のサイトでは客室の追加料金は常に 0 円（#736）のため、通常は内訳に追加料金は出ない。
  * 区分の行は、列を泊どうしでそろえる（lodging.scss の .vkbm-lodging__nights--priced）。
  *
  * @param {Object}           props
- * @param {Array}            props.nights         泊の内訳（date / rate / plan_price / room_surcharge / price）。
- * @param {Array}            props.nightRates     泊ごとの区分（date / rate / special_label）。特定日の名称を添えるために使う。
- * @param {string|undefined} props.locale         WordPress のロケール。
- * @param {?string}          props.currencySymbol 通貨記号。
+ * @param {Array}            props.nights          泊の内訳（date / rate / plan_price / room_surcharge / price）。
+ * @param {Array}            props.nightRates      泊ごとの区分（date / rate / special_label）。特定日の名称を添えるために使う。
+ * @param {string|undefined} props.locale          WordPress のロケール。
+ * @param {?string}          props.currencySymbol  通貨記号。
+ * @param {string}           props.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
  * @return {JSX.Element|null} 内訳。泊が無ければ null。
  */
 export const NightBreakdownItems = ( {
@@ -328,6 +425,7 @@ export const NightBreakdownItems = ( {
 	nightRates,
 	locale,
 	currencySymbol,
+	guestsUnitLabel = '',
 } ) => {
 	const headingId = useId();
 	const nights = attachNightRateDetails( breakdown, nightRates );
@@ -363,6 +461,13 @@ export const NightBreakdownItems = ( {
 							/>
 						</span>
 					</h4>
+					{ night.extra_guest && (
+						<ExtraGuestNightRows
+							extraGuest={ night.extra_guest }
+							currencySymbol={ currencySymbol }
+							guestsUnitLabel={ guestsUnitLabel }
+						/>
+					) }
 					{ night.guest_tiers
 						.filter( ( tier ) => Number( tier.count ) > 0 )
 						.map( ( tier, index ) => (
@@ -449,11 +554,12 @@ export const NightBreakdownItems = ( {
  * 客室を選んだ後のまとめ欄に出す、泊ごとの内訳。畳まずに常に表示する（確認画面の内訳と同じ）。
  *
  * @param {Object}           props
- * @param {Array}            props.nights         泊の内訳。
- * @param {Array}            props.nightRates     泊ごとの区分（特定日の名称を添えるために使う）。
- * @param {string|undefined} props.locale         WordPress のロケール。
- * @param {?string}          props.currencySymbol 通貨記号。
- * @param {string}           props.label          内訳全体の見出し。
+ * @param {Array}            props.nights          泊の内訳。
+ * @param {Array}            props.nightRates      泊ごとの区分（特定日の名称を添えるために使う）。
+ * @param {string|undefined} props.locale          WordPress のロケール。
+ * @param {?string}          props.currencySymbol  通貨記号。
+ * @param {string}           props.label           内訳全体の見出し。
+ * @param {string}           props.guestsUnitLabel 人数の単位（例: 名）。空文字は単位なし。
  * @return {JSX.Element|null} 内訳。泊が無ければ null。
  */
 export const NightBreakdown = ( {
@@ -461,6 +567,7 @@ export const NightBreakdown = ( {
 	nightRates,
 	locale,
 	currencySymbol,
+	guestsUnitLabel = '',
 	label = __( 'Breakdown by night', 'vk-booking-manager' ),
 } ) => {
 	// 1 ページに予約ブロックが複数あっても id が重ならないようにする。
@@ -483,6 +590,7 @@ export const NightBreakdown = ( {
 				nightRates={ nightRates }
 				locale={ locale }
 				currencySymbol={ currencySymbol }
+				guestsUnitLabel={ guestsUnitLabel }
 			/>
 		</div>
 	);

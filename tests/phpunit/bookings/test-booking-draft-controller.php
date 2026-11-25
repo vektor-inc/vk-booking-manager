@@ -75,6 +75,7 @@ class Booking_Draft_Controller_Test extends WP_UnitTestCase {
 		$controller = new Booking_Draft_Controller();
 		$payload    = $this->build_payload( $menu_id, '2024-02-01T10:00:00+09:00' );
 		$token      = $this->save_draft( $controller, $payload );
+		$this->assertSame( determine_locale(), get_transient( self::TRANSIENT_PREFIX . $token )['locale'] );
 		$this->assertSame( array(), get_transient( self::TRANSIENT_PREFIX . $token )['custom_fields'] );
 
 		// 利用者が既定値を消して保存した場合は、空文字のキーが残る。

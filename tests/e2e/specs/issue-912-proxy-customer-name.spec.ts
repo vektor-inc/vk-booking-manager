@@ -1,6 +1,11 @@
 // @category 予約の確定・確認・キャンセル
 import { test, expect, type Page } from '@playwright/test';
-import { loginAsAdmin, getServiceMenuId, wpCliArgs } from '../utils/helpers';
+import {
+	loginAsAdmin,
+	getServiceMenuId,
+	wpCliArgs,
+	wpEvalPhp,
+} from '../utils/helpers';
 import { selectAvailableCalendarDay } from '../utils/calendar-helpers';
 
 // 代理予約と会員本人の予約で、同じ予約確認画面まで進む。
@@ -102,6 +107,45 @@ test( '代理予約の名前必須・入力欄への案内・サーバーエラ�
 	await expect(
 		page.locator( '#vkbm-confirm-customer-phone' )
 	).not.toHaveAttribute( 'required' );
+	// @check スタッフ用の欄は予約時に入力する情報の箱の中にあり、お客様の情報が先頭、管理用メモがご要望・備考より後にある。枠線は箱にだけ付いている（#1173）
+	const inputsBox = page.locator( '.vkbm-confirm__inputs' );
+	await expect( inputsBox ).toHaveCount( 1 );
+	await expect(
+		inputsBox.locator( '> .vkbm-confirm__admin-fields:first-child' )
+	).toHaveCount( 1 );
+	await expect(
+		inputsBox.locator(
+			'.vkbm-confirm__form:has( #vkbm-confirm-memo ) ~ .vkbm-confirm__admin-staff-fields #vkbm-confirm-provider-note'
+		)
+	).toHaveCount( 1 );
+	await expect( inputsBox ).toHaveCSS( 'border-top-width', '1px' );
+	await expect(
+		inputsBox.locator( '.vkbm-confirm__admin-fields' )
+	).toHaveCSS( 'border-top-width', '0px' );
+	// @check 箱の中の 1 行の入力欄・プルダウンは、どのまとまりでも最小の高さ 42px が付き、同じ高さで並ぶ（#1173）
+	const lineHeights = await inputsBox.evaluate( ( box ) =>
+		Array.from(
+			box.querySelectorAll< HTMLInputElement | HTMLSelectElement >(
+				'input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select'
+			)
+		)
+			.filter(
+				( el ) =>
+					el.getClientRects().length > 0 &&
+					! el.closest( '[aria-hidden="true"]' )
+			)
+			.map( ( el ) => ( {
+				minHeight: getComputedStyle( el ).minHeight,
+				height: Math.round( el.getBoundingClientRect().height ),
+			} ) )
+	);
+	expect( lineHeights.length ).toBeGreaterThan( 1 );
+	for ( const { minHeight } of lineHeights ) {
+		expect( minHeight ).toBe( '42px' );
+	}
+	expect( new Set( lineHeights.map( ( { height } ) => height ) ).size ).toBe(
+		1
+	);
 	const buttonDescription = await confirm.getAttribute( 'aria-describedby' );
 	const bookingsBefore = wpCliArgs( [
 		'post',
@@ -280,8 +324,86 @@ test( '会員本人の画面には予約者名の入力欄と補足が出ない'
 		await expect(
 			page.locator( '#vkbm-confirm-customer-name-help' )
 		).toHaveCount( 0 );
+		// @check 会員予約でも、ご要望・備考は枠線の付いた入力欄の箱の中にある（#1173）
+		const inputsBox = page.locator( '.vkbm-confirm__inputs' );
+		await expect( inputsBox.locator( '#vkbm-confirm-memo' ) ).toHaveCount(
+			1
+		);
+		await expect( inputsBox ).toHaveCSS( 'border-top-width', '1px' );
 	} finally {
 		// このテストで作った会員だけを片付ける。
+		wpCliArgs( [ 'user', 'delete', userId, '--reassign=1', '--yes' ] );
+	}
+} );
+
+// @title 暗い配色のテーマでも、入力欄の箱の中のラジオ・チェックボックスは箱の白い背景に合う配色で描く
+test( '暗い配色のテーマでも箱の中の選択肢が明るい配色になる', async ( {
+	page,
+} ) => {
+	test.setTimeout( 120000 );
+	const login = `issue1173member${ Date.now() }`;
+	const userId = wpCliArgs( [
+		'user',
+		'create',
+		login,
+		`${ login }@example.test`,
+		'--role=subscriber',
+		'--user_pass=issue1173-test-password',
+		'--porcelain',
+	] );
+	// BM 設定のうち、このテストで変える「ご利用になる方」の 3 項目だけを控え、テストの後で元へ戻す。
+	const rosterKeys = `array( 'booking_attendee_name_mode', 'attendee_roster_enabled', 'attendee_roster_show_self' )`;
+	const originalRoster = wpEvalPhp(
+		`$s = get_option( 'vkbm_provider_settings', array() ); $o = array(); foreach ( ${ rosterKeys } as $key ) { $o[ $key ] = array_key_exists( $key, $s ) ? $s[ $key ] : null; } echo wp_json_encode( $o );`
+	);
+	try {
+		// @step 管理画面の BM 設定で「ご利用になる方」の名前の欄を「使用する（入力は任意）」にして名簿を有効にし、購読者の会員でログインして予約確認画面まで進む
+		wpEvalPhp(
+			`$s = get_option( 'vkbm_provider_settings', array() ); $s['booking_attendee_name_mode'] = 'optional'; $s['attendee_roster_enabled'] = true; $s['attendee_roster_show_self'] = true; update_option( 'vkbm_provider_settings', $s );`
+		);
+		await loginAsAdmin( page, login, 'issue1173-test-password' );
+		await gotoConfirmScreen( page );
+		const inputsBox = page.locator( '.vkbm-confirm__inputs' );
+		await expect( inputsBox ).toBeVisible();
+
+		// @step テーマが :root に color-scheme: dark を指定している状態にし、「ご利用になる方」で名前を入力する選択肢を選ぶ
+		await page.addStyleTag( { content: ':root { color-scheme: dark; }' } );
+		await inputsBox.locator( '#vkbm-confirm-attendee-manual' ).check();
+		await expect(
+			inputsBox.locator( '#vkbm-confirm-attendee-save' )
+		).toBeVisible();
+
+		// @check ページは暗い配色のまま、箱の中のラジオ・チェックボックスはすべて明るい配色（color-scheme: light）で描かれる（#1173）
+		expect(
+			await page.evaluate(
+				() => getComputedStyle( document.documentElement ).colorScheme
+			)
+		).toBe( 'dark' );
+		const schemes = await inputsBox.evaluate( ( box ) =>
+			Array.from(
+				box.querySelectorAll< HTMLInputElement >(
+					'input[type="radio"], input[type="checkbox"]'
+				)
+			)
+				.filter( ( el ) => el.getClientRects().length > 0 )
+				.map( ( el ) => ( {
+					type: el.type,
+					colorScheme: getComputedStyle( el ).colorScheme,
+				} ) )
+		);
+		expect( schemes.some( ( { type } ) => type === 'radio' ) ).toBe( true );
+		expect( schemes.some( ( { type } ) => type === 'checkbox' ) ).toBe(
+			true
+		);
+		for ( const { colorScheme } of schemes ) {
+			expect( colorScheme ).toBe( 'light' );
+		}
+	} finally {
+		// このテストで変えた名簿の設定を元へ戻し、作った会員を片付ける。
+		const restore = Buffer.from( originalRoster ).toString( 'base64' );
+		wpEvalPhp(
+			`$o = json_decode( base64_decode( '${ restore }' ), true ); $s = get_option( 'vkbm_provider_settings', array() ); foreach ( $o as $key => $value ) { if ( null === $value ) { unset( $s[ $key ] ); } else { $s[ $key ] = $value; } } update_option( 'vkbm_provider_settings', $s );`
+		);
 		wpCliArgs( [ 'user', 'delete', userId, '--reassign=1', '--yes' ] );
 	}
 } );

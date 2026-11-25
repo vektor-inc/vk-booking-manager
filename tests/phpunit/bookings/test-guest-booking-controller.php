@@ -2285,6 +2285,24 @@ class Guest_Booking_Controller_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 下書きの言語で登録されたポリシーへの同意を必須にする。
+	 *
+	 * @return void
+	 */
+	public function test_create_guest_booking_request_requires_localized_policy(): void {
+		$this->save_settings( array( 'booking_customer_mode' => 'both', 'provider_cancellation_policy' => '' ) );
+		update_option( \VKBookingManager\Multilingual\Multilingual_Labels::OPTION_KEY, array( 'en_US' => array( 'provider_cancellation_policy' => 'English policy' ) ) );
+		$menu_id  = $this->create_menu();
+		$staff_id = $this->create_staff();
+		$token    = $this->store_draft( $menu_id, $staff_id, self::START, self::END, array( 'locale' => 'en_US', 'agree_terms' => false ) );
+		list( $controller ) = $this->build_controller( $staff_id );
+		$response   = $controller->create_guest_booking_request( $this->build_request( $token, array( 'agree_terms' => false ) ) );
+		$this->assertWPError( $response );
+		$this->assertSame( 'cancellation_policy_required', $response->get_error_code() );
+		delete_option( \VKBookingManager\Multilingual\Multilingual_Labels::OPTION_KEY );
+	}
+
+	/**
 	 * 予約時の入力項目（#1147）は申し込みの時点で必須を確かめ、確認待ちデータに残した回答を、確認リンクを開いた時点の設定で予約へ保存する。
 	 */
 	public function test_create_guest_booking_request(): void {

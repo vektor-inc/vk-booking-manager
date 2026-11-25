@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+use VKBookingManager\Multilingual\Service_Menu_Texts;
 use VKBookingManager\PostTypes\Service_Menu_Detail_Link;
 use WP_Post;
 use function add_filter;
@@ -134,7 +135,7 @@ class Service_Menu_Detail_Renderer {
 		};
 		add_filter( 'private_title_format', $remove_private_prefix );
 		try {
-			$title        = get_the_title( $menu );
+			$title        = Service_Menu_Texts::get_title( $menu );
 			$content_html = $this->render_content( $menu );
 			$card_html    = $this->render_card( $menu );
 		} finally {

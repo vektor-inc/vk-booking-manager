@@ -307,7 +307,8 @@ class Service_Menu_Editor {
 			true
 		);
 
-		// 保存時のお知らせをブロックエディタの通知（core/notices）で表示する。
+		// 保存時のお知らせと、一覧から複製した直後のお知らせ（#1176）を
+		// ブロックエディタの通知（core/notices）で表示する。
 		if ( $screen->is_block_editor() ) {
 			wp_enqueue_script(
 				'vkbm-service-menu-editor-notices',
@@ -319,7 +320,10 @@ class Service_Menu_Editor {
 			wp_localize_script(
 				'vkbm-service-menu-editor-notices',
 				'vkbmServiceMenuNotices',
-				array( 'postId' => (int) get_the_ID() )
+				array(
+					'postId'            => (int) get_the_ID(),
+					'duplicatedMessage' => Post_Duplicator::get_duplicate_notice_message(),
+				)
 			);
 		}
 

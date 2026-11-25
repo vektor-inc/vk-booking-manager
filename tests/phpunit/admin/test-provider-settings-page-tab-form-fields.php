@@ -82,6 +82,35 @@ class Provider_Settings_Page_Tab_Form_Fields_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * 項目名のプレースホルダーは、どの業種でも使える例「年齢」にする（#1173）。
+	 */
+	public function test_booking_custom_field_label_placeholder(): void {
+		$page   = $this->create_page();
+		$method = new \ReflectionMethod( Provider_Settings_Page::class, 'render_booking_custom_field_row' );
+
+		// 空の行（「+ 項目を追加」で増やす行と同じ）を描画する。
+		$html = $method->invoke(
+			$page,
+			'0',
+			array(
+				'id'            => '',
+				'label'         => '',
+				'type'          => 'text',
+				'required'      => false,
+				'choices'       => '',
+				'default_value' => '',
+			),
+			''
+		);
+		$dom  = new DOMDocument();
+		@$dom->loadHTML( '<?xml encoding="UTF-8">' . $html ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- テスト用 HTML。
+		$xpath = new DOMXPath( $dom );
+
+		// 項目名の入力欄のプレースホルダーを確かめる。
+		$this->assertSame( 1, $xpath->query( '//input[@id="vkbm-booking-custom-field-0-label" and @placeholder="e.g. Age"]' )->length );
+	}
+
+	/**
 	 * render_page() のタブ定義の全タブ（保存フォームを持つもの）。
 	 *
 	 * 「連携」タブは保存フォームの外に描画され、設定項目を持たないため対象外。
