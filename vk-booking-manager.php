@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.18.0
+ * Version:     3.18.1
  * Requires at least: 6.8
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
