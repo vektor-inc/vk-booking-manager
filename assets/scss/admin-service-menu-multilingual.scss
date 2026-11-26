@@ -2,6 +2,13 @@
    サービスメニュー編集画面: メタボックス「多言語設定」
    ========================================================================== */
 
+@use "breakpoints" as *;
+
+.vkbm-service-menu-multilingual {
+	// WordPress のフォーム行に付く余白を含めても、箱の内側が言語間より狭くならないようにする。
+	padding: calc(var(--vkbm--spacing--lg) + var(--vkbm--spacing--md));
+}
+
 .vkbm-service-menu-multilingual__intro {
 	margin: 0 0 var(--vkbm--spacing--xs);
 }
@@ -9,23 +16,49 @@
 /* 言語ごとのまとまり
    ========================================================================== */
 
-// 言語ごとのまとまりの間は、まとまりの中の欄どうしより広く空ける（「多言語設定」タブの言語ごとのまとまりと揃える）。
+// フォーム行の下余白も言語間に加わるため、欄間より広く箱の内側より狭い間隔にする。
 .vkbm-service-menu-multilingual__language {
-	margin-top: var(--vkbm--spacing--lg);
+	margin-top: var(--vkbm--spacing--sm);
 	padding-top: var(--vkbm--spacing--sm);
 	border-top: 1px solid #dcdcde;
 
 	.form-table {
 		margin-top: 0;
+
+		th,
+		td {
+			padding-top: var(--vkbm--spacing--xs);
+			padding-bottom: var(--vkbm--spacing--xs);
+		}
+
+		@include vkbm-bp-down($vkbm-bp-admin-sm) {
+
+			th,
+			td {
+				padding-top: 0;
+				padding-bottom: 0;
+			}
+
+			th {
+				padding-bottom: calc(var(--vkbm--spacing--xs) / 2);
+			}
+
+			td {
+				padding-top: calc(var(--vkbm--spacing--xs) / 2);
+			}
+
+			// 次のラベルが直前の入力欄に近づきすぎないよう、欄間だけを広げる。
+			tr:where(:not(:last-child)) td {
+				padding-bottom: var(--vkbm--spacing--sm);
+			}
+		}
 	}
 }
 
-// 箱のタイトル（コアの h2.hndle は 14px・太さ 600）より目立たないよう、コアの h3（1.3em）の
-// 大きさをやめて一段小さくする。欄のラベル（th、14px・太さ 600）とは、直上の区切り線に付く位置と
-// 左の列に収まらない全幅の配置で区別する。
 .vkbm-service-menu-multilingual__language-title {
-	margin: 0;
-	font-size: var(--vkbm--admin--font-size--md);
+	// 親のメタボックス見出しを超えず、欄ラベルと同じ強さにして配置と区切り線で区別する。
+	margin: 0 0 var(--vkbm--spacing--xs);
+	font-size: var(--vkbm--admin--font-size--base);
 	font-weight: 600;
 	line-height: 1.4;
 }

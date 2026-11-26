@@ -420,7 +420,8 @@ class Booking_Draft_Controller {
 			$auto_assign      = false;
 			$slot_staff       = array(
 				'id'   => $lodging_stay['room_id'],
-				'name' => self::truncate_text( sanitize_text_field( (string) get_post_field( 'post_title', $lodging_stay['room_id'] ) ), self::LABEL_MAX_LENGTH ),
+				// 下書きには表示用の文字参照やリソースタグを含めず、言語別の生タイトルを保存する。
+				'name' => self::truncate_text( sanitize_text_field( wp_specialchars_decode( \VKBookingManager\Multilingual\Resource_Texts::resolve( (int) $lodging_stay['room_id'], (string) get_post_field( 'post_title', $lodging_stay['room_id'] ) ), ENT_QUOTES ) ), self::LABEL_MAX_LENGTH ),
 			);
 			$staff_label      = (string) $slot_staff['name'];
 			$slot_staff_label = $staff_label;

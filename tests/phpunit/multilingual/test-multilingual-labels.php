@@ -12,6 +12,7 @@ declare( strict_types=1 );
 
 namespace VKBookingManager\Tests\Multilingual;
 
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Multilingual\Multilingual_Labels;
 use VKBookingManager\Multilingual\Multilingual_Settings_Panel;
 use VKBookingManager\Multilingual\Rest_Locale;
@@ -102,6 +103,63 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 		}
 
 		parent::tear_down();
+	}
+
+	/** リソースの呼び方と複数形の追従を確認する。 */
+	public function test_resource_labels(): void {
+		// 無料版では呼び方を既定値で表示する（vkbm_should_use_default_resource_labels()）ため、言語ごとの呼び方は Pro 版でだけ検証する。
+		if ( Pro_Upsell::is_free_edition() ) {
+			$this->markTestSkipped( 'リソースの呼び方の言語ごとの登録は Pro 版限定機能のため、無料版ではスキップする。' );
+		}
+
+		$cases = array(
+			array(
+				'test_condition_name' => '英語値があれば英語値',
+				'locale'              => 'en_US',
+				'base'                => 'スタッフ',
+				'labels'              => array(
+					'resource_label_singular' => 'Staff',
+					'resource_label_menu'     => 'Available staff',
+					'resource_label_plural'   => 'Staff members',
+				),
+				'expected'            => array( 'Staff', 'Staff members', 'Available staff' ),
+			),
+			array(
+				'test_condition_name' => '英語値が空なら基本値',
+				'locale'              => 'en_US',
+				'base'                => 'スタッフ',
+				'labels'              => array(),
+				'expected'            => array( 'スタッフ', 'スタッフ', '担当可能' ),
+			),
+			array(
+				'test_condition_name' => '英語単数形だけなら複数形も英語単数形',
+				'locale'              => 'en_US',
+				'base'                => 'スタッフ',
+				'labels'              => array( 'resource_label_singular' => 'Staff' ),
+				'expected'            => array( 'Staff', 'Staff', '担当可能' ),
+			),
+			array(
+				'test_condition_name' => '未追加言語では基本値',
+				'locale'              => 'de_DE',
+				'base'                => 'スタッフ',
+				'labels'              => array(),
+				'expected'            => array( 'スタッフ', 'スタッフ', '担当可能' ),
+			),
+		);
+		foreach ( $cases as $case ) {
+			$this->current_locale = $case['locale'];
+			update_option(
+				Settings_Repository::OPTION_KEY,
+				array(
+					'resource_label_singular' => $case['base'],
+					'resource_label_plural'   => 'スタッフ',
+					'resource_label_menu'     => '担当可能',
+				)
+			);
+			update_option( Multilingual_Labels::OPTION_KEY, array( 'en_US' => $case['labels'] ) );
+			$actual = array( vkbm_get_resource_label_singular(), vkbm_get_resource_label_plural(), vkbm_get_resource_label_menu() );
+			$this->assertSame( $case['expected'], $actual, $case['test_condition_name'] );
+		}
 	}
 
 	/**
@@ -448,7 +506,10 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 				),
 				'expected_return'     => true,
 				'expected'            => array(
-					'en_US'      => array( 'menu_label' => 'Plan' ),
+					'en_US'      => array(
+						'menu_label'              => 'Plan',
+						'resource_label_singular' => 'Guide',
+					),
 					'de_DE_form' => array(),
 				),
 			),
@@ -471,7 +532,7 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 		Multilingual_Labels::save_from_request(
 			array(
 				Multilingual_Labels::SUBMITTED_KEY => '1',
-				Multilingual_Labels::INPUT_NAME => array(
+				Multilingual_Labels::INPUT_NAME    => array(
 					'en_US' => array( 'provider_booking_complete_message_pending' => str_repeat( 'a', 998 ) . "\r\n" . 'beyond' ),
 				),
 			)
@@ -512,7 +573,15 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 	 */
 	public function test_provider_settings_text_fallback(): void {
 		update_option( Settings_Repository::OPTION_KEY, array( 'provider_payment_method' => '基本の支払い案内' ) );
-		update_option( Multilingual_Labels::OPTION_KEY, array( 'en_US' => array( 'provider_payment_method' => 'English payment', 'provider_booking_complete_message_pending' => 'English pending' ) ) );
+		update_option(
+			Multilingual_Labels::OPTION_KEY,
+			array(
+				'en_US' => array(
+					'provider_payment_method' => 'English payment',
+					'provider_booking_complete_message_pending' => 'English pending',
+				),
+			)
+		);
 		$request = new \WP_REST_Request( 'GET', '/vkbm/v1/provider-settings' );
 		$request->set_param( 'vkbm_locale', 'en_US' );
 		$response = rest_do_request( $request );
@@ -686,6 +755,12 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 			),
 		);
 
+		// 無料版ではリソースの呼び方の欄を出さない（Pro 版限定機能）。
+		$expected_keys = Multilingual_Labels::FIELD_KEYS;
+		if ( Pro_Upsell::is_free_edition() ) {
+			$expected_keys = array_values( array_diff( $expected_keys, array( 'resource_label_singular', 'resource_label_menu', 'resource_label_plural' ) ) );
+		}
+
 		foreach ( $test_cases as $case ) {
 			$panel  = new Multilingual_Settings_Panel( $case['industry_hidden'], $case['nomination_enabled'], false, 'https://example.com/' );
 			$fields = $panel->get_fields( 'en_US' );
@@ -693,7 +768,7 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 			$keys   = array_column( $fields, 'key' );
 			$hidden = array_values( array_column( array_filter( $fields, static fn( $field ) => $field['hidden'] ), 'key' ) );
 
-			$this->assertSame( Multilingual_Labels::FIELD_KEYS, $keys, $case['test_condition_name'] . '（全部の欄を出す）' );
+			$this->assertSame( $expected_keys, $keys, $case['test_condition_name'] . '（全部の欄を出す）' );
 			$this->assertSame( $case['expected_hidden'], $hidden, $case['test_condition_name'] );
 		}
 	}
@@ -804,6 +879,28 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 				'expected'            => 'Plan',
 			),
 			array(
+				'test_condition_name' => 'リソースの複数形は言語別単数形へ追従',
+				'pro_only'            => true,
+				'base'                => array(
+					'resource_label_singular' => 'スタッフ',
+					'resource_label_plural'   => '',
+				),
+				'values'              => array( 'resource_label_singular' => 'Staff' ),
+				'key'                 => 'resource_label_plural',
+				'expected'            => 'Staff',
+			),
+			array(
+				'test_condition_name' => 'リソースの複数形の基本値は基本単数形へ戻る',
+				'pro_only'            => true,
+				'base'                => array(
+					'resource_label_singular' => 'スタッフ',
+					'resource_label_plural'   => '',
+				),
+				'values'              => array( 'resource_label_singular' => 'Staff' ),
+				'key'                 => 'resource_label_plural_base',
+				'expected'            => 'スタッフ',
+			),
+			array(
 				'test_condition_name' => '単数形を空にしたときの複数形 => 基本の値の単数形（言語の単数形は混ぜない）',
 				'base'                => array( 'menu_label' => 'プラン' ),
 				'values'              => array( 'menu_label' => 'Plan' ),
@@ -813,6 +910,11 @@ class Multilingual_Labels_Test extends WP_UnitTestCase {
 		);
 
 		foreach ( $test_cases as $case ) {
+			// リソースの呼び方は無料版では既定値で表示する（Pro 版限定機能）ため、無料版では検証しない。
+			if ( ! empty( $case['pro_only'] ) && Pro_Upsell::is_free_edition() ) {
+				continue;
+			}
+
 			$this->apply_conditions(
 				array(
 					'base'         => $case['base'],

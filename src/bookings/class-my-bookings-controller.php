@@ -207,7 +207,7 @@ class My_Bookings_Controller {
 			$resource_id = (int) get_post_meta( $booking_id, self::META_RESOURCE_ID, true );
 
 			$menu_name     = $menu_id > 0 ? Service_Menu_Texts::get_title( $menu_id ) : '';
-			$resource_name = $resource_id > 0 ? vkbm_get_resource_display_name( $resource_id ) : vkbm_get_no_nomination_label();
+			$resource_name = $resource_id > 0 ? vkbm_get_resource_display_name( $resource_id, true ) : vkbm_get_no_nomination_label();
 
 			$other_conditions = '';
 			if ( $menu_id > 0 ) {

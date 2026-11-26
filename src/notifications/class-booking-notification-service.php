@@ -250,7 +250,7 @@ class Booking_Notification_Service {
 			return '';
 		}
 
-		return vkbm_get_resource_display_name( $resource_id );
+		return vkbm_get_resource_display_name( $resource_id, true );
 	}
 
 	/**
@@ -620,7 +620,7 @@ class Booking_Notification_Service {
 	 * @return void
 	 */
 	private function send_notification( string $type, int $booking_id, int $attempt ): void {
-		$payload = $this->build_booking_payload( $booking_id );
+		$payload = $this->build_booking_payload( $booking_id, ! $this->is_provider_notification_type( $type ) );
 		if ( array() === $payload ) {
 			return;
 		}
@@ -967,7 +967,7 @@ class Booking_Notification_Service {
 	 * @return bool 送信結果。
 	 */
 	private function send_customer_reminder_in_locale( int $booking_id, int $hours_before ): bool {
-		$payload = $this->build_booking_payload( $booking_id );
+		$payload = $this->build_booking_payload( $booking_id, true );
 		if ( array() === $payload ) {
 			return false;
 		}
@@ -1203,7 +1203,7 @@ class Booking_Notification_Service {
 	 * @param int $booking_id Booking ID.
 	 * @return array<string,mixed>
 	 */
-	private function build_booking_payload( int $booking_id ): array {
+	private function build_booking_payload( int $booking_id, bool $localized = false ): array {
 		$booking = get_post( $booking_id );
 
 		if ( ! $booking instanceof WP_Post || Booking_Post_Type::POST_TYPE !== $booking->post_type ) {
@@ -1248,12 +1248,12 @@ class Booking_Notification_Service {
 		$is_stay_booking = $nights > 0;
 		if ( $is_stay_booking ) {
 			if ( $staff_id > 0 ) {
-				$staff_title = vkbm_get_resource_display_name( $staff_id );
+				$staff_title = vkbm_get_resource_display_name( $staff_id, $localized );
 			}
 		} else {
 			// 時間枠の予約：指名ありならスタッフ名、指名なしなら指名なしラベル。
 			if ( $nomination_enabled && $is_staff_preferred && $staff_id > 0 ) {
-				$staff_title = vkbm_get_resource_display_name( $staff_id );
+				$staff_title = vkbm_get_resource_display_name( $staff_id, $localized );
 			}
 			if ( $nomination_enabled && '' === $staff_title ) {
 				$staff_title = vkbm_get_no_nomination_label();
@@ -1281,7 +1281,7 @@ class Booking_Notification_Service {
 		$extra_guests          = Booking_Price::normalize_extra_guests( get_post_meta( $booking_id, Booking_Price::META_BOOKING_EXTRA_GUESTS, true ) );
 		$price_breakdown_lines = array() !== $extra_guests ? $this->build_extra_guest_breakdown_lines( $base_price, $extra_guests['tiers'], $nomination_fee, $extra_guests['included_guests'] ) : array();
 		// 無料版では保存値ではなく既定値を返す共通関数を通す。
-		$resource_label_singular = vkbm_get_resource_label_singular();
+		$resource_label_singular = $localized ? vkbm_get_resource_label_singular() : vkbm_get_base_resource_label_singular();
 		// Use the shared helper to get the duration label with fallback.
 		// 共通ヘルパーを使用して所要時間ラベルを取得する（フォールバック付き）。
 		$duration_label_heading = vkbm_get_duration_label();

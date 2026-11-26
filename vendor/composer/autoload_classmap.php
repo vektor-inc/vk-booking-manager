@@ -110,6 +110,8 @@ return array(
     'VKBookingManager\\Integrations\\SiteGuard\\SiteGuard_Rest_Api_Check' => $baseDir . '/src/integrations/siteguard/class-siteguard-rest-api-check.php',
     'VKBookingManager\\Multilingual\\Multilingual_Labels' => $baseDir . '/src/multilingual/class-multilingual-labels.php',
     'VKBookingManager\\Multilingual\\Multilingual_Settings_Panel' => $baseDir . '/src/multilingual/class-multilingual-settings-panel.php',
+    'VKBookingManager\\Multilingual\\Resource_Multilingual_Meta_Box' => $baseDir . '/src/multilingual/class-resource-multilingual-meta-box.php',
+    'VKBookingManager\\Multilingual\\Resource_Texts' => $baseDir . '/src/multilingual/class-resource-texts.php',
     'VKBookingManager\\Multilingual\\Rest_Locale' => $baseDir . '/src/multilingual/class-rest-locale.php',
     'VKBookingManager\\Multilingual\\Service_Menu_Multilingual_Meta_Box' => $baseDir . '/src/multilingual/class-service-menu-multilingual-meta-box.php',
     'VKBookingManager\\Multilingual\\Service_Menu_Texts' => $baseDir . '/src/multilingual/class-service-menu-texts.php',

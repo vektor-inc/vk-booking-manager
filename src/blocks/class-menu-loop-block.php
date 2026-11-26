@@ -1277,7 +1277,7 @@ class Menu_Loop_Block {
 	/**
 	 * 個別選択の担当リソース名を出すカードのため、担当リソースの投稿をまとめてキャッシュへ載せる。
 	 *
-	 * render_meta_information() がカードごとに get_the_title() で名前を引いても、
+	 * render_meta_information() がカードごとにリソース名と翻訳メタを引いても、
 	 * 問い合わせが増えないようにする。名前を出すのは lists_assigned_staff_names() が true の
 	 * メニューだけなので、該当するメニューが無ければ何も読み込まない。
 	 *
@@ -1300,7 +1300,7 @@ class Menu_Loop_Block {
 		// 公開中のリソースだけを読み込む（カード側も公開中だけを表示するため）。
 		$prime_ids = array_values( array_intersect( Service_Menu_Post_Type::get_published_resource_ids(), $assigned_ids ) );
 		if ( ! empty( $prime_ids ) ) {
-			_prime_post_caches( $prime_ids, false, false );
+			_prime_post_caches( $prime_ids, false, true );
 		}
 	}
 
@@ -1564,8 +1564,7 @@ class Menu_Loop_Block {
 			if ( ! empty( $staff_ids ) ) {
 				// 公開中のリソースID（menu_order → タイトルの並び・リクエスト内キャッシュ済み）のうち、
 				// このメニューが担当できるものだけを残す。非公開・削除済みのIDは公開中一覧に無いため除外される。
-				// 投稿は描画前に prime_assigned_staff_post_caches() でキャッシュへ載せてあるため、
-				// get_the_title() はカードごとの DB 問い合わせにならない。
+				// 投稿と翻訳メタは描画前に prime_assigned_staff_post_caches() で先読みする。
 				$assigned_published_ids = array_values(
 					array_intersect(
 						Service_Menu_Post_Type::get_published_resource_ids(),
@@ -1573,16 +1572,16 @@ class Menu_Loop_Block {
 					)
 				);
 
-				// render_menu_card() を単独で使う経路（一覧の先読みを通らない）でも、投稿を1回でまとめて読む。
+				// render_menu_card() を単独で使う経路でも、投稿と翻訳メタをまとめて読む。
 				// 先読み済みなら追加の問い合わせは発生しない。
 				if ( ! empty( $assigned_published_ids ) ) {
-					_prime_post_caches( $assigned_published_ids, false, false );
+					_prime_post_caches( $assigned_published_ids, false, true );
 				}
 
 				$names = array_values(
 					array_filter(
 						array_map(
-							'get_the_title',
+							array( \VKBookingManager\Multilingual\Resource_Texts::class, 'get_title' ),
 							$assigned_published_ids
 						),
 						static function ( string $name ): bool {

@@ -19,6 +19,8 @@ use VKBookingManager\Bookings\Booking_Confirmation_Controller;
 use VKBookingManager\Bookings\Booking_Draft_Controller;
 use VKBookingManager\Bookings\Booking_Overlap;
 use VKBookingManager\Bookings\Lodging_Booking;
+use VKBookingManager\Multilingual\Multilingual_Labels;
+use VKBookingManager\Multilingual\Resource_Texts;
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\Common\Holiday_Calendar;
 use VKBookingManager\PostTypes\Booking_Post_Type;
@@ -330,6 +332,29 @@ class Lodging_Booking_Test extends WP_UnitTestCase {
 		$this->assertInstanceOf( WP_REST_Response::class, $response, $response instanceof WP_Error ? $response->get_error_code() : '' );
 
 		return (string) $response->get_data()['token'];
+	}
+
+	/** 英語と日本語の下書きに、表示中の言語の客室名を保存する。 */
+	public function test_lodging_draft_uses_localized_room_name(): void {
+		$room    = $this->create_room();
+		$menu_id = $this->create_menu( array( $room ) );
+		wp_update_post( array( 'ID' => $room, 'post_title' => "ツイン & ダブル's" ) );
+		update_option( Multilingual_Labels::OPTION_KEY, array( 'en_US' => array() ) );
+		update_post_meta( $room, Resource_Texts::META_KEY, array( 'en_US' => array( 'title' => "Twin & Double's" ) ) );
+		wp_set_current_user( $this->factory()->user->create() );
+
+		foreach ( array( 'en_US' => "Twin & Double's", 'ja_JP' => "ツイン & ダブル's" ) as $locale => $expected ) {
+			// REST のページ言語へ切り替えた状態で下書きを作る。
+			switch_to_locale( $locale );
+			try {
+				$token = $this->save_draft_token( $this->lodging_payload( $menu_id, $room, 10, 1 ) );
+				$draft = get_transient( self::TRANSIENT_PREFIX . $token );
+				$this->assertSame( $expected, $draft['staff_label'] );
+				$this->assertSame( $expected, $draft['slot']['staff']['name'] );
+			} finally {
+				restore_previous_locale();
+			}
+		}
 	}
 
 	/**

@@ -606,7 +606,7 @@ class Menu_Search_Block {
 
 			$options[] = array(
 				'value' => (int) $staff->ID,
-				'label' => vkbm_get_resource_display_name( (int) $staff->ID ),
+				'label' => vkbm_get_resource_display_name( (int) $staff->ID, true ),
 			);
 		}
 

@@ -111,6 +111,8 @@ class ComposerStaticInit748f77bcd61cb1c2eef703c6b906a2e4
         'VKBookingManager\\Integrations\\SiteGuard\\SiteGuard_Rest_Api_Check' => __DIR__ . '/../..' . '/src/integrations/siteguard/class-siteguard-rest-api-check.php',
         'VKBookingManager\\Multilingual\\Multilingual_Labels' => __DIR__ . '/../..' . '/src/multilingual/class-multilingual-labels.php',
         'VKBookingManager\\Multilingual\\Multilingual_Settings_Panel' => __DIR__ . '/../..' . '/src/multilingual/class-multilingual-settings-panel.php',
+        'VKBookingManager\\Multilingual\\Resource_Multilingual_Meta_Box' => __DIR__ . '/../..' . '/src/multilingual/class-resource-multilingual-meta-box.php',
+        'VKBookingManager\\Multilingual\\Resource_Texts' => __DIR__ . '/../..' . '/src/multilingual/class-resource-texts.php',
         'VKBookingManager\\Multilingual\\Rest_Locale' => __DIR__ . '/../..' . '/src/multilingual/class-rest-locale.php',
         'VKBookingManager\\Multilingual\\Service_Menu_Multilingual_Meta_Box' => __DIR__ . '/../..' . '/src/multilingual/class-service-menu-multilingual-meta-box.php',
         'VKBookingManager\\Multilingual\\Service_Menu_Texts' => __DIR__ . '/../..' . '/src/multilingual/class-service-menu-texts.php',

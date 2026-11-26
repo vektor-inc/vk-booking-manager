@@ -4,7 +4,7 @@ Tags: booking, reservations, appointment, salon, beauty
 Requires at least: 6.8
 Tested up to: 7.1
 Requires PHP: 8.3
-Stable tag: 3.18.1
+Stable tag: 3.19.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -140,6 +140,9 @@ Do not add `wp/v2` to the exclusion list: it also opens the list of user names t
 5. Provider settings - Configure business hours, notifications, and policies
 
 == Changelog ==
+
+= 3.19.0 =
+* [ 機能追加 ][ 予約ブロック ] リソースの呼び方と名前を言語ごとに登録し、英語などのページに合わせて表示できるよう対応
 
 = 3.18.1 =
 * [ 不具合修正 ] 3.17.0 で更新確認の部品（plugin-update-checker）を 6.0 に上げた際に呼び出し側が古いままだったため、Pro 版で新しいバージョンの更新通知が出なかった問題を修正

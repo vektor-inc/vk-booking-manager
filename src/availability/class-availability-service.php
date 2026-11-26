@@ -1753,7 +1753,7 @@ class Availability_Service {
 
 			$info[ $staff_id ] = array(
 				'id'            => $staff_id,
-				'name'          => vkbm_get_resource_display_name( $staff_id ),
+				'name'          => vkbm_get_resource_display_name( $staff_id, ! is_admin() ),
 				'resource_tags' => $resource_tags,
 				'avatar'        => $avatar ? esc_url_raw( $avatar ) : '',
 			);

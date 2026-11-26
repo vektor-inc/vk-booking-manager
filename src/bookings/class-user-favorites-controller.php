@@ -332,7 +332,7 @@ class User_Favorites_Controller {
 
 		// 指名なし（resource_id=0）は「指名なし」ラベル、指名ありは表示名を返す。
 		$resource_name = $resource_id > 0
-			? vkbm_get_resource_display_name( $resource_id )
+			? vkbm_get_resource_display_name( $resource_id, true )
 			: vkbm_get_no_nomination_label();
 
 		return array(

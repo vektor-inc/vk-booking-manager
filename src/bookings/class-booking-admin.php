@@ -43,7 +43,7 @@ use function admin_url;
 use function get_edit_post_link;
 use function get_edit_user_link;
 use function get_userdata;
-use function vkbm_get_resource_label_singular;
+use function vkbm_get_base_resource_label_singular;
 use function number_format_i18n;
 
 /**
@@ -491,14 +491,14 @@ class Booking_Admin {
 				// 説明として読めば違和感はないが、「今のステータスは維持できる」という
 				// 安心材料が書かれていなかったため、それを明記する言い回しへ変更する。
 				/* translators: %s: resource label (singular), e.g. "staff". */
-				'noticeMessage'     => sprintf( __( 'You can keep the current status, but assigning %s is required to select a different status here.', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
+				'noticeMessage'     => sprintf( __( 'You can keep the current status, but assigning %s is required to select a different status here.', 'vk-booking-manager' ), vkbm_get_base_resource_label_singular() ),
 				// 植草さんレビュー対応: リンク単体（スクリーンリーダーのリンク一覧読み上げ等）でも
 				// 「何を」割り当てるのかが伝わるよう、既存の「Please assign at least one %s.」と
-				// 同じ resource label を含める。vkbm_get_resource_label_singular() は自由入力の
+				// 同じ resource label を含める。vkbm_get_base_resource_label_singular() は自由入力の
 				// ため、冠詞（a / an）を使うと語によって破綻する（例: "instructor" は "an" が必要）。
 				// 既存の「Please assign at least one %s.」と同じく、冠詞を使わない言い回しにする。
 				/* translators: %s: resource label (singular), e.g. "staff". */
-				'noticeActionLabel' => sprintf( __( 'Assign %s from the edit screen', 'vk-booking-manager' ), vkbm_get_resource_label_singular() ),
+				'noticeActionLabel' => sprintf( __( 'Assign %s from the edit screen', 'vk-booking-manager' ), vkbm_get_base_resource_label_singular() ),
 			)
 		);
 	}
@@ -753,7 +753,7 @@ class Booking_Admin {
 						</td>
 					</tr>
 					<?php endif; ?>
-					<?php $vkbm_singular = vkbm_get_resource_label_singular(); ?>
+					<?php $vkbm_singular = vkbm_get_base_resource_label_singular(); ?>
 					<tr>
 						<th scope="row">
 							<?php
@@ -1010,7 +1010,7 @@ class Booking_Admin {
 							<label>
 								<input type="checkbox" name="vkbm_booking[is_staff_preferred]" value="1" <?php checked( $is_preferred ); ?> />
 								<?php
-								$singular = vkbm_get_resource_label_singular();
+								$singular = vkbm_get_base_resource_label_singular();
 								printf(
 									/* translators: %s: Resource label (singular). */
 									Industry_Presets::supports( 'lodging' ) ? esc_html__( 'Reservation with %s selected by customer', 'vk-booking-manager' ) : esc_html__( 'Reservation of %s nomination by customer', 'vk-booking-manager' ),
@@ -1020,7 +1020,7 @@ class Booking_Admin {
 							</label>
 							<p class="description">
 								<?php
-								$singular = vkbm_get_resource_label_singular();
+								$singular = vkbm_get_base_resource_label_singular();
 								printf(
 									/* translators: %s: Resource label (singular). */
 									Industry_Presets::supports( 'lodging' ) ? esc_html__( 'Checked when a customer makes a reservation by selecting %s.', 'vk-booking-manager' ) : esc_html__( 'Checked when a customer makes a reservation by naming %s.', 'vk-booking-manager' ),
@@ -2535,7 +2535,7 @@ class Booking_Admin {
 	 * @param string $notice_type Notice type.
 	 */
 	private function set_staff_conflict_notice( int $post_id, int $staff_id, string $notice_type ): void {
-		$label = vkbm_get_resource_label_singular();
+		$label = vkbm_get_base_resource_label_singular();
 		$name  = $staff_id > 0 ? (string) get_the_title( $staff_id ) : '';
 
 		if ( self::ADMIN_NOTICE_TYPE_WARNING !== $notice_type ) {
@@ -2568,7 +2568,7 @@ class Booking_Admin {
 		$message = sprintf(
 			/* translators: 1: resource label, 2: maximum number of guests per resource. */
 			__( 'The number of guests per %1$s exceeds the maximum (%2$d), so the reservation was not saved.', 'vk-booking-manager' ),
-			vkbm_get_resource_label_singular(),
+			vkbm_get_base_resource_label_singular(),
 			max( 1, $max_capacity )
 		);
 		// 対処方法を別の文として案内する（1翻訳関数につき1文に分ける）。

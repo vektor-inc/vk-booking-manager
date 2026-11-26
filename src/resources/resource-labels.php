@@ -82,6 +82,30 @@ function vkbm_get_saved_resource_label_menu(): string {
 }
 
 /**
+ * 管理画面と事業者向け通知に使う基本のリソース名を返す。
+ *
+ * @return string 無料版は既定値、Pro 版は保存された基本値。
+ */
+function vkbm_get_base_resource_label_singular(): string {
+	return vkbm_should_use_default_resource_labels() ? __( 'Staff', 'vk-booking-manager' ) : vkbm_get_saved_resource_label_singular();
+}
+
+/**
+ * 管理画面に使う基本のリソース複数名を返す。
+ *
+ * @return string 無料版は既定値、Pro 版は保存された基本値。
+ */
+function vkbm_get_base_resource_label_plural(): string {
+	if ( vkbm_should_use_default_resource_labels() ) {
+		return __( 'Staff', 'vk-booking-manager' );
+	}
+	$plural   = vkbm_get_saved_resource_label_plural();
+	$singular = vkbm_get_saved_resource_label_singular();
+	$default  = __( 'Staff', 'vk-booking-manager' );
+	return $default === $plural && $default !== $singular ? $singular : $plural;
+}
+
+/**
  * Get the configured singular label for resources (default: Staff).
  * 無料版では保存値ではなく既定値を返す。
  *
@@ -92,10 +116,10 @@ function vkbm_get_resource_label_singular(): string {
 
 	// 無料版は呼び方を変えられないため、保存値があっても既定値で表示する。
 	if ( vkbm_should_use_default_resource_labels() ) {
-		return $default;
+		return (string) apply_filters( 'vkbm_label', $default, 'resource_label_singular', determine_locale() );
 	}
 
-	return vkbm_get_saved_resource_label_singular();
+	return vkbm_resolve_label( 'resource_label_singular', 'vkbm_get_saved_resource_label_singular' );
 }
 
 /**
@@ -109,22 +133,19 @@ function vkbm_get_resource_label_plural(): string {
 
 	// 無料版は呼び方を変えられないため、保存値があっても既定値で表示する。
 	if ( vkbm_should_use_default_resource_labels() ) {
-		return $default;
+		return (string) apply_filters( 'vkbm_label', $default, 'resource_label_plural', determine_locale() );
 	}
 
-	// 保存値が空・未保存の場合は、取得関数が既定値を返す。
-	$label = vkbm_get_saved_resource_label_plural();
-
-	$singular = vkbm_get_resource_label_singular();
-	// If the plural label is still the default and singular has been customized,
-	// use the singular label as the plural label.
-	// 複数形ラベルがデフォルトのままで単数形がカスタマイズされている場合、
-	// 単数形ラベルを複数形として使用する。
-	if ( $default === $label && $default !== $singular ) {
-		return $singular;
-	}
-
-	return $label;
+	return vkbm_resolve_label(
+		'resource_label_plural',
+		static function ( string $locale ): string {
+			// 言語ごとの単数形がある場合は、別言語の基本複数形を混ぜない。
+			if ( '' !== Multilingual_Labels::get_value( $locale, 'resource_label_singular' ) ) {
+				return vkbm_get_resource_label_singular();
+			}
+			return vkbm_get_base_resource_label_plural();
+		}
+	);
 }
 
 /**
@@ -253,10 +274,10 @@ function vkbm_get_resource_label_menu(): string {
 
 	// 無料版は呼び方を変えられないため、保存値があっても既定値で表示する。
 	if ( vkbm_should_use_default_resource_labels() ) {
-		return $default;
+		return (string) apply_filters( 'vkbm_label', $default, 'resource_label_menu', determine_locale() );
 	}
 
-	return vkbm_get_saved_resource_label_menu();
+	return vkbm_resolve_label( 'resource_label_menu', 'vkbm_get_saved_resource_label_menu' );
 }
 
 /**
@@ -353,14 +374,17 @@ function vkbm_resolve_label( string $key, callable $get_base_label ): string {
  */
 function vkbm_get_base_label( string $key ): string {
 	$getters = array(
-		'duration_label'         => 'vkbm_get_base_duration_label',
-		'other_conditions_label' => 'vkbm_get_base_other_conditions_label',
-		'menu_label'             => 'vkbm_get_base_menu_label',
-		'menu_label_plural'      => 'vkbm_get_base_menu_label_plural',
-		'guests_count_label'     => 'vkbm_get_base_guests_count_label',
-		'guests_unit_label'      => 'vkbm_get_base_guests_unit_label',
-		'no_nomination_label'    => 'vkbm_get_base_no_nomination_label',
-		'nomination_fee_label'   => 'vkbm_get_base_nomination_fee_label',
+		'duration_label'          => 'vkbm_get_base_duration_label',
+		'other_conditions_label'  => 'vkbm_get_base_other_conditions_label',
+		'menu_label'              => 'vkbm_get_base_menu_label',
+		'menu_label_plural'       => 'vkbm_get_base_menu_label_plural',
+		'resource_label_singular' => 'vkbm_get_saved_resource_label_singular',
+		'resource_label_menu'     => 'vkbm_get_saved_resource_label_menu',
+		'resource_label_plural'   => 'vkbm_get_base_resource_label_plural',
+		'guests_count_label'      => 'vkbm_get_base_guests_count_label',
+		'guests_unit_label'       => 'vkbm_get_base_guests_unit_label',
+		'no_nomination_label'     => 'vkbm_get_base_no_nomination_label',
+		'nomination_fee_label'    => 'vkbm_get_base_nomination_fee_label',
 	);
 
 	return isset( $getters[ $key ] ) ? (string) call_user_func( $getters[ $key ] ) : '';
@@ -701,10 +725,11 @@ function vkbm_format_guests_count( int $count, ?string $unit = null ): string {
  * When the `resource_tag_display_enabled` setting is ON, tags are appended
  * in parentheses after the resource name. When OFF, only the name is returned.
  *
- * @param int $post_id リソース投稿ID / Resource post ID.
+ * @param int  $post_id リソース投稿ID / Resource post ID.
+ * @param bool $localized 言語別の名前を使うか。
  * @return string 表示用リソース名 / Display name for the resource.
  */
-function vkbm_get_resource_display_name( int $post_id ): string {
+function vkbm_get_resource_display_name( int $post_id, bool $localized = false ): string {
 	// リソースの投稿だけを対象にする。
 	if ( Resource_Post_Type::POST_TYPE !== get_post_type( $post_id ) ) {
 		return '';
@@ -720,7 +745,7 @@ function vkbm_get_resource_display_name( int $post_id ): string {
 		wp_cache_set( 'resource_tag_display_enabled', $enabled, 'vkbm' );
 	}
 
-	$name = get_the_title( $post_id );
+	$name = $localized ? \VKBookingManager\Multilingual\Resource_Texts::get_title( $post_id ) : get_the_title( $post_id );
 	if ( '' === $name ) {
 		return '';
 	}

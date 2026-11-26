@@ -13,6 +13,8 @@ namespace VKBookingManager\Multilingual;
 
 use VKBookingManager\Capabilities\Capabilities;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
+use VKBookingManager\PostTypes\Resource_Post_Type;
+use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\ProviderSettings\Settings_Sanitizer;
 
 use function __;
@@ -40,6 +42,7 @@ use function sprintf;
 use function switch_to_locale;
 use function vkbm_get_base_label;
 use function vkbm_get_menu_label;
+use function vkbm_get_resource_label_singular;
 use function vkbm_get_other_conditions_label;
 use function wp_get_available_translations;
 
@@ -177,6 +180,27 @@ class Multilingual_Settings_Panel {
 			'hidden' => $this->is_industry_hidden( 'guests_unit_label' ),
 		);
 
+		// 表記設定と同じ順に、Pro 版だけリソースの呼び方を出す。
+		if ( ! Pro_Upsell::is_free_edition() ) {
+			$fields[] = array(
+				'key'    => 'resource_label_singular',
+				'label'  => __( 'Resource name (singular)', 'vk-booking-manager' ),
+				'hidden' => $this->is_industry_hidden( 'resource_label_singular' ),
+			);
+			$fields[] = array(
+				'key'    => 'resource_label_menu',
+				'label'  => __( 'resource label', 'vk-booking-manager' ),
+				'hidden' => $this->is_industry_hidden( 'resource_label_menu' ),
+			);
+			if ( Multilingual_Labels::locale_has_plural_forms( $locale ) ) {
+				$fields[] = array(
+					'key'    => 'resource_label_plural',
+					'label'  => __( 'Resource name (multiple)', 'vk-booking-manager' ),
+					'hidden' => $this->is_industry_hidden( 'resource_label_plural' ),
+				);
+			}
+		}
+
 		// 指名なしラベル・指名料ラベルは、「表記設定」タブと同じく指名機能が無効なときは見せない。
 		$fields[] = array(
 			'key'    => 'no_nomination_label',
@@ -238,10 +262,15 @@ class Multilingual_Settings_Panel {
 				$placeholders[ $key ] = vkbm_get_base_label( $key );
 			}
 		}
-		$placeholders['menu_label_plural_base'] = $placeholders['menu_label_plural'];
+		$placeholders['menu_label_plural_base']     = $placeholders['menu_label_plural'];
+		$placeholders['resource_label_plural_base'] = $placeholders['resource_label_plural'];
 		// 複数形の空欄は、その言語の単数形 → 基本の値の複数形 → 単数形の基本の値の順で表示される。
 		if ( '' !== ( $values['menu_label'] ?? '' ) ) {
 			$placeholders['menu_label_plural'] = $values['menu_label'];
+		}
+
+		if ( '' !== ( $values['resource_label_singular'] ?? '' ) ) {
+			$placeholders['resource_label_plural'] = $values['resource_label_singular'];
 		}
 
 		if ( $switched ) {
@@ -298,6 +327,18 @@ class Multilingual_Settings_Panel {
 				);
 				?>
 			</p>
+			<?php if ( ! Pro_Upsell::is_free_edition() ) : ?>
+				<p class="vkbm-multilingual__intro">
+				<?php
+				printf(
+					/* translators: %s: Resource term (singular), linked to the resource list when permitted. */
+					esc_html__( 'You can enter the name for each language on the edit screen of each %s.', 'vk-booking-manager' ),
+					$this->get_resource_list_link() // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- 組み立て時にエスケープ済み。
+				);
+				?>
+				</p>
+
+			<?php endif; ?>
 
 			<?php // 言語を全部削除した保存でも判別できるよう、印を必ず送る。 ?>
 			<input type="hidden" name="<?php echo esc_attr( Multilingual_Labels::SUBMITTED_KEY ); ?>" value="1" />
@@ -438,9 +479,9 @@ class Multilingual_Settings_Panel {
 									value="<?php echo esc_attr( $values[ $key ] ?? '' ); ?>"
 									placeholder="<?php echo esc_attr( $placeholders[ $key ] ?? '' ); ?>"
 									data-multilingual-key="<?php echo esc_attr( $key ); ?>"
-									<?php if ( 'menu_label_plural' === $key ) : ?>
+									<?php if ( 'menu_label_plural' === $key || 'resource_label_plural' === $key ) : ?>
 										<?php // 単数形を空にしたときに戻す、複数形のプレースホルダー（基本の値の複数形、無ければ単数形の基本の値）。 ?>
-										data-base-placeholder="<?php echo esc_attr( $placeholders['menu_label_plural_base'] ); ?>"
+										data-base-placeholder="<?php echo esc_attr( $placeholders[ $key . '_base' ] ); ?>"
 									<?php endif; ?>
 								/>
 								<?php endif; ?>
@@ -482,6 +523,20 @@ class Multilingual_Settings_Panel {
 		}
 
 		return '<a href="' . esc_url( admin_url( 'edit.php?post_type=' . Service_Menu_Post_Type::POST_TYPE ) ) . '">' . $label . '</a>';
+	}
+
+	/**
+	 * リソースの呼び方を、権限があれば一覧へのリンクにして返す。
+	 *
+	 * @return string エスケープ済みの HTML。
+	 */
+	private function get_resource_list_link(): string {
+		$label = esc_html( vkbm_get_resource_label_singular() );
+		if ( ! current_user_can( Capabilities::MANAGE_STAFF ) ) {
+			return $label;
+		}
+
+		return '<a href="' . esc_url( admin_url( 'edit.php?post_type=' . Resource_Post_Type::POST_TYPE ) ) . '">' . $label . '</a>';
 	}
 
 	/**

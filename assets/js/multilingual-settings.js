@@ -129,18 +129,23 @@
 		 * @param {HTMLElement} section 言語の欄のまとまり。
 		 */
 		const syncPluralPlaceholder = ( section ) => {
-			const singular = section.querySelector(
-				'[data-multilingual-key="menu_label"]'
-			);
-			const plural = section.querySelector(
-				'[data-multilingual-key="menu_label_plural"]'
-			);
-			if ( ! singular || ! plural ) {
-				return;
-			}
-			const value = singular.value.trim();
-			plural.placeholder =
-				'' !== value ? value : plural.dataset.basePlaceholder || '';
+			[
+				[ 'menu_label', 'menu_label_plural' ],
+				[ 'resource_label_singular', 'resource_label_plural' ],
+			].forEach( ( [ singularKey, pluralKey ] ) => {
+				const singular = section.querySelector(
+					`[data-multilingual-key="${ singularKey }"]`
+				);
+				const plural = section.querySelector(
+					`[data-multilingual-key="${ pluralKey }"]`
+				);
+				if ( singular && plural ) {
+					plural.placeholder =
+						singular.value.trim() ||
+						plural.dataset.basePlaceholder ||
+						'';
+				}
+			} );
 		};
 
 		/**
@@ -247,7 +252,9 @@
 			const target = event.target;
 			if (
 				target instanceof HTMLInputElement &&
-				'menu_label' === target.dataset.multilingualKey
+				[ 'menu_label', 'resource_label_singular' ].includes(
+					target.dataset.multilingualKey
+				)
 			) {
 				syncPluralPlaceholder(
 					target.closest( '.vkbm-multilingual__language' )

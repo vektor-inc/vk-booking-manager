@@ -850,6 +850,7 @@ class Service_Menu_Texts_Test extends WP_UnitTestCase {
 
 			$this->assertStringContainsString( 'for each language on the edit screen of each', $html, $case['test_condition_name'] . '（案内）' );
 			$this->assertSame( $case['expected'], is_int( strpos( $html, 'edit.php?post_type=' . Service_Menu_Post_Type::POST_TYPE ) ), $case['test_condition_name'] );
+			$this->assertSame( ! \VKBookingManager\Admin\Pro_Upsell::is_free_edition(), false !== strpos( $html, 'You can enter the name for each language on the edit screen of each' ), 'リソース編集画面の案内は Pro 版だけ' );
 		}
 	}
 }

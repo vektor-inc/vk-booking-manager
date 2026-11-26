@@ -3,7 +3,7 @@
  * Plugin Name: VK Booking Manager
  * Plugin URI:  https://vk-booking-manager.com/
  * Description: This is a booking plugin that supports complex service formats such as beauty, chiropractic, and private lessons. It can be used not only on websites but also as a standalone booking system.
- * Version:     3.18.1
+ * Version:     3.19.0
  * Requires at least: 6.8
  * Requires PHP: 8.3
  * Author:      Vektor,Inc.
@@ -143,6 +143,8 @@ require_once __DIR__ . '/src/multilingual/class-multilingual-settings-panel.php'
 require_once __DIR__ . '/src/multilingual/class-rest-locale.php';
 require_once __DIR__ . '/src/multilingual/class-service-menu-texts.php';
 require_once __DIR__ . '/src/multilingual/class-service-menu-multilingual-meta-box.php';
+require_once __DIR__ . '/src/multilingual/class-resource-texts.php';
+require_once __DIR__ . '/src/multilingual/class-resource-multilingual-meta-box.php';
 require_once __DIR__ . '/src/resources/resource-labels.php';
 require_once __DIR__ . '/src/provider-settings/class-industry-presets.php';
 require_once __DIR__ . '/src/provider-settings/class-provider-display-name.php';
@@ -431,6 +433,8 @@ if ( ! function_exists( 'vkbm_plugin' ) ) {
 		// プランのタイトル・抜粋・その他条件を言語ごとに入力する欄と、予約画面の REST での出し分け（#1187）。
 		( new \VKBookingManager\Multilingual\Service_Menu_Texts() )->register();
 		( new \VKBookingManager\Multilingual\Service_Menu_Multilingual_Meta_Box() )->register();
+		( new \VKBookingManager\Multilingual\Resource_Texts() )->register();
+		( new \VKBookingManager\Multilingual\Resource_Multilingual_Meta_Box() )->register();
 
 		// シフト・サービスメニュー・スタッフ・システム設定の保存/削除で
 		// 空き状況キャッシュ（transient）の世代番号を進める（#410 / #412）。

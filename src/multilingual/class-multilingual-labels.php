@@ -63,7 +63,7 @@ class Multilingual_Labels {
 	/**
 	 * 言語ごとに登録できる呼び方のキー。並びは「表記設定」タブの欄の並びと同じにする。
 	 *
-	 * スタッフ系の呼び方（resource_label_singular / resource_label_plural / resource_label_menu）は対象外。
+	 * リソースの呼び方は Pro 版の表示だけで利用する。
 	 */
 	public const FIELD_KEYS = array(
 		'duration_label',
@@ -72,6 +72,9 @@ class Multilingual_Labels {
 		'menu_label_plural',
 		'guests_count_label',
 		'guests_unit_label',
+		'resource_label_singular',
+		'resource_label_menu',
+		'resource_label_plural',
 		'no_nomination_label',
 		'nomination_fee_label',
 		...self::TEXT_KEYS,

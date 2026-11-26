@@ -87,14 +87,8 @@ class Provider_Settings_Controller {
 	 */
 	public function get_settings(): WP_REST_Response {
 		$settings = $this->settings_repository->get_settings();
-		// 無料版では保存値ではなく既定値を返す。Pro 版は従来どおり保存値をそのまま返す。
-		if ( vkbm_should_use_default_resource_labels() ) {
-			$resource_label_singular = vkbm_get_resource_label_singular();
-			$resource_label_plural   = vkbm_get_resource_label_plural();
-		} else {
-			$resource_label_singular = isset( $settings['resource_label_singular'] ) ? (string) $settings['resource_label_singular'] : __( 'Staff', 'vk-booking-manager' );
-			$resource_label_plural   = isset( $settings['resource_label_plural'] ) ? (string) $settings['resource_label_plural'] : __( 'Staff', 'vk-booking-manager' );
-		}
+		$resource_label_singular = vkbm_get_resource_label_singular();
+		$resource_label_plural   = vkbm_get_resource_label_plural();
 
 		// 指名関連ラベルを取得する（ヘルパー関数がフォールバックを処理）。
 		$no_nomination_label  = vkbm_get_no_nomination_label();

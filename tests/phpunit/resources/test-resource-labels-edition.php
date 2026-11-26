@@ -315,7 +315,7 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 					),
 			),
 			array(
-				'test_condition_name' => '単数形だけ「客室」を保存 => ' . ( $is_free ? '無料版は両方「Staff」' : 'Pro 版の複数形は保存値の「Staff」のまま（単数形へ寄せない）' ),
+				'test_condition_name' => '単数形だけ「客室」を保存 => ' . ( $is_free ? '無料版は両方「Staff」' : 'Pro 版の複数形は単数形に追従' ),
 				'conditions'          => array( 'singular' => '客室' ),
 				'expected'            => $is_free
 					? array(
@@ -324,7 +324,7 @@ class Resource_Labels_Edition_Test extends WP_UnitTestCase {
 					)
 					: array(
 						'singular' => '客室',
-						'plural'   => 'Staff',
+						'plural'   => '客室',
 					),
 			),
 			array(

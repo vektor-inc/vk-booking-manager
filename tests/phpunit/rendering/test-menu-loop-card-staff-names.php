@@ -16,6 +16,8 @@ namespace VKBookingManager\Tests\Frontend;
 
 use VKBookingManager\Admin\Pro_Upsell;
 use VKBookingManager\Blocks\Menu_Loop_Block;
+use VKBookingManager\Multilingual\Multilingual_Labels;
+use VKBookingManager\Multilingual\Resource_Texts;
 use VKBookingManager\PostTypes\Resource_Post_Type;
 use VKBookingManager\PostTypes\Service_Menu_Post_Type;
 use VKBookingManager\ProviderSettings\Settings_Repository;
@@ -177,6 +179,34 @@ class Menu_Loop_Card_Staff_Names_Test extends WP_UnitTestCase {
 		// menu_order が小さい順、同じなら title 昇順。公開中でタイトルのあるものだけ。
 		$this->assertSame( 'Carol, Alice, Bob', $this->extract_staff_names( $html, $this->get_label() ) );
 		$this->assertStringNotContainsString( 'NotAssigned', $html );
+	}
+
+	/**
+	 * 英語のカードでは言語別の名前を使い、未登録なら基本名へ戻す。
+	 */
+	public function test_card_localizes_staff_names_with_base_fallback(): void {
+		$translated = $this->create_resource( '山田 太郎', 1 );
+		$fallback   = $this->create_resource( '佐藤 花子', 2 );
+		$menu_id    = $this->create_menu( '指名メニュー', array( $translated, $fallback ) );
+		update_option( Multilingual_Labels::OPTION_KEY, array( 'en_US' => array() ) );
+		update_post_meta( $translated, Resource_Texts::META_KEY, array( 'en_US' => array( 'title' => 'Taro Yamada' ) ) );
+		add_filter( 'locale', array( $this, 'use_english_locale' ) );
+		try {
+			$html = $this->block->render_menu_card( $menu_id );
+			$this->assertSame( 'Taro Yamada, 佐藤 花子', $this->extract_staff_names( $html, $this->get_label() ) );
+		} finally {
+			remove_filter( 'locale', array( $this, 'use_english_locale' ) );
+		}
+	}
+
+	/**
+	 * 英語ロケールで描画する。
+	 *
+	 * @param string $locale 元のロケール。
+	 * @return string 英語ロケール。
+	 */
+	public function use_english_locale( string $locale ): string {
+		return 'en_US';
 	}
 
 	/**

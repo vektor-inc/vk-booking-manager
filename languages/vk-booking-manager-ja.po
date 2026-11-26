@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: vk-booking-manager 0.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/vk-booking-"
 "manager\n"
-"POT-Creation-Date: 2026-11-25T12:05:32+00:00\n"
+"POT-Creation-Date: 2026-11-26T06:31:43+00:00\n"
 "PO-Revision-Date: 2026-02-23 23:58+0900\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -269,12 +269,14 @@ msgid "System settings"
 msgstr "システム設定"
 
 #: src/admin/class-provider-settings-navigation.php:126
-#: src/multilingual/class-multilingual-settings-panel.php:265
+#: src/multilingual/class-multilingual-settings-panel.php:294
 msgid "Notation settings"
 msgstr "表記設定"
 
 #: src/admin/class-provider-settings-navigation.php:130
 #: src/admin/class-provider-settings-page.php:1133
+#: src/multilingual/class-resource-multilingual-meta-box.php:31
+#: src/multilingual/class-resource-multilingual-meta-box.php:48
 #: src/multilingual/class-service-menu-multilingual-meta-box.php:88
 #: src/multilingual/class-service-menu-multilingual-meta-box.php:206
 msgid "Multilingual settings"
@@ -681,11 +683,11 @@ msgstr ""
 #: src/provider-settings/class-settings-repository.php:141
 #: src/provider-settings/class-settings-repository.php:142
 #: src/resources/resource-labels.php:50 src/resources/resource-labels.php:64
-#: src/resources/resource-labels.php:91 src/resources/resource-labels.php:108
-#: src/rest/class-provider-settings-controller.php:95
-#: src/rest/class-provider-settings-controller.php:96
-#: src/blocks/reservation/app.js:675 src/blocks/reservation/app.js:676
-#: src/blocks/reservation/app.js:1250 src/blocks/reservation/app.js:1259
+#: src/resources/resource-labels.php:90 src/resources/resource-labels.php:100
+#: src/resources/resource-labels.php:104 src/resources/resource-labels.php:115
+#: src/resources/resource-labels.php:132 src/blocks/reservation/app.js:675
+#: src/blocks/reservation/app.js:676 src/blocks/reservation/app.js:1250
+#: src/blocks/reservation/app.js:1259
 #: src/blocks/reservation/booking-confirm-app.js:294
 #: src/blocks/reservation/booking-confirm-app.js:695
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:581
@@ -701,13 +703,13 @@ msgstr "スタッフ"
 #: src/admin/class-provider-settings-page.php:4564
 #: src/provider-settings/class-industry-presets.php:292
 #: src/provider-settings/class-settings-repository.php:143
-#: src/resources/resource-labels.php:78 src/resources/resource-labels.php:252
+#: src/resources/resource-labels.php:78 src/resources/resource-labels.php:273
 msgid "Staff available"
 msgstr "担当可能スタッフ"
 
 #: src/admin/class-provider-settings-page.php:951
 #: src/provider-settings/class-settings-repository.php:145
-#: src/resources/resource-labels.php:390 src/blocks/reservation/app.js:678
+#: src/resources/resource-labels.php:414 src/blocks/reservation/app.js:678
 #: src/blocks/reservation/app.js:1266
 #: src/blocks/reservation/booking-confirm-app.js:297
 #: src/blocks/reservation/booking-ui/daily-slot-list.js:153
@@ -718,7 +720,7 @@ msgstr "指名なし"
 
 #: src/admin/class-provider-settings-page.php:952
 #: src/provider-settings/class-settings-repository.php:146
-#: src/resources/resource-labels.php:414
+#: src/resources/resource-labels.php:438
 #: src/staff/class-staff-editor-pro.php:336
 #: src/staff/class-staff-editor.php:347 src/blocks/reservation/app.js:679
 #: src/blocks/reservation/app.js:1271
@@ -729,14 +731,14 @@ msgstr "指名料"
 #: src/admin/class-provider-settings-page.php:953
 #: src/admin/class-provider-settings-page.php:4568
 #: src/provider-settings/class-settings-repository.php:147
-#: src/resources/resource-labels.php:439
+#: src/resources/resource-labels.php:463
 msgid "Time"
 msgstr "時間"
 
 #: src/admin/class-provider-settings-page.php:954
 #: src/admin/class-provider-settings-page.php:4569
 #: src/provider-settings/class-settings-repository.php:148
-#: src/resources/resource-labels.php:464 src/blocks/reservation/app.js:695
+#: src/resources/resource-labels.php:488 src/blocks/reservation/app.js:695
 #: src/blocks/reservation/app.js:1300
 #: src/blocks/reservation/booking-confirm-app.js:303
 #: src/blocks/reservation/components/booking-summary-items.js:231
@@ -876,8 +878,8 @@ msgid "This will be displayed in the signature of notification emails, etc."
 msgstr "通知メールの署名などに表示されます。"
 
 #: src/admin/class-provider-settings-page.php:1256
-#: src/multilingual/class-multilingual-settings-panel.php:195
-#: src/multilingual/class-multilingual-settings-panel.php:410
+#: src/multilingual/class-multilingual-settings-panel.php:219
+#: src/multilingual/class-multilingual-settings-panel.php:448
 msgid "Payment instructions"
 msgstr "お支払いの案内"
 
@@ -1622,8 +1624,8 @@ msgstr ""
 "ます。"
 
 #: src/admin/class-provider-settings-page.php:2140
-#: src/multilingual/class-multilingual-settings-panel.php:196
-#: src/multilingual/class-multilingual-settings-panel.php:411
+#: src/multilingual/class-multilingual-settings-panel.php:220
+#: src/multilingual/class-multilingual-settings-panel.php:449
 msgid "Guidance text for tentative reservation completion"
 msgstr "仮予約完了時の案内文"
 
@@ -1989,8 +1991,8 @@ msgid "Select a logo image from your Media Library (optional)."
 msgstr "Media Library からロゴ画像を選択します（任意）。"
 
 #: src/admin/class-provider-settings-page.php:2456
-#: src/multilingual/class-multilingual-settings-panel.php:194
-#: src/multilingual/class-multilingual-settings-panel.php:409
+#: src/multilingual/class-multilingual-settings-panel.php:218
+#: src/multilingual/class-multilingual-settings-panel.php:447
 #: src/blocks/reservation/booking-confirm-app.js:2540
 #: src/blocks/reservation/components/footer-model.js:103
 msgid "Cancellation policy"
@@ -2131,7 +2133,7 @@ msgid "Time slot capacity feature is available in the Pro edition."
 msgstr "予約枠の定員機能はPro版で利用できます。"
 
 #: src/admin/class-provider-settings-page.php:2646
-#: src/multilingual/class-multilingual-settings-panel.php:143
+#: src/multilingual/class-multilingual-settings-panel.php:146
 msgid "Duration label"
 msgstr "所要時間ラベル"
 
@@ -2144,7 +2146,7 @@ msgstr ""
 "します。"
 
 #: src/admin/class-provider-settings-page.php:2664
-#: src/multilingual/class-multilingual-settings-panel.php:148
+#: src/multilingual/class-multilingual-settings-panel.php:151
 msgid "Other conditions label"
 msgstr "その他条件ラベル"
 
@@ -2187,14 +2189,14 @@ msgid ""
 msgstr "メニューループからサービス詳細ページに進むボタンの表示テキスト"
 
 #: src/admin/class-provider-settings-page.php:2735
-#: src/multilingual/class-multilingual-settings-panel.php:153
+#: src/multilingual/class-multilingual-settings-panel.php:156
 msgid "Service menu term"
 msgstr "サービスメニューの呼び方"
 
 #: src/admin/class-provider-settings-page.php:2744
 #: src/bookings/class-booking-admin.php:1060
 #: src/bookings/class-booking-admin.php:1637
-#: src/resources/resource-labels.php:517 src/resources/resource-labels.php:571
+#: src/resources/resource-labels.php:541 src/resources/resource-labels.php:595
 #: src/blocks/reservation/booking-ui/selected-plan-summary.js:560
 #: src/blocks/reservation/components/menu-label.js:12
 #: src/blocks/reservation/components/menu-label.js:104
@@ -2220,7 +2222,7 @@ msgstr ""
 "ださい（例: プラン / コース / 商品）。空欄のときは「メニュー」と表示します。"
 
 #: src/admin/class-provider-settings-page.php:2755
-#: src/multilingual/class-multilingual-settings-panel.php:163
+#: src/multilingual/class-multilingual-settings-panel.php:166
 msgid "Service menu term (plural)"
 msgstr "サービスメニューの呼び方（複数形）"
 
@@ -2234,7 +2236,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2771
 #: src/admin/class-provider-settings-page.php:2773
-#: src/multilingual/class-multilingual-settings-panel.php:171
+#: src/multilingual/class-multilingual-settings-panel.php:195
 msgid "Quantity label"
 msgstr "数量の見出し"
 
@@ -2257,7 +2259,7 @@ msgstr "予約対象は人とは限りません（席・部屋・個数など）
 
 #: src/admin/class-provider-settings-page.php:2791
 #: src/admin/class-provider-settings-page.php:2793
-#: src/multilingual/class-multilingual-settings-panel.php:176
+#: src/multilingual/class-multilingual-settings-panel.php:200
 msgid "Quantity unit"
 msgstr "数量の単位"
 
@@ -2289,6 +2291,7 @@ msgstr ""
 #: src/admin/class-provider-settings-page.php:2811
 #: src/admin/class-provider-settings-page.php:2813
 #: src/admin/class-provider-settings-page.php:2929
+#: src/multilingual/class-multilingual-settings-panel.php:175
 msgid "Resource name (singular)"
 msgstr "リソース名称（単数）"
 
@@ -2335,6 +2338,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2885
 #: src/admin/class-provider-settings-page.php:2887
+#: src/multilingual/class-multilingual-settings-panel.php:180
 msgid "resource label"
 msgstr "リソースラベル"
 
@@ -2348,6 +2352,7 @@ msgstr "メニューカード内の「担当可能スタッフ」表記を置き
 
 #: src/admin/class-provider-settings-page.php:2908
 #: src/admin/class-provider-settings-page.php:2910
+#: src/multilingual/class-multilingual-settings-panel.php:186
 msgid "Resource name (multiple)"
 msgstr "リソース名称（複数）"
 
@@ -2379,13 +2384,13 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2965
 #: src/admin/class-provider-settings-page.php:2967
-#: src/multilingual/class-multilingual-settings-panel.php:183
+#: src/multilingual/class-multilingual-settings-panel.php:207
 msgid "No selection label"
 msgstr "指定なしラベル"
 
 #: src/admin/class-provider-settings-page.php:2965
 #: src/admin/class-provider-settings-page.php:2967
-#: src/multilingual/class-multilingual-settings-panel.php:183
+#: src/multilingual/class-multilingual-settings-panel.php:207
 msgid "No nomination label"
 msgstr "指名なしラベル"
 
@@ -2407,7 +2412,7 @@ msgstr ""
 
 #: src/admin/class-provider-settings-page.php:2987
 #: src/admin/class-provider-settings-page.php:2989
-#: src/multilingual/class-multilingual-settings-panel.php:188
+#: src/multilingual/class-multilingual-settings-panel.php:212
 msgid "Nomination fee label"
 msgstr "指名料ラベル"
 
@@ -3494,7 +3499,7 @@ msgstr "下へ"
 #: src/auth/class-auth-shortcodes.php:1131
 #: src/customers/class-customer-flag-settings-page.php:374
 #: src/customers/class-customer-flag-settings-page.php:670
-#: src/multilingual/class-multilingual-settings-panel.php:397
+#: src/multilingual/class-multilingual-settings-panel.php:435
 msgid "Delete"
 msgstr "削除"
 
@@ -6557,7 +6562,7 @@ msgstr "担当可能なスタッフが設定されていません。"
 #. translators: %s: リソースの複数名（例: スタッフ、ガイド、講師）。
 #. translators: %s: resource label (plural), customizable via basic settings.
 #: src/availability/class-availability-service.php:1341
-#: src/resources/resource-labels.php:158
+#: src/resources/resource-labels.php:179
 #: src/blocks/reservation/resource-tag-empty-message.js:26
 msgid "There are no %s matching the selected conditions."
 msgstr "条件に該当する%sがいません。"
@@ -9357,7 +9362,7 @@ msgid "Remove the connection"
 msgstr "連携を解除"
 
 #: src/integrations/google-calendar/class-google-calendar-settings-panel.php:390
-#: src/resources/resource-labels.php:490 src/blocks/reservation/app.js:697
+#: src/resources/resource-labels.php:514 src/blocks/reservation/app.js:697
 #: src/blocks/reservation/app.js:1306
 #: src/blocks/reservation/booking-confirm-app.js:307
 #: src/blocks/reservation/components/booking-summary-items.js:157
@@ -9702,7 +9707,7 @@ msgstr ""
 msgid "External calendar / %1$s / %2$s - %3$s"
 msgstr "外部カレンダー / %1$s / %2$s〜%3$s"
 
-#: src/multilingual/class-multilingual-settings-panel.php:273
+#: src/multilingual/class-multilingual-settings-panel.php:302
 msgid ""
 "Register the terms shown on pages in languages other than the site language, "
 "such as English, for each language."
@@ -9711,7 +9716,7 @@ msgstr ""
 "ます。"
 
 #. translators: %s: link to the "Notation settings" tab.
-#: src/multilingual/class-multilingual-settings-panel.php:279
+#: src/multilingual/class-multilingual-settings-panel.php:308
 msgid ""
 "The light text in each field is the term shown when the field is left empty "
 "(the term set in \"%s\")."
@@ -9719,115 +9724,133 @@ msgstr ""
 "入力欄の薄い文字は、空欄のときに表示される呼び方（「%s」の呼び方）です。"
 
 #. translators: 1: first sentence, 2: second sentence. Remove the space if your language does not put a space between sentences.
-#: src/multilingual/class-multilingual-settings-panel.php:284
+#: src/multilingual/class-multilingual-settings-panel.php:313
 #: src/multilingual/class-service-menu-multilingual-meta-box.php:140
 msgctxt "two sentences in a row"
 msgid "%1$s %2$s"
 msgstr "%1$s%2$s"
 
-#: src/multilingual/class-multilingual-settings-panel.php:286
+#: src/multilingual/class-multilingual-settings-panel.php:315
 msgid ""
 "If the light text is not in that language, enter the term for that language."
 msgstr "薄い文字が日本語のままの項目は、その言語の呼び方を入力してください。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:290
+#: src/multilingual/class-multilingual-settings-panel.php:319
 msgid "Create pages for each language with a multilingual plugin such as Bogo."
 msgstr "言語ごとのページは、Bogo などの多言語化プラグインで作成してください。"
 
 #. translators: 1: Label of the "Other conditions" field. 2: Service menu term (singular), linked to the list of service menus.
-#: src/multilingual/class-multilingual-settings-panel.php:295
+#: src/multilingual/class-multilingual-settings-panel.php:324
 msgid ""
 "You can enter the title, excerpt, and %1$s for each language on the edit "
 "screen of each %2$s."
 msgstr "タイトル・抜粋・%1$sは、各%2$sの編集画面で言語ごとに入力できます。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:308
+#. translators: %s: Resource term (singular), linked to the resource list when permitted.
+#: src/multilingual/class-multilingual-settings-panel.php:334
+msgid "You can enter the name for each language on the edit screen of each %s."
+msgstr "%sの編集画面で、言語ごとの名前を入力できます。"
+
+#: src/multilingual/class-multilingual-settings-panel.php:346
 msgid "Add a language"
 msgstr "言語の追加"
 
-#: src/multilingual/class-multilingual-settings-panel.php:311
+#: src/multilingual/class-multilingual-settings-panel.php:349
 msgid "Language to add"
 msgstr "追加する言語"
 
-#: src/multilingual/class-multilingual-settings-panel.php:312
+#: src/multilingual/class-multilingual-settings-panel.php:350
 msgid "Select a language"
 msgstr "言語を選択"
 
-#: src/multilingual/class-multilingual-settings-panel.php:319
+#: src/multilingual/class-multilingual-settings-panel.php:357
 msgid "+ Add language"
 msgstr "+ 言語を追加"
 
-#: src/multilingual/class-multilingual-settings-panel.php:322
+#: src/multilingual/class-multilingual-settings-panel.php:360
 msgid "The list shows the languages installed on this site."
 msgstr "一覧には、このサイトにインストール済みの言語が表示されます。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:323
+#: src/multilingual/class-multilingual-settings-panel.php:361
 msgid "There are no more languages to add."
 msgstr "追加できる言語はありません。"
 
 #. translators: %s: link to the "Language Packs" screen of Bogo.
-#: src/multilingual/class-multilingual-settings-panel.php:329
+#: src/multilingual/class-multilingual-settings-panel.php:367
 msgid ""
 "Languages not in the list can be selected after you install them on the "
 "\"%s\" screen of Bogo."
 msgstr ""
 "一覧に無い言語は、Bogo の「%s」画面でインストールすると選べるようになります。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:330
+#: src/multilingual/class-multilingual-settings-panel.php:368
 msgid "Language Packs"
 msgstr "言語パック"
 
-#: src/multilingual/class-multilingual-settings-panel.php:334
+#: src/multilingual/class-multilingual-settings-panel.php:372
 msgid ""
 "Languages not in the list can be selected after you install them on this "
 "site."
 msgstr "一覧に無い言語は、サイトにインストールすると選べるようになります。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:347
+#: src/multilingual/class-multilingual-settings-panel.php:385
 msgid "No languages have been added yet."
 msgstr "まだ言語が追加されていません。"
 
 #. translators: 1: Language name, 2: Locale code (e.g. en_US).
-#: src/multilingual/class-multilingual-settings-panel.php:371
+#: src/multilingual/class-multilingual-settings-panel.php:409
 msgctxt "multilingual language heading"
 msgid "%1$s (%2$s)"
 msgstr "%1$s（%2$s）"
 
 #. translators: %s: Language name.
-#: src/multilingual/class-multilingual-settings-panel.php:396
+#: src/multilingual/class-multilingual-settings-panel.php:434
 msgctxt "multilingual language button"
 msgid "Delete “%s”"
 msgstr "「%s」を削除"
 
-#: src/multilingual/class-multilingual-settings-panel.php:399
+#: src/multilingual/class-multilingual-settings-panel.php:437
 msgid "Terms"
 msgstr "呼び方"
 
-#: src/multilingual/class-multilingual-settings-panel.php:406
+#: src/multilingual/class-multilingual-settings-panel.php:444
 msgid "Booking guidance text"
 msgstr "予約案内文"
 
-#: src/multilingual/class-multilingual-settings-panel.php:407
+#: src/multilingual/class-multilingual-settings-panel.php:445
 msgid "If left empty, the text in the basic settings is used."
 msgstr "空欄の場合は基本設定の文章を使います。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:407
+#: src/multilingual/class-multilingual-settings-panel.php:445
 msgid ""
 "For tentative reservation completion guidance, the standard text is used if "
 "the basic setting is also empty."
 msgstr "仮予約完了時の案内文は、基本設定も空欄なら標準文を使います。"
 
-#: src/multilingual/class-multilingual-settings-panel.php:408
+#: src/multilingual/class-multilingual-settings-panel.php:446
 msgid "Edit basic settings"
 msgstr "基本設定を編集"
 
-#: src/multilingual/class-multilingual-settings-panel.php:413
+#: src/multilingual/class-multilingual-settings-panel.php:451
 msgid ""
 "To edit the tentative reservation completion guidance in the basic settings, "
 "set \"Reservation status\" to \"Make a tentative reservation\"."
 msgstr ""
 "基本設定で仮予約完了時の案内文を編集するには、「予約ステータス」を「仮予約に"
 "する」に設定してください。"
+
+#: src/multilingual/class-resource-multilingual-meta-box.php:46
+msgid ""
+"Enter the title shown on pages in each added language. Empty fields show the "
+"basic title."
+msgstr ""
+"追加した言語ごとに、ページに表示するタイトルを入力してください。空欄の場合は"
+"基本のタイトルを表示します。"
+
+#: src/multilingual/class-resource-multilingual-meta-box.php:55
+#: src/multilingual/class-service-menu-multilingual-meta-box.php:236
+msgid "Title"
+msgstr "タイトル"
 
 #. translators: 1: Label of the "Other conditions" field. 2: Link to the "Multilingual settings" tab.
 #: src/multilingual/class-service-menu-multilingual-meta-box.php:121
@@ -9854,10 +9877,6 @@ msgstr "本文は言語ごとに分けて入力できません。"
 #: src/multilingual/class-service-menu-multilingual-meta-box.php:142
 msgid "If needed, write the text for each language in the content."
 msgstr "必要に応じて、本文の中に言語ごとの文章を並べて書いてください。"
-
-#: src/multilingual/class-service-menu-multilingual-meta-box.php:236
-msgid "Title"
-msgstr "タイトル"
 
 #: src/multilingual/class-service-menu-multilingual-meta-box.php:237
 msgid "Excerpt"
@@ -11169,28 +11188,28 @@ msgid "Resource tag term IDs"
 msgstr "リソースタグのタームID"
 
 #. translators: %s: リソースの複数名（例: 客室）。
-#: src/resources/resource-labels.php:149
+#: src/resources/resource-labels.php:170
 msgid "No %s are available matching the selected conditions."
 msgstr "条件に該当する%sがありません。"
 
 #. translators: %s: リソースの複数名。
-#: src/resources/resource-labels.php:166
+#: src/resources/resource-labels.php:187
 msgid "No matching %s."
 msgstr "該当%sなし"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:186
+#: src/resources/resource-labels.php:207
 msgctxt "resource selection setting heading"
 msgid "%s selection"
 msgstr "%s指定"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:188
+#: src/resources/resource-labels.php:209
 msgid "Allow customers to select a %s for this service menu."
 msgstr "このサービスメニューで、予約者が%sを指定できるようにする。"
 
 #. translators: %1$s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:190
+#: src/resources/resource-labels.php:211
 msgid ""
 "When unchecked, a %1$s is assigned automatically for this service menu and "
 "customers cannot select one."
@@ -11199,26 +11218,26 @@ msgstr ""
 "は%1$sを指定できません。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:192
+#: src/resources/resource-labels.php:213
 msgid ""
 "Maximum number of people who can share this time slot when %s is assigned "
 "automatically."
 msgstr "%sが自動で割り当てられる場合に、この時間枠を共有できる最大人数です。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:194
+#: src/resources/resource-labels.php:215
 msgid "When a specific %s is selected, only one booking per slot is allowed."
 msgstr "特定の%sが指定された場合、1枠につき1件の予約だけを受け付けます。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:196
+#: src/resources/resource-labels.php:217
 msgid ""
 "Maximum number of guests that can be booked together in a single reservation "
 "when a %s is selected."
 msgstr "%sを指定した1件の予約で、一度に申し込める最大人数です。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:198
+#: src/resources/resource-labels.php:219
 msgid ""
 "Once a booking is placed, that %s is fully booked for the slot and cannot be "
 "shared with another customer."
@@ -11226,14 +11245,14 @@ msgstr ""
 "予約が入ると、その%sは時間枠全体が埋まり、他の予約者とは共有されません。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:200
+#: src/resources/resource-labels.php:221
 msgid ""
 "This menu allows %s selection, so each booking becomes a private booking for "
 "one group."
 msgstr "このメニューでは%s指定を使うため、1件の予約が1組の貸切になります。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:202
+#: src/resources/resource-labels.php:223
 msgid ""
 "The maximum number per booking is the time slot capacity, because each "
 "booking is assigned to a single %s."
@@ -11242,7 +11261,7 @@ msgstr ""
 "す。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:204
+#: src/resources/resource-labels.php:225
 msgid ""
 "When this is enabled and the time slot capacity is 2 or more, the minimum "
 "participants (labeled \"minimum guests to accept a booking\" for menus that "
@@ -11252,7 +11271,7 @@ msgstr ""
 "では「最低申し込み人数」）・料金区分・貸し切り予約の設定が表示されます。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:206
+#: src/resources/resource-labels.php:227
 msgid ""
 "It can be chosen only when the number of guests meets this menu's minimum "
 "participants (labeled \"minimum guests to accept a booking\" for menus that "
@@ -11262,7 +11281,7 @@ msgstr ""
 "人数」）を満たす場合のみ選択できます。"
 
 #. translators: %1$s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:208
+#: src/resources/resource-labels.php:229
 msgid ""
 "For menus that allow %1$s selection, this only closes the selected %1$s for "
 "the time slot, and other options remain bookable."
@@ -11271,7 +11290,7 @@ msgstr ""
 "択肢は引き続き予約できます。"
 
 #. translators: %1$s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:210
+#: src/resources/resource-labels.php:231
 msgid ""
 "For menus that allow %1$s selection, this is judged per selected %1$s, not "
 "for the whole time slot."
@@ -11280,7 +11299,7 @@ msgstr ""
 "す。"
 
 #. translators: %1$s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:212
+#: src/resources/resource-labels.php:233
 msgid ""
 "Only the booked %1$s will stop accepting reservations for that time slot. "
 "Other %1$s remain bookable."
@@ -11289,23 +11308,23 @@ msgstr ""
 "きます。"
 
 #. translators: %s: resource label (singular), e.g. "Room".
-#: src/resources/resource-labels.php:214
+#: src/resources/resource-labels.php:235
 msgid "This is judged per %s, not for the whole time slot."
 msgstr "時間枠全体ではなく、%sごとに判定します。"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:220
+#: src/resources/resource-labels.php:241
 msgctxt "resource nomination setting heading"
 msgid "%s nomination"
 msgstr "%s指名"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:222
+#: src/resources/resource-labels.php:243
 msgid "Use %s nomination for this service menu."
 msgstr "このサービスメニューで%s指名を使う。"
 
 #. translators: %1$s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:224
+#: src/resources/resource-labels.php:245
 msgid ""
 "When unchecked, a %1$s is assigned automatically for this service menu and "
 "customers cannot choose a specific %1$s."
@@ -11313,7 +11332,7 @@ msgstr ""
 "チェックを外すと、このサービスメニューでは%1$sが自動で割り当てられ、予約者は"
 "特定の%1$sを選べません。"
 
-#: src/resources/resource-labels.php:225
+#: src/resources/resource-labels.php:246
 msgid ""
 "Maximum number of people who can share this time slot when staff auto-"
 "assignment is used."
@@ -11321,21 +11340,21 @@ msgstr ""
 "スタッフ指名なし（自動割り当て）の予約で、1つの予約枠を共有できる最大人数で"
 "す。"
 
-#: src/resources/resource-labels.php:226
+#: src/resources/resource-labels.php:247
 msgid ""
 "When a specific staff member is selected, only one booking per slot is "
 "allowed."
 msgstr "スタッフを指名した予約は1枠1組のため、この設定は適用されません。"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:228
+#: src/resources/resource-labels.php:249
 msgid ""
 "Maximum number of guests that can be booked together in a single reservation "
 "when a %s is nominated."
 msgstr "%sを指名した1件の予約で、一度に申し込める最大人数です。"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:230
+#: src/resources/resource-labels.php:251
 msgid ""
 "Once a booking is placed, that %s is fully booked for the slot (private to "
 "that group) and cannot be shared with another customer."
@@ -11344,13 +11363,13 @@ msgstr ""
 "共有されません。"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:232
+#: src/resources/resource-labels.php:253
 msgid ""
 "This menu uses %s nomination, so each booking becomes a private booking for "
 "one group."
 msgstr "このメニューでは%s指名を使うため、1件の予約が1組の貸切になります。"
 
-#: src/resources/resource-labels.php:233
+#: src/resources/resource-labels.php:254
 msgid ""
 "The maximum number per booking is the time slot capacity, because each "
 "booking is assigned to a single staff member."
@@ -11358,7 +11377,7 @@ msgstr ""
 "1件の予約は1人のスタッフに割り当てられるため、1予約あたりの最大人数は予約枠の"
 "定員になります。"
 
-#: src/resources/resource-labels.php:234
+#: src/resources/resource-labels.php:255
 msgid ""
 "When this is enabled and the time slot capacity is 2 or more, the minimum "
 "participants (labeled \"minimum guests to accept a booking\" for menus that "
@@ -11368,7 +11387,7 @@ msgstr ""
 "これを有効にして予約枠の定員が2以上のとき、最少催行人数（指名を使うメニューで"
 "は「最低申し込み人数」）・料金区分・貸し切り予約の設定が表示されます。"
 
-#: src/resources/resource-labels.php:235
+#: src/resources/resource-labels.php:256
 msgid ""
 "It can be chosen only when the number of guests meets this menu's minimum "
 "participants (labeled \"minimum guests to accept a booking\" for menus that "
@@ -11378,7 +11397,7 @@ msgstr ""
 "数」）を満たす場合のみ選択できます。"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:237
+#: src/resources/resource-labels.php:258
 msgid ""
 "For menus that use %1$s nomination, this only closes that booking's %1$s for "
 "the time slot, and other %1$s remain bookable."
@@ -11387,13 +11406,13 @@ msgstr ""
 "引き続き予約できます。"
 
 #. translators: %s: resource label (singular), e.g. "Staff".
-#: src/resources/resource-labels.php:239
+#: src/resources/resource-labels.php:260
 msgid ""
 "For menus that use %1$s nomination, this is judged per %1$s, not for the "
 "whole time slot."
 msgstr "%1$s指名を使うメニューでは、時間枠全体ではなく%1$sごとに判定します。"
 
-#: src/resources/resource-labels.php:662
+#: src/resources/resource-labels.php:686
 msgid "guests"
 msgstr "名"
 
